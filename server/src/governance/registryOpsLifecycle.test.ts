@@ -50,7 +50,7 @@ const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/
  * is SUPERSEDED for this kind by the collapse ruling (Brad 2026-10-21T19:15):
  * the `instrument` kind is deleted, so its coverage entry retires with it.
  * GC-3: the instrument run-sheet kinds (instrument-sequence header +
- * instrument-sequence-entry row) join the coverage (6 → 8), same minimal
+ * instrument-sequence-entry row) join the coverage (7 → 9), same minimal
  * registry-ops treatment as calibration-record (no stripDomainStatus).
  */
 const COVERED_KINDS = [

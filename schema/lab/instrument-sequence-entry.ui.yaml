@@ -4,17 +4,21 @@
 # section claiming its slots EXPLICITLY (list order = field order); every slot
 # in editor.slots[] is claimed exactly once. The frontend documentMapper
 # renders ONLY kind:section blocks, and the GC-2 browser-gate rendering rule is
-# binding: keep every slot scalar-or-decomposed — scalar fields bind scalar
-# widgets, ref fields bind widget: ref (single) / widget: reflist (array of
-# refs), and the three fixed-shape objects (position, amount, istdAmount) bind
-# widget: object with `properties` that decompose them to LEAF SCALARS. No
-# object/array field is ever bound to a textarea, and no block relies on
-# kind:repeater rendering. The one open string map (uninterpreted) has no fixed
-# leaf set, so it is widget: object with an empty properties list (a vacuous
-# decomposition) — never a textarea. All labels are FULL WORDS; the named
-# labels from the spec are verbatim (Vial Position, Data File Name, Sample
-# Name, Method Reference, Manual Injection, Internal Standard Amount,
-# Multiplier, Dilution, Uninterpreted Vendor Fields).
+# binding: the generic editor surface reliably renders ONLY leaf-scalar slots
+# (verified platform limit — widget: object decomposition never renders on the
+# generic surface), so the fixed-shape objects (position, amount, istdAmount)
+# are bound by LEAF-SCALAR DECOMPOSITION: one slot per scalar path ($.position.
+# vial, $.position.tray, $.amount.value, $.amount.unit, $.istdAmount.value,
+# $.istdAmount.unit). Ref fields bind widget: ref (single) / widget: reflist
+# (array of refs). No object/array field is ever bound to a textarea, and no
+# block relies on kind:repeater rendering. The one open string map
+# (uninterpreted) has no fixed leaf set, so it is a single widget: readonly
+# slot (renders the object as readable key: value lines) — never a textarea,
+# and never an invented editable field set. All labels are FULL WORDS; the
+# named labels from the spec are verbatim (Vial, Tray, Data File Name, Sample
+# Name, Method Reference, Manual Injection, Internal Standard Amount Value,
+# Internal Standard Amount Unit, Multiplier, Dilution, Uninterpreted Vendor
+# Fields).
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/instrument-sequence-entry.schema.yaml"
 
@@ -29,7 +33,7 @@ editor:
       kind: "section"
       label: "Identity and Position"
       help: "The injection row's identity and where the injection happened on the instrument. state advances only via lifecycle transitions."
-      slots: ["identifier-slot", "position-slot", "state-slot"]
+      slots: ["identifier-slot", "vial-slot", "tray-slot", "state-slot"]
     - id: "machine-links"
       kind: "section"
       label: "Machine Links"
@@ -39,7 +43,7 @@ editor:
       kind: "section"
       label: "Observed Run-Table Values"
       help: "The run-table data captured as declarative data from the GC-1 spike report's first-hand reads. Vendor-ambiguous values stay honest: unknown unit -> the Uninterpreted sibling field; unverified columns -> the Uninterpreted Vendor Fields map."
-      slots: ["sample-name-slot", "data-file-name-slot", "acquisition-started-at-slot", "date-time-raw-slot", "amount-slot", "amount-uninterpreted-slot", "multiplier-slot", "dilution-slot", "internal-standard-number-slot", "internal-standard-amount-slot", "internal-standard-amount-uninterpreted-slot", "manual-injection-slot", "vendor-method-label-slot"]
+      slots: ["sample-name-slot", "data-file-name-slot", "acquisition-started-at-slot", "date-time-raw-slot", "amount-value-slot", "amount-unit-slot", "amount-uninterpreted-slot", "multiplier-slot", "dilution-slot", "internal-standard-number-slot", "istd-amount-value-slot", "istd-amount-unit-slot", "internal-standard-amount-uninterpreted-slot", "manual-injection-slot", "vendor-method-label-slot"]
     - id: "uninterpreted-vendor-fields"
       kind: "section"
       label: "Uninterpreted Vendor Fields"
@@ -52,19 +56,16 @@ editor:
       label: "Identifier"
       widget: "readonly"
       help: "Stable local identifier (e.g., ISEN-2026-0041-007). Read-only."
-    - id: "position-slot"
-      path: "$.position"
-      label: "Vial Position"
-      widget: "object"
-      help: "Where the injection happened on the instrument. A vial id string, optionally with a tray/slot label — tray GEOMETRY is deliberately not modeled (the label is free text)."
-      properties:
-        - name: "vial"
-          widget: "text"
-          label: "Vial"
-          required: true
-        - name: "tray"
-          widget: "text"
-          label: "Tray"
+    - id: "vial-slot"
+      path: "$.position.vial"
+      label: "Vial"
+      widget: "text"
+      help: "Vial id as captured on the run table."
+    - id: "tray-slot"
+      path: "$.position.tray"
+      label: "Tray"
+      widget: "text"
+      help: "Tray/slot label as free text (tray geometry deliberately not modeled)."
     - id: "state-slot"
       path: "$.state"
       label: "State"
@@ -125,27 +126,16 @@ editor:
       label: "Date Time Raw"
       widget: "text"
       help: "The vendor timestamp string preserved VERBATIM (RUN.LOG 'Method started 10:08:18 10/23/26'). A zone is never invented; the raw string sits next to the normalized one."
-    - id: "amount-slot"
-      path: "$.amount"
-      label: "Amount"
-      widget: "object"
-      help: "The injected amount as a dimensioned quantity when the unit is known (SAMPLE.XML <Amount>). Bad unit/dimension combos are rejected by the quantity datatype (dimension collapse is a schema error, not lint)."
-      properties:
-        - name: "value"
-          widget: "number"
-          label: "Value"
-          required: true
-        - name: "unit"
-          widget: "text"
-          label: "Unit"
-          required: true
-        - name: "dimension"
-          widget: "text"
-          label: "Dimension"
-          required: true
-        - name: "qualifier"
-          widget: "text"
-          label: "Qualifier"
+    - id: "amount-value-slot"
+      path: "$.amount.value"
+      label: "Amount Value"
+      widget: "number"
+      help: "Injected amount value when the unit is known (SAMPLE.XML Amount)."
+    - id: "amount-unit-slot"
+      path: "$.amount.unit"
+      label: "Amount Unit"
+      widget: "text"
+      help: "Unit carried with the amount; bad unit/dimension combos are rejected by the quantity datatype."
     - id: "amount-uninterpreted-slot"
       path: "$.amountUninterpreted"
       label: "Amount Uninterpreted"
@@ -166,27 +156,16 @@ editor:
       label: "Internal Standard Number"
       widget: "number"
       help: "Which internal standard (SAMPLE.XML <ISTD Num='1'>). An integer >= 1."
-    - id: "internal-standard-amount-slot"
-      path: "$.istdAmount"
-      label: "Internal Standard Amount"
-      widget: "object"
-      help: "The internal-standard amount as a dimensioned quantity when the unit is known."
-      properties:
-        - name: "value"
-          widget: "number"
-          label: "Value"
-          required: true
-        - name: "unit"
-          widget: "text"
-          label: "Unit"
-          required: true
-        - name: "dimension"
-          widget: "text"
-          label: "Dimension"
-          required: true
-        - name: "qualifier"
-          widget: "text"
-          label: "Qualifier"
+    - id: "istd-amount-value-slot"
+      path: "$.istdAmount.value"
+      label: "Internal Standard Amount Value"
+      widget: "number"
+      help: "Internal-standard amount value when the unit is known."
+    - id: "istd-amount-unit-slot"
+      path: "$.istdAmount.unit"
+      label: "Internal Standard Amount Unit"
+      widget: "text"
+      help: "Unit carried with the internal-standard amount."
     - id: "internal-standard-amount-uninterpreted-slot"
       path: "$.istdAmountUninterpreted"
       label: "Internal Standard Amount Uninterpreted"
@@ -206,6 +185,5 @@ editor:
     - id: "uninterpreted-slot"
       path: "$.uninterpreted"
       label: "Uninterpreted Vendor Fields"
-      widget: "object"
-      help: "Unverified vendor columns, verbatim (string key -> string value). An OPEN string map by design — no fixed leaf fields (GC-1 unknown-is-unknown), so the decomposition is vacuous; never a textarea."
-      properties: []
+      widget: "readonly"
+      help: "Vendor-ambiguous columns preserved verbatim (string key -> string value). Display-only here: an open map has no fixed editable field set (GC-1 unknown-is-unknown); never invent keys in the UI."

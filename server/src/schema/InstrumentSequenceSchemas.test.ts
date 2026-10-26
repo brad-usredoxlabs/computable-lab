@@ -517,6 +517,9 @@ describe('instrument-sequence / entry ui (spec §UI triplet)', () => {
           for (const claim of block.slots as string[]) {
             expect(slotIds.has(claim), `block '${block.id}' claims unknown slot '${claim}'`).toBe(true);
           }
+          // Slot claims are section blocks' job: a block that claims slots
+          // must be kind:section (repeaters bind by path prefix, no slots).
+          expect(block.kind, `block '${block.id}' claims slots but is not a section`).toBe('section');
         }
         // No block is double-claimed: each slot id appears in at most one block.
       }
@@ -543,13 +546,19 @@ describe('instrument-sequence / entry ui (spec §UI triplet)', () => {
     }
 
     // The spec's mandated FULL-WORD labels, present verbatim on the entry.
+    // (FIX-2/D1: the object slots were decomposed to leaf-scalar slots per the
+    // platform rendering limit, so 'Vial Position' -> 'Vial' + 'Tray' and
+    // 'Internal Standard Amount' -> 'Internal Standard Amount Value' +
+    // 'Internal Standard Amount Unit'.)
     for (const mandated of [
-      'Vial Position',
+      'Vial',
+      'Tray',
       'Data File Name',
       'Sample Name',
       'Method Reference',
       'Manual Injection',
-      'Internal Standard Amount',
+      'Internal Standard Amount Value',
+      'Internal Standard Amount Unit',
       'Multiplier',
       'Dilution',
       'Uninterpreted Vendor Fields',
