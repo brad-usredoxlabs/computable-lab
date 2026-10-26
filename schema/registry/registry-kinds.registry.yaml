@@ -33,6 +33,11 @@ kinds:
   # matching lifecycleId/state enums so the registryOpsLifecycle pin stays green.
   - kind: instrument-sequence
   - kind: instrument-sequence-entry
+  # GC-4: the .D acquisition-package kind joins the minimal registry-ops
+  # lifecycle (draft default state, same treatment as calibration-record — no
+  # stripDomainStatus). The kind's schema declares the matching
+  # lifecycleId/state enums so the registryOpsLifecycle pin stays green.
+  - kind: acquisition-package
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
 # covered record in a terminal lifecycle state is refused at create, and on

@@ -52,8 +52,13 @@ const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/
  * GC-3: the instrument run-sheet kinds (instrument-sequence header +
  * instrument-sequence-entry row) join the coverage (7 → 9), same minimal
  * registry-ops treatment as calibration-record (no stripDomainStatus).
+ * GC-4: the .D acquisition-package kind joins the coverage (9 → 10), same
+ * minimal registry-ops treatment (no stripDomainStatus); its schema lives in
+ * schema/knowledge/ (not lab/), so the per-kind enum pin resolves the dir by
+ * kind.
  */
 const COVERED_KINDS = [
+  'acquisition-package',
   'calibration-record',
   'competency-authorization',
   'equipment',
@@ -643,7 +648,10 @@ describe('QMS7-3 schema-shape guards', () => {
     expect(lifecycle.states.find(s => s.initial)?.id).toBe(coverage.defaultState)
 
     for (const kind of COVERED_KINDS) {
-      const schema = parseYaml(readFileSync(join(SCHEMA_DIR, `lab/${kind}.schema.yaml`), 'utf-8')) as
+      // GC-4: acquisition-package's schema lives in schema/knowledge/ (not
+      // lab/); resolve the schema dir by kind.
+      const schemaDir = kind === 'acquisition-package' ? 'knowledge' : 'lab'
+      const schema = parseYaml(readFileSync(join(SCHEMA_DIR, `${schemaDir}/${kind}.schema.yaml`), 'utf-8')) as
         { properties: { lifecycleId?: { enum?: string[] }; state?: { enum?: string[] } } }
       expect(schema.properties.lifecycleId?.enum, `${kind} lifecycleId enum`).toEqual(['registry-ops'])
       expect(schema.properties.state?.enum, `${kind} state enum`).toEqual(stateIds)
