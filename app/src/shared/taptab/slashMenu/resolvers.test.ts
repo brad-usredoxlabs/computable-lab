@@ -143,11 +143,12 @@ describe('resolveMaterial', () => {
         id: 'MINST-HEPG2',
       },
     })
-    // A bare material concept reads as an ontology term to biologists.
+    // L2-TERM-1 (UC-D4): a bare workspace material record is a LOCAL record
+    // of this lab — it badges Local with an honest subtitle, never Ontology.
     expect(out[2]).toMatchObject({
       key: 'material:MAT-TRIS',
-      badge: 'Ontology',
-      subtitle: 'Ontology term',
+      badge: 'Local',
+      subtitle: 'Local record',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-TRIS' },
     })
   })
@@ -708,7 +709,10 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
       id: 'MSP-DRAFT-EVG_MV7Q7F5I_1',
       label: AGGREGATE,
     })
-    expect(out[1]?.badge).toBe('Ontology')
+    // L2-TERM-1 (UC-D4): the surviving row's label IS the multi-part
+    // composite aggregate — the resolver's structural signal reads it as a
+    // composition, so it badges Composition, never Ontology.
+    expect(out[1]?.badge).toBe('Composition')
     // Mint stays the pinned floor — last, never replaced by an invented aggregate term.
     expect(out[2]).toMatchObject({ key: `mint:${AGGREGATE}`, badge: 'New', pinBottom: true })
   })
@@ -771,14 +775,17 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     ])
     expect(additions.map((s) => s.label)).toEqual(tokens)
     expect(additions.map((s) => s.mention.label === s.label)).toEqual([true, true, true, true])
+    // L2-TERM-1 (UC-D4): the per-component records are workspace records of
+    // this lab (single-token labels — not compositions), so they badge Local,
+    // never Ontology.
     expect(additions[0]).toMatchObject({
       label: 'Thermo trypsin-EDTA',
-      badge: 'Ontology',
+      badge: 'Local',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-trypsin-edta-1fqu' },
     })
     expect(additions[2]).toMatchObject({
       label: 'Thermo FBS',
-      badge: 'Ontology',
+      badge: 'Local',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-fbs-1qbj' },
     })
     // The SAME label-collapse applies to streamed hits: the 'Thermo FBS'
