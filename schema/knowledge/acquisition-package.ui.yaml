@@ -1,0 +1,134 @@
+# UI specification for Acquisition Package records (GC-4 — .D directory
+# registration).
+#
+# EDITOR-1 + GC-2 browser-gate lesson (promoted spec D12, ORCH-GATE fix): the
+# frontend documentMapper (app/src/editor/taptab/documentMapper.ts:171) renders
+# ONLY kind:section blocks and SKIPS every other block kind (a `kind: repeater`
+# block renders nothing). So the files list is NOT a repeater — it is a SECTION
+# block claiming an ARRAY slot (path: $.files, widget: array) with an explicit
+# `properties` sub-field list (documentMapper.ts:228: an array slot with
+# `properties` projects to arraySchema; the $.lines precedent is
+# schema/workflow/budget.ui.yaml:88). Every editor slot is claimed exactly once
+# by an explicit section block; no object value is bound to a textarea; every
+# label is a FULL WORD (no truncated headers). The ref slots are shape-pinned
+# to type: data-reference; target existence is resolution-time (the
+# registration service), not the UI's job.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/acquisition-package.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.storageDeviceId"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Package identity and lifecycle. state advances only via lifecycle transitions (registry-ops: draft -> active -> archived)."
+      slots: ["id-slot", "title-slot", "state-slot"]
+    - id: "device-and-directory"
+      kind: "section"
+      label: "Storage Device and Directory"
+      help: "The configured storage device (the config id, never a mount path) and the .D directory key RELATIVE to the device root. Both are set at registration and read-only afterward."
+      slots: ["storage-device-id-slot", "directory-key-slot"]
+    - id: "files"
+      kind: "section"
+      label: "Files"
+      help: >
+        One row per pinned file in the .D: its role, the per-file data-reference
+        (the integrity anchor), and its path relative to the package root.
+        signal_channel = an .CH signal file (a registrable package needs at
+        least one); uninterpreted = pinned with no semantics claimed (GC-1(e):
+        preserve bytes, don't parse) — nothing is ever silently skipped.
+      slots: ["files-slot"]
+    - id: "manifest-and-links"
+      kind: "section"
+      label: "Signal Collection and Links"
+      help: >
+        The manifest-level signal-collection data-reference (its contentHash is
+        the sha256 of the canonical per-file manifest string, not a hash of the
+        directory) and the optional run/sample links.
+      slots: ["signal-collection-ref-slot", "source-run-ref-slot", "sample-ref-slot"]
+  slots:
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+      help: "Stable local identifier (e.g., ACQP-2026-RES35077-4). Read-only."
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+      required: true
+      help: "Human-readable name for this acquisition package."
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    - id: "storage-device-id-slot"
+      path: "$.storageDeviceId"
+      label: "Storage Device Id"
+      widget: "readonly"
+      help: "The config storage device id (config.storageDevices[].id, e.g. gc-fid-nas) — the id, never a mount path. Set at registration."
+    - id: "directory-key-slot"
+      path: "$.directoryKey"
+      label: "Directory Key"
+      widget: "readonly"
+      help: "Safe RELATIVE key of the .D DIRECTORY relative to the device root (e.g. machine1/RES35077-4.D). A directory key — no single-file data-reference points at it directly. Set at registration."
+    - id: "files-slot"
+      path: "$.files"
+      label: "Files"
+      widget: "array"
+      required: true
+      help: "One row per pinned file. Each row: the file's role, the per-file data-reference (the integrity anchor), and the file's path relative to the package root."
+      properties:
+        - name: "relativePath"
+          widget: "text"
+          label: "Relative Path"
+          required: true
+          help: "Path of the file relative to the package root (the device key minus the directoryKey prefix)."
+        - name: "role"
+          widget: "select"
+          label: "File Role"
+          required: true
+          help: "signal_channel | sample_metadata | run_log | method_asset | uninterpreted."
+        - name: "dataReferenceRef"
+          widget: "ref"
+          label: "Data Reference Ref"
+          required: true
+          help: "The per-file data-reference record (the integrity anchor). Shape-pinned to type: data-reference."
+    - id: "signal-collection-ref-slot"
+      path: "$.signalCollectionRef"
+      label: "Signal Collection Ref"
+      widget: "ref"
+      refKind: "data-reference"
+      required: true
+      help: "The manifest-level signal-collection data-reference (dataKind signal-collection). Its contentHash is the sha256 of the canonical per-file manifest string, not a hash of the directory. Set at registration."
+    - id: "source-run-ref-slot"
+      path: "$.sourceRunRef"
+      label: "Source Run Ref"
+      widget: "ref"
+      refKind: "instrument-sequence-entry"
+      help: "Optional record ref to the instrument-sequence-entry (run) this package was acquired for."
+    - id: "sample-ref-slot"
+      path: "$.sampleRef"
+      label: "Sample Ref"
+      widget: "ref"
+      help: "Optional record ref to the sample (plain record ref — no CHEBI minting; compound/sample identity lives on gc-method / instrument-sequence-entry)."
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "180px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.storageDeviceId"
+    label: "Storage Device Id"
+    width: "140px"
+  - path: "$.state"
+    label: "State"
+    width: "100px"

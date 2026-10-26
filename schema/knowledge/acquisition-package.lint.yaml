@@ -1,0 +1,82 @@
+# Lint rules for Acquisition Package records (GC-4 — .D directory registration).
+#
+# HONEST BOUNDARIES (GC-4 spec D8, LintEngine record-scope hard limit —
+# LintEngine.ts:143-145): the v1 lint DSL CANNOT open the record store, so ref
+# TARGET EXISTENCE (do the per-file DREFs exist?) is resolution-time (the
+# registration service's verifyAcquisitionPackage + the GC-3 orch-resolution-2
+# deferral), NOT lint's job. What lint CAN do, and does here, is intra-record
+# shape discipline:
+#   R1 an empty package (no file entries) is suspicious (warning);
+#   R2 every file item carries a non-empty data-reference ref id with a
+#      DREF- prefix (error — catches dangling-by-typo without store access);
+#   R4 the directoryKey is a safe RELATIVE key (error — no .., no backslash,
+#      no leading / — belt for the code-level S-checks).
+# Do NOT add a store-resolution rule (reviewer bait #1): any YAML rule claiming
+# "dangling ref rejected" is a tautology or a lie in this DSL.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/acquisition-package.schema.yaml"
+rules:
+  # R1 — an empty package is suspicious, not fatal at the schema level.
+  # (minItems 1 makes an empty files[] structurally illegal at AJV validation;
+  # this is the warning belt that names the case for ops.)
+  - id: "acqp-files-declared"
+    title: "An acquisition package should declare at least one file"
+    description: >-
+      acquisition-package pins a .D by its FILES — one data-reference per file.
+      A package with no file entries pins nothing; the schema's minItems 1 makes
+      this structurally illegal at validation, so this is a warning belt that
+      names the case.
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.files[*].relativePath"
+    message:
+      template: "Acquisition package '{{$.id}}' declares no files — an empty package pins nothing (declare at least one file data-reference)"
+      paths: ["$.id"]
+  # R2 — every file item carries a non-empty, DREF-prefixed data-reference id.
+  # The DREF mint pattern is code-verified DREF-\d{6} (acquisition.ts nextDataReferenceId);
+  # a regex-prefix here catches a dangling-by-typo id WITHOUT store access —
+  # the GC-3 regex-prefix honesty pattern.
+  - id: "acqp-dref-closure"
+    title: "Every file item must reference a DREF- data-reference"
+    description: >-
+      Each files item's dataReferenceRef.id must be non-empty and carry the
+      DREF- prefix (the data-reference mint pattern). A missing or mis-shaped
+      id is a dangling-by-typo reference; the actual target existence is
+      resolution-time (the registration service), not lint's job.
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "everyItem"
+      collectionPath: "files"
+      assert:
+        op: "all"
+        predicates:
+          - op: "nonEmpty"
+            path: "dataReferenceRef.id"
+          - op: "regex"
+            path: "dataReferenceRef.id"
+            pattern: "^DREF-"
+    message:
+      template: "Acquisition package '{{$.id}}' has a file item whose dataReferenceRef is empty or not DREF-prefixed — pin every file to a real data-reference id"
+      paths: ["$.id"]
+  # R4 — the directoryKey is a safe RELATIVE key (no .., no backslash, no
+  # leading /). Belt for the code-level S3 pre-checks (assertSafeRelativePath
+  # + PACKAGE_PATH_ESCAPE); the schema's directoryKey pattern is the primary.
+  - id: "acqp-directory-key-safe"
+    title: "The directory key must be a safe relative path"
+    description: >-
+      directoryKey names the .D directory RELATIVE to the device root. It must
+      not escape the mount (no leading /, no . or .. segments, no backslash).
+      The schema's directoryKey pattern is the primary gate; this is the lint
+      belt that names a traversal attempt for ops.
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "regex"
+      path: "$.directoryKey"
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._ -]*(/[A-Za-z0-9][A-Za-z0-9._ -]*)*$"
+    message:
+      template: "Acquisition package '{{$.id}}' has an unsafe directoryKey (traversal or absolute path) — directoryKey must be a safe relative key within the device root"
+      paths: ["$.id"]
