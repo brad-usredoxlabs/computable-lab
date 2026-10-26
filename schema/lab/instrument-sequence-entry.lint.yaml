@@ -27,8 +27,8 @@ rules:
   - id: "isen-ref-shape-closed"
     title: "Entry ref ids must carry the target kind's id-prefix vocabulary"
     description: >-
-      sampleRef.id must match ^SMP-, gcMethodRef.id must match ^GCM-,
-      operatorRef.id must match ^USR-. Shape check ONLY: a well-shaped id
+      sampleRef.id must match ^SMP-, gcMethodRef.id must match ^GCM-.
+      Shape check ONLY: a well-shaped id
       that names no record is still legal here — existence is enforced at
       resolution time, not by the lint DSL (which cannot see the store).
     severity: "error"

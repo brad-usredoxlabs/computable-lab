@@ -1,0 +1,99 @@
+# UI specification for Instrument Sequence records (GC-3 run-sheet header).
+#
+# EDITOR-1 binding (the promoted spec §UI triplet): section blocks claim their
+# slots EXPLICITLY (list order = field order); every slot in editor.slots[] is
+# claimed exactly once. The injection-rows list is a kind: repeater carrying NO
+# slots, so it keeps path-prefix binding on `path: $.entryRefs`
+# (budget.ui.yaml:20 / gc-method.ui.yaml:32-41 precedent — repeaters keep the
+# path prefix and have no editor slot: the rows are SEPARATE
+# instrument-sequence-entry records, referenced by id, never inlined). The
+# frontend documentMapper renders ONLY kind:section blocks and skips the
+# repeater — that is the intended GC-2 browser-gate lesson: the generic
+# projection does NOT inline-render the rows, so every editor slot here is
+# scalar (no object/array slot is shipped without a decomposition, and no
+# object value is bound to a textarea). The per-row surface is the entry
+# record's own editor (a separate *.ui.yaml), not this header's generic
+# projection. Every label is a FULL WORD (no truncated headers); the
+# spec's named labels are used verbatim.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/instrument-sequence.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.id"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Run-sheet identity. state advances only via lifecycle transitions."
+      slots: ["id-slot", "title-slot", "state-slot"]
+    - id: "binding"
+      kind: "section"
+      label: "Study and Run Binding"
+      help: "The study and the study RUN record this run sheet belongs to. Optional while the sheet is being assembled (lint R2 flags an unbound header as a warning)."
+      slots: ["study-ref-slot", "run-ref-slot"]
+    - id: "operator-and-instrument"
+      kind: "section"
+      label: "Operator and Instrument"
+      help: "Who ran the sequence and on which equipment asset (the instrument RECORD KIND was retired by INSTR-COLLAPSE; equipment is the asset)."
+      slots: ["operator-ref-slot", "instrument-ref-slot"]
+    - id: "injection-rows"
+      kind: "repeater"
+      label: "Injection Rows"
+      help: "Ordered entryRefs — one separate instrument-sequence-entry record per row. No slots declared: binds by path prefix on the array below; the generic projection skips non-section blocks, so per-row rendering is the entry record's own editor surface's job."
+      path: "$.entryRefs"
+  slots:
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+      help: "Stable local identifier (e.g., ISEQ-2026-0041). Read-only."
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+      required: true
+      help: "Human-readable run-sheet title."
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    - id: "study-ref-slot"
+      path: "$.studyRef"
+      label: "Study Reference"
+      widget: "ref"
+      refKind: "study"
+      help: "The study this run sheet belongs to. Shape-pinned to type: study; target existence is resolution-time."
+    - id: "run-ref-slot"
+      path: "$.runRef"
+      label: "Run Reference"
+      widget: "ref"
+      refKind: "run"
+      help: "The study RUN record whose execution this sheet documents. Shape-pinned to type: run; target existence is resolution-time."
+    - id: "operator-ref-slot"
+      path: "$.operatorRef"
+      label: "Operator Reference"
+      widget: "ref"
+      refKind: "user"
+      help: "The operator who ran the sequence. Deliberately NOT type-pinned (no {type: const user} ref precedent in-tree)."
+    - id: "instrument-ref-slot"
+      path: "$.instrumentRef"
+      label: "Instrument Reference"
+      widget: "ref"
+      refKind: "equipment"
+      help: "The equipment asset performing the sequence. Shape-pinned to type: equipment (the retired `instrument` kind is rejected)."
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "160px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.state"
+    label: "State"
+    width: "100px"

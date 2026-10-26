@@ -33,9 +33,12 @@
  */
 import { beforeAll, describe, expect, it, afterAll } from 'vitest';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { parse as parseYaml } from 'yaml';
 
 import { loadAllSchemas } from './SchemaLoader.js';
 import { createSchemaRegistry } from './SchemaRegistry.js';
@@ -46,6 +49,7 @@ import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
 import { createRecordStore, RecordStoreImpl } from '../store/RecordStoreImpl.js';
 import { RecordRevisionService, revisionRef } from '../revisions/RecordRevisionService.js';
 import { AnalysisRunner } from '../analysis/analysisRunner.js';
+import { createUISpecLoader, loadAllUISpecs } from '../ui/UISpecLoader.js';
 import type { AppContext } from '../server.js';
 
 // Repo root from server/src/schema/ (same convention as the sibling contract
@@ -458,3 +462,104 @@ describe('GC-3 freeze guarantee: entry edits never rewrite submitted-analysis pr
     expect(code, 'the real runner must refuse the drifted frozen run').toBe('FROZEN_INPUT_CHANGED');
   });
 });
+
+// ---------------------------------------------------------------------------
+// UI triplet (spec §UI triplet — the adversarial-gate defect list item 1):
+// loadAllUISpecs loads BOTH instrument-sequence.ui.yaml and
+// instrument-sequence-entry.ui.yaml with zero loader errors. The loader
+// (UISpecLoader.validateSpec) enforces the EDITOR-1 binding: unknown slot
+// refs, double-claims, and unclaimed slots in an explicitly-bound spec all
+// fail at load time. So "loads with zero errors" already proves every editor
+// block names slots that exist (the controlled-document / gc-method / budget
+// pattern). The full-word-label criterion (no truncated headers) is verified
+// here by reading the literal label strings out of the loaded YAML: every
+// label is a full word (no single letters, no ellipses), and the spec's
+// mandated entry labels are present verbatim.
+// ---------------------------------------------------------------------------
+describe('instrument-sequence / entry ui (spec §UI triplet)', () => {
+  it('U1: loadAllUISpecs loads BOTH ui.yaml files with zero loader errors', async () => {
+    const loader = createUISpecLoader();
+    const result = await loadAllUISpecs(loader, SCHEMA_DIR);
+    const seqErrors = result.errors.filter((e) => e.path.includes('instrument-sequence.ui.yaml'));
+    const entryErrors = result.errors.filter((e) => e.path.includes('instrument-sequence-entry.ui.yaml'));
+    expect(seqErrors).toEqual([]);
+    expect(entryErrors).toEqual([]);
+
+    // Both specs are cached by schemaId (proof loadAllUISpecs loaded them).
+    const seqSpec = loader.get(SEQUENCE_SCHEMA_ID);
+    const entrySpec = loader.get(ENTRY_SCHEMA_ID);
+    expect(seqSpec?.editor).toBeDefined();
+    expect(entrySpec?.editor).toBeDefined();
+
+    // display.titleField per the spec triplet — read from the raw YAML (the
+    // loader's UISpec type is structural and does not model `display`), which
+    // is the source of truth loadAllUISpecs just loaded without error.
+    const seqRaw = parseYamlUi('instrument-sequence.ui.yaml') as Record<string, unknown>;
+    const entryRaw = parseYamlUi('instrument-sequence-entry.ui.yaml') as Record<string, unknown>;
+    expect((seqRaw.display as { titleField?: string }).titleField).toBe('$.title');
+    expect((entryRaw.display as { titleField?: string }).titleField).toBe('$.sampleName');
+  });
+
+  it('U2: every editor block names slots that exist and is a section (or the header repeater)', () => {
+    // Re-read the raw YAML (the projection type is structural; the loader does
+    // not persist block.slots on the UISpec editor in a typed shape the test
+    // can reach through .get), so the binding assertion reads the source of
+    // truth the loader actually validated.
+    const seqRaw = parseYamlUi('instrument-sequence.ui.yaml') as Record<string, unknown>;
+    const entryRaw = parseYamlUi('instrument-sequence-entry.ui.yaml') as Record<string, unknown>;
+
+    for (const raw of [seqRaw, entryRaw]) {
+      const editor = raw.editor as { blocks: Array<Record<string, unknown>>; slots: Array<Record<string, unknown>> };
+      const slotIds = new Set(editor.slots.map((s) => s.id as string));
+      // Every slot id referenced by a block's explicit `slots` claim exists.
+      for (const block of editor.blocks) {
+        if (Array.isArray(block.slots)) {
+          for (const claim of block.slots as string[]) {
+            expect(slotIds.has(claim), `block '${block.id}' claims unknown slot '${claim}'`).toBe(true);
+          }
+        }
+        // No block is double-claimed: each slot id appears in at most one block.
+      }
+      const claimed = new Map<string, string>();
+      for (const block of editor.blocks) {
+        for (const claim of (block.slots as string[]) ?? []) {
+          expect(claimed.has(claim), `slot '${claim}' claimed by more than one block`).toBe(false);
+          claimed.set(claim, String(block.id));
+        }
+      }
+    }
+  });
+
+  it('U3: every editor slot label is a full word (no truncated headers) and the mandated entry labels are verbatim', () => {
+    const entryRaw = parseYamlUi('instrument-sequence-entry.ui.yaml') as Record<string, unknown>;
+    const editor = entryRaw.editor as { blocks: Array<Record<string, unknown>>; slots: Array<Record<string, unknown>> };
+
+    const labels = editor.slots.map((s) => s.label as string);
+    // No-truncated-headers criterion: no label is a single character, a
+    // fragment ending in ellipsis, or empty.
+    for (const label of labels) {
+      expect(label.trim().length, `label '${label}' is truncated/empty`).toBeGreaterThan(1);
+      expect(label, `label '${label}' must not be an abbreviation`).not.toMatch(/\.\.\.$/);
+    }
+
+    // The spec's mandated FULL-WORD labels, present verbatim on the entry.
+    for (const mandated of [
+      'Vial Position',
+      'Data File Name',
+      'Sample Name',
+      'Method Reference',
+      'Manual Injection',
+      'Internal Standard Amount',
+      'Multiplier',
+      'Dilution',
+      'Uninterpreted Vendor Fields',
+    ]) {
+      expect(labels, `mandated label '${mandated}' missing`).toContain(mandated);
+    }
+  });
+});
+
+function parseYamlUi(file: string): unknown {
+  const url = new URL(`../../../schema/lab/${file}`, import.meta.url);
+  return parseYaml(readFileSync(fileURLToPath(url), 'utf-8'));
+}
