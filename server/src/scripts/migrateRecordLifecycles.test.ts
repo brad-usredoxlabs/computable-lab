@@ -100,6 +100,7 @@ function loadCoverage(): { engine: LifecycleEngine; coverage: KindLifecycleRegis
     knownKinds: new Set([
       'person', 'equipment', 'equipment-class', 'training-record',
       'competency-authorization', 'calibration-record', 'gc-method',
+      'instrument-sequence', 'instrument-sequence-entry',
     ]),
   })
   return { engine, coverage }
