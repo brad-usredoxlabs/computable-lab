@@ -27,6 +27,12 @@ kinds:
   # The kind's own schema declares the matching lifecycleId/state enums so the
   # registryOpsLifecycle pin stays green.
   - kind: gc-method
+  # GC-3: the instrument run-sheet kinds (header + injection row) join the
+  # minimal registry-ops lifecycle (draft default state, same treatment as
+  # calibration-record — no stripDomainStatus). Both kinds' schemas declare the
+  # matching lifecycleId/state enums so the registryOpsLifecycle pin stays green.
+  - kind: instrument-sequence
+  - kind: instrument-sequence-entry
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
 # covered record in a terminal lifecycle state is refused at create, and on
