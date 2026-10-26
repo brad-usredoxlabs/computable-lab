@@ -264,8 +264,12 @@ export interface AiProposalDraft {
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
   /** The prompt that produced this draft. */
   prompt: string
-  /** Prompts of the PRIOR drafts in the current chain (empty on a first draft). */
-  revisionHistory: { prompt: string; createdAt: string }[]
+  // NOTE (L2-CHAT-1 FIX1 D7): this draft carries NO `revisionHistory` field.
+  // The deck ghost mount (useDeckGhostMount) rebuilds its OWN trail from
+  // state.preview (the mounted preview's trail — CURRENT draft's prompt), and
+  // the server-bound trail lives separately on AiDraftRevisionContext
+  // (previous drafts' prompts). A single `revisionHistory` here read as live
+  // but was never read by its only consumer — two different "trail" values.
 }
 
 /**
@@ -586,10 +590,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       // to the server as `draftRevision.revisionHistory` (AiTabPanel's
       // round-trip). The CURRENT prompt is the new request, not history.
       const revising = previewEvents.length > 0 || previewLabwareAdditions.length > 0
+      // L2-CHAT-1 FIX1 D3: the staged draft's source prompt rides back as
+      // `currentPreviewDraft.sourcePrompt` (the legacy pane's shape) — captured
+      // here, before the staged source is consumed below.
+      const revisingSource = revising ? stagedSourceRef.current : null
       if (revising) {
-        if (stagedSourceRef.current) {
-          revisionTrailRef.current = [...revisionTrailRef.current, stagedSourceRef.current]
-        }
+        // L2-CHAT-1 FIX1 D3: the revision trail sent on THIS request is the
+        // staged draft's OWN trail (already held in revisionTrailRef since the
+        // prior done, legacy AiTabPanel.tsx:642-647 semantics) — the first
+        // draft's prompt is carried as sourcePrompt, never re-appended here.
         stagedSourceRef.current = null
         setPreviewEvents([])
         setPreviewLabwareAdditions([])
@@ -656,7 +665,13 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             events: previewEvents,
             labwareRequirements: [],
             labwareAdditions: previewLabwareAdditions,
+            // L2-CHAT-1 FIX1 D3: the staged (now-superseded) draft's source
+            // prompt — the legacy pane carries it as sourcePrompt, so the
+            // server sees the first draft's prompt HERE, not in the trail.
+            ...(revisingSource ? { sourcePrompt: revisingSource.prompt } : {}),
           },
+          // The trail is EXCLUSIVE of the sourcePrompt above (legacy: the trail
+          // starts at the 2nd draft) — never re-includes the first draft's prompt.
           revisionHistory: revisionTrailRef.current,
         }
         contextPayload.draftRevision = draftRevision
@@ -922,10 +937,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               nextStates.set(e.eventId, 'pending')
             })
             setPreviewEventStatesMap(nextStates)
-            // L2-CHAT-1: record the staged draft's source so a REVISE turn
-            // can append it to the revision trail (the universal equivalent of
-            // AiTabPanel's preview-revisionHistory round-trip).
+            // L2-CHAT-1 FIX1 D3: the staged preview carries (source, trail) —
+            // legacy AiTabPanel.tsx:642-647 semantics: a REVISE draft's trail is
+            // the previous preview's trail + THIS draft's prompt, so the FIRST
+            // draft's prompt rides as currentPreviewDraft.sourcePrompt and is
+            // never in the trail (the trail starts at the 2nd draft).
             if (normalizedPreviewEvents.length > 0 && !isConfirm) {
+              revisionTrailRef.current = revising
+                ? [...revisionTrailRef.current, { prompt, createdAt: new Date().toISOString() }]
+                : []
               stagedSourceRef.current = { prompt, createdAt: new Date().toISOString() }
               // L2-CHAT-1: the universal GHOST MOUNT. A surface that owns a
               // deck (event editor) receives the event-bearing proposal here
@@ -936,8 +956,12 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 labwareAdditions: result.labwareAdditions ?? [],
                 ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
                 prompt,
-                revisionHistory: revisionTrailRef.current,
               })
+            } else {
+              // L2-CHAT-1 FIX1 D3: no (re)staged preview — the draft chain ends;
+              // clear the trail/source so a later fresh chain starts clean.
+              revisionTrailRef.current = []
+              stagedSourceRef.current = null
             }
             const pending = (result.unresolvedRefs ?? []).filter(
               (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id)
@@ -1220,6 +1244,11 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         // PreviewActionBar cannot commit the same events a second time
         // (exactly one adopter writes events + placements).
         onPreviewDiscardedRef.current?.()
+        // L2-CHAT-1 FIX1 D2: a successful accept ENDS this draft chain — reset
+        // the trail/source so an applied chain's prompt never leaks into a
+        // later chain's draftRevision.revisionHistory (mirror the else branches).
+        revisionTrailRef.current = []
+        stagedSourceRef.current = null
       } else if (eventsToAccept.length > 0) {
         // L2-CHAT-1: LOUD ACCEPT. A missing handler used to be a silent no-op
         // (the spec §1 defect: "make the missing-handler case loud"). The

@@ -80,16 +80,19 @@ describe('useAiChat — L2-CHAT-1 universal revision loop', () => {
 
     const secondContext = vi.mocked(streamAssist).mock.calls[1]![2] as Record<string, unknown>
     const draftRevision = secondContext.draftRevision as {
-      currentPreviewDraft: { events: Array<{ eventId: string }> }
+      currentPreviewDraft: { events: Array<{ eventId: string }>; sourcePrompt?: string }
       revisionHistory: Array<{ prompt: string; createdAt: string }>
     }
     expect(draftRevision).toBeDefined()
     expect(draftRevision.currentPreviewDraft.events).toEqual([
       expect.objectContaining({ eventId: 'EVT-1' }),
     ])
-    expect(draftRevision.revisionHistory).toHaveLength(1)
-    expect(draftRevision.revisionHistory[0].prompt).toBe('draft a transfer to B1')
-    expect(typeof draftRevision.revisionHistory[0].createdAt).toBe('string')
+    // L2-CHAT-1 FIX1 D3 (legacy AiTabPanel.tsx:296-315, 642-647 shape): the
+    // first draft's prompt rides as currentPreviewDraft.sourcePrompt and the
+    // trail is EXCLUSIVE of it — so a 2-turn chain carries an EMPTY
+    // revisionHistory on turn 2 (the trail starts at the 2nd draft).
+    expect(draftRevision.currentPreviewDraft.sourcePrompt).toBe('draft a transfer to B1')
+    expect(draftRevision.revisionHistory).toHaveLength(0)
   })
 
   it('HONEST WALL: a success that produced nothing is a REPORTED failure in plain language, owned by its turn', async () => {
