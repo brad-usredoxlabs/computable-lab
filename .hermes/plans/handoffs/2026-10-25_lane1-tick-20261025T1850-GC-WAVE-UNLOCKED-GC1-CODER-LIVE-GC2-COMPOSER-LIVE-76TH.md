@@ -76,3 +76,25 @@ Trunk cl/integration-1 @ b7a3dd8c (post dual-lane merge-fixes; GC wave header pr
 3. INSTR-COLLAPSE-3 ratification orphan: ask architect only if a future server item needs the
    INS- deletions; otherwise propose closing via next handoff ratification line.
 4. Deadmount/qms8c artifacts: unchanged, not re-asked.
+
+## ADDENDUM l1t1935 (same tick, extended) — GC-1 attempt-1 died on output-token limit; r2 RESUME dispatched
+
+- Attempt-1 coder (cl-l1-coder-gc1-l1t1730) exited rc=0 19:23 with NO report and NO worktree
+  commits: hermes reported "No visible answer was produced — model hit its output-token limit
+  on every continuation". Ownership closed (process gone, worktree clean at b7a3dd8c, slot-0
+  pid file cleared).
+- SALVAGE (first-hand ls): real probe artifacts survive in /tmp: gc1-decA.{py,json},
+  gc1-decB.{py,json} (the two-decoder cross-check), gc1-pyb.whl (real chromatography lib
+  wheel), gc1-venv-prove/ (venv exists). The run did substantive work before dying.
+- r2 RESUME dispatched to the SAME worktree/branch with an explicit salvage-first +
+  terse-output + write-report-early brief: unit cl-l1-coder-gc1-r2-l1t1935, slot 0 acquired
+  19:58:25, log logs/coder-GC1-r2-l1t1935.log, report (unique) gc-1-report-l1t1730-r2.md,
+  end-marker "GC1 DONE <sha>". Due check 21:58.
+- Attempt-count note for the two-cycle rule: this is a harness/token-limit death, not a
+  quality cycle; if r2 ALSO dies without a report, change approach (orch runs the probe
+  scripts directly and composes the spike report from real outputs, flagged orch-composed).
+- GC-2 composer unit cl-l1-speccompose-gc2-l1t1730 was still active at last check; next tick
+  reconciles it (draft lanes/1/drafts/2026-10-25_GC-2-gc-method-records-spec.l1t1730.draft.md,
+  end-marker "COMPOSER DONE GC-2 <bytes>").
+- Budget: this tick exceeded its 45-min soft budget on the recovery; no further launches —
+  checkpointing and exiting per step 9.
