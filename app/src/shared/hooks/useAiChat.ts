@@ -434,6 +434,11 @@ export interface UseAiChatOptions {
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
+// regatefix2-fix1 D4: a stable EMPTY for the staged-truth memo dep — a fresh
+// {} per render would churn the dependency whenever no staged seam is
+// registered (non-deck surfaces), recomputing the count every render.
+const EMPTY_STAGED_LABWARES = Object.freeze({})
+
 export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -517,22 +522,35 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // L2-CHAT-1 regatefix2 D2 — the STAGED labware truth the card shows: the
   // count of previewLabwares the ghost mount staged on the editor's preview
   // (the onStagedExtras seam — the same data the deck bar's "N new labware"
-  // reads). Recomputes when the staged preview lands/changes (previewEvents
-  // / previewLabwareAdditions move on the done); the ref read sees the
-  // LATEST extras at that moment. No seam (non-deck surface) or empty
-  // staged labwares → fall back to the done result's additions count —
+  // reads). The staged truth is a memo DEPENDENCY (regatefix2-fix1 D4), so
+  // the count tracks staged-preview mutations even when no chat turn moves
+  // previewEvents / previewLabwareAdditions. No seam (non-deck surface) or
+  // empty staged labwares → fall back to the done result's additions count —
   // never a fabricated number, never the misreport of counting only the
   // additions while the deck stages more (or fewer) labwares. (Placed after
   // onStagedExtrasRef — an earlier position would hit the ref's temporal
   // dead zone on the first render.)
+  // regatefix2-fix1 D4 (gate defect D4): read the staged truth ONCE per render
+  // so the count memo can TRACK it as a dependency. The memo used to recompute
+  // only on [previewEvents, previewLabwareAdditions] — a staged-extras change
+  // that did not move those two arrays (an editor-preview mutation without a
+  // new chat turn) left the memo stale and, on the shorthand path (the done
+  // result's additions are EMPTY), the count fell back to 0 (the gate's
+  // "1 event · 0 new labware" misreport). The seam read is a cheap pure read
+  // of the host's editor preview (the same data the deck bar reads);
+  // `?? EMPTY_STAGED_LABWARES` keeps the dep STABLE (a frozen shared object)
+  // when no seam is registered, so non-deck surfaces don't churn the memo.
+  const stagedPreviewLabwares =
+    onStagedExtrasRef.current?.()?.previewLabwares ?? EMPTY_STAGED_LABWARES
   const previewStagedLabwareCount = useMemo(() => {
-    const staged = Object.keys(onStagedExtrasRef.current?.()?.previewLabwares ?? {}).length
+    const staged = Object.keys(stagedPreviewLabwares).length
     if (staged > 0) return staged
     return previewLabwareAdditions.length
-    // onStagedExtrasRef is a ref (stable) — the staged extras are read at
-    // recompute time, when a staging state change re-runs this memo.
+    // stagedPreviewLabwares is a per-render dep (the staged truth); the ref
+    // read above keeps it live. The rest of the closure is intentionally
+    // stable (ref-backed), so the deps list is exhaustive by design.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewEvents, previewLabwareAdditions])
+  }, [stagedPreviewLabwares, previewEvents, previewLabwareAdditions])
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
