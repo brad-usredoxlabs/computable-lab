@@ -72,3 +72,19 @@ slots: slot-1 = CHAT-1 run 4 (lane-2), slot-0 = lane-1 GC-3-r2 (legit).
 - CHAT-1 run 4 (slot 1) streaming; TERM-1 tier-2 gate streaming (cloud). Fleet 2/2 (slot-0
   lane-1 GC-3-r2, slot-1 lane-2 run 4). Brad's stack untouched.
 - Trunk b5748b85 (TERM-1 merge b5b25c99 + docs); stack serving it.
+
+## SAME-TICK RESOLUTION (appended l2t0430, ~05:00 EDT)
+- L2-TERM-1 DONE: tier-2 gate (OpenRouter deepseek-v4.1-flash) delivered VERDICT: accept in
+  ~5 min with full real evidence (36-step trail, 7 PNGs, all 7 criteria exercised; ontology
+  tier via Tris/glucose since DMEM has no ontology hit — recorded for honesty). Orch audit
+  first-hand per browser-gate-receipt-audit: cite-checks on trail steps 8/9/14/25 all match;
+  orch natively read shots 12-02 (Local green + 'Local record', no Ontology-on-local) and
+  20-04 (popover Vocabulary=local, 'Ontology: local' absent). Sole console error = proven
+  pre-existing run-steps 400. Report promoted .hermes/plans/L2-TERM-1-brgate-report.md
+  (commit d31c41c5); task-list flipped done (code merge already in trunk since b5b25c99).
+  Tier-ladder lesson CONFIRMED and worth reusing: tier-1 qwen35-4b-vision looped 89 min with
+  zero receipts on browser_vision self-judging; tier-2 cloud delivered in 5 min. For bounded
+  picker-gates consider tier-2 first next time.
+- CHAT-1 run 4 healthy: STEP 0 executed — run-3 work committed 4a6d9150 'wip(l2-chat-1):
+  run-3 implementation in flight' (4 revision-loop + 1 ghost test GREEN; ghost
+  previewPlacements still RED). 80 msgs / 41 tools, streaming. Next tick: watch for exit.
