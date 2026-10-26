@@ -80,3 +80,20 @@ prompt PRE-STAGED for immediate dispatch the moment CHAT-1 merges + a slot frees
 ## LIVE AT EXIT
 - CHAT-1 run 4 streaming (slot-1); SUITE-B composer streaming (thunderbeast). Fleet 2/2.
   Brad's stack untouched. Trunk 1875d068; stack serving it.
+
+## SAME-TICK CORRECTION (appended l2t0511, ~06:00 EDT)
+- CHAT-1 RUN 4 DIED after this handoff was written: rc=0 at 05:45 with the run-2 death class —
+  hermes wall 'reasoning consumed the entire output budget each continuation' after 137 API
+  calls. Work survived: commit 154dc885 (honest wall render + Stop escape + shared ghost-mount
+  hook) + small uncommitted diff. Compression fix HELD (no compression_failure_error) — the
+  two death classes are distinct.
+- RUN 5 QUEUED 05:53 with `--reasoning low` (harness-recommended lever; max_tokens already at
+  65536): unit cl-l2-chat1-run5-l2t0511, log logs/coder-L2CHAT1-run5-l2t0511.log, report
+  deliverables/L2-CHAT-1-report.l2t0550run5.md, SAME worktree/branch, STEP 0 = commit run-4's
+  in-flight diff. Took SLOT 0 at 05:53:16 (lane-1 GC-3-r2 pid confirmed gone — legit release).
+  Live: hermes 1435888 family, session 20261026_055318_e98963 streaming. NEW assumption
+  AS-L2T0511-CHAT1-RUN5-REASONING-LOW (evidence debt OPEN; ledger entry appended).
+- NEXT-TICK WATCH on run 5 unchanged from the run-4 protocol above (exit -> grep death class ->
+  gates). If run 5 dies with reasoning-low TOO: do NOT re-dispatch blind — that is two
+  identical-class failures; route an engine-side max_tokens/output-cap investigation
+  (NInfer serve config on appliance-2) before run 6.
