@@ -204,12 +204,25 @@ describe('badgeStyles', () => {
   // L2-TERM-1 (UC-D4): the new vocabulary tiers need their own palettes, and
   // 'Local' must NOT be indistinguishable from the neutral unknown fallback.
   it('returns distinct palettes for the L2-TERM-1 vocabulary tiers', () => {
+    const tiers = ['Local', 'Composition', 'New', 'Ontology'] as const
     const seen = new Set<string>()
-    for (const badge of ['Local', 'Composition', 'Ontology', 'New']) {
+    for (const badge of tiers) {
       const css = badgeStyles(badge)
       seen.add(css.background)
     }
-    expect(seen.size).toBeGreaterThan(1)
+    // L2-TERM-1 fix-1 (D2): pairwise-distinct backgrounds across ALL four
+    // tiers — two tiers must never share a palette (the old `size > 1`
+    // assertion was trivially satisfiable).
+    expect(seen.size).toBe(tiers.length)
+    // The local/composite/mint tiers must never wear the ontology purple
+    // (background #f3e8ff / color #7e22ce) — a regression to it is exactly
+    // the UC-D4 "local reads as Ontology" contradiction.
+    for (const badge of ['Local', 'Composition', 'New']) {
+      const css = badgeStyles(badge)
+      expect(css.background).not.toBe('#f3e8ff')
+      expect(css.color).not.toBe('#7e22ce')
+    }
+    // ...and never the neutral unknown-badge gray.
     expect(badgeStyles('Local').background).not.toBe('#e5e7eb')
     expect(badgeStyles('Composition').background).not.toBe('#e5e7eb')
   })
