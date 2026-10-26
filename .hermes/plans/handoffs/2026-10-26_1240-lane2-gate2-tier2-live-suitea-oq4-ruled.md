@@ -111,3 +111,23 @@ tier-2 same flow new receipts dir -> on accept mark CHAT-1 done + close the 3 ca
 assumption debts. FREEFORM-1 still live (~85 min, seams-mapped phase in report, 0 commits —
 2x checkpoint ~13:30; if no commits by 2x, motion-assess via state.db before any resume call).
 Fleet: both slot watchers now armed (FREEFORM-1 in slot 1; gatefix queue unit waiting).
+
+## ADDENDUM 2 at ~13:02 EDT — FREEFORM-1 CONTEXT DEATH + RESUME; fleet 2/2 both lane-2
+First FREEFORM-1 run EXITED rc=0 12:40 with ZERO commits: report has full baselines (server
+tsc clean; app tsc 71-line pre-existing; server sweep 135-failed-file list at
+/tmp/ff1-server-failing-files-baseline2.txt), seam map w/ cites, per-leg plan — and two
+untracked H1 drafts (AgentOrchestrator.freeformLegs.test.ts + honestOutcome.ts). Death-class
+(orientation context exhaustion), not stalled-progress loss. RESUME dispatched slot 1 at
+13:00: unit cl-l2-freeform1-resume-l2t1210 (prompt inherit-baselines/seams/WIP, leg-by-leg,
+one commit per leg, targeted suites only), SAME worktree/branch, log
+logs/coder-L2FREEFORM1-resume-l2t1210.log, marker 'FREEFORM1 DONE <sha>'. 2x watch ~15:00.
+CHAT-1 GATEFIX1 GRABBED SLOT 0 at 12:54 (GC3-lane1 released it): running now, log
+logs/coder-L2CHAT1-gatefix1-l2t1210.log, worktree wt/L2-CHAT-1-gatefix1-lane2-l2t1210 off
+701f80c0 tip, report deliverables/L2-CHAT-1-gatefix1-report.l2t1210.md, marker 'CHAT1
+GATEFIX1 DONE <sha>'. FLEET: BOTH slots are lane-2 work.
+NEXT TICK (both workers alive): exit-check either marker; CHAT1 gatefix1 complete -> advc
+(scope 701f80c0...HEAD, reviews/L2-CHAT-1-gatefix-advc1-l2t<tick>.md) -> self-verify -> merge
+-> RE-GATE tier-2 (new receipts dir, same flow prompt as
+prompts/browser-L2CHAT1-gate-l2t1210-tier2.txt, receipts dir swapped). FREEFORM resume
+complete -> advc (scope 701f80c0...HEAD on ITS branch) -> self-verify vs the inherited
+failing-file-set baseline -> merge -> SUITE-A canonical promotion + restart.
