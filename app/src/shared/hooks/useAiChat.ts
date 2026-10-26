@@ -1354,6 +1354,13 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           for (const event of eventsToAccept) {
             handler(rewriteEventRefs(event, combined))
           }
+          // L2-CHAT-1 FIX1 D1+D2: the resolve-ref accept is ALSO an adoption —
+          // unmount the ghost through the same discard seam (one adopter) and
+          // reset the trail/source (mirror acceptPreview's handler branch),
+          // so the deck bar cannot re-commit and a later chain starts clean.
+          onPreviewDiscardedRef.current?.()
+          revisionTrailRef.current = []
+          stagedSourceRef.current = null
         } else if (eventsToAccept.length > 0) {
           // L2-CHAT-1: loud accept (same as acceptPreview).
           revisionTrailRef.current = []
@@ -1449,6 +1456,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         for (const event of toApply) {
           handler(event)
         }
+        // L2-CHAT-1 FIX1 D1+D2 (consistency): a per-event commit is an
+        // adoption too — unmount the ghost through the same discard seam the
+        // legacy pane's commit flow ends in (clearPreview), and reset the
+        // trail/source, so every event-writing path keeps exactly one adopter
+        // and no stale trail leaks into a later chain.
+        onPreviewDiscardedRef.current?.()
+        revisionTrailRef.current = []
+        stagedSourceRef.current = null
       }
 
       // Add system message

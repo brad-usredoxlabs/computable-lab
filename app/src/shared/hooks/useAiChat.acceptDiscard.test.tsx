@@ -131,4 +131,48 @@ describe('useAiChat — D1: chat-card Apply unmounts the ghost (one adopter)', (
     editor.commitPreview()
     expect(editor.events.map((e) => e.eventId)).toEqual(['EVT-1'])
   })
+
+  it('D1+D2: acceptPreviewWithResolutions (the resolve-ref accept path) ALSO unmounts the ghost and resets the trail', async () => {
+    // The SECOND successful-accept path. The review's D1 ("exactly one
+    // adopter") and D2 ("reset on EVERY successful accept") mandate it —
+    // leaving it would re-introduce the same double-commit / trail leak on
+    // the resolve-ref path.
+    frames(
+      { type: 'status', message: 'working' },
+      {
+        type: 'done',
+        result: {
+          success: true,
+          events: [{ eventId: 'EVT-1', event_type: 'add_material', details: {} }],
+          notes: [],
+        },
+      },
+    )
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext,
+        onAcceptEvent: (event) => editor.appendEvent(event as { eventId: string }),
+        onProposalDrafted: (draft) =>
+          editor.setPreview({ previewEvents: draft.events, previewPlacements: [] }),
+        onPreviewDiscarded: () => editor.clearPreview(),
+      }),
+    )
+
+    await act(async () => {
+      result.current.sendPrompt('draft an add_material for A1')
+    })
+    await waitFor(() => expect(result.current.hasPreview).toBe(true))
+    expect(editor.preview).toBeTruthy()
+
+    // Accept via the resolve-ref path (empty resolutions = nothing to rewrite).
+    await act(async () => {
+      result.current.acceptPreviewWithResolutions(new Map())
+    })
+    // Applied EXACTLY ONCE, and the ghost is unmounted with the apply.
+    await waitFor(() => expect(editor.events.map((e) => e.eventId)).toEqual(['EVT-1']))
+    expect(editor.preview).toBeNull()
+    // The deck bar cannot re-commit the same events a second time.
+    editor.commitPreview()
+    expect(editor.events.map((e) => e.eventId)).toEqual(['EVT-1'])
+  })
 })
