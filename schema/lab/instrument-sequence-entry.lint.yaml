@@ -1,0 +1,103 @@
+# Lint rules for Instrument Sequence Entry records (GC-3 injection row).
+#
+# HONEST BOUNDARY (GC-3 spec §Lint R3/R5, orch resolution 2 option (a)):
+# the v1 lint DSL CANNOT open the record store — ref TARGET EXISTENCE is
+# resolution-time (the GC-4 resolver; the bindRecordId UNKNOWN_RECORD
+# precedent), NOT lint's job. What lint CAN do, and does here, is
+# SHAPE-adjacent id-prefix closure — the most common dangling-by-typo
+# class, caught WITHOUT store access:
+#   R3 sampleRef/gcMethodRef ids must carry the target kind's own
+#      id-prefix vocabulary (^SMP- / ^GCM-);
+#   R4 a zero multiplier or dilution is almost certainly a data-entry error.
+# (operatorRef lives on the HEADER, not the entry, and is deliberately NOT
+#  type-pinned — orch resolution 4: no ^USR- prefix lint is invented; the
+#  header schema's description states that boundary.)
+# An id like 'SMP-MISSING' PASSES these rules — shape is not existence
+# (reviewer bait #1: no store-resolution rule exists, by design).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/instrument-sequence-entry.schema.yaml"
+rules:
+  # R3 — ref id-prefix shape closure. Vacuous-pass branch (not(nonEmpty))
+  # mirrors protocol.lint.yaml step-role-closure's any-branch shape: an
+  # absent ref passes; a present ref must match the target kind's id
+  # pattern (the pattern declared by that kind's own schema — services/
+  # sample.schema.yaml ^SMP-, gc-method.schema.yaml ^GCM- per GC-2, the
+  # ^USR- vocabulary run.schema.yaml executedBy establishes for operators;
+  # no type:const user pin is invented — orch resolution 4).
+  - id: "isen-ref-shape-closed"
+    title: "Entry ref ids must carry the target kind's id-prefix vocabulary"
+    description: >-
+      sampleRef.id must match ^SMP-, gcMethodRef.id must match ^GCM-.
+      Shape check ONLY: a well-shaped id
+      that names no record is still legal here — existence is enforced at
+      resolution time, not by the lint DSL (which cannot see the store).
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "all"
+      predicates:
+        - op: "any"
+          predicates:
+            - op: "not"
+              not:
+                op: "nonEmpty"
+                path: "$.sampleRef.id"
+            - op: "regex"
+              path: "$.sampleRef.id"
+              pattern: "^SMP-"
+        - op: "any"
+          predicates:
+            - op: "not"
+              not:
+                op: "nonEmpty"
+                path: "$.gcMethodRef.id"
+            - op: "regex"
+              path: "$.gcMethodRef.id"
+              pattern: "^GCM-"
+    message:
+      template: "Entry '{{$.id}}' carries a ref id outside its target kind's id-prefix vocabulary (sampleRef ^SMP-, gcMethodRef ^GCM-)"
+      paths: ["$.id"]
+  # R4 — a zero multiplier/dilution is almost certainly a data-entry error
+  # (division by the dilution factor downstream). ONE rule per the spec:
+  # each branch passes vacuously when its field is ABSENT and fails when
+  # it is present and not > 0. The guard is not(exists) — the spec's
+  # sketch (`when: not(equals null)`) cannot express this in the DSL:
+  # equals-null is false for EVERY present value (so the guard never
+  # excludes a zero) and true for absent fields (so the rule would fire
+  # on rows that omit the field). not(exists) is the only guard whose
+  # branch semantics match the spec's stated intent: absent is clean,
+  # present must be > 0.
+  - id: "isen-multiplier-dilution-sane"
+    title: "Multiplier and dilution must be positive when present"
+    description: >-
+      A zero run-table multiplier or dilution factor is almost certainly a
+      data-entry error. Absent fields pass vacuously (a row may omit them);
+      present fields must be > 0.
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "all"
+      predicates:
+        - op: "any"
+          predicates:
+            - op: "not"
+              not:
+                op: "exists"
+                path: "$.multiplier"
+            - op: "compare"
+              path: "$.multiplier"
+              operator: "gt"
+              value: 0
+        - op: "any"
+          predicates:
+            - op: "not"
+              not:
+                op: "exists"
+                path: "$.dilution"
+            - op: "compare"
+              path: "$.dilution"
+              operator: "gt"
+              value: 0
+    message:
+      template: "Entry '{{$.id}}' multiplier/dilution must be > 0 when present (a zero factor is a data-entry error)"
+      paths: ["$.id"]

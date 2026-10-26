@@ -49,6 +49,9 @@ const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/
  * INSTR-COLLAPSE-2 C3: 7 → 6. The older orchestrator ruling "OQ3: KEEP AT 7"
  * is SUPERSEDED for this kind by the collapse ruling (Brad 2026-10-21T19:15):
  * the `instrument` kind is deleted, so its coverage entry retires with it.
+ * GC-3: the instrument run-sheet kinds (instrument-sequence header +
+ * instrument-sequence-entry row) join the coverage (7 → 9), same minimal
+ * registry-ops treatment as calibration-record (no stripDomainStatus).
  */
 const COVERED_KINDS = [
   'calibration-record',
@@ -56,6 +59,8 @@ const COVERED_KINDS = [
   'equipment',
   'equipment-class',
   'gc-method',
+  'instrument-sequence',
+  'instrument-sequence-entry',
   'person',
   'training-record',
 ]
@@ -393,7 +398,7 @@ describe('QMS7-3 governed kinds are untouched by the coverage stamp', () => {
     expect(storedPayload(world, 'DOC-QMS7OK').lifecycleId).toBe('document-controlled-signing')
   })
 
-  it('coverage is DATA: the real coverage YAML declares exactly the 7 approved kinds', () => {
+  it('coverage is DATA: the real coverage YAML declares exactly the 9 approved kinds', () => {
     const engine = loadEngine()
     const coverage = loadCoverage(engine)
     expect([...coverage.kinds()].sort()).toEqual(COVERED_KINDS)
