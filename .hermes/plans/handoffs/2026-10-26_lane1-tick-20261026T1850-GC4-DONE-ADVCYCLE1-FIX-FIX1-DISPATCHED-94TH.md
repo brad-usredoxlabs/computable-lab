@@ -90,3 +90,34 @@ Author: orchestrator cron tick l1t1835 — lane 1 only. All git via -c core.file
   at last check).
 - Adversarial reviewer unit cl-l1-advgc4-l1t1835 EXITED rc=0 18:40 (report on disk).
 - Lane stack :3092/:5192 healthy. No YAML merged to trunk this tick — no restart needed.
+
+## ADDENDUM at budget expiry 19:25 (same tick)
+
+- GC-4 FIX1 COMPLETED 19:00:04 rc=0 — `GC4 FIX1 DONE 528f32b5` (ONE commit, 2 files
+  +106/-23; assertDirectoryRoot before the walk in register AND verify: absent root ->
+  PACKAGE_DEVICE_MISSING, non-dir root -> PACKAGE_NOT_A_FILE; dead !device branches removed;
+  PACKAGE_HASH_MISMATCH kept w/ disposition comment; 2 named-cause tests RED-first, raw
+  gc-4-fix1-RED-l1t1850.txt shows 2 failed before the fix). Slot-1 released 19:00:04.
+- ORCH VERIFY first-hand: own `npx vitest run` 31/31 (19:21:38, both touched suites), own
+  `npx tsc --noEmit` = 0 error TS.
+- CYCLE-2 ADV GATE dispatched 19:24 (unit cl-l1-advgc4fix1-l1t1925, OpenRouter
+  deepseek-v4.1-flash, scope = fix1 commit only: D1/D2 actually fixed w/ named-token
+  assertions, new-hole hunt incl. symlinked root + no-regression on present-but-empty-dir
+  PACKAGE_FILE_MISSING, hash-mismatch disposition ruling, scope-creep stat check, own vitest
+  run). Report path reviews/GC4-fix1-advreview-l1t1925-20261026T192439.md; log
+  logs/advc-GC4fix1-l1t1925-20261026T192439.log. LIVE at checkpoint — do not duplicate; the
+  next tick reads the verdict. On ACCEPT: merge --no-ff (expect trivial pin conflicts per
+  AS-L1T1745-2) -> RESTART (YAML merged!) -> mint ACQP fixture via :3092 -> orch
+  deterministic-Playwright gate on the acquisition-package editor -> mark done.
+- GC-9 COMPOSER EXITED 19:16:05 rc=0 — GC9 DRAFT COMPLETE, draft
+  .hermes/plans/drafts/DRAFT-2026-10-26T1815-GC-9-parameter-forms-spec.md (35.5 KB, ends with
+  the marker). Draft self-report: handwritten ParameterForm.tsx closed-construct renderer,
+  Advanced-JSON escape, default-keyword pre-fill, effective-params preview, unsupported-
+  construct actionable block, 11+8 vitest matrix, baselines app-analysis 22/22 + app tsc
+  21-error-line baseline 0-in-src/analysis + server tsc 0. OQ-1..OQ4 open with
+  recommendations (OQ-1 handwritten-vs-@rjsf needs ratify-before-dispatch; OQ-2/OQ-4
+  AMEND-AT-MERGE at GC-7 promotion). NEXT TICK: cite-audit [F] facts first-hand, ratify
+  OQ-1 (orch ruling is defensible: actionable-unsupported + ViewRenderer precedent; record
+  as assumption), promote to .hermes/plans/2026-10-28_GC-9-parameter-forms.md.
+- Fleet at checkpoint: slot-0 = lane-2 (pid 3487672, their tick owns it), slot-1 FREE — next
+  tick may grab slot-1 for GC-5 once GC-4 merges (GC-4 itself is in gate, no coder needed).
