@@ -31,7 +31,9 @@ import type {
   InstrumentApplianceJob,
   PromptMention,
   AiAgentActionEnvelope,
+  AiDraftRevisionContext,
 } from '../../types/ai'
+import { draftProducedNothing } from '../../event-editor/right-pane/ai/draftEmptiness'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
 let _warnedFallbackOnce = false
@@ -212,6 +214,14 @@ export interface UseAiChatReturn {
   executingApplianceJobIds: ReadonlySet<string>
   hasPreview: boolean
   unresolvedRefs: OntologyRefProposal[]
+  /**
+   * L2-CHAT-1: the honest-failure wall — a `success` done that produced
+   * nothing mountable is a REPORTED failure in plain language, owned by its
+   * turn (cleared on the next send). null when the last turn delivered
+   * something or is still in flight. The universal port of AiTabPanel's
+   * `honestWall` state.
+   */
+  honestWall: string | null
   inputText: string
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
   cancelStream: () => void
@@ -238,6 +248,27 @@ export interface UseAiChatReturn {
 export type AcceptEventHandler = (event: PlateEvent) => void
 
 /**
+ * L2-CHAT-1 — an event-bearing proposal the universal chat just staged.
+ * Surfaces that own a deck (event editor) register a handler to mount the
+ * proposal as GHOSTS on the editor state (the universal port of AiTabPanel's
+ * buildPreviewFromDraft seam, AiTabPanel.tsx:608-669).
+ */
+export interface AiProposalDraft {
+  events: PlateEvent[]
+  labwareAdditions: AiLabwareAddition[]
+  /**
+   * Resolved placement offers (REVISE-GHOST-1 fix3 shape): labware hints the
+   * pipeline bound against real inventory records. Ghosted as placements of
+   * the EXISTING record (keyed by recordId), never a re-creation.
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
+  /** The prompt that produced this draft. */
+  prompt: string
+  /** Prompts of the PRIOR drafts in the current chain (empty on a first draft). */
+  revisionHistory: { prompt: string; createdAt: string }[]
+}
+
+/**
  * Callback for adding labware from a record.
  */
 export type AddLabwareFromRecordHandler = (record: Record<string, unknown>, addition?: AiLabwareAddition) => void
@@ -257,6 +288,17 @@ export interface UseAiChatOptions {
   proposalScopeKey?: string
   onSequenceProposal?: (proposal: Record<string, unknown>, userRequest?: string) => void
   onAcceptEvent?: AcceptEventHandler
+  /**
+   * L2-CHAT-1: called when the universal chat stages an event-bearing
+   * proposal (a done with mountable events). Deck-owning surfaces use it to
+   * mount the proposal as ghosts on the editor state.
+   */
+  onProposalDrafted?: (draft: AiProposalDraft) => void
+  /**
+   * L2-CHAT-1: called when the staged preview is discarded (Discard). Deck
+   * surfaces use it to clear the ghosted preview.
+   */
+  onPreviewDiscarded?: () => void
   /** Handler called to add labware from a record (for AI-proposed additions). */
   onAddLabwareFromRecord?: AddLabwareFromRecordHandler
   /**
@@ -298,13 +340,26 @@ export interface UseAiChatOptions {
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
   const [previewEvents, setPreviewEvents] = useState<PlateEvent[]>([])
   const [previewLabwareAdditions, setPreviewLabwareAdditions] = useState<AiLabwareAddition[]>([])
   const [previewEventStates, setPreviewEventStatesMap] = useState<Map<string, PreviewEventState>>(new Map())
+  // L2-CHAT-1 — the universal honest-failure wall: a done result that produced
+  // nothing (the ONE shared rule, draftEmptiness.draftProducedNothing) is a
+  // REPORTED failure in plain language, owned by its turn. AiTabPanel's
+  // `honestWall` state ported to the generic stack.
+  const [honestWall, setHonestWall] = useState<string | null>(null)
+  // L2-CHAT-1 — the revision trail: prompts that produced staged drafts in
+  // the current draft chain. Carries back to the server as
+  // `draftRevision.revisionHistory` (the structured context AiTabPanel's
+  // context builder sends, AiTabPanel.tsx:308-315).
+  const revisionTrailRef = useRef<{ prompt: string; createdAt: string }[]>([])
+  // The staged draft's own source prompt + staging time (set by the done
+  // handler); joined into the trail when the NEXT send revises it.
+  const stagedSourceRef = useRef<{ prompt: string; createdAt: string } | null>(null)
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
   const [executingApplianceJobIds, setExecutingApplianceJobIds] = useState<Set<string>>(() => new Set())
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
@@ -346,6 +401,12 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
   const onAcceptEventRef = useRef(onAcceptEvent)
   onAcceptEventRef.current = onAcceptEvent
+  // L2-CHAT-1: ghost-mount seam — stable-ref convention (same as the
+  // callbacks above) so the done handler always calls the LATEST handler.
+  const onProposalDraftedRef = useRef(onProposalDrafted)
+  onProposalDraftedRef.current = onProposalDrafted
+  const onPreviewDiscardedRef = useRef(onPreviewDiscarded)
+  onPreviewDiscardedRef.current = onPreviewDiscarded
 
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
@@ -514,8 +575,23 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       if (isStreaming) return
       const submittedProposalScope = proposalScopeRef.current
 
-      // Auto-reject existing preview before starting new stream
-      if (previewEvents.length > 0 || previewLabwareAdditions.length > 0) {
+      // L2-CHAT-1: a new send starts a new turn — the honest-failure wall
+      // belongs to the turn that produced the failure, so it clears HERE,
+      // synchronously (before any await) so the fresh turn never renders the
+      // prior turn's wall.
+      setHonestWall(null)
+
+      // Auto-reject existing preview before starting new stream.
+      // L2-CHAT-1: a send while a preview is staged is a REVISE turn — the
+      // staged draft's source prompt joins the revision trail and rides back
+      // to the server as `draftRevision.revisionHistory` (AiTabPanel's
+      // round-trip). The CURRENT prompt is the new request, not history.
+      const revising = previewEvents.length > 0 || previewLabwareAdditions.length > 0
+      if (revising) {
+        if (stagedSourceRef.current) {
+          revisionTrailRef.current = [...revisionTrailRef.current, stagedSourceRef.current]
+        }
+        stagedSourceRef.current = null
         setPreviewEvents([])
         setPreviewLabwareAdditions([])
         setUnresolvedRefs([])
@@ -570,6 +646,22 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
       const ctx = aiContextRef.current
       const contextPayload: Record<string, unknown> = { ...ctx.surfaceContext }
+      // L2-CHAT-1: the revision trail round-trip. A revise turn (send while a
+      // preview was staged) carries the staged draft + the accumulated
+      // revision history back as structured `draftRevision` context — the
+      // same shape the legacy pane's context builder sends, so the server
+      // sees the universal path's revise turns identically.
+      if (revising) {
+        const draftRevision: AiDraftRevisionContext = {
+          currentPreviewDraft: {
+            events: previewEvents,
+            labwareRequirements: [],
+            labwareAdditions: previewLabwareAdditions,
+          },
+          revisionHistory: revisionTrailRef.current,
+        }
+        contextPayload.draftRevision = draftRevision
+      }
       let promptMentions: PromptMention[] = []
       // Inject mentions for event-editor surface
       if (ctx.surface === 'event-editor') {
@@ -831,6 +923,23 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               nextStates.set(e.eventId, 'pending')
             })
             setPreviewEventStatesMap(nextStates)
+            // L2-CHAT-1: record the staged draft's source so a REVISE turn
+            // can append it to the revision trail (the universal equivalent of
+            // AiTabPanel's preview-revisionHistory round-trip).
+            if (normalizedPreviewEvents.length > 0 && !isConfirm) {
+              stagedSourceRef.current = { prompt, createdAt: new Date().toISOString() }
+              // L2-CHAT-1: the universal GHOST MOUNT. A surface that owns a
+              // deck (event editor) receives the event-bearing proposal here
+              // and mounts it as ghosts on the editor state (the port of
+              // AiTabPanel's buildPreviewFromDraft seam, AiTabPanel.tsx:608-669).
+              onProposalDraftedRef.current?.({
+                events: normalizedPreviewEvents,
+                labwareAdditions: result.labwareAdditions ?? [],
+                ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
+                prompt,
+                revisionHistory: revisionTrailRef.current,
+              })
+            }
             const pending = (result.unresolvedRefs ?? []).filter(
               (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id)
             )
@@ -876,6 +985,19 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
             const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
             if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
+              // L2-CHAT-1: the universal honest-failure wall. A success that
+              // produced nothing mountable (the ONE shared rule,
+              // draftEmptiness.draftProducedNothing — the same predicate
+              // AiTabPanel's wall uses) is a REPORTED failure in plain
+              // language, owned by its turn. Never a silent empty plate.
+              if (draftProducedNothing(result as Parameters<typeof draftProducedNothing>[0])) {
+                const delivered = [
+                  (result.notes?.length ?? 0) > 0 ? 'notes' : null,
+                ].filter((part): part is string => part !== null)
+                setHonestWall(
+                  `Draft produced no events${delivered.length > 0 ? ` — it delivered only ${delivered.join(' and ')}` : ''} and asked no questions. Nothing was proposed and nothing was applied.`,
+                )
+              }
               setMessages((prev) => [
                 ...prev,
                 {
@@ -1094,6 +1216,24 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         for (const event of eventsToAccept) {
           handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
         }
+      } else if (eventsToAccept.length > 0) {
+        // L2-CHAT-1: LOUD ACCEPT. A missing handler used to be a silent no-op
+        // (the spec §1 defect: "make the missing-handler case loud"). The
+        // staged events are reported as NOT applied — never quietly dropped.
+        revisionTrailRef.current = []
+        stagedSourceRef.current = null
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateMessageId(),
+            role: 'system',
+            content: `This surface has no event path wired — ${eventsToAccept.length} accepted event${eventsToAccept.length !== 1 ? 's' : ''} could not be applied.`,
+            timestamp: Date.now(),
+          },
+        ])
+      } else {
+        revisionTrailRef.current = []
+        stagedSourceRef.current = null
       }
 
       // Compute the final summary message based on outcomes.
@@ -1147,6 +1287,22 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           for (const event of eventsToAccept) {
             handler(rewriteEventRefs(event, combined))
           }
+        } else if (eventsToAccept.length > 0) {
+          // L2-CHAT-1: loud accept (same as acceptPreview).
+          revisionTrailRef.current = []
+          stagedSourceRef.current = null
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: generateMessageId(),
+              role: 'system',
+              content: `This surface has no event path wired — ${eventsToAccept.length} accepted event${eventsToAccept.length !== 1 ? 's' : ''} could not be applied.`,
+              timestamp: Date.now(),
+            },
+          ])
+        } else {
+          revisionTrailRef.current = []
+          stagedSourceRef.current = null
         }
         setMessages((prev) => [
           ...prev,
@@ -1174,6 +1330,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
+    // L2-CHAT-1: discard ends the draft chain.
+    revisionTrailRef.current = []
+    stagedSourceRef.current = null
+    onPreviewDiscardedRef.current?.()
     setMessages((prev) => [
       ...prev,
       {
@@ -1278,6 +1438,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     executingApplianceJobIds,
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
+    honestWall,
     inputText,
     sendPrompt,
     cancelStream,

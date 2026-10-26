@@ -109,7 +109,7 @@ describe('useAiChat — L2-CHAT-1 universal revision loop', () => {
     // The reported failure belongs to ITS turn: a fresh send clears it.
     frames({ type: 'status', message: 'working again' }, DONE_WITH_EVENT)
     await act(async () => {
-      result.current.sendPrompt('draft a read for A1')
+      await result.current.sendPrompt('draft a read for A1')
     })
     expect(result.current.honestWall).toBeNull()
     await waitFor(() => expect(result.current.hasPreview).toBe(true))

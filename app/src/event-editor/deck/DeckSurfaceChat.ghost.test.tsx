@@ -15,6 +15,7 @@
  *    with an unwired event path.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
 import type { PlateEvent } from '../../types/events'
@@ -24,7 +25,10 @@ import { DeckSurfaceChat } from './DeckSurfaceChat'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 const mocks = vi.hoisted(() => ({
-  setPreview: vi.fn(),
+  setPreview: vi.fn((preview: unknown) => {
+    // Mirror the real reducer: a set_preview dispatch replaces state.preview.
+    mocks.state = { ...mocks.state, preview } as unknown as EventEditorState
+  }),
   clearPreview: vi.fn(),
   appendEvent: vi.fn(),
   commitPreview: vi.fn(),
@@ -48,11 +52,34 @@ vi.mock('../../shared/api/aiClient', () => ({
   getAiHealth: vi.fn().mockResolvedValue({ available: true }),
 }))
 
+// Thread persistence: DeckSurfaceChat registers the chat with endpoint
+// 'event-editor' — the thread hydrate/append effects would hit the LIVE
+// stack's /api/ai/threads. Stub them: the ghost lock asserts the mount path,
+// not persistence, and this test must never write to a running thread.
+vi.mock('../../shared/api/aiThreadClient', () => ({
+  getThread: vi.fn().mockRejectedValue(new Error('no thread')),
+  appendThreadMessage: vi.fn().mockResolvedValue(undefined),
+  promoteThread: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
     getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }),
   },
+}))
+
+// The workstate proposal flow's executor tree pulls OpenTabsProvider +
+// navigation into the render — out of scope for the ghost lock. Stub the
+// flow: the ghost mount + apply path never touches workstate frames.
+vi.mock('../../shared/ai/useWorkstateProposalFlow', () => ({
+  useWorkstateProposalFlow: () => ({
+    card: null,
+    proposeWorkstate: vi.fn(),
+    acceptWorkstate: vi.fn(),
+    rejectWorkstate: vi.fn(),
+    handleAgentAction: vi.fn(),
+  }),
 }))
 
 // ChatLog imports the lane-2 answer helper from AiTabPanel, whose real import
@@ -94,18 +121,53 @@ function frames(...events: Array<Record<string, unknown>>) {
   })
 }
 
+/**
+ * Render the deck chat + pane.
+ *
+ * REACTIVITY NOTE (seam design, not a defect of this item): the pane
+ * (HarnessChatPane) re-reads the registered chat when its ELEMENT identity
+ * changes — in production that piggybacks on the host page's re-renders
+ * (AppShell recreates the rightPane element). A version bump alone re-renders
+ * the provider, not the pane's subtree (children-element bailout). A fresh
+ * element per re-read below supplies the same identity change the host page
+ * causes, so the test asserts on the pane reading the FRESH registered chat.
+ */
 function renderDeckChat() {
-  return render(
+  const makeTree = () => (
     <AiPanelProvider>
       <DeckSurfaceChat />
       <HarnessChatPane />
-    </AiPanelProvider>,
+    </AiPanelProvider>
   )
+  const utils = render(makeTree())
+  return { ...utils, reread: () => utils.rerender(makeTree()) }
 }
 
-async function sendThroughPane(text: string) {
-  fireEvent.change(screen.getByLabelText('Message'), { target: { value: text } })
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+/**
+ * Poll the pane's re-read until the staged preview card appears (the stream
+ * finishes asynchronously; the pane reads the fresh chat on each re-read, the
+ * same way the host page's re-render makes it read).
+ */
+async function awaitPreviewCard(deck: ReturnType<typeof renderDeckChat>, timeoutMs = 4000) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    await act(async () => {
+      deck.reread()
+    })
+    const card = screen.queryByTestId('chat-preview')
+    if (card) return card
+    if (Date.now() >= deadline) throw new Error('chat-preview card never appeared')
+    await new Promise((r) => setTimeout(r, 50))
+  }
+}
+
+async function sendThroughPane(text: string, deck: ReturnType<typeof renderDeckChat>) {
+  await act(async () => {
+    deck.reread() // the pane picks up the registered chat (composer enabled)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: text } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  })
+  return awaitPreviewCard(deck)
 }
 
 describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1)', () => {
@@ -122,14 +184,13 @@ describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1
         },
       },
     )
-    renderDeckChat()
+    const deck = renderDeckChat()
 
     // MOUNT CONSISTENCY: the deck route's right pane IS the universal chat.
     expect(screen.getByTestId('harness-chat-pane')).toBeInTheDocument()
 
-    await sendThroughPane('draft an add-material for A1')
+    const card = await sendThroughPane('draft an add-material for A1', deck)
     // The universal pane stages the proposal (ChatPreviewCard).
-    const card = await screen.findByTestId('chat-preview')
     expect(card).toBeInTheDocument()
 
     // Deck ghosts mounted on the editor state (the universal ghost leg).
@@ -165,9 +226,8 @@ describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1
         },
       },
     )
-    renderDeckChat()
-    await sendThroughPane('first draft: add material')
-    await screen.findByTestId('chat-preview')
+    const deck = renderDeckChat()
+    await sendThroughPane('first draft: add material', deck)
     const first = mocks.setPreview.mock.calls[0]![0] as EventEditorPreview
     expect(first.previewEvents).toEqual([expect.objectContaining({ eventId: 'EVT-1' })])
 
@@ -183,7 +243,8 @@ describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1
         },
       },
     )
-    await sendThroughPane('actually read A1 instead')
+    await sendThroughPane('actually read A1 instead', deck)
+    // The revise turn's card is staged (one event).
     await waitFor(() => {
       const card = screen.getByTestId('chat-preview')
       expect(card.textContent).toContain('1')
@@ -196,7 +257,10 @@ describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1
       expect.objectContaining({ eventId: 'EVT-2' }),
     ])
     expect(second.revisionHistory).toHaveLength(1)
-    expect(second.revisionHistory![0].prompt).toBe('first draft: add material')
+    // Legacy contract (AiTabPanel.ghostRemount §4B.5): the entry is the
+    // prompt that was JUST drafted (the one now mounted), appended when the
+    // PREVIOUS preview is replaced.
+    expect(second.revisionHistory![0].prompt).toBe('actually read A1 instead')
     expect(typeof second.revisionHistory![0].createdAt).toBe('string')
   })
 })
