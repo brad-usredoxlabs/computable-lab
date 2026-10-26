@@ -569,3 +569,133 @@ describe('REVISE-GHOST-1 fix 1 — the wall does NOT fire on a proposal-bearing 
     expect(draftProducedNothing({ success: true, events: [], protocolEdit: { ops: [{ op: 'x' }] } })).toBe(true)
   })
 })
+
+/**
+ * L2-FREEFORM-1 H3 — the SECOND dishonest channel on the chat draft leg:
+ * a done result that DELIVERED proposal channels (so the wall's emptiness
+ * predicate correctly does not fire — the turn was not "nothing") but where
+ * buildPreviewFromDraft SKIPPED every mountable placement (deck not loaded,
+ * scope refusal, validation failure). Today that branch is a silent
+ * `return`: the sidebar (dispatched 'reviewing' with an EMPTY change list by
+ * the non-event arm) sits over a dead plate with a live "Apply to run". The
+ * fix renders the skip reasons through the SAME shared honesty wall
+ * (ai-tab-honest-wall — the CHAT-1 extraction; no second wall module) and
+ * resets the sidebar (PB-CH-4 D1), exactly like the draftProducedNothing arm.
+ */
+describe('L2-FREEFORM-1 H3 — a skipped-but-delivered draft surfaces the skip reasons through the shared wall (never a silent dead plate)', () => {
+  it('the skip arm: labwareRequirements delivered + deck not loaded => the wall NAMES the skip reason; NO actionable review, no ghost set, chat stays usable', async () => {
+    // An editor with NO loaded platform: the requirements arm of
+    // buildPreviewFromDraft skips ('deck not loaded') and mounts nothing —
+    // the skip shape. The turn DELIVERED a proposal channel (the
+    // draftProducedNothing wall above correctly does not fire) but the deck
+    // got nothing — today this is the silent `return` (RED gate).
+    mocks.editor.current = {
+      state: {
+        platforms: [],
+        platformId: 'opentrons-flex',
+        variantId: 'flex-1',
+        placements: [],
+        labwares: {},
+        events: [],
+        selection: null,
+        focusPlacementId: null,
+        vocabPackId: 'default',
+        eventGraphId: 'EVG-ff1-h3',
+        preview: null,
+      },
+      actions: mocks.editorActions,
+    }
+    renderPanel()
+    await emitDraft(
+      {
+        success: true,
+        events: [],
+        labwareRequirements: [{ classCurie: 'CL:24_well_plate', reason: 'needs a second vessel' }],
+        shorthand: SHORTHAND_YAML,
+      },
+      'we also need a 24-well plate',
+    )
+
+    // The shortfall is REPORTED through the shared wall, naming the skip
+    // reason verbatim — never a silent dead plate.
+    const wall = await screen.findByTestId('ai-tab-honest-wall')
+    expect(wall.getAttribute('role')).toBe('alert')
+    expect(wall.textContent).toContain('deck not loaded')
+    expect(wall.textContent).toContain('Nothing was mounted')
+    // PB-CH-4 D1: a reported failure is never an actionable review — the
+    // sidebar (dispatched 'reviewing' over an EMPTY change list by the
+    // non-event arm) is reset, not left with a live "Apply to run".
+    expect(screen.queryByTestId('changes-panel')).toBeNull()
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    // Nothing ghosted onto a deck that skipped everything.
+    expect(mocks.editorActions.setPreview).not.toHaveBeenCalled()
+    // The chat stays usable — the biologist can retry or load a deck.
+    expect(screen.getByTestId('chat-input')).toBeTruthy()
+  })
+
+  it('BOUNDARY (no misfire): skips EMPTY + nothing mounted (a record creation with no placement ask) keeps today\u2019s silent return — no wall (H3 surfaces NAMED skips only)', async () => {
+    mocks.editor.current = {
+      state: {
+        platforms: [],
+        platformId: 'opentrons-flex',
+        variantId: 'flex-1',
+        placements: [],
+        labwares: {},
+        events: [],
+        selection: null,
+        focusPlacementId: null,
+        vocabPackId: 'default',
+        eventGraphId: 'EVG-ff1-h3b',
+        preview: null,
+      },
+      actions: mocks.editorActions,
+    }
+    renderPanel()
+    // A MATERIAL creation is never placed (it has no bench position): the
+    // turn delivered a proposal, skipped nothing, mounted nothing —
+    // draftProducedNothing is false (recordCreations non-empty) so the
+    // emptiness wall does not fire, and H3 must not fire either (no named
+    // skip): today's review-over-proposal behavior stands.
+    await emitDraft(
+      {
+        success: true,
+        events: [],
+        recordCreations: [{ kind: 'material', name: 'Fresh buffer' }],
+        shorthand: SHORTHAND_YAML,
+      },
+      'create a record for the fresh buffer',
+    )
+    expect(screen.queryByTestId('ai-tab-honest-wall')).toBeNull()
+    // The proposal still reaches its review surface (unchanged behavior).
+    expect(await screen.findByTestId('changes-panel')).toBeTruthy()
+    expect(mocks.editorActions.setPreview).not.toHaveBeenCalled()
+  })
+
+  it('NEGATIVE (bait 2): a PARTIALLY skipped draft that MOUNTS a placement does NOT wall — the preview rides and only the unmounted residue is the shortfall', async () => {
+    mountDeckEditor()
+    renderPanel()
+    await screen.findByTestId('ai-tab-system-prompt')
+    // The 24-well requirement MOUNTS on the freeform lawn (D1's shape); the
+    // equipment-LOOKING token is SKIPPED by the labware arm's isEquipmentToken
+    // guard (skips > 0) but MOUNTS through the equipment arm — skips > 0 AND
+    // placements > 0: the deck got something, so no wall (the H3 arm is
+    // gated on hasPreview false, not on skips alone).
+    await emitDraft(
+      {
+        success: true,
+        events: [],
+        labwareRequirements: [{ classCurie: 'CL:24_well_plate', reason: 'needs a second vessel' }],
+        equipmentRequirements: [{ classCurie: 'equipment:water_bath', handle: 'bath 55', settings: { temperature_c: 55 } }],
+      },
+      'add a 24-well plate and a water bath',
+    )
+    // The mounted placement rides the deck (destination asserted).
+    expect(mocks.editorActions.setPreview).toHaveBeenCalledTimes(1)
+    const preview = mocks.editorActions.setPreview.mock.calls[0]![0] as { previewPlacements: unknown[] }
+    expect(preview.previewPlacements.length).toBeGreaterThan(0)
+    // …and the wall never fires (a mounted preview is not a reported
+    // failure — the skip residue is a non-blocking warning, not a wall).
+    expect(screen.queryByTestId('ai-tab-honest-wall')).toBeNull()
+    expect(await screen.findByTestId('changes-panel')).toBeTruthy()
+  })
+})

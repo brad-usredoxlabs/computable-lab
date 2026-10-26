@@ -630,7 +630,34 @@ export function AiTabPanel() {
       })
       const hasPreview =
         preview.previewPlacements.length > 0 || preview.previewEvents.length > 0
-      if (!hasPreview) return
+      // L2-FREEFORM-1 H3: the SILENT GATE. hasPreview false means the turn
+      // mounted NOTHING on the deck — but when the turn DELIVERED proposal
+      // channels that were individually SKIPPED (buildPreviewFromDraft's
+      // skips: 'deck not loaded', scope refusal, validation failure), the
+      // shortfall has a NAME and the turn is NOT a draftProducedNothing
+      // silence (the wall arm above only fires on zero channels) — yet today
+      // this branch just `return`s: the sidebar (dispatched 'reviewing' by
+      // the non-event arm above) sits over an EMPTY change list with a live
+      // "Apply to run" over a plate that got nothing. That is the second
+      // dishonest channel (REVISE-GHOST-1 doctrine, both panes): render the
+      // skip reasons through the SAME shared honesty wall (ai-tab-honest-
+      // wall — CHAT-1's extraction; no second wall module) and reset the
+      // sidebar (PB-CH-4 D1: a reported failure is never an actionable
+      // review). skips empty + hasPreview false = a turn with nothing
+      // deliverable AND nothing named: today's silent return stands (the
+      // draftProducedNothing arm is the other guard for that shape).
+      if (!hasPreview) {
+        if (skips.length > 0) {
+          const reasons = [...new Set(skips)].join('; ')
+          setHonestWall(
+            `The draft could not be placed on this deck — ${reasons}. Nothing was mounted; nothing was applied.`,
+          )
+          protocolProposalRef.current = null
+          setProtocolApply(null)
+          sidebarDispatch({ type: 'reset' })
+        }
+        return
+      }
       // A follow-up draft while a preview is mounted is a revision: replace
       // the ghosts and append to the revision trail that rides back to the
       // backend as structured draftRevision context.
