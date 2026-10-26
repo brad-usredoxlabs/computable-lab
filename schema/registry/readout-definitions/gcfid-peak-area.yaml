@@ -1,0 +1,9 @@
+kind: readout-definition
+id: RDEF-GCFID-PEAK_AREA
+name: GC-FID Peak Area
+instrument_type: gc_fid
+mode: peak_area
+channel_label: FID
+units: pA
+tags:
+  - gc-fid
