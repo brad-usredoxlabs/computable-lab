@@ -743,12 +743,22 @@ export function AiTabPanel() {
         const prompt = lastShorthandDraftRef.current?.prompt ?? ''
         const platform = getPlatformManifest(editor.state.platforms, editor.state.platformId)
         const variant = getVariantManifest(editor.state.platforms, editor.state.platformId, editor.state.variantId)
+        // L2-FREEFORM-1 H2 (client recompile threading): the recompile's OWN
+        // resolved placement offers ride terminalArtifacts (the handler
+        // spreads result.terminalArtifacts verbatim; the binder now re-binds
+        // events to those record ids). Without this thread a recompiled draft
+        // mounts events but zero ghost placements — the exact fix3 Defect-1
+        // shape the main done-handler already threads at :608/:623. The
+        // loose terminalArtifacts channel carries the key absent-or-value
+        // (exactOptionalPropertyTypes: never an explicit undefined).
+        const resolvedLabwares = (terminal.resolvedLabwares ?? []) as AiResolvedLabware[]
         const { preview, skips } = buildPreviewFromDraft({
           platform,
           variant,
           events,
           labwareAdditions: [],
           labwareRequirements: [],
+          ...(resolvedLabwares.length > 0 ? { resolvedLabwares } : {}),
           equipmentRequirements: [],
           recordCreations: [],
           existingLabwares: editor.state.labwares,
