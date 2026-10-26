@@ -79,3 +79,15 @@ provisioning DONE early: mafft 7.526 functional user-scope (see AS-L2T0755-MAFFT
 ## LIVE AT EXIT
 - FIX RUN 1 streaming (slot 0); armed advc2 waiter standing by. Fleet 1/2. Brad's stack untouched.
   Trunk 018a034a (docs tip); stack serving it. Worksheet: AWAITING-BRAD.
+
+## ADDENDUM AT TICK EXIT (08:12)
+FIX RUN 1 EXITED rc=0 07:59:56 (marker 'CHAT1 FIX1 DONE 71a5ee3c', STATUS: complete, tree clean).
+Final commit 71a5ee3c extends D1+D2 to the other two event-writing accept paths — inside the
+cycle-2 review range; fleet slot 0 released. ARMED GATE FIRED: advc2 cloud reviewer LIVE since
+07:59:03 (logs/advc-L2CHAT1-c2-l2t0755.log), report owed reviews/L2-CHAT-1-advc2-l2t0755.md.
+NEXT TICK: read advc2 report -> ACCEPT: self-verify (vitest targeted set in worktree,
+deck/LabwareGlyph KNOWN failure disclosed; app tsc == baseline 16 lines) -> merge --no-ff into
+cl/integration-2 (inspect trunk first; app-only, no YAML) -> browser gate :5193 tier ladder ->
+done + handoff -> dispatch FREEFORM-1 on free slot IMMEDIATELY. 'fix' verdict = cycle cap ->
+architect with both defect lists (reviews/L2-CHAT-1-advc-l2t0635.md + advc2). Slot 1 stays empty
+until then (everything else gated).
