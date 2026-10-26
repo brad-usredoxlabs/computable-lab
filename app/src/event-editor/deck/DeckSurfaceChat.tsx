@@ -20,11 +20,10 @@
  */
 import { useEffect, useMemo } from 'react'
 import { useEventEditor } from '../EventEditorContext'
-import { useSurfaceChat, type AiProposalDraft } from '../../agent/useSurfaceChat'
+import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import type { AiContext } from '../../types/aiContext'
 import { useSetChatFocus } from '../../agent/ChatFocusContext'
-import { buildPreviewFromDraft } from '../right-pane/ai/draftPreview'
-import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
+import { useDeckGhostMount } from './useDeckGhostMount'
 
 export function DeckSurfaceChat() {
   const { state, actions } = useEventEditor()
@@ -62,54 +61,22 @@ export function DeckSurfaceChat() {
     state.selection,
   ])
 
-  /**
-   * L2-CHAT-1 — the universal GHOST MOUNT. A plain function (never
-   * memoized): it must see the LATEST editor state at the moment the draft
-   * lands, and useAiChat always invokes the current closure through a
-   * ref. Port of AiTabPanel's setPreview block (AiTabPanel.tsx:608-669) —
-   * events + placement-per-resolved-offer + revision-trail append.
-   */
-  const handleProposalDrafted = (draft: AiProposalDraft) => {
-    const platform = getPlatformManifest(state.platforms, state.platformId)
-    const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
-    const { preview, skips } = buildPreviewFromDraft({
-      platform,
-      variant,
-      events: draft.events,
-      labwareAdditions: draft.labwareAdditions,
-      labwareRequirements: [],
-      resolvedLabwares: draft.resolvedLabwares,
-      equipmentRequirements: [],
-      recordCreations: [],
-      existingLabwares: state.labwares,
-      existingPlacements: state.placements,
-    })
-    if (preview.previewPlacements.length === 0 && preview.previewEvents.length === 0) return
-    // A follow-up draft while a preview is mounted is a revision: replace the
-    // ghosts and append to the revision trail (the deck review modal's chain).
-    const previousPreview = state.preview
-    const revisionHistory = previousPreview
-      ? [
-          ...(previousPreview.revisionHistory ?? []),
-          { prompt: draft.prompt, createdAt: new Date().toISOString() },
-        ]
-      : undefined
-    actions.setPreview({
-      ...preview,
-      sourcePrompt: draft.prompt,
-      labwareAdditions: [...draft.labwareAdditions],
-      ...(skips.length > 0 ? { sourceSkips: skips } : {}),
-      ...(revisionHistory ? { revisionHistory } : {}),
-    })
-  }
+  // L2-CHAT-1: the universal GHOST MOUNT (extracted to useDeckGhostMount so
+  // the run workspace shares the SAME implementation — one event/ghost path).
+  const { onProposalDrafted, onPreviewDiscarded } = useDeckGhostMount()
 
   useSurfaceChat({
     aiContext,
     endpoint: 'event-editor',
     onAcceptEvent: actions.appendEvent,
-    // L2-CHAT-1: event-bearing proposals mount deck ghosts; discard clears.
-    onProposalDrafted: handleProposalDrafted,
-    onPreviewDiscarded: actions.clearPreview,
+    // L2-CHAT-1: event-bearing proposals mount deck ghosts; a chat discard
+    // clears the preview (the hook's discard seam is a no-op — adoption is
+    // the deck's PreviewActionBar's job — so the clear rides the editor).
+    onProposalDrafted,
+    onPreviewDiscarded: () => {
+      onPreviewDiscarded()
+      actions.clearPreview()
+    },
   })
 
   // Publish the pane's working-focus box. Without this the universal pane's

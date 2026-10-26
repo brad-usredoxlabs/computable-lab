@@ -407,7 +407,6 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   onProposalDraftedRef.current = onProposalDrafted
   const onPreviewDiscardedRef = useRef(onPreviewDiscarded)
   onPreviewDiscardedRef.current = onPreviewDiscarded
-
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
