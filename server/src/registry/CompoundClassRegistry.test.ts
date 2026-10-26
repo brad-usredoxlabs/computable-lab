@@ -2,16 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { getCompoundClassRegistry } from './CompoundClassRegistry.js';
 
 describe('CompoundClassRegistry', () => {
-  it('loads all 4 seed entries and list() returns them sorted by id', () => {
+  it('loads all 5 seed entries and list() returns them sorted by id', () => {
     const registry = getCompoundClassRegistry();
     const entries = registry.list();
 
-    expect(entries).toHaveLength(4);
+    expect(entries).toHaveLength(5);
 
     const ids = entries.map((e) => e.id);
     expect(ids).toEqual([
       'AhR-activator',
       'AhR-antagonist',
+      'fame-medium-chain',
       'PPARa-activator',
       'PPARa-antagonist',
     ]);
@@ -45,6 +46,7 @@ describe('CompoundClassRegistry', () => {
       'AhR-antagonist',
       'PPARa-activator',
       'PPARa-antagonist',
+      'fame-medium-chain',
     ];
 
     for (const id of expectedIds) {
@@ -94,5 +96,20 @@ describe('CompoundClassRegistry', () => {
     expect(entry!.id).toBe('PPARa-antagonist');
     expect(entry!.name).toBe('PPARa antagonist');
     expect(entry!.candidates.length).toBe(1);
+  });
+
+  it('get("fame-medium-chain") returns the three methyl-ester standards (GC-2 F)', () => {
+    const registry = getCompoundClassRegistry();
+    const entry = registry.get('fame-medium-chain');
+
+    expect(entry).toBeDefined();
+    expect(entry!.id).toBe('fame-medium-chain');
+    expect(entry!.name).toBe('FAME medium chain (6:0-10:0 methyl esters)');
+    expect(entry!.candidates.map((c) => c.compoundId)).toEqual([
+      'FAME-LOCAL:methyl-hexanoate-n6',
+      'FAME-LOCAL:methyl-octanoate-n8',
+      'FAME-LOCAL:methyl-decanoate-n10',
+    ]);
+    expect(entry!.chebi_ids).toEqual(['CHEBI:77322', 'CHEBI:87432', 'CHEBI:143577']);
   });
 });

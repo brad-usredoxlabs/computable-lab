@@ -165,6 +165,7 @@ describe('INSTR-COLLAPSE-2 C3: the instrument record kind is deleted', () => {
       'competency-authorization',
       'equipment',
       'equipment-class',
+      'gc-method',
       'person',
       'training-record',
     ]);

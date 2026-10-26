@@ -55,6 +55,7 @@ const COVERED_KINDS = [
   'competency-authorization',
   'equipment',
   'equipment-class',
+  'gc-method',
   'person',
   'training-record',
 ]

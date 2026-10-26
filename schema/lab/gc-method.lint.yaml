@@ -1,0 +1,32 @@
+# Lint rules for GC Method records (GC-2 D: the silent-execution block).
+#
+# Rule 1 — executable-use gate: timed integration events are CAPTURE; the
+# record is executable only with a declared engine binding
+# (analysis.executable_binding). `nonEmpty` over the timed_events array is
+# expressible in the existing DSL (wildcard/any-semantics resolve the array;
+# an absent/empty array is empty), so no DSL extension is needed.
+#
+# INTENT (not expressible in the v1 DSL — recorded, not faked):
+#   provenance_capture.source_files[*].key_values[*].raw_value entries must
+#   never be REFERENCED FROM analysis paths. The DSL has no cross-path
+#   provenance/identity operator (no "this analysis value was not copied
+#   verbatim from a key_value raw_value"), so the unknown-is-unknown rule is
+#   enforced by SCHEMA (key_values are strings; analysis fields are typed
+#   numbers/refs) + reviewer process, not by a lint rule here. Do not invent
+#   a fake rule for it.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/gc-method.schema.yaml"
+rules:
+  - id: "gcmethod-timed-events-require-executable-binding"
+    title: "Captured timed events require a declared executable binding"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "nonEmpty"
+      path: "$.analysis.timed_events"
+    assert:
+      op: "exists"
+      path: "$.analysis.executable_binding"
+    message:
+      template: "gc-method '{{$.id}}' captures timed integration events but declares no executable binding — recordable for capture, lint-blocked from silent executable use until analysis.executable_binding is declared"
+      paths: ["$.id"]

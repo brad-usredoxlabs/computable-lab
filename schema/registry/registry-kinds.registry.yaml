@@ -22,6 +22,11 @@ kinds:
     # kind (Brad 2026-10-21T19:15 ruling; schema/lab/instrument.{schema,lint,ui}
     # deleted, record.schema.yaml oneOf branch removed). Coverage is now 6 kinds.
   - kind: calibration-record
+  # GC-2: gc-method records join the minimal registry-ops lifecycle (draft
+  # default state, same treatment as calibration-record — no stripDomainStatus).
+  # The kind's own schema declares the matching lifecycleId/state enums so the
+  # registryOpsLifecycle pin stays green.
+  - kind: gc-method
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
 # covered record in a terminal lifecycle state is refused at create, and on
