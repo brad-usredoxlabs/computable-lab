@@ -17,6 +17,17 @@ ORCH OQ RESOLUTIONS (folded, binding for the coder):
 - OQ3 RESOLVED: runner-side pre-exec probe (the draft's §C default) — zero SDK change, GC-6's reader-
   version provenance merges into engineProvenance later without touching this shape.
 
+ORCH AMENDMENT 2026-10-26T17:45 (tick l1t1720, trunk tip 72d32b77) — coverage-fence baseline moved
+AFTER this spec was drafted; the numbers below in the F16 anchor and First targeted check are SUPERSEDED:
+GC-3 (3530b758) added instrument-sequence + instrument-sequence-entry (coverage file now declares 9
+kinds; registryOpsLifecycle COVERED_KINDS = 9; KindLifecycleRegistry KINDS = 9 and size pin = 9), and
+housekeeping commit 72d32b77 completed the bump in InstrumentKindRetirement.test.ts + migrateRecord-
+Lifecycles.test.ts knownKinds (trunk was RED on those two until then; now 47/47 green across the four
+fence suites). CONSEQUENCE for the coder: the registry-kinds list ends with the instrument-sequence-
+entry rows, not `- kind: gc-method`; your four coverage-pin bumps are 9->10 (size pin toBe(10)); the
+First targeted check expects ALL GREEN at size 10 with the analysis-engine row present, not size 8.
+Branch off trunk tip at dispatch (>= 72d32b77) so the fence starts green.
+
 ## Goal (one sentence)
 
 Make the analysis engine a declared registry record (schema/knowledge/analysis-engine triplet) that an
