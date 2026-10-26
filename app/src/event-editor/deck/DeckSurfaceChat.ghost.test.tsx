@@ -18,7 +18,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
-import type { PlateEvent } from '../../types/events'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { streamAssist } from '../../shared/api/aiClient'
 import { DeckSurfaceChat } from './DeckSurfaceChat'
