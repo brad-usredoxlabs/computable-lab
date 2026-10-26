@@ -153,6 +153,13 @@ calibration-record; no `stripDomainStatus`).
   methyl octanoate CAS 111-11-5, methyl decanoate CAS 110-42-9 — CAS numbers cited from
   an ECHA dossier found in an orchestrator web search; ChEBI IDs MUST be confirmed by
   the lookup, NEVER from memory). Confirmed → record the CHEBI CURIE in the term.
+  **ORCH CORRECTION 2026-10-26T01:00 (verified live at OLS4 + PubChem):** the FAME
+  CAS anchors above are CORRECT (CID 7824/8091/8050 titles match); an earlier draft's
+  hexanoic-acid anchor 110-94-1 was WRONG (PubChem CID 743 = glutaric acid; true
+  hexanoic acid CAS 142-62-1, CID 8892). Confirmed ChEBI ids for all six (orch-
+  verified labels): hexanoic acid CHEBI:30776, octanoic acid CHEBI:28837, decanoic
+  acid CHEBI:30813, methyl hexanoate CHEBI:77322, methyl octanoate CHEBI:87432,
+  methyl decanoate CHEBI:143577.
   Not confirmed → mint WITHOUT an external id (unknown-is-unknown).
 - NEW `schema/registry/ontology-terms/fame-local.yaml` (source: local/manual pattern of
   manual.yaml): terms distinguishing the two species REQUIRED — for each n in {6,8,10}:
