@@ -23,6 +23,12 @@ import { VendorProductBuilderModal } from './VendorProductBuilderModal'
 import { MaterialInstanceBuilderModal } from './MaterialInstanceBuilderModal'
 import { BiologicalMaterialBuilderModal } from './BiologicalMaterialBuilderModal'
 import { DerivedMaterialBuilderModal } from './DerivedMaterialBuilderModal'
+// L2-TERM-1 fix-1 (UC-D4): a kind='material' row in this picker is a
+// workspace-LOCAL concept record (apiClient.searchMaterials, category
+// 'concept-only'). It must wear the shared vocabulary map's local tier word,
+// never 'Ontology' — the same entity badges 'Local' in the resolver surface,
+// so one local term everywhere. Read the word from the map; never re-spell it.
+import { VOCABULARY_BADGE } from '../../shared/taptab/slashMenu/tokens'
 
 const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
   thermo: 'Thermo Fisher',
@@ -102,12 +108,16 @@ export function visibleConceptMatches(
   return [...exact, ...(showConcepts || !hasHigherValueResults ? weak : [])]
 }
 
-function kindBadgeLabel(kind?: string): string {
+export function kindBadgeLabel(kind?: string): string {
   if (kind === 'material-spec') return 'Saved Stock'
   if (kind === 'vendor-product') return 'Vendor Reagent'
   if (kind === 'material-instance') return 'Prepared Tube/Plate'
   if (kind === 'aliquot') return 'Prepared Tube/Plate'
-  if (kind === 'material') return 'Ontology'
+  // L2-TERM-1 fix-1 (UC-D4): a kind='material' row here is a workspace-LOCAL
+  // concept record, not an ontology hit. Badge it with the shared map's local
+  // tier word ('Local') — never 'Ontology' — consistent with the source==='local'
+  // badge below and the resolver surface.
+  if (kind === 'material') return VOCABULARY_BADGE.local
   if (kind === 'term') return 'Term'
   return kind || 'Record'
 }

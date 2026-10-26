@@ -25,6 +25,10 @@ import type {
 } from './types'
 import { filterTubePresets } from '../../../types/tubeSizes'
 import { exaVendorEnabled } from '../../lib/integrationFlags'
+// L2-TERM-1 (UC-D4): the badge/vocabulary tier words live in ONE declarative
+// table (tokens.ts) — every surface reads them from there, never re-spells
+// them as scattered string branches.
+import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE } from './tokens'
 
 const PAGE = 8
 const MATERIAL_PAGE = 12
@@ -113,11 +117,13 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
     initial.push({
       key: `mint:${q}`,
       label: `Create local term "${q}"`,
-      badge: 'New',
-      subtitle: 'mint a draft term into the lab namespace',
+      // L2-TERM-1 (UC-D4): the mint floor's tier words come from the
+      // declarative vocabulary map (byte-identical words, one source).
+      badge: VOCABULARY_BADGE.mint,
+      subtitle: VOCABULARY_SUBTITLE.mint,
       detail: {
         source: 'New local term (tier 5 — last resort)',
-        ontology: 'local',
+        ontology: LOCAL_VOCABULARY,
         definition:
           `Creates a draft material record named "${q}" in the lab's local namespace. ` +
           'Prefer an existing workspace record or ontology term above when one matches.',
@@ -442,7 +448,10 @@ function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] 
       return {
         key: `ontology:${c.curie}`,
         label: c.label,
-        badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
+        // L2-TERM-1 (UC-D4): a TRUE ontology hit keeps its namespace badge;
+        // the fallback word comes from the vocabulary map (these rows ARE
+        // ontology hits — the map is the single spelling of the tier).
+        badge: c.namespace ? c.namespace.toUpperCase() : VOCABULARY_BADGE.ontology,
         subtitle: c.curie,
         detail: candidateDetail(c),
         mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
@@ -471,7 +480,7 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
     subtitle: hit.recordId,
     detail: {
       source: 'Workspace record (this lab)',
-      ontology: 'local',
+      ontology: LOCAL_VOCABULARY,
       id: hit.recordId,
       extra: [{ label: 'Kind', value: 'labware instance' }],
     },
@@ -518,7 +527,7 @@ export const resolveEquipment: SlashResolver = async (query, ctx) => {
     subtitle: hit.recordId,
     detail: {
       source: 'Workspace record (this lab)',
-      ontology: 'local',
+      ontology: LOCAL_VOCABULARY,
       id: hit.recordId,
       extra: [{ label: 'Kind', value: 'equipment' }],
     },
@@ -750,16 +759,26 @@ function materialSuggestions(
         id: item.recordId,
         label: item.title,
       }
+      // L2-TERM-1 (UC-D4): the row's OWN structural signal (a multi-part
+      // composite title — the aggregate joiner the platform writes, nothing
+      // name-specific) reads the row as a composition. A composition is not
+      // a term under any ontology: it badges Composition, never the kind's
+      // local tier.
+      const isComposition = aggregateComponentTokens(item.title).length > 1
+      const badge = isComposition ? VOCABULARY_BADGE.composition : materialBadge(entityKind)
+      const subtitle = isComposition
+        ? VOCABULARY_SUBTITLE.composition
+        : entityKind === 'material'
+          ? VOCABULARY_SUBTITLE.local
+          : (item.subtitle || item.recordId)
       return {
         key: `${entityKind}:${item.recordId}`,
         label: item.title,
-        badge: materialBadge(entityKind),
-        // A bare material concept reads as an ontology term to a biologist —
-        // label it that way rather than the internal "Bare concept record".
-        subtitle: entityKind === 'material' ? 'Ontology term' : (item.subtitle || item.recordId),
+        badge,
+        subtitle,
         detail: {
           source: 'Workspace record (this lab)',
-          ontology: 'local',
+          ontology: LOCAL_VOCABULARY,
           id: item.recordId,
           ...(item.subtitle && entityKind !== 'material' ? { definition: item.subtitle } : {}),
           extra: [
@@ -780,11 +799,24 @@ function materialMentionKind(kind: string): MaterialMentionKind {
   return 'material'
 }
 
+/**
+ * L2-TERM-1 (UC-D4): the badge/vocabulary policy for workspace material
+ * records as a single declarative table keyed by mention kind. The old
+ * fallback spelled a bare `material` record 'Ontology' — a record of THIS
+ * lab reading as an ontology term. The honest tier is Local (the kind is
+ * the concept layer, the source is the workspace, not an ontology); a
+ * multi-part composite label is a Composition, never a term at all.
+ */
+const MATERIAL_BADGE_BY_KIND: Record<MaterialMentionKind, string> = {
+  'material': VOCABULARY_BADGE.local,
+  'material-spec': 'Formulation',
+  'material-instance': 'Instance',
+  'aliquot': 'Instance',
+  'vendor-product': 'Vendor',
+}
+
 function materialBadge(kind: MaterialMentionKind): string {
-  if (kind === 'material-spec') return 'Formulation'
-  if (kind === 'material-instance' || kind === 'aliquot') return 'Instance'
-  if (kind === 'vendor-product') return 'Vendor'
-  return 'Ontology'
+  return MATERIAL_BADGE_BY_KIND[kind]
 }
 
 function abortIfNeeded(ctx: SlashResolverContext): void {

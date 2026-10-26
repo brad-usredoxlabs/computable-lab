@@ -30,6 +30,48 @@ export function mentionToToken(mention: SlashMention): string {
   }
 }
 
+/**
+ * L2-TERM-1 (UC-D4) — the badge/vocabulary policy as a single DATA table.
+ *
+ * The vocabulary tiers are the words a resolved row wears: a TRUE ontology
+ * hit, a workspace RECORD of this lab, a multi-part COMPOSITION, and the
+ * mint floor must be visibly distinct terms. Never two local terms for one
+ * entity; never a local/composite reading as "Ontology". Every badge
+ * surface (resolver rows, the record popover, the heading copy) reads
+ * these words from here — no scattered string branches.
+ */
+export const VOCABULARY_BADGE = {
+  ontology: 'Ontology',
+  local: 'Local',
+  composition: 'Composition',
+  mint: 'New',
+} as const
+export type VocabularyTier = keyof typeof VOCABULARY_BADGE
+
+/** The honest subtitle a tier wears next to its badge. A local record is
+ *  not an ontology term; a composition is not a term under any ontology.
+ *  (The mint entry carries the byte-pinned floor wording.) */
+export const VOCABULARY_SUBTITLE: Record<VocabularyTier, string> = {
+  ontology: 'Ontology term',
+  local: 'Local record',
+  composition: 'Composition',
+  mint: 'mint a draft term into the lab namespace',
+}
+
+/** A row whose detail.ontology is this value is a record of THIS lab, not
+ *  an ontology hit — its popover field must not be labelled "Ontology". */
+export const LOCAL_VOCABULARY = 'local'
+
+/** Popover/rail field label for a row's detail.ontology value (DATA map):
+ *  a namespace (CHEBI, XCO, OAK…) is an ontology; 'local' is the lab's own
+ *  vocabulary. L2-TERM-1 — the "Ontology: local" contradiction is gone. */
+export const ONTOLOGY_FIELD_LABEL: Record<string, string> = {
+  [LOCAL_VOCABULARY]: 'Vocabulary',
+}
+export function detailOntologyFieldLabel(value: string): string {
+  return ONTOLOGY_FIELD_LABEL[value] ?? 'Ontology'
+}
+
 /** Badge label shown by the UI for a given mention. Centralised so the
  *  suggestion list and the inline pill agree. */
 export function mentionBadge(mention: SlashMention): string {
@@ -62,6 +104,15 @@ export function badgeStyles(
     case 'Concept':
     case 'Ontology':
       return { background: '#f3e8ff', color: '#7e22ce', border: '#d8b4fe' }
+    // L2-TERM-1 (UC-D4): the local/composite/mint vocabulary tiers wear
+    // palettes of their own — never the neutral unknown-badge gray, and
+    // never the ontology purple.
+    case 'Local':
+      return { background: '#f0fdf4', color: '#15803d', border: '#4ade80' }
+    case 'Composition':
+      return { background: '#ccfbf1', color: '#0f766e', border: '#2dd4bf' }
+    case 'New':
+      return { background: '#fff7ed', color: '#c2410c', border: '#fb923c' }
     case 'Labware':
       return { background: '#fef3c7', color: '#92400e', border: '#fcd34d' }
     case 'Source':

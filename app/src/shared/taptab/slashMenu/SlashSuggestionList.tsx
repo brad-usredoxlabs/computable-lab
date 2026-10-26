@@ -10,7 +10,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { SlashSuggestion, SlashSuggestionDetail } from './types'
-import { badgeStyles } from './tokens'
+import { badgeStyles, detailOntologyFieldLabel } from './tokens'
 import './SlashSuggestionList.css'
 
 export interface SlashSuggestionListProps {
@@ -223,7 +223,7 @@ export function DetailTooltip({
         <p className="slash-suggestion-detail__definition">{detail.definition}</p>
       )}
       <dl className="slash-suggestion-detail__rows">
-        {detail.ontology && <TooltipRow label="Ontology" value={detail.ontology} />}
+        {detail.ontology && <TooltipRow label={detailOntologyFieldLabel(detail.ontology)} value={detail.ontology} />}
         {detail.id && <TooltipRow label="ID" value={detail.id} mono />}
         {detail.iri && <TooltipRow label="IRI" value={detail.iri} mono />}
         {(detail.extra ?? []).map((row) => (
