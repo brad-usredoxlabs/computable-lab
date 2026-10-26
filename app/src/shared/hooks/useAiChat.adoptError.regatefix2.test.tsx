@@ -147,11 +147,17 @@ describe('useAiChat — regatefix2 D1: an adoption REFUSAL is surfaced, never sw
     expect(systemLines).toContain('Nothing was written')
   })
 
-  it('a successful adoption CLEARS a prior refusal (no stale wall)', async () => {
+  it('a successful adoption CLEARS a prior refusal (no stale wall) — same hook, retry after replacement', async () => {
+    // The seam refuses on the FIRST apply (the lock conflict) and succeeds
+    // on the retry (the explicit replacement landed) — the same hook
+    // instance, so the clear is asserted where the wall was set.
     frames(...CLARIFY_FRAMES)
+    let attempts = 0
     const { result } = mountHook({
       onPreviewAccept: async () => {
-        throw LOCK_CONFLICT
+        attempts += 1
+        if (attempts === 1) throw LOCK_CONFLICT
+        return { adopted: true, eventCount: 1, placementCount: 1, labwareCount: 1 }
       },
     })
     await act(async () => {
@@ -162,26 +168,19 @@ describe('useAiChat — regatefix2 D1: an adoption REFUSAL is surfaced, never sw
       await result.current.acceptPreview()
     })
     await waitFor(() => expect(result.current.adoptionError).toBeTruthy())
+    expect(result.current.hasPreview).toBe(true) // the refused preview stays
 
-    // The deck bar's explicit replacement lands; the chat Apply retries and
-    // succeeds — the stale refusal must not linger.
+    // Retry (the deck route now resolves the locked deck — D1a): the
+    // successful adopt clears the staged state AND the refusal wall.
     frames(...CLARIFY_FRAMES)
-    const { result: result2 } = mountHook({
-      onPreviewAccept: async () => ({
-        adopted: true,
-        eventCount: 1,
-        placementCount: 1,
-        labwareCount: 1,
-      }),
-    })
     await act(async () => {
-      result2.current.sendPrompt('retry after replacement')
+      result.current.sendPrompt('retry after replacement')
     })
-    await waitFor(() => expect(result2.current.hasPreview).toBe(true))
+    await waitFor(() => expect(result.current.hasPreview).toBe(true))
     await act(async () => {
-      await result2.current.acceptPreview()
+      await result.current.acceptPreview()
     })
-    await waitFor(() => expect(result2.current.hasPreview).toBe(false))
-    expect(result2.current.adoptionError).toBeNull()
+    await waitFor(() => expect(result.current.hasPreview).toBe(false))
+    expect(result.current.adoptionError).toBeNull()
   })
 })

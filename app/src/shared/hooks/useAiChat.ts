@@ -6,7 +6,7 @@
  * When used from other pages, the caller provides page-specific context.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { streamAssist, getAiHealth } from '../api/aiClient'
 import { apiClient } from '../api/client'
@@ -231,6 +231,17 @@ export interface UseAiChatReturn {
    * mounted (nothing half-applied — retry stays possible).
    */
   adoptionError: string | null
+  /**
+   * L2-CHAT-1 regatefix2 D2: the labware count the card shows — the
+   * STAGED preview's truth, the same data the deck bar reads
+   * (state.preview.previewPlacements via the onStagedExtras seam: a
+   * placement per proposed new labware). Falls back to the done result's
+   * additions count when the surface registers no seam (non-deck
+   * surfaces). The card used to count previewLabwareAdditions alone —
+   * empty on the shorthand path the gate ran ("1 event · 0 new labware"
+   * vs the bar's "1 new labware, 1 event" over the SAME staged preview).
+   */
+  previewStagedLabwareCount: number
   inputText: string
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
   cancelStream: () => void
@@ -503,6 +514,25 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   onPreviewAcceptRef.current = onPreviewAccept
   const onStagedExtrasRef = useRef(onStagedExtras)
   onStagedExtrasRef.current = onStagedExtras
+  // L2-CHAT-1 regatefix2 D2 — the STAGED labware truth the card shows: the
+  // count of previewLabwares the ghost mount staged on the editor's preview
+  // (the onStagedExtras seam — the same data the deck bar's "N new labware"
+  // reads). Recomputes when the staged preview lands/changes (previewEvents
+  // / previewLabwareAdditions move on the done); the ref read sees the
+  // LATEST extras at that moment. No seam (non-deck surface) or empty
+  // staged labwares → fall back to the done result's additions count —
+  // never a fabricated number, never the misreport of counting only the
+  // additions while the deck stages more (or fewer) labwares. (Placed after
+  // onStagedExtrasRef — an earlier position would hit the ref's temporal
+  // dead zone on the first render.)
+  const previewStagedLabwareCount = useMemo(() => {
+    const staged = Object.keys(onStagedExtrasRef.current?.()?.previewLabwares ?? {}).length
+    if (staged > 0) return staged
+    return previewLabwareAdditions.length
+    // onStagedExtrasRef is a ref (stable) — the staged extras are read at
+    // recompute time, when a staging state change re-runs this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewEvents, previewLabwareAdditions])
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
@@ -1769,6 +1799,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     unresolvedRefs,
     honestWall,
     adoptionError,
+    previewStagedLabwareCount,
     inputText,
     sendPrompt,
     cancelStream,
