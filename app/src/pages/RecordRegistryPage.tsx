@@ -33,6 +33,11 @@ export const REGISTRY_TABS = [
   { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
   { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
   { id: 'documents', label: 'Documents', kinds: ['controlled-document'] },
+  // GC-2R (GC-2 acceptance: "a gc-method record is visible in the /registry
+  // UI"): the tab strip, the listing filter, and the Create affordance all
+  // derive from this kinds DATA — the row IS the feature, no kind-specific
+  // code (the gc-method schema resolves like any other via GET /schemas).
+  { id: 'methods', label: 'Methods', kinds: ['gc-method'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];

@@ -62,6 +62,10 @@ const REGISTRY_KINDS = [
   'verb-definition',
   'equipment-capability',
   'controlled-document',
+  // GC-2: the gc-method schema triplet is merged (schema/lab/
+  // gc-method.schema.yaml), so GET /schemas serves it — the harness models
+  // the REAL registry.
+  'gc-method',
 ] as const
 
 const mocked = vi.hoisted(() => ({
@@ -88,6 +92,10 @@ const mocked = vi.hoisted(() => ({
 }))
 
 function declaredPattern(kind: string): string {
+  // GC-2: gc-method declares a DIFFERENT shape than the uniform registry
+  // pattern — the harness models the schema's OWN declaration
+  // (schema/lab/gc-method.schema.yaml line 27), not the uniform shape.
+  if (kind === 'gc-method') return '^GCM-[A-Za-z0-9_-]+$'
   // The uniform declared shape verified first-hand on :3092 for every
   // registry kind (person ^PER-…, equipment ^EQP-…, instrument ^INSTR-…).
   const prefixes: Record<string, string> = {
