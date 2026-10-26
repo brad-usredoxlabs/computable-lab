@@ -93,9 +93,10 @@ describe('HarnessChatPane — L2-CHAT-1 universal revision-loop legs', () => {
     const wall = screen.getByTestId('honest-wall')
     expect(wall).toHaveTextContent('Draft produced no events')
     expect(wall).toHaveTextContent('Nothing was proposed and nothing was applied.')
-    // role=status: screen-reader live region, the same contract as the
-    // legacy ai-tab-honest-wall node.
-    expect(screen.getByRole('status')).toBe(wall)
+    // L2-CHAT-1 FIX1 D5: the failure node is ASSERTIVE (role=alert) — parity
+    // with the legacy ai-tab-honest-wall node (AiTabPanel.tsx:1437), which a
+    // screen-reader must announce loudly for a REPORTED failure.
+    expect(screen.getByRole('alert')).toBe(wall)
   })
 
   it('the wall is absent while the turn delivered something or is still in flight', () => {

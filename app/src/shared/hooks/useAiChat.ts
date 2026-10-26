@@ -33,7 +33,6 @@ import type {
   AiAgentActionEnvelope,
   AiDraftRevisionContext,
 } from '../../types/ai'
-import { draftProducedNothing } from '../../event-editor/right-pane/ai/draftEmptiness'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
 let _warnedFallbackOnce = false
@@ -1001,24 +1000,59 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   : m
               ),
             ])
-            // Check for empty-success case: AI completed but proposed nothing.
-            // Skip when CONFIRM — the system did pause for confirmation and we
-            // already surfaced a clarity message above.
+            // Check for empty-success case: AI completed but proposed nothing
+            // the universal pane can MOUNT. Skip when CONFIRM — the system did
+            // pause for confirmation and we already surfaced a clarity message
+            // above.
+            // L2-CHAT-1 FIX1 D4: the gate is the universal stack's MOUNTABLE
+            // set — the channels with a render/ghost arm HERE:
+            //   events           -> ChatPreviewCard + deck ghosts (useDeckGhostMount)
+            //   labwareAdditions -> the card's "N new labware" line
+            //   clarification    -> the ChatLog clarification block (ChatLog.tsx:196)
+            //   error            -> rendered as the message content
+            // Everything else a done result can carry (equipmentRequirements,
+            // recordCreations, labwareRequirements, deckLayout,
+            // clarificationRequests, instrumentApplianceJobs) has NO universal
+            // arm — useDeckGhostMount hardcodes them to [] (useDeckGhostMount
+            // .ts:73-77) and no universal surface renders them — so a turn
+            // delivering only one of them reached neither a card nor a wall:
+            // the spec §3 forbidden silently-empty pane. The legacy
+            // draftEmptiness.draftProducedNothing predicate counts those as
+            // "produced something" because the LEGACY pane renders them; it is
+            // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
-            const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
-            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
-              // L2-CHAT-1: the universal honest-failure wall. A success that
-              // produced nothing mountable (the ONE shared rule,
-              // draftEmptiness.draftProducedNothing — the same predicate
-              // AiTabPanel's wall uses) is a REPORTED failure in plain
-              // language, owned by its turn. Never a silent empty plate.
-              if (draftProducedNothing(result as Parameters<typeof draftProducedNothing>[0])) {
-                const delivered = [
-                  (result.notes?.length ?? 0) > 0 ? 'notes' : null,
+            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware) {
+              // A turn that asked a question or surfaced an error delivered
+              // something the pane shows — the wall ("asked no questions")
+              // must not fire beside it.
+              const askedQuestion =
+                Boolean(result.clarification?.prompt) ||
+                Boolean(result.clarificationNeeded?.trim())
+              const surfacedError = Boolean(result.error?.trim())
+              if (!askedQuestion && !surfacedError) {
+                // Name what the turn actually carried when it is unmountable
+                // here — the wall must report plain-language truth, not claim
+                // "nothing" was proposed when it proposed unmountable things.
+                const notesDelivered = (result.notes?.length ?? 0) > 0
+                const unmountable = [
+                  (result.equipmentRequirements?.length ?? 0) > 0 ? 'bench-equipment requirements' : null,
+                  (result.recordCreations?.length ?? 0) > 0 ? 'records to create' : null,
+                  (result.labwareRequirements?.length ?? 0) > 0 ? 'labware requirements' : null,
+                  // deckLayout is not declared on AiAgentResult but the server's
+                  // AssistDraftResult can carry it in the done payload — read
+                  // defensively so the wall stays honest if it appears.
+                  Boolean((result as { deckLayout?: unknown }).deckLayout) ? 'a deck layout' : null,
+                  (result.instrumentApplianceJobs?.length ?? 0) > 0 ? 'appliance jobs' : null,
                 ].filter((part): part is string => part !== null)
                 setHonestWall(
-                  `Draft produced no events${delivered.length > 0 ? ` — it delivered only ${delivered.join(' and ')}` : ''} and asked no questions. Nothing was proposed and nothing was applied.`,
+                  `Draft produced no events${
+                    unmountable.length > 0
+                      ? ` — it proposed ${unmountable.join(' and ')}, which this surface cannot mount`
+                      : notesDelivered
+                        ? ' — it delivered only notes'
+                        : ''
+                  } and asked no questions. Nothing was proposed and nothing was applied.`,
                 )
               }
               setMessages((prev) => [

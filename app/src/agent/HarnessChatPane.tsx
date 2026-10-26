@@ -51,9 +51,12 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
       {/* L2-CHAT-1 §3: the universal honest-failure wall — a success that
           produced nothing mountable is a REPORTED failure in plain language
           (the universal port of AiTabPanel's ai-tab-honest-wall). Owned by
-          its turn: the next send clears it in useAiChat. */}
+          its turn: the next send clears it in useAiChat.
+          L2-CHAT-1 FIX1 D5: role=alert (assertive) — parity with the legacy
+          ai-tab-honest-wall (AiTabPanel.tsx:1437); a reported failure must
+          be announced loudly, not as a polite status. */}
       {chat.honestWall ? (
-        <div className="harness-chat-pane__honest-wall" data-testid="honest-wall" role="status">
+        <div className="harness-chat-pane__honest-wall" data-testid="honest-wall" role="alert">
           {chat.honestWall}
         </div>
       ) : null}
