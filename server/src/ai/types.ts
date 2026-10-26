@@ -725,6 +725,20 @@ export interface AgentResult {
   error?: string;
   /** If the agent needs more information from the user. */
   clarificationNeeded?: string;
+  /**
+   * L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable marker for a
+   * doc-discussion prose answer. A doc-discussion turn (an attached-file
+   * question) answers in plain prose by design — zero events, zero cards —
+   * and its ONLY deliverable channel is `clarificationNeeded` (the prose
+   * body). Without a marker the result is indistinguishable from a silent
+   * empty draft at the wire, and the client's draftEmptiness wall
+   * FALSE-FIRES on a legitimate paragraph of answer. The marker rides ONLY
+   * on a doc-discussion SUCCESS result with non-empty prose (the empty
+   * answer keeps the honest error and never rides the marker) — a data-
+   * shaped boolean, no surface/turn-kind branch in the wall (repo rule #1).
+   * Absent (never undefined) on every other turn.
+   */
+  proseDeliverable?: boolean;
   /** Structured clarification request with options. */
   clarification?: AgentClarification;
   /** Structured clarification requests for menu-backed follow-up. */

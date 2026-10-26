@@ -13,16 +13,23 @@
  * draft-ready/setPreview).
  *
  * Pinned relationship (Ruling 1/3): CLIENT ⊇ SERVER canonical, never ==. The
- * server's inline empty-draft guard (AgentOrchestrator.ts `const emptyResult`)
- * counts the 7 canonical channels — events, clarificationRequests, error,
- * labwareAdditions, labwareRequirements, recordCreations, deckLayout. This
- * client predicate counts those 7 PLUS exactly one sanctioned client-superset
- * member: equipmentRequirements, a client-surface deliverable — the client
- * mounts ghosts from it via the buildPreviewFromDraft seam and the
- * destination-asserting honestWall negative proves setPreview +
- * previewPlacements > 0. The AiTabPanel.honestWall drift-pin test asserts the
- * superset mechanically (server guard block + per-channel functional legs),
- * so a divergence fails the app suite, not a live dogfood.
+ * server's 7-channel guard (draftArgDiagnostics.draftProducedNothingOnServer,
+ * extracted L2-FREEFORM-1 H5 from the draft-tool arm's inline `const
+ * emptyResult =` check) counts the 7 canonical channels — events,
+ * clarificationRequests, error, labwareAdditions, labwareRequirements,
+ * recordCreations, deckLayout. This client predicate counts those 7 PLUS
+ * exactly two sanctioned client-superset members:
+ *   - equipmentRequirements — a client-surface deliverable; the client
+ *     mounts ghosts from it via the buildPreviewFromDraft seam and the
+ *     destination-asserting honestWall negative proves setPreview +
+ *     previewPlacements > 0;
+ *   - proseDeliverable (L2-FREEFORM-1 H5, OQ3 ruling) — the server's
+ *     structural marker for a doc-discussion prose answer (the prose body
+ *     rides clarificationNeeded; the marker makes the deliverable structural
+ *     so this predicate never walls a legitimate paragraph of answer).
+ * The AiTabPanel.honestWall drift-pin test asserts the superset
+ * mechanically (server helper + per-channel functional legs), so a
+ * divergence fails the app suite, not a live dogfood.
  *
  * protocolEdit is DELIBERATELY NOT a predicate term (Ruling 1): it is a
  * client-surface-aware channel — the server emits ops without knowing whether
@@ -46,6 +53,9 @@ export function draftProducedNothing(result: AssistDraftResult): boolean {
     !(result.labwareRequirements?.length ?? 0) &&
     !(result.equipmentRequirements?.length ?? 0) &&
     !(result.recordCreations?.length ?? 0) &&
-    !result.deckLayout
+    !result.deckLayout &&
+    // L2-FREEFORM-1 H5 (OQ3): a doc-discussion prose answer IS a deliverable
+    // (the marker rides the success arm only) — never "produced nothing".
+    !result.proseDeliverable
   )
 }

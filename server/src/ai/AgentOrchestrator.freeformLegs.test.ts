@@ -15,6 +15,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
+import * as runChatbotCompileModule from './runChatbotCompile.js';
+import { emptyDraftMessage } from './draftArgDiagnostics.js';
 import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import { createLabwareLookup } from './compiler/labwareLookup.js';
@@ -490,5 +492,199 @@ describe('L2-FREEFORM-1 H4 — mapper leg (the escalation shape, no model)', () 
     expect(out.error).toBeUndefined();
     expect(out.clarificationRequests?.length).toBe(1);
     expect(out.loopAskCounts?.[factRequestId(factFixture)]).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// H5 — doc-discussion prose leg + assurance-CONFIRM empty-bypass.
+// (a) ROOT: ANY attached-file turn is docDiscussion (tools disabled) and
+//     returns prose-only { success:true, clarificationNeeded, events:[] } —
+//     the client wall predicate does NOT count clarificationNeeded, so the
+//     honest wall FALSE-FIRES on a legitimate prose answer (both panes).
+//     OQ3 RULED: the server marks the prose deliverable with a STRUCTURAL
+//     marker channel; the client predicate gains ONE term (the CHAT-1
+//     extracted module = draftEmptiness) + the drift pin updates the SAME
+//     commit. The committed server-side guarantee: a doc-discussion success
+//     result is NEVER indistinguishable from an empty draft at the wire
+//     (marker present; today absent -> RED).
+// (b) ROOT: assurance CONFIRM with EMPTY blockers + EMPTY gaps returns
+//     success:true, zero events, zero requests through the chatbot-compile
+//     bypass — the arm never reaches the draft-tool arm's empty guard
+//     (server-silent). The 7-channel empty check is extracted into ONE
+//     server helper (draftArgDiagnostics.draftProducedNothingOnServer —
+//     byte-identical channel list, CLIENT ⊇ SERVER) and applied to the
+//     CONFIRM arm (the shorthand return is already honest since H1/H4:
+//     needs-clarification with zero requests is the only empty shape there,
+//     and it now escalates rather than exits silently).
+// ---------------------------------------------------------------------------
+
+describe('L2-FREEFORM-1 H5 — the extracted 7-channel server guard (unit)', () => {
+  it('counts EXACTLY the 7 canonical channels (the drift pin server arm, functional)', async () => {
+    const { draftProducedNothingOnServer } = await import('./draftArgDiagnostics.js');
+    expect(draftProducedNothingOnServer({ success: true, events: [] })).toBe(true);
+    expect(draftProducedNothingOnServer({ success: true, events: [] , clarificationRequests: [{ id: 'c1' }] })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [], error: 'boom' })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [], labwareAdditions: [{ recordId: 'LBW-x' }] })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [], labwareRequirements: [{ classCurie: 'CL:24_well_plate' }] })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [], recordCreations: [{ kind: 'material', name: 'X' }] })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [], deckLayout: { platformId: 'p', variantId: 'v' } })).toBe(false);
+    expect(draftProducedNothingOnServer({ success: true, events: [{ eventId: 'e1' }] })).toBe(false);
+    // The client-superset members are NOT server channels (CLIENT ⊇ SERVER
+    // — the helper's source counts EXACTLY the 7 canonical channels; the
+    // per-predicate-term source assertion lives on the DRIFT PIN side,
+    // AiTabPanel.honestWall.test.tsx — SAME-commit discipline).
+    expect(draftProducedNothingOnServer({ success: true, events: [], equipmentRequirements: [{ classCurie: 'equipment:water_bath' }] } as never)).toBe(true);
+    expect(draftProducedNothingOnServer({ success: true, events: [], proseDeliverable: true } as never)).toBe(true);
+  });
+});
+
+describe('L2-FREEFORM-1 H5 — assurance CONFIRM empty-bypass (scripted, server-guarded)', () => {
+  function confirmOrchestrator(blockers: Array<Record<string, unknown>>) {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [
+        {
+          eventId: 'evt-confirm-1',
+          event_type: 'add_material',
+          details: { note: 'held by the CONFIRM decision' },
+        } as never,
+      ],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [],
+      terminalArtifacts: {
+        events: [
+          {
+            eventId: 'evt-confirm-1',
+            event_type: 'add_material',
+            details: { note: 'held by the CONFIRM decision' },
+          },
+        ],
+        directives: [],
+        gaps: [],
+        assurance: {
+          score: 0.9125,
+          threshold: 0.9,
+          decision: 'CONFIRM',
+          blockers,
+          degraders: [],
+        },
+      },
+      outcome: 'complete' as const,
+    }) as never;
+    const completeStream = vi.fn(async function* () {});
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream } as never,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      { store: { get: vi.fn(async () => null) } as never },
+    );
+    const run = () => orchestrator.run({
+      prompt: 'confirm the held draft',
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['add_material'],
+      },
+    });
+    return { compileSpy, run };
+  }
+
+  it('CONFIRM with EMPTY blockers + EMPTY gaps MUST carry an honest error (the empty-bypass is closed)', async () => {
+    const { run } = confirmOrchestrator([]);
+    const result = await run();
+    // The draft is STILL held (the CONFIRM decision stands — the guard never
+    // un-holds a proposal) but the empty shape no longer exits silently.
+    expect(result.events).toBeUndefined();
+    expect(result.assurance?.decision).toBe('CONFIRM');
+    expect(result.clarificationRequests).toBeUndefined();
+    // RED today: success:true + zero deliverable channels + zero questions.
+    expect(result.error).toBeTruthy();
+    expect(result.error).toBe(emptyDraftMessage({ truncated: false, hadArguments: true }));
+    expect(classifyHonestOutcome(result)).toBe('honest-failure');
+  });
+
+  it('CONFIRM with a NON-EMPTY blocker is UNTOUCHED (the hold + card path stays byte-identical)', async () => {
+    const { run } = confirmOrchestrator([
+      { code: 'NEW_LOCAL_ENTITY', disposition: 'BLOCK', mention: 'clofibrate', message: '"clofibrate" would create a new local vocabulary term — requires confirmation.' },
+    ]);
+    const result = await run();
+    expect(result.events).toBeUndefined();
+    expect(result.assurance?.decision).toBe('CONFIRM');
+    expect(result.error).toBeUndefined();
+    expect((result.clarificationRequests ?? []).some((r) => (r.query ?? '').includes('clofibrate'))).toBe(true);
+    expect(classifyHonestOutcome(result)).toBe('cards');
+  });
+});
+
+describe('L2-FREEFORM-1 H5 — the doc-discussion prose deliverable marker (OQ3)', () => {
+  it('a doc-discussion prose answer rides the STRUCTURAL marker — never indistinguishable from an empty draft at the wire', async () => {
+    const prose = 'The protocol fixes the substrate at 37 degrees for 20 minutes before seeding.';
+    const completeStream = vi.fn(async function* () {
+      yield {
+        id: 'resp-1',
+        choices: [{ index: 0, delta: { role: 'assistant', content: prose }, finish_reason: 'stop' }],
+      } as unknown as CompletionResponse;
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream } as never,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { baseUrl: 'http://test.invalid', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({
+      prompt: 'What does the document say about substrate handling?',
+      surface: 'workspace.deck' as const,
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['add_material'],
+        runId: 'RUN-freeform-h5',
+      },
+      attachments: [{ name: 'protocol.md', mime_type: 'text/markdown', content: 'Fix the substrate at 37 degrees for 20 minutes before seeding.' }],
+    } as unknown as AgentRequest);
+    // The prose answer stands (the arm is unchanged: clarificationNeeded
+    // carries it; zero events by design).
+    expect(result.success).toBe(true);
+    expect(result.clarificationNeeded).toBe(prose);
+    expect(result.events ?? []).toHaveLength(0);
+    // The WIRE guarantee (OQ3): the structural marker rides, so the client
+    // predicate can count the prose as a deliverable instead of walling a
+    // paragraph of answer as "produced nothing". RED today: absent.
+    expect(result.proseDeliverable).toBeTruthy();
+  });
+
+  it('a doc-discussion EMPTY answer stays the honest error (the marker never rides a failure)', async () => {
+    const completeStream = vi.fn(async function* () {
+      yield {
+        id: 'resp-1',
+        choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: 'stop' }],
+      } as unknown as CompletionResponse;
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream } as never,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { baseUrl: 'http://test.invalid', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({
+      prompt: 'What does the document say about substrate handling?',
+      surface: 'workspace.deck' as const,
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['add_material'],
+        runId: 'RUN-freeform-h5-empty',
+      },
+      attachments: [{ name: 'protocol.md', mime_type: 'text/markdown', content: 'Fix the substrate at 37 degrees for 20 minutes before seeding.' }],
+    } as unknown as AgentRequest);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(result.proseDeliverable).toBeUndefined();
   });
 });

@@ -179,6 +179,16 @@ export interface AssistDraftResult {
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string
+  /**
+   * L2-FREEFORM-1 H5 (OQ3 ruling): the server's STRUCTURAL deliverable marker
+   * for a doc-discussion prose answer (an attached-file question answered in
+   * plain prose — zero events by design). The draftEmptiness predicate
+   * counts it as a deliverable (the prose body rides clarificationNeeded),
+   * so the honest wall never false-fires on a paragraph of answer. The
+   * drift pin (AiTabPanel.honestWall) asserts the client ⊇ server
+   * relationship including this term — SAME commit as the server stamp.
+   */
+  proseDeliverable?: boolean
   clarification?: { prompt?: string }
   clarificationRequests?: AiClarificationRequest[]
   error?: string

@@ -45,7 +45,7 @@ import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabel
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
-import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
+import { DRAFT_ARG_KEYS, draftArgDiagnostics, draftProducedNothingOnServer, emptyDraftMessage } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
 import { clarificationAskCount } from './clarificationLoopAsk.js';
 import { followUpForLayer } from './materialFollowUp.js';
@@ -1811,7 +1811,7 @@ export function createAgentOrchestrator(
 
         const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
 
-        const result: AgentResult = {
+        let result: AgentResult = {
           success: true,
           // Hold events on CONFIRM — never auto-return a draft needing confirmation.
           ...(shouldConfirm ? {} : { events }),
@@ -1832,6 +1832,20 @@ export function createAgentOrchestrator(
             toolCalls: 0,
           },
         };
+        // L2-FREEFORM-1 H5 (b): the CONFIRM arm never reached the draft-tool
+        // arm's empty guard — a CONFIRM hold whose blockers + gaps derived
+        // ZERO clarification requests used to exit success:true with every
+        // deliverable channel empty (server-silent). The extracted ONE
+        // server helper (the draft-tool arm's 7 channels, byte-identical)
+        // closes the bypass: the draft stays HELD (the guard never un-holds
+        // a proposal) and the empty shape carries the honest failure.
+        if (shouldConfirm && draftProducedNothingOnServer(result)) {
+          result = {
+            ...result,
+            error: emptyDraftMessage({ truncated: false, hadArguments: true }),
+          };
+          console.warn(`[agent ${tid}] ${result.error}`);
+        }
         return result;
       } else {
         // Pipeline produced no events and no gaps (or outcome is 'error') —
@@ -2496,7 +2510,15 @@ export function createAgentOrchestrator(
           };
           const result: AgentResult = isDocDiscussionTurn
             ? docDiscussionContent.trim().length > 0
-              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage }
+              // L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable
+              // marker — a doc-discussion prose answer is a deliverable, and
+              // without the marker the result (success, zero events, zero
+              // cards) is indistinguishable from a silent empty draft at the
+              // wire. The marker rides ONLY the success arm (the empty
+              // answer keeps its honest error and never rides it); the
+              // client's draftEmptiness predicate counts it (the ONE-term
+              // superset addition, drift pin updated the same commit).
+              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage, proseDeliverable: true }
               : {
                   success: false,
                   error: `Model returned an empty response (finish_reason=${choice.finish_reason ?? 'unknown'}). Try shortening the document or asking a more specific question.`,
@@ -2739,6 +2761,16 @@ export function createAgentOrchestrator(
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
+              }
+              // L2-FREEFORM-1 H5 (b): the ONE server guard at the shorthand
+              // return — the H1/H4 mapper already turns its only empty shape
+              // (needs-clarification with ZERO generated requests) into an
+              // escalation, so this backstop only fires on a mapper shape
+              // that can no longer happen; without it the arm could still
+              // exit success:true with every deliverable channel empty.
+              if (shResult.success && !shResult.error && draftProducedNothingOnServer(shResult)) {
+                shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
+                console.warn(`[agent ${tid}] ${shResult.error}`);
               }
               shorthandSummary(shResult);
               return shResult;
@@ -4118,15 +4150,12 @@ export function createAgentOrchestrator(
             // with a cause, never a silent success. The coerced/compile path
             // could end `success=true` with zero events and no explanation
             // (observed live 2026-09-20), the same silence the draft path was
-            // fixed for.
-            const emptyResult =
-              !(result.events?.length ?? 0) &&
-              !(result.clarificationRequests?.length ?? 0) &&
-              !result.error &&
-              !(result.labwareAdditions?.length ?? 0) &&
-              !(result.labwareRequirements?.length ?? 0) &&
-              !(result.recordCreations?.length ?? 0) &&
-              !result.deckLayout;
+            // fixed for. L2-FREEFORM-1 H5: the 7-channel check is the ONE
+            // server helper (draftArgDiagnostics.draftProducedNothingOnServer
+            // — extracted from this inline expression, behavior byte-
+            // identical), applied here AND at the CONFIRM bypass arm AND the
+            // shorthand return (CLIENT ⊇ SERVER — the honestWall drift pin).
+            const emptyResult = draftProducedNothingOnServer(result);
             if (emptyResult) {
               result = {
                 ...result,
