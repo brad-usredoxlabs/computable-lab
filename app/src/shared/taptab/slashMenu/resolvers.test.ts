@@ -203,6 +203,54 @@ describe('resolveMaterial', () => {
       },
     })
   })
+
+  it('keeps the ontology tier for a true ontology hit (namespace badge + the map fallback)', async () => {
+    // L2-TERM-1 (UC-D4): true ontology hits (OAK/OLS4) keep the ontology
+    // vocabulary — a namespaced hit badges its namespace, a namespace-less
+    // hit falls back to the map's 'Ontology' word. The Local/Composition
+    // tiers are for records and composites; a real ontology hit must still
+    // read as ontology.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    // localOnly resolve → nothing (the workspace tier is empty)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+    // full resolve → one OAK hit with a namespace + one OLS4 hit without
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            curie: 'XCO:0000988',
+            label: "Dulbecco's Modified Eagle's Medium",
+            namespace: 'XCO',
+            tier: 1,
+            level: 'unknown',
+            score: 0.9,
+            source: 'oak',
+          },
+          {
+            curie: 'GO:0006915',
+            label: 'apoptotic process',
+            namespace: '',
+            tier: 2,
+            level: 'concept',
+            score: 0.8,
+            source: 'ols4',
+          },
+        ],
+      }),
+    } as Response)
+
+    const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    await resolveMaterial('dmem', ctx({ onUpdate: more }))
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(additions.find((s) => s.key === 'ontology:XCO:0000988')?.badge).toBe('XCO')
+    // The namespace-less hit takes the vocabulary map's fallback word — the
+    // ontology word is reserved for ontology rows, never local/composite.
+    expect(additions.find((s) => s.key === 'ontology:GO:0006915')?.badge).toBe('Ontology')
+  })
 })
 
 describe('resolveLabware', () => {
@@ -823,8 +871,12 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     // Expected values captured from the resolver at the pre-fix base tip
     // (154746ef) with the identical mock fixtures — the whole serialized row
     // list must not change by a single byte for delimiter-free queries.
+    // L2-TERM-1 (UC-D4): the 'Tris' row's badge/subtitle were deliberately
+    // corrected 'Ontology'/'Ontology term' → 'Local'/'Local record' — a bare
+    // workspace material record is a LOCAL record of this lab, never an
+    // ontology term. (The other bytes are unchanged.)
     const EXPECTED_TRIS =
-      '[{"key":"material-instance:MINST-HEPG2","label":"HepG2 P12","badge":"Instance","subtitle":"Existing prepared material","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MINST-HEPG2","definition":"Existing prepared material","extra":[{"label":"Kind","value":"material-instance"},{"label":"Category","value":"prepared-material"}]},"mention":{"type":"material","entityKind":"material-instance","id":"MINST-HEPG2","label":"HepG2 P12"}},{"key":"material:MAT-TRIS","label":"Tris","badge":"Ontology","subtitle":"Ontology term","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MAT-TRIS","extra":[{"label":"Kind","value":"material"},{"label":"Category","value":"concept-only"}]},"mention":{"type":"material","entityKind":"material","id":"MAT-TRIS","label":"Tris"}},{"key":"mint:tris","label":"Create local term \\"tris\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"tris\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"tris"}}]'
+      '[{"key":"material-instance:MINST-HEPG2","label":"HepG2 P12","badge":"Instance","subtitle":"Existing prepared material","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MINST-HEPG2","definition":"Existing prepared material","extra":[{"label":"Kind","value":"material-instance"},{"label":"Category","value":"prepared-material"}]},"mention":{"type":"material","entityKind":"material-instance","id":"MINST-HEPG2","label":"HepG2 P12"}},{"key":"material:MAT-TRIS","label":"Tris","badge":"Local","subtitle":"Local record","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MAT-TRIS","extra":[{"label":"Kind","value":"material"},{"label":"Category","value":"concept-only"}]},"mention":{"type":"material","entityKind":"material","id":"MAT-TRIS","label":"Tris"}},{"key":"mint:tris","label":"Create local term \\"tris\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"tris\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"tris"}}]'
     const EXPECTED_DMEM =
       '[{"key":"mint:dmem","label":"Create local term \\"dmem\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"dmem\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"dmem"}}]'
 
