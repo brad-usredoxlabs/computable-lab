@@ -201,6 +201,6 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     {!following && <button className="sequence-chat-latest" onClick={followLatest}>Latest messages <span aria-hidden="true">↓</span></button>}
     <label>Message<textarea rows={4} value={prompt} onChange={event => onPromptChange(event.target.value)}/></label>
     <button disabled={isStreaming || !prompt.trim()} onClick={onSend}>Send</button>
-    {isStreaming && <button onClick={onCancel}>Cancel</button>}
+    {isStreaming && <button data-testid="interpreting-stop" onClick={onCancel}>Cancel</button>}
   </aside>
 }

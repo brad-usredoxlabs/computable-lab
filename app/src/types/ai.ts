@@ -544,6 +544,15 @@ export interface AiAgentResult {
   recordCreations?: AiRecordCreation[]
   /** Place the created record on the bench in the same turn (explicit, never implied). */
   alsoPlace?: AiAlsoPlace
+  /**
+   * L2-CHAT-1: resolved placement offers — labware hints the deterministic
+   * pipeline bound against REAL inventory records (REVISE-GHOST-1 fix3,
+   * AssistDraftResult's resolved arm). The universal ghost mount ghosts a
+   * PLACEMENT of the existing record (keyed by recordId, never a
+   * re-creation). Absent on payloads that carried no offers (key ABSENT,
+   * never undefined).
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   ontologyBindings?: DraftOntologyBinding[]

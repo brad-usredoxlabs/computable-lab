@@ -16,12 +16,14 @@
  *  - tier-1 agent actions go through flow.handleAgentAction, which is the
  *    single narrowing point for agent_action frames.
  */
-import { useAiChat, type UseAiChatOptions, type UseAiChatReturn } from '../shared/hooks/useAiChat'
+import { useAiChat, type UseAiChatOptions, type UseAiChatReturn, type AiProposalDraft } from '../shared/hooks/useAiChat'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import {
   useWorkstateProposalFlow,
   type WorkstateProposalFlow,
 } from '../shared/ai/useWorkstateProposalFlow'
+
+export type { AiProposalDraft }
 
 export interface SurfaceChat {
   chat: UseAiChatReturn
