@@ -35,10 +35,14 @@ describe('ViewRenderer compatibility arms (PB-CH-5 — preserved, not widened)',
     expect(getByText(/Missing artifact/)).toBeDefined()
   })
 
-  it('source-pin: ViewRenderer gains ZERO new renderer identifiers (closed set preserved)', () => {
+  it('source-pin: ViewRenderer gains NO new renderer identifiers beyond the task-mandated GC-10 widening', () => {
     const source = readFileSync('src/analysis/ViewRenderer.tsx', 'utf8')
     // The shipped closed set: table, signal, metric, model (+ the error arm).
-    // No new renderer identifier may appear in the switch.
+    // No new renderer identifier may appear in the switch — EXCEPT the two
+    // GC-10 ids (chromatogram, trace-compare) that the task mandates adding
+    // (view-spec enum extended); the compatibility error arm still fires for
+    // everything else (quantum stays banned, so the closed-set behavior is
+    // preserved for unshipped renderers).
     for (const banned of ['quantum', 'heatmap', 'scatter', 'component-tree']) {
       expect(source).not.toContain(banned)
     }

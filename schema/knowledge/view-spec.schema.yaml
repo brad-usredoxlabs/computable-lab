@@ -28,9 +28,29 @@ properties:
 
   renderer:
     type: string
-    enum: [ table, signal, metric, static-figure ]
+    # GC-10 [E]: the shipped renderer set, extended with the interactive
+    # chromatogram + the multi-trace compare (task: "view-spec enum extended").
+    # The static `signal` polyline is preserved unchanged (OQ-3); these are
+    # NEW ids. bindings/options below remain the free objects that absorb the
+    # renderer-specific data — no `properties` addition is needed.
+    enum: [ table, signal, metric, static-figure, chromatogram, trace-compare ]
 
   # Field/axis bindings onto the artifact payload (e.g. { x: 'time', y: 'intensity' }).
+  # GC-10 canonical shapes (all optional, data-only; unknown keys pass through —
+  # additionalProperties is the schema's own stance):
+  #   chromatogram:
+  #     markersFrom: "<sibling artifact NAME>"      # -> RT/peak markers
+  #     markerRtField / markerLabelField            # property NAMES in the marker rows
+  #     markerSaturatedField / markerFlagsField     # saturation + reason-code columns
+  #     baselineFrom / baselineField                # optional overlay baseline key
+  #   trace-compare:
+  #     artifactRef = the PRIMARY trace artifact (the schema-required field)
+  #     traces: [ { artifactRef: { kind:'record', id:'AOUT-…',
+  #                                    type:'analysis-output-artifact', label?: '…' },
+  #                 conversion?: { factor: number, toUnit: string, declaredBy: string } } ]
+  #     axisUnits: { x: '<unit string as seen>', y: '<unit string as seen>' }  # audit echo
+  #   Colour is NOT spec data: it is derived (stable rank within the trace list
+  #   sorted by artifact record id); the `options` colours are presentation-only.
   bindings:
     type: object
     additionalProperties: true

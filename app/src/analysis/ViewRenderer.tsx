@@ -6,6 +6,7 @@
  * rather than silently failing.
  */
 import type { ReactNode } from 'react'
+import { ChromatogramView } from './ChromatogramView'
 
 export interface RenderableArtifact {
   id: string
@@ -22,9 +23,33 @@ export interface RenderableView {
   id: string
   title: string
   artifact: string
-  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'model' | 'binary'
+  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'model' | 'binary'
   bindings?: Record<string, unknown>
   options?: Record<string, unknown>
+}
+
+/** The page's view whitelist (the GC-9 silent-coercion trap, F1 :380-382 /
+ *  bait #4): a manifest view's renderer string passes through ONLY if it is a
+ *  shipped view renderer; anything else is (silently) coerced to 'table' (the
+ *  compatibility error arm never fires for these). GC-10 extends the set with
+ *  `chromatogram` + `trace-compare` — both must PASS THROUGH, not table-coerce.
+ *  Extracted as a pure function so the whitelist is unit-testable in isolation
+ *  (the reviewer's "chromatogram is not table-coerced" leg). */
+export const VIEW_RENDERER_WHITELIST = [
+  'table',
+  'signal',
+  'metric',
+  'static-figure',
+  'chromatogram',
+  'trace-compare',
+] as const
+
+export type WhitelistedRenderer = (typeof VIEW_RENDERER_WHITELIST)[number]
+
+export function resolveViewRenderer(raw: string | undefined): WhitelistedRenderer {
+  return (VIEW_RENDERER_WHITELIST as readonly string[]).includes(raw ?? '')
+    ? (raw as WhitelistedRenderer)
+    : 'table'
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -120,7 +145,15 @@ function ModelView({ artifact }: { artifact: RenderableArtifact }) {
   )
 }
 
-export function ViewRenderer({ view, artifact }: { view: RenderableView; artifact: RenderableArtifact }) {
+export function ViewRenderer({
+  view,
+  artifact,
+  siblings,
+}: {
+  view: RenderableView
+  artifact: RenderableArtifact
+  siblings?: RenderableArtifact[]
+}) {
   switch (view.renderer) {
     case 'table':
       return <TableView artifact={artifact} />
@@ -130,6 +163,32 @@ export function ViewRenderer({ view, artifact }: { view: RenderableView; artifac
       return <MetricView artifact={artifact} />
     case 'static-figure':
       return <StaticFigureView artifact={artifact} />
+    // GC-10: the interactive chromatogram + the compare view. These land
+    // BEFORE `default:` so an unknown renderer still hits the visible
+    // compatibility error arm below (the closed-set error is preserved).
+    case 'chromatogram': {
+      const bindings = view.bindings ?? {}
+      const markersFrom = typeof bindings.markersFrom === 'string' ? (bindings.markersFrom as string) : undefined
+      const markerArtifact =
+        markersFrom && siblings ? siblings.find((a) => a.name === markersFrom) : undefined
+      return (
+        <ChromatogramView
+          artifact={artifact}
+          markerArtifact={markerArtifact}
+          bindings={bindings}
+          siblings={siblings}
+        />
+      )
+    }
+    case 'trace-compare':
+      // A `trace-compare` view renders through the Compare surface (§D4), not
+      // the single-artifact per-view path. The dispatch arm exists so an
+      // orphan trace-compare view-spec is VISIBLE (a named error), never blank.
+      return (
+        <div className="view-spec__error" data-testid="view-spec-error">
+          trace-compare views render through the Compare surface (select runs → Compare traces)
+        </div>
+      )
     case 'model':
     case 'binary':
       return <ModelView artifact={artifact} />
@@ -169,7 +228,7 @@ export function renderViews(
     return (
       <div key={view.id} className="view-spec">
         <div className="view-spec__title">{view.title}</div>
-        <ViewRenderer view={view} artifact={artifact} />
+        <ViewRenderer view={view} artifact={artifact} siblings={artifacts} />
       </div>
     )
   })

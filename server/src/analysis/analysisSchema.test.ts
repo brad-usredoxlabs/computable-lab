@@ -165,4 +165,38 @@ describe('view-spec schema', () => {
       renderer: 'quantum',
     }).valid).toBe(false);
   });
+
+  // GC-10 [E]: the two NEW enum ids validate (task: "view-spec enum extended").
+  // The quantum rejection above stays — the closed-set error is preserved for
+  // unshipped renderers.
+  it('accepts a chromatogram view (GC-10 new enum id)', () => {
+    expect(validateFor(IDS.view)({
+      kind: 'view-spec',
+      id: 'VSPEC-000101',
+      title: 'interactive chromatogram',
+      artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' },
+      renderer: 'chromatogram',
+      bindings: { markersFrom: 'peak_table' },
+    }).valid).toBe(true);
+  });
+
+  it('accepts a trace-compare view (GC-10 new enum id, AOUT refs in bindings)', () => {
+    expect(validateFor(IDS.view)({
+      kind: 'view-spec',
+      id: 'VSPEC-000102',
+      title: 'trace comparison',
+      artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' },
+      renderer: 'trace-compare',
+      bindings: {
+        traces: [
+          { artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' } },
+          {
+            artifactRef: { kind: 'record', id: 'AOUT-000002', type: 'analysis-output-artifact' },
+            conversion: { factor: 1000, toUnit: 'pA', declaredBy: 'brad' },
+          },
+        ],
+        axisUnits: { x: 'min', y: 'pA' },
+      },
+    }).valid).toBe(true);
+  });
 });
