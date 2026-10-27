@@ -103,6 +103,8 @@ function loadCoverage(): { engine: LifecycleEngine; coverage: KindLifecycleRegis
       'instrument-sequence', 'instrument-sequence-entry',
       // GC-4: the .D acquisition-package kind joins the coverage (9 -> 10).
       'acquisition-package',
+      // GC-5: the declared analysis-engine kind joins the coverage (10 -> 11).
+      'analysis-engine',
     ]),
   })
   return { engine, coverage }

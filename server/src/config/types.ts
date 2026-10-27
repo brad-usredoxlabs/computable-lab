@@ -25,6 +25,28 @@ export interface AppConfig {
   labSync?: LabSyncConfig;
   ontology?: OntologyConfig;
   corpus?: CorpusConfig;
+  /**
+   * GC-5: analysis execution configuration. `python` is the DECLARED
+   * interpreter for analysis runs — step 1 of the GC-1 resolution order
+   * (config-declared → env CLA_ANALYSIS_PYTHON → the declared last-resort).
+   * The value lives in CONFIG DATA (gitignored config.yaml), never in code:
+   * no venv path literal exists in the runner.
+   */
+  analysis?: AnalysisConfig;
+}
+
+/**
+ * GC-5 — analysis execution configuration (GC-1 F18 resolution order, step 1).
+ * Every field optional: an absent block means "no declared interpreter" and
+ * the runner falls through to the env var / declared last-resort exactly as
+ * today.
+ */
+export interface AnalysisConfig {
+  /**
+   * Declared analysis interpreter path (e.g. a provisioned venv's python).
+   * CONFIG DATA — the venv path itself is gitignored and never a code literal.
+   */
+  python?: string;
 }
 
 /**

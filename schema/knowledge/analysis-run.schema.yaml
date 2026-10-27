@@ -69,6 +69,69 @@ properties:
     additionalProperties: true
     description: "Validated output manifest describing artifacts + views (for UI rendering)."
 
+  # GC-5: machine-readable engine provenance — the ACTUAL engine + interpreter +
+  # package versions that ran, written ONCE at completion by the AnalysisRunner
+  # (probe → dispatch → record). Absent on legacy (no-engineRef) runs and on
+  # runs that failed the engine gate before status flipped to 'running'. The
+  # idempotent re-read path returns the stored manifest + record untouched, so
+  # old runs keep byte-stable provenance.
+  engineProvenance:
+    type: object
+    additionalProperties: false
+    required: [engineRef, engineRecordId, engineVersion, adapter, interpreterPath, interpreterVersion, packages, probedAt]
+    properties:
+      engineRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      engineRecordId:
+        type: string
+        description: "The engine record id this run dispatched on."
+      engineVersion:
+        type: string
+        description: "The engine_version the pinned record declares."
+      adapter:
+        type: string
+        description: "The shipped adapter id the record's implementation.adapter declared (the dispatch key)."
+      interpreterPath:
+        type: string
+        description: "The ACTUAL interpreter path that ran (resolved per the GC-1 order)."
+      interpreterVersion:
+        type: string
+        description: "The ACTUAL interpreter version, probed."
+      packages:
+        type: array
+        description: "Declared vs ACTUAL versions of every declared package."
+        items:
+          type: object
+          additionalProperties: false
+          required: [name, required, actual]
+          properties:
+            name: { type: string }
+            required: { type: string, description: "The declared constraint (from the record)." }
+            actual: { type: string, description: "The probed actual version." }
+      probedAt:
+        type: string
+        format: date-time
+      capabilitiesReported:
+        type: array
+        description: "The capability declaration as reported by the pinned record (approximate support is surfaced, never hidden)."
+        items:
+          type: object
+          additionalProperties: false
+          required: [capability, support]
+          properties:
+            capability:
+              type: string
+              enum:
+              - baseline_control
+              - width_slope_sensitivity
+              - area_height_reject
+              - timed_integration_windows
+              - peak_detection
+              - deconvolution
+            support:
+              type: string
+              enum: [supported, approximate, unsupported, unverified]
+
   startedAt:
     type: string
     format: date-time

@@ -1,0 +1,47 @@
+# Lint rules for Analysis Engine records (GC-5 — declared engine registry).
+#
+# HONEST BOUNDARIES (the v1 lint DSL is shape-only, gc-method.lint.yaml:9-14 +
+# acquisition-package.lint.yaml precedent):
+#
+# INTENT (not expressible in the v1 DSL — recorded, not faked):
+#   An engine that declares a capability as `supported` must carry a version
+#   constraint for every HOST PACKAGE that capability depends on (e.g.
+#   peak_detection as supported ⇒ the packages list names the host package
+#   that implements it). The DSL cannot FILTER an array BY VALUE (no
+#   "capabilities.declared[*].support == 'supported'" operator exists — the
+#   v1 ops are exists / nonEmpty / regex / equals / in / all / any / not /
+#   compare), so the cross-field implication cannot be expressed. Do NOT
+#   invent a vacuous `exists` rule for it: the guarantee is enforced by the
+#   probe at execute time (the runner checks the DECLARED packages against the
+#   ACTUAL interpreter, ENGINE_VERSION_MISMATCH / ENGINE_VERSION_CHECK_UNSUPPORTED
+#   on any miss) + the closed-enum SCHEMA (an unsupported capability value is
+#   structurally rejected). A vacuous rule would be a lie in this DSL.
+#
+# The id pattern + required-field discipline are SCHEMA jobs (done in
+# analysis-engine.schema.yaml: pattern ^ENG- + required list) — lint does not
+# re-declare them.
+#
+# INTENT (not expressible in the v1 DSL — recorded, not faked; l1t2245 defect
+# 4 — cross-field title-stubness of the stub-echo adapter is NOT enforced):
+#   An engine whose implementation.adapter is `stub-echo` (the DECLARED
+#   pluggability probe) SHOULD carry 'STUB' in its title so no test or UI can
+#   mistake it for science. This is a CROSS-FIELD rule (the value of
+#   implementation.adapter implies a property of title) and the v1 shape-only
+#   DSL cannot express it (no value-conditional / cross-field operator — same
+#   limit recorded above). It is therefore NOT enforced by the schema (title
+#   is a plain string) NOR by any lint rule here (none is invented — a vacuous
+#   rule would be a lie in this DSL). What DOES hold: (a) the shipped
+#   stub-echo adapter emits exactly one metric artifact + a warning manifest
+#   log with the STUB_ADAPTER code (the stub's identity in every manifest it
+#   produces), (b) the contract test (analysisRunner.engine.test.ts, leg iv)
+#   asserts the FIXTURE engine record's title contains STUB and the manifest's
+#   STUB_ADAPTER warning. An operator who titles a stub-echo engine without
+#   STUB is not stopped declaratively — recorded as the honest boundary, not
+#   implied as verified.
+#
+# This file therefore carries ZERO enforced rules, which is the house-honest
+# shape (the triplet convention tolerates schema + lint + ui; analysis-revision
+# itself RUNS without a lint/ui sibling — schema/knowledge/ today).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml"
+rules: []

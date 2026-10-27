@@ -8,6 +8,8 @@
  */
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
+import { RecordRevisionService } from '../revisions/RecordRevisionService.js';
+import type { EngineRecord } from './engineAdapters.js';
 
 const SCHEMAS = {
   rev: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml',
@@ -54,6 +56,16 @@ export interface CreateRevisionInput {
   methodNotes?: string;
   inputs?: Array<{ name: string; description?: string; dataKind?: string; required?: boolean }>;
   parameterSchema?: Record<string, unknown>;
+  /**
+   * GC-5: the pinned analysis-engine record. OPTIONAL in the schema (bait #2),
+   * but when present it MUST resolve at creation (or its REV- snapshot pin
+   * must): the resolved payload's kind must be analysis-engine and its state
+   * must not be 'archived' — else ENGINE_REF_UNRESOLVED, a NAMED declared
+   * failure. No fallback, no strip-and-create: the rejection IS the behavior.
+   */
+  engineRef?: { kind: 'record'; type: 'analysis-engine'; id: string; label?: string; revisionRef?: { kind: 'record'; type: 'record-revision'; id: string } };
+  /** GC-5: capabilities this method needs (checked against the engine at execute time). */
+  requiredCapabilities?: string[];
 }
 
 export interface CreateRunInput {
@@ -65,12 +77,110 @@ export interface CreateRunInput {
   initiator?: string;
 }
 
+const ENGINE_KIND = 'analysis-engine' as const;
+
+/**
+ * GC-5 — the SHARED engineRef resolver (the spec's §b create-time gate and
+ * §c execute-time gate both resolve through this — one resolver, not two,
+ * CL Way). Resolves the revision-pinned engineRef:
+ *  - engineRef.revisionRef (REV- snapshot pin) → the pinned IMMUTABLE engine
+ *    snapshot (record-revision record's payload.snapshot); the run then runs
+ *    against exactly the pinned bytes (F7 snapshot semantics).
+ *  - else the CURRENT engine record head (store.get by id).
+ * Declared failures only (bait #5, §e matrix): absent / wrong-kind /
+ * unresolvable snapshot → ENGINE_REF_UNRESOLVED (400); archived engine →
+ * ENGINE_REF_UNRESOLVED (409, state leg named in the message). The pinned
+ * engineRef.id is validated against the resolved record: a snapshot whose
+ * sourceRecordId is another record (cross-engine ref) or a payload whose id
+ * differs from the pinned id is ENGINE_REF_UNRESOLVED (400) — an invalid
+ * pinned ref is declared-dead, never silently substituted (l1t2245 defect 1).
+ * No fallback, no strip-and-create — the rejection IS the behavior.
+ */
+export async function resolveEngineRef(
+  store: import('../store/types.js').RecordStore,
+  engineRef: { id: string; revisionRef?: { id?: string } },
+): Promise<RecordEnvelope> {
+  let payload: Record<string, unknown>;
+  if (engineRef.revisionRef?.id) {
+    // The revision pins an IMMUTABLE engine snapshot (REV- record-revision).
+    // RRS.read verifies the snapshot's contentHash (F7 snapshot semantics —
+    // the run runs against exactly the pinned bytes) AND — with the pinned
+    // engine id passed as sourceRecordId — that the snapshot's sourceRecordId
+    // IS the pinned engine (a cross-engine snapshot of another record is an
+    // INVALID_REVISION here, a NAMED declared failure below; no silent
+    // substitution of one engine for another, l1t2245 defect 1).
+    try {
+      const snap = (await new RecordRevisionService(store).read({ id: engineRef.revisionRef.id }, engineRef.id)).payload.snapshot;
+      payload = snap as Record<string, unknown>;
+    } catch (err) {
+      throw new AnalysisServiceError(
+        'ENGINE_REF_UNRESOLVED',
+        `engine ${engineRef.id} pinned via snapshot ${engineRef.revisionRef.id} does not resolve: ${err instanceof Error ? err.message : String(err)}`,
+        400,
+      );
+    }
+  } else {
+    const env = await store.get(engineRef.id);
+    if (!env) {
+      throw new AnalysisServiceError(
+        'ENGINE_REF_UNRESOLVED',
+        `engine ${engineRef.id} does not resolve (no analysis-engine record with that id)`,
+        400,
+      );
+    }
+    payload = env.payload as Record<string, unknown>;
+  }
+  // The resolved payload's record id must BE the pinned engine id. The
+  // sourceRecordId check above covers the snapshot branch structurally; this
+  // comparison is the defense for any path that reaches here (l1t2245
+  // defect 1: an envelope labelled with the pinned id must not carry another
+  // engine's payload).
+  if (payload.id !== engineRef.id) {
+    throw new AnalysisServiceError(
+      'ENGINE_REF_UNRESOLVED',
+      `engine ${engineRef.id} resolves to record '${String(payload.id)}' — the pinned engineRef.id and the resolved record id must match; no engine is substituted`,
+      400,
+    );
+  }
+  if (payload.kind !== ENGINE_KIND) {
+    throw new AnalysisServiceError(
+      'ENGINE_REF_UNRESOLVED',
+      `engine ${engineRef.id} resolves to kind '${String(payload.kind)}', not analysis-engine`,
+      400,
+    );
+  }
+  if (payload.state === 'archived') {
+    throw new AnalysisServiceError(
+      'ENGINE_REF_UNRESOLVED',
+      `engine ${engineRef.id} has lifecycle state 'archived' — a pinned engine must be live (draft or active)`,
+      409,
+    );
+  }
+  return { recordId: engineRef.id, schemaId: '', payload };
+}
+
 export class AnalysisService {
   constructor(private readonly ctx: AppContext) {}
+
+  /**
+   * GC-5 — resolve the pinned engine (delegates to the shared
+   * resolveEngineRef — one resolver, not two). Returns the resolved engine
+   * record payload. Used by the createRevision gate; the runner's
+   * execute-time gate calls resolveEngineRef directly.
+   */
+  async resolveEngineRecord(engineRef: { id: string; revisionRef?: { id?: string } }): Promise<EngineRecord> {
+    const env = await resolveEngineRef(this.ctx.store, engineRef);
+    return env.payload as unknown as EngineRecord;
+  }
 
   async createRevision(input: CreateRevisionInput): Promise<{ recordId: string; payload: Record<string, unknown> }> {
     if (!input.title?.trim() || !input.entryScript?.trim() || !input.sdkVersion?.trim()) {
       throw new AnalysisServiceError('BAD_REQUEST', 'title, entryScript, and sdkVersion are required');
+    }
+    // GC-5 gate: a present engineRef MUST resolve (or its snapshot pin) — a
+    // NAMED declared failure, the rejection IS the behavior.
+    if (input.engineRef) {
+      await this.resolveEngineRecord(input.engineRef);
     }
     const recordId = await nextId(this.ctx, 'analysis-revision');
     const payload: Record<string, unknown> = {
@@ -84,6 +194,8 @@ export class AnalysisService {
       ...(input.methodNotes?.trim() ? { methodNotes: input.methodNotes.trim() } : {}),
       ...(input.inputs && input.inputs.length > 0 ? { inputs: input.inputs } : {}),
       ...(input.parameterSchema ? { parameterSchema: input.parameterSchema } : {}),
+      ...(input.engineRef ? { engineRef: input.engineRef } : {}),
+      ...(input.requiredCapabilities && input.requiredCapabilities.length > 0 ? { requiredCapabilities: input.requiredCapabilities } : {}),
     };
     const result = await this.ctx.store.create({
       envelope: { recordId, schemaId: SCHEMAS.rev, payload },

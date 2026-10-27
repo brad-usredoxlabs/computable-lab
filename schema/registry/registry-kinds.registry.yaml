@@ -38,6 +38,12 @@ kinds:
   # stripDomainStatus). The kind's schema declares the matching
   # lifecycleId/state enums so the registryOpsLifecycle pin stays green.
   - kind: acquisition-package
+  # GC-5: the declared analysis-engine kind joins the minimal registry-ops
+  # lifecycle (draft default state, same treatment as calibration-record — no
+  # stripDomainStatus). The kind's schema (schema/knowledge/
+  # analysis-engine.schema.yaml) declares the matching lifecycleId/state enums
+  # so the registryOpsLifecycle pin stays green.
+  - kind: analysis-engine
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
 # covered record in a terminal lifecycle state is refused at create, and on
