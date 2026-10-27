@@ -435,3 +435,16 @@ edits land; show them failing; note the inversion in the commit message (EDITOR-
 
 ORCH REVIEW: cite-audit passed 2026-10-26T06:15 (l1t0550); OQ1/OQ2/OQ3 folded above. Dispatch
 preconditions: GC-3 merged (shares registry-kinds + coverage pins) AND a free fleet coder slot.
+
+## ORCH AMENDMENT 2 2026-10-26T20:50 (tick l1940, trunk tip a444f944) — coverage-fence baseline moved AGAIN
+
+GC-4 MERGED (a444f944): the acquisition-package kind is now IN registry-kinds.registry.yaml and all
+four coverage-fence pins are bumped to 10 on trunk (verified first-hand: the four fence suites are
+47/47 + registry suites green at size 10, own vitest run on the gc-5 worktree 20:48).
+CONSEQUENCE for the coder: branch off a444f944 (already checked out). The list in
+migrateRecordLifecycles.test.ts knownKinds ends with 'acquisition-package' after
+instrument-sequence-entry. YOUR four coverage-pin bumps are 10 -> 11 (analysis-engine):
+registryOpsLifecycle COVERED_KINDS, KindLifecycleRegistry KINDS + size pin toBe(11),
+InstrumentKindRetirement covered list, migrateRecordLifecycles knownKinds. The First targeted check
+expects ALL GREEN at size 11 with the analysis-engine row present. The earlier 9->10 instruction is
+SUPERSEDED — do not re-add instrument-sequence* rows (already on trunk).
