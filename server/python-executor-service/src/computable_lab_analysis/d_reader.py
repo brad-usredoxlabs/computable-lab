@@ -2,9 +2,10 @@
 
 Stdlib-only by design (spec D1 / stop boundary B4): ``pyproject.toml`` declares
 zero runtime deps and the production interpreter at dispatch time may be
-``/usr/bin/python3`` for revisions without a provisioned-venv engine. numpy is
-Faster but forbidden HERE (it may appear in entry scripts only, never in this
-module).
+``/usr/bin/python3`` for revisions without a provisioned-venv engine. A numeric
+array library is FASTER but forbidden HERE (it may appear in entry scripts
+only, never in this module) — the sequential loop is milliseconds at corpus
+scale, exactly as the GC-1 decoders ran it.
 
 Decode authority: the canonical GC-1 decoder D CODE
 (``.hermes/plans/scripts/gc1-decD.py``, lines 21-50), NOT the GC-1 report's
@@ -23,8 +24,9 @@ exact loop; do not "clean it up".
 
 Metadata (SAMPLE.XML / RUN.LOG) is strict UTF-16 (BOM ``FF FE`` on real
 files): decode failure is a NAMED error (``METADATA_DECODE_FAILED``), never a
-silent loss — no ``errors='ignore'`` anywhere (spec bait #3). Unrecognized
-RUN.LOG lines survive verbatim with ``parsed: None`` (lossless clause).
+silent loss — no error-swallowing decode mode anywhere (spec bait #3).
+Unrecognized RUN.LOG lines survive verbatim with ``parsed: None`` (lossless
+clause).
 
 Failure codes (spec §Failure table X1-X11) are STRING codes inside the
 exception message — no new TS error tokens, no schema vocabulary (B6).
@@ -244,7 +246,7 @@ def _strict_utf16(data: bytes, what: str) -> str:
     """Strict UTF-16 decode. Real files carry the FF FE BOM (``decode('utf-16')``
     consumes it); a BOM-less file falls back to explicit utf-16-le. ANY decode
     error (odd length, lone surrogate) is METADATA_DECODE_FAILED — never a
-    silent loss (no errors='ignore'/'replace' anywhere; spec bait #3)."""
+    silent loss (no error-swallowing decode modes; spec bait #3)."""
     try:
         if data[:2] == b"\xff\xfe":
             return data.decode("utf-16")
