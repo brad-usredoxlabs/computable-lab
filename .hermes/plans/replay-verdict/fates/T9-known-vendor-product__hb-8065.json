@@ -1,0 +1,349 @@
+{
+  "turn": "T9-known-vendor-product",
+  "utterance": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+  "noun": "HB-8065",
+  "source": "derived: VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB record name (a real persisted vendor-product)",
+  "spine_ranked": [
+    {
+      "curie": "local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl",
+      "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB",
+      "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+      "namespace": "local",
+      "tier": 1,
+      "level": "vendor-product",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "",
+      "label": "Create local term “HB-8065”",
+      "namespace": "local",
+      "tier": 5,
+      "level": "concept",
+      "score": 0.05,
+      "source": "mint",
+      "mint": {
+        "label": "HB-8065"
+      }
+    }
+  ],
+  "stage_fate": [
+    {
+      "tier": "tier1-local-record",
+      "term": "HB-8065",
+      "curie": "local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl",
+      "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "HB-8065",
+      "curie": "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB",
+      "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+      "level": "vendor-product",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    }
+  ],
+  "engine": [
+    {
+      "arm": "add_material.material",
+      "remote_clamp_context": "local VPR candidate present; any REAL remote vendor tier (4) could never bind (max 0.58 < 0.7) even online — arithmetic pinned in remote_clamp (constants parsed from product, D12)"
+    },
+    {
+      "arm": "add_material.material",
+      "engine_arm": "armA eligibility-absent",
+      "eligibility_loaded": false,
+      "declared_level": null,
+      "declared_levels_allowed_set": [
+        "concept",
+        "formulation",
+        "vendor-product",
+        "instance"
+      ],
+      "wantLevel_fires": false,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "HB-8065",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+              "confidence": 1,
+              "ref": "MAT-hep-g2-hepg2-hb-8065-atc-7hdl"
+            },
+            {
+              "label": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+              "confidence": 1,
+              "ref": "VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "add_material",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Hep G2 [HEPG2] - HB-8065 | ATCC",
+          "Hep G2 [HEPG2] - HB-8065 | ATCC"
+        ],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "RANKING (ambiguous-noun; 2 candidates, 1 distinct labels)"
+      ]
+    },
+    {
+      "arm": "add_material.material",
+      "engine_arm": "armB production (eligibility data loaded)",
+      "eligibility_loaded": true,
+      "declared_level": null,
+      "declared_levels_allowed_set": [
+        "concept",
+        "formulation",
+        "vendor-product",
+        "instance"
+      ],
+      "wantLevel_fires": false,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "HB-8065",
+          "reason": "vendor-scope-unknown",
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "add_material",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "catalog-scope-gate: label \"HB-8065\" matches a data catalogShape pattern with no declared vendor scope — eliciting scope, fabricating no identity"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": true,
+        "clarification_reasons": [
+          "vendor-scope-unknown"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)"
+      ]
+    },
+    {
+      "arm": "wash.material",
+      "remote_clamp_context": "local VPR candidate present; any REAL remote vendor tier (4) could never bind (max 0.58 < 0.7) even online — arithmetic pinned in remote_clamp (constants parsed from product, D12)"
+    },
+    {
+      "arm": "wash.material",
+      "engine_arm": "armA eligibility-absent",
+      "eligibility_loaded": false,
+      "declared_level": "aliquot",
+      "declared_levels_allowed_set": null,
+      "wantLevel_fires": true,
+      "bindings": [
+        {
+          "verb": "wash",
+          "argument": "material",
+          "label": "HB-8065",
+          "curie": "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB",
+          "resolvedLabel": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+          "tier": 1,
+          "level": "vendor-product",
+          "confidence": 1,
+          "source": "local-record",
+          "actionIndex": 0
+        }
+      ],
+      "clarifications": [],
+      "traces": [
+        "level-mismatch: local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl (level concept) ineligible for wantLevel aliquot"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [
+          "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB"
+        ],
+        "returned_ranked_in_clarification": [],
+        "level_filtered": [
+          "local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl"
+        ],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "LEVEL-FILTERING (local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl)",
+        "WRONG-BIND (bound local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB level=vendor-product label \"Hep G2 [HEPG2] - HB-8065 | ATCC\" != spoken noun \"HB-8065\")",
+        "ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)"
+      ]
+    },
+    {
+      "arm": "wash.material",
+      "engine_arm": "armB production (eligibility data loaded)",
+      "eligibility_loaded": true,
+      "declared_level": "aliquot",
+      "declared_levels_allowed_set": null,
+      "wantLevel_fires": true,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "HB-8065",
+          "reason": "vendor-scope-unknown",
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "wash",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "catalog-scope-gate: label \"HB-8065\" matches a data catalogShape pattern with no declared vendor scope — eliciting scope, fabricating no identity"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": true,
+        "clarification_reasons": [
+          "vendor-scope-unknown"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)"
+      ]
+    }
+  ],
+  "offline": {
+    "fetch_blocked": 0,
+    "fetch_blocked_note": "global fetch stubbed to throw; any stray remote call recorded here",
+    "localOnly": true,
+    "oak": "not built (no service URL)",
+    "vendor": "not wired"
+  }
+}
