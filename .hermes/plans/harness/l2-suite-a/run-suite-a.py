@@ -299,8 +299,12 @@ class HeldSession:
               "vocabPackId", "editorMode")},
             sort_keys=True).encode("utf-8")
         sha = hashlib.sha256(ident).hexdigest()
+        # D3: advance the driven-turn ordinal per DRIVEN turn (this method is
+        # reached only by driven prompts — a blocked-by dependent continues
+        # before it) and stamp THIS turn's ordinal into the B5 evidence.
+        turn = self.accum.begin_turn()
         self.key_evidence.append(
-            {"prompt_idx": self.accum.turn_index, "context_identity_sha256": sha})
+            {"prompt_idx": turn, "context_identity_sha256": sha})
         return sha
 
     def push_history(self, prompt, assistant_text):
@@ -392,6 +396,22 @@ def load_expectations(exp_dir):
     return out
 
 
+def answerable_cards(cards):
+    """The cards arm's structural shape: a clarification request is ANSWERABLE
+    when it carries an answer form (a non-empty `options` list — the
+    AgentClarificationRequest.options the client renders as pickable rows,
+    types.ts:603). Pure shape, no prose (B9: only channel SHAPES may be
+    asserted; LLM prose is excluded)."""
+    out = []
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        opts = c.get("options")
+        if isinstance(opts, list) and len(opts) > 0:
+            out.append(c)
+    return out
+
+
 def check_expectation(idx, exp, state):
     """Return a list of violation strings (empty = met). exp may be {} for a
     probe-only prompt (no channel constraint yet)."""
@@ -413,13 +433,12 @@ def check_expectation(idx, exp, state):
         dl = (state.get("done") or {}).get("deckLayout")
         ok = (isinstance(dl, dict) and dl.get("variantId") == "manual_freeform")
         if not ok:
-            # cards arm: a clarification card naming the freeform layout
-            named = any(
-                "freeform" in str((c or {}).get("prompt", "")).lower()
-                or "manual bench" in str((c or {}).get("prompt", "")).lower()
-                for c in cards)
-            if not named and not (isinstance(dl, dict) and dl.get("variantId")):
-                v.append("no deckLayout variantId and no freeform-naming card")
+            # cards arm (STRUCTURAL — D2 fix-run: no model-prose substring, no
+            # keywords in the driver; B9: only channel SHAPES may be asserted):
+            # the turn answered with cards (cards_count>0) AND at least one card
+            # is ANSWERABLE (carries a non-empty options answer form).
+            if not answerable_cards(cards) and not (isinstance(dl, dict) and dl.get("variantId")):
+                v.append("no deckLayout variantId and no answerable card")
         if verdict is None:
             v.append("silent shape on a navigation turn (prose-only = FAIL)")
 
@@ -434,28 +453,74 @@ def check_expectation(idx, exp, state):
         if sorted(got) != sorted(exp_wells):
             v.append("wells %r != expected %r" % (sorted(got), sorted(exp_wells)))
 
-    # P5: 8-channel semantics (B8): A2:H2 = eight wells across eight columns
-    # (row A, columns 2-9). The constraint is only meaningful as an 8-channel
-    # operation: ONE event over exactly the 8 columns of row A. A 96-well
-    # single-channel interpretation or a 24-event (3-row) spread FAILS.
+    # P5: 8-channel semantics (B8): A2:H2 = eight wells (the compiler's own
+    # expansion, pinned in expectations/P5.json `wells` via wellRange.ts —
+    # wellRange.ts treats the LETTER as the ROW and the NUMBER as the COLUMN,
+    # so "A2:H2" expands to A2,B2,...,H2 = row LETTERS vary, column fixed).
+    # The constraint is only meaningful as an 8-channel operation: assert it
+    # STRUCTURALLY over that same expectation set — never re-encode an axis
+    # mapping in python (B3: well-range semantics are the compiler's). One
+    # material-bearing event whose well set == the expectation's 8-well set is
+    # the 8-channel operation; a 96-well single-channel interpretation or a
+    # spread of smaller ops (no single op over the full 8-well set) FAILS.
+    # If the event honestly carries a channel count (details.channels /
+    # channel_count / channelCount / n_channels / activeChannels — the
+    # compiler's own hint keys, ExecutionPlanningValidator.collectChannelHints)
+    # it must agree with 8; an honest channels:1 over the 8-well set is a
+    # single-channel interpretation -> FAIL.
     if exp.get("channel_semantics") == "8-channel":
+        exp_set = sorted(exp_wells) if isinstance(exp_wells, list) else None
         add_ev = [ev for ev in events if (ev.get("verb") or ev.get("event_type"))
                   in ("add_material", "multi_dispense", "dispense")]
-        rows = set()
-        for ev in add_ev:
-            rows |= {w[0] for w in event_wells(ev) if w}
-        if rows and rows != {"A"}:
-            v.append("8-channel add spans rows %r (expected only row A)" % sorted(rows))
-        eight_col_op = None
-        for ev in add_ev:
-            ws = event_wells(ev)
-            if len(ws) == 8 and {w[0] for w in ws} == {"A"} and \
-                    {w[1:] for w in ws} == {str(i) for i in range(2, 10)}:
-                eight_col_op = ev
-        if add_ev and eight_col_op is None:
-            got = [event_wells(ev) for ev in add_ev]
-            v.append("no single 8-column operation over A2:H2 (8-channel "
-                     "constraint not honored): %r" % json.dumps(got)[:200])
+        if not exp_set:
+            v.append("channel_semantics 8-channel but no expectation well set "
+                     "to assert against (expectations/P5.json `wells` missing)")
+        else:
+            # A material-bearing op IS the 8-channel operation when its well
+            # set == the expectation's 8-well set AND (if it honestly carries a
+            # channel count) that count is 8. The channel-hint keys are the
+            # compiler's own (ExecutionPlanningValidator.collectChannelHints).
+            def _ch(d):
+                for k in ("channels", "channel_count", "channelCount",
+                          "n_channels"):
+                    val = d.get(k)
+                    if isinstance(val, (int, float)) and not isinstance(val, bool):
+                        return int(val)
+                ac = d.get("activeChannels")
+                if isinstance(ac, list):
+                    return len(ac)
+                return None
+
+            full_op = None
+            contradicted = []   # (wells, channels) where an honest count != 8
+            for ev in add_ev:
+                ws = event_wells(ev)
+                if sorted(ws) != exp_set:
+                    continue
+                ch = _ch(ev.get("details") or {})
+                if ch is None or ch == 8:
+                    if full_op is None:
+                        full_op = ev
+                else:
+                    contradicted.append((ws, ch))
+            if full_op is not None:
+                # the 8-channel operation was honored
+                pass
+            elif contradicted:
+                v.append("operation(s) over the expectation's 8-well set %r "
+                         "honestly carry a channel count other than 8 "
+                         "(%r) — a single-/multi-channel interpretation, not "
+                         "an 8-channel operation (B8)"
+                         % (exp_set,
+                            [(sorted(w), c) for (w, c) in contradicted][:4]))
+            elif add_ev:
+                got = [event_wells(ev) for ev in add_ev]
+                v.append("no single material-bearing operation over exactly the "
+                         "expectation's 8-well set %r (8-channel constraint not "
+                         "honored): %r" % (exp_set, json.dumps(got)[:200]))
+            else:
+                v.append("8-channel op expected over %r but no material-bearing "
+                         "event delivered" % exp_set)
 
     # P7: computed set = union of the prior material wells THIS run placed
     # (read from the accumulated state files — B3, never a literal).

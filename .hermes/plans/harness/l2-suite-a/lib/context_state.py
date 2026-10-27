@@ -215,6 +215,18 @@ class AccumulatedDeckState:
         set — computed, never a literal; B3)."""
         return sorted({w for (_lid, w) in self.well_state})
 
+    def begin_turn(self):
+        """B5: advance the DRIVEN-turn ordinal (0 = first driven turn) and
+        return the ordinal this turn holds. Called once per driven prompt so
+        the held-thread key evidence indexes to ITS turn. A blocked-by (not
+        driven) dependent prompt never calls this — it is downgraded, not
+        driven — so the ordinal counts actual driven turns, not prompt
+        numbers. (Advc cycle-1 D3: turn_index was initialised to 0 and never
+        incremented, so every key_evidence entry stamped prompt_idx:0.)"""
+        idx = self.turn_index
+        self.turn_index += 1
+        return idx
+
     def well_state_snapshot(self):
         # app-side shape (EditorContext.wellStateSnapshot): the labware name
         # rides the summary; harvested=false (nothing is harvested here).
