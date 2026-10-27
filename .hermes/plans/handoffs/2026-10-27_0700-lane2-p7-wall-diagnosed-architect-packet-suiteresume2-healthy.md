@@ -60,3 +60,34 @@ EVIDENCE DEBT: none open.
 ## BUDGET
 ~30 min used (reconcile + first-hand diagnosis + packet + queue updates). Checkpoint:
 SUITE-B resume-2 LIVE (untouched), architect decision LIVE. Exit.
+
+## ADDENDUM (same tick, ~07:45) — RULING LANDED + SUITE-B DONE + Q1 CODER LIVE
+Three developments after the section above was written:
+1. ARCH-RULING LANDED 07:23 (packet decisions/SUITEA-P7-mix-wellset-scope-l2t0635.md,
+   architect verified at a197fe0b). Q1 volume = in-campaign vocabulary-only fix-run
+   (mix += volume kind:quantity; NO volumeUl twin, NO channel arg; COMP-1 D4 string-bar
+   test-pinned; acceptance = P7 violations shrink to wellset/labware ONLY). Q2 = (iii):
+   P7 stays unspolit, drive closes as RULED WALL (this ruling IS the spec-OQ4 sign-off and
+   discharges the browser-gate precondition); (i) filed for BRAD as WELLSET-RESOLVER-1
+   (decisions/WELLSET-RESOLVER-1-brad-approval-card.md; deck binding + 8-channel folded in).
+   Q3 = BY DESIGN — acceptedBindings revise-only per Brad's OQ-1; REFUSE any coder widening
+   it. SUITE-A blocker fields cleared from the task block.
+2. SUITE-B resume-2 COMPLETED (~07:25, exit rc=0, marker SUITEB DONE 6accb44b, report ends
+   STATUS: complete; log's CODER_EXITED timestamp is the systemd-run escaping quirk — the
+   earlier 'healthy live' line in this handoff was overtaken by the coder's fast finish).
+   ADVC CYCLE-1 LIVE (cloud; unit cl-l2-advc-suiteb-c1-l2t0635; report owed
+   reviews/L2-SUITE-B-advc-l2t0635.md; key judgement = schema-reject product-wall vs harness
+   input bug). The 'third admission death -> infra escalation' watch is MOOT.
+3. Q1 CODER LIVE 07:37 fleet slot-1 (queue cl-l2-suitea-q1vol-queue-l2t0635, worktree
+   wt/L2-SUITE-A-q1vol-lane2-l2t0635, report deliverables/L2-SUITE-A-Q1VOL-report.l2t0635.md,
+   marker Q1VOL DONE <sha>, ~20-30 min).
+
+NEXT TICK (order): (1) Q1 exit -> advc (2-file diff) -> self-verify -> merge --no-ff ->
+STACK RESTART (vocabulary YAML!) -> orch --all re-drive; P7 must shrink to the wellset wall
+only; ruled-wall receipts -> BROWSER GATE (tier-1 reviewer, :5193, receipts
+/home/brad/.hermes/cl/receipts/L2-SUITE-A/<ts>/) -> SUITE-A DONE. (2) SUITE-B advc verdict:
+accept -> self-verify (parity vitest, purity, tsc) -> merge -> orch EXECUTE replay (OQ5) +
+browser receipt (OQ4) -> SUITE-B DONE. fix -> same-worktree fix run, cycle cap 2.
+(3) WELLSET-RESOLVER-1 waits for Brad — unattended tick: do not claim, do not spec-author.
+Budget: tick used ~70 min (diagnosis + packet + reconcile + 2 dispatches + cards). Checkpoint:
+Q1 coder LIVE slot-1, advc-SUITEB LIVE (cloud), no drives in flight. Exit.
