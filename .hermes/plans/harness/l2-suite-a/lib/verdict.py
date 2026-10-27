@@ -19,7 +19,7 @@ class HonestOutcomeError(Exception):
     rode through) — the delivered-channel dump rides the message."""
 
 
-VERDICTS = ("events-bound", "cards", "honest-failure")
+VERDICTS = ("events-bound", "cards", "honest-failure", "action-delivered")
 
 
 def _channel_dump(result):
@@ -80,8 +80,32 @@ def classify(result, context=None):
 
     # H4: the error outranks the cards — the escalation shape (error + the
     # standing question) is the honest failure, not an answerable cards turn.
+    # The error also outranks the action arm: the server's emit site makes
+    # error and deckLayout mutually exclusive (defensive order, D-1 ruling).
     if errored:
         return "honest-failure"
+
+    # L2-FREEFORM-1F (D-1): the action-delivered arm — BYTE-MIRROR of
+    # honestOutcome.ts's structural predicate:
+    #   `deckLayout !== null && typeof deckLayout === 'object' &&
+    #    !Array.isArray(deckLayout)` + `typeof platformId === 'string' &&
+    #    platformId.length > 0` + `typeof variantId === 'string' &&
+    #    variantId.length > 0`. In python a JSON object is a dict (a non-null,
+    # non-array object); null arrives as None and an array as list — both
+    # fail the isinstance check, matching the TS expression-for-expression.
+    # Structural only: no registry lookup, no id literals (zero-vocabulary
+    # contract). {deckLayout:{}}, empty ids, or null stay the silent shape
+    # (the anti-ghost pins) and fall through to the raise.
+    deck_layout = result.get("deckLayout")
+    if isinstance(deck_layout, dict):
+        platform_id = deck_layout.get("platformId")
+        variant_id = deck_layout.get("variantId")
+        if (
+            isinstance(platform_id, str) and len(platform_id) > 0
+            and isinstance(variant_id, str) and len(variant_id) > 0
+        ):
+            return "action-delivered"
+
     if len(cards) > 0:
         return "cards"
     raise HonestOutcomeError(

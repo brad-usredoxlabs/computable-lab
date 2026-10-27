@@ -26,7 +26,15 @@
  *       success-with-zero-mountable);
  *   (e) H1's shipped shape — events>0 with an UNBOUND raw-label labwareId
  *       and no cards/error → THROWS ("events-bound" requires every event's
- *       labwareId ∈ deck ids ∪ resolved record ids).
+ *       labwareId ∈ deck ids ∪ resolved record ids);
+ *   (f) THE D-1 RECEIPT SHAPE (L2-FREEFORM-1F): {success:true,
+ *       deckLayout:{platformId, variantId}} (P1 prompt-1's done, field-
+ *       for-field from receipts/L2-SUITE-A/20261027T045347Z/prompt-1.json
+ *       :6-12) → "action-delivered" — the structural action-delivered arm
+ *       (non-null object + non-empty string platformId AND variantId);
+ *   (g) the anti-ghost set — {deckLayout:{}} and
+ *       {deckLayout:{platformId:'',variantId:''}} → THROWS (an empty-but-
+ *       present deckLayout never earns the arm, pre- AND post-arm).
  *
  * Run (cwd=server): npx vitest run src/ai/L2SuiteA.honestOutcome.parity.test.ts
  * Zero model calls; zero store writes; pure fixture classification.
@@ -40,13 +48,14 @@ const HARNESS_DIR = resolve(process.cwd(), '..', '.hermes', 'plans', 'harness', 
 const NODE_CLI = resolve(HARNESS_DIR, 'lib', 'honest-cli.ts');
 const PYTHON_CLI = resolve(HARNESS_DIR, 'lib', 'verdict-cli.py');
 
-/** The five FREEFORM acceptance #2 fixture shapes (a)-(e), verbatim.
- *  Each: { result, context?, expected: verdict | 'THROW' }. */
+/** The seven fixture shapes (a)-(g) (FREEFORM acceptance #2 (a)-(e) verbatim
+ *  + the D-1 ruling's (f)/(g), L2-FREEFORM-1F). Each:
+ *  { result, context?, expected: verdict | 'THROW' }. */
 const FIXTURES: Array<{
   name: string;
   result: Record<string, unknown>;
   context?: { deckIds?: readonly string[]; resolvedIds?: readonly string[] };
-  expected: 'events-bound' | 'cards' | 'honest-failure' | 'THROW';
+  expected: 'events-bound' | 'cards' | 'honest-failure' | 'action-delivered' | 'THROW';
 }> = [
   {
     name: '(a) events-bearing result (bound labwareId)',
@@ -83,6 +92,50 @@ const FIXTURES: Array<{
     },
     context: { deckIds: ['LAB-plate-1'], resolvedIds: ['MAT-dmem-1'] },
     expected: 'THROW',
+  },
+  // (f) THE D-1 RECEIPT SHAPE (L2-FREEFORM-1F): P1 prompt-1's done, field-
+  // for-field from receipts/L2-SUITE-A/20261027T045347Z/prompt-1.json :6-12.
+  // Pre-arm (the D-1 defect) this threw the silent shape — the pre-arm RED
+  // is captured in /home/brad/.hermes/cl/lanes/2/freeform1f-RED-l2t0155.txt.
+  // Post-arm the structural action-delivered arm admits the delivery.
+  {
+    name: '(f) D-1 receipt: deckLayout action {platformId:"manual", variantId:"manual_freeform"}',
+    result: {
+      success: true,
+      deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+    },
+    expected: 'action-delivered',
+  },
+  // (g) the anti-ghost set: an empty-but-present deckLayout never earns the
+  // arm — THROWS pre- AND post-arm (both feeds).
+  {
+    name: '(g1) anti-ghost: deckLayout:{} (empty-but-present)',
+    result: { success: true, deckLayout: {} },
+    expected: 'THROW',
+  },
+  {
+    name: '(g2) anti-ghost: deckLayout with empty ids {platformId:"", variantId:""}',
+    result: { success: true, deckLayout: { platformId: '', variantId: '' } },
+    expected: 'THROW',
+  },
+  // (h) well-formed platformId with variantId ABSENT — the arm requires BOTH
+  // ids; this stays the silent shape (D-1 ruling's RED-SHAPE (h)).
+  {
+    name: '(h) deckLayout with variantId absent {platformId:"manual"}',
+    result: { success: true, deckLayout: { platformId: 'manual' } },
+    expected: 'THROW',
+  },
+  // (i) the DEFENSIVE ORDER pin (D-1 ruling's RED-SHAPE (i)): error outranks
+  // the action arm — a well-formed deckLayout alongside an error is the
+  // honest failure (the emit site makes the two mutually exclusive).
+  {
+    name: '(i) error + delivered deckLayout (H4: error outranks the action arm)',
+    result: {
+      success: false,
+      error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+      deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+    },
+    expected: 'honest-failure',
   },
 ];
 
@@ -192,13 +245,21 @@ describe('L2-SUITE-A honest-outcome parity pin (OQ3: ONE trichotomy, three feeds
         [row[0], row[0], row[0]],
       );
     }
-    // the expected column is the FREEFORM acceptance #2 verdicts, verbatim
+    // the expected column is the FREEFORM acceptance #2 verdicts (a)-(e)
+    // verbatim, extended (L2-FREEFORM-1F) with the D-1 ruling's RED-SHAPE
+    // (f)-(i): the action-delivered arm is ADDITIVE — the shipped-defect
+    // shapes (d)/(e) still THROW.
     expect(verdicts.map((r) => r[0])).toEqual([
       'events-bound',
       'cards',
       'honest-failure',
       'THROW',
       'THROW',
+      'action-delivered',
+      'THROW',
+      'THROW',
+      'THROW',
+      'honest-failure',
     ]);
   });
 });

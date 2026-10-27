@@ -2,7 +2,8 @@
  * L2-FREEFORM-1 — the committed honest-outcome trichotomy helper.
  *
  * THE RULE (campaign gate doctrine): every free-form draft turn lands exactly
- * one of three honest outcomes —
+ * one of four honest outcomes (the trichotomy + the action-delivered arm,
+ * L2-FREEFORM-1F) —
  *   1. "events-bound": events > 0 AND every event's labwareId is BOUND
  *      (∈ deck ids ∪ resolved record ids when the probe supplies them);
  *   2. "honest-failure": an error that names itself — checked BEFORE
@@ -10,20 +11,46 @@
  *      error and the standing QUESTION (B7: the card channel stays beside
  *      the honest failure). An errored turn is the loop's terminal state —
  *      a cards-only turn (no error) is still the answerable question;
- *   3. "cards": clarification cards > 0, no error (an answerable question).
+ *   3. "cards": clarification cards > 0, no error (an answerable question);
+ *   4. "action-delivered" (L2-FREEFORM-1F, the D-1 ruling): the deckLayout
+ *      action channel carries a WELL-FORMED delivery — a non-null object
+ *      with a non-empty string platformId AND a non-empty string variantId
+ *      (the server's emit site stamps exactly this shape). The arm is
+ *      STRUCTURAL: the helper judges DELIVERY, never correctness — a
+ *      wrong-but-well-formed variantId is an accuracy defect the
+ *      expectations catch, not the wall. The server's canonical emptiness
+ *      guard already counts deckLayout a deliverable channel (see the
+ *      drift comment below), so a turn the product calls delivered is not
+ *      the silent shape (defect D-1, closed).
  * Anything else — the shipped defect shape { success:true, events>0,
- * cards==0, no error } with an UNBOUND raw-label labwareId — is a silent
- * success-with-zero-mountable and MUST throw (with the delivered-channel
- * dump) so the defect cannot exit the server unclassified.
+ * cards==0, no error } with an UNBOUND raw-label labwareId, or a silent
+ * success with zero delivery on every channel — MUST throw (with the
+ * delivered-channel dump) so the defect cannot exit the server
+ * unclassified.
  *
  * L2-SUITE-A's harness imports `assertHonestOutcome` and does NOT re-implement
  * the trichotomy (spec acceptance #2).
  *
  * Structural only: the helper reads the result's own channels and the probe's
- * own id sets — zero vocabulary, zero name literals.
+ * own id sets — zero vocabulary, zero name literals. The action-delivered arm
+ * adds no manifest/registry lookup and no id literals: the
+ * variant-vs-platform check is registry-data-dependent and lives on the
+ * client apply path, where it belongs.
+ *
+ * DRIFT: the action-delivered arm mirrors draftProducedNothingOnServer's
+ * (server/src/ai/draftArgDiagnostics.ts) deckLayout term — one of the 7
+ * canonical deliverable channels the H5 guard counts. If that 7-channel list
+ * changes, this arm must change with it (and the pinned parity feeds will
+ * trip). Client superset: app/src/event-editor/right-pane/ai/draftEmptiness.ts
+ * (CLIENT ⊇ SERVER, pinned — a divergence fails the app suite, not a live
+ * dogfood).
  */
 
-export type HonestOutcomeVerdict = 'events-bound' | 'cards' | 'honest-failure';
+export type HonestOutcomeVerdict =
+  | 'events-bound'
+  | 'cards'
+  | 'honest-failure'
+  | 'action-delivered';
 
 /** The id context a probe supplies so "bound" is checkable (acceptance #2(e):
  *  "events-bound" requires every event's labwareId ∈ deck ids ∪ resolved
@@ -39,6 +66,11 @@ interface HonestOutcomeInput {
   events?: unknown[];
   clarificationRequests?: unknown[];
   error?: string;
+  // L2-FREEFORM-1F (D-1): the deckLayout action channel, read STRUCTURALLY
+  // (the action-delivered arm below). `unknown` on purpose — the helper
+  // never assumes its shape beyond the sound predicate; exactOptionalProperty
+  // types: the property is absent OR a value, never undefined.
+  deckLayout?: unknown;
 }
 
 function eventLabwareId(event: unknown): string | undefined {
@@ -48,7 +80,7 @@ function eventLabwareId(event: unknown): string | undefined {
 }
 
 /** Classify a delivered draft result against the trichotomy. Returns the
- *  verdict, or null when the result is NONE of the three (the silent shape). */
+ *  verdict, or null when the result is NONE of the four (the silent shape). */
 export function classifyHonestOutcome(
   result: HonestOutcomeInput,
   context?: HonestOutcomeContext,
@@ -78,7 +110,30 @@ export function classifyHonestOutcome(
   }
   // H4: the error outranks the cards — the escalation shape (error + the
   // standing question) is the honest failure, not an answerable cards turn.
+  // The error also outranks the action arm: a failed turn never delivers,
+  // and the server's emit site makes error and deckLayout mutually
+  // exclusive (the defensive order, per the D-1 ruling).
   if (errored) return 'honest-failure';
+  // L2-FREEFORM-1F (D-1): the action-delivered arm — STRUCTURAL delivery
+  // only. deckLayout counts as delivered IFF it is a non-null object with a
+  // non-empty string platformId AND a non-empty string variantId (the shape
+  // the server's emit site stamps). {deckLayout:{}}, empty ids, or null stay
+  // the silent shape (the anti-ghost pins) and fall through to the throw.
+  // No manifest/registry lookup, no id literals — the zero-vocabulary
+  // contract holds (header :22-23).
+  const deckLayout = result.deckLayout;
+  if (deckLayout !== null && typeof deckLayout === 'object' && !Array.isArray(deckLayout)) {
+    const platformId = (deckLayout as Record<string, unknown>)['platformId'];
+    const variantId = (deckLayout as Record<string, unknown>)['variantId'];
+    if (
+      typeof platformId === 'string' &&
+      platformId.length > 0 &&
+      typeof variantId === 'string' &&
+      variantId.length > 0
+    ) {
+      return 'action-delivered';
+    }
+  }
   if (cards > 0) return 'cards';
   return null;
 }
