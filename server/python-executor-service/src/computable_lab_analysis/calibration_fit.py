@@ -67,6 +67,12 @@ CODE_MODEL_UNSUPPORTED = "MODEL_UNSUPPORTED"
 CODE_ORIGIN_CONSTRAINT_UNSUPPORTED = "ORIGIN_CONSTRAINT_UNSUPPORTED"
 CODE_WEIGHTING_UNSUPPORTED = "WEIGHTING_UNSUPPORTED"
 CODE_WEIGHT_UNDEFINED_AT_ZERO = "WEIGHT_UNDEFINED_AT_ZERO"
+# D3: per-point declared weights (levels[i].weight) MUTUALLY EXCLUSIVE with a
+# conflicting `weighting` scheme — declaring BOTH channels is a parameter
+# conflict, loud-failed (never silently one channel overrides the other),
+# and the model payload emits an `effective_weighting` marker so the
+# declared-scheme field never says "none" while weights were applied.
+CODE_WEIGHTING_CONFLICT = "WEIGHTING_CONFLICT"
 CODE_STATISTIC_UNSUPPORTED = "STATISTIC_UNSUPPORTED"
 CODE_STATISTIC_UNDEFINED = "STATISTIC_UNDEFINED"
 CODE_INPUT_NOT_PROMOTED = "INPUT_NOT_PROMOTED"
@@ -704,6 +710,26 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                         f"(levels[{wins[i][0]}] {lo1}-{hi1} min and levels[{wins[j][0]}] {lo2}-{hi2} min)",
                     )
 
+    # D3: per-point declared weights (levels[i].weight) are MUTUALLY EXCLUSIVE
+    # with a conflicting `weighting` scheme (A2.2's scheme channel vs the
+    # per-point data channel). Declaring BOTH is a parameter conflict — loud
+    # WEIGHTING_CONFLICT, never a silent override. The original run let the
+    # per-point channel silently win while the payload's `weighting` field
+    # still echoed the scheme, so the artifact said "none" while weights
+    # 1,1,4 were actually applied — the contradictory echo D3 punishes.
+    # `weighting: "none"` is the scheme channel's IDENTITY (w=1 everywhere):
+    # it names NO scheme, so per-point weights + "none" is the legal C3
+    # combination (exactly one channel declared, not two).
+    weighted_levels = [lv["index"] for lv in levels if lv["weight"] is not None]
+    if weighted_levels and weighting != "none":
+        raise CalibrationError(
+            CODE_WEIGHTING_CONFLICT,
+            f"per-point declared weights (levels{weighted_levels}) conflict with the "
+            f"declared weighting scheme '{weighting}' — declare ONE channel: either the "
+            f"per-point weights (with weighting: 'none') or the scheme (no per-level "
+            f"weights); a silent override is never applied",
+        )
+
     istd = _validate_istd(p["istd"], "istd")
     istd_mode = istd["role"] == "internal_standard"
     response_quantity = RESPONSE_QUANTITY_RATIO if istd_mode else RESPONSE_QUANTITY_RAW
@@ -826,9 +852,20 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             "no fit points: every level is fit: false or carries no usable response — "
             "the fit is impossible; nothing is dropped silently",
         )
-    floor = 3 if model == "quadratic" else (1 if model == "linear_through_origin" else 2)
-    if model == "linear" and origin_constraint:
-        floor = 1  # forced-on-origin behaves as linear_through_origin (A2.3)
+    # Point-count floors (A2.1). `correlation_statistic` is a REQUIRED
+    # parameter — every legal run DEMANDS a statistic (A2.4) — so a plain
+    # linear fit needs >= 3 points: with exactly 2 points the weighted line
+    # passes both by construction (SS_res == 0) and a "1.0" statistic would be
+    # a guaranteed certainty dressed as evidence — the exact anti-laundering
+    # failure A2.4/A2.5 forbid (D2). The origin-CONSTRAINED linear behaves as
+    # linear_through_origin (A2.3) and keeps the 1-point floor: there is no
+    # intercept left to over-determine.
+    if model == "quadratic":
+        floor = 3
+    elif model == "linear_through_origin" or (model == "linear" and origin_constraint):
+        floor = 1
+    else:  # plain linear, statistic demanded (required param — A2.1)
+        floor = 3
     if n_fit < floor:
         raise CalibrationError(
             CODE_INSUFFICIENT_POINTS,
@@ -937,14 +974,17 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             meta = src.meta if hasattr(src, "meta") and isinstance(src.meta, dict) else {}
             src_ref: Dict[str, Any] = {
                 # A6: source_point_ref = {artifact_or_dref_id, input_name,
-                # peak_row_index}. The identity slot carries the dref's OWN
-                # pinned sourcePath (the storage path of the promoted/dref-
-                # backed input — the identity of the bytes the peak came
-                # from; an ECHO of declared provenance, never parsed).
-                # Absent for inline inputs (no dref identity exists there —
-                # never invented).
-                **({"artifact_or_dref_id": meta["sourcePath"]}
-                    if isinstance(meta.get("sourcePath"), str) else {}),
+                # peak_row_index}. The identity slot carries the INPUT'S
+                # DECLARED ref id — the artifact/data-reference record id the
+                # run's `inputs` map declared for this input (D4: a filesystem
+                # PATH must never sit under an `_id` name; the original run
+                # echoed meta.sourcePath there). The runner hands the declared
+                # id through the input meta as `sourceRefId` when it has one;
+                # when NO id exists (e.g. an unpromoted inline artifact input,
+                # which declares no record id), the key is OMITTED — never a
+                # path, never invented (documented in the model schema note).
+                **({"artifact_or_dref_id": meta["sourceRefId"]}
+                    if isinstance(meta.get("sourceRefId"), str) and meta["sourceRefId"] else {}),
                 "input_name": fp["source_input"],
                 "peak_row_index": fp["source_peak_index"],
                 **({"contentHash": meta["contentHash"]}
@@ -964,12 +1004,30 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             "source_peak_index": fp["source_peak_index"],
             "source_point_ref": src_ref,
         })
+    # D3: the EFFECTIVE weighting that actually entered the normal equations —
+    # emitted so the declared-scheme field (`weighting`) never says "none"
+    # while non-unit weights were applied (C3: weights 1,1,4 were applied
+    # under the declared identity scheme). The marker is machine-readable
+    # from the APPLIED weights, never from the echo:
+    #   "none"               — every applied weight is 1.0 (the identity);
+    #   "per_point_declared" — per-level declared weights (C3 channel) were
+    #                          applied (weighting was the identity scheme);
+    #   <scheme>             — the declared A2.2 scheme was applied (1/x,
+    #                          1/x^2, 1/y^2 — never all-1 by construction).
+    applied_weights = [weights[fp["level_index"]] for fp in fit_points]
+    if all(w == 1.0 for w in applied_weights):
+        effective_weighting = "none"
+    elif weighting == "none":
+        effective_weighting = "per_point_declared"
+    else:
+        effective_weighting = weighting
     model_payload: Dict[str, Any] = {
         "model_version": MODEL_VERSION,
         "model": model,
         "equation": equation,
         "coefficients": coefficients,
         "weighting": weighting,
+        "effective_weighting": effective_weighting,
         "origin_constraint": origin_constraint,
         "statistic_name": statistic_name,
         "statistic_value": statistic_value,
@@ -1120,7 +1178,14 @@ def _publish(
             "fitted-model artifact (A6): coefficients at float round-trip precision + the explicit "
             "equation string (parse-free: the structured coefficients carry the truth); "
             "statistic_definition is emitted verbatim so a reader never has to guess; "
-            "source_point_ref per fit point = {artifact_or_dref_id, input_name, peak_row_index}"
+            "source_point_ref per fit point = {artifact_or_dref_id, input_name, peak_row_index} — "
+            "artifact_or_dref_id carries the INPUT'S DECLARED ref id (the artifact/data-reference "
+            "record id the run's inputs map declared for that input) and is OMITTED when no id "
+            "exists for the input (e.g. an unpromoted inline artifact input declares no record "
+            "id): a filesystem path is NEVER placed under an _id field (D4); "
+            "effective_weighting names the weighting actually applied (none / per_point_declared / "
+            "the declared A2.2 scheme) so `weighting` never reports 'none' while non-unit weights "
+            "entered the fit (D3)"
         )
     }
     ctx.publish("calibration_model", model_payload, kind="table", units=model_units, schema=model_schema)

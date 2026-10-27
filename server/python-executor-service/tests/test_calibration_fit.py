@@ -106,11 +106,15 @@ class TestC1WeightInvarianceExactLine(unittest.TestCase):
         self.assertEqual(model["calibration_scope"], CALIBRATION_SCOPE)
         # A6 payload contract: every key the quantifier (and a reviewer) reads.
         for key in ("model_version", "model", "equation", "coefficients", "weighting",
+                    "effective_weighting",
                     "origin_constraint", "statistic_name", "statistic_value",
                     "statistic_definition", "residual_basis", "response_quantity",
                     "amount_unit", "fit_points", "x_min", "x_max", "params_digest",
                     "calibration_scope"):
             self.assertIn(key, model)
+        # D3: the identity fit (w=1 everywhere) reports effective "none" —
+        # the marker is machine-readable from the APPLIED weights, never the echo.
+        self.assertEqual(model["effective_weighting"], "none")
         self.assertEqual(model["amount_unit"], "ng/uL")
         self.assertEqual(model["x_min"], 1.0)
         self.assertEqual(model["x_max"], 5.0)
@@ -179,6 +183,12 @@ class TestC3WeightedNormalEquations(unittest.TestCase):
         # the weights are machine-readable on the fit points (A6).
         weights = [fp["weight"] for fp in model["fit_points"]]
         self.assertEqual(weights, [1.0, 1.0, 4.0])
+        # D3 (the C3 probe): the declared scheme says "none" but per-point
+        # weights 1,1,4 WERE applied — the effective-weighting marker MUST say
+        # so. The original run's artifact read weighting: "none" for this very
+        # fit (the contradictory echo D3 punishes).
+        self.assertEqual(model["weighting"], "none")
+        self.assertEqual(model["effective_weighting"], "per_point_declared")
 
     def test_c3_weights_invariance_on_exact_data(self):
         """C2 — the SAME exact line with declared weights 1,2,3,4,5 keeps the
@@ -215,6 +225,8 @@ class TestC3WeightedNormalEquations(unittest.TestCase):
         self.assertEqual([fp["weight"] for fp in model["fit_points"]],
                          [1.0, 0.5, 1.0 / 3, 0.25, 0.2])
         self.assertEqual(model["weighting"], "1/x")
+        # D3: a real declared scheme applied → the effective marker names the scheme.
+        self.assertEqual(model["effective_weighting"], "1/x")
 
 
 class TestC6OriginConstraintForced(unittest.TestCase):
@@ -449,6 +461,23 @@ class TestFailureMatrix(unittest.TestCase):
         self.expect_code(cal_params(fixture, weighting="1/y^2"), inputs=inputs,
                          code="WEIGHT_UNDEFINED_AT_ZERO")
 
+    def test_weighting_conflict_per_point_plus_scheme(self):
+        # D3: per-point declared weights (C3's w=1,1,4) are MUTUALLY
+        # EXCLUSIVE with a conflicting `weighting` scheme — declaring BOTH is
+        # a loud WEIGHTING_CONFLICT, never a silent override (the original
+        # run let the per-point channel win while the payload still echoed
+        # the scheme). `weighting: "none"` is the identity (names no scheme),
+        # so C3 (weights + "none") stays legal — only a REAL scheme conflicts.
+        fixture = fx.C3
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        levels = fx.level_params(fixture, rt0=1.0, d_rt=1.0, weights=fixture["weights"])
+        self.expect_code(cal_params(fixture, levels=levels, weighting="1/x"),
+                         inputs=inputs, code="WEIGHTING_CONFLICT",
+                         msg_part="conflict with the declared weighting scheme")
+        # the identity combination is NOT a conflict (C3 itself, above).
+        res = run_fit(inputs, cal_params(fixture, levels=levels, weighting="none"))
+        self.assertEqual(res["model"]["effective_weighting"], "per_point_declared")
+
     def test_origin_constraint_unsupported_quadratic(self):
         self.expect_code(cal_params(self.fixture, model="quadratic", origin_constraint=True),
                          code="ORIGIN_CONSTRAINT_UNSUPPORTED")
@@ -473,6 +502,18 @@ class TestFailureMatrix(unittest.TestCase):
         inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
         self.expect_code(cal_params(fixture), inputs=inputs, code="INSUFFICIENT_POINTS",
                          msg_part="1 present")
+
+    def test_insufficient_points_linear_two_points(self):
+        # D2 (the review's probe A): a 2-POINT plain-linear fit was ACCEPTED
+        # while a correlation statistic is REQUIRED — SS_res == 0 by
+        # construction, so the emitted r^2 = 1.0 was a guaranteed certainty
+        # dressed as evidence (A2.4/A2.5 anti-laundering). correlation_statistic
+        # is a required parameter, so every legal linear run demands a
+        # statistic → the linear floor is 3 (A2.1). Named count: "2 present".
+        fixture = {**fx.C1, "x": [1, 2], "y": [3.0, 5.0]}  # exactly 2 points
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(fixture), inputs=inputs, code="INSUFFICIENT_POINTS",
+                         msg_part="2 present")
 
     def test_insufficient_points_quadratic(self):
         fixture = {**fx.C4, "x": [1, 2], "y": [3.1, 6.4]}
@@ -684,6 +725,63 @@ class TestFailureMatrix(unittest.TestCase):
             with self.assertRaises(CalibrationError) as e:
                 run_fit(self.inputs, p)
             self.assertIn(field, str(e.exception))
+
+
+class TestSourcePointRefIdentity(unittest.TestCase):
+    """D4: the A6 source_point_ref identity slot. The INPUT'S DECLARED ref id
+    (the artifact/data-reference record id the run's inputs map declared for
+    the input) rides `artifact_or_dref_id`; a filesystem PATH must NEVER sit
+    under an `_id` name (the original run echoed meta.sourcePath there); when
+    no id exists (an unpromoted inline artifact input) the key is OMITTED.
+
+    These drive the real module through a synthetic Context whose input
+    specs carry a declared ``meta`` (the runner hands the declared ref id
+    through meta as ``sourceRefId`` when it has one).
+    """
+
+    def _fit_with_meta(self, meta):
+        fixture = fx.C1
+        params = cal_params(fixture)
+        inputs_spec = {
+            f"level_{i + 1}": {"dataKind": "table", "inline": payload, "meta": meta}
+            for i, payload in enumerate(fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0).values())
+        }
+        ctx = Context(inputs=inputs_spec, parameters=params)
+        return fit_calibration(ctx, params)["model"]
+
+    def test_declared_ref_id_carried_in_source_point_ref(self):
+        # a declared ref id (the promoted dref / artifact record id) IS
+        # carried — under the _id name, as an id, not a path.
+        meta = {"sourceRefId": "AOUT-000424"}
+        model = self._fit_with_meta(meta)
+        self.assertEqual(len(model["fit_points"]), 5)
+        for n, fp in enumerate(model["fit_points"], start=1):
+            ref = fp["source_point_ref"]
+            self.assertEqual(ref["artifact_or_dref_id"], "AOUT-000424")
+            self.assertEqual(ref["input_name"], f"level_{n}")  # one input per level
+            self.assertIsInstance(ref["peak_row_index"], int)
+
+    def test_path_is_never_placed_under_the_id_name(self):
+        # a filesystem PATH in meta.sourcePath must NOT leak into the _id
+        # slot. When the input declares no ref id (only a sourcePath), the
+        # key is OMITTED — never a path under an `_id` name.
+        meta = {"sourcePath": "analysis-artifacts/promoted/AOUT-000424/calibration_model.json"}
+        model = self._fit_with_meta(meta)
+        for fp in model["fit_points"]:
+            ref = fp["source_point_ref"]
+            self.assertNotIn("artifact_or_dref_id", ref)
+            # and the path string itself never appears anywhere in the ref
+            self.assertNotIn("analysis-artifacts", json.dumps(ref))
+
+    def test_no_meta_no_id_key(self):
+        # no meta at all → the identity key is omitted (inline input, no
+        # declared ref id exists — never invented).
+        model = self._fit_with_meta({})
+        for fp in model["fit_points"]:
+            self.assertNotIn("artifact_or_dref_id", fp["source_point_ref"])
+            # the two ALWAYS-present ref fields are intact
+            self.assertIn("input_name", fp["source_point_ref"])
+            self.assertIn("peak_row_index", fp["source_point_ref"])
 
 
 if __name__ == "__main__":
