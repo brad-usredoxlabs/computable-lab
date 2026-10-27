@@ -42,7 +42,14 @@ properties:
     description: >
       Human-facing name. A DECLARED STUB engine (the pluggability probe,
       implementation.adapter: stub-echo) carries 'STUB' in this field so no
-      test or UI can mistake it for science.
+      test or UI can mistake it for science. HONEST BOUNDARY (l1t2245 defect 4,
+      recorded not enforced): this cross-field convention — stub-echo adapter
+      ⇒ 'STUB' in title — is NOT enforced by the schema (title is a plain
+      string; the v1 shape-only lint DSL cannot express it either, and no
+      vacuous rule is invented for it — see the INTENT header of
+      analysis-engine.lint.yaml). The stub is instead identified in every
+      manifest it produces (the STUB_ADAPTER warning log code) and the
+      contract test asserts the fixture record's title carries STUB.
 
   description:
     type: string

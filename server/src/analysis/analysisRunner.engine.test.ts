@@ -303,7 +303,20 @@ describe('AnalysisRunner engine gate (GC-5 integration)', () => {
     expect(art.dataKind).toBe('metric');
     expect(JSON.stringify(art.value)).toContain(STUB_ECHO_LITERAL);
     expect(res.manifest.views.length).toBe(0);
-    expect(res.manifest.logs.some((l) => l.level === 'warning' && /stub/i.test(l.message))).toBe(true);
+    // The manifest identifies the stub (the STUB_ADAPTER warning log code is
+    // the stub's identity in the manifest).
+    expect(res.manifest.logs.some((l) => l.level === 'warning' && l.code === 'STUB_ADAPTER')).toBe(true);
+    // The pinned ENGINE RECORD's title carries STUB (the schema data that keeps
+    // no test or UI from mistaking the stub for science — asserted against the
+    // actual record, not the test's own fixture literal).
+    // HONEST BOUNDARY (recorded, not enforced): nothing in the schema or the
+    // lint DSL enforces cross-field title-stubness for stub-echo engines (the
+    // v1 shape-only DSL cannot express it) — this test asserts the FIXTURE
+    // record, and the gap is recorded in analysis-engine.lint.yaml INTENT +
+    // the schema title description. See DEFECT 4 of the l1t2245 adversarial
+    // review.
+    const engRecord = await ctx.store.get(engId);
+    expect(String((engRecord?.payload as { title?: string }).title ?? '')).toContain('STUB');
     // The provenance records the stub adapter (dispatched off the record's data).
     const prov = (await service.getRun(runId))!.payload as { engineProvenance?: { adapter: string } };
     expect(prov.engineProvenance?.adapter).toBe('stub-echo');
@@ -390,6 +403,7 @@ describe('AnalysisRunner engine gate (GC-5 integration)', () => {
     expect((runEnv!.payload as { status: string }).status).toBe('failed');
     expect((runEnv!.payload as { engineProvenance?: unknown }).engineProvenance).toBeUndefined();
   }, 60000);
+
   /**
    * l1t2245 adversarial-review defects (fix run). RED-first: each leg below
    * FAILED at 600bec4e (raw: /home/brad/.hermes/cl/lanes/1/gc5-fix1-RED-
