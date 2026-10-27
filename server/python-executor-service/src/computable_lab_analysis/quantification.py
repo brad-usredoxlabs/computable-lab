@@ -13,7 +13,7 @@ auto sourceRelations, not anything this module invents).
 The model payload is the CONTRACT (A6): ``model_version``, ``equation``,
 ``coefficients``, ``amount_unit``, ``response_quantity``, ``x_min``/``x_max``,
 ``params_digest`` — any missing/typed-wrong key → ``MODEL_PAYLOAD_INVALID``
-(no read_rows heuristics, no CSV coercion — A5).
+(no row-coercion heuristics, no CSV guessing — A5).
 
 ISTD semantics (A3, bidirectional guard): the model's ``response_quantity``
 says which quantity the curve was fit on; the QUANT parameter ``istd.role``
@@ -491,7 +491,7 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                 f"(got {rt_t!r}, {rt_w!r})",
             )
 
-    # ---- 2. Load the inputs (A5: file_bytes + json.loads; NEVER read_rows) ----
+    # ---- 2. Load the inputs (A5: file_bytes + json.loads; no row-coercion helper) ----
     # The shared loader raises calibration_fit.CalibrationError for the A5
     # input-load failure class (INPUT_NOT_PROMOTED / INPUT_JSON_INVALID); the
     # quant consumer re-wraps it into ITS OWN error class with the SAME code

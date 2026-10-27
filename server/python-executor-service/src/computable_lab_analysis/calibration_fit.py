@@ -198,7 +198,7 @@ def _require_enum(p: Dict[str, Any], name: str, allowed: Tuple[str, ...], code: 
 
 # ---------------------------------------------------------------------------
 # A5 — the promoted-input load path (anchor-fact-driven; GC-8's OWN helper,
-# zero platform change). NEVER read_rows (the ctx.py numeric-guessing
+# zero platform change). NEVER the ctx.py row-coercion helper (its numeric-guessing
 # coercion is a silent identity-corruptor for compound labels and a silent
 # mangle of ref objects). file_bytes + json.loads only.
 # ---------------------------------------------------------------------------
@@ -1028,7 +1028,7 @@ CAL_TABLE_UNITS = {
 _CAL_SCHEMA_NOTE = {
     "level": "1-based declared level index (parameter data)",
     "compound_label": "the declared identity label, echoed verbatim (never parsed, never branched on)",
-    "compound_ref": "declared ref (FAME-LOCAL:* / ChEBI data) echoed; null when the level declared none",
+    "compound_ref": "declared ref (local-curie / ChEBI data) echoed; null when the level declared none",
     "amount": "declared level amount in the ONE declared amount_unit (no unit conversion ever guessed)",
     "rt_target_min": "declared RT window centre (min)",
     "rt_window_min": "declared RT window half-width (min)",
