@@ -80,3 +80,11 @@ d9d9ac93 on top is the 99th handoff only).
 - Lane stack :3092/:5192 up (backend pid 401987), serving trunk @ 1eaa5f02.
 - Worktrees: wt/gc-5-lane1-l1t1945 (merged; removable), wt/gc-6-lane1-l1t0125 @ 1eaa5f02
   (owned by the LIVE GC-6 coder).
+
+## tick-end progress confirmation (~02:00, orch first-hand)
+
+GC-6 coder confirmed doing REAL WORK at ~17 min in: worktree shows M __init__.py, M ctx.py,
+new d_reader.py + tests/test_d_reader.py + fixtures/gc-d/, and report gc6-report-l1t0125.md
+exists (being built). Log stays 79 bytes until coder exit — normal for one-shot `hermes -z`
+(stdout flushes at exit); worktree motion is the in-flight observability, not the log. Next
+tick: reconcile by worktree commits + report, not log size.
