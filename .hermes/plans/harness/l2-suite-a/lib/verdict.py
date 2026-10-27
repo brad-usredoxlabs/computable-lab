@@ -4,9 +4,10 @@ verdict as server/src/ai/honestOutcome.ts (L2-FREEFORM-1's committed helper).
 ONE implementation lives in TS (honestOutcome.ts, consumed by the driver via
 lib/honest-cli.ts — OQ3 ruling (ii), no drift surface); THIS module is the
 python re-encoding the driver uses in-line. The pinned vitest parity pin
-(server/src/ai/L2SuiteA.honestOutcome.parity.test.ts) feeds BOTH the same ten
-fixture rows (FREEFORM acceptance #2 (a)-(e) verbatim + the D-1 ruling's
-(f)-(i), L2-FREEFORM-1F; (g) is two rows, g1/g2) and asserts identical
+(server/src/ai/L2SuiteA.honestOutcome.parity.test.ts) feeds BOTH the same
+eleven fixture rows (FREEFORM acceptance #2 (a)-(e) verbatim, extended by
+the D-1 ruling's RED-SHAPE (f)-(i) [L2-FREEFORM-1F] and the (j) null
+anti-ghost pin [fix run 1, advc D5]; (g) is two rows, g1/g2) and asserts identical
 verdicts — drift between the two encodings is a defect (B-pair: the driver
 must not silently classify where the helper throws).
 
