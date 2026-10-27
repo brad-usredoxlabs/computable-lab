@@ -1,0 +1,406 @@
+/**
+ * GC-9 deliverables B/C/D/E (wiring) — AnalysisPage parameter-form integration.
+ *
+ * RED-first suite: written BEFORE the AnalysisPage wiring existed (the page
+ * still renders only the raw-JSON input). Every fixture schema is TEST-LOCAL;
+ * the GC-fixture revision (W8) is a VERBATIM transcription of the shipped
+ * integration revision's parameterSchema (server/src/analysis/analysisGcIntegration.test.ts
+ * createGc7Revision, base 2598e451): 9 required properties (baseline_correction
+ * enum none|tangent_skim|vertical_drop|other; six numbers; saturated_min_plateau_points
+ * integer minimum 2; backend enum stdlib|scipy), 2 optional strings
+ * (method_label, method_revision_ref), NO title/description/x-unit/default
+ * keywords anywhere — labels fall back to property names verbatim. The
+ * timed_events object-array rendering stays TEST-LOCAL (a neutral-named
+ * variant, since the shipped schema carries no array property).
+ *
+ * apiClient is mocked per the AnalysisPage.test.tsx:9 precedent.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { ThemeProvider } from '../shared/shell'
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
+import { apiClient } from '../shared/api/client'
+import { AnalysisPage } from './AnalysisPage'
+
+vi.mock('../shared/api/client', () => ({
+  apiClient: {
+    listAnalysisRevisions: vi.fn(),
+    listAnalysisRuns: vi.fn(),
+    createAnalysisRevision: vi.fn(),
+    createAnalysisRun: vi.fn(),
+    executeAnalysisRun: vi.fn(),
+    getAnalysisRun: vi.fn(),
+    getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }),
+    draftAnalysisRevision: vi.fn(),
+    promoteAnalysisArtifact: vi.fn(),
+  },
+}))
+
+const P = 'analysis-param' // spec §B: testIdPrefix="analysis-param"
+
+// --- Test-local fixtures ----------------------------------------------------
+
+// Neutral (non-GC) schema WITH defaults + titles: pins "domain labels are data"
+// and pre-fill/override behavior on a non-GC domain (spec acceptance mapping).
+const NEUTRAL_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  required: ['cutoff'],
+  properties: {
+    cutoff: { type: 'number', title: 'Cutoff threshold', default: 0.25, minimum: 0 },
+    mode: { type: 'string', enum: ['fast', 'slow', 'auto'] },
+    note: { type: 'string' },
+  },
+}
+
+// Verbatim copy of the SHIPPED integration revision's parameterSchema
+// (createGc7Revision, analysisGcIntegration.test.ts @ 2598e451). No defaults,
+// no titles — every label must be the property name verbatim.
+const GC_FIXTURE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  required: [
+    'baseline_correction',
+    'baseline_window_s',
+    'peak_width_s',
+    'slope_sensitivity',
+    'min_width_factor',
+    'max_width_factor',
+    'saturated_top_fraction_of_max',
+    'saturated_min_plateau_points',
+    'backend',
+  ],
+  properties: {
+    baseline_correction: { type: 'string', enum: ['none', 'tangent_skim', 'vertical_drop', 'other'] },
+    baseline_window_s: { type: 'number' },
+    peak_width_s: { type: 'number' },
+    slope_sensitivity: { type: 'number' },
+    min_width_factor: { type: 'number' },
+    max_width_factor: { type: 'number' },
+    saturated_top_fraction_of_max: { type: 'number' },
+    saturated_min_plateau_points: { type: 'integer', minimum: 2 },
+    backend: { type: 'string', enum: ['stdlib', 'scipy'] },
+    method_label: { type: 'string' },
+    method_revision_ref: { type: 'string' },
+  },
+}
+
+// TEST-LOCAL timed-event object-array (neutral names — the shipped GC fixture
+// carries no array property; this pins the repeatable-row arm end-to-end).
+const TIMED_EVENTS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  required: ['events'],
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { at: { type: 'number', minimum: 0 }, kind: { type: 'string', enum: ['on', 'off'] } },
+        required: ['at', 'kind'],
+      },
+    },
+  },
+}
+
+// Unsupported-node schema: one bad node + supported siblings.
+const UNSUPPORTED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  required: ['good'],
+  properties: {
+    good: { type: 'number' },
+    badOneOf: { oneOf: [{ type: 'number' }, { type: 'string' }] },
+  },
+}
+
+// --- Helpers ------------------------------------------------------------------
+
+function wrap(ui: React.ReactNode) {
+  return <ThemeProvider><OpenTabsProvider><MemoryRouter>{ui}</MemoryRouter></OpenTabsProvider></ThemeProvider>
+}
+
+function mockRevisions(revs: Array<{ id: string; payload: Record<string, unknown> }>) {
+  vi.mocked(apiClient.listAnalysisRevisions).mockResolvedValue({
+    revisions: revs.map((r) => ({ recordId: r.id, payload: r.payload })),
+    total: revs.length,
+  })
+  vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({ runs: [], total: 0 })
+}
+
+async function selectRev(id: string) {
+  await screen.findByTestId('analysis-page')
+  fireEvent.change(screen.getByTestId('analysis-run-rev'), { target: { value: id } })
+}
+
+function runCreateBtn() {
+  return screen.getByTestId('analysis-run-create-btn') as HTMLButtonElement
+}
+
+function previewText(): string {
+  return screen.getByTestId('analysis-params-preview').textContent ?? ''
+}
+
+/** Pretty-printed sorted-keys JSON (the frozen-preview contract, spec §B). */
+function sortedJson(obj: Record<string, unknown>): string {
+  const sortKeys = (o: unknown): unknown => {
+    if (o !== null && typeof o === 'object' && !Array.isArray(o)) {
+      const out: Record<string, unknown> = {}
+      for (const k of Object.keys(o as Record<string, unknown>).sort()) out[k] = sortKeys((o as Record<string, unknown>)[k])
+      return out
+    }
+    if (Array.isArray(o)) return o.map(sortKeys)
+    return o
+  }
+  return JSON.stringify(sortKeys(obj), null, 2)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({ runs: [], total: 0 })
+  vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ success: true, recordId: 'ANR-PF1', run: {} })
+})
+
+describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
+  it('W1: submit builds parameters from the form — untouched optionals OMITTED, existing keys untouched', async () => {
+    mockRevisions([{ id: 'REV-N1', payload: { id: 'REV-N1', title: 'Neutral method', parameterSchema: NEUTRAL_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-N1')
+    // Pre-fill lands the default (cutoff 0.25); user overrides one number and
+    // sets an enum; `note` (optional, no default) is never touched.
+    fireEvent.change(screen.getByTestId(`${P}-cutoff`), { target: { value: '0.5' } })
+    fireEvent.change(screen.getByTestId(`${P}-mode`), { target: { value: 'fast' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    // F7 payload shape: exactly the configured keys — optionals OMITTED, not
+    // undefined/null-valued (toStrictEqual would pass on undefined values, so
+    // the key-set assertion is load-bearing).
+    expect(arg.parameters).toStrictEqual({ cutoff: 0.5, mode: 'fast' })
+    expect(Object.keys(arg.parameters)).toEqual(['cutoff', 'mode'])
+    expect(arg.revisionRef).toEqual({ kind: 'record', id: 'REV-N1', type: 'analysis-revision' })
+    expect(arg.inputs).toEqual({})
+  })
+
+  it('W2: the frozen preview above Create-run equals the exact JSON that will be sent (sorted keys, pretty)', async () => {
+    mockRevisions([{ id: 'REV-N2', payload: { id: 'REV-N2', title: 'Neutral method', parameterSchema: NEUTRAL_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-N2')
+    fireEvent.change(screen.getByTestId(`${P}-cutoff`), { target: { value: '0.75' } })
+    fireEvent.change(screen.getByTestId(`${P}-mode`), { target: { value: 'auto' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    const expected = { cutoff: 0.75, mode: 'auto' }
+    // BEFORE any click: the preview shows the exact frozen payload.
+    expect(previewText()).toContain(sortedJson(expected))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual(expected)
+  })
+
+  it('W3: Advanced JSON is a demoted escape — closed by default, override badge when edited, Clear restores the form path', async () => {
+    mockRevisions([{ id: 'REV-N3', payload: { id: 'REV-N3', title: 'Neutral method', parameterSchema: NEUTRAL_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-N3')
+    // Closed by default: the disclosure exists but is not open, no badge.
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    expect(details.tagName).toBe('DETAILS')
+    expect(details.open).toBe(false)
+    expect(screen.queryByTestId('analysis-params-override-json')).toBeNull()
+    // Form-driven submit while advanced is untouched.
+    fireEvent.change(screen.getByTestId(`${P}-cutoff`), { target: { value: '0.1' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ cutoff: 0.1 })
+    // Open the disclosure, paste JSON → visible override badge; payload = advanced JSON.
+    fireEvent.click(details)
+    expect(details.open).toBe(true)
+    const advInput = screen.getByTestId('analysis-run-params') as HTMLInputElement
+    fireEvent.change(advInput, { target: { value: '{"cutoff": 9.5, "mode": "slow"}' } })
+    expect(screen.getByTestId('analysis-params-override-json')).toBeDefined()
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[1][0].parameters).toStrictEqual({ cutoff: 9.5, mode: 'slow' })
+    // Clear returns to the form-driven path: badge gone, payload back to form values.
+    fireEvent.click(screen.getByTestId('analysis-params-clear'))
+    expect(screen.queryByTestId('analysis-params-override-json')).toBeNull()
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(3))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[2][0].parameters).toStrictEqual({ cutoff: 0.1 })
+  })
+
+  it('W4: a revision WITHOUT parameterSchema keeps the legacy textarea path + honest noschema line', async () => {
+    mockRevisions([{ id: 'REV-L1', payload: { id: 'REV-L1', title: 'Legacy method' } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-L1')
+    expect(screen.getByTestId('analysis-params-noschema')).toBeDefined()
+    expect(screen.getByTestId('analysis-params-noschema').textContent).toContain('no parameterSchema')
+    // No form, no advanced disclosure, no preview — the raw input IS the path.
+    expect(screen.queryByTestId(`${P}-cutoff`)).toBeNull()
+    expect(screen.queryByTestId('analysis-params-advanced')).toBeNull()
+    expect(screen.queryByTestId('analysis-params-preview')).toBeNull()
+    // Legacy behavior intact: the demo default is in the input and submits verbatim.
+    const input = screen.getByTestId('analysis-run-params') as HTMLInputElement
+    expect(input.value).toBe('{"window": [0.0, 0.5]}')
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ window: [0.0, 0.5] })
+  })
+
+  it('W5: an unsupported node blocks submit with an actionable named reason; enabling the advanced override unblocks with the advanced payload', async () => {
+    mockRevisions([{ id: 'REV-U1', payload: { id: 'REV-U1', title: 'Mixed method', parameterSchema: UNSUPPORTED_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-U1')
+    // The unsupported block names its JSON path + construct; the sibling renders.
+    const blocks = screen.getAllByTestId(`${P}-unsupported`)
+    expect(blocks.some((b) => (b.textContent ?? '').includes('badOneOf') && (b.textContent ?? '').includes('oneOf'))).toBe(true)
+    expect(screen.getByTestId(`${P}-good`).tagName).toBe('INPUT')
+    // Fill the required supported control — still blocked by the unsupported node.
+    fireEvent.change(screen.getByTestId(`${P}-good`), { target: { value: '1' } })
+    expect(runCreateBtn().disabled).toBe(true)
+    const reason = screen.getByTestId('analysis-params-blocked')
+    expect(reason.textContent).toContain('badOneOf')
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    // Enabling the advanced override unblocks; the payload is the advanced JSON.
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    fireEvent.click(details)
+    fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{"good": 2, "badOneOf": 3}' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ good: 2, badOneOf: 3 })
+  })
+
+  it('W6: mount accounting non-regression — selection change fires ZERO apiClient calls (schema comes from the already-fetched list payload)', async () => {
+    mockRevisions([
+      { id: 'REV-A', payload: { id: 'REV-A', title: 'A', parameterSchema: NEUTRAL_SCHEMA } },
+      { id: 'REV-B', payload: { id: 'REV-B', title: 'B', parameterSchema: TIMED_EVENTS_SCHEMA } },
+    ])
+    render(wrap(<AnalysisPage />))
+    expect(await screen.findByTestId('analysis-page')).toBeDefined()
+    expect(apiClient.listAnalysisRevisions).toHaveBeenCalledTimes(1)
+    expect(apiClient.listAnalysisRuns).toHaveBeenCalledTimes(1)
+    // Selecting + switching revisions reads parameterSchema from the fetched
+    // payloads — zero further apiClient traffic (F2/F6 mount-spy rule).
+    await selectRev('REV-A')
+    await selectRev('REV-B')
+    expect(apiClient.listAnalysisRevisions).toHaveBeenCalledTimes(1)
+    expect(apiClient.listAnalysisRuns).toHaveBeenCalledTimes(1)
+    expect(apiClient.getAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.draftAnalysisRevision).not.toHaveBeenCalled()
+    expect(apiClient.promoteAnalysisArtifact).not.toHaveBeenCalled()
+    // Both schemas rendered from data (the switch actually re-rendered).
+    expect(screen.getByTestId(`${P}-events-add`)).toBeDefined()
+  })
+
+  it('W7: pre-fill on selection change — values re-initialize to the selected revision\'s defaults; overrides reset', async () => {
+    mockRevisions([
+      { id: 'REV-D1', payload: { id: 'REV-D1', title: 'Defaults A', parameterSchema: NEUTRAL_SCHEMA } },
+      {
+        id: 'REV-D2',
+        payload: {
+          id: 'REV-D2',
+          title: 'Defaults B',
+          parameterSchema: {
+            type: 'object',
+            required: ['gain'],
+            properties: { gain: { type: 'number', default: 3.5 }, tag: { type: 'string', default: 'batch-2' } },
+          },
+        },
+      },
+    ])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-D1')
+    // Pre-filled from schema defaults (deliverable C): the value is present.
+    expect((screen.getByTestId(`${P}-cutoff`) as HTMLInputElement).value).toBe('0.25')
+    // Override it → visible override badge.
+    fireEvent.change(screen.getByTestId(`${P}-cutoff`), { target: { value: '9' } })
+    expect(screen.getByTestId(`${P}-cutoff-overridden`)).toBeDefined()
+    // Switching revisions RE-INITIALIZES to the new revision's defaults.
+    await selectRev('REV-D2')
+    expect((screen.getByTestId(`${P}-gain`) as HTMLInputElement).value).toBe('3.5')
+    expect((screen.getByTestId(`${P}-tag`) as HTMLInputElement).value).toBe('batch-2')
+    // The old revision's override state does not leak across.
+    expect(screen.queryByTestId(`${P}-cutoff-overridden`)).toBeNull()
+    expect(screen.queryByTestId(`${P}-gain-overridden`)).toBeNull()
+  })
+
+  it('W8: the shipped GC-integration-shape revision renders labeled controls and submits the reviewer-style payload without any JSON interaction', async () => {
+    mockRevisions([{ id: 'REV-GC', payload: { id: 'REV-GC', title: 'Peak integration (shipped shape)', parameterSchema: GC_FIXTURE_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-GC')
+    // Every top-level property renders a labeled control; labels = property
+    // names VERBATIM (the shipped schema carries no titles).
+    for (const name of [
+      'baseline_correction', 'baseline_window_s', 'peak_width_s', 'slope_sensitivity',
+      'min_width_factor', 'max_width_factor', 'saturated_top_fraction_of_max',
+      'saturated_min_plateau_points', 'backend', 'method_label', 'method_revision_ref',
+    ]) {
+      expect(screen.getByText(name), `label for ${name}`).toBeDefined()
+    }
+    // Enum selects carry the verbatim option texts.
+    const bcSel = screen.getByTestId(`${P}-baseline_correction`) as HTMLSelectElement
+    expect(Array.from(bcSel.querySelectorAll('option:not([disabled])')).map((o) => o.textContent))
+      .toEqual(['none', 'tangent_skim', 'vertical_drop', 'other'])
+    const backendSel = screen.getByTestId(`${P}-backend`) as HTMLSelectElement
+    expect(Array.from(backendSel.querySelectorAll('option:not([disabled])')).map((o) => o.textContent))
+      .toEqual(['stdlib', 'scipy'])
+    // Required-but-empty marks the missing controls (no defaults in the shipped schema).
+    expect(screen.getByTestId(`${P}-baseline_correction-missing`)).toBeDefined()
+    expect(screen.getByTestId(`${P}-backend-missing`)).toBeDefined()
+    expect(runCreateBtn().disabled).toBe(true)
+
+    // Configure via the labeled path ONLY — the raw JSON input is never read.
+    fireEvent.change(bcSel, { target: { value: 'tangent_skim' } })
+    fireEvent.change(screen.getByTestId(`${P}-baseline_window_s`), { target: { value: '30' } })
+    fireEvent.change(screen.getByTestId(`${P}-peak_width_s`), { target: { value: '12.5' } })
+    fireEvent.change(screen.getByTestId(`${P}-slope_sensitivity`), { target: { value: '0.004' } })
+    fireEvent.change(screen.getByTestId(`${P}-min_width_factor`), { target: { value: '1.5' } })
+    fireEvent.change(screen.getByTestId(`${P}-max_width_factor`), { target: { value: '8' } })
+    fireEvent.change(screen.getByTestId(`${P}-saturated_top_fraction_of_max`), { target: { value: '0.9' } })
+    fireEvent.change(screen.getByTestId(`${P}-saturated_min_plateau_points`), { target: { value: '5' } })
+    fireEvent.change(backendSel, { target: { value: 'stdlib' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    // Untouched optionals stay out of the frozen preview (omitted, not null).
+    expect(previewText()).not.toContain('method_label')
+    expect(previewText()).not.toContain('method_revision_ref')
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    expect(arg.parameters).toStrictEqual({
+      baseline_correction: 'tangent_skim',
+      baseline_window_s: 30,
+      peak_width_s: 12.5,
+      slope_sensitivity: 0.004,
+      min_width_factor: 1.5,
+      max_width_factor: 8,
+      saturated_top_fraction_of_max: 0.9,
+      saturated_min_plateau_points: 5,
+      backend: 'stdlib',
+    })
+    expect(Object.keys(arg.parameters)).toHaveLength(9)
+    // Zero JSON-textarea interaction: the advanced disclosure was never opened
+    // and the raw input kept its untouched placeholder default.
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect((screen.getByTestId('analysis-run-params') as HTMLInputElement).value).toBe('{"window": [0.0, 0.5]}')
+  })
+
+  it('W8b: timed-event object-array (test-local) — two rows configured in order land in the submitted payload', async () => {
+    mockRevisions([{ id: 'REV-EV', payload: { id: 'REV-EV', title: 'Events method', parameterSchema: TIMED_EVENTS_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-EV')
+    // Add two rows; configure row 0 then row 1 (order preserved as stored).
+    fireEvent.click(screen.getByTestId(`${P}-events-add`))
+    fireEvent.click(screen.getByTestId(`${P}-events-add`))
+    fireEvent.change(screen.getByTestId(`${P}-events-0-at`), { target: { value: '1.5' } })
+    fireEvent.change(screen.getByTestId(`${P}-events-0-kind`), { target: { value: 'on' } })
+    fireEvent.change(screen.getByTestId(`${P}-events-1-at`), { target: { value: '4' } })
+    fireEvent.change(screen.getByTestId(`${P}-events-1-kind`), { target: { value: 'off' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    expect(arg.parameters).toStrictEqual({ events: [{ at: 1.5, kind: 'on' }, { at: 4, kind: 'off' }] })
+  })
+})
