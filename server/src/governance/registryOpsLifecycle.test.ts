@@ -56,9 +56,13 @@ const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/
  * minimal registry-ops treatment (no stripDomainStatus); its schema lives in
  * schema/knowledge/ (not lab/), so the per-kind enum pin resolves the dir by
  * kind.
+ * GC-5: the declared analysis-engine kind joins the coverage (10 → 11), same
+ * minimal registry-ops treatment (no stripDomainStatus); its schema also lives
+ * in schema/knowledge/ (the per-kind enum pin resolves the dir by kind).
  */
 const COVERED_KINDS = [
   'acquisition-package',
+  'analysis-engine',
   'calibration-record',
   'competency-authorization',
   'equipment',
@@ -403,7 +407,7 @@ describe('QMS7-3 governed kinds are untouched by the coverage stamp', () => {
     expect(storedPayload(world, 'DOC-QMS7OK').lifecycleId).toBe('document-controlled-signing')
   })
 
-  it('coverage is DATA: the real coverage YAML declares exactly the 9 approved kinds', () => {
+  it('coverage is DATA: the real coverage YAML declares exactly the 11 approved kinds', () => {
     const engine = loadEngine()
     const coverage = loadCoverage(engine)
     expect([...coverage.kinds()].sort()).toEqual(COVERED_KINDS)
@@ -650,7 +654,8 @@ describe('QMS7-3 schema-shape guards', () => {
     for (const kind of COVERED_KINDS) {
       // GC-4: acquisition-package's schema lives in schema/knowledge/ (not
       // lab/); resolve the schema dir by kind.
-      const schemaDir = kind === 'acquisition-package' ? 'knowledge' : 'lab'
+      // GC-5: analysis-engine's schema ALSO lives in schema/knowledge/.
+      const schemaDir = kind === 'acquisition-package' || kind === 'analysis-engine' ? 'knowledge' : 'lab'
       const schema = parseYaml(readFileSync(join(SCHEMA_DIR, `${schemaDir}/${kind}.schema.yaml`), 'utf-8')) as
         { properties: { lifecycleId?: { enum?: string[] }; state?: { enum?: string[] } } }
       expect(schema.properties.lifecycleId?.enum, `${kind} lifecycleId enum`).toEqual(['registry-ops'])

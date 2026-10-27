@@ -101,4 +101,67 @@ describe('AnalysisService CRUD (integration)', () => {
     });
     expect(recordId).toMatch(/^ANR-/);
   });
+
+  describe('GC-5 engine gate at createRevision', () => {
+  const ENGINE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml';
+  let seq = 0;
+
+  async function createEngineRecord(over: Record<string, unknown> = {}): Promise<string> {
+    seq += 1;
+    const id = `ENG-GC5SVC${String(seq).padStart(3, '0')}`;
+    const payload: Record<string, unknown> = {
+      kind: 'analysis-engine',
+      id,
+      title: `gc5 svc engine ${id}`,
+      implementation: { adapter: 'stub-echo', entry: 'stub' },
+      version_constraints: { python: '>=3.14,<3.15', packages: [] },
+      capabilities: { declared: [{ capability: 'peak_detection', support: 'supported' }] },
+      availability: { available: true },
+      runtime_requirements: { interpreter: 'system' },
+      ...over,
+    };
+    const result = await ctx.store.create({
+      envelope: { recordId: id, schemaId: ENGINE_SCHEMA_ID, payload },
+      message: `GC-5 test: create engine ${id}`,
+    });
+    if (!result.success) throw new Error(`engine create failed: ${result.error}`);
+    return id;
+  }
+
+  it('forwards engineRef + requiredCapabilities into the revision payload when the engine resolves', async () => {
+    const service = new AnalysisService(ctx);
+    const engId = await createEngineRecord();
+    const { recordId, payload: rev } = await service.createRevision({
+      title: 'pinned engine',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
+      requiredCapabilities: ['peak_detection'],
+    });
+    expect(recordId).toMatch(/^ANREV-/);
+    expect(rev.engineRef).toEqual({ kind: 'record', type: 'analysis-engine', id: engId });
+    expect(rev.requiredCapabilities).toEqual(['peak_detection']);
+  });
+
+  it('declares ENGINE_REF_UNRESOLVED (400) when the engine id does not resolve — the revision is NOT created', async () => {
+    const service = new AnalysisService(ctx);
+    await expect(service.createRevision({
+      title: 'missing engine',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      engineRef: { kind: 'record', type: 'analysis-engine', id: 'ENG-MISSING' },
+    })).rejects.toMatchObject({ code: 'ENGINE_REF_UNRESOLVED', statusCode: 400 });
+  });
+
+  it('declares ENGINE_REF_UNRESOLVED (409, state leg) when the pinned engine record is archived', async () => {
+    const service = new AnalysisService(ctx);
+    const engId = await createEngineRecord({ state: 'archived' });
+    await expect(service.createRevision({
+      title: 'archived engine',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
+    })).rejects.toMatchObject({ code: 'ENGINE_REF_UNRESOLVED', statusCode: 409 });
+  });
+  });
 });

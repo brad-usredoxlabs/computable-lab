@@ -78,6 +78,38 @@ properties:
     type: object
     additionalProperties: true
 
+  # GC-5: the pinned analysis-engine record (the registry DATA the runner
+  # resolves, probes, dispatches and records as engine provenance). OPTIONAL —
+  # bait #2: existing revisions (DNA sequenceMethod revisions, demo revisions,
+  # the AI-drafting surface) stay valid with zero backfill; required-ness lives
+  # in GC-7 authoring practice, not the schema. The ref datatype already carries
+  # the optional REV- snapshot pin (revisionRef), so the pinned engine freezes
+  # with the revision snapshot automatically (zero new framework).
+  engineRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: "record" }
+        type: { const: "analysis-engine" }
+        id: { type: string, pattern: "^ENG-[A-Za-z0-9_-]+$" }
+
+  # GC-5: the capabilities this method NEEDS. Every name must appear in the
+  # pinned engine's capabilities.declared with support 'supported' or
+  # 'approximate' or the run is a NAMED declared failure
+  # (ENGINE_CAPABILITY_UNSUPPORTED) — never dropped silently.
+  requiredCapabilities:
+    type: array
+    items:
+      type: string
+      enum:
+      - baseline_control
+      - width_slope_sensitivity
+      - area_height_reject
+      - timed_integration_windows
+      - peak_detection
+      - deconvolution
+
   createdBy:
     type: string
     readOnly: true

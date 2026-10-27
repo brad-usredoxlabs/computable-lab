@@ -162,6 +162,7 @@ describe('INSTR-COLLAPSE-2 C3: the instrument record kind is deleted', () => {
     // The remaining covered kinds keep their coverage (retirement, not shrinkage).
     expect(covered.sort()).toEqual([
       'acquisition-package',
+      'analysis-engine',
       'calibration-record',
       'competency-authorization',
       'equipment',
