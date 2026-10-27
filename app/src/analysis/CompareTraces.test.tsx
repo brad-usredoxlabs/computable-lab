@@ -207,6 +207,78 @@ describe('CompareTraces — Save as view (ONE server-validated view-spec pinning
   })
 })
 
+describe('CompareTraces — saved comparison reload restores declared conversions (D3, verification 5g)', () => {
+  // A saved comparison whose two traces carry DIFFERENT units (pA vs AU) can
+  // only have been stored while the gate was green — i.e. the AU trace carried
+  // a declared conversion into the record. On reload, `loadSaved` must seed
+  // `conversions` from the SAVED spec, or the gate re-raises the mismatch and
+  // the overlay opens red/blank. This test proves the overlay re-renders
+  // WITHOUT re-entering any conversion input.
+  const SAVED_SPEC = {
+    recordId: 'VSPEC-000001',
+    payload: {
+      renderer: 'trace-compare',
+      id: 'VSPEC-000001',
+      title: 'Saved pA vs AU',
+      bindings: {
+        traces: [
+          { artifactRef: { id: 'AOUT-000001' } },
+          { artifactRef: { id: 'AOUT-000002' }, conversion: { factor: 1000, toUnit: 'pA', declaredBy: 'brad' } },
+        ],
+      },
+    },
+  }
+  const AOUT_1 = {
+    recordId: 'AOUT-000001',
+    payload: {
+      kind: 'analysis-output-artifact',
+      name: 'sig',
+      inlineValue: { axis: [0, 1, 2], values: [0, 2, 0], axis_units: 'min', value_units: 'pA' },
+    },
+  }
+  const AOUT_2 = {
+    recordId: 'AOUT-000002',
+    payload: {
+      kind: 'analysis-output-artifact',
+      name: 'sig',
+      inlineValue: { axis: [0, 1, 2], values: [0, 3, 0], axis_units: 'min', value_units: 'AU' },
+    },
+  }
+
+  it('save -> reload re-renders the overlay from the seeded conversion (gate green, inputs pre-filled, no re-entry)', async () => {
+    vi.mocked(apiClient.listRecordsByKind).mockResolvedValue({ records: [SAVED_SPEC as never], total: 1 })
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) =>
+      Promise.resolve((id === 'AOUT-000001' ? AOUT_1 : AOUT_2) as never),
+    )
+    render(<CompareTraces runs={RUNS} open onClose={() => {}} />)
+
+    // The saved comparison is listed; load it (the D4 "Load" button).
+    const loadBtn = await screen.findByTestId('compare-saved-load-VSPEC-000001')
+    fireEvent.click(loadBtn)
+
+    // The overlay re-renders from the pinned AOUT ids.
+    await waitFor(() => expect(screen.getByTestId('compare-overlay-svg')).toBeDefined())
+    expect(screen.getByTestId('compare-trace-polyline-AOUT-000001')).toBeDefined()
+    expect(screen.getByTestId('compare-trace-polyline-AOUT-000002')).toBeDefined()
+
+    // The gate is GREEN: the seeded declared conversion cleared the pA vs AU
+    // mismatch, so NO conflict is re-raised on reload.
+    expect(screen.queryByTestId('trace-compare-axis-conflict')).toBeNull()
+
+    // The declared conversion is SEEDED into the inputs from the saved spec —
+    // not re-entered. This is the D3 pin: reload restores the conversion.
+    expect((screen.getByTestId('compare-conv-factor-AOUT-000002') as HTMLInputElement).value).toBe('1000')
+    expect((screen.getByTestId('compare-conv-tounit-AOUT-000002') as HTMLInputElement).value).toBe('pA')
+    expect((screen.getByTestId('compare-conv-declaredby-AOUT-000002') as HTMLInputElement).value).toBe('brad')
+
+    // The y-axis spans to the CONVERTED extent (3 * 1000 = 3000): the declared
+    // factor is applied on reload, not re-derived by re-entering inputs.
+    const svg = screen.getByTestId('compare-overlay-svg')
+    const [, y1] = (svg.getAttribute('data-y-domain') ?? '').split(':').map(Number)
+    expect(y1).toBeCloseTo(3000, 0)
+  })
+})
+
 describe('CompareTraces hardcode boundary (bait #7 source-pin)', () => {
   it('prod CompareTraces.tsx carries no unit/domain literals (beyond test data)', () => {
     const source = readFileSync('src/analysis/CompareTraces.tsx', 'utf8')

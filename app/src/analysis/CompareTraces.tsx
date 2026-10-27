@@ -416,6 +416,22 @@ export function CompareTraces({
       }
       const next: Record<string, Trace> = {}
       const errs: Record<string, string> = {}
+      // Seed the declared conversions from the SAVED spec (D3): a saved
+      // comparison is only storable while the gate is green, so every
+      // mismatched-unit trace carried a declared conversion into the record.
+      // Without this the gate re-raises the mismatch and the reload opens
+      // red/blank (spec §Verification 5g: save -> reload -> re-render).
+      const seedConversions: Record<string, { factor: string; toUnit: string; declaredBy: string }> = {}
+      for (const t of parsed.value.traces) {
+        if (t.conversion) {
+          seedConversions[t.artifactId] = {
+            factor: String(t.conversion.factor),
+            toUnit: t.conversion.toUnit,
+            declaredBy: t.conversion.declaredBy,
+          }
+        }
+      }
+      setConversions((prev) => ({ ...prev, ...seedConversions }))
       await Promise.all(
         parsed.value.traces.map(async (t) => {
           const envelope = await apiClient.getRecord(t.artifactId)
