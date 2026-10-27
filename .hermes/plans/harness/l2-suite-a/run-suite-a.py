@@ -447,11 +447,30 @@ def check_expectation(idx, exp, state):
     # the well set from the server result and byte-compares against the
     # expectations JSON (well-range semantics are the compiler's, never
     # re-derived in the harness).
+    # l2t0510 harness fix 2 (orch): every wells-bearing expectation is an OR
+    # in the spec ("wells exactly …, OR answerable cards" — P3/P4 expectation
+    # sources say so verbatim; never-guess makes a composition ambiguity a
+    # LEGAL cards answer). The `wells` branch applies only when the turn
+    # DELIVERED events; a cards verdict satisfies the other arm (verdict_in
+    # above already pins the trichotomy; P1's outcome check pins answerability
+    # structurally). Asserting wells on a cards turn inverted the OR into an
+    # AND — P4's honest composition-ambiguity card FAILed by construction.
     exp_wells = exp.get("wells")
     if exp_wells is not None:
-        got = sorted(w for ev in events for w in event_wells(ev))
-        if sorted(got) != sorted(exp_wells):
-            v.append("wells %r != expected %r" % (sorted(got), sorted(exp_wells)))
+        if events:
+            got = sorted(w for ev in events for w in event_wells(ev))
+            if sorted(got) != sorted(exp_wells):
+                v.append("wells %r != expected %r" % (sorted(got), sorted(exp_wells)))
+        else:
+            # the cards arm of the OR, asserted not skipped: a wells-expected
+            # turn with zero events is only legal when it asked an ANSWERABLE
+            # card (non-empty options answer form — the same structural shape
+            # P1's check uses, no prose). Zero events + zero answerable cards
+            # is the silent shape -> FAIL.
+            if not answerable_cards(cards):
+                v.append("wells expected %r but zero events delivered and no "
+                         "answerable card (neither arm of the spec's OR holds)"
+                         % len(exp_wells))
 
     # P5: 8-channel semantics (B8): A2:H2 = eight wells (the compiler's own
     # expansion, pinned in expectations/P5.json `wells` via wellRange.ts —
@@ -729,6 +748,17 @@ def drive(base, prompts, selected, single, timeout, preseed, expect_dir,
             "done_equipment_requirements": len(done.get("equipmentRequirements") or []),
             "done_resolved_labwares": len(done.get("resolvedLabwares") or []),
             "unbound_refs": done.get("unboundRefs"),
+            # l2t0510 HARNESS FIX (orch, verified root cause): check_expectation
+            # reads state["events"]/state["cards"] but this dict never carried
+            # them — every well-set assertion (P3-P6) compared [] vs expected,
+            # a FAIL BY CONSTRUCTION. The live server DOES expand B1:H6 to the
+            # 42-well set on details.wells (orch replay, held session,
+            # bound to the resolved plate record). Raw events/cards also ride
+            # the receipt now: a failing turn is diagnosable from the receipt
+            # alone. This fix cannot turn a real wall green — the server's
+            # delivered wells are the truth either way.
+            "events": events,
+            "cards": cards,
             "computed_wells": sorted(session.accum.material_wells()) if idx == 7 else None,
         }
         if v_py is not None and v_ts is None:
