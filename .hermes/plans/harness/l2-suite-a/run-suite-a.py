@@ -1024,8 +1024,26 @@ def _seq_context_from_catalog(catalog, contract, last_action_result):
     record selected the page sends NO residues. The driver instead
     includes `residues` for every record that carries them (no selection
     guard, no length cap): the P9/P10 turns ride residues the product
-    page would omit in exactly this no-selection world. Everything except
-    residues is the page's true wire shape."""
+    page would omit in exactly this no-selection world.
+    DISCLOSED DIVERGENCES vs the page's wire shape (advc fix run 2,
+    FIX-8 — the former "everything except residues is the page's true
+    wire shape" universal is deleted as false; the emitted bytes are
+    FROZEN by the cycle-cap ruling — dropping the nulls would be a wire
+    change invalidating Run F's pinned evidence, so this is disclosure,
+    not correction):
+      (a) the driver emits `alphabet`/`length` UNCONDITIONALLY (the base
+        entry always carries both keys), so JSON null RIDES where the
+        page's JSON.stringify (aiClient.ts:268) would DROP the undefined
+        key. Measured in Run F's request_body (20261027T121516Z):
+        20 null-valued fields per turn — alphabet+length on 10 of the
+        13 records (only the 3 `sequence` records carry real values);
+      (b) `... is not None` includes empty-array/empty-string values
+        where the page's truthy spreads omit them (the page's spreads
+        test truthiness; the driver's tests non-None);
+      (c) the label chain uses `or` (`p.get("label") or p.get("name")
+        or p.get("title")`) where the page uses `??` — an empty-string
+        label/name falls through to the next candidate on the page but
+        rides as "" on the driver."""
     records = []
     for r in catalog.get("records", []):
         p = r.get("payload", {})
@@ -1539,14 +1557,16 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                                  "correctly. (1) MODEL-AUTHORING FAILURE "
                                  "(the cause): the model did not emit a "
                                  "schema-valid run_blastn payload — the "
-                                 "server's Ajv rejections captured in "
-                                 "primary_p10_error/followup_errors are "
-                                 "'/: Expected type: object' and "
-                                 "'/endpointRef: Missing required property: "
-                                 "type' (the model's run_blastn proposal "
-                                 "carried a non-object shape / its "
-                                 "endpointRef omitted the required 'type' "
-                                 "field). (2) CAPABILITY WALL (none): the "
+                                 "server rejected the authoring turn(s) "
+                                 "with Ajv schema rejections, and the "
+                                 "exact captured strings ride the "
+                                 "machine-readable fields of THIS run "
+                                 "only (wall_evidence.primary_p10_error / "
+                                 "wall_evidence.followup_errors); this "
+                                 "note quotes none, so it cannot assert a "
+                                 "string a given run's receipt fields do "
+                                 "not contain (advc fix run 2, FIX-8). "
+                                 "(2) CAPABILITY WALL (none): the "
                                  "capability is NOT absent — both endpoints "
                                  "are provisioned in the lane catalog "
                                  "(SEQEND-mafft-lane2, SEQEND-blastn-lane2) "
@@ -1619,9 +1639,16 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                      "AI-revcomp + run_blastn x2) judged over the COMPLETE held-"
                      "session proposal set. In the write-free layer-(a) world the "
                      "actual two-artifact comparison is the ORCH-owned execute "
-                     "replay + browser receipt (OQ5/OQ4); when not met here the "
-                     "honest wall naming the gap rides P10.wall_evidence (the "
-                     "task-block gate's 'or an honest wall' clause)."),
+                     "replay + browser receipt (OQ5/OQ4). When not met here the "
+                     "cause is a MODEL-AUTHORING FAILURE (schema-invalid "
+                     "proposal payloads — the server's Ajv rejections, captured "
+                     "verbatim in P10.wall_evidence's primary_p10_error/"
+                     "followup_errors), NOT a capability/provisioning gap; the "
+                     "write-free layer (a) simply never EXECUTES, so the "
+                     "variants cannot be turned into comparable artifacts here "
+                     "(execute leg is ORCH-owned, OQ5). One characterization: "
+                     "honest disclosure of a model-authoring failure, never a "
+                     "named capability wall (advc fix run 2, FIX-8)."),
         },
     }
     with open(os.path.join(out_dir, "run-meta.json"), "w") as f:
