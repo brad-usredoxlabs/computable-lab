@@ -1,14 +1,18 @@
 /**
- * GC-9 deliverable A — ParameterForm: generic closed-set renderer over a
- * JSON-Schema subset (spec 2026-10-28_GC-9-parameter-forms.md §A).
+ * ParameterForm — constructs matrix (lane spec: GC-9 deliverable A).
  *
- * RED-first: this suite exists BEFORE the component. Every fixture schema is
- * TEST-LOCAL and deliberately NON-GC (neutral domain names) — the component
+ * RED-first suite (written before the component existed). Every fixture schema
+ * is TEST-LOCAL and deliberately NON-GC (neutral domain names) — the component
  * must be domain-agnostic; all labels/choices are data from the schema.
  * The hardcode-boundary grep (spec §A) is owned by CI here, not just the
  * runbook: ParameterForm.tsx must contain ZERO occurrences of the banned
  * domain tokens.
+ *
+ * ParameterForm is a CONTROLLED component: multi-step interaction tests drive
+ * it through a stateful Harness so each edit re-renders with the latest value
+ * (exactly how the page wires it).
  */
+import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { render, screen, fireEvent } from '@testing-library/react'
@@ -16,10 +20,34 @@ import { ParameterForm } from './ParameterForm'
 
 const P = 'pf' // testIdPrefix for unit tests
 
-function renderForm(schema: Record<string, unknown>, value: Record<string, unknown>, onChange?: (next: Record<string, unknown>) => void) {
-  const spy = onChange ?? vi.fn()
-  render(<ParameterForm schema={schema} value={value} onChange={spy} testIdPrefix={P} />)
-  return spy
+/** Last value pushed into the Harness onChange recorder (app tsconfig lib is
+ *  ES2020: no Array.prototype.at; the recorder stores values, not call tuples). */
+function lastChange(spy: { mock: { calls: Array<Record<string, unknown>> } }): Record<string, unknown> | undefined {
+  const calls = spy.mock.calls
+  return calls.length > 0 ? calls[calls.length - 1] : undefined
+}
+
+function Harness({ schema, initial, onChange, testIdPrefix = P }: {
+  schema: Record<string, unknown>
+  initial: Record<string, unknown>
+  onChange?: (next: Record<string, unknown>) => void
+  testIdPrefix?: string
+}) {
+  const [value, setValue] = useState(initial)
+  return (
+    <ParameterForm
+      schema={schema}
+      value={value}
+      onChange={(next: Record<string, unknown>) => { setValue(next); onChange?.(next) }}
+      testIdPrefix={testIdPrefix}
+    />
+  )
+}
+
+function renderForm(schema: Record<string, unknown>, value: Record<string, unknown>, testIdPrefix = P) {
+  const calls: Array<Record<string, unknown>> = []
+  render(<Harness schema={schema} initial={value} onChange={(next) => { calls.push(next) }} testIdPrefix={testIdPrefix} />)
+  return { mock: { calls } }
 }
 
 // --- Test-local NEUTRAL schemas (no GC domain names anywhere in fixtures) ---
@@ -95,8 +123,8 @@ const defaultSchema = {
   },
 }
 
-describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)', () => {
-  it('1. number + title/description/min/max (+ x-unit when present): labeled input, verbatim label, min/max attrs', () => {
+describe('ParameterForm — constructs matrix (spec test plan rows 1-10)', () => {
+  it('1. number + title/description/min/max: labeled input, verbatim label, min/max attrs', () => {
     renderForm(numberSchema, {})
     const input = screen.getByTestId(`${P}-cutoff`) as HTMLInputElement
     expect(input.tagName).toBe('INPUT')
@@ -109,14 +137,8 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
   })
 
   it('1b. x-unit suffix renders only when the schema carries it', () => {
-    render(
-      <ParameterForm
-        schema={{ type: 'object', properties: { rate: { type: 'number', 'x-unit': 'mL/min' } }}
-        value={{}}
-        onChange={() => {}}
-        testIdPrefix={P}
-      />,
-    )
+    const xunitSchema = { type: 'object', properties: { rate: { type: 'number', 'x-unit': 'mL/min' } } }
+    renderForm(xunitSchema, {})
     expect(screen.getByText('mL/min')).toBeDefined()
   })
 
@@ -124,7 +146,7 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
     renderForm(enumSchema, {})
     const sel = screen.getByTestId(`${P}-mode`) as HTMLSelectElement
     expect(sel.tagName).toBe('SELECT')
-    const options = Array.from(sel.querySelectorAll('option')).map((o) => o.textContent)
+    const options = Array.from(sel.querySelectorAll('option:not([disabled])')).map((o) => o.textContent)
     expect(options).toEqual(['fast', 'slow', 'auto', 'off'])
   })
 
@@ -142,13 +164,13 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
     expect(screen.getByTestId(`${P}-events-row-1`)).toBeDefined()
     // Edit row 1's `at` → writes to index 1 only.
     fireEvent.change(screen.getByTestId(`${P}-events-1-at`), { target: { value: '9' } })
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ events: [{ at: 1, kind: 'on' }, { at: 9, kind: 'off' }] })
+    expect(lastChange(onChange)).toMatchObject({ events: [{ at: 1, kind: 'on' }, { at: 9, kind: 'off' }] })
     // Remove row 0 → exactly that row goes, row 1 becomes index 0.
     fireEvent.click(screen.getByTestId(`${P}-events-remove-0`))
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ events: [{ at: 9, kind: 'off' }] })
+    expect(lastChange(onChange)).toMatchObject({ events: [{ at: 9, kind: 'off' }] })
     // Add-row seeds {} (row block appears with empty controls).
     fireEvent.click(screen.getByTestId(`${P}-events-add`))
-    const next = onChange.mock.calls.at(-1)?.[0] as { events: unknown[] }
+    const next = lastChange(onChange) as { events: unknown[] }
     expect(next.events.length).toBe(2)
     expect(next.events[1]).toEqual({})
   })
@@ -156,11 +178,11 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
   it('5. array of strings: add/remove/list works', () => {
     const onChange = renderForm(stringArraySchema, { tags: ['a'] })
     fireEvent.change(screen.getByTestId(`${P}-tags-0`), { target: { value: 'zz' } })
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ tags: ['zz'] })
+    expect(lastChange(onChange)).toMatchObject({ tags: ['zz'] })
     fireEvent.click(screen.getByTestId(`${P}-tags-add`))
-    expect((onChange.mock.calls.at(-1)?.[0] as { tags: unknown[] }).tags).toHaveLength(2)
+    expect((lastChange(onChange) as { tags: unknown[] }).tags).toHaveLength(2)
     fireEvent.click(screen.getByTestId(`${P}-tags-remove-0`))
-    expect((onChange.mock.calls.at(-1)?.[0] as { tags: unknown[] }).tags).toHaveLength(1)
+    expect((lastChange(onChange) as { tags: unknown[] }).tags).toHaveLength(1)
   })
 
   it('6. boolean: checkbox toggles', () => {
@@ -168,13 +190,13 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
     const box = screen.getByTestId(`${P}-verbose`) as HTMLInputElement
     expect(box.type).toBe('checkbox')
     fireEvent.click(box)
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ verbose: true })
+    expect(lastChange(onChange)).toMatchObject({ verbose: true })
   })
 
   it('7. string free text: input round-trips', () => {
     const onChange = renderForm(boolStringSchema, { label: '' })
     fireEvent.change(screen.getByTestId(`${P}-label`), { target: { value: 'my sample' } })
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ label: 'my sample' })
+    expect(lastChange(onChange)).toMatchObject({ label: 'my sample' })
   })
 
   it('8. unsupported nodes: -unsupported block names JSON path + construct; siblings still render (no blank form)', () => {
@@ -207,7 +229,7 @@ describe('ParameterForm — constructs matrix (GC-9 spec §Test plan rows 1-10)'
     expect(screen.queryByTestId(`${P}-group-seed-overridden`)).toBeNull()
     // Reset affordance reverts to the default.
     fireEvent.click(screen.getByTestId(`${P}-gain-reset`))
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({ gain: 4.5 })
+    expect(lastChange(onChange)).toMatchObject({ gain: 4.5 })
   })
 
   it('hardcode boundary (spec §A pin, CI-owned): ParameterForm.tsx contains ZERO banned domain tokens', () => {
