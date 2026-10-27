@@ -1,0 +1,9 @@
+{
+  "prompt": 7,
+  "prompt_text": "Do a pipette mix on all wells that contain materials with the 8-channel pipette (75ul, 3 cycles)",
+  "expectation_source": "spec per-prompt criteria P7: the computed well set 'all wells that contain materials' = the UNION of the material wells P2-P6 actually delivered THIS run (the driver computes it from its own accumulated state files — B3: NEVER a well-list literal in the harness, never well-set logic in server TS). 75uL volume + 3 cycles must be present in the proposal (shape, not prose — B9).",
+  "verdict_in": ["events-bound", "cards"],
+  "wellset": "computed:union-of-prior-material-wells",
+  "require_mix_params": true,
+  "deterministic": false
+}

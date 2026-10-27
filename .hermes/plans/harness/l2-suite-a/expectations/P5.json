@@ -1,0 +1,12 @@
+{
+  "prompt": 5,
+  "prompt_text": "Add 1uL 1mM clofibrate in DMSO to wells A2:H2 with an 8-channel pipette",
+  "expectation_source": "spec per-prompt criteria P5: wells EXACTLY A2:H2 (row A, columns 2-9 = eight wells; compiler expansion pinned via wellRange.ts) AND the 8-channel constraint honored (B8): the constraint is only meaningful as an 8-channel operation — a 96-well single-channel interpretation or a 24-event (3-row) spread FAILS. channel_semantics encodes that shape.",
+  "verdict_in": ["events-bound", "cards"],
+  "wells": ["A2", "B2", "C2", "D2", "E2", "F2", "G2", "H2"],
+  "channel_semantics": "8-channel",
+  "badge": {
+    "never": ["Ontology"]
+  },
+  "deterministic": false
+}

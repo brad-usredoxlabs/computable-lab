@@ -1,0 +1,90 @@
+"""The driver's RE-ENCODED honest-outcome verdict — the SAME discriminated
+verdict as server/src/ai/honestOutcome.ts (L2-FREEFORM-1's committed helper).
+
+ONE implementation lives in TS (honestOutcome.ts, consumed by the driver via
+lib/honest-cli.ts — OQ3 ruling (ii), no drift surface); THIS module is the
+python re-encoding the driver uses in-line. The pinned vitest parity pin
+(server/src/ai/L2SuiteA.honestOutcome.parity.test.ts) feeds BOTH the same five
+fixture shapes (FREEFORM acceptance #2 (a)-(e)) and asserts identical verdicts
+— drift between the two encodings is a defect (B-pair: the driver must not
+silently classify where the helper throws).
+
+Structural only: reads the result's own channels and the probe's own id sets —
+zero vocabulary, zero name literals.
+"""
+
+
+class HonestOutcomeError(Exception):
+    """The result is NONE of the three honest outcomes (or an unbound event
+    rode through) — the delivered-channel dump rides the message."""
+
+
+VERDICTS = ("events-bound", "cards", "honest-failure")
+
+
+def _channel_dump(result):
+    channels = {}
+    for key, value in (result or {}).items():
+        if isinstance(value, list):
+            channels[key] = "array(%d)" % len(value)
+        elif isinstance(value, str):
+            channels[key] = "string(%d chars)" % len(value)
+        else:
+            channels[key] = value
+    return str(sorted(channels.items()))
+
+
+def _event_labware_id(event):
+    if not isinstance(event, dict):
+        return None
+    labware_id = event.get("labwareId")
+    if isinstance(labware_id, str) and labware_id:
+        return labware_id
+    return None
+
+
+def classify(result, context=None):
+    """Classify a delivered draft result against the trichotomy.
+
+    Returns one of 'events-bound' | 'cards' | 'honest-failure', or raises
+    HonestOutcomeError on the silent shape / the unbound raw-label shape
+    (mirror of assertHonestOutcome's throw contract; the driver treats the
+    raise as verdict None + the recorded dump).
+    """
+    result = result or {}
+    cards = result.get("clarificationRequests") or []
+    cards = cards if isinstance(cards, list) else []
+    # BYTE-MIRROR of honestOutcome.ts: `typeof error === 'string' &&
+    # error.length > 0` — NOT .strip(): a whitespace-only error string is
+    # "errored" in the TS helper (the parity pin would catch a drift here).
+    errored = isinstance(result.get("error"), str) and len(result["error"]) > 0
+    events = result.get("events") or []
+    events = events if isinstance(events, list) else []
+
+    if len(events) > 0:
+        bound = set()
+        if context:
+            bound |= set(context.get("deckIds") or [])
+            bound |= set(context.get("resolvedIds") or [])
+        for event in events:
+            labware_id = _event_labware_id(event)
+            # An event with no labware identity carries nothing to bind. A
+            # string labwareId outside the bound sets (when the probe supplies
+            # them) is the shipped defect: raise (H1 post-merge contract).
+            if labware_id is not None and context is not None and labware_id not in bound:
+                raise HonestOutcomeError(
+                    "assertHonestOutcome: NOT an honest outcome — events>0 with an "
+                    "UNBOUND raw-label labwareId (%r) and no cards, no error. "
+                    "Delivered channels: %s" % (labware_id, _channel_dump(result)))
+        return "events-bound"
+
+    # H4: the error outranks the cards — the escalation shape (error + the
+    # standing question) is the honest failure, not an answerable cards turn.
+    if errored:
+        return "honest-failure"
+    if len(cards) > 0:
+        return "cards"
+    raise HonestOutcomeError(
+        "assertHonestOutcome: NOT an honest outcome — success with zero bound "
+        "events, zero cards, no error (the silent success-with-zero-mountable). "
+        "Delivered channels: %s" % _channel_dump(result))

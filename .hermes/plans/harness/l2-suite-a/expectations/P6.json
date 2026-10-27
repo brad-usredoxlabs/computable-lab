@@ -1,0 +1,11 @@
+{
+  "prompt": 6,
+  "prompt_text": "All 1uL DMSO (vehicle control) to A3:H3",
+  "expectation_source": "spec per-prompt criteria P6: wells EXACTLY A3:H3 (compiler expansion pinned via wellRange.ts); the 'All' typo (sic, for 'Add') + the '(vehicle control)' parenthetical must not derail — either handles it (events-bound) or asks an answerable card; a silent success with neither FAILS. Badge for DMSO (vehicle control) honest per TERM-1 tiers — never a false Ontology (B4).",
+  "verdict_in": ["events-bound", "cards"],
+  "wells": ["A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3"],
+  "badge": {
+    "never": ["Ontology"]
+  },
+  "deterministic": false
+}
