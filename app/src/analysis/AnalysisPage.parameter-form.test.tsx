@@ -418,11 +418,16 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
       backend: 'stdlib',
     })
     expect(Object.keys(arg.parameters ?? {})).toHaveLength(9)
-    // Zero JSON-textarea interaction: the advanced disclosure was never opened
-    // and the raw input kept its untouched placeholder default.
+    // Zero JSON-textarea interaction: the advanced disclosure was never opened,
+    // and its box is SEEDED FROM THE CURRENT FORM VALUES (D7: the demo literal
+    // belongs to the no-schema path only — it must not appear here).
     const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
     expect(details.open).toBe(false)
-    expect((screen.getByTestId('analysis-run-params') as HTMLInputElement).value).toBe('{"window": [0.0, 0.5]}')
+    const advValue = (screen.getByTestId('analysis-run-params') as HTMLInputElement).value
+    expect(advValue).not.toBe('{"window": [0.0, 0.5]}')
+    expect(advValue).toContain('baseline_correction')
+    expect(advValue).toContain('tangent_skim')
+    expect(advValue).toContain('stdlib')
   })
 
   it('W8b: timed-event object-array (test-local) — two rows configured in order land in the submitted payload', async () => {
@@ -535,10 +540,12 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
   })
 
   it('W13: (D6 probe P6) pruned payloads drop emptied nested objects and empty array elements', async () => {
+    // g.x is a STRING child so clearing it leaves an empty group (a number
+    // child would trip the invalid-number gate arm instead — spec §B gate (b)).
     const pruneSchema = {
       type: 'object',
       properties: {
-        g: { type: 'object', properties: { x: { type: 'number' } } },
+        g: { type: 'object', properties: { x: { type: 'string' } } },
         k: { type: 'number' },
         tags: { type: 'array', items: { type: 'string' } },
       },
@@ -552,6 +559,7 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     fireEvent.change(screen.getByTestId(`${P}-g-x`), { target: { value: '' } })
     fireEvent.change(screen.getByTestId(`${P}-k`), { target: { value: '3' } })
     fireEvent.click(screen.getByTestId(`${P}-tags-add`))
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
     fireEvent.click(runCreateBtn())
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
@@ -595,6 +603,8 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     ])
     render(wrap(<AnalysisPage />))
     await selectRev('REV-U15')
+    // Fill the required supported control so ONLY the unsupported arm blocks.
+    fireEvent.change(screen.getByTestId(`${P}-good`), { target: { value: '1' } })
     // Gate-block reason (unsupported node) on its own testid.
     const gateLine = screen.getByTestId('analysis-params-blocked')
     expect(gateLine.textContent).toContain('badOneOf')

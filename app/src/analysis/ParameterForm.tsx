@@ -71,8 +71,10 @@ function typeList(node: SchemaNode): string[] {
 }
 
 /** Classify a subschema against the closed set. Returns the control kind or
- *  the unsupported-construct name (the actionable message names it). */
-function classify(node: SchemaNode): ClassifyResult {
+ *  the unsupported-construct name (the actionable message names it).
+ *  Exported: the submit gate in AnalysisPage consumes this SAME authority
+ *  (D2/D9) so renderer and gate can never disagree about what is renderable. */
+export function classify(node: SchemaNode): ClassifyResult {
   // $ref without a resolvable local target is unsupported (no ref store here).
   if ('$ref' in node) return { kind: 'unsupported', construct: '$ref' }
   // Combinators / conditional constructs are outside the closed set.
@@ -234,6 +236,13 @@ function EnumControl(props: LeafProps) {
   const enumNames = asStringArray(node.enumNames)
   const missing = required && isEmptyValue(value)
   const id = `${testIdPrefix}-${path}`
+  // D5: the DOM select value is a string by nature; map it back to the
+  // matching enum member (strict identity, then serialized identity) so the
+  // emitted value keeps the schema's ORIGINAL JSON type (number/boolean),
+  // not a stringified form.
+  const serializeMember = (m: unknown): string => (typeof m === 'string' ? m : JSON.stringify(m) ?? String(m))
+  const currentMember = enumVals.find((ev) => ev === value)
+  const selectValue = currentMember !== undefined ? serializeMember(currentMember) : ''
   return (
     <div className="paramform__field">
       <label htmlFor={id}>{label}</label>
@@ -241,9 +250,16 @@ function EnumControl(props: LeafProps) {
         id={id}
         data-testid={id}
         disabled={disabled}
-        value={typeof value === 'string' ? value : ''}
+        value={selectValue}
         {...(missing ? { 'aria-invalid': true } : {})}
-        onChange={(e) => onValue(name, e.target.value)}
+        onChange={(e) => {
+          const raw = e.target.value
+          const member =
+            enumVals.find((ev) => ev === raw) ??
+            enumVals.find((ev) => serializeMember(ev) === raw) ??
+            raw
+          onValue(name, member)
+        }}
       >
         <option value="" disabled>
           {'—'}
@@ -300,6 +316,12 @@ function NodeRenderer(props: {
     const props_ = asRecord(node.properties) ?? {}
     const reqArr = asStringArray(node.required) ?? []
     const obj = asRecord(value) ?? {}
+    // D1 fix: children resolve their `default` against the GROUP'S OWN default
+    // map — `defaults[name]` (this node's collected default, from its explicit
+    // `default` keyword or built from its children's defaults), NOT the parent
+    // map keyed by child names (the pre-fix lookup was a level off and the
+    // nested override badge/reset never rendered).
+    const groupDefaults = asRecord(defaults[name]) ?? {}
     return (
       <fieldset className="paramform__group">
         <legend>{labelFor(node, name)}</legend>
@@ -313,7 +335,7 @@ function NodeRenderer(props: {
               value={obj[childName]}
               required={reqArr.includes(childName)}
               disabled={disabled}
-              defaults={asRecord(defaults[childName]) ?? {}}
+              defaults={groupDefaults}
               onSet={(seg, next) => {
                 const copy = { ...obj }
                 copy[seg] = next
@@ -421,6 +443,115 @@ export function ParameterForm({ schema, value, onChange, disabled, testIdPrefix 
       ))}
     </div>
   )
+}
+
+/** Drop undefined/null/empty-string leaves AND any container that prunes to
+ *  nothing, so the submitted payload never carries a poisoned `key: undefined`,
+ *  a `''`-as-number, an emptied nested object (`g: {}`), or an empty-string
+ *  array element (D6). Pure data walk. */
+export function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
+  const pruneArray = (arr: unknown[]): unknown[] =>
+    arr
+      .map((el) => {
+        if (typeof el === 'string' && el.trim() === '') return undefined
+        if (el !== null && typeof el === 'object' && !Array.isArray(el)) return pruneEmpty(el as Record<string, unknown>)
+        return el
+      })
+      .filter((el) => el !== undefined)
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    if (Array.isArray(v)) {
+      const prunedArr = pruneArray(v)
+      if (prunedArr.length > 0) out[k] = prunedArr
+      continue
+    }
+    if (typeof v === 'object') {
+      const pruned = pruneEmpty(v as Record<string, unknown>)
+      if (Object.keys(pruned).length > 0) out[k] = pruned
+      continue
+    }
+    out[k] = v
+  }
+  return out
+}
+
+/** A numeric/integer leaf holds a value that is not a finite number (D9: the
+ *  NaN/empty gate arm; '' is handled by the required/empty arm first). */
+export function isInvalidNumber(node: SchemaNode, value: unknown): boolean {
+  const types = typeList(node)
+  return types.length === 1 && (types[0] === 'number' || types[0] === 'integer') && (typeof value !== 'number' || !Number.isFinite(value))
+}
+
+/** THE single classification/traversal authority (D2/D9). Yields every
+ *  unsupported JSON path (including array-item subtrees — the pre-fix gate
+ *  fork in AnalysisPage never descended into `array.items`), every missing
+ *  required leaf (at ANY depth — the pre-fix gate stopped one object deep),
+ *  and every invalid numeric leaf, walking the SAME nodes the renderer walks.
+ *  The AnalysisPage submit gate consumes exactly this; the forked
+ *  pClassify/pUnsupportedPaths are gone. */
+export interface GateIssues {
+  missing: string[]
+  invalidNumbers: string[]
+  unsupported: string[]
+}
+
+export function collectGateIssues(schema: Record<string, unknown> | undefined, values: Record<string, unknown>): GateIssues {
+  const issues: GateIssues = { missing: [], invalidNumbers: [], unsupported: [] }
+  if (!schema) return issues
+  const walk = (node: SchemaNode, path: string, value: unknown, required: boolean): void => {
+    const cls = classify(node)
+    if (cls.kind === 'unsupported') {
+      issues.unsupported.push(path)
+      return
+    }
+    if (cls.kind === 'scalar' || cls.kind === 'enum') {
+      if (required && isEmptyValue(value)) {
+        issues.missing.push(path)
+      } else if (value !== undefined && value !== null && isInvalidNumber(node, value)) {
+        issues.invalidNumbers.push(path)
+      }
+      return
+    }
+    if (cls.kind === 'group') {
+      const props_ = asRecord(node.properties) ?? {}
+      const reqArr = asStringArray(node.required) ?? []
+      const obj = asRecord(value) ?? {}
+      for (const [k, v] of Object.entries(props_)) {
+        walk(v as SchemaNode, `${path}.${k}`, obj[k], reqArr.includes(k))
+      }
+      return
+    }
+    // Array arms (array-scalar / array-enum / array-object).
+    const itemsNode = asRecord(node.items) ?? {}
+    const reqArr = asStringArray(node.required) ?? []
+    const arr = Array.isArray(value) ? value : []
+    // A required array that is absent entirely is a missing control (the
+    // pre-fork gate flagged this too; rows below only cover present rows).
+    if (required && !Array.isArray(value)) issues.missing.push(path)
+    arr.forEach((row, i) => {
+      if (cls.kind === 'array-object') {
+        walk(itemsNode, `${path}[${i}]`, row, reqArr.length > 0)
+      } else {
+        const scalar = cls.kind === 'array-scalar' ? cls.scalar : 'string'
+        if (isEmptyValue(row)) {
+          if (reqArr.length > 0) issues.missing.push(`${path}[${i}]`)
+        } else if (scalar === 'number') {
+          const types = typeList(itemsNode)
+          if (types.length === 1 && (types[0] === 'number' || types[0] === 'integer') && isInvalidNumber(itemsNode, row)) {
+            issues.invalidNumbers.push(`${path}[${i}]`)
+          }
+        }
+      }
+    })
+  }
+  const props = asRecord(schema.properties) ?? {}
+  const reqArr = asStringArray(schema.required) ?? []
+  for (const [k, v] of Object.entries(props)) {
+    walk(v as SchemaNode, k, values[k], reqArr.includes(k))
+  }
+  return issues
 }
 
 /** Deep-collect `default` keywords from a schema subtree (deliverable C
