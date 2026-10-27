@@ -27,6 +27,8 @@ import {
   colorForTraceInSet,
   decimateForRender,
   extractTrace,
+  parseMarkerRows,
+  parseTraceValue,
   stableTraceOrder,
   type DeclaredConversion,
   type Trace,
@@ -249,6 +251,64 @@ describe('traceModel.colour (stable per-trace colour — bait #9)', () => {
       trace({ recordId: 'AOUT-000003' }),
     ]
     expect(stableTraceOrder(ts).map((t) => t.recordId)).toEqual(['AOUT-000001', 'AOUT-000002', 'AOUT-000003'])
+  })
+})
+
+describe('traceModel.parseTraceValue (shared axis/values/unit extraction)', () => {
+  it('extracts axis/values + the data-carried unit strings', () => {
+    const res = parseTraceValue({ axis: [0, 1], values: [1, 2], axis_units: 'min', value_units: 'pA' })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.trace.axis).toEqual([0, 1])
+      expect(res.trace.values).toEqual([1, 2])
+      expect(res.trace.xUnit).toBe('min')
+      expect(res.trace.yUnit).toBe('pA')
+    }
+  })
+
+  it('omits absent unit keys (no fabricated units)', () => {
+    const res = parseTraceValue({ axis: [0], values: [1] })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.trace.xUnit).toBeUndefined()
+      expect(res.trace.yUnit).toBeUndefined()
+    }
+  })
+
+  it('named failure legs', () => {
+    expect(parseTraceValue('nope').ok).toBe(false)
+    expect(parseTraceValue({}).ok).toBe(false)
+    expect(parseTraceValue({ axis: [0], values: [] }).ok).toBe(false)
+  })
+})
+
+describe('traceModel.parseMarkerRows (peak-table markers as DATA)', () => {
+  // Field names are TEST DATA here — the prod module never re-types them.
+  const FIELDS = { rt: 'rt_min', label: 'peak', saturated: 'saturated', flags: 'flags' }
+
+  it('parses rows with data-carried rt/label/saturated/flags', () => {
+    const rows = [
+      { peak: 'P1', rt_min: 1.0, height_pa: 2.6, saturated: false, flags: '' },
+      { peak: 'P2', rt_min: 3.0, height_pa: 1.6, saturated: true, flags: ['UNRECOVERABLE_SATURATED'] },
+    ]
+    const markers = parseMarkerRows(rows, FIELDS)
+    expect(markers.map((m) => m.label)).toEqual(['P1', 'P2'])
+    expect(markers.map((m) => m.rt)).toEqual([1.0, 3.0])
+    expect(markers.map((m) => m.saturated)).toEqual([false, true])
+    // The reason code arrives AS DATA in flags — rendered, never re-typed.
+    expect(markers[1]!.flags).toBe('UNRECOVERABLE_SATURATED')
+  })
+
+  it('rows with a null/absent rt keep rt:null (the component skips them visibly)', () => {
+    const markers = parseMarkerRows([{ peak: 'P?', rt_min: null }, { peak: 'P1' }], FIELDS)
+    expect(markers[0]!.rt).toBeNull()
+    expect(markers[1]!.rt).toBeNull()
+    expect(markers[0]!.label).toBe('P?')
+  })
+
+  it('non-array rows -> empty (a named empty state, never a throw)', () => {
+    expect(parseMarkerRows(undefined, FIELDS)).toEqual([])
+    expect(parseMarkerRows({ a: 1 }, FIELDS)).toEqual([])
   })
 })
 

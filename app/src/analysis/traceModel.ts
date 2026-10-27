@@ -117,6 +117,42 @@ function firstString(record: Record<string, unknown> | undefined, keys: readonly
 }
 
 // ---------------------------------------------------------------------------
+// 0. parseTraceValue — the axis/values/unit extraction (shared by inline and
+//    the OQ-1(a) content-route bytes)
+// ---------------------------------------------------------------------------
+
+/** A parsed trace payload (data-only). */
+export interface ParsedTraceValue {
+  axis: number[]
+  values: number[]
+  xUnit?: string
+  yUnit?: string
+}
+
+/**
+ * Parse a trace payload (inline value OR the content-route JSON) into
+ * axis/values + the data-carried unit strings. Unit-map KEYS are structural
+ * names (never unit VALUES); the unit STRINGS come from the data.
+ */
+export function parseTraceValue(value: unknown): { ok: true; trace: ParsedTraceValue } | { ok: false; message: string } {
+  if (!isRecord(value)) return { ok: false, message: 'trace payload is not an object' }
+  const axis = Array.isArray(value.axis) ? value.axis.map(Number) : []
+  const values = Array.isArray(value.values) ? value.values.map(Number) : []
+  if (axis.length === 0 || values.length === 0) {
+    return { ok: false, message: 'trace payload has no axis/values' }
+  }
+  return {
+    ok: true,
+    trace: {
+      axis,
+      values,
+      ...(firstString(value, AXIS_UNIT_KEYS) ? { xUnit: firstString(value, AXIS_UNIT_KEYS) } : {}),
+      ...(firstString(value, VALUE_UNIT_KEYS) ? { yUnit: firstString(value, VALUE_UNIT_KEYS) } : {}),
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 1. extractTrace — AOUT-* -> inline payload OR dref bytes via the OQ-1(a) route
 // ---------------------------------------------------------------------------
 
@@ -151,33 +187,21 @@ export async function extractTrace(
     return { ok: false, code: 'ARTIFACT_NOT_FOUND', message: `artifact not found in the run manifest: ${artifactRecordId}` }
   }
   const runId = runRecord.recordId ?? ''
-  const base: Omit<Trace, 'axis' | 'values'> = {
+  const base: Omit<Trace, 'axis' | 'values' | 'xUnit' | 'yUnit'> = {
     recordId: artifactRecordId,
     runId,
     runTitle: runRecord.payload?.title ?? runId,
     artifactName: entry.name ?? artifactRecordId,
-    xUnit: undefined,
-    yUnit: undefined,
   }
 
   // Inline payload (small artifacts ride the run record verbatim).
   const inline = isRecord(entry.value) ? entry.value : undefined
   if (inline) {
-    const axis = Array.isArray(inline.axis) ? inline.axis.map(Number) : []
-    const values = Array.isArray(inline.values) ? inline.values.map(Number) : []
-    if (axis.length === 0 || values.length === 0) {
-      return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} carries an inline payload without axis/values` }
+    const parsed = parseTraceValue(inline)
+    if (!parsed.ok) {
+      return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId}: ${parsed.message}` }
     }
-    return {
-      ok: true,
-      trace: {
-        ...base,
-        axis,
-        values,
-        ...(firstString(inline, AXIS_UNIT_KEYS) ? { xUnit: firstString(inline, AXIS_UNIT_KEYS) } : {}),
-        ...(firstString(inline, VALUE_UNIT_KEYS) ? { yUnit: firstString(inline, VALUE_UNIT_KEYS) } : {}),
-      },
-    }
+    return { ok: true, trace: { ...base, ...parsed.trace } }
   }
 
   // Dref-backed: the ratified content route is the ONLY byte source.
@@ -189,30 +213,60 @@ export async function extractTrace(
   if (!bytes) {
     return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content route returned no bytes` }
   }
-  let parsed: unknown
+  let parsedJson: unknown
   try {
-    parsed = JSON.parse(bytes)
+    parsedJson = JSON.parse(bytes)
   } catch {
     return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content is not JSON` }
   }
-  if (!isRecord(parsed)) {
-    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content is not an object` }
+  const parsed = parseTraceValue(parsedJson)
+  if (!parsed.ok) {
+    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId}: ${parsed.message}` }
   }
-  const axis = Array.isArray(parsed.axis) ? parsed.axis.map(Number) : []
-  const values = Array.isArray(parsed.values) ? parsed.values.map(Number) : []
-  if (axis.length === 0 || values.length === 0) {
-    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content has no axis/values` }
-  }
-  return {
-    ok: true,
-    trace: {
-      ...base,
-      axis,
-      values,
-      ...(firstString(parsed, AXIS_UNIT_KEYS) ? { xUnit: firstString(parsed, AXIS_UNIT_KEYS) } : {}),
-      ...(firstString(parsed, VALUE_UNIT_KEYS) ? { yUnit: firstString(parsed, VALUE_UNIT_KEYS) } : {}),
-    },
-  }
+  return { ok: true, trace: { ...base, ...parsed.trace } }
+}
+
+// ---------------------------------------------------------------------------
+// 1b. parseMarkerRows — the peak-table marker extraction (data-only)
+// ---------------------------------------------------------------------------
+
+/** A parsed marker row (all fields arrive as DATA from the artifact). */
+export interface MarkerRow {
+  peakId: string
+  /** The RT value (null when the row declares none — skipped visibly). */
+  rt: number | null
+  label: string
+  saturated: boolean
+  flags: string
+}
+
+/**
+ * Parse a peak-table artifact into marker rows. Field NAMES come from the
+ * bindings (or the shipped default names held in DEFAULT_MARKER_FIELDS); the
+ * row VALUES are data. Rows with a null/absent RT are returned with rt:null —
+ * the component SKIPS them visibly (counted, never silently dropped).
+ */
+export function parseMarkerRows(
+  rows: unknown,
+  fields: { rt: string; label: string; saturated?: string; flags?: string },
+): MarkerRow[] {
+  if (!Array.isArray(rows)) return []
+  return rows.map((raw, i) => {
+    const r = isRecord(raw) ? raw : {}
+    const rtVal = r[fields.rt]
+    const rt = typeof rtVal === 'number' && Number.isFinite(rtVal) ? rtVal : null
+    const labelVal = r[fields.label]
+    const label = typeof labelVal === 'string' && labelVal.length > 0 ? labelVal : String(i + 1)
+    const satVal = fields.saturated ? r[fields.saturated] : undefined
+    const flagVal = fields.flags ? r[fields.flags] : undefined
+    return {
+      peakId: String(i),
+      rt,
+      label,
+      saturated: satVal === true || (typeof satVal === 'string' && satVal.toLowerCase() === 'true'),
+      flags: typeof flagVal === 'string' ? flagVal : Array.isArray(flagVal) ? flagVal.join(', ') : '',
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------

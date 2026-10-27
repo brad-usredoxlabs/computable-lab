@@ -1,0 +1,429 @@
+/**
+ * GC-10 [C] — ChromatogramView.tsx — the interactive single-trace renderer.
+ *
+ * Replaces the 320x120 static `signal` polyline for `chromatogram` view-specs:
+ * zoom (drag-select), pan (Shift-drag), reset, hover readout (raw points),
+ * RT/peak markers from a sibling peak-table artifact, peak-table row <-> trace
+ * sync, and axes labeled from the artifact-carried unit strings.
+ *
+ * Hard lines (spec §D2/§D5 + reviewer bait #7/#8/#13):
+ *  - Units/labels/field names arrive from the DATA (the artifact payload /
+ *    the marker rows); this component contains ZERO unit literals and ZERO
+ *    domain-name literals beyond the single sanctioned DEFAULT_MARKER_FIELDS
+ *    fallback const (the shipped column names as data, not logic).
+ *  - Decimation is visual-only: `decimateForRender` output drives the SVG
+ *    geometry only; the hover readout snaps to RAW points; nothing persists
+ *    a decimated copy.
+ *  - dref-backed artifacts read their full-resolution bytes through the
+ *    ratified OQ-1(a) content route (apiClient.getAnalysisArtifactContent);
+ *    a failure is a NAMED error, never a silent partial/scaled fallback.
+ *  - Interaction state (zoom domain, selection, hover, active peak) is
+ *    component-local view state — never written back to any record.
+ *
+ * Gesture model (documented; the spec names "drag-select" zoom + "no-modifier"
+ * pan as two distinct drags, so a modifier disambiguates):
+ *   - plain left-drag  = ZOOM drag-select (rubber-band -> set x-domain)
+ *   - Shift left-drag  = PAN (translate the x-domain)
+ *   - Reset button     = restore the FULL data extent
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { apiClient } from '../shared/api/client'
+import type { RenderableArtifact } from './ViewRenderer'
+import {
+  decimateForRender,
+  parseMarkerRows,
+  parseTraceValue,
+  type MarkerRow,
+} from './traceModel'
+
+/** The single sanctioned fallback field-name table (shipped column names AS
+ *  DATA — the one exception to the bait #7 grep pin; bindings override it). */
+export const DEFAULT_MARKER_FIELDS = { rt: 'rt_min', label: 'peak', saturated: 'saturated', flags: 'flags' } as const
+
+export interface ChromatogramBindings {
+  /** Sibling artifact NAME that carries the peak-table markers. */
+  markersFrom?: string
+  /** Property NAMES in the marker rows (data). Fallback: DEFAULT_MARKER_FIELDS. */
+  markerRtField?: string
+  markerLabelField?: string
+  markerSaturatedField?: string
+  markerFlagsField?: string
+}
+
+interface Domain {
+  x0: number
+  x1: number
+}
+
+// Fixed viewBox geometry (handwritten SVG; no chart dependency).
+const W = 720
+const H = 280
+const PAD_L = 52
+const PAD_R = 14
+const PAD_T = 14
+const PAD_B = 30
+const PLOT_W = W - PAD_L - PAD_R
+const PLOT_H = H - PAD_T - PAD_B
+
+/** Binary-search the nearest axis index to x (axis is ascending). */
+function nearestIndex(axis: number[], x: number): number {
+  if (axis.length === 0) return -1
+  let lo = 0
+  let hi = axis.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (axis[mid]! < x) lo = mid + 1
+    else hi = mid
+  }
+  if (lo > 0 && Math.abs(axis[lo - 1]! - x) < Math.abs(axis[lo]! - x)) return lo - 1
+  return lo
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+export function ChromatogramView({
+  artifact,
+  bindings,
+  siblings,
+}: {
+  artifact: RenderableArtifact
+  bindings?: Record<string, unknown>
+  siblings?: RenderableArtifact[]
+}) {
+  const b = (bindings ?? {}) as ChromatogramBindings
+  const svgRef = useRef<SVGSVGElement | null>(null)
+
+  // ---- Data: inline value OR the OQ-1(a) content route (dref-only) ----
+  const drefId = artifact.dataReferenceRef?.id
+  const [fetched, setFetched] = useState<unknown>(undefined)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!drefId) return
+    let on = true
+    setFetched(undefined)
+    setFetchError(null)
+    apiClient
+      .getAnalysisArtifactContent(drefId)
+      .then((v) => {
+        if (on) setFetched(v)
+      })
+      .catch((err) => {
+        if (on) setFetchError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      on = false
+    }
+  }, [drefId])
+
+  const value = artifact.inlineValue !== undefined ? artifact.inlineValue : fetched
+  const parsed = useMemo(() => {
+    if (value === undefined) return null
+    const r = parseTraceValue(value)
+    return r.ok ? r.trace : null
+  }, [value])
+
+  const fullDomain = useMemo<Domain | null>(() => {
+    if (!parsed) return null
+    const x0 = Math.min(...parsed.axis)
+    const x1 = Math.max(...parsed.axis)
+    return x1 > x0 ? { x0, x1 } : { x0: x0 - 0.5, x1: x1 + 0.5 }
+  }, [parsed])
+
+  const [domain, setDomain] = useState<Domain | null>(null)
+  useEffect(() => {
+    if (fullDomain) setDomain(fullDomain)
+  }, [fullDomain])
+
+  // ---- Interaction state (component-local; never persisted) ----
+  const [sel, setSel] = useState<{ a: number; b: number } | null>(null)
+  const [drag, setDrag] = useState<{ mode: 'zoom' | 'pan'; startPx: number; start: Domain } | null>(null)
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
+  const [activePeak, setActivePeak] = useState<string | null>(null)
+
+  const dom = domain ?? fullDomain
+  const xToPx = (x: number): number => {
+    if (!dom) return PAD_L
+    const span = dom.x1 - dom.x0 || 1
+    return PAD_L + ((x - dom.x0) / span) * PLOT_W
+  }
+  const pxToX = (px: number): number => {
+    if (!dom) return 0
+    const span = dom.x1 - dom.x0 || 1
+    return dom.x0 + ((px - PAD_L) / PLOT_W) * span
+  }
+  const yExtent = useMemo(() => {
+    if (!parsed) return { y0: 0, y1: 1 }
+    let y0 = Math.min(...parsed.values)
+    let y1 = Math.max(...parsed.values)
+    if (y1 === y0) {
+      y0 -= 0.5
+      y1 += 0.5
+    }
+    return { y0, y1 }
+  }, [parsed])
+  const yToPx = (y: number): number => PAD_T + PLOT_H - ((y - yExtent.y0) / (yExtent.y1 - yExtent.y0 || 1)) * PLOT_H
+
+  const clientToPx = (clientX: number): number => {
+    const el = svgRef.current
+    if (!el) return PAD_L
+    const rect = el.getBoundingClientRect()
+    if (!rect.width) return PAD_L
+    return (clientX - rect.left) * (W / rect.width)
+  }
+
+  // ---- Markers (from the sibling peak-table artifact, by NAME) ----
+  const markerArtifact = useMemo(() => {
+    if (!b.markersFrom || !siblings) return undefined
+    return siblings.find((a) => a.name === b.markersFrom)
+  }, [b.markersFrom, siblings])
+
+  const markers = useMemo<MarkerRow[]>(() => {
+    if (!markerArtifact) return []
+    const inline = isRecord(markerArtifact.inlineValue) ? markerArtifact.inlineValue : {}
+    const rows = Array.isArray(inline.rows) ? inline.rows : []
+    const fields = {
+      rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
+      label: b.markerLabelField ?? DEFAULT_MARKER_FIELDS.label,
+      saturated: b.markerSaturatedField ?? DEFAULT_MARKER_FIELDS.saturated,
+      flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
+    }
+    return parseMarkerRows(rows, fields)
+  }, [markerArtifact, b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField])
+
+  const skippedNoRt = markers.filter((m) => m.rt === null).length
+
+  // ---- Visual-only decimation (SVG geometry only; readout uses raw points) ----
+  const slice = useMemo(
+    () => (parsed ? decimateForRender(parsed.axis, parsed.values, Math.max(1, Math.floor(PLOT_W))) : { indices: [], droppedCount: 0 }),
+    [parsed],
+  )
+
+  const polyline = useMemo(() => {
+    if (!parsed || !dom) return ''
+    const pts: string[] = []
+    for (const i of slice.indices) {
+      const x = parsed.axis[i]!
+      if (x < dom.x0 || x > dom.x1) continue
+      pts.push(`${xToPx(x).toFixed(2)},${yToPx(parsed.values[i]!).toFixed(2)}`)
+    }
+    return pts.join(' ')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsed, slice, dom, yExtent])
+
+  // ---- Pointer handlers ----
+  function onPointerDown(e: React.MouseEvent) {
+    if (!dom) return
+    e.preventDefault()
+    const px = clientToPx(e.clientX)
+    setDrag({ mode: e.shiftKey ? 'pan' : 'zoom', startPx: px, start: dom })
+  }
+  function onPointerMove(e: React.MouseEvent) {
+    if (!dom || !parsed) return
+    const px = clientToPx(e.clientX)
+    if (drag) {
+      if (drag.mode === 'zoom') {
+        setSel({ a: Math.min(drag.startPx, px), b: Math.max(drag.startPx, px) })
+      } else {
+        const dxData = (px - drag.startPx) / PLOT_W * (drag.start.x1 - drag.start.x0)
+        setDomain({ x0: drag.start.x0 - dxData, x1: drag.start.x1 - dxData })
+      }
+      return
+    }
+    // Hover readout: nearest RAW point to the hovered data-x (never decimated).
+    const hx = pxToX(px)
+    const i = nearestIndex(parsed.axis, hx)
+    if (i >= 0) setHover({ x: parsed.axis[i]!, y: parsed.values[i]! })
+  }
+  function onPointerUp() {
+    if (drag?.mode === 'zoom' && sel && sel.b - sel.a > 2) {
+      const x0 = pxToX(sel.a)
+      const x1 = pxToX(sel.b)
+      setDomain({ x0: Math.min(x0, x1), x1: Math.max(x0, x1) })
+    }
+    setDrag(null)
+    setSel(null)
+  }
+  function onPointerLeave() {
+    setHover(null)
+  }
+  function reset() {
+    if (fullDomain) setDomain(fullDomain)
+    setSel(null)
+    setHover(null)
+  }
+
+  // ---- Named error / empty states (never a thrown render) ----
+  if (fetchError) {
+    return (
+      <div className="view-spec__chromatogram" data-testid="view-spec-chromatogram">
+        <div className="view-spec__error" data-testid="chromatogram-error">
+          Could not load the trace bytes: {fetchError}
+        </div>
+      </div>
+    )
+  }
+  if (!parsed || !dom) {
+    return (
+      <div className="view-spec__chromatogram" data-testid="view-spec-chromatogram">
+        <div className="view-spec__empty" data-testid="chromatogram-empty">
+          {drefId && fetched === undefined ? 'Loading trace…' : 'No trace data to display (no axis/values).'}
+        </div>
+      </div>
+    )
+  }
+
+  const xUnit = parsed.xUnit
+  const yUnit = parsed.yUnit
+  const xTicks = tickValues(dom.x0, dom.x1, 5)
+  const yTicks = tickValues(yExtent.y0, yExtent.y1, 5)
+
+  return (
+    <div
+      className="view-spec__chromatogram"
+      data-testid="view-spec-chromatogram"
+      data-x-domain={dom ? `${dom.x0}:${dom.x1}` : undefined}
+    >
+      <div className="chromatogram__toolbar">
+        <button type="button" onClick={reset} data-testid="chromatogram-reset" className="chromatogram__reset">
+          Reset
+        </button>
+        {hover && (
+          <span className="chromatogram__readout" data-testid="chromatogram-readout">
+            {fmt(hover.x)}
+            {xUnit ? ` ${xUnit}` : ''} / {fmt(hover.y)}
+            {yUnit ? ` ${yUnit}` : ''}
+          </span>
+        )}
+        {slice.droppedCount > 0 && (
+          <span className="chromatogram__decim" data-testid="chromatogram-decimated">
+            decimating {slice.droppedCount} points for display — full resolution is preserved in the artifact
+          </span>
+        )}
+      </div>
+
+      <svg
+        ref={svgRef}
+        className="chromatogram__svg"
+        width="100%"
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        data-testid="chromatogram-svg"
+        onMouseDown={onPointerDown}
+        onMouseMove={onPointerMove}
+        onMouseUp={onPointerUp}
+        onMouseLeave={onPointerLeave}
+      >
+        {/* plot frame */}
+        <rect x={PAD_L} y={PAD_T} width={PLOT_W} height={PLOT_H} className="chromatogram__frame" />
+        {/* x-axis ticks + labels */}
+        {xTicks.map((t, i) => (
+          <g key={`xt-${i}`}>
+            <line x1={xToPx(t)} y1={PAD_T + PLOT_H} x2={xToPx(t)} y2={PAD_T + PLOT_H + 4} className="chromatogram__tick" />
+            <text x={xToPx(t)} y={PAD_T + PLOT_H + 16} className="chromatogram__ticklabel">
+              {fmt(t)}
+            </text>
+          </g>
+        ))}
+        {/* y-axis ticks + labels */}
+        {yTicks.map((t, i) => (
+          <g key={`yt-${i}`}>
+            <line x1={PAD_L - 4} y1={yToPx(t)} x2={PAD_L} y2={yToPx(t)} className="chromatogram__tick" />
+            <text x={PAD_L - 8} y={yToPx(t) + 3} textAnchor="end" className="chromatogram__ticklabel">
+              {fmt(t)}
+            </text>
+          </g>
+        ))}
+        {/* axis unit labels (data-carried) */}
+        <text x={PAD_L + PLOT_W / 2} y={H - 4} textAnchor="middle" className="chromatogram__axislabel">
+          {xUnit ?? 'x'}
+        </text>
+        <text x={12} y={PAD_T + PLOT_H / 2} textAnchor="middle" transform={`rotate(-90 12 ${PAD_T + PLOT_H / 2})`} className="chromatogram__axislabel">
+          {yUnit ?? 'y'}
+        </text>
+
+        {/* markers (RT peaks) */}
+        {markers
+          .filter((m) => m.rt !== null)
+          .map((m) => {
+            if (m.rt === null) return null
+            const px = xToPx(m.rt)
+            const inView = px >= PAD_L && px <= PAD_L + PLOT_W
+            if (!inView) return null
+            const active = activePeak === m.peakId
+            return (
+              <g
+                key={m.peakId}
+                data-testid={`chromatogram-marker-${m.peakId}`}
+                className={`chromatogram__marker${m.saturated ? ' chromatogram__marker--saturated' : ''}${active ? ' chromatogram__marker--active' : ''}`}
+                onClick={() => setActivePeak(activePeak === m.peakId ? null : m.peakId)}
+              >
+                <line x1={px} y1={PAD_T} x2={px} y2={PAD_T + PLOT_H} className="chromatogram__markerline" />
+                <text x={px + 3} y={PAD_T + 10} className="chromatogram__markerlabel">
+                  {m.label}
+                </text>
+              </g>
+            )
+          })}
+
+        {/* the trace (decimated geometry) */}
+        <polyline points={polyline} fill="none" className="chromatogram__trace" />
+
+        {/* hover cursor */}
+        {hover && (
+          <line x1={xToPx(hover.x)} y1={PAD_T} x2={xToPx(hover.x)} y2={PAD_T + PLOT_H} className="chromatogram__hover" />
+        )}
+
+        {/* zoom selection rectangle */}
+        {sel && (
+          <rect x={Math.min(sel.a, sel.b)} y={PAD_T} width={Math.abs(sel.b - sel.a)} height={PLOT_H} className="chromatogram__sel" data-testid="chromatogram-selection" />
+        )}
+      </svg>
+
+      {/* peak-table micro-table with row <-> trace sync */}
+      {markers.length > 0 && (
+        <div className="chromatogram__tablewrap">
+          {skippedNoRt > 0 && (
+            <div className="chromatogram__skipnote" data-testid="chromatogram-skipped">
+              {skippedNoRt} marker row(s) have no RT value and are not plotted.
+            </div>
+          )}
+          <table className="chromatogram__table">
+            <tbody>
+              {markers.map((m) => (
+                <tr
+                  key={m.peakId}
+                  data-testid={`chromatogram-row-${m.peakId}`}
+                  className={activePeak === m.peakId ? 'chromatogram__row--active' : ''}
+                  onClick={() => setActivePeak(activePeak === m.peakId ? null : m.peakId)}
+                >
+                  <td className="chromatogram__rowlabel">{m.label}</td>
+                  <td>{m.rt === null ? '—' : `${fmt(m.rt)}${xUnit ? ` ${xUnit}` : ''}`}</td>
+                  <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? 'saturated' : ''}</td>
+                  <td className="chromatogram__rowflags">{m.flags}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 5 evenly spaced tick values (inclusive endpoints). */
+function tickValues(x0: number, x1: number, count: number): number[] {
+  if (x1 <= x0) return [x0]
+  const out: number[] = []
+  for (let i = 0; i < count; i++) out.push(x0 + ((x1 - x0) * i) / (count - 1))
+  return out
+}
+
+/** Compact number formatting for readout/labels (no unit literals). */
+function fmt(v: number): string {
+  if (!Number.isFinite(v)) return String(v)
+  if (Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0)) return v.toExponential(2)
+  return String(Math.round(v * 1000) / 1000)
+}

@@ -3268,6 +3268,25 @@ export const apiClient = {
     })
   },
 
+  /** GC-10 OQ-1(a): read the stored bytes of a data-reference-backed analysis
+   *  output artifact via the read-only content route (GET-only; the storage
+   *  path is resolved server-side from the immutable DREF record — the client
+   *  supplies ONLY the AOUT-* record id). Returns the raw JSON bytes. */
+  async getAnalysisArtifactContent(id: string): Promise<unknown> {
+    const res = await fetch(`${API_BASE}/analysis-artifacts/${encodeURIComponent(id)}/content`)
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const body = (await res.json()) as { error?: string; message?: string }
+        detail = body.message || body.error || ''
+      } catch {
+        detail = ''
+      }
+      throw new Error(detail || `analysis artifact content unavailable (HTTP ${res.status})`)
+    }
+    return res.json()
+  },
+
   async executeInstrumentApplianceJob(
     job: InstrumentApplianceJob,
     options?: { confirmLiveExecution?: boolean },
