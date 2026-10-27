@@ -68,6 +68,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "fixtures", "gc-peaks"))
 
 import make_peak_fixtures as fx  # noqa: E402
+from computable_lab_analysis import peak_integration as pi  # noqa: E402
 from computable_lab_analysis.ctx import Context  # noqa: E402
 from computable_lab_analysis.peak_integration import (  # noqa: E402
     IntegrationError,
@@ -119,6 +120,48 @@ def _run_raw(sig, params):
     ctx = Context()
     res = integrate_peaks(ctx, {"signal1": sig}, params)
     return res, ctx
+
+
+def _deciding_pass_floor_ratio(sig):
+    """(adversarial review cycle-2) The measured floor/small_h ratio of
+    the valley on the DECIDING baseline pass — the second pass of the
+    module's fixed two-pass baseline, whose output is the emitted baseline.
+    The docstring's 'measured' ratios must be reproducible: this helper
+    re-measures them by spying on the module's own pass structure (the spy
+    is restored before the run returns), never a stale hand-computed
+    figure. Returns the last (deciding) pass's ratio."""
+    ratios = []
+    real = pi._apply_tangent_skim
+
+    def spy(base, values, windows, skim_ratio, vtp, ctx):
+        ws = sorted(windows, key=lambda w: w["idx"])
+        for a, b in zip(ws[:-1], ws[1:]):
+            ia, ib = a["idx"], b["idx"]
+            if ib - ia < 2:
+                continue
+            small_h = min(values[ia] - base[ia], values[ib] - base[ib])
+            if small_h <= 0:
+                continue
+            floor = values[ia] - base[ia]
+            for j in range(ia + 1, ib):
+                d = values[j] - base[j]
+                if d < floor:
+                    floor = d
+            ratios.append(floor / small_h)
+        return real(base, values, windows, skim_ratio, vtp, ctx)
+
+    pi._apply_tangent_skim = spy
+    try:
+        _run(sig, baseline_correction="tangent_skim",
+             skim_ratio=0.05, valley_to_peak_ratio=0.2)
+    finally:
+        pi._apply_tangent_skim = real
+    if len(ratios) < 2:
+        raise AssertionError(
+            "the module's declared two-pass baseline must yield at least "
+            f"two skim decisions — got {len(ratios)}; the deciding pass "
+            "is the SECOND")
+    return ratios[-1]
 
 
 def _saturated_signal() -> dict:
@@ -866,6 +909,44 @@ class TestPeakIntegration(unittest.TestCase):
         # byte-identical to the vertical-drop baseline (no skim applied)
         self.assertEqual(res["baseline"], res_vd["baseline"],
                          "a below-band valley must leave the baseline "
+                         "exactly as the vertical-drop leg produced it")
+        self._assert_pairing(res["rows"])
+
+    def test_t1_14_high_valley_above_upper_gate_is_not_skimmed(self):
+        """F1 gate UPPER arm (adversarial review cycle-2, MINOR 1): a
+        valley floor ABOVE the upper band gate is NOT skimmed. Before
+        this case nothing pinned the UPPER half of the declared band —
+        deleting the `floor < valley_to_peak_ratio·small_h` comparison
+        left the whole suite green (reviewer's Probe D). Two
+        barely-resolved maxima whose valley floor sits at 0.47472·small_h
+        (MEASURED on the DECIDING/second baseline pass; the first pass
+        is 0.46540·small_h) — well ABOVE the
+        valley_to_peak_ratio=0.2·small_h upper gate on BOTH passes —
+        must log no TANGENT_SKIM_APPLIED and leave the baseline
+        byte-identical to the vertical-drop leg, the same shape as the
+        band-edge case on the other side of the band."""
+        sig = self._skim_trace(1.34)
+        res, ctx = _run(sig, baseline_correction="tangent_skim",
+                        skim_ratio=0.05, valley_to_peak_ratio=0.2)
+        res_vd, _ = _run(sig)
+        self.assertEqual(len(res["rows"]), 2)
+        self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                             for l in ctx.manifest().logs),
+                         "floor=0.47472·small_h (deciding pass) is ABOVE "
+                         "the valley_to_peak_ratio·small_h=0.2·small_h "
+                         "upper gate — must NOT skim")
+        # the measured ratio sits comfortably ABOVE the upper gate — the
+        # margin is asserted, not just claimed in the docstring (a skim
+        # of this valley would flatten the shoulders and corrupt the
+        # areas of the overlapping envelopes)
+        ratio = _deciding_pass_floor_ratio(sig)
+        self.assertGreater(ratio, 2.0 * 0.2,
+                           f"floor ratio {ratio:.5f} is not comfortably "
+                           "ABOVE the 0.2·small_h upper gate — the "
+                           "high-floor case must sit above it")
+        # byte-identical to the vertical-drop baseline (no skim applied)
+        self.assertEqual(res["baseline"], res_vd["baseline"],
+                         "an above-band valley must leave the baseline "
                          "exactly as the vertical-drop leg produced it")
         self._assert_pairing(res["rows"])
 
