@@ -18,8 +18,9 @@ Python functions in the entry script.
 """
 from __future__ import annotations
 
-__version__ = "0.3.0"  # GC-7 (OQ5 fold, orch-confirmed): ships peak_integration (declared-settings peak
-                      # integration) — 0.2.0 shipped the .D reader (d_reader)
+__version__ = "0.4.0"  # GC-8 (OQ4 fold, orch-confirmed): ships calibration_fit + quantification
+                      # (declared-parameters calibration curve + cross-run quantification) —
+                      # 0.3.0 shipped peak_integration (GC-7); 0.2.0 shipped the .D reader (d_reader)
 __all__ = [
     "run",
     "Context",
@@ -30,6 +31,10 @@ __all__ = [
     "READER_NAME",
     "READER_VERSION",
     "integrate_peaks",
+    "fit_calibration",
+    "quantify_peaks",
+    "CalibrationError",
+    "QuantificationError",
 ]
 
 # GC-6: the .D reader (lazily re-exported so plain-SDK runs pay no import cost;
@@ -38,3 +43,8 @@ from .d_reader import READER_NAME, READER_VERSION, attach as attach_package_inpu
 
 # GC-7: the declared-settings peak-integration module (stdlib-only core).
 from .peak_integration import integrate_peaks  # noqa: E402
+
+# GC-8: the declared-parameters calibration-fit + quantification modules
+# (stdlib-only; the fit is weighted normal equations — no numpy/scipy).
+from .calibration_fit import CalibrationError, fit_calibration  # noqa: E402
+from .quantification import QuantificationError, quantify_peaks  # noqa: E402
