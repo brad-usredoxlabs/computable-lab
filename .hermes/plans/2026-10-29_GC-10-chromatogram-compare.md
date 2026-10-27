@@ -117,6 +117,16 @@ decimation that never touches analysis inputs.
   `[ table, signal, signal-collection, spatial-array, image, model, binary, metric, sequence,
   sequence-collection, alignment, sequence-hits ]`. `:50-53` inlineValue XOR dataReferenceRef;
   `:55-63` free `schema` + per-field `units` maps.
+- RE-ANCHOR COMPLETE l1t1255 (orch, first-hand at merged trunk 2598e451 — this closes the
+  AMEND-AT-MERGE clause; no further re-read needed at claim): SHIPPED fixtures confirm —
+  `signal_plus_baseline` artifact payload carries `dataReferenceRef` (DREF-*) and NO
+  `inlineValue` (analysisGcIntegration.test.ts :392-399); persisted dref bytes decode to
+  `{axis: number[], values: number[], baseline: number[], axis_units, value_units,
+  integration_windows}` (:409-416). `peak_table` is INLINE (`inlineValue {columns,rows}` +
+  `units` + per-field `schema` definitions; :365-371), dataKind `table`, columns VERBATIM
+  `['peak','rt_min','height_pa','area_pa_min','width_min','area_percent','symmetry',
+  'saturated','flags']` (:376) — note width_min+symmetry vs earlier drafts; rows length 2 on
+  the synthetic fixture. Marker layer + row<->trace sync consume these names as DATA.
 - [G7] GC-7 promoted spec :415 (§A3.6): the integration run publishes `signal_plus_baseline`
   (dataKind `signal`) via `publish_file` of a tempfile JSON
   `{axis, values, baseline, axis_units: "min", value_units: "pA", integration_windows}` -> blob ->
