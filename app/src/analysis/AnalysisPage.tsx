@@ -6,12 +6,13 @@
  * through validated ViewSpecs. The `analysis` surface carries a
  * `SurfaceContext(surface:'analysis', active=run, selection=input refs)`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
 import { renderViews, type RenderableArtifact, type RenderableView } from './ViewRenderer'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
+import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
 import './AnalysisPage.css'
 
 interface RunPayload {
@@ -28,7 +29,79 @@ interface RevPayload {
   title?: string
   sdkVersion?: string
   entryScript?: string
+  /** Free-form JSON-Schema fragment the UI renders as controls (spec F1/F2:
+   *  already delivered by the list endpoint — no new fetch). */
+  parameterSchema?: Record<string, unknown>
 }
+
+// --- Parameter-form submit gate (GC-9 deliverable B, fix1) -------------------
+// The gate consumes the SINGLE classification/traversal authority exported by
+// ParameterForm (collectGateIssues — the same classify the renderer uses), so
+// the gate and the renderer can never disagree about what is renderable:
+// unsupported paths include array-item subtrees, and required-missing is
+// checked at every depth (D2/D9). The pre-fix forked pClassify/
+// pUnsupportedPaths re-implementation is gone.
+
+/** The frozen-preview text for the empty-payload case (D4): the submit omits
+ *  the `parameters` key entirely, so the preview must name that decision
+ *  instead of rendering a fabricated `{}`. */
+export const NO_PARAMS_PREVIEW = '(no parameters)'
+
+/** Pretty-printed, recursively sorted-keys JSON — the frozen-preview contract
+ *  (spec §B: "the EXACT JSON that will be sent — pretty-printed, sorted keys"). */
+function pSortedJson(obj: unknown): string {
+  const sortKeys = (o: unknown): unknown => {
+    if (o !== null && typeof o === 'object' && !Array.isArray(o)) {
+      const out: Record<string, unknown> = {}
+      for (const k of Object.keys(o as Record<string, unknown>).sort()) out[k] = sortKeys((o as Record<string, unknown>)[k])
+      return out
+    }
+    if (Array.isArray(o)) return o.map(sortKeys)
+    return o
+  }
+  return JSON.stringify(sortKeys(obj), null, 2)
+}
+
+/** Parse advanced raw JSON as a JSON object (null when it is not one).
+ *  Shared by buildParameters + the invalid-JSON check so both see the SAME
+ *  parse (no forked parse paths). */
+function asAdvancedRecord(text: string): Record<string, unknown> | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return null
+  }
+  return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+}
+
+/** Submit gate (spec §B): (a) required control missing/empty, (b) number
+ *  control holds a non-finite value, (c) unsupported node present AND advanced
+ *  JSON is not overriding. All three arms come from collectGateIssues (one
+ *  authority). Returns the actionable reason (never a silent grey button). */
+function pCollectGateIssues(
+  schema: Record<string, unknown> | undefined,
+  values: Record<string, unknown>,
+  advancedActive: boolean,
+): { blocked: boolean; reason: string } {
+  if (!schema) return { blocked: false, reason: '' }
+  const issues = collectGateIssues(schema, values)
+  if (issues.unsupported.length > 0 && !advancedActive) {
+    return {
+      blocked: true,
+      reason: `Cannot submit: unsupported construct(s) at ${issues.unsupported.join(', ')} — open "Advanced: edit raw JSON" and set the full parameter JSON to submit them, or fix the method's parameterSchema`,
+    }
+  }
+  if (issues.missing.length > 0) return { blocked: true, reason: `Cannot submit: missing required parameter(s): ${issues.missing.join(', ')}` }
+  if (issues.invalidNumbers.length > 0) return { blocked: true, reason: `Cannot submit: invalid number(s): ${issues.invalidNumbers.join(', ')} — enter a finite number or clear the field` }
+  return { blocked: false, reason: '' }
+}
+
+/** The legacy raw-JSON demo literal (spec §B: the no-schema textarea default
+ *  ONLY — kept so existing AI-demo flows don't change). One named constant;
+ *  the schema-mode Advanced path is seeded from the current form values
+ *  instead (D7). */
+const LEGACY_DEMO_PARAMS = '{"window": [0.0, 0.5]}'
 
 const DEFAULT_ENTRY = `def run(ctx):
     trace = ctx.input('trace').read_signal()
@@ -48,7 +121,10 @@ export function AnalysisPage() {
   const [entry, setEntry] = useState(DEFAULT_ENTRY)
   const [selectedRevId, setSelectedRevId] = useState('')
   const [runTitle, setRunTitle] = useState('')
-  const [paramJson, setParamJson] = useState('{"window": [0.0, 0.5]}')
+  // GC-9: schema-driven form values, pre-filled from the selected revision's
+  // parameterSchema `default` keywords (deliverable C) and re-initialized on
+  // selection change. The form is the primary parameter path (spec §B).
+  const [paramValues, setParamValues] = useState<Record<string, unknown>>({})
   const [activeRunId, setActiveRunId] = useState('')
   const [activeRun, setActiveRun] = useState<{ recordId: string; payload: RunPayload } | null>(null)
   const [manifest, setManifest] = useState<{ artifacts: unknown[]; views: unknown[]; metrics: unknown[] } | null>(null)
@@ -70,6 +146,43 @@ export function AnalysisPage() {
   }, [])
 
   useEffect(() => { void refresh() }, [refresh])
+
+  // GC-9 (deliverable C + fix1 D3/D7): (re)initialize the form values from the
+  // selected revision's schema defaults AND clear any manual advanced-JSON
+  // edit when the selection actually changes. The advanced box is then
+  // re-seeded from the new selection (form values in schema mode, the named
+  // demo constant on the no-schema path). Reading the schema from the
+  // already-fetched list payload — no fetch on selection (F2/F6 mount-spy
+  // rule; the no-execute suite pins zero extra calls).
+  const selectedRev = revisions.find((r) => r.recordId === selectedRevId) ?? null
+  const selectedSchema = selectedRev?.payload.parameterSchema
+  const lastSelectedRevRef = useRef<string | null>(null)
+  useEffect(() => {
+    const id = selectedRevId || null
+    if (id !== lastSelectedRevRef.current) {
+      lastSelectedRevRef.current = id
+      setParamValues(id ? collectDefaults(selectedRev?.payload.parameterSchema) : {})
+      // D3: an advanced-JSON override is scoped to the revision it was
+      // authored under — a manual edit must never be submitted against a
+      // different revision (F7 poisoned-run class).
+      setParamAdvanced((prev) => ({ ...prev, manual: null }))
+    }
+  }, [selectedRevId, selectedRev])
+  // D7: the legacy demo literal is a SINGLE named constant and belongs to the
+  // no-schema textarea path ONLY (spec §B). The schema-mode Advanced box is
+  // seeded from the current form values instead (or empty when nothing is
+  // configured) — it opens showing what the form will send.
+  const advancedSeedNext = useMemo(() => {
+    if (!selectedSchema) return LEGACY_DEMO_PARAMS
+    const pruned = pruneEmpty(paramValues)
+    return Object.keys(pruned).length > 0 ? pSortedJson(pruned) : ''
+  }, [selectedSchema, paramValues])
+  // Keep the pristine (non-manual) advanced text in sync with the seed; a
+  // manual edit, once made, is authoritative until cleared or the selection
+  // changes (D3).
+  useEffect(() => {
+    setParamAdvanced((prev) => (prev.manual === null && prev.seed !== advancedSeedNext ? { manual: null, seed: advancedSeedNext } : prev))
+  }, [advancedSeedNext])
 
   const createRev = useCallback(async () => {
     setBusy(true)
@@ -126,12 +239,78 @@ export function AnalysisPage() {
     }
   }, [artifactRefs])
 
+  // --- GC-9 parameter-path derivation (deliverable B, fix1) -------------------
+  // The advanced editor (raw JSON) becomes the source of truth ONLY once it
+  // holds a MANUAL edit — that is the "non-empty manual edit" that flips the
+  // visible override badge. Its pristine state (no manual edit yet) is SEEDED:
+  //   - no-schema path: the named legacy demo constant (spec §B: the demo
+  //     literal is the no-schema textarea default ONLY),
+  //   - schema mode: the current form values as sorted pretty JSON (D7: the
+  //     advanced box opens showing what the form will send — not parameters
+  //     that belong to no schema).
+  // The seed is never a "manual edit": pristine ≠ override. On a revision
+  // switch the manual edit is cleared (D3) so stale JSON can never be
+  // submitted against a different revision.
+  const [paramAdvanced, setParamAdvanced] = useState<{ manual: string | null; seed: string }>({ manual: null, seed: '' })
+  const { manual: advancedManual, seed: advancedSeed } = paramAdvanced
+  const advancedText = advancedManual ?? advancedSeed
+  const advancedActive = advancedManual !== null
+  // D8: invalid advanced JSON is a DISTINCT condition from the submit-gate
+  // block — its own testid (analysis-params-invalid-json) and its own line.
+  let advancedJsonInvalid = false
+  if (selectedSchema && advancedActive) {
+    try {
+      if (advancedText.trim() === '') throw new Error('empty')
+      if (asAdvancedRecord(advancedText) === null) advancedJsonInvalid = true
+    } catch {
+      advancedJsonInvalid = true
+    }
+  }
+  const gate = pCollectGateIssues(selectedSchema, paramValues, advancedActive && !advancedJsonInvalid)
+
+  /** The EXACT parameters object the submit will send: the parsed advanced
+   *  JSON when overriding, else the pruned form values (F7 + D6: untouched
+   *  optionals, emptied objects and empty array elements are all OMITTED,
+   *  never undefined/null/""-valued). undefined = no key. */
+  const buildParameters = useCallback((): Record<string, unknown> | undefined => {
+    if (!selectedSchema) {
+      // Legacy no-schema path: the raw JSON input IS the parameter path —
+      // pre-GC-9 semantics verbatim (parse, pass through; undefined when empty).
+      const text = advancedText.trim()
+      if (!text) return undefined
+      const rec = asAdvancedRecord(text)
+      if (rec === null) throw new Error('Advanced JSON must be a JSON object')
+      return rec
+    }
+    if (advancedActive) {
+      const rec = asAdvancedRecord(advancedText)
+      if (rec === null) throw new Error('Advanced JSON must be a JSON object')
+      return rec
+    }
+    const pruned = pruneEmpty(paramValues)
+    return Object.keys(pruned).length > 0 ? pruned : undefined
+  }, [selectedSchema, advancedActive, advancedText, paramValues])
+
+  // The frozen preview (spec §B): the exact JSON that will be sent —
+  // pretty-printed, sorted keys — updated live above Create-run. D4: when the
+  // submit would omit the `parameters` key, the preview NAMES that decision
+  // instead of rendering a fabricated `{}`.
+  const previewJson = useMemo(() => {
+    try {
+      const params = buildParameters()
+      if (params === undefined) return NO_PARAMS_PREVIEW
+      return pSortedJson(params)
+    } catch {
+      return null
+    }
+  }, [buildParameters])
+
   const createRun = useCallback(async () => {
     if (!selectedRevId) return
     setBusy(true)
     setError(null)
     let parameters: Record<string, unknown> | undefined
-    try { parameters = paramJson.trim() ? JSON.parse(paramJson) : undefined } catch { setError('Invalid parameters JSON'); setBusy(false); return }
+    try { parameters = buildParameters() } catch { setError('Invalid parameters JSON'); setBusy(false); return }
     try {
       const res = await apiClient.createAnalysisRun({
         title: runTitle.trim() || 'run',
@@ -146,7 +325,7 @@ export function AnalysisPage() {
     } finally {
       setBusy(false)
     }
-  }, [selectedRevId, runTitle, paramJson, refresh])
+  }, [selectedRevId, runTitle, buildParameters, refresh])
 
   const execute = useCallback(async (runId: string) => {
     setBusy(true)
@@ -258,8 +437,50 @@ export function AnalysisPage() {
           ))}
         </select>
         <input data-testid="analysis-run-title" value={runTitle} onChange={(e) => setRunTitle(e.target.value)} placeholder="Run title (optional)" />
-        <input data-testid="analysis-run-params" value={paramJson} onChange={(e) => setParamJson(e.target.value)} placeholder='{"window": [0.0, 0.5]}' className="analysis__mono" />
-        <button onClick={() => void createRun()} disabled={busy || !selectedRevId} data-testid="analysis-run-create-btn">Create run</button>
+        {/* GC-9 §B render rule: with a parameterSchema the labeled form is the
+            mandatory path and raw JSON is demoted to a closed disclosure;
+            without one the raw input stays the live path + honest notice. */}
+        {selectedSchema ? (
+          <>
+            <ParameterForm
+              schema={selectedSchema}
+              value={paramValues}
+              onChange={setParamValues}
+              disabled={busy}
+              testIdPrefix="analysis-param"
+            />
+            {advancedActive ? (
+              <div className="analysis__params-override" data-testid="analysis-params-override-json">
+                Advanced JSON overrides the form
+              </div>
+            ) : null}
+            <details className="analysis__params-advanced" data-testid="analysis-params-advanced">
+              <summary>Advanced: edit raw JSON</summary>
+              <input data-testid="analysis-run-params" value={advancedText} onChange={(e) => setParamAdvanced({ manual: e.target.value, seed: advancedSeed })} placeholder='{"window": [0.0, 0.5]}' className="analysis__mono" />
+              <button type="button" onClick={() => setParamAdvanced({ manual: null, seed: advancedSeed })} data-testid="analysis-params-clear">Clear — back to the form</button>
+            </details>
+            {advancedJsonInvalid ? (
+              // D8: distinct testid — invalid advanced JSON is its own
+              // condition, never conflated with the submit-gate block line.
+              <div className="analysis__error" data-testid="analysis-params-invalid-json">Advanced JSON is invalid — fix it (or Clear back to the form) before creating the run</div>
+            ) : null}
+            {previewJson !== null ? (
+              <div className="analysis__params-preview">
+                <span className="analysis__params-preview-label">Parameters frozen at submit time (preview):</span>
+                <pre className="analysis__mono" data-testid="analysis-params-preview">{previewJson}</pre>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="analysis__params-noschema" data-testid="analysis-params-noschema">
+            This method declares no parameterSchema — raw JSON only.
+            <input data-testid="analysis-run-params" value={advancedText} onChange={(e) => setParamAdvanced({ manual: e.target.value, seed: advancedSeed })} placeholder='{"window": [0.0, 0.5]}' className="analysis__mono" />
+          </div>
+        )}
+        {selectedSchema && gate.blocked ? (
+          <div className="analysis__error" data-testid="analysis-params-blocked">{gate.reason}</div>
+        ) : null}
+        <button onClick={() => void createRun()} disabled={busy || !selectedRevId || gate.blocked} data-testid="analysis-run-create-btn">Create run</button>
       </div>
 
       <div className="analysis__section" data-testid="analysis-run-list">

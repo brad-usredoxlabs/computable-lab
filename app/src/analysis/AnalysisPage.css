@@ -92,3 +92,36 @@
 .view-spec__error { color: #c92a2a; font-size: .85rem; }
 .view-spec__figure { max-width: 100%; border-radius: 6px; }
 .view-spec__empty { color: #9ca3af; font-size: .85rem; }
+
+/* GC-9 — parameter-form wiring (deliverable B/C). The labeled form is the
+   primary path; raw JSON is a demoted disclosure that can never block it. */
+.analysis__params-noschema { color: #6b7280; font-size: .85rem; }
+
+.analysis__params-advanced { border: 1px dashed #cbd5e1; border-radius: 6px; padding: .5rem .6rem; background: #f8fafc; }
+.analysis__params-advanced summary { cursor: pointer; font-size: .8rem; color: #475569; user-select: none; }
+.analysis__params-advanced > *:not(summary) { margin-top: .5rem; }
+
+.analysis__params-override { color: #e67700; font-size: .8rem; font-weight: 600; }
+
+.analysis__params-preview { display: flex; flex-direction: column; gap: .25rem; }
+.analysis__params-preview-label { font-size: .75rem; color: #6b7280; }
+.analysis__params-preview pre { margin: 0; padding: .5rem .6rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; font-size: .78rem; max-height: 14rem; overflow: auto; }
+
+/* ParameterForm (deliverable A) control layout. */
+.paramform { display: flex; flex-direction: column; gap: .5rem; }
+.paramform__field { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.paramform__field > label { min-width: 9rem; font-size: .85rem; color: #374151; }
+.paramform__field > input, .paramform__field > select { flex: 0 1 12rem; }
+.paramform__unit { color: #6b7280; font-size: .75rem; }
+.paramform__missing { color: #c92a2a; font-size: .7rem; font-weight: 600; text-transform: uppercase; }
+.paramform__group { border: 1px solid #e5e7eb; border-radius: 6px; padding: .5rem .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.paramform__group legend { font-size: .8rem; font-weight: 600; color: #374151; padding: 0 .3rem; }
+.paramform__list { display: flex; flex-direction: column; gap: .4rem; }
+.paramform__list-label { font-size: .85rem; color: #374151; }
+.paramform__row { display: flex; align-items: center; gap: .5rem; border: 1px solid #eef2f7; border-radius: 6px; padding: .4rem .5rem; }
+.paramform__row .paramform__field { flex: 1; }
+.paramform__row .paramform__field > input, .paramform__row .paramform__field > select { flex: 1; min-width: 5rem; }
+.paramform__remove, .paramform__add, .paramform__reset { font-size: .75rem; padding: .25rem .55rem; }
+.paramform__unsupported { border: 1px solid #f5c2c7; background: #fff5f5; color: #c92a2a; border-radius: 6px; padding: .5rem .6rem; font-size: .8rem; }
+.paramform__field-actions { display: inline-flex; align-items: center; gap: .4rem; }
+.paramform__override { color: #e67700; font-size: .7rem; font-weight: 600; text-transform: uppercase; }
