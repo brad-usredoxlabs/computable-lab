@@ -611,9 +611,60 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     n_quantified = 0
     quantified_labels = set()
 
-    # target -> matched-row bookkeeping (each target matches exactly ONE row;
-    # MULTIPLE in-window peaks → AMBIGUOUS_PEAK_MATCH, no nearest-RT rescue)
-    target_by_rt: Dict[Tuple[float, float], int] = {}  # window -> first matched row index
+    # D5: match PER TARGET FIRST. Each declared target's in-window rows are
+    # collected up front (the SAME declared-window vocabulary, inclusive
+    # bounds — the A4.2 vocabulary the CAL revision used):
+    #   * ZERO in-window rows for a target → the target is simply unmatched
+    #     (named in the TARGET_UNMATCHED warning below — loudness is data);
+    #   * MORE THAN ONE in-window row for ONE target → AMBIGUOUS_PEAK_MATCH
+    #     naming the TWO row indices (spec A4.2: "Target matching MULTIPLE
+    #     peaks in-window ... naming both rows"; no nearest-RT rescue);
+    #   * a peak row claimed by MORE THAN ONE target → the DECLARED
+    #     precedence rule resolves it: targets are matched in declared
+    #     (parameters.targets) order, so the FIRST target in that order wins
+    #     the shared row; the conflict is DECLARED — a warning log names every
+    #     claimant (machine-readable, code=TARGET_WINDOW_OVERLAP), never a
+    #     silent overwrite. The original run keyed its bookkeeping by the
+    #     window BOUNDS (lo, hi) — two targets sharing a window therefore
+    #     raised AMBIGUOUS for a SINGLE peak (naming "rows 0 and 0") and let
+    #     the later target silently overwrite the earlier one on the same
+    #     peak. Per-target matching + a named precedence rule fixes both.
+    target_in_window: Dict[int, List[int]] = {}
+    for ti, t in enumerate(targets):
+        in_win = [i for i, r in enumerate(rows)
+                  if _window_contains(r, float(t["rt_target_min"]), float(t["rt_window_min"]))]
+        target_in_window[ti] = in_win
+        if len(in_win) > 1:
+            raise QuantificationError(
+                CODE_AMBIGUOUS_PEAK_MATCH,
+                f"target '{t['compound_label']}' (window "
+                f"[{float(t['rt_target_min']) - float(t['rt_window_min'])}, "
+                f"{float(t['rt_target_min']) + float(t['rt_window_min'])}] min) matches MULTIPLE "
+                f"peaks in peak_table (rows {in_win[0]} and {in_win[1]}; rts "
+                f"{rows[in_win[0]].get('rt_min')!r} and {rows[in_win[1]].get('rt_min')!r}) — "
+                f"no nearest-RT rescue",
+            )
+    row_owner: Dict[int, int] = {}  # peak row index -> owning target index
+    overlap_claims: List[Tuple[int, List[int]]] = []  # (row, [target idx...])
+    for ti, t in enumerate(targets):  # declared order = the precedence rule
+        for i in target_in_window[ti]:
+            owner = row_owner.get(i)
+            if owner is None:
+                row_owner[i] = ti
+            elif owner != ti:
+                overlap_claims.append((i, sorted({owner, ti})))
+    if overlap_claims:
+        claim_text = "; ".join(
+            f"peak_table row {i} (rt {rows[i].get('rt_min')!r}) is inside the windows of BOTH "
+            f"'{targets[a]['compound_label']}' and '{targets[b]['compound_label']}'"
+            for (i, (a, b)) in overlap_claims
+        )
+        ctx.log(
+            f"quantification: {claim_text} — the DECLARED precedence rule resolves the shared row "
+            f"to the FIRST-named target (targets are matched in declared parameters.targets order); "
+            f"the conflict is declared data, never a silent overwrite (D5)",
+            level="warning", code="TARGET_WINDOW_OVERLAP",
+        )
 
     for i, row in enumerate(rows):
         rt = row.get("rt_min")
@@ -625,22 +676,11 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         sat_reason = _saturated_reason(row)
         area, area_reason = (None, sat_reason) if sat_reason else _row_area(row, f"peak_table row {i}")
 
-        # identity: the declared target whose window contains this peak
-        matched_target = None
-        for t in targets:
-            lo = float(t["rt_target_min"]) - float(t["rt_window_min"])
-            hi = float(t["rt_target_min"]) + float(t["rt_window_min"])
-            key = (lo, hi)
-            if lo <= float(rt) <= hi:
-                if key in target_by_rt:
-                    raise QuantificationError(
-                        CODE_AMBIGUOUS_PEAK_MATCH,
-                        f"target '{t['compound_label']}' (window [{lo}, {hi}] min) matches MULTIPLE "
-                        f"peaks in peak_table (rows {target_by_rt[key]} and {i}; rts "
-                        f"{rows[target_by_rt[key]].get('rt_min')!r} and {rt!r}) — no nearest-RT rescue",
-                    )
-                target_by_rt[key] = i
-                matched_target = t
+        # identity: the declared target whose window contains this peak —
+        # resolved PER TARGET above (the row's owner under the declared
+        # precedence rule); a row claimed by several targets is quantified
+        # once, by its owner, and the conflict is already declared (log).
+        matched_target = targets[row_owner[i]] if i in row_owner else None
         if matched_target is None:
             n_unassigned += 1
             flags.append(FLAG_UNASSIGNED_PEAK)  # the peak is real; identity is unknown
@@ -762,13 +802,17 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             "flags": flags,
         })
 
-    # a target that matched NOTHING → the row is kept with nulls + the code is
-    # DATA (bait-#7: loudness is data) — the UNASSIGNED count covers peaks;
-    # unmatched targets are named in a warning log (machine-readable).
-    matched_target_labels = {t["compound_label"] for t in targets if any(
-        float(t["rt_target_min"]) - float(t["rt_window_min"]) <= float(r["rt_min"]) <=
-        float(t["rt_target_min"]) + float(t["rt_window_min"]) for r in rows
-    )}
+    # a target that owns NO quantified row under the declared precedence rule
+    # → the row is kept with nulls + the code is DATA (bait-#7: loudness is
+    # data) — the UNASSIGNED count covers peaks; unmatched targets are named
+    # in a warning log (machine-readable). Ownership is computed by the
+    # per-target claim loop above (row_owner): a target is matched when it
+    # OWNS at least one row — either a window that held only its own peaks, or
+    # (under the declared precedence rule) a shared row it won as the
+    # FIRST-named claimant. A target whose window held a peak it LOST to an
+    # earlier-named claimant owns no row → it is unmatched here (the overlap
+    # is already declared as TARGET_WINDOW_OVERLAP above).
+    matched_target_labels = {targets[ti]["compound_label"] for ti in row_owner.values()}
     unmatched_targets = [t["compound_label"] for t in targets if t["compound_label"] not in matched_target_labels]
 
     # ---- 4. Publish (A4.5 + A6) ----
@@ -802,7 +846,7 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             amt_col: f"inverse-predicted amount in the MODEL's declared unit ({amount_unit}) — the units-in-names convention; null + OUT_OF_RANGE / NO_REAL_ROOT when the declared policy says so",
             rep_col: f"the reporting step (A4.4): {amount_semantics} — multiplier/dilution applied EXACTLY ONCE when apply_multipliers; the model's x directly when model_amount_as_reported",
             "fit_detail": "machine-readable inverse detail (quadratic: BOTH roots + the pinned nearest-midpoint selection)",
-            "flags": "reason codes (OUT_OF_RANGE / EXTRAPOLATED / NO_REAL_ROOT / UNASSIGNED_PEAK / inherited GC-7 null reasons)",
+            "flags": "reason codes (OUT_OF_RANGE / EXTRAPOLATED / NO_REAL_ROOT / UNASSIGNED_PEAK / inherited GC-7 null reasons); a row claimed by several targets is quantified ONCE by the first-named target (declared precedence rule) — the conflict is a declared warning log (TARGET_WINDOW_OVERLAP), never a silent overwrite or a self-conflict",
         },
         "note": (
             "analytical quantification (calibration_scope: 'analytical') — cross-run consumer of the "
@@ -851,8 +895,10 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         ctx.metric("quant_tolerance_percent_declared", float(tol), unit="%",
                    label="consumer-side verification tolerance declared by the run — echoed, never applied by the algorithm")
     if unmatched_targets:
-        ctx.log(f"quantification: declared target(s) {unmatched_targets} matched no peak row in peak_table — "
-                f"the unmatched targets are data, not a silent drop", level="warning", code="TARGET_UNMATCHED")
+        ctx.log(f"quantification: declared target(s) {unmatched_targets} own no quantified peak row — "
+                f"either their window held no peak or the shared peak went to an earlier-named target under the "
+                f"declared precedence rule; the unmatched targets are data, not a silent drop",
+                level="warning", code="TARGET_UNMATCHED")
     if n_oor:
         ctx.log(f"quantification: {n_oor} peak(s) outside the model's declared response range — "
                 f"flagged OUT_OF_RANGE (declared policy fail_on_out_of_range={fail_on_oor})",

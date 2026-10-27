@@ -563,6 +563,52 @@ class TestQuantFailureMatrix(unittest.TestCase):
         self.expect_code(self.model, table["rows"], quant_params(),
                          "AMBIGUOUS_PEAK_MATCH", msg_part="MULTIPLE")
 
+    def test_single_target_multiple_peaks_names_both_rows(self):
+        # D5 per-target matching: ONE target matching TWO in-window peaks is
+        # AMBIGUOUS_PEAK_MATCH naming the two row INDICES (0 and 1) — spec
+        # A4.2 (a single row never names itself twice; the two DISTINCT row
+        # indices are the two in-window peaks of the ONE target).
+        # two peaks inside the SAME declared window [1±0.25]:
+        table = peak_table([(3.0, 0.9), (3.5, 1.1)])
+        p = quant_params(targets=[{"compound_label": "TEST-CMPD-A",
+                                   "rt_target_min": 1.0, "rt_window_min": 0.25}])
+        self.expect_code(self.model, table["rows"], p, "AMBIGUOUS_PEAK_MATCH",
+                         msg_part="rows 0 and 1")
+
+    def test_shared_window_single_peak_is_not_ambiguous(self):
+        # D5 (the review's probes E+F): TWO declared targets sharing a window
+        # ([0.75, 1.25] both) and a SINGLE peak in it must NOT raise
+        # AMBIGUOUS_PEAK_MATCH (the original run raised it naming "rows 0 and
+        # 0" — a row never conflicts with itself). The DECLARED precedence
+        # rule resolves the shared row to the FIRST-named target (declared
+        # targets order): the row is quantified ONCE by that target, the other
+        # target is unmatched (TARGET_UNMATCHED), and the conflict is a
+        # DECLARED warning log (TARGET_WINDOW_OVERLAP), never a silent
+        # overwrite.
+        table = peak_table([(3.0, 1.0)])  # one peak, rt 1.0, area 3.0
+        p = quant_params(targets=[
+            {"compound_label": "TEST-CMPD-A", "rt_target_min": 1.0, "rt_window_min": 0.25},
+            {"compound_label": "TEST-CMPD-B", "rt_target_min": 1.25, "rt_window_min": 0.25},
+        ])
+        qctx, out = run_quant(self.model, table["rows"], p, return_ctx=True)
+        rows = out["rows"]
+        self.assertEqual(len(rows), 1)
+        # the first-named target owns the shared row (declared precedence)
+        self.assertEqual(rows[0]["compound_label"], "TEST-CMPD-A")
+        assert_close(self, rows[0][out["amt_col"]], 1.0, "shared-row amount")
+        self.assertEqual(rows[0]["flags"], [])  # quantified cleanly, no self-conflict
+        # the second target claimed the row but lost the precedence rule →
+        # unmatched (loudness is data)
+        self.assertEqual(out["metrics"]["compounds_quantified"], 1)
+        logs = qctx.manifest().logs
+        overlap = [lg for lg in logs if lg.get("code") == "TARGET_WINDOW_OVERLAP"]
+        self.assertEqual(len(overlap), 1)  # the conflict is DECLARED, exactly once
+        self.assertIn("TEST-CMPD-A", overlap[0]["message"])
+        self.assertIn("TEST-CMPD-B", overlap[0]["message"])
+        self.assertIn("row 0", overlap[0]["message"])
+        unmatched = [lg for lg in logs if lg.get("code") == "TARGET_UNMATCHED"]
+        self.assertTrue(any("TEST-CMPD-B" in lg["message"] for lg in unmatched))
+
     def test_istd_peak_not_found(self):
         fixture = fx.C7
         inputs = fx.c7_level_payloads(fixture)
