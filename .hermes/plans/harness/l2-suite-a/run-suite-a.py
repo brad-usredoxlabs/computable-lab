@@ -672,7 +672,15 @@ def check_expectation(idx, exp, state):
             found_vol = found_cyc = False
             for d in det:
                 vol = d.get("volume")
-                vol_ok = (isinstance(vol, dict) and vol.get("value") == 75)
+                # l2t1450 harness fidelity: the product carries a declared
+                # kind:quantity arg VERBATIM from the model payload — mix
+                # volume rides as a raw number (receipts 20261027T191339Z
+                # prompt-7 details.volume == 75), not a {value} wrapper.
+                # Accept the shapes the product actually emits; never widen
+                # to prose strings (a string quantity stays a FAIL — that is
+                # the COMP-1 D4 bar).
+                vol_ok = ((isinstance(vol, (int, float)) and not isinstance(vol, bool) and vol == 75)
+                          or (isinstance(vol, dict) and vol.get("value") == 75))
                 cyc = d.get("cycles")
                 cyc_ok = (cyc == 3)
                 if vol_ok:
