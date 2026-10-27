@@ -90,12 +90,17 @@ def _is_ch_marker(data: bytes) -> bool:
 def _linspace(t0: float, t_end: float, n: int) -> List[float]:
     """Linear axis over n points, decoder A endpoint convention (decD :47):
     ``axis[-1] == t_end`` EXACTLY — computed as t0 + i*dt with dt =
-    (t_end - t0)/(n-1); do NOT switch to a recomputation that leaves the
-    endpoint short (spec bait #6)."""
+    (t_end - t0)/(n-1), then the endpoint PINNED to t_end (the decD
+    ``np.linspace`` convention forces y[-1] = stop; ``t0 + (n-1)*dt`` alone
+    is off by ~1 ulp for ~1.5% of header tick pairs — the adversarial review
+    l1t0320 defect 2 pinned this). Do NOT switch to a recomputation that
+    leaves the endpoint short (spec bait #6)."""
     if n == 1:
         return [t0]
     dt = (t_end - t0) / (n - 1)
-    return [t0 + i * dt for i in range(n)]
+    axis = [t0 + i * dt for i in range(n)]
+    axis[-1] = t_end  # endpoint pinning (np.linspace): exact, not t0+(n-1)*dt
+    return axis
 
 
 def read_ch_bytes(data: bytes, *, source: Optional[str] = None) -> Dict[str, Any]:
@@ -118,11 +123,16 @@ def read_ch_bytes(data: bytes, *, source: Optional[str] = None) -> Dict[str, Any
         )
     page = struct.unpack_from(">I", data, _PAGE_OFFSET)[0]
     offset = (page - 1) * 512
-    if offset > len(data):
+    # X1 — page must host a body: page >= 1 (hence offset >= 0) AND the body
+    # must fit in the file. A page of 0 yields a NEGATIVE offset that a raw
+    # struct.unpack_from would surface as struct.error — a named failure, not
+    # a library error (adversarial review l1t0320 defect 3).
+    if offset < 0 or offset > len(data):
         raise ReaderError(
             CH_TRUNCATED,
             f"{src}: header page={page} places the body at byte offset {offset} "
-            f"but the file is only {len(data)} bytes",
+            f"but the file is only {len(data)} bytes"
+            + (" (page must be >= 1 — a page of 0 cannot host a body)" if offset < 0 else ""),
         )
     # (offset == len(data) is a legal EMPTY body — it surfaces as CH_NO_POINTS
     # after the loop, per the X5 row of the failure table.)
@@ -149,7 +159,18 @@ def read_ch_bytes(data: bytes, *, source: Optional[str] = None) -> Dict[str, Any
         )
 
     # Body: BIG-endian signed int16 slots (">h").
-    n_slots = (len(data) - offset) // 2
+    body_len = len(data) - offset
+    # X3 — an ODD body length means a dangling trailing byte: the spec lists
+    # it as CH_TRUNCATED, and silently dropping the byte (or a whole slot)
+    # would mis-decode the tail (adversarial review l1t0320 defect 4).
+    if body_len % 2:
+        raise ReaderError(
+            CH_TRUNCATED,
+            f"{src}: body has odd length {body_len} bytes — dangling byte at "
+            f"offset {offset + body_len - 1} (slots are 2 bytes each; a "
+            f"truncated trailing slot is corruption, not data)",
+        )
+    n_slots = body_len // 2
     slots = struct.unpack_from(f">{n_slots}h", data, offset)
 
     # THE canonical decD loop (gc1-decD.py:30-46) — unbounded Python ints,
