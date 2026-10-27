@@ -1,0 +1,12 @@
+{
+  "prompt": 5,
+  "prompt_text": "Add 1uL 1mM clofibrate in DMSO to wells A2:H2 with an 8-channel pipette",
+  "expectation_source": "spec per-prompt criteria P5: wells EXACTLY A2:H2 (eight wells — the compiler's own expansion A2,B2,...,H2 via wellRange.ts, where the LETTER is the row and the NUMBER the column, so A2:H2 = rows A..H at column 2; the `wells` array above is that compiler expansion, never a re-derived axis mapping) AND the 8-channel constraint honored (B8): the constraint is only meaningful as an 8-channel operation — ONE material-bearing event over exactly this 8-well set (honest channel count, if the event carries one, must agree with 8); a 96-well single-channel interpretation or a spread of smaller ops (no single op over the full 8-well set) FAILS. channel_semantics encodes that shape; the driver asserts it structurally over the `wells` set (advc cycle-1 D1).",
+  "verdict_in": ["events-bound", "cards"],
+  "wells": ["A2", "B2", "C2", "D2", "E2", "F2", "G2", "H2"],
+  "channel_semantics": "8-channel",
+  "badge": {
+    "never": ["Ontology"]
+  },
+  "deterministic": false
+}
