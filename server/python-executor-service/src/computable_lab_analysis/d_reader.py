@@ -387,6 +387,59 @@ def _handle_bytes(handle, source: str):
     return role, data, None
 
 
+def _leading_text_is_metadata_shaped(data: bytes, err: UnicodeError) -> bool:
+    """Decide raise-vs-opaque for a BOM-prefixed input whose STRICT UTF-16
+    decode failed (cycle-2 adversarial-review defect 1 — the cycle-1 arm
+    keyed on the BOM alone, so a genuinely BINARY asset that merely begins
+    with FF FE — the spec's SINGLE.B-shaped opaque member — aborted the run
+    instead of the X10 opaque skip).
+
+    "Metadata-shaped" means the leading content is 7-bit-ASCII metadata
+    TEXT (the corpus shapes: BOM + ``<?xml``… / ``<Sample>`` / ASCII RUN.LOG
+    lines — spec D3.3: only BOM+xml is sample_metadata, BOM-decodable text
+    is run_log; everything else is opaque / X10). Two content-based checks,
+    either one suffices — decided from BYTES, never the input name, and
+    never via a lossy decode mode (bait #3: this prefix analysis only ever
+    CLASSIFIES raise-vs-opaque; the artifact-producing decode downstream is
+    still the full strict ``decode_sample_xml``/``decode_run_log``):
+
+    (a) the strict UTF-16LE prefix up to the decode failure decodes and its
+        first character is 7-bit ASCII — the UTF-16-encoded metadata head
+        (e.g. a torn ``FF FE 3C 00 3F 00`` ``<?xml`` file);
+    (b) the raw leading bytes (after the BOM, up to the failure) are all
+        7-bit ASCII — the torn RAW-ASCII metadata head (e.g. the
+        adversarial probe D1a shape ``FF FE`` + 7 ASCII bytes: odd length,
+        strict UTF-16 decode fails on truncated data, but the head is
+        unambiguously ASCII text, not binary).
+
+    On any prefix decode error the answer is NO (opaque) — a file whose
+    first content bytes are not cleanly decodable (lone surrogate at the
+    head, raw high bytes, …) is opaque content, never a failure. A prefix
+    decode of a slice of the same stream cannot succeed where the full
+    strict decode proves the file corrupt: the bytes ARE corrupt metadata —
+    the named X6 failure — or the input is opaque.
+    """
+    start = getattr(err, "start", None)
+    if not isinstance(start, int) or start <= 2:
+        # No content position (or no position at all — a non-decode
+        # UnicodeError): nothing after the BOM to be metadata-shaped.
+        return False
+    content = data[2:]
+    fail = start - 2
+    if fail % 2:
+        fail -= 1  # the prefix must be an even number of UTF-16 bytes
+    pre = content[:fail]
+    if not pre:
+        return False
+    try:
+        text = pre.decode("utf-16-le")
+    except UnicodeError:
+        text = ""
+    if text and ord(text[0]) < 0x80:
+        return True
+    return all(b < 0x80 for b in pre)
+
+
 def _classify(data: bytes, source: str) -> str:
     """Classify one input's BYTES by content (D3.3 fallback — pure sniff,
     never requires meta): v181 CH marker → signal_channel; BOM+xml →
@@ -394,13 +447,17 @@ def _classify(data: bytes, source: str) -> str:
     else opaque. The role strings are the GC-4 acquisition-package vocabulary
     (referenced by name, not redefined — bait #11).
 
-    A BOM-prefixed input whose bytes are NOT valid strict UTF-16 (truncated /
-    odd length, lone surrogate) is CORRUPT METADATA, not opaque content:
+    A BOM-prefixed input whose bytes are NOT valid strict UTF-16 is CORRUPT
+    METADATA only when it is metadata-shaped — its leading content is
+    7-bit-ASCII metadata text (``_leading_text_is_metadata_shaped``):
     ``decode_sample_xml`` / ``decode_run_log`` would raise
-    METADATA_DECODE_FAILED (spec X6) — the SAME strict decode is run here so
-    the named code surfaces through attach() instead of the run "succeeding"
-    with an opaque-skip log and no metadata (adversarial review l1t0320
-    defect 1, MAJOR). ``opaque`` is reserved for genuinely non-text content.
+    METADATA_DECODE_FAILED (spec X6) — the SAME strict decode is re-run here
+    so the named code surfaces through attach() instead of the run
+    "succeeding" with an opaque-skip log and no metadata (adversarial review
+    l1t0320 defect 1, MAJOR). A BOM-prefixed input whose leading bytes are
+    NOT metadata text (genuine binary that happens to start with
+    FF FE — the spec's ``SINGLE.B`` opaque member) is OPAQUE, never a
+    failure (cycle-2 review defect 1 — the BOM arm must not over-broaden).
     """
     if _is_ch_marker(data):
         return "signal_channel"
@@ -408,15 +465,19 @@ def _classify(data: bytes, source: str) -> str:
         try:
             text = data.decode("utf-16")
         except (UnicodeDecodeError, UnicodeError) as e:
-            # Metadata-shaped (BOM prefix) but not valid strict UTF-16:
-            # truncated/corrupt metadata — a NAMED failure, never opaque.
-            # The message names the input (spec X6).
-            raise ReaderError(
-                METADATA_DECODE_FAILED,
-                f"{source}: strict UTF-16 decode failed — {e} "
-                f"(BOM-prefixed input with invalid UTF-16 bytes: "
-                f"truncated or corrupt metadata)",
-            ) from e
+            # Strict UTF-16 decode of the WHOLE file failed. Only
+            # metadata-shaped bytes (7-bit-ASCII metadata head) are corrupt
+            # metadata — a NAMED failure, never opaque; anything else is an
+            # unknown BOM-prefixed binary → opaque (X10).
+            if _leading_text_is_metadata_shaped(data, e):
+                # The message names the input (spec X6).
+                raise ReaderError(
+                    METADATA_DECODE_FAILED,
+                    f"{source}: strict UTF-16 decode failed — {e} "
+                    f"(metadata-shaped BOM-prefixed input with invalid "
+                    f"UTF-16 bytes: truncated or corrupt metadata)",
+                ) from e
+            return "opaque"
         stripped = text.lstrip("\ufeff").lstrip()
         if stripped.startswith("<?xml") or stripped.startswith("<"):
             # XML-shaped: distinguish sample metadata from any other XML by
