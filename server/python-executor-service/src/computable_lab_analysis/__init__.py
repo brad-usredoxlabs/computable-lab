@@ -18,7 +18,8 @@ Python functions in the entry script.
 """
 from __future__ import annotations
 
-__version__ = "0.2.0"  # GC-6 (OQ4): ships the .D reader (d_reader) — 0.1.0 had none
+__version__ = "0.3.0"  # GC-7 (OQ5 fold, orch-confirmed): ships peak_integration (declared-settings peak
+                      # integration) — 0.2.0 shipped the .D reader (d_reader)
 __all__ = [
     "run",
     "Context",
@@ -28,8 +29,12 @@ __all__ = [
     "attach_package_inputs",
     "READER_NAME",
     "READER_VERSION",
+    "integrate_peaks",
 ]
 
 # GC-6: the .D reader (lazily re-exported so plain-SDK runs pay no import cost;
 # d_reader itself is stdlib-only, so the re-export is safe either way).
 from .d_reader import READER_NAME, READER_VERSION, attach as attach_package_inputs  # noqa: E402
+
+# GC-7: the declared-settings peak-integration module (stdlib-only core).
+from .peak_integration import integrate_peaks  # noqa: E402
