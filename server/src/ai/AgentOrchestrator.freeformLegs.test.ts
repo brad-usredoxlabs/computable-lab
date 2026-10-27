@@ -158,6 +158,79 @@ describe('L2-FREEFORM-1 acceptance #2 — assertHonestOutcome trichotomy hook', 
   it('classifyHonestOutcome returns null (not throws) on the silent shape — the probe classifier arm', () => {
     expect(classifyHonestOutcome({ success: true, events: [] })).toBeNull();
   });
+
+  // (f) THE D-1 RECEIPT SHAPE (L2-FREEFORM-1F): P1 prompt-1's done,
+  // receipts/L2-SUITE-A/20261027T045347Z/prompt-1.json :6-12, field-for-field
+  // — the deckLayout action channel the server stamps when the model's
+  // deck_layout intent resolves ({success:true, deckLayout:{platformId,
+  // variantId}}). PRE-arm (captured RED, freeform1f-RED-l2t0155.txt) the
+  // helper read only the 4 channels and threw the silent shape here — defect
+  // D-1 verbatim. POST-arm the action-delivered arm admits the delivery ->
+  // 'action-delivered'.
+  it('(f) a delivered deckLayout action (P1 receipt: manual/manual_freeform) classifies "action-delivered"', () => {
+    const receipt = {
+      success: true,
+      deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+    };
+    const verdict = assertHonestOutcome(receipt);
+    expect(verdict).toBe('action-delivered');
+    expect(classifyHonestOutcome(receipt)).toBe('action-delivered');
+  });
+
+  // (g) THE ANTI-GHOST SET (L2-FREEFORM-1F): an empty-but-present deckLayout
+  // never earns the arm — pre- AND post-arm it stays the silent shape and
+  // THROWS (pre-arm behavior proven in the same captured RED file,
+  // freeform1f-RED-l2t0155.txt, entries (g1)/(g2)).
+  it('(g) deckLayout:{} (empty-but-present) THROWS (the anti-ghost pin)', () => {
+    expect(() => assertHonestOutcome({ success: true, deckLayout: {} })).toThrow(
+      /NOT an honest outcome/,
+    );
+  });
+
+  it('(g) deckLayout with empty ids {platformId:"", variantId:""} THROWS (the anti-ghost pin)', () => {
+    expect(() =>
+      assertHonestOutcome({ success: true, deckLayout: { platformId: '', variantId: '' } }),
+    ).toThrow(/NOT an honest outcome/);
+  });
+
+  // (h) (L2-FREEFORM-1F, the D-1 ruling's RED-SHAPE): a well-formed platformId
+  // with variantId ABSENT never earns the arm — both ids are required.
+  it('(h) deckLayout with variantId absent {platformId:"manual"} THROWS (the arm requires BOTH ids)', () => {
+    expect(() => assertHonestOutcome({ success: true, deckLayout: { platformId: 'manual' } })).toThrow(
+      /NOT an honest outcome/,
+    );
+  });
+
+  // (j) THE THIRD ANTI-GHOST SHAPE (fix run 1, advc D5): the D-1 decision
+  // names `deckLayout: null` among the shapes that "must remain the silent
+  // shape and throw" — an explicit null is rejected identically by the arm's
+  // `deckLayout !== null` guard and stays the silent shape (THROWS).
+  it('(j) deckLayout:null (explicit null) THROWS (the third anti-ghost shape, advc D5)', () => {
+    expect(() => assertHonestOutcome({ success: true, deckLayout: null })).toThrow(
+      /NOT an honest outcome/,
+    );
+  });
+
+  // (i) (L2-FREEFORM-1F, the D-1 ruling's RED-SHAPE): the DEFENSIVE ORDER pin —
+  // H4: error outranks the action arm. A failed turn with a well-formed
+  // deckLayout alongside is the honest failure, never action-delivered (the
+  // server's emit site makes the two mutually exclusive; the order is
+  // defensive, and this pins it).
+  it('(i) error + delivered deckLayout classifies "honest-failure" (H4: error outranks the action arm)', () => {
+    const verdict = assertHonestOutcome({
+      success: false,
+      error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+      deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+    });
+    expect(verdict).toBe('honest-failure');
+    expect(
+      classifyHonestOutcome({
+        success: false,
+        error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+        deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+      }),
+    ).toBe('honest-failure');
+  });
 });
 
 // ---------------------------------------------------------------------------
