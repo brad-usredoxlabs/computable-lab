@@ -25,10 +25,15 @@ VERDICTS = ("proposal", "cards", "honest-failure")
 
 # The error-text tokens that NAME a capability gap (BYTE-MIRROR of
 # sequence-leg.ts CAPABILITY_CLASS_TOKENS): the sequence runtime's own
-# error family (SequenceService.ts:141 + sequenceRuntime.ts inspectEndpoint)
-# and the orchestrator's sequence-channel walls. The engine ids are ADDED
-# from the probe's own request context (the contract menu) — never a
-# hardcoded engine list.
+# error family (SequenceService.ts:141 + sequenceRuntime.ts inspectEndpoint),
+# the orchestrator's sequence-channel walls, and the workspace_action
+# COMPILE-REJECTION family (AgentOrchestrator.ts:3178-3182: success:true +
+# the named refusal in notes — "success:false would ride the existing error
+# surface and read as an endpoint failure. The corrective text rides the
+# notes channel" — compileWorkspaceAction.ts:408's own text "did not resolve
+# to any local term or workspace record"). The engine ids are ADDED from the
+# probe's own request context (the contract menu) — never a hardcoded engine
+# list.
 CAPABILITY_CLASS_TOKENS = [
     "endpoint",
     "engine",
@@ -37,6 +42,10 @@ CAPABILITY_CLASS_TOKENS = [
     "version",
     "sequence proposal",
     "sequence action",
+    "did not resolve",
+    "nothing was focused",
+    "nothing was retrieved",
+    "nothing was projected",
 ]
 
 
@@ -93,6 +102,34 @@ def _has_nav_frame(frames):
     return False
 
 
+def _named_wall_texts(result, frames):
+    """The turn's OWN named-wall text on channels OTHER than 'error': the
+    done result's 'notes' (the workspace_action compile-rejection arm rides
+    its corrective text there with success:true —
+    AgentOrchestrator.ts:3178-3182) and the 'pipeline_diagnostics' frames'
+    diagnostic messages (outcome 'gap', pass_id
+    'workspace-action-compile'). Read as strings; no parsing of any prose
+    meaning. (BYTE-MIRROR of sequence-leg.ts namedWallTexts.)"""
+    texts = []
+    notes = result.get("notes") if isinstance(result, dict) else None
+    if isinstance(notes, list):
+        for n in notes:
+            if isinstance(n, str):
+                texts.append(n)
+    if isinstance(frames, list):
+        for f in frames:
+            if not isinstance(f, dict):
+                continue
+            if f.get("type") != "pipeline_diagnostics":
+                continue
+            diags = f.get("diagnostics")
+            if isinstance(diags, list):
+                for d in diags:
+                    if isinstance(d, dict) and isinstance(d.get("message"), str):
+                        texts.append(d["message"])
+    return texts
+
+
 def classify(result, frames=None, context=None):
     """Classify a delivered sequences-surface turn against the sequence
     trichotomy. Returns one of 'proposal' | 'cards' | 'honest-failure', or
@@ -139,6 +176,15 @@ def classify(result, frames=None, context=None):
 
     if cards > 0:
         return "cards"
+
+    # The workspace_action compile-rejection arm: success:true with NO
+    # agent_action frame and the NAMED refusal riding the notes channel (or
+    # the pipeline_diagnostics messages) — AgentOrchestrator.ts:3178-3182.
+    # A NAMED wall here is an honest-failure; only a notes/diagnostics text
+    # that NAMES the gap qualifies (a generic line does not — B6).
+    for text in _named_wall_texts(res, frames):
+        if _is_named_wall(text, context):
+            return "honest-failure"
 
     raise SequenceLegOutcomeError(
         "NOT an honest outcome — success with no sequence proposal, no "

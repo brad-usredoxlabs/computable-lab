@@ -63,9 +63,15 @@ export interface SequenceLegContext {
  *  from the turn's OWN request context (the contract menu the page sent) —
  *  never a hardcoded engine list; the class tokens are the sequence
  *  runtime's own error family (endpoint/engine/executable/version —
- *  SequenceService.ts:141 + sequenceRuntime.ts inspectEndpoint) and the
+ *  SequenceService.ts:141 + sequenceRuntime.ts inspectEndpoint), the
  *  orchestrator's sequence-channel walls ("sequence proposal" / "sequence
- *  action"). */
+ *  action"), and the workspace_action COMPILE-REJECTION family
+ *  (AgentOrchestrator.ts:3178-3182: success:true + the named refusal text
+ *  in notes — "success:false would ride the existing error surface and read
+ *  as an endpoint failure. The corrective text rides the notes channel" —
+ *  compileWorkspaceAction.ts:408's own text "did not resolve to any local
+ *  term or workspace record"; spec §3: "the focus-guard's named refusal" is
+ *  an honest-failure). */
 const CAPABILITY_CLASS_TOKENS = [
   'endpoint',
   'engine',
@@ -74,6 +80,10 @@ const CAPABILITY_CLASS_TOKENS = [
   'version',
   'sequence proposal',
   'sequence action',
+  'did not resolve',
+  'nothing was focused',
+  'nothing was retrieved',
+  'nothing was projected',
 ];
 
 function channelDump(result: Record<string, unknown>): string {
@@ -129,6 +139,40 @@ function hasNavFrame(frames?: readonly unknown[]): boolean {
     const action = frame['action'];
     return !!action && typeof action === 'object';
   });
+}
+
+/** The turn's OWN named-wall text on channels OTHER than `error`: the
+ *  done result's `notes` (the workspace_action compile-rejection arm rides
+ *  its corrective text there with success:true — AgentOrchestrator.ts:
+ *  3178-3182) and the `pipeline_diagnostics` frames' diagnostic messages
+ *  (outcome 'gap', pass_id 'workspace-action-compile'). Read as strings;
+ *  no parsing of any prose meaning. */
+function namedWallTexts(
+  result: Record<string, unknown>,
+  frames?: readonly unknown[],
+): string[] {
+  const texts: string[] = [];
+  const notes = result['notes'];
+  if (Array.isArray(notes)) {
+    for (const n of notes) if (typeof n === 'string') texts.push(n);
+  }
+  if (Array.isArray(frames)) {
+    for (const f of frames) {
+      if (!f || typeof f !== 'object') continue;
+      const frame = f as Record<string, unknown>;
+      if (frame['type'] !== 'pipeline_diagnostics') continue;
+      const diags = frame['diagnostics'];
+      if (Array.isArray(diags)) {
+        for (const d of diags) {
+          if (d && typeof d === 'object') {
+            const msg = (d as Record<string, unknown>)['message'];
+            if (typeof msg === 'string') texts.push(msg);
+          }
+        }
+      }
+    }
+  }
+  return texts;
 }
 
 /** Classify a delivered sequences-surface turn against the sequence
@@ -188,6 +232,17 @@ export function classifySequenceLegOutcome(
   if (hasNavFrame(frames)) return 'proposal';
 
   if (cards > 0) return 'cards';
+
+  // The workspace_action compile-rejection arm: success:true with NO
+  // agent_action frame and the NAMED refusal riding the notes channel (or
+  // the pipeline_diagnostics messages) — AgentOrchestrator.ts:3178-3182
+  // ("success:false would ride the existing error surface and read as an
+  // endpoint failure. The corrective text rides the notes channel"). A
+  // NAMED wall here is an honest-failure; only a notes/diagnostics text
+  // that NAMES the gap qualifies (a generic line does not — B6).
+  for (const text of namedWallTexts(res, frames)) {
+    if (isNamedWall(text, context)) return 'honest-failure';
+  }
 
   throw new SequenceLegOutcomeError(
     'classifySequenceLegOutcome: NOT an honest outcome — success with no sequence ' +

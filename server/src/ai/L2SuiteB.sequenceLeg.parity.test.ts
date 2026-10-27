@@ -4,7 +4,8 @@
  * fixtures: grounded proposal, ungrounded-ref proposal -> forbidden, cards,
  * named wall, generic-failure -> forbidden)").
  *
- * The three encodings fed the SAME five fixtures:
+ * The three encodings fed the SAME seven fixtures (the five spec §3
+ * fixtures + the two resume-run notes-channel fixtures):
  *   1. THE TS CLASSIFIER — .hermes/plans/harness/l2-suite-a/lib/
  *      sequence-leg.ts (classifySequenceLegOutcome — the ONE TS
  *      implementation home for the sequence trichotomy; additive, never
@@ -16,9 +17,13 @@
  *      lib/sequence_verdict_cli.py (lib/sequence_verdict.py), the driver's
  *      in-line classifier.
  *
- * The five fixtures (spec §3, verbatim shapes):
+ * The five fixtures (spec §3, verbatim shapes) PLUS one resume-run
+ * fixture (f) that locks the classifier fix the live drive exposed:
  *   (a) grounded proposal — a sequenceProposal whose record refs all
  *       resolve in the request's context.records → "proposal";
+ *       (its notes are the server's own proposal-turn text, no capability
+ *       token — the classifier's nav/proposal arms outrank the notes
+ *       scan, so a generic note on a successful turn can never launder);
  *   (b) ungrounded-ref proposal — a record ref NOT in context.records →
  *       FORBIDDEN (B2: the classifier THROWS; a harness that counts any
  *       sequenceProposal-shaped frame as `proposal` without ref-membership
@@ -29,7 +34,20 @@
  *       text class) → "honest-failure";
  *   (e) generic-failure — a generic model-failure line (no capability
  *       naming) → FORBIDDEN (B6: never launder a generic failure into an
- *       honest wall).
+ *       honest wall);
+ *   (f) NAMED REFUSAL ON THE NOTES CHANNEL (resume-run fix, not spec §3):
+ *       the workspace_action compile-rejection arm returns success:true
+ *       with NO agent_action frame, NO cards, and the named refusal text
+ *       ("Term ... did not resolve to any local term or workspace record.
+ *       Nothing was focused..." — compileWorkspaceAction.ts:408) in
+ *       notes (AgentOrchestrator.ts:3178-3182: "success:false would ride
+ *       the existing error surface and read as an endpoint failure. The
+ *       corrective text rides the notes channel"). Spec §3 names "the
+ *       focus-guard's named refusal" an honest-failure → "honest-failure".
+ *       A GENERIC notes line ("Done." / "Alignment complete.") must
+ *       STILL be the forbidden silent shape (B6 stands on the notes
+ *       channel too) — the live P9 drive's silent-shape FAIL is what
+ *       motivated this fixture.
  *
  * The forbidden shapes carry expected='THROW': the classifier's throw
  * contract (nonzero exit on the CLIs, SequenceLegOutcomeError on the TS
@@ -144,6 +162,26 @@ const FIXTURES: Array<{
     context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
     expected: 'THROW',
   },
+  {
+    name: '(f) named refusal on the notes channel (compile-rejection arm, success:true → honest-failure)',
+    result: {
+      success: true,
+      notes: [
+        'Term "multiple sequence alignment tool" did not resolve to any local term or workspace record. Nothing was focused; name a term the lab already has, or author it as a local term first.',
+      ],
+    },
+    context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
+    expected: 'honest-failure',
+  },
+  {
+    name: '(g) generic notes line, no capability naming (success + no deliverable → forbidden)',
+    result: {
+      success: true,
+      notes: ['Done. The alignment was requested.'],
+    },
+    context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
+    expected: 'THROW',
+  },
 ];
 
 /** The stdin/stdout CLI contract (both CLIs): the fixture's JSON document on
@@ -240,7 +278,16 @@ describe('L2-SUITE-B sequence-leg parity pin (spec §3: ONE trichotomy, three fe
         row[0],
       ]);
     }
-    // the expected column is spec §3's own verdicts, verbatim
-    expect(verdicts.map((r) => r[0])).toEqual(['proposal', 'THROW', 'cards', 'honest-failure', 'THROW']);
+    // the expected column is spec §3's own verdicts, verbatim (plus the
+    // two resume-run fixtures (f)/(g) that lock the notes-channel fix)
+    expect(verdicts.map((r) => r[0])).toEqual([
+      'proposal',
+      'THROW',
+      'cards',
+      'honest-failure',
+      'THROW',
+      'honest-failure',
+      'THROW',
+    ]);
   });
 });

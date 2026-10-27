@@ -1334,41 +1334,72 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
 
         state = drive_turn(idx, prompt, "turn")
         # OQ3 (c): P10 needs the TWO directional run_blastn variants + the
-        # save_sequence. If P10's first turn did not deliver the full shape,
-        # the model's one-proposal-per-turn arm means the remaining variant is
-        # authored as the NEXT proposal — drive ONE held follow-up that asks
-        # for the remaining directional variant (still the same held session,
-        # still the captured shape, still write-free). The follow-up is
-        # disclosed in the receipt; it is never a re-type of the corpus.
+        # save_sequence. The model's one-proposal-per-turn arm delivers each
+        # proposal on its OWN turn, so drive a BOUNDED set of held follow-up
+        # turns (up to 3 P10 turns total) asking for whichever variant is
+        # still missing (still the same held session, still the captured
+        # shape, still write-free). Every P10 turn is disclosed in the
+        # receipt (turn / turn2-folup / turn3-folup); the follow-ups are
+        # never a re-type of the corpus. The structural verdict is judged
+        # over the COMPLETE proposal set (P9's + every P10 turn) AFTER the
+        # last P10 turn lands (spec §4 P10 operationalized).
         if idx == 10 and state.get("verdict") is not None:
-            collected = collect_proposals(results)
-            if seq_structural_p10(collected) is not None:
-                nudge = ("The reverse-complement directional variant has not been "
-                         "proposed yet. Author it now as the next proposal: compute "
-                         "the reverse-complement residues and propose the remaining "
-                         "run_blastn so both the 5'->3' and the reverse-complement "
-                         "variants are reviewable.")
-                follow = drive_turn(10, nudge, "turn2-folup")
-                results.setdefault("10-follow", follow)
-                # The OQ3 (c) structural expression is judged over the
-                # COMPLETE proposal set (P9's + every P10 turn, follow-up
-                # included) AFTER the last P10 turn lands (spec §4 P10
-                # operationalized). Re-evaluate here and clear the P10
-                # structural violation if the full set now holds; a
-                # transport/verdict failure of the follow-up still stands.
-                collected = collect_proposals(results)
-                if seq_structural_p10(collected) is None:
-                    state["expectation_violations"] = [
-                        x for x in state["expectation_violations"]
+            exp10 = load_seq_expectation(10) if expect_dir else {}
+            if exp10.get("require_two_directional_variants"):
+                primary = state  # the P10 primary turn (results[10])
+                turns_left = 2  # bounded: at most 2 follow-up P10 turns
+                while (turns_left > 0
+                       and seq_structural_p10(collect_proposals(results))
+                       is not None):
+                    props = [p for p in collect_proposals(results)
+                             if isinstance(p, dict)]
+                    ops = [p.get("operation") for p in props]
+                    blastn_count = sum(1 for o in ops if o == "run_blastn")
+                    if "save_sequence" not in ops:
+                        nudge = ("Author the reverse-complement variant: "
+                                 "compute the reverse-complement residues and "
+                                 "propose them (operation save_sequence), so the "
+                                 "directional variants can be compared.")
+                    elif blastn_count == 0:
+                        nudge = ("Now run the comparison. Propose a run_blastn "
+                                 "(operation run_blastn) for the 5'->3' variant "
+                                 "so the alignment can be evaluated.")
+                    else:
+                        nudge = ("Propose the remaining directional variant: "
+                                 "emit the second run_blastn (operation "
+                                 "run_blastn) over the reverse-complement query "
+                                 "so BOTH the 5'->3' and the reverse-complement "
+                                 "variants are reviewable and comparable.")
+                    follow = drive_turn(10, nudge,
+                                        "turn%d-folup" % (turns_left + 1))
+                    # drive_turn wrote results[10] = follow; RESTORE the
+                    # primary so prompt-10.json stays the primary P10
+                    # receipt and the follow-up turn(s) ride the separate
+                    # "10-follow" list receipts.
+                    results[10] = primary
+                    results.setdefault("10-follow", []).append(follow)
+                    turns_left -= 1
+                # Judge over the COMPLETE proposal set (P9 + every P10
+                # turn) now that all P10 turns have landed.
+                if seq_structural_p10(collect_proposals(results)) is None:
+                    primary["expectation_violations"] = [
+                        x for x in primary["expectation_violations"]
                         if "OQ3 (c)" not in x]
-                    follow_viol = follow.get("expectation_violations") or []
-                    follow["expectation_violations"] = [
-                        x for x in follow_viol if "OQ3 (c)" not in x]
-                    if (not follow["expectation_violations"]
-                            and follow.get("verdict") is not None):
-                        follow["status"] = "ok"
-                        state["status"] = "ok"
-                        failed = None
+                    for f in results.get("10-follow") or []:
+                        f["expectation_violations"] = [
+                            x for x in (f.get("expectation_violations") or [])
+                            if "OQ3 (c)" not in x]
+                        if (not f["expectation_violations"]
+                                and f.get("verdict") is not None):
+                            f["status"] = "ok"
+                    primary["status"] = "ok" if (
+                        primary.get("verdict") is not None
+                        and not primary["expectation_violations"]) else "FAIL"
+                    if primary["status"] == "ok":
+                        failed = None  # P10 structural gap now satisfied
+                    print("P10 structural re-check (full proposal set): %s"
+                          % ("MET — cleared"
+                             if primary["status"] == "ok" else "still not met"))
 
     digest_after = data_repo_digest(SEQ_DATA_REPO)
     write_free = digest_before == digest_after
@@ -1381,10 +1412,11 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
         if st:
             with open(os.path.join(out_dir, "prompt-%d.json" % idx), "w") as f:
                 json.dump(st, f, indent=2, sort_keys=True)
-    follow = results.get("10-follow")
-    if follow:
-        with open(os.path.join(out_dir, "prompt-10-followup.json"), "w") as f:
-            json.dump(follow, f, indent=2, sort_keys=True)
+    follows = results.get("10-follow") or []
+    for n, fstate in enumerate(follows, start=2):
+        with open(os.path.join(out_dir,
+                               "prompt-10-followup-%d.json" % n), "w") as f:
+            json.dump(fstate, f, indent=2, sort_keys=True)
 
     meta = {
         "suite": "L2-SUITE-B sequence leg",
@@ -1403,8 +1435,11 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
         "data_repo_digest_after": digest_after,
         "write_free": write_free,
         "blocked_by": {str(k): v for k, v in blocked_by.items()},
-        "verdicts": {str(k): (v.get("verdict") if isinstance(v, dict) else v.get("status"))
-                     for k, v in results.items()},
+        "verdicts": {
+            str(k): (
+                [x.get("verdict") for x in v] if isinstance(v, list)
+                else (v.get("verdict") if isinstance(v, dict) else v.get("status")))
+            for k, v in results.items()},
         "key_evidence": key_shas,
         "hold_ids": sorted(hold_ids),
     }
@@ -1440,9 +1475,10 @@ def collect_proposals(results):
         st = results.get(idx)
         if isinstance(st, dict) and isinstance(st.get("proposals"), list):
             out.extend(st["proposals"])
-    follow = results.get("10-follow")
-    if isinstance(follow, dict) and isinstance(follow.get("proposals"), list):
-        out.extend(follow["proposals"])
+    follows = results.get("10-follow") or []
+    for f in follows:
+        if isinstance(f, dict) and isinstance(f.get("proposals"), list):
+            out.extend(f["proposals"])
     return out
 
 
