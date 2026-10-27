@@ -1,0 +1,5 @@
+9.  Go to the multiple sequence alignment tool and align all 16S sequences in this project.
+
+10.  Holding the multiple sequence alignment in place, align our primary and probe sequences 
+against it.  Try both a 5'->3' alignment and a reverse complement alignment to see which one 
+is the better sequence alignment
