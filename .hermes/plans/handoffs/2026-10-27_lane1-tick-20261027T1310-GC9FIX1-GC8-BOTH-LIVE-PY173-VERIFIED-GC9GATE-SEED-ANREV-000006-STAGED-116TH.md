@@ -106,3 +106,11 @@ No merges this tick (none possible — both gates open).
 - Lane stack :3092/:5192 up (200). Docs tip ec2d7c8d, code tip 2598e451. No YAML merged —
   no restart owed. gc-fid-nas configured. Lane seed ANREV-000006 present (browser-gate
   fixture for GC-9).
+
+## Post-checkpoint motion (13:20 re-poll, same tick)
+
+- GC-9 FIX RUN 1: RED leg COMMITTED — 8f5e08d4 `[GC-9][fix1-red] adversarial-review probes
+  D1-D9 (P1-P6 schemas): RED` on top of a41ffe3f. GREEN leg next per its work plan. Alive
+  30 min at 13:20.
+- GC-8: leg-4 artifacts still moving — analysisGcChaining test mtime 13:17:41, calibration
+  entry-reference fixtures 12:54. Alive 1h24m, within due window (~13:45).
