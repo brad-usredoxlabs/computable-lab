@@ -14,6 +14,10 @@
  * the Python-spawn suites must run SERIALIZED, never in one parallel vitest
  * invocation (dispatch ruling; NFS flake). Run each suite in its own
  * `npx vitest run <file>` process.
+ *
+ * NOTE (ADV-1 defect 7): the mount/workspace dirs are UNIQUE mkdtemp dirs
+ * per suite run — the previous fixed shared paths let two vitest processes
+ * (an orch gate and a lane run) share, and `rm -rf`, each other's workspace.
  */
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { execFile } from 'node:child_process';
@@ -171,16 +175,18 @@ const INLINE_SIGNAL_ENTRY = [
 ].join('\n');
 
 describe('AnalysisRunner + d_reader (GC-6 integration)', () => {
-  const mountDir = join(tmpdir(), 'cl-dreader-mount');
-  const wsDir = resolve(tmpdir(), 'cl-dreader-ws');
+  // ADV-1 defect 7 — unique mkdtemp dirs per suite run (the previous fixed
+  // shared paths let two vitest processes share and rm -rf each other).
+  let mountDir = '';
+  let wsDir = '';
 
   let ctx: Awaited<ReturnType<typeof initializeApp>>;
   let runner: AnalysisRunner;
   let service: AnalysisService;
 
   beforeAll(async () => {
-    await rm(mountDir, { recursive: true, force: true });
-    await rm(wsDir, { recursive: true, force: true });
+    mountDir = await mkdtemp(join(tmpdir(), 'cl-dreader-mount-'));
+    wsDir = await mkdtemp(join(tmpdir(), 'cl-dreader-ws-'));
     await mkdir(mountDir, { recursive: true });
     await mkdir(join(mountDir, SYNTH_DIR), { recursive: true });
     const { bytes } = buildSyntheticCh(N_POINTS);

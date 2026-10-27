@@ -19,6 +19,6 @@ proof lives in the lane-only read-only smoke script
   (`<ISTD Num="1">`, self-closed `<TargetMasses />`, hex event-code log lines).
 
 Consumers: `tests/test_d_reader.py` (unit, stdlib-only) and
-`server/src/analysis/analysisDReader.test.ts` (its TS mirror `buildSyntheticD`
+`server/src/analysis/analysisDReader.test.ts` (its TS mirror `buildSyntheticCh`
 must stay the exact same byte layout — the reader is byte-level, the test
 parses the persisted output, not the bytes).
