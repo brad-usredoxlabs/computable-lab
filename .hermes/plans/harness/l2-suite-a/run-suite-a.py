@@ -500,7 +500,11 @@ def check_expectation(idx, exp, state):
     # compiler's own hint keys, ExecutionPlanningValidator.collectChannelHints)
     # it must agree with 8; an honest channels:1 over the 8-well set is a
     # single-channel interpretation -> FAIL.
-    if exp.get("channel_semantics") == "8-channel":
+    # l2t0510 (orch): channel semantics constrain a DELIVERED operation only.
+    # verdict_in includes 'cards' (never-guess makes the ambiguous-noun card a
+    # legal P5 answer); a cards turn already had its cards arm asserted by the
+    # wells check above. Asserting the op here would re-invert the spec's OR.
+    if exp.get("channel_semantics") == "8-channel" and events:
         exp_set = sorted(exp_wells) if isinstance(exp_wells, list) else None
         add_ev = [ev for ev in events if (ev.get("verb") or ev.get("event_type"))
                   in ("add_material", "multi_dispense", "dispense")]
