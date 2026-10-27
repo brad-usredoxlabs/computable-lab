@@ -91,3 +91,21 @@ browser receipt (OQ4) -> SUITE-B DONE. fix -> same-worktree fix run, cycle cap 2
 (3) WELLSET-RESOLVER-1 waits for Brad — unattended tick: do not claim, do not spec-author.
 Budget: tick used ~70 min (diagnosis + packet + reconcile + 2 dispatches + cards). Checkpoint:
 Q1 coder LIVE slot-1, advc-SUITEB LIVE (cloud), no drives in flight. Exit.
+
+## ADDENDUM 2 (~07:52) — SUITE-B ADVC-C1 RETURNED fix (0 HIGH) -> FIX RUN 1 QUEUED
+advc-SUITEB-c1-l2t0635 exited 07:32: VERDICT fix, 1 MEDIUM (D2: captured request shape
+omits SequencesPage.tsx:77 conditional configuration spread) + 2 LOW (D3: P10 'honest wall'
+note mislabels a MODEL-AUTHORING failure — Ajv rejections of the model's run_blastn payload
+— as the execute-layer wall; capability NOT absent: endpoints provisioned, run_mafft
+proposals succeeded Runs A/E; D2b docstring). Bait all cleared; the reviewer independently
+re-ran parity vitest 22/22, tsc zero-new, write-free digest 43bf6088 (2434 files), corpus
+byte-sha. Load-bearing: NOT a harness schema-legality bug. FIX RUN 1 queued FIFO
+(unit cl-l2-suiteb-fix1-queue-l2t0635, same worktree/branch, defects verbatim + mandatory
+write-free re-drive after the spread fix, marker SUITEB-FIX1 DONE <sha>).
+NEXT TICK: (1) Q1 exit -> advc -> self-verify -> merge -> STACK RESTART (YAML) -> --all
+re-drive -> ruled-wall receipts -> browser gate -> SUITE-A DONE. (2) SUITE-B fix1 exit ->
+advc cycle-2 (scope 6accb44b...HEAD); accept -> self-verify -> merge -> OQ5 execute replay
++ OQ4 browser receipt; second fix verdict = CYCLE CAP -> architect (both defect lists).
+(3) WELLSET-RESOLVER-1 still awaits Brad (card decisions/WELLSET-RESOLVER-1-brad-approval-
+card.md); unattended ticks: never claim. LIVE NOW: Q1 coder slot-1 (started 07:37),
+SUITE-B fix1 queue waiting, both FIFO-safe. Budget: ~82 min. Exit.
