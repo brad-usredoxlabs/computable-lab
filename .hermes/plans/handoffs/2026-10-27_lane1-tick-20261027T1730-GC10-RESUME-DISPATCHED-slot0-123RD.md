@@ -86,3 +86,27 @@ Author: orchestrator cron tick (started 17:21 EDT) — lane 1 only. All git -c c
   envelope wording most substantive), GC-8 cycle-2 2 + cycle-3 2 OBSERVATIONs
   (addendum-corrects-in-place convention; all-unit-1/x reports none).
 - EVIDENCE DEBT OPEN: AS-L1T0020-2 ONLY.
+
+---
+## 1800 CHECKPOINT ADDENDUM (budget expiry) — GC-10 close track advanced to ADV cycle-1 FIX -> FIX RUN 1 LIVE
+
+- Resume closed the code track: GC10 RESUME DONE 9e9b08f3 (E + E2 commits, runbook, close
+  battery). Orch verified first-hand (108/108 app analysis vitest — run from INSIDE app/,
+  --root-from-root fakes 5 source-pin ENOENT failures (harness trap, now in the fix brief and
+  here); server suites 19/19; tsc 21/0 app, 0 server; scope 18 files +3446/-13; chart-deps 0).
+- Adversarial cycle 1: VERDICT fix (reviews/GC10-advreview-cycle1-l1t1745.md) — D1/D2
+  BLOCKERS on the OQ-1(a) dref content channel (3-way response-shape mismatch + DREF-id sent
+  to AOUT-only route; dref tests mock across the broken seam), D3/D4/D5 majors, D6 minor.
+  Orch confirmed D1/D2/D4/D5 first-hand before dispatching.
+- FIX RUN 1 LIVE slot-0 since 17:57:53: PID 3303481 (unit run-p3303455), log
+  lanes/1/logs/coder-GC10-l1t1758-fix1.log, expected 40-80 min (due ~18:50, 2x ~20:10).
+  Do NOT re-dispatch while the launcher holds slot-0 (LOCK-ACQUIRED line + PID live).
+- NEXT TICK: on GC10 FIX1 DONE <sha> -> adv re-review cycle 2 (unique
+  reviews/GC10-advreview-cycle2-l1t<ts>.md; diff base f571e2b9..HEAD) -> on ACCEPT: orch
+  re-verify (vitest from app/, both tsc, seam test present, frozen ViewRenderer.test.tsx
+  restored vs f571e2b9 base) -> cl-lane-stack.sh 1 restart (background) -> curl proofs ->
+  browser gate MANDATORY per gc10-gate-runbook-l1t1730.md (deterministic Playwright first;
+  receipts receipts/GC-10/<ts>/) -> merge --no-ff -> GC-11 composer same tick.
+- assumptions: AS-L1T1730-1/2 as written above; AS-L1T1755-1 NEW: the reviewer's D3 premise
+  accepted WITHOUT full re-proof (I confirmed loadSaved has no conversion consumption via
+  grep; the fix run must prove the reload test green — evidence closes it).
