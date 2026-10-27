@@ -362,20 +362,61 @@ def decode_run_log(data: bytes, *, source: Optional[str] = None) -> Dict[str, An
 # ---------------------------------------------------------------------------
 # attach() — the package-level convenience entry scripts call (D2/D3/D4)
 # ---------------------------------------------------------------------------
-def _classify(handle) -> str:
-    """Classify one input by CONTENT (D3.3 fallback — pure sniff, never
-    requires meta): v181 CH marker → signal_channel; BOM+xml → sample_metadata;
-    BOM-decodable UTF-16 text that is not XML → run_log; else opaque.
-    The role strings are the GC-4 acquisition-package vocabulary (referenced
-    by name, not redefined — bait #11)."""
-    data = handle.file_bytes()
+def _handle_bytes(handle, source: str):
+    """Return ``(role, data, read_err)`` for one input (adversarial review
+    l1t0320 defects 1 + 6).
+
+    A readable (file-backed) handle: ``(role, data, None)`` where role is the
+    content classification — or a ``ReaderError`` (``METADATA_DECODE_FAILED``)
+    is RAISED when the bytes are metadata-shaped but not valid strict UTF-16
+    (defect 1 — never swallowed into opaque).
+
+    A handle with NO readable file — the runner's inline artifact/table shape
+    (``path: <inputDir>/<name>.inline`` with the file never written; or no
+    path and no inline bytes) — ``file_bytes()`` raises FileNotFoundError /
+    RuntimeError. The reader must not crash with a NON-READER error on any
+    such revision: return ``("no_file", None, the_cause)`` so attach() logs
+    it via the method-asset opaque path and decodes only file-backed
+    handles.
+    """
+    try:
+        data = handle.file_bytes()
+    except (FileNotFoundError, RuntimeError, OSError) as e:
+        return "no_file", None, e
+    role = _classify(data, source)
+    return role, data, None
+
+
+def _classify(data: bytes, source: str) -> str:
+    """Classify one input's BYTES by content (D3.3 fallback — pure sniff,
+    never requires meta): v181 CH marker → signal_channel; BOM+xml →
+    sample_metadata; BOM-decodable UTF-16 text that is not XML → run_log;
+    else opaque. The role strings are the GC-4 acquisition-package vocabulary
+    (referenced by name, not redefined — bait #11).
+
+    A BOM-prefixed input whose bytes are NOT valid strict UTF-16 (truncated /
+    odd length, lone surrogate) is CORRUPT METADATA, not opaque content:
+    ``decode_sample_xml`` / ``decode_run_log`` would raise
+    METADATA_DECODE_FAILED (spec X6) — the SAME strict decode is run here so
+    the named code surfaces through attach() instead of the run "succeeding"
+    with an opaque-skip log and no metadata (adversarial review l1t0320
+    defect 1, MAJOR). ``opaque`` is reserved for genuinely non-text content.
+    """
     if _is_ch_marker(data):
         return "signal_channel"
     if data[:2] == b"\xff\xfe":
         try:
             text = data.decode("utf-16")
-        except (UnicodeDecodeError, UnicodeError):
-            return "opaque"
+        except (UnicodeDecodeError, UnicodeError) as e:
+            # Metadata-shaped (BOM prefix) but not valid strict UTF-16:
+            # truncated/corrupt metadata — a NAMED failure, never opaque.
+            # The message names the input (spec X6).
+            raise ReaderError(
+                METADATA_DECODE_FAILED,
+                f"{source}: strict UTF-16 decode failed — {e} "
+                f"(BOM-prefixed input with invalid UTF-16 bytes: "
+                f"truncated or corrupt metadata)",
+            ) from e
         stripped = text.lstrip("\ufeff").lstrip()
         if stripped.startswith("<?xml") or stripped.startswith("<"):
             # XML-shaped: distinguish sample metadata from any other XML by
@@ -406,13 +447,30 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
     never silent.
     """
     decoded: Dict[str, Dict[str, Any]] = {}
-    for name in sorted(getattr(ctx, "_inputs", {}) or {}):
+    # D3.2 — the PUBLIC input_names() seam (the diff added it FOR this; the
+    # private _inputs attribute is not a contract the reader may depend on —
+    # adversarial review l1t0320 defect 5).
+    for name in ctx.input_names():
         handle = ctx.input(name)
-        role = _classify(handle)
         meta_source = handle.meta.get("sourcePath") if isinstance(handle.meta, dict) else None
-        source = meta_source or handle.name
+        source = meta_source or (handle.path or handle.name)
+        # Defect 6 — only FILE-BACKED handles are decoded. Non-file inputs
+        # (the runner's inline shape: path <inputDir>/<name>.inline with no
+        # file written, or no path and no inline bytes) take the method-asset
+        # opaque path: named log line, never a crash with a non-reader error.
+        role, data, read_err = _handle_bytes(handle, source)
+        if role == "no_file":
+            ctx.log(
+                f"d_reader: {name} ({source}) → opaque: no readable file "
+                f"(non-file/inline input — {type(read_err).__name__}: {read_err}); "
+                f"skipped as opaque (referenceable via its data-reference, "
+                f"never parsed — GC-1(e))",
+                level="info",
+                code="D_READER_OPAQUE",
+            )
+            continue
         if role == "signal_channel":
-            out = read_ch_bytes(handle.file_bytes(), source=meta_source or handle.name)
+            out = read_ch_bytes(data, source=meta_source or handle.name)
             # Channel identity precedence (D3.3): meta.sourcePath stem →
             # handle name → None. Never invented.
             if meta_source:
@@ -440,7 +498,7 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
                     code="D_READER_ESCAPE_TAG",
                 )
         elif role == "sample_metadata":
-            out = decode_sample_xml(handle.file_bytes(), source=source)
+            out = decode_sample_xml(data, source=source)
             decoded[name] = out
             ctx.log(
                 f"d_reader: {name} → {role}: sample '{out['name']}' "
@@ -449,7 +507,7 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
                 code="D_READER_SAMPLE",
             )
         elif role == "run_log":
-            out = decode_run_log(handle.file_bytes(), source=source)
+            out = decode_run_log(data, source=source)
             decoded[name] = out
             ctx.log(
                 f"d_reader: {name} → {role}: {len(out['lines'])} lines, "
