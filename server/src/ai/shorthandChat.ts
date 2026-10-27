@@ -54,6 +54,11 @@ import {
 } from '../compiler/scientistIntent/compositionFractions.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
+import {
+  clarificationAskCount,
+  clarificationLoopEscalation,
+  clarificationLoopRequestIds,
+} from './clarificationLoopAsk.js';
 import type {
   AgentClarificationAnswer,
   AgentClarificationRequest,
@@ -196,6 +201,35 @@ export interface ResolvedLabwareOffer {
   title?: string;
 }
 
+/**
+ * L2-FREEFORM-1 H1 (bait B3): one REFUSED labware ref. The binder no longer
+ * fail-opens — an event whose top-level `labwareId` is a raw scientist LABEL
+ * that it cannot bind (an AMBIGUOUS deck name with duplicate plates, or an
+ * UNMATCHED label) is DROPPED from `events` and reported here LOUDLY. The
+ * refusal is STRUCTURE, not lexicon (never-guess): `candidates` lists EVERY
+ * deck/record id the name collided with (ambiguous) or is EMPTY (unmatched);
+ * the server mints no id, guesses no disambiguation. The complete-path mapper
+ * rides these on `AgentResult.unboundRefs` + answerable clarification cards so
+ * the scientist picks — the silent success-with-zero-events shape cannot exit.
+ */
+export interface UnboundLabwareRef {
+  /** The event the refusal belongs to (the dropped event's own id, if any). */
+  eventId?: string;
+  /** The raw scientist label as the model emitted it (verbatim). */
+  label: string;
+  /** Every deck/record id the label collided with (ambiguous) — or [] (unmatched). */
+  candidates: string[];
+  reason: 'ambiguous' | 'unmatched';
+}
+
+/** The binder's report: the surviving bound events + the refused refs. */
+export interface BindShorthandEventsResult<T extends object> {
+  /** The events that SURVIVED (bound, already-a-deck-id, or no top-level ref). */
+  events: T[];
+  /** The refs the binder REFUSED (dropped) — empty when every event bound. */
+  unboundRefs: UnboundLabwareRef[];
+}
+
 export function bindShorthandEventsToDeck<T extends object>(
   events: readonly T[],
   deck: readonly DeckLabwareSummary[] | undefined,
@@ -209,10 +243,12 @@ export function bindShorthandEventsToDeck<T extends object>(
   // still wins a collision: a labware physically on the deck binds to the
   // deck id first. Zero name literals — every pair is compile output.
   resolved?: readonly ResolvedLabwareOffer[] | undefined,
-): T[] {
+): BindShorthandEventsResult<T> {
   const hasDeck = Array.isArray(deck) && deck.length > 0;
   const hasResolved = Array.isArray(resolved) && resolved.length > 0;
-  if ((!hasDeck && !hasResolved) || events.length === 0) return [...events];
+  if ((!hasDeck && !hasResolved) || events.length === 0) {
+    return { events: [...events], unboundRefs: [] };
+  }
   const idByName = new Map<string, { id: string; ambiguous: boolean }>();
   const knownIds = new Set<string>();
   if (hasDeck) {
@@ -241,6 +277,42 @@ export function bindShorthandEventsToDeck<T extends object>(
       }
     }
   }
+  // L2-FREEFORM-1 H1 (bait B3): the binder now classifies a raw label it CANNOT
+  // bind and REFUSES it (never-guess: an ambiguous name lists EVERY candidate,
+  // an unmatched one lists none). The refused event is DROPPED from `events`
+  // and rides `unboundRefs` so the mapper can report LOUDLY. `candidates` is
+  // collected per name across the deck (ambiguous) — structural, no lexicon.
+  const nameCandidateIds = new Map<string, string[]>();
+  if (hasDeck) {
+    for (const lw of deck!) {
+      if (!lw || typeof lw.labwareId !== 'string') continue;
+      if (typeof lw.name !== 'string') continue;
+      const key = lw.name.trim().toLowerCase();
+      if (!key) continue;
+      const list = nameCandidateIds.get(key);
+      if (list) {
+        if (!list.includes(lw.labwareId)) list.push(lw.labwareId);
+      } else {
+        nameCandidateIds.set(key, [lw.labwareId]);
+      }
+    }
+  }
+  const classifyRefusal = (ref: unknown): UnboundLabwareRef | undefined => {
+    if (typeof ref !== 'string' || !ref.trim()) return undefined;
+    if (knownIds.has(ref)) return undefined; // already a deck id
+    if (hasResolved && (resolved as Array<{ recordId: string }>).some((offer) => offer?.recordId === ref)) {
+      return undefined; // already a resolved record id (H2 channel)
+    }
+    const key = ref.trim().toLowerCase();
+    const hit = idByName.get(key);
+    if (hit && !hit.ambiguous) return undefined; // clean single bind — not a refusal
+    const bound = resolvedByName.get(key);
+    if (bound && !bound.ambiguous) return undefined; // clean resolved bind
+    if (hit) {
+      return { label: ref, candidates: nameCandidateIds.get(key) ?? [], reason: 'ambiguous' };
+    }
+    return { label: ref, candidates: [], reason: 'unmatched' };
+  };
   const bindRef = (ref: unknown): string | undefined => {
     if (typeof ref !== 'string' || !ref.trim()) return undefined;
     if (knownIds.has(ref)) return undefined; // already a deck id
@@ -250,10 +322,26 @@ export function bindShorthandEventsToDeck<T extends object>(
     const bound = resolvedByName.get(key);
     return bound && !bound.ambiguous ? bound.id : undefined;
   };
-  return events.map((raw) => {
+  // The binder REFUSES an event whose TOP-LEVEL labwareId is a raw label it
+  // cannot bind (ambiguous or unmatched) — that event is dropped from the
+  // bound set and reported in `unboundRefs`. An event with NO top-level ref,
+  // or one whose top-level ref binds cleanly / is already an id, survives
+  // with the existing details-side repair arms (Task 21/22, COMP-1) intact.
+  const kept: T[] = [];
+  const unboundRefs: UnboundLabwareRef[] = [];
+  for (const raw of events) {
     const ev = raw as Record<string, unknown>;
-    let changed = false;
+    const refusal = classifyRefusal(ev.labwareId);
+    if (refusal) {
+      unboundRefs.push(
+        typeof ev.eventId === 'string' && ev.eventId.length > 0
+          ? { ...refusal, eventId: ev.eventId }
+          : refusal,
+      );
+      continue; // dropped — the raw label never rides through
+    }
     const next: Record<string, unknown> = { ...ev };
+    let changed = false;
     const boundTop = bindRef(ev.labwareId);
     if (boundTop) {
       next.labwareId = boundTop;
@@ -325,8 +413,9 @@ export function bindShorthandEventsToDeck<T extends object>(
         changed = true;
       }
     }
-    return (changed ? next : raw) as T;
-  });
+    kept.push((changed ? next : raw) as T);
+  }
+  return { events: kept, unboundRefs };
 }
 
 /**
@@ -457,6 +546,17 @@ export interface HeldShorthandIntent {
    * Travels with the held intent; MAX_HELD eviction semantics unchanged.
    */
   answeredSlots?: readonly AnsweredSlot[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the per-requestId ask ledger (the N=1
+   * occurrence counter for the requestId-identity loop detector — the
+   * `looped` flag flips on the SECOND occurrence of a content-keyed
+   * factRequestId, paraphrase or not; clarificationLoopAsk.ts). Data on the
+   * hold (the `answeredSlots` precedent): the fold re-hold advances it and
+   * the fold arm's mapper reads it (the LIVE seed — it outranks the wire
+   * channel); the take/clear/eviction lifecycle is unchanged. Absent on a
+   * hold minted before this leg (undefined ⇒ first ask).
+   */
+  loopAskCounts?: Record<string, number>;
 }
 
 /** One closed slot identity (SH-QA-1 ledger entry). */
@@ -1244,15 +1344,70 @@ export function shorthandResultFromCompile(
   shorthandYaml: string,
   note: string,
   deck?: readonly DeckLabwareSummary[],
+  options?: {
+    /**
+     * L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's prior per-requestId
+     * ask ledger (from the PREVIOUS done result's `loopAskCounts` — the
+     * fold-free re-extraction seam) or the held intent's ledger (the fold
+     * seam). The needs-clarification branch advances it by THIS turn's asks
+     * (clarificationAskCount) and, when a requestId reaches its SECOND
+     * occurrence, flips the result into the honest escalation (error names
+     * the unresolvable noun — composed from requestId-scoped data, never a
+     * vocabulary literal — while the card channel STAYS: the refusal never
+     * removes the question). Absent ⇒ first ask ⇒ today's byte-identical
+     * cards-only shape.
+     */
+    priorLoopAskCounts?: Record<string, number>;
+  },
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
     const requests = clarificationsFromUnresolvedFacts(compiled.clarifications);
     const legacy = legacyClarificationFromRequests(requests);
+    // L2-FREEFORM-1 H4 (OQ4 ruling): the requestId-identity loop detector.
+    // THIS turn's asks advance the ledger unconditionally (count = prior +
+    // this turn's content-keyed ids — stable across compiles,
+    // paraphrase-invariant); a count reaching 2 flips `looped` (N=1) — the
+    // honest escalation, with the QUESTION intact (B7: the card channel
+    // stays beside the error; the pick still works). Absent prior ⇒ first
+    // ask ⇒ the cards-only shape, with the count riding so the NEXT turn
+    // (fold re-hold or fold-free re-extraction) can see it.
+    const prior = options?.priorLoopAskCounts;
+    const counts =
+      requests.length > 0
+        ? clarificationAskCount(prior, requests.map((r) => r.id))
+        : {};
+    const loopedIds = clarificationLoopRequestIds(counts);
+    const loopedRequests = requests.filter((r) => loopedIds.includes(r.id));
+    if (loopedRequests.length > 0) {
+      const nounShape = loadNounShape();
+      const loopedFacts = loopedRequests.map((r) => {
+        const fact = r.unresolvedFact;
+        return {
+          label: fact?.label ?? r.query ?? '',
+          ...(typeof fact?.reason === 'string' && fact.reason.trim() !== '' ? { reason: fact.reason } : {}),
+          ...(fact && nounShape ? { mintRefused: !isMintableLabel(fact.label, nounShape) } : {}),
+        };
+      });
+      return {
+        success: true,
+        events: [],
+        error: clarificationLoopEscalation(loopedFacts),
+        ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
+        ...(legacy ? { clarification: legacy } : {}),
+        ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
+        shorthand: shorthandYaml,
+      };
+    }
     return {
       success: true,
       events: [],
       ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
       ...(legacy ? { clarification: legacy } : {}),
+      // L2-FREEFORM-1 H4: the ledger rides on the FIRST ask too (absent when
+      // the turn asked nothing — conditional spread,
+      // exactOptionalPropertyTypes) so the NEXT turn's seed (the held
+      // intent's live count or the wire channel) starts at 1, not 0.
+      ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
       shorthand: shorthandYaml,
     };
   }
@@ -1263,7 +1418,7 @@ export function shorthandResultFromCompile(
       shorthand: shorthandYaml,
     };
   }
-  const events = bindShorthandEventsToDeck(
+  const { events: boundEvents, unboundRefs } = bindShorthandEventsToDeck(
     compiledEventsToProposals(compiled.terminalArtifacts.events),
     deck,
     // REVISE-GHOST-1 fix3 (gate Defect 1, f2mjyr 'events=3' with ghostTiles=0):
@@ -1275,6 +1430,46 @@ export function shorthandResultFromCompile(
     // discipline as labwareAdditions (exactOptionalPropertyTypes).
     compiled.terminalArtifacts.resolvedLabwares,
   );
+  // L2-FREEFORM-1 H1 (defense-in-depth): the binder REFUSES any event whose
+  // raw labware label it cannot bind (ambiguous deck name / unmatched). Those
+  // events are DROPPED (boundEvents carries only the survivors) and the
+  // refusal report rides LOUDLY — the silent shape { success, events>0-raw,
+  // cards==0, no error } can no longer exit this mapper. OQ1 granularity:
+  // surviving events stay; unbound refs ride the `unboundRefs` channel + a
+  // card per distinct label so the scientist disambiguates. When NOTHING
+  // binds, the whole turn is an honest failure naming the labels (the
+  // emptyDraftMessage family's "nothing applied" doctrine).
+  const refusedCards: AgentClarificationRequest[] = unboundRefs.map((ref) => ({
+    id: `unbound-${ref.reason}-${ref.label}`,
+    kind: 'labware' as const,
+    prompt: `The draft names "${ref.label}" as labware, but ${
+      ref.reason === 'ambiguous'
+        ? `the deck has ${ref.candidates.length > 1 ? 'multiple plates with that name' : 'no unique match'} — pick the plate you meant.`
+        : 'the lab spine could not match that name to a plate — pick the plate you meant.'
+    }`,
+    origin: 'harness' as const,
+    entityType: 'labware' as const,
+    menuProvider: '/l' as const,
+    query: ref.label,
+    options: ref.candidates.map((candidate) => ({ id: candidate, label: candidate })),
+  }));
+  if (unboundRefs.length > 0 && boundEvents.length === 0) {
+    const labels = [...new Set(unboundRefs.map((ref) => ref.label))].join(', ');
+    return {
+      success: false,
+      error: `no proposal: the draft named labware ${labels}, but none of it could be bound to the deck or the lab inventory — nothing was applied. ${
+        unboundRefs.some((ref) => ref.reason === 'ambiguous')
+          ? 'Rename the duplicate plates on the deck (or pick a plate) and re-ask.'
+          : 'Name the plate explicitly and re-ask.'
+      }`,
+      ...(unboundRefs.length > 0
+        ? { unboundRefs: unboundRefs as NonNullable<AgentResult['unboundRefs']> }
+        : {}),
+      ...(refusedCards.length > 0 ? { clarificationRequests: refusedCards } : {}),
+      shorthand: shorthandYaml,
+      notes: [note],
+    };
+  }
   // The compileResultToAgentResult precedent: gaps ride unresolvedRefs through
   // the same loose proposal shape the compiler path already emits.
   const unresolvedRefs = compiled.terminalArtifacts.gaps.map((gap) => ({
@@ -1287,7 +1482,7 @@ export function shorthandResultFromCompile(
     : [];
   return {
     success: true,
-    events,
+    events: boundEvents,
     // COMP-1 Task 20 (Part IV): the raw mapper's precedent
     // (compileResultToAgentResult, AgentOrchestrator.ts:612) — the compile
     // already puts resolve_labware's additions on terminalArtifacts
@@ -1312,7 +1507,14 @@ export function shorthandResultFromCompile(
       ? { resolvedLabwares: compiled.terminalArtifacts.resolvedLabwares }
       : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
+    // L2-FREEFORM-1 H1: the binder's refusal report rides when something
+    // unbound (mixed granularity per OQ1 — the surviving events stay, the
+    // unbound labels are reported LOUDLY). Absent-or-value (exactOptionalPropertyTypes).
+    ...(unboundRefs.length > 0
+      ? { unboundRefs: unboundRefs as NonNullable<AgentResult['unboundRefs']> }
+      : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
+    ...(refusedCards.length > 0 ? { clarificationRequests: [...requests, ...refusedCards] } : {}),
     shorthand: shorthandYaml,
     notes: [note],
   };

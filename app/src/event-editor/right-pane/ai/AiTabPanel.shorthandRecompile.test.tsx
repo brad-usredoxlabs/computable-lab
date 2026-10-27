@@ -356,6 +356,107 @@ describe('SH-QB-1 T9 — the recompile request carries the editor YAML verbatim 
   })
 })
 
+// ---------------------------------------------------------------------------
+// L2-FREEFORM-1 H2 — the client recompile thread: terminalArtifacts' OWN
+// resolved placement offers reach buildPreviewFromDraft (the recompile's
+// ghost placements — the fix3 Defect-1 shape, recompile arm)
+// ---------------------------------------------------------------------------
+
+describe('L2-FREEFORM-1 H2 — a recompile whose resolved offers ride terminalArtifacts ghosts the EXISTING record', () => {
+  it('the recompile threads terminalArtifacts.resolvedLabwares into buildPreviewFromDraft: a ghost placement of the existing record mounts (proposedRecord absent)', async () => {
+    // A loaded single-plate deck (the resolvedGhosts.run-deck shape) — the
+    // resolved arm of buildPreviewFromDraft only mounts placements on a
+    // loaded platform/variant (the 'deck not loaded' skip arm otherwise).
+    mountDeckEditor({
+      platforms: [
+        {
+          id: 'manual',
+          label: 'Manual',
+          allowedVocabIds: ['liquid-handling/v1'],
+          defaultVariant: 'manual_single_plate',
+          toolTypeIds: [],
+          modules: [],
+          variants: [
+            {
+              id: 'manual_single_plate',
+              title: 'Single SBS Plate',
+              slots: [{ id: 'PLATE', kind: 'standard' as const, orientationMode: 'locked_landscape' as const, reachable: true }],
+            },
+          ],
+        },
+      ],
+      platformId: 'manual',
+      variantId: 'manual_single_plate',
+      runId: 'EXR-FF1-H2',
+    })
+    render(panelTree())
+    await mountReviewingDraft()
+
+    // The fixed route's wire shape (the handler spreads
+    // result.terminalArtifacts verbatim; the binder re-binds the event to the
+    // resolved record id top-level AND in details — the ghost bucket key).
+    mocks.api.intentCompile.mockResolvedValueOnce({
+      outcome: 'complete',
+      terminalArtifacts: {
+        events: [
+          {
+            eventId: 'evt-add_material-ff1h2clx',
+            event_type: 'add_material',
+            labwareId: 'LAB-store-plate',
+            details: { labwareId: 'LAB-store-plate', wells: ['A1'], volumeUl: 50 },
+          },
+        ],
+        gaps: [],
+        resolvedLabwares: [{ hint: 'Store Plate', recordId: 'LAB-store-plate', title: 'Store Plate' }],
+      },
+    })
+
+    await saveAndRecompileUnedited()
+
+    // No error surface on a non-empty recompile.
+    expect(screen.queryByTestId('shorthand-error')).toBeNull()
+
+    // The recompile's own setPreview is identified by the recompile's OWN
+    // event id in previewEvents (the draft mount's async preview write can
+    // land in any order relative to it — positional index is not stable).
+    // Poll until that call arrives; the recompile's event id is a fresh mint
+    // that no other call carries.
+    const recompileCall = async () => {
+      for (let i = 0; i < 50; i++) {
+        await new Promise((r) => setTimeout(r, 10))
+        const hit = mocks.editorActions.setPreview.mock.calls.find((call) => {
+          const pv = call[0] as { previewEvents?: Array<{ eventId?: unknown }> } | undefined
+          return (pv?.previewEvents ?? []).some((ev) => (ev as { eventId?: string }).eventId === 'evt-add_material-ff1h2clx')
+        })
+        if (hit) return hit[0]
+      }
+      throw new Error('recompile setPreview never arrived (the thread is broken)')
+    }
+    const lastPreview = (await recompileCall()) as {
+      previewPlacements: Array<{ labwareId: string; location: { kind: string; slotId?: string } }>
+      previewLabwares: Record<string, { labwareId: string; proposedRecord?: boolean }>
+      previewEvents: unknown[]
+    }
+    // The recompile's OWN resolved offers must reach buildPreviewFromDraft —
+    // without the thread the preview mounts events but zero placements (the
+    // fix3 Defect-1 shape on the recompile arm).
+    expect(
+      lastPreview.previewPlacements.length,
+      'recompile resolved offers never reached buildPreviewFromDraft — the plate stays empty',
+    ).toBeGreaterThan(0)
+    const placement = lastPreview.previewPlacements[0]!
+    // The ghost PLACEMENT of the EXISTING record: keyed by the record id on
+    // the locked single slot, never a proposed re-creation (the resolved
+    // arm's contract — labwareRecordToEditorLabware keys BY the record id).
+    expect(placement.location).toEqual({ kind: 'slot', slotId: 'PLATE' })
+    expect(placement.labwareId).toBe('LAB-store-plate')
+    const ghosted = lastPreview.previewLabwares['LAB-store-plate']
+    expect(ghosted, 'previewLabwares must carry the placement labware under the same id').toBeDefined()
+    expect(ghosted.proposedRecord).toBeUndefined()
+    expect(lastPreview.previewEvents.length).toBe(1)
+  })
+})
+
 describe('SH-QB-1 T10 — a non-empty recompile keeps today\'s draft-ready flow (no regression)', () => {
   it('non-empty events: draft-ready fires with the compiled changes, gaps ride as warnings, carried clarifications ride as warnings too', async () => {
     mountDeckEditor()

@@ -133,3 +133,50 @@ export function emptyDraftMessage(options: { truncated: boolean; hadArguments: b
     'Nothing was applied — try rephrasing, or name the material explicitly.'
   );
 }
+
+/**
+ * L2-FREEFORM-1 H5 — the ONE server-side "produced nothing" guard: the 7
+ * canonical deliverable channels a done draft result can carry, extracted
+ * from the draft-tool arm's inline `const emptyResult =` check (behavior
+ * BYTE-IDENTICAL — the same 7 channels, the same empty tests) so the guard
+ * can be applied at every silent-success exit site, not only the
+ * draft-tool arm:
+ *
+ *   - the chatbot-compile bypass's assurance-CONFIRM arm (the hold that
+ *     derived ZERO clarification requests — empty blockers + empty gaps —
+ *     used to return success:true with every deliverable channel empty and
+ *     no error: server-silent, the spec's (b));
+ *   - the deterministic shorthand return (the H1/H4 mapper already turns
+ *     its only empty shape — needs-clarification with zero requests — into
+ *     an escalation, this guard is the structural backstop);
+ *   - the draft-tool arm itself (the original site, now calling the helper
+ *     instead of inlining the 7-channel expression).
+ *
+ * CLIENT ⊇ SERVER (the honestWall drift pin): this helper counts the 7
+ * canonical channels ONLY. The client's draftEmptiness predicate counts
+ * those PLUS the sanctioned client-superset members (equipmentRequirements
+ * — a client-surface deliverable — and, H5, proseDeliverable — the
+ * doc-discussion prose marker the server stamps; the server never emits
+ * the former and marks the latter only on the doc-discussion success
+ * arm). Never a second channel list here — add a term to the client and
+ * update the drift pin in the SAME commit.
+ */
+export function draftProducedNothingOnServer(result: {
+  events?: unknown[];
+  clarificationRequests?: unknown[];
+  error?: string;
+  labwareAdditions?: unknown[];
+  labwareRequirements?: unknown[];
+  recordCreations?: unknown[];
+  deckLayout?: unknown;
+}): boolean {
+  return (
+    !(result.events?.length ?? 0) &&
+    !(result.clarificationRequests?.length ?? 0) &&
+    !result.error &&
+    !(result.labwareAdditions?.length ?? 0) &&
+    !(result.labwareRequirements?.length ?? 0) &&
+    !(result.recordCreations?.length ?? 0) &&
+    !result.deckLayout
+  );
+}

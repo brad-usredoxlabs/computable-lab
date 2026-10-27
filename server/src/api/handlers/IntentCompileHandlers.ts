@@ -144,8 +144,36 @@ export function createIntentCompileHandlers(deps: IntentCompileDeps) {
         // (shorthandChat.ts:570) — a no-edit round-trip's events equal the
         // chat path's proposals field-for-field INCLUDING details.labwareId.
         // Store-only calls skip the pass (zero behavior change).
+        // L2-FREEFORM-1 H1: the binder now returns a report {events,
+        // unboundRefs} — the round-trip's terminalArtifacts ride the SURVIVING
+        // (bound) events; a label the binder cannot bind is refused, not
+        // fail-open. L2-FREEFORM-1 H2: the binder's THIRD arg — the compile's
+        // OWN resolved placement offers (terminalArtifacts.resolvedLabwares,
+        // resolve_labware's real inventory records) — is threaded here so a
+        // recompile re-binds a store-resolved labware to its record id instead
+        // of ghost-empting (the fix3 Defect-1 shape, previously dropped at
+        // this seam). Without it the H1 refusal would DROP a resolved-offer
+        // event as unmatched (its record id is not a deck id) — the same
+        // zero-ghost the binder used to fail-open past. The deck map still
+        // wins a collision (binder contract).
+        const bound = deck
+          ? bindShorthandEventsToDeck(
+            result.terminalArtifacts.events,
+            deck,
+            result.terminalArtifacts.resolvedLabwares,
+          )
+          : undefined;
         const terminalArtifacts = deck
-          ? { ...result.terminalArtifacts, events: bindShorthandEventsToDeck(result.terminalArtifacts.events, deck) }
+          ? {
+              ...result.terminalArtifacts,
+              events: bound!.events,
+              // L2-FREEFORM-1 H2 (unboundRefs response channel): the binder's
+              // refusal report rides the response VERBATIM (additive; absent
+              // when nothing unbound — the goldens' byte-identity guard holds).
+              // A recompile whose labware label the binder refused is reported
+              // LOUDLY, never silently dropped (the zero-ghost discipline).
+              ...(bound!.unboundRefs.length > 0 ? { unboundRefs: bound!.unboundRefs } : {}),
+            }
           : result.terminalArtifacts;
         // SH-QB-1 (fix 2, the dropped-reason channel): the bar arm's
         // structured clarifications (compileScientistIntent.ts:253-272) used

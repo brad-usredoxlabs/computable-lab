@@ -45,8 +45,9 @@ import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabel
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
-import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
+import { DRAFT_ARG_KEYS, draftArgDiagnostics, draftProducedNothingOnServer, emptyDraftMessage } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
+import { clarificationAskCount } from './clarificationLoopAsk.js';
 import { followUpForLayer } from './materialFollowUp.js';
 import { repairMintedLabelsAgainstUserWords } from './mintLabelFidelity.js';
 import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.js';
@@ -82,6 +83,7 @@ import {
   heldReextractionContext,
   malformedShorthandRepairPrompt,
   parseShorthandForChat,
+  factRequestId,
   shorthandResultFromCompile,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
@@ -1286,6 +1288,26 @@ export function createAgentOrchestrator(
       let eventGraphRefusalAsked = false;
       let shorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
+      // L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
+      // ledger seed for the mapper seams — the LIVE held-intent count
+      // (the fold seam; it outranks the wire channel because the re-hold
+      // below advances it in place) or the previous done result's ledger
+      // (context.loopAskCounts — the fold-free re-extraction seam: a
+      // non-1:1 answer drop consumes the hold and re-extracts, and without
+      // the wire channel the occurrence count would reset there and a
+      // paraphrase loop could never flip). Seeded on shorthand-surface
+      // turns only (the surface membership is the DATA
+      // surfaceDraftsShorthand reads — no surface-name literal here).
+      function h4AskCountSeed(): Record<string, number> | undefined {
+        if (!shorthandSurface) return undefined;
+        const heldSeed = takeHeldShorthandIntent(conversationKey);
+        if (heldSeed) {
+          const seed = heldSeed.loopAskCounts;
+          holdShorthandIntent(conversationKey, heldSeed); // peek: the fold arm takes it below
+          return seed;
+        }
+        return context?.loopAskCounts ? { ...context.loopAskCounts } : undefined;
+      }
 
       /**
        * SHORTHAND deck-context threading: the labware-hint lookup the frozen
@@ -1434,21 +1456,53 @@ export function createAgentOrchestrator(
                 folded.doc,
               );
               if (survivingFacts.length > 0) {
+                // L2-FREEFORM-1 H4: the re-hold carries the ADVANCED ledger
+                // (the fold re-asked the surviving slots). The fold mapper
+                // below is seeded with the PRE-ask ledger (held.loopAskCounts
+                // — the value the held carried BEFORE this re-hold advanced
+                // it; the draft arm's h4Seed precedent) and advances it by
+                // this turn's surviving asks: the mapper's result ledger and
+                // this re-hold's ledger are the SAME prior+this-turn advance,
+                // so they agree. A slot that STILL bars after an answer is the
+                // 2nd occurrence of its requestId and escalates IN THE SAME
+                // TURN (OQ4, N=1). Byte-identical when nothing asked (the seed
+                // is absent, never undefined — the `answeredSlots`
+                // conditional-spread precedent on the hold).
                 holdShorthandIntent(conversationKey, {
                   yaml: folded.yaml,
                   doc: folded.doc,
                   clarifications: survivingFacts,
                   ...(ledger.length > 0 ? { answeredSlots: ledger } : {}),
+                  ...(survivingFacts.length > 0
+                    ? {
+                        loopAskCounts: clarificationAskCount(
+                          held.loopAskCounts,
+                          survivingFacts.map((fact) => factRequestId(fact)),
+                        ),
+                      }
+                    : {}),
                 });
               }
               // The result mapper sees the LEDGER-FILTERED facts: a closed
               // slot emits no card. The compile itself is untouched (the
               // frozen pipeline's output rides verbatim otherwise).
+              // L2-FREEFORM-1 H4: seed the fold mapper with the PRE-ask
+              // ledger (held.loopAskCounts — the value the held carried
+              // BEFORE the re-hold above advanced it; the draft arm's
+              // h4Seed precedent). The mapper advances it by this turn's
+              // surviving asks, so a slot that STILL bars (the 2nd
+              // occurrence of its requestId) escalates IN THE SAME TURN and
+              // the result's ledger matches the re-hold's (both advance the
+              // same prior by the same asks). Absent when the held carried
+              // no ledger (conditional spread — exactOptionalPropertyTypes:
+              // absent, never undefined).
+              const foldH4Seed = held.loopAskCounts;
               const foldResult = shorthandResultFromCompile(
                 { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
+                { ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}) },
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {
@@ -1774,7 +1828,7 @@ export function createAgentOrchestrator(
 
         const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
 
-        const result: AgentResult = {
+        let result: AgentResult = {
           success: true,
           // Hold events on CONFIRM — never auto-return a draft needing confirmation.
           ...(shouldConfirm ? {} : { events }),
@@ -1795,6 +1849,20 @@ export function createAgentOrchestrator(
             toolCalls: 0,
           },
         };
+        // L2-FREEFORM-1 H5 (b): the CONFIRM arm never reached the draft-tool
+        // arm's empty guard — a CONFIRM hold whose blockers + gaps derived
+        // ZERO clarification requests used to exit success:true with every
+        // deliverable channel empty (server-silent). The extracted ONE
+        // server helper (the draft-tool arm's 7 channels, byte-identical)
+        // closes the bypass: the draft stays HELD (the guard never un-holds
+        // a proposal) and the empty shape carries the honest failure.
+        if (shouldConfirm && draftProducedNothingOnServer(result)) {
+          result = {
+            ...result,
+            error: emptyDraftMessage({ truncated: false, hadArguments: true }),
+          };
+          console.warn(`[agent ${tid}] ${result.error}`);
+        }
         return result;
       } else {
         // Pipeline produced no events and no gaps (or outcome is 'error') —
@@ -2459,7 +2527,15 @@ export function createAgentOrchestrator(
           };
           const result: AgentResult = isDocDiscussionTurn
             ? docDiscussionContent.trim().length > 0
-              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage }
+              // L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable
+              // marker — a doc-discussion prose answer is a deliverable, and
+              // without the marker the result (success, zero events, zero
+              // cards) is indistinguishable from a silent empty draft at the
+              // wire. The marker rides ONLY the success arm (the empty
+              // answer keeps its honest error and never rides it); the
+              // client's draftEmptiness predicate counts it (the ONE-term
+              // superset addition, drift pin updated the same commit).
+              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage, proseDeliverable: true }
               : {
                   success: false,
                   error: `Model returned an empty response (finish_reason=${choice.finish_reason ?? 'unknown'}). Try shortening the document or asking a more specific question.`,
@@ -2668,19 +2744,50 @@ export function createAgentOrchestrator(
               }
 
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
+              // L2-FREEFORM-1 H4 (OQ4 ruling): seed the requestId-identity
+              // loop detector BEFORE the hold — the held intent's live count
+              // or the previous done result's wire ledger. On a
+              // needs-clarification hold the ADVANCED ledger (prior + this
+              // turn's content-keyed fact ids) rides the hold (the fold
+              // re-hold's live seed) and the same count rides the result
+              // (the wire seam); both advance identically.
+              const h4Seed = h4AskCountSeed();
               if (compiledSh.outcome === 'needs-clarification') {
                 // Hold the VALIDATED intent per conversation (the held localMacro
                 // precedent) so an answer folds deterministically next turn.
-                holdShorthandIntent(conversationKey, { yaml: shorthandYaml, doc: shorthandDoc, clarifications: compiledSh.clarifications });
+                const h4HoldCounts = clarificationAskCount(
+                  h4Seed,
+                  compiledSh.clarifications.map((fact) => factRequestId(fact)),
+                );
+                holdShorthandIntent(conversationKey, {
+                  yaml: shorthandYaml,
+                  doc: shorthandDoc,
+                  clarifications: compiledSh.clarifications,
+                  ...(Object.keys(h4HoldCounts).length > 0 ? { loopAskCounts: h4HoldCounts } : {}),
+                });
               }
               const shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
                 shorthandDeckLabwares,
+                // L2-FREEFORM-1 H4: the loop detector's seed (conditional
+                // spread — exactOptionalPropertyTypes: absent on every turn
+                // with no seed).
+                { ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}) },
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
+              }
+              // L2-FREEFORM-1 H5 (b): the ONE server guard at the shorthand
+              // return — the H1/H4 mapper already turns its only empty shape
+              // (needs-clarification with ZERO generated requests) into an
+              // escalation, so this backstop only fires on a mapper shape
+              // that can no longer happen; without it the arm could still
+              // exit success:true with every deliverable channel empty.
+              if (shResult.success && !shResult.error && draftProducedNothingOnServer(shResult)) {
+                shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
+                console.warn(`[agent ${tid}] ${shResult.error}`);
               }
               shorthandSummary(shResult);
               return shResult;
@@ -4060,15 +4167,12 @@ export function createAgentOrchestrator(
             // with a cause, never a silent success. The coerced/compile path
             // could end `success=true` with zero events and no explanation
             // (observed live 2026-09-20), the same silence the draft path was
-            // fixed for.
-            const emptyResult =
-              !(result.events?.length ?? 0) &&
-              !(result.clarificationRequests?.length ?? 0) &&
-              !result.error &&
-              !(result.labwareAdditions?.length ?? 0) &&
-              !(result.labwareRequirements?.length ?? 0) &&
-              !(result.recordCreations?.length ?? 0) &&
-              !result.deckLayout;
+            // fixed for. L2-FREEFORM-1 H5: the 7-channel check is the ONE
+            // server helper (draftArgDiagnostics.draftProducedNothingOnServer
+            // — extracted from this inline expression, behavior byte-
+            // identical), applied here AND at the CONFIRM bypass arm AND the
+            // shorthand return (CLIENT ⊇ SERVER — the honestWall drift pin).
+            const emptyResult = draftProducedNothingOnServer(result);
             if (emptyResult) {
               result = {
                 ...result,
