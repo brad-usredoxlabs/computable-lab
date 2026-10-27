@@ -70,3 +70,15 @@ version line). EVIDENCE DEBT: AS-L2T0755-MAFFT-USERPROVISION only.
 
 ## BUDGET
 ~15 min used at dispatch time; checkpoint. Both dispatches left running untouched.
+
+## ADDENDUM (same tick, ~00:55 EDT) — MATRES advc2 RETURNED: VERDICT fix (cycle 2)
+reviews/MATRES-VERDICT-advc2-l2t0035.md: all 12 cycle-1 defects FIXED in substance; 6 NEW
+cheap findings N1-N6 + bait B1-B7 (reviewer: 'introduced a machine-readable regression…
+cheap to fix'). ORCH JUDGEMENT vs staged cycle-cap note: cap rule = two cycles WITHOUT
+improvement; this cycle improved 12/12 with fresh evidence => ONE scoped fix run, not an
+architect route. FIX RUN 2 LIVE (cl-worker thunderbeast, unit cl-l2-matresverdict-fix2-
+l2t0035, prompt prompts/coder-MATRESVERDICT-fix2-l2t0035.txt — N1-N6 verbatim, no D1-D12
+redo, determinism double-run required, marker 'MATRESFIX2 DONE <sha>', log logs/
+coder-MATRESVERDICT-fix2-l2t0035.log). Cycle-3 fix verdict = HARD cap -> architect with
+all three reports. B6 is ORCH-OWNED at merge: supersede the stale cycle-1 deliverable copy
+deliverables/MATRES-VERDICT-report.l2t1805.md when promoting.
