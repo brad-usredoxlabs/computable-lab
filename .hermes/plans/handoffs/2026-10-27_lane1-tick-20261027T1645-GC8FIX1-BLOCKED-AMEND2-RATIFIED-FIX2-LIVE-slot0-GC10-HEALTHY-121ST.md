@@ -108,3 +108,17 @@ greps, 16-file scope, B1-correction integrity. NEXT TICK: on accept -> orch veri
 BACKGROUND (schema YAML changes) -> T3 real-standards smoke re-run on merged stack per OQ1 ->
 merge --no-ff wt/gc-8-lane1-l1t1130 -> mark done. Slot-0 FREE at checkpoint; slot-1 GC-10 live
 (due ~17:45). Vision slot free; GC-11 composer still gated on GC-10's shipped exports.
+
+### 1650 second addendum — adv cycle 2 verdict fix (1 defect), FIX RUN 3 LIVE slot-0
+
+Cycle 2 (reviews/GC8-advreview-cycle2-l1t1640.md @ ee837d27): VERDICT fix; D1/D2/D4/D5 CLOSED
+(reviewer ran chaining 6/6 in 84s, python 180 OK, schema 102/102, tsc 0, greps 0, 16-file scope
+clean). Sole defect (minor): D3 token conformance — undeclared WEIGHTING_CONFLICT emitted where
+spec-canonical PARAM_INVALID (spec :499) is the declared path; effective_weighting literal
+'per_point_declared' vs expected 'per_point'; report:155 misstatement. FIX RUN 3 dispatched
+16:48:02 slot-0 (systemd run-p3110576, PID 3110579, log coder-GC8-fix3-l1t1650.log, prompt
+coder-GC8-fix3-l1t1650.txt; end-marker GC8 FIX3 DONE/BLOCKED; due ~17:20). NEXT: cycle-3 micro-
+review (D3 re-probe + battery spot-check; monotone 5->1 improvement justifies cycle 3), then
+orch verify -> stack restart -> T3 re-run -> merge. PATH NOTE: cycle-1 review file actually
+lives at ~/.hermes/cl/reviews/GC8-advreview-cycle1-l1t1455.md (NOT lanes/1/reviews/) — cite it
+correctly in future prompts. GC-10 slot-1 healthy (report+movement checked 16:45; due ~17:45).
