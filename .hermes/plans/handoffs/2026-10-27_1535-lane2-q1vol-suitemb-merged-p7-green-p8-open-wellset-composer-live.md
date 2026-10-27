@@ -47,8 +47,8 @@ blind-dispatch a coder; if product-behaviour change is needed, it is either
 WELLSET-RESOLVER-1 scope or a new architect packet.
 
 ## LIVE AT THIS CHECKPOINT (do not duplicate)
-- SUITE-B FIX-8 coder: EXITED (rc=0), merged — nothing live.
-- cl-spec-composer WELLSET-RESOVER-1 draft (unit cl-l2-speccomp-wellset-l2t1450,
+- SUITE-B FIX-8 coder: EXITED (rc=0), merged (c5db498e) — nothing live.
+- cl-spec-composer WELLSET-RESOLVER-1 draft (unit cl-l2-speccomp-wellset-l2t1450,
   thunderbeast, log logs/speccomp-wellset-l2t1450.log): STILL ALIVE at budget expiry,
   ~33 min elapsed (~2h class; 2x ~17:30). Draft owed
   drafts/2026-10-27_L2-WELLSET-RESOLVER-1-DRAFT.l2t1450.md. Next tick: review draft,
