@@ -1007,10 +1007,25 @@ def _seq_context_identity_sha(ctx):
 def _seq_context_from_catalog(catalog, contract, last_action_result):
     """Build the captured sequences-surface context (SequencesPage.tsx:77
     aiContext → useAiChat.ts:796 contextPayload = {...surfaceContext}).
-    Conditional spreads mirror the page: residues only when <=20000 and
-    selected; endpoint configuration / oligos / channel / outputArtifactRefs
-    / statement only when present. The lane corpus has no selection, so the
-    selected-record spread is the empty object (faithful, not invented)."""
+    Faithful to the page's conditional spreads:
+      - configuration: included for EVERY record whose kind is
+        'sequence-endpoint' — the page's own conditional spread
+        (`...(r.payload.kind==='sequence-endpoint' ?
+        {configuration:r.payload} : {})`), always true for endpoint
+        records, so the full endpoint payload always rides as
+        `configuration` (advc fix run 1, D2 — no divergence);
+      - oligos / channel / outputArtifactRefs / statement: the page's
+        truthy spreads (oligos / channel_label / outputArtifactRefs /
+        statement);
+    DISCLOSED DIVERGENCE (advc D1 — the residues selection guard is NOT in
+    this item's fix list): the page spreads residues only when
+    `r.recordId === selected && r.payload.residues?.length <= 20000`, with
+    `selected` initialised to '' (SequencesPage.tsx:26) — so with no
+    record selected the page sends NO residues. The driver instead
+    includes `residues` for every record that carries them (no selection
+    guard, no length cap): the P9/P10 turns ride residues the product
+    page would omit in exactly this no-selection world. Everything except
+    residues is the page's true wire shape."""
     records = []
     for r in catalog.get("records", []):
         p = r.get("payload", {})
@@ -1024,6 +1039,10 @@ def _seq_context_from_catalog(catalog, contract, last_action_result):
         }
         if p.get("residues") is not None:
             entry["residues"] = p["residues"]
+        # Page predicate (SequencesPage.tsx:77): every sequence-endpoint
+        # record rides its FULL payload as `configuration`.
+        if p.get("kind") == "sequence-endpoint":
+            entry["configuration"] = p
         if p.get("oligos") is not None:
             entry["oligos"] = p["oligos"]
         if p.get("channel_label") is not None:
@@ -1515,23 +1534,42 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                         "primary_p10_error": p10wall,
                         "followup_errors": walls,
                         "note": ("OQ3 (c) structural expression not met over "
-                                 "the complete proposal set. In write-free "
-                                 "layer (a) the run_blastn variants cannot be "
-                                 "EXECUTED into comparable artifacts: "
-                                 "run_blastn.inputs.{queries,references} must "
-                                 "be grounded record refs and the held "
-                                 "alignment was never EXECUTED (execute leg is "
+                                 "the complete proposal set. Real cause, "
+                                 "split so the OQ5 execute replay reads it "
+                                 "correctly. (1) MODEL-AUTHORING FAILURE "
+                                 "(the cause): the model did not emit a "
+                                 "schema-valid run_blastn payload — the "
+                                 "server's Ajv rejections captured in "
+                                 "primary_p10_error/followup_errors are "
+                                 "'/: Expected type: object' and "
+                                 "'/endpointRef: Missing required property: "
+                                 "type' (the model's run_blastn proposal "
+                                 "carried a non-object shape / its "
+                                 "endpointRef omitted the required 'type' "
+                                 "field). (2) CAPABILITY WALL (none): the "
+                                 "capability is NOT absent — both endpoints "
+                                 "are provisioned in the lane catalog "
+                                 "(SEQEND-mafft-lane2, SEQEND-blastn-lane2) "
+                                 "and run_mafft proposals succeeded in the "
+                                 "earlier drives (Runs A/E); the write-free "
+                                 "layer (a) simply never EXECUTES, so the "
+                                 "run_blastn variants cannot be turned into "
+                                 "comparable artifacts here (execute leg is "
                                  "ORCH-owned, OQ5; layer (a) is write-free). "
-                                 "Honest named wall, not a mock (B3/B6). The "
-                                 "actual two-artifact comparison is the "
-                                 "ORCH-owned execute replay + browser "
-                                 "receipt (OQ5/OQ4)."),
+                                 "Honest named disclosure of a "
+                                 "model-authoring failure — NOT a "
+                                 "capability/provisioning gap, and not a "
+                                 "mock (B3/B6). The actual two-artifact "
+                                 "comparison is the ORCH-owned execute "
+                                 "replay + browser receipt (OQ5/OQ4)."),
                     }
                     # P10's per-turn turn remains its honest verdict (ok when
                     # in verdict_in); the structural gap is a reported field,
                     # not a per-turn FAIL that would break verification #1.
                     print("P10 structural re-check (full proposal set): "
-                          "NOT MET (honest wall) — %s" % structural)
+                          "NOT MET (honest disclosure — model-authoring "
+                          "failure, not a capability wall) — %s"
+                          % structural)
 
     digest_after = data_repo_digest(SEQ_DATA_REPO)
     write_free = digest_before == digest_after
