@@ -128,6 +128,8 @@ properties:
               - timed_integration_windows
               - peak_detection
               - deconvolution
+              - curve_fitting
+              - weighted_regression
             support:
               type: string
               enum: [supported, approximate, unsupported, unverified]
