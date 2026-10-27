@@ -201,6 +201,16 @@ describe('L2-FREEFORM-1 acceptance #2 — assertHonestOutcome trichotomy hook', 
     );
   });
 
+  // (j) THE THIRD ANTI-GHOST SHAPE (fix run 1, advc D5): the D-1 decision
+  // names `deckLayout: null` among the shapes that "must remain the silent
+  // shape and throw" — an explicit null is rejected identically by the arm's
+  // `deckLayout !== null` guard and stays the silent shape (THROWS).
+  it('(j) deckLayout:null (explicit null) THROWS (the third anti-ghost shape, advc D5)', () => {
+    expect(() => assertHonestOutcome({ success: true, deckLayout: null })).toThrow(
+      /NOT an honest outcome/,
+    );
+  });
+
   // (i) (L2-FREEFORM-1F, the D-1 ruling's RED-SHAPE): the DEFENSIVE ORDER pin —
   // H4: error outranks the action arm. A failed turn with a well-formed
   // deckLayout alongside is the honest failure, never action-delivered (the

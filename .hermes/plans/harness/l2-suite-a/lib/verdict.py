@@ -4,10 +4,11 @@ verdict as server/src/ai/honestOutcome.ts (L2-FREEFORM-1's committed helper).
 ONE implementation lives in TS (honestOutcome.ts, consumed by the driver via
 lib/honest-cli.ts — OQ3 ruling (ii), no drift surface); THIS module is the
 python re-encoding the driver uses in-line. The pinned vitest parity pin
-(server/src/ai/L2SuiteA.honestOutcome.parity.test.ts) feeds BOTH the same five
-fixture shapes (FREEFORM acceptance #2 (a)-(e)) and asserts identical verdicts
-— drift between the two encodings is a defect (B-pair: the driver must not
-silently classify where the helper throws).
+(server/src/ai/L2SuiteA.honestOutcome.parity.test.ts) feeds BOTH the same ten
+fixture rows (FREEFORM acceptance #2 (a)-(e) verbatim + the D-1 ruling's
+(f)-(i), L2-FREEFORM-1F; (g) is two rows, g1/g2) and asserts identical
+verdicts — drift between the two encodings is a defect (B-pair: the driver
+must not silently classify where the helper throws).
 
 Structural only: reads the result's own channels and the probe's own id sets —
 zero vocabulary, zero name literals.
@@ -15,8 +16,9 @@ zero vocabulary, zero name literals.
 
 
 class HonestOutcomeError(Exception):
-    """The result is NONE of the three honest outcomes (or an unbound event
-    rode through) — the delivered-channel dump rides the message."""
+    """The result is NONE of the four honest outcomes (the trichotomy + the
+    action-delivered arm, L2-FREEFORM-1F; or an unbound event rode through) —
+    the delivered-channel dump rides the message."""
 
 
 VERDICTS = ("events-bound", "cards", "honest-failure", "action-delivered")
@@ -46,8 +48,9 @@ def _event_labware_id(event):
 def classify(result, context=None):
     """Classify a delivered draft result against the trichotomy.
 
-    Returns one of 'events-bound' | 'cards' | 'honest-failure', or raises
-    HonestOutcomeError on the silent shape / the unbound raw-label shape
+    Returns one of 'events-bound' | 'cards' | 'honest-failure' |
+    'action-delivered', or raises HonestOutcomeError on the silent shape /
+    the unbound raw-label shape
     (mirror of assertHonestOutcome's throw contract; the driver treats the
     raise as verdict None + the recorded dump).
     """

@@ -7,12 +7,12 @@
  *   1. "events-bound": events > 0 AND every event's labwareId is BOUND
  *      (∈ deck ids ∪ resolved record ids when the probe supplies them);
  *   2. "honest-failure": an error that names itself — checked BEFORE
- *      "cards" (L2-FREEFORM-1 H4): the escalation shape carries BOTH an
- *      error and the standing QUESTION (B7: the card channel stays beside
- *      the honest failure). An errored turn is the loop's terminal state —
- *      a cards-only turn (no error) is still the answerable question;
- *   3. "cards": clarification cards > 0, no error (an answerable question);
- *   4. "action-delivered" (L2-FREEFORM-1F, the D-1 ruling): the deckLayout
+ *      "cards" (L2-FREEFORM-1 H4) AND before the action arm (the D-1
+ *      ruling): the escalation shape carries BOTH an error and the
+ *      standing QUESTION (B7: the card channel stays beside the honest
+ *      failure). An errored turn is the loop's terminal state — a
+ *      cards-only turn (no error) is still the answerable question;
+ *   3. "action-delivered" (L2-FREEFORM-1F, the D-1 ruling): the deckLayout
  *      action channel carries a WELL-FORMED delivery — a non-null object
  *      with a non-empty string platformId AND a non-empty string variantId
  *      (the server's emit site stamps exactly this shape). The arm is
@@ -21,7 +21,9 @@
  *      expectations catch, not the wall. The server's canonical emptiness
  *      guard already counts deckLayout a deliverable channel (see the
  *      drift comment below), so a turn the product calls delivered is not
- *      the silent shape (defect D-1, closed).
+ *      the silent shape (defect D-1, closed). CHECKED BEFORE "cards" —
+ *      precedence events-bound > honest-failure > action-delivered > cards;
+ *   4. "cards": clarification cards > 0, no error (an answerable question).
  * Anything else — the shipped defect shape { success:true, events>0,
  * cards==0, no error } with an UNBOUND raw-label labwareId, or a silent
  * success with zero delivery on every channel — MUST throw (with the

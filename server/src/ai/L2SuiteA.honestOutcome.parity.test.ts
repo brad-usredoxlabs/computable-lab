@@ -1,10 +1,12 @@
 /**
  * L2-SUITE-A — the HONESTY-HELPER PARITY PIN (OQ3 ruling: "a pinned parity
- * test (vitest, in server or app per OQ3) feeds both implementations the same
- * five fixture shapes (FREEFORM acceptance #2 (a)-(e)) and asserts identical
- * verdicts — drift between driver and helper is a defect").
+ * test (vitest, in server or app per OQ3) feeds both implementations the
+ * same fixture shapes and asserts identical verdicts — drift between driver
+ * and helper is a defect"; original scope: the FREEFORM acceptance #2
+ * shapes (a)-(e), below verbatim).
  *
- * The three implementations fed the SAME five fixtures:
+ * The three implementations fed the SAME fixture rows — eleven in total
+ * (the inventory below; (g) is two rows, g1/g2):
  *   1. THE COMMITTED TS HELPER — server/src/ai/honestOutcome.ts
  *      (L2-FREEFORM-1's assertHonestOutcome / classifyHonestOutcome),
  *      in-process import (the source of truth; SUITE-A consumes, never
@@ -17,7 +19,10 @@
  *      lib/verdict-cli.py (lib/verdict.py), re-encoded structurally for the
  *      driver's in-line use.
  *
- * The five fixtures (FREEFORM acceptance #2, verbatim shapes):
+ * The fixture inventory (eleven rows — FREEFORM acceptance #2 (a)-(e)
+ * verbatim, extended by the D-1 ruling's RED-SHAPE (f)-(i) [L2-FREEFORM-1F]
+ * and the (j) null anti-ghost pin [fix run 1, advc D5]; (g) is two rows,
+ * g1/g2):
  *   (a) events-bearing result (bound labwareId, probe supplies the id set)
  *       → "events-bound";
  *   (b) cards result → "cards";
@@ -32,9 +37,17 @@
  *       for-field from receipts/L2-SUITE-A/20261027T045347Z/prompt-1.json
  *       :6-12) → "action-delivered" — the structural action-delivered arm
  *       (non-null object + non-empty string platformId AND variantId);
- *   (g) the anti-ghost set — {deckLayout:{}} and
- *       {deckLayout:{platformId:'',variantId:''}} → THROWS (an empty-but-
- *       present deckLayout never earns the arm, pre- AND post-arm).
+ *   (g1) anti-ghost: {deckLayout:{}} → THROWS (an empty-but-present
+ *       deckLayout never earns the arm, pre- AND post-arm);
+ *   (g2) anti-ghost: {deckLayout:{platformId:'',variantId:''}} → THROWS
+ *       (empty ids never earn the arm);
+ *   (h) {deckLayout:{platformId:'manual'}} (variantId ABSENT) → THROWS
+ *       (the arm requires BOTH ids — the D-1 ruling's RED-SHAPE (h));
+ *   (i) error + delivered deckLayout → "honest-failure" (H4: error
+ *       outranks the action arm — the defensive-order pin, the D-1 ruling's
+ *       RED-SHAPE (i));
+ *   (j) {deckLayout:null} → THROWS (the decision's third anti-ghost shape:
+ *       an explicit null stays the silent shape — fix run 1, advc D5).
  *
  * Run (cwd=server): npx vitest run src/ai/L2SuiteA.honestOutcome.parity.test.ts
  * Zero model calls; zero store writes; pure fixture classification.
@@ -48,8 +61,9 @@ const HARNESS_DIR = resolve(process.cwd(), '..', '.hermes', 'plans', 'harness', 
 const NODE_CLI = resolve(HARNESS_DIR, 'lib', 'honest-cli.ts');
 const PYTHON_CLI = resolve(HARNESS_DIR, 'lib', 'verdict-cli.py');
 
-/** The seven fixture shapes (a)-(g) (FREEFORM acceptance #2 (a)-(e) verbatim
- *  + the D-1 ruling's (f)/(g), L2-FREEFORM-1F). Each:
+/** The eleven fixture rows (a)-(j) (FREEFORM acceptance #2 (a)-(e) verbatim
+ *  + the D-1 ruling's (f)-(i), L2-FREEFORM-1F + the (j) null anti-ghost pin,
+ *  fix run 1 advc D5; (g) is two rows, g1/g2). Each:
  *  { result, context?, expected: verdict | 'THROW' }. */
 const FIXTURES: Array<{
   name: string;
@@ -136,6 +150,16 @@ const FIXTURES: Array<{
       deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
     },
     expected: 'honest-failure',
+  },
+  // (j) THE THIRD ANTI-GHOST SHAPE (fix run 1, advc D5): the D-1 decision
+  // names `deckLayout: null` among the shapes that "must remain the silent
+  // shape and throw" — an explicit null is rejected identically in both
+  // feeds (TS: the arm's `deckLayout !== null` guard; python: None is not a
+  // dict) and is pinned in all three feeds here.
+  {
+    name: '(j) anti-ghost: deckLayout:null (explicit null never earns the arm)',
+    result: { success: true, deckLayout: null },
+    expected: 'THROW',
   },
 ];
 
@@ -247,8 +271,9 @@ describe('L2-SUITE-A honest-outcome parity pin (OQ3: ONE trichotomy, three feeds
     }
     // the expected column is the FREEFORM acceptance #2 verdicts (a)-(e)
     // verbatim, extended (L2-FREEFORM-1F) with the D-1 ruling's RED-SHAPE
-    // (f)-(i): the action-delivered arm is ADDITIVE — the shipped-defect
-    // shapes (d)/(e) still THROW.
+    // (f)-(i) and the (j) null anti-ghost pin (fix run 1, advc D5): the
+    // action-delivered arm is ADDITIVE — the shipped-defect shapes (d)/(e)
+    // still THROW.
     expect(verdicts.map((r) => r[0])).toEqual([
       'events-bound',
       'cards',
@@ -260,6 +285,7 @@ describe('L2-SUITE-A honest-outcome parity pin (OQ3: ONE trichotomy, three feeds
       'THROW',
       'THROW',
       'honest-failure',
+      'THROW',
     ]);
   });
 });
