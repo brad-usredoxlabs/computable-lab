@@ -213,7 +213,12 @@ class TestPeakIntegration(unittest.TestCase):
             self.assertLessEqual(abs(row["height_pa"] - amp) / amp, 0.02)
             # area within 2 % (pinned 10 %)
             self.assertLessEqual(abs(row["area_pa_min"] - analytic) / analytic, 0.02)
-            self.assertLess(row["width_min"], 0.02 / (s * 1e-9))  # positive & sane
+            # width = area/height against the analytic tangential-equivalent
+            # width (area/height, sigma·sqrt(2π)) at the declared 2 % — a
+            # real bound, not an effectively-unbounded sanity check (F4)
+            analytic_width = analytic / amp
+            self.assertLessEqual(abs(row["width_min"] - analytic_width),
+                                 0.02 * analytic_width)
             self.assertGreaterEqual(row["symmetry"], 0.99)
             self.assertLessEqual(row["symmetry"], 1.01)
             self.assertFalse(row["saturated"])
@@ -698,6 +703,161 @@ class TestPeakIntegration(unittest.TestCase):
                                      / drow["area_pa_min"], 0.10)
 
     # ------------------------------------------------------------------
+    # T1-14 — tangent_skim behavioural coverage (adversarial review cycle-1,
+    # findings F1/F2). The skim path was previously shipped with ZERO tests:
+    # deleting the valley-band gate left the whole suite green. These cases
+    # pin the declared one-sided gate (spec §A3.3: floor > skim_ratio·small_h,
+    # upper-bounded by valley_to_peak_ratio·small_h) and the skimmed baseline
+    # geometry. All fixtures are deterministic hand-built Gaussians on a
+    # TILTED baseline (10 + 8·t pA) — the tilt is what makes the pre-skim
+    # vertical-drop baseline lag BELOW the two-flank connecting line, so a
+    # band-matched skim measurably RAISES the baseline (on a flat baseline
+    # the drop has already flattened the valley to the foot level and the
+    # connecting line is coincident). Synthetic truth, synthetic params.
+    # ------------------------------------------------------------------
+    def _skim_trace(self, rt2_min, t0=0.2, t_end=2.4, dt=0.001):
+        """Two equal 1000 pA Gaussians (σ=0.10) at 1.0 and rt2_min on a
+        tilted baseline 10 + 8·t pA. Deterministic."""
+        n = int(round((t_end - t0) / dt)) + 1
+        axis = [t0 + i * dt for i in range(n)]
+        values = [10.0 + 8.0 * t
+                  + 1000.0 * math.exp(-0.5 * ((t - 1.0) / 0.10) ** 2)
+                  + 1000.0 * math.exp(-0.5 * ((t - rt2_min) / 0.10) ** 2)
+                  for t in axis]
+        return {"axis": axis, "values": values, "axis_units": "min",
+                "value_units": "pA"}
+
+    def test_t1_14_shallow_valley_is_skimmed_to_the_connecting_line(self):
+        """F1(a): a SHALLOW valley whose floor lies in the declared band
+        (measured floor/small_h ≈ 0.088, inside [0.05, 0.2] for these params)
+        is skimmed: the baseline RISES to the straight line between the two
+        flanks' foot points and TANGENT_SKIM_APPLIED is logged."""
+        sig = self._skim_trace(1.5)
+        res, ctx = _run(sig, baseline_correction="tangent_skim",
+                        skim_ratio=0.05, valley_to_peak_ratio=0.2)
+        res_vd, _ = _run(sig)  # the vertical-drop baseline, the no-skim leg
+        self.assertEqual(len(res["rows"]), 2)
+        # the skim decision is DECLARED, not incidental
+        self.assertTrue(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                            for l in ctx.manifest().logs),
+                        "a band-matched shallow valley must log TANGENT_SKIM_APPLIED")
+        # the baseline RISES to the connecting line in the valley (it cannot
+        # fabricate signal, only raise the measured floor up to the line)
+        axis, values = sig["axis"], sig["values"]
+        n = len(axis)
+        lifts = [res["baseline"][i] - res_vd["baseline"][i] for i in range(n)]
+        lifted = [i for i in range(n) if lifts[i] > 0.0]
+        self.assertGreater(len(lifted), 0,
+                           "the skimmed baseline must rise above the "
+                           "vertical-drop baseline somewhere (F1: pin the "
+                           "path, not just log it)")
+        max_lift = max(lifts)
+        self.assertGreater(max_lift, 1.0,
+                           f"the valley lift is implausibly small: {max_lift}")
+        self.assertLess(max_lift, 10.0,
+                        f"the valley lift is implausibly large: {max_lift}")
+        # never fabricates signal: the skim only ever RAISES the baseline,
+        # and never below the vertical-drop leg (drop is min-only; the skim
+        # line only lifts the floor up to the connecting line)
+        self.assertTrue(all(lifts[i] >= 0.0 for i in range(n)),
+                        "the skimmed baseline must never drop below the "
+                        "vertical-drop baseline (min-only semantics)")
+        # the rise is CONTAINED within the two flanks' foot-to-foot span:
+        # extend each peak to its prominence floor (floor = 0.001 × robust
+        # range, the declared detection floor) — the window edges ARE the
+        # foot points the skim line connects. The lifted region must sit
+        # within the closed span [fa, fb]; a lifted baseline sample outside
+        # it would fabricate signal (the skim only raises the floor between
+        # the two flanks, never beyond them)
+        floor = 0.001 * (max(values) - min(res_vd["baseline"]))
+        i1 = min(range(n), key=lambda i: abs(axis[i] - 1.0))
+        i2 = min(range(n), key=lambda i: abs(axis[i] - 1.5))
+        fa = i1
+        while fa > 0 and (values[fa - 1] - res_vd["baseline"][fa - 1]) > floor:
+            fa -= 1
+        fb = i2
+        while fb + 1 < n and (values[fb + 1] - res_vd["baseline"][fb + 1]) > floor:
+            fb += 1
+        self.assertGreaterEqual(lifted[0], fa,
+                                "a lifted baseline sample before the front "
+                                "flank's foot would fabricate signal")
+        self.assertLessEqual(lifted[-1], fb,
+                             "a lifted baseline sample after the back flank's "
+                             "foot would fabricate signal")
+        self._assert_pairing(res["rows"])
+
+    def test_t1_14_discriminator_band_edge_is_not_skimmed(self):
+        """F2 pin + F1 gate: a valley floor at ≈0.038·small_h sits BETWEEN
+        the legacy 0.5·skim_ratio·small_h (=0.025·small_h) and the spec's
+        one-sided skim_ratio·small_h (=0.05·small_h). Under the spec's
+        one-sided lower gate (the 0.5 coefficient is NOT a declared
+        parameter) this valley must NOT be skimmed; under the legacy
+        0.5·gate it WOULD be. This single case is what makes deleting the
+        gate (F1) or restoring the 0.5 (F2) go RED."""
+        sig = self._skim_trace(1.56)
+        res, ctx = _run(sig, baseline_correction="tangent_skim",
+                        skim_ratio=0.05, valley_to_peak_ratio=0.2)
+        res_vd, _ = _run(sig)
+        self.assertEqual(len(res["rows"]), 2)
+        self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                             for l in ctx.manifest().logs),
+                         "floor≈0.038·small_h is below the one-sided "
+                         "skim_ratio·small_h=0.05·small_h gate — must NOT skim")
+        # byte-identical to the vertical-drop baseline (no skim applied)
+        self.assertEqual(res["baseline"], res_vd["baseline"],
+                         "a below-band valley must leave the baseline "
+                         "exactly as the vertical-drop leg produced it")
+        self._assert_pairing(res["rows"])
+
+    def test_t1_14_deep_valley_is_not_skimmed(self):
+        """F1(b): a DEEP valley (floor 0.0·small_h — the peaks are distinct)
+        lies below the band and is NOT skimmed."""
+        sig = self._skim_trace(1.70)
+        res, ctx = _run(sig, baseline_correction="tangent_skim",
+                        skim_ratio=0.05, valley_to_peak_ratio=0.2)
+        res_vd, _ = _run(sig)
+        self.assertEqual(len(res["rows"]), 2)
+        self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                             for l in ctx.manifest().logs),
+                         "a deep valley (floor below the band) must NOT skim")
+        self.assertEqual(res["baseline"], res_vd["baseline"],
+                         "a deep valley must leave the baseline unchanged")
+        self._assert_pairing(res["rows"])
+
+    def test_t1_14_skim_ratio_absent_is_declared_off(self):
+        """F1(c): baseline_correction='tangent_skim' WITHOUT the declared
+        skim_ratio/valley_to_peak_ratio is the DECLARED-OFF leg: the
+        SKIM_RATIO_ABSENT warning is logged (never a silent default) and the
+        vertical-drop baseline stands unchanged. One-sided absence is the
+        same declared-off."""
+        sig = self._skim_trace(1.5)
+        res, ctx = _run(sig, baseline_correction="tangent_skim")
+        res_vd, _ = _run(sig)
+        self.assertEqual(len(res["rows"]), 2)
+        logs = [l for l in ctx.manifest().logs
+                if l.get("code") == "SKIM_RATIO_ABSENT"]
+        self.assertGreaterEqual(len(logs), 1,
+                                "tangent_skim without the ratios must log "
+                                "SKIM_RATIO_ABSENT (declared off, not silent)")
+        self.assertTrue(all(l["level"] == "warning" for l in logs),
+                        "SKIM_RATIO_ABSENT is a warning (declared off)")
+        self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                             for l in ctx.manifest().logs))
+        self.assertEqual(res["baseline"], res_vd["baseline"],
+                         "with the ratios absent the vertical-drop baseline "
+                         "stands (the skim leg is OFF, not defaulted)")
+        # one-sided absence (skim_ratio present, valley_to_peak_ratio
+        # absent) is the same declared-off
+        res_b, ctx_b = _run(sig, baseline_correction="tangent_skim",
+                            skim_ratio=0.05)
+        self.assertGreaterEqual(
+            sum(1 for l in ctx_b.manifest().logs
+                if l.get("code") == "SKIM_RATIO_ABSENT"), 1)
+        self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
+                             for l in ctx_b.manifest().logs))
+        self._assert_pairing(res["rows"])
+
+    # ------------------------------------------------------------------
     # Channel selection + provenance echoes (module-side, unit level)
     # ------------------------------------------------------------------
     def test_channel_selection_is_declared_never_filename(self):
@@ -760,23 +920,54 @@ class TestPeakIntegration(unittest.TestCase):
         self.assertIn("integration_windows", payload)
 
     def test_zero_total_area_percent_is_declared(self):
-        """All-rows-null-area or zero-total → area_percent null on EVERY
-        row with the declared reason (bait #4 — never a partial
-        percentage). The zero-total arm is reached when every accepted
-        peak's area sums to exactly 0: a single zero-height candidate
-        cannot survive (height > 0 is required), so the declared
-        UNDEFINED_ZERO_TOTAL arm is proven by the module's own metric:
-        on a trace with NO peaks the table is empty and no percentage
-        exists at all — the invariant is the null-side one, asserted here
-        through the saturated-fixture path (sibling null) already covered
-        in T1-8; this case pins the EMPTY-table + zero-metrics side."""
-        res, _ = _run(fx.zeros(1000))
-        self.assertEqual(res["rows"], [])
-        self.assertEqual(res["metrics"]["peaks_detected"], 0)
-        # no row can present a percentage over an empty total
+        """Zero-total branch (bait #4 — never a percentage over an
+        incomplete total). The REAL ``total_area == 0.0`` arm is exercised
+        with rows present: single-sample bump peaks (the width gate admits
+        a zero width, area = 0.0) so the table is NON-EMPTY yet the sum of
+        the reported areas is exactly 0.0 — not the tautological
+        empty-table case. Every row's area_percent is null with the
+        declared UNDEFINED_ZERO_TOTAL reason (contagion: never a partial /
+        "complete-looking" percentage presented over an incomplete total).
+        The all-null-sibling arm (REASON_SIBLING_AREA_NULL) is pinned
+        separately by T1-8."""
+        # Three single-sample 100 pA bumps on a flat axis. slope_sensitivity
+        # 0.0 (prominence floor 0 — a single sample is a candidate) and
+        # peak_width_s 0.0 (single-sample window → trapezoid area 0.0); the
+        # width gate (0.0 × 0.0) admits the zero width. All values are
+        # declared test parameters, never module defaults.
+        n = 3000
+        axis = [i * 0.001 for i in range(n)]
+        values = [0.0] * n
+        for i in (500, 1500, 2500):
+            values[i] = 100.0
+        sig = {"axis": axis, "values": values, "axis_units": "min",
+               "value_units": "pA"}
+        res, _ = _run(sig, slope_sensitivity=0.0, peak_width_s=0.0,
+                      min_width_factor=0.0, max_width_factor=1.0)
+        # the table is NON-EMPTY — the rows exist (this is the real branch,
+        # not the vacuous empty-table case)
+        self.assertEqual(len(res["rows"]), 3)
+        self.assertEqual(res["metrics"]["peaks_detected"], 3)
+        # every row: the reported area is exactly 0.0 (single-sample
+        # trapezoid) and the area_percent is NULL — never a number presented
+        # as a percentage of a zero total
+        for r in res["rows"]:
+            self.assertEqual(r["area_pa_min"], 0.0,
+                             f"expected the single-sample area to be exactly "
+                             f"0.0: {r}")
+            self.assertIsNone(r["area_percent"],
+                              f"area_percent must be null over a zero total: {r}")
+            self.assertIn(REASON_ZERO_TOTAL, r["flags"],
+                          f"the null area_percent must carry UNDEFINED_ZERO_TOTAL: {r}")
+        # no row may carry a "complete-looking" percentage over the
+        # incomplete total (the contagion, both directions)
         self.assertEqual(
-            [r["area_percent"] for r in res["rows"] if r["area_percent"] is not None],
-            [])
+            [r["area_percent"] for r in res["rows"]
+             if r["area_percent"] is not None],
+            [],
+            "a percentage over a zero total would be a partial percentage "
+            "presented as complete")
+        self._assert_pairing(res["rows"])
 
 
 if __name__ == "__main__":

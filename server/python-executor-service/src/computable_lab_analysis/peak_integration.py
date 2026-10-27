@@ -29,9 +29,12 @@ GC-1 IQ1.MTH note; the revision's methodNotes says so verbatim):
   peak top would return the peak's own values — the drop is what makes the
   baseline honest under peaks.
 - tangent skim: after the drop, valleys between adjacent maxima whose floor
-  lies in the declared ratio band (0.5·skim_ratio·small_h < floor <
-  valley_to_peak_ratio·small_h) are skimmed to the straight line between the
-  two flanks' foot points; deep valleys (below the band) are NOT skimmed.
+  lies in the declared ratio band (skim_ratio·small_h < floor <
+  valley_to_peak_ratio·small_h — a ONE-SIDED lower gate, spec §A3.3: the
+  floor must rise above the smaller flank's half-height by ratio
+  skim_ratio, and valley_to_peak_ratio gates which valleys skim) are
+  skimmed to the straight line between the two flanks' foot points; deep
+  valleys (below the band) are NOT skimmed.
 - detection: flat-top-aware local maxima strictly above the prominence floor
   (slope_sensitivity × the segment's robust range); peak windows extend to
   the prominence floor and are TILED at the valley between overlapping
@@ -388,12 +391,14 @@ def _apply_tangent_skim(
     let the valley be the local minimum of (value − baseline) between the
     two maxima, with flanks h_a/h_b (the two maxima's heights over the
     pre-skim baseline) and small_h = min(h_a, h_b). When the valley floor
-    lies in the declared band — 0.5·skim_ratio·small_h < floor <
-    valley_to_peak_ratio·small_h — the valley region (between the two
-    maxima) is skimmed to the straight line between the two flanks' foot
-    points (the window edges): a shallow shoulder is skimmed, a deep valley
-    (peaks are distinct) is NOT. Synthetic tests pin THIS behavior — not
-    ChemStation's (vendor-undocumented)."""
+    lies in the declared band — skim_ratio·small_h < floor <
+    valley_to_peak_ratio·small_h (a ONE-SIDED lower gate per spec §A3.3:
+    the floor must rise above the smaller flank's half-height by ratio
+    skim_ratio; valley_to_peak_ratio gates which valleys skim) — the valley
+    region (between the two maxima) is skimmed to the straight line between
+    the two flanks' foot points (the window edges): a shallow shoulder is
+    skimmed, a deep valley (peaks are distinct) is NOT. Synthetic tests pin
+    THIS behavior — not ChemStation's (vendor-undocumented)."""
     n = len(values)
     out = list(base)
     ws = sorted(windows, key=lambda w: w["idx"])
@@ -414,7 +419,7 @@ def _apply_tangent_skim(
             if d < floor:
                 floor = d
                 iv = j
-        if not (0.5 * skim_ratio * small_h < floor < valley_to_peak_ratio * small_h):
+        if not (skim_ratio * small_h < floor < valley_to_peak_ratio * small_h):
             continue
         # Foot points: the window edges of each flank (where the prominence
         # floor is crossed). The skim line connects them.
@@ -428,7 +433,7 @@ def _apply_tangent_skim(
                 out[j] = line
         ctx.log(
             f"peak_integration: tangent skim applied to the valley at {values[iv] - base[iv]:.6f} "
-            f"(declared band {0.5 * skim_ratio * small_h:.6f} .. {valley_to_peak_ratio * small_h:.6f})",
+            f"(declared band {skim_ratio * small_h:.6f} .. {valley_to_peak_ratio * small_h:.6f})",
             level="info", code="TANGENT_SKIM_APPLIED",
         )
     return out
