@@ -48,6 +48,12 @@ the decoder's linear axis); every sum that feeds a reported value uses
 ``json.dumps(params, sort_keys=True, separators=(",", ":"))``. Same inputs
 twice → byte-identical digest / table JSON / metrics.
 
+UNIT CONVENTION (declared): the axis is in MINUTES (the signal artifact's
+axis_units) while the ``*_s`` parameters are in SECONDS (their unit is in
+the field name — gc-method convention). Every seconds→samples conversion
+therefore divides by 60 * dt (dt in min) — a unit constant, not a domain
+threshold.
+
 Backend selection (§A3.0): the stdlib path is pure (lists + math). The
 optional ``backend == "scipy"`` branch lazily imports scipy INSIDE the branch;
 an ImportError there is the DECLARED failure ``BACKEND_UNAVAILABLE`` — never a
@@ -448,8 +454,8 @@ def _build_baseline(
             level="info", code="BASELINE_NONE_RAW",
         )
         return [0.0] * n
-    win_pts = max(1, int(round(baseline_window_s / dt))) if dt > 0 else 1
-    smo_pts = max(1, int(round(peak_width_s / dt))) if dt > 0 else 1
+    win_pts = max(1, int(round(baseline_window_s / (60.0 * dt)))) if dt > 0 else 1
+    smo_pts = max(1, int(round(peak_width_s / (60.0 * dt)))) if dt > 0 else 1
     snaked = _rolling_min_centered_inclusive(values, win_pts // 2)
     base = _rolling_min_centered_inclusive(snaked, smo_pts // 2)
     windows = _peak_windows(maxima, values, prev_base, segs, on_mask)
@@ -585,7 +591,7 @@ def _detect(
     for seg_idx, seg in enumerate(segs):
         s, e = seg["start"], seg["end"]
         floor = _segment_floor(seg, values, base)
-        min_dist_pts = max(1, int(round(seg["eff"]["peak_width_s"] / dt))) if dt > 0 else 1
+        min_dist_pts = max(1, int(round(seg["eff"]["peak_width_s"] / (60.0 * dt)))) if dt > 0 else 1
         cands = [(i, v) for (i, v) in cands_all
                  if s <= i < e and v > base[i] + floor]
         cands.sort(key=lambda c: (-c[1], c[0]))
@@ -637,10 +643,11 @@ def _half_height_symmetry(
     start: int,
     end: int,
 ) -> Tuple[Optional[float], Optional[str]]:
-    """f/b at half height (§A1). f = RT − t_f where t_f is the LAST crossing
-    of (baseline + height/2) BEFORE the RT (the back-flank crossing);
-    b = t_b − RT where t_b is the FIRST crossing of the half level AFTER the
-    RT (the front-flank crossing). Crossings are linearly interpolated.
+    """f/b at half height (§A1). t_f = the LAST crossing of (baseline +
+    height/2) BEFORE the RT (the front-flank crossing) → f = RT − t_f;
+    t_b = the FIRST crossing of the half level AFTER the RT (the back-flank
+    crossing) → b = t_b − RT. f and b are the front/back half-height widths
+    (symmetric ≈ 1). Crossings are linearly interpolated.
     Returns (value, flag): None + REASON_HALF_HEIGHT_UNBOUNDED when a
     half-level crossing runs off the peak window; None + REASON_ZERO_HEIGHT
     when the height is not positive."""
@@ -664,8 +671,11 @@ def _half_height_symmetry(
     if i > end:
         return None, REASON_HALF_HEIGHT_UNBOUNDED
     t_front = _crossing_time(axis[i - 1], values[i - 1], axis[i], values[i], half)
-    b = rt - t_back
-    f = t_front - rt
+    # §A1: f = RT - t_f (t_f = LAST crossing BEFORE the RT = the front-flank
+    # half-width); b = t_b - RT (t_b = FIRST crossing AFTER the RT = the
+    # back-flank half-width). Symmetric ≈ 1.
+    f = rt - t_back
+    b = t_front - rt
     if b <= 0 or f <= 0:
         return None, REASON_HALF_HEIGHT_UNBOUNDED
     return f / b, None
@@ -895,12 +905,12 @@ def integrate_peaks(ctx: Any, decoded_signals: Dict[str, Dict[str, Any]],
             sym_val, sym_flag = _half_height_symmetry(idx, values, base, axis, start, end)
             if sym_flag is not None:
                 flags.append(sym_flag)
-        # Width-plausibility gate (× the declared factors, GLOBAL peak_width_s
-        # per §A2 — the width gate is a plausibility check on the expected
-        # width, not a per-segment rejection).
+        # Width-plausibility gate (× the declared factors, against the
+        # segment-effective expected width — a timed event's peak_width_s
+        # override applies from its at_min forward).
         if width_val is not None:
-            lo = min_width_factor * peak_width_s
-            hi = max_width_factor * peak_width_s
+            lo = min_width_factor * eff["peak_width_s"] / 60.0
+            hi = max_width_factor * eff["peak_width_s"] / 60.0
             if width_val < lo or width_val > hi:
                 rejected_width += 1
                 ctx.log(f"peak_integration: peak at {rt} min width {width_val:.6f} min outside "
