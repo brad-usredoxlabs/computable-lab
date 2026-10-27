@@ -18,12 +18,13 @@
  *  - NO unit literals: every unit string in this file is test DATA.
  */
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   TRACES_PALETTE,
   applyDeclaredConversion,
   buildCompareViewSpecPayload,
   checkAxes,
-  colorForTrace,
+  colorForTraceInSet,
   decimateForRender,
   extractTrace,
   stableTraceOrder,
@@ -47,6 +48,33 @@ function spyFetch(bytes = ''): { fn: (artifactRecordId: string) => Promise<strin
   const calls: string[] = []
   return { calls, fn: async (id: string) => { calls.push(id); return bytes } }
 }
+
+describe('traceModel hardcode boundary (bait #7 — CI-owned grep pin)', () => {
+  // The prod module contains ZERO unit literals and ZERO domain-name literals:
+  // units arrive from the artifact payloads; field names arrive as data.
+  // Long tokens are substring-checked; unit tokens are checked as QUOTED
+  // literals (Math.min / minI are code, not unit values — not a violation).
+  it('prod traceModel.ts carries no unit or domain literals', () => {
+    const source = readFileSync('src/analysis/traceModel.ts', 'utf8')
+    for (const banned of [
+      'baseline_correction',
+      'timed_event',
+      'ChemStation',
+      'FAME',
+      'signal_plus_baseline',
+      'rt_min',
+      'peak_table',
+      'UNRECOVERABLE_SATURATED',
+    ]) {
+      expect(source, `forbidden literal ${banned}`).not.toContain(banned)
+    }
+    for (const unit of ['pA', 'AU', 'min']) {
+      expect(source, `forbidden quoted unit literal '${unit}'`).not.toMatch(new RegExp(`['"]${unit}['"]`))
+    }
+    // No implicit scaling constant (bait #8: any *1e3-style constant is a defect).
+    expect(source, 'forbidden implicit scale constant').not.toMatch(/\b1e3\b|\b1000\b|\* ?1000\b/)
+  })
+})
 
 describe('traceModel.checkAxes (same-axes gate — rejected or declared conversion, never hidden)', () => {
   it('two traces with matching data-carried units pass', () => {
@@ -77,10 +105,14 @@ describe('traceModel.checkAxes (same-axes gate — rejected or declared conversi
 
   it('absent unit on any trace is a conflict (UNIT_UNDECLARED) — never assumed', () => {
     const a = trace({ recordId: 'AOUT-000001', xUnit: 'min', yUnit: 'pA' })
-    const b = trace({ recordId: 'AOUT-000002' })
+    const b = trace({ recordId: 'AOUT-000002', xUnit: 'min' })
     const res = checkAxes([a, b])
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.conflicts.map((c) => c.code)).toEqual(['UNIT_UNDECLARED'])
+    if (!res.ok) {
+      expect(res.conflicts).toHaveLength(1)
+      expect(res.conflicts[0]!.code).toBe('UNIT_UNDECLARED')
+      expect(res.conflicts[0]!.axis).toBe('y')
+    }
   })
 
   it('a declared conversion clears exactly its own conflict; no implicit factor discovery', () => {
@@ -96,7 +128,10 @@ describe('traceModel.checkAxes (same-axes gate — rejected or declared conversi
 
   it('a non-numeric axis value is AXIS_NOT_NUMERIC', () => {
     const a = trace({ recordId: 'AOUT-000001', xUnit: 'min', yUnit: 'pA', axis: [0, 1, 2] })
-    const b = trace({ recordId: 'AOUT-000002', xUnit: 'min', yUnit: 'pA', axis: [0, 'x', 2] })
+    // A malformed payload (non-numeric axis cell) is data arriving from a
+    // JSON artifact — checkAxes is the defensive gate, so the fixture
+    // simulates that shape with an explicit cast (NOT a number[] lie).
+    const b = { ...trace({ recordId: 'AOUT-000002', xUnit: 'min', yUnit: 'pA' }), axis: [0, 'x', 2] } as unknown as Trace
     const res = checkAxes([a, b])
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.conflicts.some((c) => c.code === 'AXIS_NOT_NUMERIC')).toBe(true)
@@ -178,27 +213,33 @@ describe('traceModel.decimateForRender (visual-only, pure over inputs)', () => {
 })
 
 describe('traceModel.colour (stable per-trace colour — bait #9)', () => {
-  it('assigns from a fixed palette in sorted-rank order, cycling', () => {
-    expect(colorForTrace('AOUT-000001')).toBe(TRACES_PALETTE[0])
-    expect(colorForTrace('AOUT-000002')).toBe(TRACES_PALETTE[1])
-    expect(colorForTrace('AOUT-000003')).toBe(TRACES_PALETTE[2])
-    expect(colorForTrace('AOUT-000009')).toBe(TRACES_PALETTE[0]) // cycles past 8
+  it('assigns from a fixed palette by rank in the sorted spec list, cycling', () => {
+    const ids = ['AOUT-000001', 'AOUT-000002', 'AOUT-000003', 'AOUT-000009']
+    expect(colorForTraceInSet(ids, 'AOUT-000001')).toBe(TRACES_PALETTE[0])
+    expect(colorForTraceInSet(ids, 'AOUT-000002')).toBe(TRACES_PALETTE[1])
+    expect(colorForTraceInSet(ids, 'AOUT-000003')).toBe(TRACES_PALETTE[2])
+    expect(colorForTraceInSet(ids, 'AOUT-000009')).toBe(TRACES_PALETTE[3])
+    // 9 traces -> the 9th cycles back to the first palette slot.
+    const nine = Array.from({ length: 9 }, (_, i) => `AOUT-${String(i + 1).padStart(6, '0')}`)
+    expect(colorForTraceInSet(nine, nine[8]!)).toBe(TRACES_PALETTE[0])
   })
 
   it('same spec, different toggle state -> same colours (toggle-state invariance)', () => {
-    const ids = ['AOUT-000003', 'AOUT-000001', 'AOUT-000002']
-    const c1 = ids.map(colorForTrace)
-    // Hiding AOUT-000002 changes the VISIBLE set, but each surviving trace's
-    // colour is the function of ITS rank in the saved spec's sorted list.
-    const c2 = ['AOUT-000003', 'AOUT-000001'].map(colorForTrace)
+    // The spec's FULL id list is the colour authority — hiding a trace changes
+    // the visible set, never the saved list, so colours are invariant.
+    const specIds = ['AOUT-000001', 'AOUT-000002', 'AOUT-000003']
+    const c1 = ['AOUT-000003', 'AOUT-000001', 'AOUT-000002'].map((id) => colorForTraceInSet(specIds, id))
+    const c2 = ['AOUT-000003', 'AOUT-000001'].map((id) => colorForTraceInSet(specIds, id))
     expect(c2).toEqual([c1[0], c1[1]])
   })
 
-  it('reordering the saved list does not recolour (rank is by id, not by position)', () => {
-    const a = ['AOUT-000001', 'AOUT-000002'].map(colorForTrace)
-    const b = ['AOUT-000002', 'AOUT-000001'].map(colorForTrace)
-    expect(a[0]).toBe(b[1])
-    expect(a[1]).toBe(b[0])
+  it('reordering the saved list does not recolour (rank is by sorted id, not position)', () => {
+    expect(colorForTraceInSet(['AOUT-000001', 'AOUT-000002'], 'AOUT-000001')).toBe(
+      colorForTraceInSet(['AOUT-000002', 'AOUT-000001'], 'AOUT-000001'),
+    )
+    expect(colorForTraceInSet(['AOUT-000001', 'AOUT-000002'], 'AOUT-000002')).toBe(
+      colorForTraceInSet(['AOUT-000002', 'AOUT-000001'], 'AOUT-000002'),
+    )
   })
 
   it('stableTraceOrder sorts by record id (the deterministic rank authority)', () => {
@@ -225,8 +266,9 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
               value: { axis: [0, 1], values: [1, 2], axis_units: 'min', value_units: 'pA' },
             },
           ],
+          artifactRefs: { sig: { artifactRecordId: 'AOUT-000001' } },
         },
-        outputArtifactRefs: { sig: { artifactRecordId: 'AOUT-000001' } },
+        outputArtifactRefs: [{ kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' }],
       },
     }
     const { calls, fn } = spyFetch()
@@ -255,8 +297,9 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
           artifacts: [
             { name: 'sig', dataKind: 'signal', dataReferenceRef: { id: 'DREF-000001' } },
           ],
+          artifactRefs: { sig: { artifactRecordId: 'AOUT-000002', dataReferenceId: 'DREF-000001' } },
         },
-        outputArtifactRefs: { sig: { artifactRecordId: 'AOUT-000002', dataReferenceId: 'DREF-000001' } },
+        outputArtifactRefs: [{ kind: 'record', id: 'AOUT-000002', type: 'analysis-output-artifact' }],
       },
     }
     const { fn, calls } = spyFetch(bytes)
@@ -271,7 +314,7 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
   })
 
   it('named error legs: unknown artifact id / artifact with no payload to read', async () => {
-    const runRecord = { recordId: 'ANR-000001', payload: { outputManifest: { artifacts: [] }, outputArtifactRefs: {} } }
+    const runRecord = { recordId: 'ANR-000001', payload: { outputManifest: { artifacts: [] } } }
     const r1 = await extractTrace(runRecord, 'AOUT-999999')
     expect(r1.ok).toBe(false)
     if (!r1.ok) expect(r1.code).toBe('ARTIFACT_NOT_FOUND')
@@ -281,8 +324,10 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
     const runNoPayload = {
       recordId: 'ANR-000001',
       payload: {
-        outputManifest: { artifacts: [{ name: 'sig', dataKind: 'signal' }] },
-        outputArtifactRefs: { sig: { artifactRecordId: 'AOUT-000001' } },
+        outputManifest: {
+          artifacts: [{ name: 'sig', dataKind: 'signal' }],
+          artifactRefs: { sig: { artifactRecordId: 'AOUT-000001' } },
+        },
       },
     }
     const r2 = await extractTrace(runNoPayload, 'AOUT-000001')
