@@ -53,7 +53,9 @@ function sigValue(n = 21, xMax = 10): { axis: number[]; values: number[]; axis_u
 
 function sigArtifact(inline?: unknown, dref?: { id: string }) {
   return {
-    id: dref ? '' : 'AOUT-000001',
+    // AOUT-* artifact record id (the content route resolves AOUT ids —
+    // `dataReferenceRef` only SIGNALS the dref-backed storage).
+    id: 'AOUT-000001',
     name: 'trace',
     dataKind: 'signal',
     ...(inline !== undefined ? { inlineValue: inline } : {}),
@@ -238,15 +240,17 @@ describe('ChromatogramView — decimation is visual-only (D5 pin)', () => {
 })
 
 describe('ChromatogramView — dref-backed bytes via the ratified OQ-1(a) route', () => {
-  it('fetches through apiClient.getAnalysisArtifactContent (id only) and renders the full-resolution trace', async () => {
-    // The client method returns the route's PARSED JSON (res.json()); the
-    // component parses nothing further — the full-resolution arrays arrive.
+  it('fetches through apiClient.getAnalysisArtifactContent with the AOUT id (NOT the dref id) and renders the full-resolution trace', async () => {
+    // Client-shaped value: the route's `content` field UNWRAPPED (the stored
+    // JSON PARSED — the client method does the res.json() + envelope unwrap).
     const value = sigValue()
     vi.mocked(apiClient.getAnalysisArtifactContent).mockResolvedValue(value as unknown)
     render(<ChromatogramView artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />)
     expect(await screen.findByTestId('chromatogram-svg')).toBeDefined()
     expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(1)
-    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledWith('DREF-000001')
+    // The content route resolves AOUT-* ids (a DREF id would 400 NOT_ARTIFACT):
+    // the fetch carries the artifact's AOUT record id.
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledWith('AOUT-000001')
   })
 
   it('a route failure is a NAMED error — never a silent fallback (bait #13)', async () => {

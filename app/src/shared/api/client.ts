@@ -3271,7 +3271,11 @@ export const apiClient = {
   /** GC-10 OQ-1(a): read the stored bytes of a data-reference-backed analysis
    *  output artifact via the read-only content route (GET-only; the storage
    *  path is resolved server-side from the immutable DREF record — the client
-   *  supplies ONLY the AOUT-* record id). Returns the raw JSON bytes. */
+   *  supplies ONLY the AOUT-* record id). The route answers with the envelope
+   *  `{ artifactId, dataReferenceId, content }` whose `content` field is the
+   *  artifact's stored JSON, PARSED — this method returns that `content`
+   *  field directly (the unwrapped trace payload object), or null when the
+   *  envelope carries no content (the route always fills it on 2xx). */
   async getAnalysisArtifactContent(id: string): Promise<unknown> {
     const res = await fetch(`${API_BASE}/analysis-artifacts/${encodeURIComponent(id)}/content`)
     if (!res.ok) {
@@ -3284,7 +3288,8 @@ export const apiClient = {
       }
       throw new Error(detail || `analysis artifact content unavailable (HTTP ${res.status})`)
     }
-    return res.json()
+    const body = (await res.json()) as { content?: unknown }
+    return body && typeof body === 'object' && 'content' in body ? body.content : body
   },
 
   async executeInstrumentApplianceJob(

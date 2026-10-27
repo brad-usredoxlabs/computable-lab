@@ -17,8 +17,9 @@
  *  - saved payloads OMIT absent optional keys (bait #10).
  *  - NO unit literals: every unit string in this file is test DATA.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { apiClient } from '../shared/api/client'
 import {
   TRACES_PALETTE,
   applyDeclaredConversion,
@@ -34,6 +35,7 @@ import {
   parseTraceValue,
   stableTraceOrder,
   type DeclaredConversion,
+  type FetchContent,
   type Trace,
 } from './traceModel'
 
@@ -48,10 +50,12 @@ function trace(partial: Partial<Trace> & { recordId: string }): Trace {
   } as Trace
 }
 
-/** A minimal fetchContent spy (test-local; the prod caller is the OQ-1(a) client method). */
-function spyFetch(bytes = ''): { fn: (artifactRecordId: string) => Promise<string | null>; calls: string[] } {
+/** A minimal fetchContent spy (test-local; the prod caller is the OQ-1(a) client method).
+ *  CLIENT-SHAPED: the real channel returns the route's `content` field UNWRAPPED
+ *  (a parsed payload object — never a raw JSON string). */
+function spyFetch(content: unknown = null): { fn: (artifactRecordId: string) => Promise<unknown>; calls: string[] } {
   const calls: string[] = []
-  return { calls, fn: async (id: string) => { calls.push(id); return bytes } }
+  return { calls, fn: async (id: string) => { calls.push(id); return content } }
 }
 
 describe('traceModel.parseChromatogramBindings / parseCompareBindings (D6 named guards)', () => {
@@ -439,7 +443,9 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
   })
 
   it('reads dref-backed bytes through the ratified content route when there is no inline value', async () => {
-    const bytes = JSON.stringify({ axis: [0, 1, 2], values: [3, 4, 5], axis_units: 'min', value_units: 'pA' })
+    // Client-shaped value: the route's `content` field (the stored JSON
+    // PARSED — the client method does the res.json() + envelope unwrap).
+    const content = { axis: [0, 1, 2], values: [3, 4, 5], axis_units: 'min', value_units: 'pA' }
     const runRecord = {
       recordId: 'ANR-000002',
       payload: {
@@ -453,7 +459,7 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
         outputArtifactRefs: [{ kind: 'record', id: 'AOUT-000002', type: 'analysis-output-artifact' }],
       },
     }
-    const { fn, calls } = spyFetch(bytes)
+    const { fn, calls } = spyFetch(content)
     const res = await extractTrace(runRecord, 'AOUT-000002', fn)
     expect(res.ok).toBe(true)
     if (res.ok) {
@@ -461,6 +467,53 @@ describe('traceModel.extractTrace (inline OR the OQ-1(a) content route)', () => 
       expect(res.trace.xUnit).toBe('min')
       expect(res.trace.yUnit).toBe('pA')
       expect(calls).toEqual(['AOUT-000002'])
+    }
+  })
+
+  it('D1 seam: drives the REAL handler response shape through the REAL client-shaped value into extractTrace (no double mocking)', async () => {
+    // The server handler (analysisArtifactContent.ts) answers with the
+    // ENVELOPE { artifactId, dataReferenceId, content }. This test feeds that
+    // exact 2xx JSON body to the REAL apiClient.getAnalysisArtifactContent
+    // (only the network is stubbed), and threads the client's REAL return
+    // value as the FetchContent channel into extractTrace's dref branch —
+    // no pre-parsed string, no mocked client, no double mocking.
+    const handlerBody = {
+      artifactId: 'AOUT-000009',
+      dataReferenceId: 'DREF-000009',
+      content: { axis: [0, 1, 2, 3], values: [0.5, 4.25, 1.75, 0.1], axis_units: 'min', value_units: 'pA' },
+    }
+    const fetchSpy = vi.fn(async (_url: string | URL | undefined) => ({ ok: true, status: 200, json: async () => handlerBody }))
+    vi.stubGlobal('fetch', fetchSpy)
+    const runRecord = {
+      recordId: 'ANR-000009',
+      payload: {
+        title: 'Run C',
+        outputManifest: {
+          artifacts: [
+            { name: 'sig', dataKind: 'signal', dataReferenceRef: { id: 'DREF-000009' } },
+          ],
+          artifactRefs: { sig: { artifactRecordId: 'AOUT-000009', dataReferenceId: 'DREF-000009' } },
+        },
+        outputArtifactRefs: [{ kind: 'record', id: 'AOUT-000009', type: 'analysis-output-artifact' }],
+      },
+    }
+    const fn: FetchContent = (artifactRecordId: string) => apiClient.getAnalysisArtifactContent(artifactRecordId)
+    try {
+      const res = await extractTrace(runRecord, 'AOUT-000009', fn)
+      expect(res.ok).toBe(true)
+      if (res.ok) {
+        expect(res.trace.axis).toEqual([0, 1, 2, 3])
+        expect(res.trace.values).toEqual([0.5, 4.25, 1.75, 0.1])
+        expect(res.trace.xUnit).toBe('min')
+        expect(res.trace.yUnit).toBe('pA')
+        expect(res.trace.runTitle).toBe('Run C')
+        expect(res.trace.artifactName).toBe('sig')
+      }
+      // The client called the content route with the AOUT id.
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain('/analysis-artifacts/AOUT-000009/content')
+    } finally {
+      vi.unstubAllGlobals()
     }
   })
 

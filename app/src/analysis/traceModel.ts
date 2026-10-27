@@ -61,8 +61,13 @@ export interface RenderSlice {
   droppedCount: number
 }
 
-/** The OQ-1(a) content-fetch channel (the ratified read-only route). */
-export type FetchContent = (artifactRecordId: string) => Promise<string | null>
+/** The OQ-1(a) content-fetch channel (the ratified read-only route).
+ *  The prod wiring is the client method itself, which fetches
+ *  `GET /api/analysis-artifacts/:id/content` and returns the route's
+ *  `content` field UNWRAPPED from the `{ artifactId, dataReferenceId,
+ *  content }` envelope — i.e. the artifact's stored (parsed) trace payload
+ *  OBJECT for a well-formed dref artifact (never a raw JSON string). */
+export type FetchContent = (artifactRecordId: string) => Promise<unknown>
 
 export type TraceError =
   | { ok: false; code: 'ARTIFACT_NOT_FOUND'; message: string }
@@ -212,17 +217,13 @@ export async function extractTrace(
   if (!drefId || !fetchContent) {
     return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} has no readable payload (dref content route unavailable)` }
   }
-  const bytes = await fetchContent(artifactRecordId)
-  if (!bytes) {
-    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content route returned no bytes` }
+  // The channel already returns the client-unwrapped `content` field (the
+  // route's PARSED JSON payload — the client method does the res.json()).
+  const value = await fetchContent(artifactRecordId)
+  if (value === null || value === undefined) {
+    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content route returned no payload` }
   }
-  let parsedJson: unknown
-  try {
-    parsedJson = JSON.parse(bytes)
-  } catch {
-    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId} content is not JSON` }
-  }
-  const parsed = parseTraceValue(parsedJson)
+  const parsed = parseTraceValue(value)
   if (!parsed.ok) {
     return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${artifactRecordId}: ${parsed.message}` }
   }

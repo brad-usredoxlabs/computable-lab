@@ -98,17 +98,24 @@ export function ChromatogramView({
   const svgRef = useRef<SVGSVGElement | null>(null)
 
   // ---- Data: inline value OR the OQ-1(a) content route (dref-only) ----
+  // `dataReferenceRef` only SIGNALS that this artifact is dref-backed (its
+  // bytes live in storage, not in the manifest). The content route resolves
+  // AOUT-* record ids (the handler looks the id up in the store and requires
+  // kind analysis-output-artifact — a DREF id would 400 NOT_ARTIFACT), so the
+  // fetch carries the artifact's AOUT record id and receives the client-
+  // UNWRAPPED `content` field (the stored trace payload object).
   const drefId = artifact.dataReferenceRef?.id
+  const aoutId = artifact.id
   const [fetched, setFetched] = useState<unknown>(undefined)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!drefId) return
+    if (!drefId || !aoutId) return
     let on = true
     setFetched(undefined)
     setFetchError(null)
     apiClient
-      .getAnalysisArtifactContent(drefId)
+      .getAnalysisArtifactContent(aoutId)
       .then((v) => {
         if (on) setFetched(v)
       })
@@ -118,7 +125,7 @@ export function ChromatogramView({
     return () => {
       on = false
     }
-  }, [drefId])
+  }, [drefId, aoutId])
 
   const value = artifact.inlineValue !== undefined ? artifact.inlineValue : fetched
   const parsed = useMemo(() => {

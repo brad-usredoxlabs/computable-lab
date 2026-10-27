@@ -58,12 +58,14 @@ export interface CompareRunSummary {
   status?: string
 }
 
-/** The OQ-1(a) content channel wrapped to the FetchContent contract. */
+/** The OQ-1(a) content channel wrapped to the FetchContent contract. The
+ *  client method ALREADY unwraps the route's `{ artifactId, dataReferenceId,
+ *  content }` envelope (returns `content` — the stored trace payload object),
+ *  so the channel passes the client's value through verbatim: a null/missing
+ *  content becomes the NAMED NO_PAYLOAD error in extractTrace, never a
+ *  silent no-overlay. */
 function contentFetch(): FetchContent {
-  return async (artifactRecordId: string) => {
-    const v = await apiClient.getAnalysisArtifactContent(artifactRecordId)
-    return typeof v === 'string' ? v : null
-  }
+  return (artifactRecordId) => apiClient.getAnalysisArtifactContent(artifactRecordId)
 }
 
 interface SelectedArtifact {
