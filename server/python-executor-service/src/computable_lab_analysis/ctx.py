@@ -46,7 +46,17 @@ class DatasetHandle:
         if self.inline is not None and isinstance(self.inline, dict):
             return self.inline
         if self.path:
-            text = Path(self.path).read_text(encoding="utf-8")
+            # GC-6 (D3.1) — the reader seam: file bytes carrying the v181 .CH
+            # marker (marker at :326/:327, a cheap slice probe) are decoded by
+            # the d_reader module; everything else keeps the CSV behavior
+            # BYTE-IDENTICAL (reviewer bait #5).
+            raw = Path(self.path).read_bytes()
+            if _looks_like_ch_v181(raw):
+                from computable_lab_analysis.d_reader import read_ch_bytes
+
+                meta_source = self.meta.get("sourcePath") if isinstance(self.meta, dict) else None
+                return read_ch_bytes(raw, source=meta_source or self.path)
+            text = raw.decode(encoding="utf-8")
             # naive CSV -> points; robust parsing belongs to the runner/readers
             return _csv_signal(text)
         return {"axis": [], "values": []}
@@ -70,6 +80,13 @@ class DatasetHandle:
     @property
     def source_path(self) -> Optional[str]:
         return self.path
+
+
+def _looks_like_ch_v181(raw: bytes) -> bool:
+    """v181 .CH marker probe for the read_signal seam (D3.1): the marker bytes
+    at :326 (0x03) and :327..331 (b'1\\x008\\x00', UTF-16 '18'). A slice check —
+    non-CH files (CSV, JSON, inline tables) never match and keep the CSV path."""
+    return len(raw) > 331 and raw[326] == 3 and raw[327:331] == b"1\x008\x00"
 
 
 def _parse_rows(text: str) -> List[Dict[str, Any]]:
@@ -162,10 +179,15 @@ class OutputManifest:
     views: List[View] = field(default_factory=list)
     metrics: List[Dict[str, Any]] = field(default_factory=list)
     logs: List[Dict[str, Any]] = field(default_factory=list)
+    # GC-6 (D4): reader identity + version, set by d_reader.attach() when a run
+    # decodes .D inputs. Absent (None) on every other run → to_dict() omits the
+    # key, keeping the manifest JSON byte-identical for non-reader runs.
+    reader: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "version": self.version,
+            **({} if self.reader is None else {"reader": self.reader}),
             "artifacts": [
                 {
                     "name": a.name,
@@ -234,6 +256,10 @@ class Context:
             inline=spec.get("inline"),
             meta=dict(spec.get("meta", {})),
         )
+
+    def input_names(self) -> List[str]:
+        """GC-6 (D3.2) — sorted input names (needed by d_reader.attach())."""
+        return sorted(self._inputs)
 
     def publish(
         self,
