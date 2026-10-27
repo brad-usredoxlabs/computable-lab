@@ -223,6 +223,12 @@ def load_structured_input(handle: DatasetHandle, params: Dict[str, Any]) -> Any:
         return inline
     if isinstance(inline, list):
         return inline
+    if inline is not None:
+        # a NON-structured inline value (scalar/string): pass it through — the
+        # CALLER's shape/contract check raises the consumer-side code
+        # (PEAK_TABLE_SHAPE_INVALID for tables, MODEL_PAYLOAD_INVALID for the
+        # model). The loader never guesses, never coerces (A5).
+        return inline
     if handle.path:
         try:
             raw = Path(handle.path).read_bytes()
@@ -592,6 +598,10 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(lv, dict):
             raise CalibrationError("PARAM_INVALID", f"levels[{idx}] must be an object, got {lv!r}")
         for f in LEVEL_REQUIRED_FIELDS:
+            if f == "amount":
+                continue  # the dedicated LEVEL_AMOUNT_MISSING check below owns
+                          # the missing-amount code (spec A1: missing amount =
+                          # whole-run failure LEVEL_AMOUNT_MISSING, NOT PARAM_MISSING)
             if f not in lv:
                 raise CalibrationError(
                     "PARAM_MISSING", f"levels[{idx}] is missing required field '{f}' — no default is applied"
@@ -606,7 +616,7 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             raise CalibrationError(
                 "PARAM_INVALID", f"levels[{idx}].compound_label must be a non-empty string, got {label!r}"
             )
-        amount = lv["amount"]
+        amount = lv.get("amount")
         if "amount" not in lv or amount is None:
             raise CalibrationError(
                 CODE_LEVEL_AMOUNT_MISSING,

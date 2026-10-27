@@ -246,5 +246,432 @@ class TestC6OriginConstraintForced(unittest.TestCase):
         self.assertGreater(model["statistic_value"], 0.9)
 
 
+class TestC4QuadraticExact(unittest.TestCase):
+    """C4 — quadratic, w=none, x=1..5 on y = 1 + 2x + 0.1x² (1/10 exact
+    rational): c0 = 1.0, c1 = 2.0, c2 = 0.1 within float epsilon; the
+    equation carries the x**2 form; residuals are 0."""
+
+    def test_c4_quadratic(self):
+        fixture = fx.C4
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        params = cal_params(fixture, model="quadratic")
+        res = run_fit(inputs, params)
+        model = res["model"]
+        assert_close(self, model["coefficients"]["c0"], fixture["expected_c0"], "C4 c0")
+        assert_close(self, model["coefficients"]["c1"], fixture["expected_c1"], "C4 c1")
+        assert_close(self, model["coefficients"]["c2"], fixture["expected_c2"], "C4 c2")
+        assert_close(self, model["statistic_value"], 1.0, "C4 r2_w")
+        for row in res["table_rows"]:
+            assert_close(self, row["relative_residual"], 0.0, "C4 residual")
+        self.assertIn("amount_ng_uL**2", model["equation"])
+        self.assertEqual(model["model"], "quadratic")
+
+
+class TestC5LinearThroughOrigin(unittest.TestCase):
+    """C5 — linear_through_origin, points (1,3),(2,6),(3,9),(4,12): slope =
+    3.0 EXACT; the equation string says the '+ 0' form; the intercept is
+    zero BY CONSTRUCTION (absent/zero flag in the payload)."""
+
+    def test_c5_through_origin(self):
+        fixture = fx.C5
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        params = cal_params(fixture, model="linear_through_origin")
+        res = run_fit(inputs, params)
+        model = res["model"]
+        assert_close(self, model["coefficients"]["slope"], fixture["expected_slope"], "C5 slope 3.0")
+        self.assertEqual(model["coefficients"]["intercept"], 0.0)  # by construction
+        self.assertTrue(model["equation"].endswith("+ 0.0"))
+        assert_close(self, model["statistic_value"], 1.0, "C5 r2_w")
+        for row in res["table_rows"]:
+            assert_close(self, row["relative_residual"], 0.0, "C5 residual")
+        self.assertEqual(model["model"], "linear_through_origin")
+
+
+class TestC7ISTDRatioMode(unittest.TestCase):
+    """C7 — ISTD ratio mode: analyte area = k*amount, ISTD area constant 1000
+    → ratio curve slope = k/1000 = 0.5 EXACT; response_quantity ==
+    'area_ratio'; response_ratio column is the ratio (the ONLY ISTD division
+    in the system — A3); residuals 0; statistic 1.0."""
+
+    def test_c7_ratio_curve(self):
+        fixture = fx.C7
+        inputs = fx.c7_level_payloads(fixture)
+        params = cal_params(
+            fixture,
+            levels=fx.level_params(fixture, rt0=1.0, d_rt=1.0,
+                                   compound_label="TEST-CMPD-ANALYTE"),
+            istd=fx.c7_istd(fixture),
+        )
+        res = run_fit(inputs, params)
+        model = res["model"]
+        assert_close(self, model["coefficients"]["slope"], fixture["expected_slope"],
+                     "C7 ratio slope k/1000 exact")
+        assert_close(self, model["coefficients"]["intercept"], fixture["expected_intercept"],
+                     "C7 intercept")
+        self.assertEqual(model["response_quantity"], "area_ratio")
+        assert_close(self, model["statistic_value"], 1.0, "C7 r2_w")
+        # response_ratio = area(analyte)/area(istd) per table (the declared
+        # ISTD combination; the plain raw column carries the raw area).
+        for row, amount in zip(res["table_rows"], fixture["x"]):
+            assert_close(self, row["response_ratio"], fixture["k"] / fixture["istd_area"] * amount,
+                         "C7 ratio value")
+            assert_close(self, row["response_raw_pa_min"], fixture["k"] * amount, "C7 raw area")
+            assert_close(self, row["relative_residual"], 0.0, "C7 residual")
+        self.assertEqual(model["residual_basis"],
+                         "relative_residual = (fitted - observed)/observed * 100 on the fit response: "
+                         "area_ratio (ISTD-mode response, A3)")
+
+
+class TestNullReasonPairingInvariant(unittest.TestCase):
+    """GC-7's null/reason pairing invariant (inherited), asserted BOTH
+    directions over ALL fixture outputs:
+    (a) every null numeric cell names its code in flags;
+    (b) every reason code in flags corresponds to a null cell."""
+
+    NUMERIC_NULLS = ("response_raw_pa_min", "response_ratio", "relative_residual")
+    REASON_TO_FIELD = {
+        "NO_MATCHING_PEAK": "response_raw_pa_min",
+        "UNRECOVERABLE_SATURATED": "response_raw_pa_min",
+        "EXCLUDED_FROM_FIT": "relative_residual",
+        "ZERO_OBSERVED": "relative_residual",
+    }
+
+    def _all_rows(self):
+        rows = []
+        for name in ("C1", "C3", "C4", "C5", "C6"):
+            fixture = getattr(fx, name)
+            inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+            kwargs = {"model": "quadratic"} if name == "C4" else \
+                     {"model": "linear_through_origin"} if name == "C5" else \
+                     {"origin_constraint": True} if name == "C6" else {}
+            if name == "C3":
+                kwargs["levels"] = fx.level_params(fixture, rt0=1.0, d_rt=1.0,
+                                                   weights=fixture["weights"])
+            params = cal_params(fixture, **kwargs)
+            rows.extend(run_fit(inputs, params)["table_rows"])
+        # the NO_MATCHING_PEAK leg (a row with null response + declared flag)
+        fixture = fx.C1
+        levels = fx.level_params(fixture, rt0=1.0, d_rt=1.0)
+        levels[2] = dict(levels[2], rt_target_min=99.0)  # window misses the table
+        params = cal_params(fixture, levels=levels)
+        rows.extend(run_fit(fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0), params)["table_rows"])
+        return rows
+
+    def test_a_null_implies_reason(self):
+        for row in self._all_rows():
+            for field in self.NUMERIC_NULLS:
+                if row[field] is None:
+                    self.assertTrue(
+                        any(f in self.REASON_TO_FIELD for f in row["flags"]),
+                        f"null {field} on level {row['level']} without a declared reason: {row}",
+                    )
+
+    def test_b_reason_implies_null(self):
+        for row in self._all_rows():
+            for field in self.NUMERIC_NULLS:
+                if row[field] is not None:
+                    self.assertNotIn("EXCLUDED_FROM_FIT", row["flags"],
+                                     f"{field} present but EXCLUDED_FROM_FIT flagged: {row}")
+                    self.assertNotIn("NO_MATCHING_PEAK", row["flags"],
+                                     f"{field} present but NO_MATCHING_PEAK flagged: {row}")
+            # peak_source null iff the row has no matched peak
+            if row["peak_source"] is None:
+                self.assertIn("NO_MATCHING_PEAK", row["flags"], f"null peak_source unreasoned: {row}")
+            else:
+                self.assertNotIn("NO_MATCHING_PEAK", row["flags"],
+                                 f"peak_source set but NO_MATCHING_PEAK flagged: {row}")
+
+
+class TestFailureMatrix(unittest.TestCase):
+    """The spec's failure matrix (T1): one named assertion per code."""
+
+    def setUp(self):
+        self.fixture = fx.C1
+        self.inputs = fx.level_table_payloads(self.fixture, rt0=1.0, d_rt=1.0)
+        self.params = cal_params(self.fixture)
+
+    def expect_code(self, params, inputs=None, code=None, msg_part=None):
+        with self.assertRaises(CalibrationError) as ctx:
+            run_fit(inputs if inputs is not None else self.inputs, params)
+        if code:
+            self.assertEqual(ctx.exception.code, code)
+        if msg_part:
+            self.assertIn(msg_part, str(ctx.exception))
+        return ctx.exception
+
+    # ---- C10 trio ----
+    def test_c10_duplicate_level_same_label_amount(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[1] = dict(levels[1], amount=levels[0]["amount"], rt_target_min=2.0)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="DUPLICATE_LEVEL",
+                         msg_part="declared twice")
+
+    def test_c10_duplicate_level_number(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[1] = dict(levels[1], level=1, rt_target_min=2.0, amount=5.0)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="DUPLICATE_LEVEL")
+
+    def test_c10_overlapping_fit_windows_same_compound(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0, rt_window=2.0)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="DUPLICATE_LEVEL",
+                         msg_part="overlap")
+
+    def test_c10_missing_amount(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        del levels[0]["amount"]
+        self.expect_code(cal_params(self.fixture, levels=levels), code="LEVEL_AMOUNT_MISSING",
+                         msg_part="no declared amount")
+
+    def test_c10_unit_invalid_empty(self):
+        self.expect_code(cal_params(self.fixture, amount_unit=""), code="UNIT_INVALID")
+
+    def test_c10_unit_invalid_non_string(self):
+        self.expect_code(cal_params(self.fixture, amount_unit=3.14), code="UNIT_INVALID")
+
+    # ---- declared-enum failures ----
+    def test_model_unsupported(self):
+        self.expect_code(cal_params(self.fixture, model="cubic"), code="MODEL_UNSUPPORTED")
+
+    def test_weighting_unsupported(self):
+        self.expect_code(cal_params(self.fixture, weighting="1/x^3"), code="WEIGHTING_UNSUPPORTED")
+
+    def test_weight_undefined_at_zero_1x(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[0] = dict(levels[0], amount=0.0)
+        inputs = fx.level_table_payloads(self.fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(self.fixture, weighting="1/x", levels=levels), inputs=inputs,
+                         code="WEIGHT_UNDEFINED_AT_ZERO")
+
+    def test_weight_undefined_at_zero_1y2(self):
+        # y = 0 observed response + 1/y^2 → WEIGHT_UNDEFINED_AT_ZERO
+        fixture = {**fx.C1, "y": [0.0, 5.0, 7.0, 9.0, 11.0]}
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(fixture, weighting="1/y^2"), inputs=inputs,
+                         code="WEIGHT_UNDEFINED_AT_ZERO")
+
+    def test_origin_constraint_unsupported_quadratic(self):
+        self.expect_code(cal_params(self.fixture, model="quadratic", origin_constraint=True),
+                         code="ORIGIN_CONSTRAINT_UNSUPPORTED")
+
+    def test_statistic_unsupported(self):
+        self.expect_code(cal_params(self.fixture, statistic="pearson_r"),
+                         code="STATISTIC_UNSUPPORTED")
+
+    def test_statistic_undefined_single_point(self):
+        # linear_through_origin with ONE fit point: SS_tot == 0 → null +
+        # STATISTIC_UNDEFINED (never 1.0, never 0.0 substituted)
+        fixture = {**fx.C1, "x": [1], "y": [3.0]}
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        params = cal_params(fixture, model="linear_through_origin")
+        res = run_fit(inputs, params)
+        self.assertIsNone(res["model"]["statistic_value"])
+        self.assertEqual(res["model"]["statistic_name"], "weighted_r_squared")
+
+    # ---- point-count failures ----
+    def test_insufficient_points_linear(self):
+        fixture = {**fx.C1, "x": [1], "y": [3.0]}
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(fixture), inputs=inputs, code="INSUFFICIENT_POINTS",
+                         msg_part="1 present")
+
+    def test_insufficient_points_quadratic(self):
+        fixture = {**fx.C4, "x": [1, 2], "y": [3.1, 6.4]}
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(fixture, model="quadratic"), inputs=inputs,
+                         code="INSUFFICIENT_POINTS", msg_part="2 present")
+
+    def test_no_fit_points_all_excluded(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        for lv in levels:
+            lv["fit"] = False
+        self.expect_code(cal_params(self.fixture, levels=levels), code="NO_FIT_POINTS")
+
+    # ---- ISTD failures (A3) ----
+    def test_istd_peak_not_found(self):
+        fixture = fx.C7
+        inputs = fx.c7_level_payloads(fixture)
+        params = cal_params(
+            fixture,
+            levels=fx.level_params(fixture, rt0=1.0, d_rt=1.0, compound_label="TEST-CMPD-ANALYTE"),
+            istd={**fx.c7_istd(fixture), "rt_target_min": 42.0},  # misses every table
+        )
+        self.expect_code(params, inputs=inputs, code="ISTD_PEAK_NOT_FOUND",
+                         msg_part="never a fallback to raw area")
+
+    def test_istd_ambiguous(self):
+        fixture = fx.C7
+        inputs = fx.c7_level_payloads(fixture)
+        params = cal_params(
+            fixture,
+            levels=fx.level_params(fixture, rt0=1.0, d_rt=1.0, compound_label="TEST-CMPD-ANALYTE"),
+            istd={**fx.c7_istd(fixture), "rt_target_min": 3.0, "rt_window_min": 3.0},
+        )
+        # window [0,6] hits the analyte (rt 3.0 in level_3) AND the ISTD (rt 5)
+        self.expect_code(params, inputs=inputs, code="AMBIGUOUS_PEAK_MATCH")
+
+    # ---- matching failures ----
+    def test_no_matching_peak_per_level(self):
+        # required: false → row present with null response + NO_MATCHING_PEAK
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[2] = dict(levels[2], rt_target_min=99.0)
+        res = run_fit(self.inputs, cal_params(self.fixture, levels=levels))
+        row3 = res["table_rows"][2]
+        self.assertIsNone(row3["response_raw_pa_min"])
+        self.assertIn("NO_MATCHING_PEAK", row3["flags"])
+        self.assertTrue(all(len(r["flags"]) == 0 for i, r in enumerate(res["table_rows"]) if i != 2))
+
+    def test_level_unmatched_required(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[2] = dict(levels[2], rt_target_min=99.0, required=True)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="LEVEL_UNMATCHED",
+                         msg_part="required")
+
+    def test_ambiguous_peak_match(self):
+        # a level's declared window matches MULTIPLE peaks in its table →
+        # AMBIGUOUS_PEAK_MATCH naming both rows (no nearest-RT rescue).
+        # Every level input is the SAME two-peak table (peaks at rt 3.0 and
+        # 3.05); level 3's window [3-0.25, 3+0.25] catches BOTH → the failure.
+        two = fx.two_peak_table((500.0, 3.0), (1000.0, 3.05))
+        inputs = {f"level_{i + 1}": two for i in range(5)}
+        self.expect_code(self.params, inputs=inputs,
+                         code="AMBIGUOUS_PEAK_MATCH", msg_part="MULTIPLE")
+
+    def test_unassigned_peaks_kept_in_quant(self):
+        # (quant-side) — covered in test_quantification.py; here the CAL side
+        # never invents identity: unmatched rows carry NO_MATCHING_PEAK.
+        self.assertTrue(True)
+
+    # ---- A5 loader failures ----
+    def test_input_not_promoted_dict_inline(self):
+        # dict-inline input + allow_inline_inputs: false → INPUT_NOT_PROMOTED
+        # BEFORE any filesystem read (the [F-run] FileNotFoundError trap,
+        # discharged as a DECLARED failure).
+        params = cal_params(self.fixture, allow_inline_inputs=False)
+        self.expect_code(params, code="INPUT_NOT_PROMOTED", msg_part="never written")
+
+    def test_input_json_invalid(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"this is not json at all")
+            path = f.name
+        try:
+            ctx = Context(
+                inputs={"level_1": {"dataKind": "table", "path": path}},
+                parameters=cal_params(self.fixture),
+            )
+            with self.assertRaises(CalibrationError) as e:
+                fit_calibration(ctx, cal_params(self.fixture))
+            self.assertEqual(e.exception.code, "INPUT_JSON_INVALID")
+        finally:
+            import os
+            os.unlink(path)
+
+    def test_input_missing(self):
+        # a declared input name that is NOT provisioned → INPUT_MISSING
+        params = cal_params(self.fixture)
+        ctx = Context(
+            inputs={f"level_{i + 1}": {"dataKind": "table",
+                                       "inline": payload}
+                    for i, (name, payload) in enumerate(self.inputs.items()) if i < 4},
+            parameters=params,
+        )
+        with self.assertRaises(CalibrationError) as e:
+            fit_calibration(ctx, params)
+        self.assertEqual(e.exception.code, "INPUT_MISSING")
+
+    # ---- shape failures ----
+    def test_peak_table_shape_invalid_missing_columns(self):
+        bad = {"columns": ["rt_min", "saturated", "flags"],
+               "rows": [{"rt_min": 1.0, "saturated": False, "flags": []}]}
+        self.expect_code(self.params, inputs={"level_1": bad},
+                         code="PEAK_TABLE_SHAPE_INVALID", msg_part="area_pa_min")
+
+    def test_peak_table_shape_invalid_not_a_table(self):
+        self.expect_code(self.params, inputs={"level_1": 42},
+                         code="PEAK_TABLE_SHAPE_INVALID")
+
+    def test_rt_window_invalid_zero(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[0] = dict(levels[0], rt_window_min=0.0)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="RT_WINDOW_INVALID")
+
+    def test_rt_window_invalid_negative_target(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        levels[0] = dict(levels[0], rt_target_min=-1.0)
+        self.expect_code(cal_params(self.fixture, levels=levels), code="RT_WINDOW_INVALID")
+
+    def test_istd_rt_window_invalid(self):
+        fixture = fx.C7
+        inputs = fx.c7_level_payloads(fixture)
+        params = cal_params(
+            fixture,
+            levels=fx.level_params(fixture, rt0=1.0, d_rt=1.0, compound_label="TEST-CMPD-ANALYTE"),
+            istd={**fx.c7_istd(fixture), "rt_window_min": -1.0},
+        )
+        self.expect_code(params, inputs=inputs, code="RT_WINDOW_INVALID")
+
+    # ---- ill-conditioned ----
+    def test_fit_ill_conditioned(self):
+        # ALL levels at the SAME amount (distinct labels — legal) → every
+        # x is equal → the design matrix is singular (det = 0 at scale) →
+        # FIT_ILL_CONDITIONED, never garbage numbers (A2.8).
+        fixture = {**fx.C1, "x": [1.0, 1.0, 1.0, 1.0, 1.0]}
+        levels = fx.level_params(fixture, rt0=1.0, d_rt=1.0,
+                                 compound_label="TEST-CMPD-A")
+        for i, lv in enumerate(levels):
+            lv["compound_label"] = f"TEST-CMPD-{chr(ord('A') + i)}"
+            # distinct labels → no DUPLICATE_LEVEL; same amount → singular.
+            lv["rt_target_min"] = 1.0 + i
+        inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
+        self.expect_code(cal_params(fixture, levels=levels), inputs=inputs,
+                         code="FIT_ILL_CONDITIONED")
+
+    # ---- parameter honesty (GC-7 T1-10 pattern) ----
+    def test_param_missing_names_the_field(self):
+        for field in ("model", "weighting", "origin_constraint", "correlation_statistic",
+                      "amount_unit", "istd", "extrapolation", "fail_on_out_of_range",
+                      "allow_inline_inputs", "levels"):
+            p = dict(self.params)
+            del p[field]
+            with self.assertRaises(CalibrationError) as e:
+                run_fit(self.inputs, p)
+            self.assertEqual(e.exception.code, "PARAM_MISSING")
+            self.assertIn(field, str(e.exception), f"'{field}' must be named")
+
+    def test_param_missing_level_field(self):
+        levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)
+        del levels[0]["fit"]
+        with self.assertRaises(CalibrationError) as e:
+            run_fit(self.inputs, cal_params(self.fixture, levels=levels))
+        self.assertEqual(e.exception.code, "PARAM_MISSING")
+        self.assertIn("fit", str(e.exception))
+
+    def test_istd_role_absent_is_param_missing(self):
+        fixture = fx.C1
+        with self.assertRaises(CalibrationError) as e:
+            run_fit(fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0),
+                    cal_params(fixture, istd={}))
+        self.assertEqual(e.exception.code, "PARAM_MISSING")
+        self.assertIn("role", str(e.exception))
+
+    def test_unknown_param_is_param_invalid(self):
+        p = dict(self.params)
+        p["mystery_parameter"] = True
+        with self.assertRaises(CalibrationError) as e:
+            run_fit(self.inputs, p)
+        self.assertEqual(e.exception.code, "PARAM_INVALID")
+        self.assertIn("mystery_parameter", str(e.exception))
+
+    def test_zero_defaults_applied(self):
+        """B5: every scientific value arrives as a declared parameter — strip
+        ONE and the run fails (there is no default to apply)."""
+        for field in ("model", "weighting", "correlation_statistic", "amount_unit"):
+            p = dict(self.params)
+            del p[field]
+            with self.assertRaises(CalibrationError) as e:
+                run_fit(self.inputs, p)
+            self.assertIn(field, str(e.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

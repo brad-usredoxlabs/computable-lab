@@ -71,6 +71,36 @@ C6 = {
         3.7037037037037037,   # (28/3-9)/9*100 = 100/27
     ],
 }
+C4 = {
+    # quadratic, w=none, x=1..5 on y = 1 + 2x + 0.1x^2 (1/10 exact rational)
+    "x": [1, 2, 3, 4, 5],
+    "y": [3.1, 5.4, 7.9, 10.6, 13.5],
+    "weights": [1.0, 1.0, 1.0, 1.0, 1.0],
+    "expected_c0": 1.0,
+    "expected_c1": 2.0,
+    "expected_c2": 0.1,  # 1/10
+}
+C5 = {
+    # linear_through_origin, points (1,3),(2,6),(3,9),(4,12)
+    "x": [1, 2, 3, 4],
+    "y": [3.0, 6.0, 9.0, 12.0],
+    "weights": [1.0, 1.0, 1.0, 1.0],
+    "expected_slope": 3.0,
+}
+# C7 — ISTD ratio mode: level tables each carry an analyte peak + a declared
+# ISTD peak; analyte area = k*amount (k=500 pA*min per ng/uL), ISTD area
+# constant 1000 pA*min → ratio = 0.5*amount EXACT. The ratio-curve slope is
+# k/1000 = 0.5 EXACT; response_quantity == "area_ratio"; the quant round-trip
+# recovers the declared amounts (Leg 3 consumes this model).
+C7 = {
+    "x": [1.0, 2.0, 3.0],
+    "k": 500.0,  # pA*min per ng/uL (declared synthetic response factor)
+    "istd_area": 1000.0,  # constant ISTD peak area (pA*min)
+    "analyte_rt": [1.0, 2.0, 3.0],
+    "istd_rt": 5.0,
+    "expected_slope": 0.5,  # k/1000 exact
+    "expected_intercept": 0.0,
+}
 
 
 def peak_table(rt: float, area_pa_min: float, flags: List[str] | None = None,
@@ -123,6 +153,30 @@ def two_peak_table(analyte: Tuple[float, float], istd: Tuple[float, float],
              "width_min": 0.05, "area_percent": 100.0 * ar_i / total, "symmetry": 1.0,
              "saturated": False, "flags": []},
         ],
+    }
+
+
+def c7_level_payloads(fixture: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """C7 per-level tables: analyte peak (area = k*amount) + declared ISTD
+    peak (constant area) — the ISTD combination's raw material."""
+    out = {}
+    for i, amount in enumerate(fixture["x"]):
+        out[f"level_{i + 1}"] = two_peak_table(
+            (fixture["k"] * amount, fixture["analyte_rt"][i]),
+            (fixture["istd_area"], fixture["istd_rt"]),
+        )
+    return out
+
+
+def c7_istd(fixture: Dict[str, Any], label: str = "TEST-ISTD") -> Dict[str, Any]:
+    """The declared ISTD parameter block for C7 (names WHICH peak row is the
+    internal standard in each table — matched by the same RT-window
+    machinery as any compound)."""
+    return {
+        "role": "internal_standard",
+        "compound_label": label,
+        "rt_target_min": fixture["istd_rt"],
+        "rt_window_min": 0.25,
     }
 
 
