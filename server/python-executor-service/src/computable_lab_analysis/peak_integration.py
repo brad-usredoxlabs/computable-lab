@@ -317,6 +317,23 @@ def _rolling_min_centered_inclusive(values: Sequence[float], r: int) -> List[flo
     return out
 
 
+def _segmented_rolling_min(values: Sequence[float], segs: List[Dict[str, Any]],
+                           r: int) -> List[float]:
+    """Per-sample centered moving-min whose window is CLIPPED TO THE SAMPLE'S
+    SEGMENT (spec §A3.3: "per-segment the window resets at off boundaries").
+    An off segment's samples never enter an on segment's floor and vice
+    versa — each segment is floored from its own measured signal."""
+    n = len(values)
+    out = list(values)
+    for seg in segs:
+        s, e = seg["start"], seg["end"]
+        if e - s < 2:
+            continue
+        sub = list(values[s:e])
+        out[s:e] = _rolling_min_centered_inclusive(sub, r)
+    return out
+
+
 def _segment_floor(seg: Dict[str, Any], values: Sequence[float], base: Sequence[float]) -> float:
     """The segment's prominence floor = slope_sensitivity × (segmax −
     baseline min) over the segment span (declared)."""
@@ -456,27 +473,37 @@ def _build_baseline(
         return [0.0] * n
     win_pts = max(1, int(round(baseline_window_s / (60.0 * dt)))) if dt > 0 else 1
     smo_pts = max(1, int(round(peak_width_s / (60.0 * dt)))) if dt > 0 else 1
-    snaked = _rolling_min_centered_inclusive(values, win_pts // 2)
-    base = _rolling_min_centered_inclusive(snaked, smo_pts // 2)
+    # Per-segment windows (spec §A3.3: the window resets at off boundaries).
+    snaked = _segmented_rolling_min(values, segs, win_pts // 2)
+    base = _segmented_rolling_min(snaked, segs, smo_pts // 2)
     windows = _peak_windows(maxima, values, prev_base, segs, on_mask)
-    # The peak-referenced vertical drop: under each maximum, the baseline
-    # drops to the foot level (the floor in the region just outside the
-    # prominence window — where the min filter is honest). A plain min
-    # filter under a peak top returns the peak's own values; the drop is
-    # what makes the baseline honest under peaks.
-    m = max(1, win_pts // 2)
+    # The peak-referenced VERTICAL DROP: under each maximum, the baseline
+    # drops to the FOOT level — the floor measured in a small neighborhood
+    # just OUTSIDE the prominence window (where the min filter is honest:
+    # the peak's own samples never enter the foot neighborhood). A plain
+    # min filter under a peak top would return the peak's own values; the
+    # drop is what makes the baseline honest under peaks. DECLARED details
+    # (OQ4): the foot neighborhood radius = the smoothing pass radius
+    # (peak_width_s-derived — a declared parameter, not a literal); feet
+    # are read from the PRE-DROP baseline and applied in one pass (no
+    # chaining between peaks); the drop only ever LOWERS the baseline
+    # (min-only), so it can never fabricate signal.
+    m = max(1, smo_pts // 2)
+    feet: List[Tuple[int, int, float]] = []
+    pre_drop = list(base)
     for w in windows:
-        foot_lo_a, foot_hi_a = max(0, w["start"] - m), w["start"]
-        foot_lo_b, foot_hi_b = w["end"], min(n, w["end"] + m + 1)
+        lo_a, hi_a = max(0, w["start"] - m), w["start"]
+        lo_b, hi_b = w["end"], min(n, w["end"] + m + 1)
         foot_vals: List[float] = []
-        if foot_hi_a > foot_lo_a:
-            foot_vals.extend(base[foot_lo_a:foot_hi_a])
-        if foot_hi_b > foot_lo_b:
-            foot_vals.extend(base[foot_lo_b:foot_hi_b])
+        if hi_a > lo_a:
+            foot_vals.extend(pre_drop[lo_a:hi_a])
+        if hi_b > lo_b:
+            foot_vals.extend(pre_drop[lo_b:hi_b])
         if not foot_vals:
             continue
-        foot = min(foot_vals)
-        for i in range(w["start"], w["end"] + 1):
+        feet.append((w["start"], w["end"], min(foot_vals)))
+    for s_i, e_i, foot in feet:
+        for i in range(s_i, e_i + 1):
             if base[i] > foot:
                 base[i] = foot
     if mode == "tangent_skim":
@@ -837,6 +864,27 @@ def integrate_peaks(ctx: Any, decoded_signals: Dict[str, Dict[str, Any]],
     # ---- 4. Detection (final, against the built baseline) ----
     maxima = _detect(values, base, segs, dt)
     windows = _peak_windows(maxima, values, base, segs, on_mask)
+
+    # Valley tiling (DECLARED, OQ4 — the overlap honesty rule): adjacent
+    # prominence windows that overlap share the valley region; tile at the
+    # valley (argmin of signal-baseline between the maxima) so the shared
+    # region is measured ONCE — trapezoid additivity over the tiled union
+    # makes the areas sum to the envelope integral (no double count, no
+    # deconvolution — out of scope). The pair is flagged
+    # OVERLAP_SHARED_BASELINE (an envelope is not N compounds).
+    ws_sorted = sorted(windows, key=lambda w: w["idx"])
+    for a, b in zip(ws_sorted[:-1], ws_sorted[1:]):
+        if a["seg"] != b["seg"] or b["start"] > a["end"]:
+            continue
+        best_i = a["idx"]
+        best_d = values[a["idx"]] - base[a["idx"]]
+        for j in range(a["idx"] + 1, b["idx"]):
+            d = values[j] - base[j]
+            if d < best_d:
+                best_d = d
+                best_i = j
+        a["end"] = best_i
+        b["start"] = best_i
 
     # ---- 5/6. Measure, reject-filter, saturate ----
     rows: List[Dict[str, Any]] = []
