@@ -661,8 +661,15 @@ export class AnalysisRunner {
     // capabilities, and builds the machine-readable engineProvenance written
     // at completion. Absent engineRef = the legacy path (gate skipped, no
     // provenance — byte-identical behavior).
+    // l1t2245 defect 2: a revision carrying BOTH sequenceMethod and engineRef
+    // dispatches to the SEQUENCE path (spec §d: "sequenceMethod → sequence
+    // path untouched") — the pinned engine does NOT execute, so the gate is
+    // skipped entirely: no resolve, no probe, no manifest engine echo, and NO
+    // engineProvenance written for an engine that never ran (false
+    // provenance is a knowledge-layer defect; a failing gate would also
+    // block a valid sequence run for an unused engine).
     let engineGate: { engine: EngineRecord; interpreterPath: string; provenance: EngineProvenance; approximate: Array<{ capability: string; support: string }> } | null = null;
-    if (revPayload.engineRef) {
+    if (revPayload.engineRef && !revPayload.sequenceMethod) {
       try {
         engineGate = await this.engineGate(revPayload.engineRef, revPayload.requiredCapabilities);
       } catch (err) {

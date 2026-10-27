@@ -480,5 +480,112 @@ describe('AnalysisRunner engine gate (GC-5 integration)', () => {
       expect(prov.engineProvenance?.engineRef.revisionRef?.id).toBe(snap);
     }, 60000);
 
+    it('DEFECT 2: a revision carrying BOTH sequenceMethod and engineRef runs the SEQUENCE path byte-identical — no engine gate, no probe, NO engineProvenance, no manifest engine echo', async () => {
+      // Real sequence fixtures: a builtin virtual-pcr endpoint + DNA sequences
+      // (schema-valid records via the store), so the sequence path is the ACTUAL
+      // dispatch — not a stub.
+      const endpointPayload: Record<string, unknown> = {
+        kind: 'sequence-endpoint',
+        id: 'SEQEP-GC5FIX1',
+        label: 'GC-5 fix1 virtual PCR endpoint',
+        engine: 'virtual-pcr',
+        runtime: 'builtin',
+        version: '1.0.0',
+        threads: 1,
+        timeoutSeconds: 60,
+      };
+      const epRes = await ctx.store.create({
+        envelope: { recordId: endpointPayload.id as string, schemaId: 'https://computable-lab.com/schema/bio/sequence-endpoint.schema.yaml', payload: endpointPayload },
+        message: 'GC-5 fix1: test endpoint',
+        skipValidation: true,
+        skipLint: true,
+      } as never);
+      if (!epRes.success) throw new Error(`endpoint create failed: ${epRes.error}`);
+      const epRev = await new RecordRevisionService(ctx.store).capture((await ctx.store.get('SEQEP-GC5FIX1'))!, 'GC5FIX1-TEST', 'research-use');
+
+      const sequences: Array<[string, string]> = [
+        ['SEQG1', 'AACG' + 'T'.repeat(132) + 'TGCA'],
+        ['SEQG2', 'AACG'],
+        ['SEQG3', 'TGCA'],
+        ['SEQG4', 'TTTTTT'],
+      ];
+      const seqRefs: Record<string, { id: string }> = {};
+      for (const [id, residues] of sequences) {
+        const seqPayload: Record<string, unknown> = {
+          kind: 'sequence',
+          id,
+          label: id,
+          alphabet: 'dna',
+          residues,
+          topology: 'linear',
+        };
+        const sRes = await ctx.store.create({
+          envelope: { recordId: id, schemaId: 'https://computable-lab.com/schema/bio/sequence.schema.yaml', payload: seqPayload },
+          message: `GC-5 fix1: test sequence ${id}`,
+          skipValidation: true,
+          skipLint: true,
+        } as never);
+        if (!sRes.success) throw new Error(`sequence create failed: ${sRes.error}`);
+        const sRev = await new RecordRevisionService(ctx.store).capture((await ctx.store.get(id))!, 'GC5FIX1-TEST', 'research-use');
+        seqRefs[id] = { id: sRev.recordId };
+      }
+
+      // The engine that MUST NOT run: provisioned-venv + a declared package →
+      // if the engine gate were (incorrectly) executed for this revision, the
+      // provisioned-venv last-resort trap would fail the run with
+      // ENGINE_UNAVAILABLE. A succeeded run therefore proves the gate was
+      // skipped (no resolve, no probe, no provenance).
+      const engId = await createEngine({
+        runtime_requirements: { interpreter: 'provisioned-venv' },
+        version_constraints: { python: '>=3.13', packages: [{ name: 'numpy', constraint: '==2.5.4' }] },
+      });
+
+      // The combination revision is the defect's subject: the analysis-revision
+      // schema permits BOTH optional fields (no mutual exclusion), and the DNA
+      // lane writes such revisions through its own save path (SequenceService)
+      // — AnalysisService.createRevision intentionally forwards only its own
+      // fields. Write the record directly (real schema validation, no skip) so
+      // the RUNNER sees the exact payload the defect describes.
+      const revId = 'ANREV-GC5FIX1SEQ';
+      const revPayload: Record<string, unknown> = {
+        kind: 'analysis-revision',
+        id: revId,
+        title: 'sequence + engine combination',
+        entryScript: '# Registered sequence adapter; no model-authored script.',
+        sdkVersion: '0.1.0',
+        sequenceMethod: { operation: 'virtual-pcr', endpointRevisionRef: { kind: 'record', type: 'record-revision', id: epRev.recordId } },
+        engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
+      };
+      const revRes = await ctx.store.create({
+        envelope: { recordId: revId, schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml', payload: revPayload },
+        message: 'GC-5 fix1: combination revision (sequenceMethod + engineRef)',
+      });
+      if (!revRes.success) throw new Error(`combination revision create failed: ${revRes.error}`);
+      const { recordId: runId } = await service.createRun({
+        title: 'run-seq-engine',
+        revisionRef: { kind: 'record', id: revId, type: 'analysis-revision' },
+        inputs: {
+          references: { kind: 'record', id: seqRefs.SEQG1!.id, type: 'record-revision' },
+          forward: { kind: 'record', id: seqRefs.SEQG2!.id, type: 'record-revision' },
+          reverse: { kind: 'record', id: seqRefs.SEQG3!.id, type: 'record-revision' },
+          probe: { kind: 'record', id: seqRefs.SEQG4!.id, type: 'record-revision' },
+        },
+        parameters: { minLength: 140, maxLength: 140, maxMismatches: 0, exactThreePrime: 3, maxProducts: 100 },
+      });
+      // The SEQUENCE path takes dispatch precedence and runs untouched (spec
+      // §d); the pinned engine never executed → NO engineProvenance may be
+      // written for it (false provenance is a knowledge-layer defect).
+      const res = await runner.executeRun(runId);
+      expect(res.status).toBe('succeeded');
+      // The sequence path's own manifest (amplicons artifact) — and no engine
+      // echo was merged into it.
+      expect(res.manifest.artifacts.some((a) => a.name === 'amplicons')).toBe(true);
+      expect((res.manifest as { engine?: unknown }).engine).toBeUndefined();
+      const p = (await service.getRun(runId))!.payload as { status: string; engineProvenance?: unknown; outputManifest?: { engine?: unknown } };
+      expect(p.status).toBe('succeeded');
+      expect(p.engineProvenance).toBeUndefined();
+      expect((p.outputManifest as { engine?: unknown } | undefined)?.engine).toBeUndefined();
+    }, 90000);
+
   });
 });
