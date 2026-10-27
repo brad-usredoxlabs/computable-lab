@@ -36,11 +36,17 @@ be76c512 (96th handoff) over 7da353e2 over a444f944 (GC-4 merge).
    is mine at merge time; O5 model.pkl reappears after test runs — gitignore entry = separate
    housekeeping; O6 compareDotted prerelease leniency — advisory only.
 4. GC-5-FIX1 DISPATCHED (cycle 1 fix, same worktree/branch, defects verbatim from
-   gc5-defects-cycle1-l1t2245.txt, RED-first raw -> gc5-fix1-RED-l1t2245.txt): FLEET SLOT 0
-   acquired via flock wrapper; coder live (pids 91465/91473/91476, slot-0 pid file = 91473
-   alive), log logs/coder-GC5fix1-l1t2245.log, report gc5-fix1-report-l1t2245.md,
-   end-marker 'GC5FIX1 DONE <sha>'. Dispatched ~23:0x; expected duration ~2h (large RED-first
-   fix set): due ~01:00, 2x ~03:00, 3x => orch writes provisional per rule 7b.
+   gc5-defects-cycle1-l1t2245.txt, RED-first raw -> gc5-fix1-RED-l1t2245.txt). DISPATCH
+   CORRECTION (first-hand): the first launcher (pid 115649->115902) took slot-0's flock but
+   QUEUED behind lane 2's live L2-SUITE-A coder (pids 91465/91473/91476 — NOT mine; the
+   earlier 'slot-0 acquired' read in this tick's notes was WRONG, those pids belong to lane
+   2). I killed the queued launcher 115902 (it had spawned nothing: log 0 bytes, no coder
+   process) and re-dispatched on FREE slot-1 at ~23:52: launcher wrapper pid 175852, coder
+   pid 176152 LIVE on slot-1 (slot-1 pid file 176148 holder chain verified), prompt
+   prompts/coder-GC5fix1-l1t2245.txt, log logs/coder-GC5fix1-l1t2245.log, report
+   gc5-fix1-report-l1t2245.md, end-marker 'GC5FIX1 DONE <sha>'. FLEET STATE AT CHECKPOINT:
+   2 live coders = the cap (slot-0 = lane 2 L2-SUITE-A; slot-1 = lane 1 GC5-fix1). Expected
+   duration ~2h: due ~01:50, 2x ~03:50, 3x => orch writes provisional per rule 7b.
 5. GC-10 SPEC CITE-AUDIT + PROMOTION: delegated bounded exhaustive audit (70 checks over
    every [F]/[F-run]/authority/[G7]/[G9] cite, read-only): 65 HOLDS, 5 HOLDS-at-drift,
    0 CLAIM-FAIL, 1 skipped (live port); all three [F-run] baselines re-executed and
@@ -117,11 +123,13 @@ be76c512 (96th handoff) over 7da353e2 over a444f944 (GC-4 merge).
 
 ## live-worker checkpoint (do NOT kill, do NOT duplicate)
 
-- FLEET SLOT 0: GC-5-FIX1 coder (cl-coder, unit-less nohup flock launcher; coder pids
-  91465/91473/91476; slot-0 pid file = 91473), worktree wt/gc-5-lane1-l1t1945 branch
-  wt/gc-5-lane1-l1t1945 (base 600bec4e), log logs/coder-GC5fix1-l1t2245.log, report
-  gc5-fix1-report-l1t2245.md, end-marker 'GC5FIX1 DONE <sha>'. Dispatched ~23:05, due ~01:00.
-- FLEET SLOT 1: FREE.
+- FLEET SLOT 1: GC-5-FIX1 coder (cl-coder; launcher wrapper pid 175852 [terminal session
+  proc_532cdfda3226], coder pid 176152, slot-1 flock held — pid file written by wrapper),
+  worktree wt/gc-5-lane1-l1t1945 branch wt/gc-5-lane1-l1t1945 (base 600bec4e), prompt
+  prompts/coder-GC5fix1-l1t2245.txt, log logs/coder-GC5fix1-l1t2245.log, report
+  gc5-fix1-report-l1t2245.md, end-marker 'GC5FIX1 DONE <sha>'. Dispatched ~23:52, due ~01:50.
+- FLEET SLOT 0: lane 2's L2-SUITE-A coder (pids 91465/91473/91476) — LIVE, NOT lane-1
+  property, NOT ours to touch. Fleet cap (2) SATISFIED at checkpoint.
 - Thunderbeast: no live compose session. Orch tick + one completed delegation only.
 - Lane stack :3092/:5192 up (backend pid 3672029); NOT restarted this tick (no YAML merged —
   GC-10 promotion is docs-only commit b2c81272).
