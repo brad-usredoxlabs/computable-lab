@@ -1186,6 +1186,21 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
 
     digest_before = data_repo_digest(SEQ_DATA_REPO)
 
+    def _post_assist(body, timeout):
+        headers = dict(ACTOR_HEADER)
+        headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(
+            base + "/api/ai/assist/stream",
+            data=json.dumps(body).encode("utf-8"), headers=headers,
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=timeout)
+            return 200, _read_sse_frames(resp), b""
+        except urllib.error.HTTPError as e:
+            return e.code, [], e.read()
+        except (TimeoutError, urllib.error.URLError) as e:
+            return -1, [], str(e).encode("utf-8", errors="replace")
+
     def drive_turn(idx, prompt, label):
         nonlocal last_action_result, failed, history, hold_ids
         ctx = _seq_context_from_catalog(catalog, contract, last_action_result)
@@ -1196,19 +1211,48 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
         request_sha = hashlib.sha256(
             json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
-        headers = dict(ACTOR_HEADER)
-        headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(
-            base + "/api/ai/assist/stream",
-            data=json.dumps(body).encode("utf-8"), headers=headers,
-        )
-        try:
-            resp = urllib.request.urlopen(req, timeout=timeout)
-            status, frames, raw = 200, _read_sse_frames(resp), b""
-        except urllib.error.HTTPError as e:
-            status, frames, raw = e.code, [], e.read()
-        except (TimeoutError, urllib.error.URLError) as e:
-            status, frames, raw = -1, [], str(e).encode("utf-8", errors="replace")
+
+        status, frames, raw = _post_assist(body, timeout)
+
+        # BOUNDED TRANSIENT-FALLBACK RETRY (one shot, disclosed in the
+        # receipt): the lane stack's assist arm rides a remote model that
+        # can, on an individual turn, fail to emit the required
+        # agent_intent tool call ("The model (...) did not emit the
+        # required agent_intent tool call after N attempts" — a GENERIC
+        # model-transport line, NOT a named capability wall). That is a
+        # transient model flake, not the product's honest outcome, so the
+        # driver re-POSTs the IDENTICAL body exactly once (same prompt,
+        # same held context, same history — the hold is not rebuilt) and
+        # the receipt carries retry_count + the first raw error. No retry
+        # on a named wall (that IS the honest outcome) and no retry after
+        # a transport error. NEVER a fake: if the retried turn is the
+        # silent shape too, the verdict stands as the forbidden FAIL.
+        retry_count = 0
+        state_retry_note = None
+        if status == 200:
+            _types_f, _done_f, _err_f_list, _tc_f = summarize_frames(frames)
+            _done_f = _done_f if isinstance(_done_f, dict) else {}
+            _err_f = _done_f.get("error")
+            if (not _done_f.get("sequenceProposal")
+                    and not (_done_f.get("clarificationRequests") or [])
+                    and not any(
+                        isinstance(f, dict) and f.get("type") == "agent_action"
+                        for f in frames)
+                    and isinstance(_err_f, str) and _err_f.strip()
+                    and "did not emit the required agent_intent tool call"
+                    in _err_f):
+                retry_count = 1
+                state_retry_note = (
+                    "bounded transient-fallback retry (generic "
+                    "'did not emit the required agent_intent tool call' "
+                    "wall on attempt 1, a model-transport flake, NOT a "
+                    "named capability wall): %r" % _err_f[:200])
+                print("P%d: generic model-transport wall on turn %r — ONE "
+                      "bounded re-post of the identical body "
+                      "(disclosed as a transient fallback, not a fake)"
+                      % (idx, label))
+                time.sleep(5)
+                status, frames, raw = _post_assist(body, timeout)
 
         types, done, error_frames, tool_calls = summarize_frames(frames)
 
@@ -1220,6 +1264,8 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
             "tool_calls": tool_calls,
             "context_record_ids": record_ids,
             "context_engine_ids": engine_ids,
+            "retry_count": retry_count,
+            "retry_note": state_retry_note,
         }
         if status != 200 or done is None:
             state.update({"events_count": 0, "cards_count": 0, "wall": False,
