@@ -85,10 +85,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 export function ChromatogramView({
   artifact,
+  markerArtifact,
   bindings,
   siblings,
 }: {
   artifact: RenderableArtifact
+  markerArtifact?: RenderableArtifact
   bindings?: Record<string, unknown>
   siblings?: RenderableArtifact[]
 }) {
@@ -174,15 +176,22 @@ export function ChromatogramView({
     return (clientX - rect.left) * (W / rect.width)
   }
 
-  // ---- Markers (from the sibling peak-table artifact, by NAME) ----
-  const markerArtifact = useMemo(() => {
+  // ---- Markers (from the sibling peak-table artifact) ----
+  // D2 contract: the caller resolves `markersFrom` by NAME and passes the
+  // resolved artifact. When only `siblings` is provided (e.g. renderViews
+  // without a cross-view bus), resolve by NAME here as a fallback so the
+  // markers still surface — either way the field-name DATA comes from
+  // bindings, and the rows come from the artifact (data-only).
+  const resolvedMarkerArtifact = useMemo(() => {
+    if (markerArtifact) return markerArtifact
     if (!b.markersFrom || !siblings) return undefined
     return siblings.find((a) => a.name === b.markersFrom)
-  }, [b.markersFrom, siblings])
+  }, [markerArtifact, b.markersFrom, siblings])
 
   const markers = useMemo<MarkerRow[]>(() => {
-    if (!markerArtifact) return []
-    const inline = isRecord(markerArtifact.inlineValue) ? markerArtifact.inlineValue : {}
+    const ma = resolvedMarkerArtifact
+    if (!ma) return []
+    const inline = isRecord(ma.inlineValue) ? ma.inlineValue : {}
     const rows = Array.isArray(inline.rows) ? inline.rows : []
     const fields = {
       rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
@@ -191,7 +200,7 @@ export function ChromatogramView({
       flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
     }
     return parseMarkerRows(rows, fields)
-  }, [markerArtifact, b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField])
+  }, [resolvedMarkerArtifact, b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField])
 
   const skippedNoRt = markers.filter((m) => m.rt === null).length
 

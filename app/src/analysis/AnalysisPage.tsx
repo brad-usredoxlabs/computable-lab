@@ -10,7 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
-import { renderViews, type RenderableArtifact, type RenderableView } from './ViewRenderer'
+import {
+  renderViews,
+  resolveViewRenderer,
+  type RenderableArtifact,
+  type RenderableView,
+} from './ViewRenderer'
+import { CompareTraces } from './CompareTraces'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
 import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
 import './AnalysisPage.css'
@@ -133,6 +139,9 @@ export function AnalysisPage() {
   const [busy, setBusy] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  // GC-10 [E]: the Compare surface (D4) — a prominent header action over the
+  // results pane. Open state is view-only (no record written by opening).
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -377,9 +386,7 @@ export function AnalysisPage() {
           id: `v-${i}`,
           title: vv.name ?? `view-${i}`,
           artifact: vv.artifact ?? '',
-          renderer: (['table', 'signal', 'metric', 'static-figure'] as const).includes(vv.renderer as 'table')
-            ? (vv.renderer as 'table' | 'signal' | 'metric' | 'static-figure')
-            : 'table',
+          renderer: resolveViewRenderer(vv.renderer),
           bindings: vv.bindings,
           options: vv.options,
         }
@@ -511,9 +518,25 @@ export function AnalysisPage() {
           the run page's chat-right discipline. No new layout machinery. */}
       <AnalysisChatPanel />
       <div className="analysis-right__title">
-        {activeRun?.payload.title ?? (activeRunId ? runs.find((r) => r.recordId === activeRunId)?.payload.title : null) ?? 'Results'}
+        <span className="analysis-right__title-text">
+          {activeRun?.payload.title ?? (activeRunId ? runs.find((r) => r.recordId === activeRunId)?.payload.title : null) ?? 'Results'}
+        </span>
         {activeStatus ? <span className={`analysis__status analysis__status--${activeStatus}`}>{activeStatus}</span> : null}
+        {/* GC-10 [E] (D4): the prominent Compare action. Visible whenever the
+            runs list exists; disabled+reason when < 2 succeeded runs (no dead
+            chrome — the reason names what is missing). Opening is view-only. */}
+        <CompareTracesButton
+          succeeded={runs.filter((r) => r.payload.status === 'succeeded')}
+          onOpen={() => setCompareOpen(true)}
+        />
       </div>
+      {compareOpen && (
+        <CompareTraces
+          runs={runs.map((r) => ({ recordId: r.recordId, title: r.payload.title, status: r.payload.status }))}
+          open
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
       {activeProcessed ? (
         rendered.length > 0 ? (
           <div className="analysis-right__views">{rendered}</div>
@@ -570,4 +593,39 @@ function toRenderable(
     ...(format ? { format } : {}),
     ...(drefId?.id ? { dataReferenceRef: { id: drefId.id } } : {}),
   }
+}
+
+/**
+ * GC-10 [E] (D4) — the prominent "Compare traces" action for the results
+ * header. Visible whenever the runs list exists (NOT hidden in a
+ * disclosure); disabled + a named reason when < 2 succeeded runs (no dead
+ * chrome — the reason says what is missing). `data-testid="analysis-compare-btn"`.
+ */
+function CompareTracesButton({
+  succeeded,
+  onOpen,
+}: {
+  succeeded: Array<{ recordId: string }>
+  onOpen: () => void
+}) {
+  const canCompare = succeeded.length >= 2
+  const reason = canCompare
+    ? undefined
+    : succeeded.length === 1
+      ? 'need one more succeeded run'
+      : 'run at least two succeeded runs first'
+  return (
+    <button
+      type="button"
+      className="analysis-compare-btn"
+      data-testid="analysis-compare-btn"
+      data-disabled={canCompare ? 'false' : 'true'}
+      disabled={!canCompare}
+      title={reason ?? 'Compare traces across runs'}
+      onClick={onOpen}
+    >
+      Compare traces
+      {reason ? <span className="analysis-compare-btn__reason"> ({reason})</span> : null}
+    </button>
+  )
 }

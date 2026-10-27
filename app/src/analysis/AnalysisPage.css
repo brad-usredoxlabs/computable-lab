@@ -194,3 +194,22 @@
 .compare-surface__saved-title { font-weight: 600; font-size: .85rem; }
 .compare-surface__saved-row { display: flex; flex-direction: column; gap: .2rem; font-size: .78rem; }
 .compare-surface__saved-row button { align-self: flex-start; font-size: .72rem; padding: .15rem .45rem; }
+
+/* GC-10 [E] — the prominent Compare action in the results header. */
+.analysis-right__title { display: flex; align-items: center; gap: .6rem; }
+.analysis-right__title-text { flex: 0 1 auto; }
+.analysis-compare-btn {
+  margin-left: auto;
+  padding: .35rem .8rem;
+  border: 1px solid #1971c2;
+  background: #e7f5ff;
+  color: #1864ab;
+  border-radius: 6px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.analysis-compare-btn:hover:not(:disabled) { background: #d0ebff; }
+.analysis-compare-btn:disabled { background: #f1f3f5; border-color: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+.analysis-compare-btn__reason { font-weight: 400; color: #6b7280; }
