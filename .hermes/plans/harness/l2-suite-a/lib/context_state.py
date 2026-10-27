@@ -163,15 +163,29 @@ class AccumulatedDeckState:
             })
             self.placement_count += 1
         # 3) events ghosted: the summary line + the well-state accumulation.
+        #    l2t1705 harness fidelity (OQ-1 ruling, decisions/
+        #    WELLSET-RESOLVER-1-oq-rulings-l2t1705.md): the PRODUCT binds an
+        #    add_material's labware through the resolvedLabwares OFFER channel
+        #    (details.labwareId stays absent on those events — receipts
+        #    20261027T192830Z prompt-3: 42 wells, labwareId None; the browser
+        #    ghosts the same way). The accumulation read ONLY
+        #    details.labwareId, so the P7 expected union was vacuously [].
+        #    Mirror the browser's binding: when this turn resolved EXACTLY ONE
+        #    labware, material events lacking a details binding ride that
+        #    offer. Zero or several resolved labware this turn -> the binding
+        #    is ambiguous -> skip (never-guess), same conservatism as the
+        #    product. Expectations files stay untouched (no-weaken).
+        bound = self.resolved_ids(result)
+        fallback_lid = bound[0] if len(bound) == 1 else None
         for ev in (result.get("events") or []):
             if not isinstance(ev, dict):
                 continue
             self.events.append(ev)
-            self._accumulate_wells(ev)
+            self._accumulate_wells(ev, fallback_lid=fallback_lid)
         # a deck_layout done carries no deck state change (the client applies
         # it to the editor; the probe's harness-owned identity stays put).
 
-    def _accumulate_wells(self, ev):
+    def _accumulate_wells(self, ev, fallback_lid=None):
         verb = str(ev.get("verb") or ev.get("event_type") or "")
         # material-bearing verbs only for the COMPUTED set (P7: "all wells
         # that CONTAIN MATERIALS"): a mix event's wells do not add material.
@@ -179,6 +193,10 @@ class AccumulatedDeckState:
             return
         d = ev.get("details") or {}
         lid = d.get("labwareId")
+        if not isinstance(lid, str):
+            # harness fidelity l2t1705: ride the turn's unique resolved-labware
+            # offer when the event carries no details binding (see absorb()).
+            lid = fallback_lid
         if not isinstance(lid, str):
             return
         mats = _event_materials(ev)
