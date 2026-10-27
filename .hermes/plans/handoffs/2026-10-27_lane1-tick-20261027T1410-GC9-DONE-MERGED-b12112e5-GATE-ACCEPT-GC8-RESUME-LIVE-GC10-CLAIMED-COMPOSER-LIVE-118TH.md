@@ -92,3 +92,17 @@ Supersedes the 117TH (same tick, written 13:58 before the fast close landed).
   AS-L1T0950-1 CLOSED, AS-L1T0950-2 carried, GC-7 cycle-3 ratio-helper OBSERVATION (folded),
   GC-9 cycle-2 6 OBSERVATIONs (this handoff section).
 - EVIDENCE DEBT OPEN: AS-L1T0020-2 ONLY.
+
+## Post-checkpoint motion (14:20 re-poll, same tick — budget expiry at ~14:25)
+
+- GC-8 RESUME: HEALTHY+MOVING — committed leg 4 09201fdf (T2 chaining spine GREEN: 6/6
+  vitest, 80s; A5-reject + immutability legs in), leg 5 448a1667 (T3 smoke script + honesty
+  gate + GC8 REAL-STANDARDS DEFERRED receipt, OQ1-ratified), leg 4.5 9896bea4 (grep hygiene:
+  the FAME-LOCAL docstring + read_rows COMMENT mentions reworded to all-zero greps; python
+  re-verified 173 OK). Leg 6 (close battery) in flight. Launcher PID 2517280 alive 27m at
+  14:20 — within due window (~15:20). The report's leg-4 note confirms the ORCH ADOPTION of
+  the prior run's artifacts worked as AS-L1T1400-1 anticipated. NEXT TICK: expect GC8 DONE
+  marker; then adversarial cycle 1 per checklist.
+- GC-10 composer: still running at 14:20 (unit alive, log empty-buffered; due ~14:50). If
+  its draft lands late, next tick does the cite-audit + promotion + slot-1 dispatch.
+- Vision/browser slot: FREE (GC-9 gate closed 14:03).
