@@ -93,3 +93,18 @@ Author: orchestrator cron tick (started 16:20 EDT) — lane 1 only. All git -c c
   candidates for GC-11/GC-12/gc-wave-close; O1 ISTD self-ratio amount and O7 promoted-bytes-vs-
   envelope wording are the two most substantive).
 - EVIDENCE DEBT OPEN: AS-L1T0020-2 ONLY.
+
+## SAME-TICK FAST CLOSE (16:45 addendum)
+
+FIX RUN 2 EXITED rc=0 16:35:14 `GC8 FIX2 DONE ee837d27` (~5 min — the amendment's one-line
+scope). Orch verified first-hand: widening commit = +2 lines in analysis-run.schema.yaml third
+enum, EXACTLY curve_fitting + weighted_regression appended, nothing else in the file; whole-item
+diff 3cf3a9dd..HEAD = exactly 16 ratified files, .ts hits all test-only version re-pins, zero
+app/. ADVERSARIAL CYCLE 2 DISPATCHED 16:42 (systemd run-p3082584, OpenRouter
+deepseek-v4.1-flash, report reviews/GC8-advreview-cycle2-l1t1640.md, due ~17:40): re-proves
+D1-D5 by its own probes + full close battery incl. chaining 6/6, 102 schema suites, server tsc,
+greps, 16-file scope, B1-correction integrity. NEXT TICK: on accept -> orch verify first-hand
+(python >=180, chaining re-run, schema suites, tsc, greps) -> cl-lane-stack.sh 1 restart in
+BACKGROUND (schema YAML changes) -> T3 real-standards smoke re-run on merged stack per OQ1 ->
+merge --no-ff wt/gc-8-lane1-l1t1130 -> mark done. Slot-0 FREE at checkpoint; slot-1 GC-10 live
+(due ~17:45). Vision slot free; GC-11 composer still gated on GC-10's shipped exports.
