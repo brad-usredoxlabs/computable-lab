@@ -819,6 +819,10 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
     config.corpus = partialConfig.corpus;
   }
 
+  if (partialConfig.analysis !== undefined) {
+    config.analysis = partialConfig.analysis;
+  }
+
   return config;
 }
 
