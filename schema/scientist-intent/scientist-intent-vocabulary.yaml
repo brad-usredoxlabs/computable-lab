@@ -88,6 +88,9 @@ verbs:
       - name: duration
         kind: scalar
         required: false
+      - name: volume
+        kind: quantity
+        required: false
       - name: cycles
         kind: quantity
         required: false
