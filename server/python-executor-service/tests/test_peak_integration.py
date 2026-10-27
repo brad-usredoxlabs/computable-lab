@@ -160,8 +160,38 @@ def _deciding_pass_floor_ratio(sig):
         raise AssertionError(
             "the module's declared two-pass baseline must yield at least "
             f"two skim decisions — got {len(ratios)}; the deciding pass "
-            "is the SECOND")
+            "the SECOND")
     return ratios[-1]
+
+
+def _final_prominence_window_span(sig, baseline):
+    """(M2: adversarial review cycle-2) The module's OWN foot-to-foot span
+    for a two-peak trace, derived from the module's own functions on the
+    FINAL baseline it emitted — the front window's start and the back
+    window's end. This is the containment bound a never-fabricates-signal
+    skim is asserted against: NOT a re-implemented threshold walk (which
+    left 74 samples of slack the reviewer exploited), but the actual
+    prominence-window edges the module computes on the very baseline
+    under test. A lifted sample outside [fa, fb] would sit on the rising
+    limb of a flank, where a baseline lift fabricates signal the skim
+    never may (it only raises the floor between the flanks)."""
+    axis = sig["axis"]
+    values = sig["values"]
+    n = len(axis)
+    dt = (axis[-1] - axis[0]) / (n - 1) if n > 1 else 0.0
+    segs = pi._build_segments(axis, [], {
+        "slope_sensitivity": _base_params()["slope_sensitivity"],
+        "peak_width_s": _base_params()["peak_width_s"],
+        "area_reject_pa_min": None,
+        "height_reject_pa": None,
+    })
+    maxima = pi._detect(values, baseline, segs, dt)
+    wins = pi._peak_windows(maxima, values, baseline, segs, [True] * n)
+    ws = sorted(wins, key=lambda w: w["idx"])
+    if len(ws) < 2:
+        raise AssertionError(
+            f"expected two prominence windows, got {len(ws)}: {ws}")
+    return ws[0]["start"], ws[-1]["end"]
 
 
 def _saturated_signal() -> dict:
@@ -846,8 +876,7 @@ class TestPeakIntegration(unittest.TestCase):
                         "a band-matched shallow valley must log TANGENT_SKIM_APPLIED")
         # the baseline RISES to the connecting line in the valley (it cannot
         # fabricate signal, only raise the measured floor up to the line)
-        axis, values = sig["axis"], sig["values"]
-        n = len(axis)
+        n = len(sig["axis"])
         lifts = [res["baseline"][i] - res_vd["baseline"][i] for i in range(n)]
         lifted = [i for i in range(n) if lifts[i] > 0.0]
         self.assertGreater(len(lifted), 0,
@@ -865,28 +894,32 @@ class TestPeakIntegration(unittest.TestCase):
         self.assertTrue(all(lifts[i] >= 0.0 for i in range(n)),
                         "the skimmed baseline must never drop below the "
                         "vertical-drop baseline (min-only semantics)")
-        # the rise is CONTAINED within the two flanks' foot-to-foot span:
-        # extend each peak to its prominence floor (floor = 0.001 × robust
-        # range, the declared detection floor) — the window edges ARE the
-        # foot points the skim line connects. The lifted region must sit
-        # within the closed span [fa, fb]; a lifted baseline sample outside
-        # it would fabricate signal (the skim only raises the floor between
-        # the two flanks, never beyond them)
-        floor = 0.001 * (max(values) - min(res_vd["baseline"]))
-        i1 = min(range(n), key=lambda i: abs(axis[i] - 1.0))
-        i2 = min(range(n), key=lambda i: abs(axis[i] - 1.5))
-        fa = i1
-        while fa > 0 and (values[fa - 1] - res_vd["baseline"][fa - 1]) > floor:
-            fa -= 1
-        fb = i2
-        while fb + 1 < n and (values[fb + 1] - res_vd["baseline"][fb + 1]) > floor:
-            fb += 1
+        # the rise is CONTAINED within the two flanks' foot-to-foot span —
+        # AND NOTHING ELSE: the allowed span is derived from the module's
+        # OWN prominence windows on the FINAL baseline (the module's own
+        # functions, the module's own output — no re-implemented threshold
+        # walk, whose 74 samples of front-limb slack a fabricated lift
+        # inside it sailed through undetected; adversarial review
+        # cycle-2, MINOR 2). The lifted samples must sit within that span
+        # EXACTLY: the skim only raises the floor between the flanks, so
+        # any sample lifted outside the module's window span would
+        # fabricate signal, and any sample inside the span that was NOT
+        # lifted would leave the connecting line only partially applied.
+        fa, fb = _final_prominence_window_span(sig, res["baseline"])
         self.assertGreaterEqual(lifted[0], fa,
-                                "a lifted baseline sample before the front "
-                                "flank's foot would fabricate signal")
+                                f"lifted sample {lifted[0]} before the "
+                                f"module's front-flank foot {fa} — a "
+                                "baseline lift on the front flank's rising "
+                                "limb would fabricate signal")
         self.assertLessEqual(lifted[-1], fb,
-                             "a lifted baseline sample after the back flank's "
-                             "foot would fabricate signal")
+                             f"lifted sample {lifted[-1]} after the "
+                             f"module's back-flank foot {fb} — a "
+                             "baseline lift beyond the back flank would "
+                             "fabricate signal")
+        self.assertEqual(lifted, list(range(lifted[0], lifted[-1] + 1)),
+                         "the lifted samples must be exactly contiguous "
+                         "(the skim line applies over one closed span, "
+                         "never a scattered set)")
         self._assert_pairing(res["rows"])
 
     def test_t1_14_discriminator_band_edge_is_not_skimmed(self):
