@@ -623,15 +623,41 @@ class TestQuantFailureMatrix(unittest.TestCase):
         self.expect_code(self.model, self.table["rows"], quant_params(amount_semantics="guess"),
                          "PARAM_INVALID")
 
+    # NOTE: `allow_inline_inputs` is NOT in this list — it is a FAIL-CLOSED
+    # GATE the loader reads (spec A5.1/T2-2), not a required parameter:
+    # absent → INPUT_NOT_PROMOTED (the declared failure), never PARAM_MISSING.
     def test_param_missing(self):
         for field in ("istd", "targets", "extrapolation", "fail_on_out_of_range",
-                      "amount_semantics", "allow_inline_inputs"):
+                      "amount_semantics"):
             p = quant_params()
             del p[field]
             with self.assertRaises(q.QuantificationError) as e:
                 run_quant(self.model, self.table["rows"], p)
             self.assertEqual(e.exception.code, "PARAM_MISSING")
             self.assertIn(field, str(e.exception))
+
+    def test_allow_inline_absent_is_the_gate_not_param_missing(self):
+        """A5.1/T2-2 contract: the file-backed model + ABSENT
+        `allow_inline_inputs` → the run proceeds via the file path (the gate
+        only rejects dict-inline); a DICT-inline model + absent gate →
+        INPUT_NOT_PROMOTED, never PARAM_MISSING (spec :432-435 + T2-2 :539)."""
+        # file-backed model + absent gate → proceeds (the gate is inert for
+        # file-backed inputs — the declared parameter is OPTIONAL, not required)
+        p = quant_params()
+        del p["allow_inline_inputs"]
+        out = run_quant(self.model, self.table["rows"], p)
+        assert_close(self, out["rows"][0][out["amt_col"]], 1.0, "absent gate + file-backed model")
+        # dict-inline model + absent gate → the declared failure (INPUT_NOT_PROMOTED)
+        ctx = Context(
+            inputs={
+                "calibration_model": {"dataKind": "table", "inline": self.model},
+                "peak_table": {"dataKind": "table", "inline": self.table["rows"]},
+            },
+            parameters=p,
+        )
+        with self.assertRaises(q.QuantificationError) as e:
+            q.quantify_peaks(ctx, p)
+        self.assertEqual(e.exception.code, "INPUT_NOT_PROMOTED")
 
     def test_unknown_param(self):
         p = quant_params()

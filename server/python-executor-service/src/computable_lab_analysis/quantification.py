@@ -97,9 +97,17 @@ QUANT_REQUIRED_PARAMS: Tuple[str, ...] = (
     "extrapolation",
     "fail_on_out_of_range",
     "amount_semantics",
-    "allow_inline_inputs",
 )
+# NOTE: `allow_inline_inputs` is NOT a required parameter — it is a
+# FAIL-CLOSED GATE the loader reads (spec A5.1 + T2-2): a dict-inline input is
+# allowed ONLY when it is declared true; ABSENT → INPUT_NOT_PROMOTED (the
+# declared failure), never PARAM_MISSING and never normalization-by-default.
+# The shipped spine promotes instead (POST /analysis-artifacts/:id/promote).
+# It is still a DECLARED (known) parameter — the spec's parameterSchema lists
+# it (QUANT :470) — so it lives in the known set, just not required.
 QUANT_OPTIONAL_PARAMS: Tuple[str, ...] = (
+    # the A5 fail-closed gate (declared param; absent → INPUT_NOT_PROMOTED).
+    "allow_inline_inputs",
     # the sample factors block (A4.4) — required when amount_semantics =
     # 'apply_multipliers', absent otherwise (the factors are DATA, never
     # defaults; an absent sample + apply_multipliers → PARAM_MISSING).
@@ -391,8 +399,9 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             "PARAM_INVALID", f"unknown parameter(s) {unknown} — no silent ignore (unknown-is-unknown)"
         )
     fail_on_oor = _require_bool(p, "fail_on_out_of_range")
-    allow_inline = _require_bool(p, "allow_inline_inputs")  # A5 loader gate
-    _ = allow_inline
+    # (allow_inline_inputs is a fail-closed GATE the shared loader reads —
+    # spec A5.1/T2-2: absent → INPUT_NOT_PROMOTED, never PARAM_MISSING; the
+    # runner hands run parameters through verbatim and the gate decides.)
     extrapolation = p["extrapolation"]
     if extrapolation not in EXTRAPOLATION_ENUM:
         raise QuantificationError(
@@ -492,14 +501,17 @@ def quantify_peaks(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         model_payload = load_structured_input(model_handle, p)
     except CalibrationError as e:
-        raise QuantificationError(e.code, str(e)) from None
+        # re-wrap in the quant consumer's own error class (one error class per
+        # engine module) using the PREFIX-FREE .message (str(e) already carries
+        # the code prefix — re-stamping it would double the token).
+        raise QuantificationError(e.code, e.message) from None
     model = validate_model_payload(model_payload)
 
     table_handle = ctx.input("peak_table")
     try:
         table_payload = load_structured_input(table_handle, p)
     except CalibrationError as e:
-        raise QuantificationError(e.code, str(e)) from None
+        raise QuantificationError(e.code, e.message) from None
     if isinstance(table_payload, dict):
         rows = table_payload.get("rows")
         if not isinstance(rows, list):

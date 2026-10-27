@@ -627,16 +627,29 @@ class TestFailureMatrix(unittest.TestCase):
                          code="FIT_ILL_CONDITIONED")
 
     # ---- parameter honesty (GC-7 T1-10 pattern) ----
+    # NOTE: `allow_inline_inputs` is NOT in this list — it is a FAIL-CLOSED
+    # GATE the loader reads (spec A5.1/T2-2), not a required parameter:
+    # absent → INPUT_NOT_PROMOTED (the declared failure), never PARAM_MISSING.
     def test_param_missing_names_the_field(self):
         for field in ("model", "weighting", "origin_constraint", "correlation_statistic",
                       "amount_unit", "istd", "extrapolation", "fail_on_out_of_range",
-                      "allow_inline_inputs", "levels"):
+                      "levels"):
             p = dict(self.params)
             del p[field]
             with self.assertRaises(CalibrationError) as e:
                 run_fit(self.inputs, p)
             self.assertEqual(e.exception.code, "PARAM_MISSING")
             self.assertIn(field, str(e.exception), f"'{field}' must be named")
+
+    def test_allow_inline_absent_is_the_gate_not_param_missing(self):
+        """A5.1/T2-2 contract: the dict-inline test inputs + ABSENT
+        `allow_inline_inputs` → INPUT_NOT_PROMOTED (the fail-closed gate),
+        never PARAM_MISSING and never a FileNotFoundError."""
+        p = dict(self.params)
+        del p["allow_inline_inputs"]
+        with self.assertRaises(CalibrationError) as e:
+            run_fit(self.inputs, p)
+        self.assertEqual(e.exception.code, "INPUT_NOT_PROMOTED")
 
     def test_param_missing_level_field(self):
         levels = fx.level_params(self.fixture, rt0=1.0, d_rt=1.0)

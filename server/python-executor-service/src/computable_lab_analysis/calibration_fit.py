@@ -105,10 +105,18 @@ CAL_REQUIRED_PARAMS: Tuple[str, ...] = (
     "istd",
     "extrapolation",
     "fail_on_out_of_range",
-    "allow_inline_inputs",
     "levels",
 )
+# NOTE: `allow_inline_inputs` is NOT a required parameter — it is a
+# FAIL-CLOSED GATE the loader reads (spec A5.1 + T2-2): a dict-inline input is
+# allowed ONLY when it is declared true; ABSENT → INPUT_NOT_PROMOTED (the
+# declared failure), never PARAM_MISSING and never normalization-by-default.
+# The shipped spine promotes instead (POST /analysis-artifacts/:id/promote).
+# It is still a DECLARED (known) parameter — the spec's parameterSchema lists
+# it (CAL :468 / QUANT :470) — so it lives in the known set, just not required.
 CAL_OPTIONAL_PARAMS: Tuple[str, ...] = (
+    # the A5 fail-closed gate (declared param; absent → INPUT_NOT_PROMOTED).
+    "allow_inline_inputs",
     # Declare the calibration run's id when known so the model artifact carries
     # machine-readable lineage (A6 calibration_run_id). The submitter wired it,
     # so it is DATA; absent → the payload field is null (never guessed).
@@ -199,17 +207,22 @@ def load_structured_input(handle: DatasetHandle, params: Dict[str, Any]) -> Any:
 
     1. Dict-inline (an UNPROMOTED inline artifact's ``inlineValue`` is a dict;
        the runner provisions it as ``<name>.inline`` — a file that is NEVER
-       WRITTEN, analysisRunner.ts:195 [F-run]): allowed ONLY when the
-       REQUIRED parameter ``allow_inline_inputs`` is true; otherwise
-       ``INPUT_NOT_PROMOTED`` is raised BEFORE any filesystem read — the
-       declared failure instead of the shipped FileNotFoundError crash class.
+       WRITTEN, analysisRunner.ts:195 [F-run]): allowed ONLY when
+       ``allow_inline_inputs`` is DECLARED true (a fail-closed gate, not a
+       required parameter — spec A5.1 + T2-2: ABSENT → INPUT_NOT_PROMOTED,
+       the declared failure; the shipped spine promotes instead). Otherwise
+       ``INPUT_NOT_PROMOTED`` is raised BEFORE any filesystem read — never a
+       FileNotFoundError.
     2. List-inline (the shipped inline-list edge): the payload is already in
        memory — returned verbatim (no filesystem, no coercion).
     3. File-backed (promoted dref streamed to ``<name>.bin`` [F :166-176], or
        a data-reference input): ``json.loads`` of the raw bytes;
        unreadable/invalid JSON → ``INPUT_JSON_INVALID``.
     """
-    allow_inline = _require_bool(params, "allow_inline_inputs")
+    # A5 gate: fail-closed read. `params.get(name)` WITHOUT a default — the
+    # absence IS the declared reject path (INPUT_NOT_PROMOTED), so no default
+    # is ever supplied (B5: zero defaults; the gate decides, not a fallback).
+    allow_inline = params.get("allow_inline_inputs") is True
     inline = handle.inline
     if isinstance(inline, dict):
         if not allow_inline:
@@ -584,7 +597,9 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     _validate_istd(p["istd"], "istd")
     _require_enum(p, "extrapolation", EXTRAPOLATION_ENUM, "EXTRAPOLATION_UNSUPPORTED")
     _require_bool(p, "fail_on_out_of_range")
-    allow_inline = _require_bool(p, "allow_inline_inputs")
+    # (allow_inline_inputs is a fail-closed GATE the loader reads — spec
+    # A5.1/T2-2: absent → INPUT_NOT_PROMOTED, never PARAM_MISSING; the
+    # runner hands run parameters through verbatim and the gate decides.)
     levels_raw = p["levels"]
     if not isinstance(levels_raw, list) or not levels_raw:
         raise CalibrationError("PARAM_INVALID", "parameter 'levels' must be a non-empty array")
