@@ -1036,7 +1036,16 @@ def integrate_peaks(ctx: Any, decoded_signals: Dict[str, Dict[str, Any]],
 
     # ---- Metrics (unit-tagged) ----
     saturated_peaks = sum(1 for r in rows if r["saturated"])
-    diffs = [abs(values[i] - base[i]) for i in range(n) if on_mask[i]]
+    # Declared metric interpretation (OQ4 class): the baseline NOISE floor
+    # is the residual over ON samples OUTSIDE the detected peak windows —
+    # peak flanks are signal, not noise. This is what makes the spec's
+    # T1-3 assertion (noise < drift span) meaningful on a peak-bearing trace.
+    in_win = [False] * n
+    for w in windows:
+        for i in range(w["start"], w["end"] + 1):
+            in_win[i] = True
+    diffs = [abs(values[i] - base[i]) for i in range(n)
+             if on_mask[i] and not in_win[i]]
     if diffs:
         srt = sorted(diffs)
         rank = max(0, min(len(srt) - 1, int(math.ceil(0.95 * len(srt))) - 1))
@@ -1059,7 +1068,7 @@ def integrate_peaks(ctx: Any, decoded_signals: Dict[str, Dict[str, Any]],
     ctx.metric("overlap_shared_baseline_pairs", overlap_pairs, unit="pairs",
                label="OVERLAP_SHARED_BASELINE pairs")
     ctx.metric("baseline_noise_p95_pa", noise_p95, unit="pA",
-               label="p95 |signal-baseline| over ON segments")
+               label="p95 |signal-baseline| over ON samples outside detected peak windows")
     ctx.metric("timed_off_duration_min", off_dur, unit="min", label="total integration-off duration")
     ctx.metric("integration_coverage_fraction", coverage, unit="fraction",
                label="ON samples / total samples")
