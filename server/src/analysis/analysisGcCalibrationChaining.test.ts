@@ -43,26 +43,21 @@ const ENGINE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/analy
 const SDK_VERSION = '0.4.0'; // GC-8 OQ4 fold (shipped __init__.py at this base)
 
 // ---------------------------------------------------------------------------
-// CAPABILITY GAP (B1/B4 collision — documented, not hidden; see the report).
-// B1 re-pin (orchestrator, first-hand at this base): "GC-8 declares
-// ['curve_fitting','weighted_regression']". But the SHIPPED schema enums at
-// this base (schema/knowledge/analysis-engine.schema.yaml :152-158 and
-// analysis-revision.schema.yaml :105-111) carry a CLOSED capability enum of
-// SIX terms — neither `curve_fitting` nor `weighted_regression` — and the
-// store is VALIDATION-BLOCKING on create. Minting the B1-listed terms is
-// therefore a declared validation failure at this base, and a revision
-// pinning them would also fail the runner's execute-time capability gate.
-//
-// B4 forbids adding schema/ontology terms in-lane, so the SPINE runs under
-// the nearest schema-valid declared capability (`peak_detection` — the
-// table-publishing revisions are the GC-7 lineage) and leg T2-0 below
-// PINS the gap: it mints an engine record declaring the B1-listed terms and
-// asserts the store's VALIDATION FAILURES name both missing terms verbatim.
-// If the orchestrator extends the schema enums (out of GC-8 scope), T2-0
-// flips: the same payload mints cleanly and the spine flips to the B1 terms.
+// CAPABILITY TERMS (ruling: 2026-10-27_GC-8-D1-capability-enum-ruling.md).
+// The B1 re-pin (orchestrator, first-hand) declares ['curve_fitting',
+// 'weighted_regression'] — the spec's §A7 :462 names. Adversarial cycle 1
+// (D1 BLOCKER) found the ORIGINAL run's silent substitution of
+// `peak_detection` for the whole spine and its T2-0 gap-encoding test.
+// The orchestrator ruling REJECTED the substitution and RATIFIED widening the
+// two closed schema enums (analysis-engine + analysis-revision) with EXACTLY
+// the two spec-mandated terms — nothing else in those files. The spine
+// THEREFORE declares the spec's real terms: the engine record declares them,
+// the CAL and QUANT revisions pin them, and leg T2-0 (below) proves the store
+// and the execute-time capability gate ACCEPT the real terms — if either
+// still rejected them after the widening, that would be a real platform gap
+// and the fix run would STOP with evidence (ruling step 3), never substitute.
 // ---------------------------------------------------------------------------
 const B1_CAPABILITIES = ['curve_fitting', 'weighted_regression'];
-const SPINE_CAPABILITY = 'peak_detection'; // schema-valid at this base (gap pinned by T2-0)
 
 /** The minimal §A1-shaped peak-table publisher (spec T2-1 sanctioned form:
  * a minimal test revision publishing a GC-7-shaped table — the assertion is
@@ -269,18 +264,20 @@ describe('AnalysisRunner + calibration/quantification chaining (GC-8 spine)', ()
     service = new AnalysisService(ctx);
     runner = new AnalysisRunner(ctx, '/usr/bin/python3', resolve(process.cwd(), 'python-executor-service', 'src'));
 
-    engId = await createEngine('ENG-GC8CAL001', [SPINE_CAPABILITY],
+    engId = await createEngine('ENG-GC8CAL001', B1_CAPABILITIES,
       'GC-8 calibration/quantification engine (stdlib, system interpreter)');
 
-    // The minimal §A1 peak-table publisher revision (T2-1)
+    // The minimal §A1 peak-table publisher revision (T2-1). It publishes the
+    // GC-7-shaped tables the spine consumes — it does NOT do curve fitting, so
+    // it pins NO GC-8 capability (no engineRef → the shipped runner takes the
+    // legacy no-gate path, analysisRunner.ts :697). Pinning a capability here
+    // would be a second substitution of the D1 class — never.
     const { recordId } = await service.createRevision({
       title: 'GC-8 minimal peak-table publisher (test data)',
       entryScript: MINIMAL_PEAK_TABLE_ENTRY,
       sdkVersion: SDK_VERSION,
       inputs: [{ name: 'rows', dataKind: 'table', required: true, description: 'declared synthetic rows (test data)' }],
       parameterSchema: { type: 'object', required: ['rows'], properties: { rows: { type: 'array' } } },
-      engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
-      requiredCapabilities: [SPINE_CAPABILITY],
     });
     minimalRev = recordId;
   }, 90000);
@@ -290,35 +287,35 @@ describe('AnalysisRunner + calibration/quantification chaining (GC-8 spine)', ()
     await rm(wsDir, { recursive: true, force: true });
   });
 
-  it('T2-0 capability-gap pin: the B1-listed terms are ABSENT from the shipped schema enums (validation-blocked at this base)', async () => {
-    // The B1 re-pin declares ['curve_fitting','weighted_regression']. The
-    // shipped schema enums (analysis-engine + analysis-revision) carry a
-    // closed six-term enum — neither B1 term is in it, and the store is
-    // validation-blocking on create. Mint the B1 payload and assert the
-    // VALIDATION FAILURE names both missing terms (the gap is pinned in the
-    // test, never papered over; see the header comment + the report).
-    const id = 'ENG-GC8GAP001';
-    const payload: Record<string, unknown> = {
-      kind: 'analysis-engine',
-      id,
-      title: 'GC-8 B1 capability gap probe',
-      implementation: { adapter: 'python-entry-script', entry: 'run(ctx)', module: 'computable_lab_analysis' },
-      version_constraints: { python: '>=3.13', packages: [{ name: 'pyyaml', constraint: '>=6' }] },
-      capabilities: { declared: B1_CAPABILITIES.map((c) => ({ capability: c, support: 'supported' })) },
-      availability: { available: true },
-      runtime_requirements: { interpreter: 'system' },
-    };
-    const result = await ctx.store.create({
-      envelope: { recordId: id, schemaId: ENGINE_SCHEMA_ID, payload },
-      message: 'GC-8 test: B1 capability gap probe (expected validation failure)',
-    });
-    expect(result.success).toBe(false);
-    const validationText = JSON.stringify(result.validation ?? {});
-    for (const cap of B1_CAPABILITIES) {
-      expect(validationText).toContain(cap);
-    }
-    expect(result.error ?? '').toContain('Validation failed');
-  }, 30000);
+  it('T2-0 capability terms ACCEPTED: the store mints the engine declaring the spec terms, and the CAL spine PASSES the execute-time capability gate on them', async () => {
+    // Ruling step 3 (2026-10-27_GC-8-D1-capability-enum-ruling.md): the spine
+    // declares the spec's REAL terms; if store validation or the
+    // engine-capability gate STILL rejected them after the enum widening,
+    // THAT is a real platform gap — STOP with evidence, do not substitute.
+    // (a) Store validation: the SAME engine payload (ENG-GC8CAL001) that
+    // beforeAll minted with B1_CAPABILITIES re-validated against the schema —
+    // if either spec term were still outside the closed enum, the store would
+    // refuse it. (beforeAll would have thrown first, so its success is the
+    // primary proof; the re-check makes the assertion local + explicit.)
+    const engEnv = await ctx.store.get('ENG-GC8CAL001');
+    expect(engEnv).toBeDefined();
+    const declared = (engEnv!.payload as { capabilities?: { declared?: Array<{ capability: string; support: string }> } })
+      .capabilities!.declared!;
+    expect(declared.map((c) => c.capability)).toEqual(B1_CAPABILITIES);
+    // (b) Execute-time gate: a real CAL run whose revision pins the spec
+    // terms (see createCalRevision) reaches executeLocked's engineGate
+    // (analysisRunner.ts :598-610: every requiredCapability must be declared
+    // supported/approximate on the pinned engine or the run hard-fails
+    // ENGINE_CAPABILITY_UNSUPPORTED). A succeeded status therefore PROVES the
+    // gate accepted the real terms — the capability gate proves what it
+    // claims (the exact failure D1 punished).
+    const calRev = await createCalRevision('TEST GC-8 cal-rev-capability-gate');
+    const stdA = await publishPeakTable('gc8-std-caps-A', C1_ROWS);
+    const capRun = await runCal(calRev, stdA, CAL_PARAMS);
+    const capRes = await runner.executeRun(capRun);
+    expect(capRes.status).toBe('succeeded');
+    expect(capRes.status).not.toBe('failed'); // no ENGINE_CAPABILITY_UNSUPPORTED
+  }, 180000);
 
   /** Mint the CAL revision (entry = the fixture reference copy). */
   async function createCalRevision(title: string) {
@@ -335,7 +332,9 @@ describe('AnalysisRunner + calibration/quantification chaining (GC-8 spine)', ()
       })),
       parameterSchema: CAL_PARAMS_SCHEMA,
       engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
-      requiredCapabilities: [SPINE_CAPABILITY],
+      // The spec's REAL capability terms (§A7 — the D1 ruling rejects any
+      // substitution; the spine proves the gate on these, not on peak_detection).
+      requiredCapabilities: [...B1_CAPABILITIES],
     });
     return recordId;
   }
@@ -353,7 +352,9 @@ describe('AnalysisRunner + calibration/quantification chaining (GC-8 spine)', ()
       ],
       parameterSchema: QUANT_PARAMS_SCHEMA,
       engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
-      requiredCapabilities: [SPINE_CAPABILITY],
+      // The spec's REAL capability terms (§A7) — the quantification leg of the
+      // curve-fitting/weighted-regression revision pair (D1 ruling: no substitution).
+      requiredCapabilities: [...B1_CAPABILITIES],
     });
     return recordId;
   }
@@ -435,6 +436,13 @@ describe('AnalysisRunner + calibration/quantification chaining (GC-8 spine)', ()
       const ref = fp.source_point_ref as Record<string, unknown>;
       expect(ref.input_name).toMatch(/^level_\d+$/);
       expect(ref.peak_row_index).toBeDefined();
+      // D4: the identity slot is an _id field — a filesystem PATH may never sit
+      // under it (the original run carried meta.sourcePath there). The spine's
+      // level inputs are UNPROMOTED inline artifacts: no declared ref id exists
+      // for them, so the key must be OMITTED (the module carries a declared id
+      // only when one is available via the input meta — proven in the python
+      // unit tests against a synthetic meta).
+      expect('artifact_or_dref_id' in ref).toBe(false);
     }
     // the calibration_table A1 payload
     const calTable = (await artifactOf('calibration_table', calRun)).payload as { inlineValue: Record<string, unknown> };
