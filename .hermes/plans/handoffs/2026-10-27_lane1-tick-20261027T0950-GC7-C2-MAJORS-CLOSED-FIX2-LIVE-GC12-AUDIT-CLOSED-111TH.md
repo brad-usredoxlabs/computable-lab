@@ -109,3 +109,13 @@ Author: orchestrator cron tick (started ~09:20 EDT) — lane 1 only. All git -c 
 - advreview-gc7c2 unit EXITED rc=0 (report at reviews/GC7-advreview-cycle2-l1t0940.md).
 - Lane stack :3092/:5192 up (http=200), serving trunk a015a594; no YAML change pending — no
   restart. gc-fid-nas lane storage remains a GC-12 browser-gate prereq.
+
+## ADDENDUM (same tick, ~09:58): OPS PREREQ DONE — gc-fid-nas lane storage CONFIGURED
+Appended device {id: gc-fid-nas, kind: local-mount, mountPath: /mnt/vast/gc-fid} to the LANE-OWNED
+config /home/brad/.hermes/cl/lanes/1/lane1-config.yaml (lane-stack.sh passes it via CONFIG_PATH —
+Brad's symlinked config.yaml untouched; backup lane1-config.yaml.bak-l1t0955). A readOnly key was
+tried then removed: StorageDeviceConfig (app/src/types/config.ts:150-164) declares no such field —
+read-only discipline on the NAS stays behavioral, per GC-4 spec. Lane stack restarted (background
+per the blocking-script trap); VERIFIED: :3092 health 200, GET /api/config now lists
+['vast','gc-fid-nas'] (was ['vast'] only), :5192 200. GC-12's V7 browser prereq is CLEARED
+(update checklist item 3/4 accordingly). No YAML/product files changed — no further restart owed.
