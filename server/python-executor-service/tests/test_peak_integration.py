@@ -862,8 +862,9 @@ class TestPeakIntegration(unittest.TestCase):
 
     def test_t1_14_shallow_valley_is_skimmed_to_the_connecting_line(self):
         """F1(a): a SHALLOW valley whose floor lies in the declared band
-        (measured floor/small_h ≈ 0.088, inside [0.05, 0.2] for these params)
-        is skimmed: the baseline RISES to the straight line between the two
+        (measured, DECIDING/second baseline pass: floor/small_h = 0.09473,
+        first pass 0.07956 — inside [0.05, 0.2] for these params) is
+        skimmed: the baseline RISES to the straight line between the two
         flanks' foot points and TANGENT_SKIM_APPLIED is logged."""
         sig = self._skim_trace(1.5)
         res, ctx = _run(sig, baseline_correction="tangent_skim",
@@ -923,22 +924,41 @@ class TestPeakIntegration(unittest.TestCase):
         self._assert_pairing(res["rows"])
 
     def test_t1_14_discriminator_band_edge_is_not_skimmed(self):
-        """F2 pin + F1 gate: a valley floor at ≈0.038·small_h sits BETWEEN
-        the legacy 0.5·skim_ratio·small_h (=0.025·small_h) and the spec's
-        one-sided skim_ratio·small_h (=0.05·small_h). Under the spec's
-        one-sided lower gate (the 0.5 coefficient is NOT a declared
-        parameter) this valley must NOT be skimmed; under the legacy
-        0.5·gate it WOULD be. This single case is what makes deleting the
-        gate (F1) or restoring the 0.5 (F2) go RED."""
-        sig = self._skim_trace(1.56)
+        """F2 pin + F1 gate: a valley floor at 0.03625·small_h (MEASURED on
+        the DECIDING/second baseline pass; the first pass of the same
+        two-pass baseline is 0.01910·small_h) sits BETWEEN the legacy
+        0.5·skim_ratio·small_h (=0.025·small_h) and the spec's one-sided
+        skim_ratio·small_h (=0.05·small_h): 45.0 % ABOVE the legacy lower
+        and 27.5 % BELOW the spec lower — unambiguous on BOTH sides, so
+        the pin cannot be mistaken for either gate's boundary (cycle-2
+        MINOR 3 moved it here from 0.04801, which sat only 4.0 % below
+        the spec lower). Under the spec's one-sided lower gate (the 0.5
+        coefficient is NOT a declared parameter) this valley must NOT be
+        skimmed; under the legacy 0.5·gate it WOULD be. This single case
+        is what makes deleting the gate (F1) or restoring the 0.5 (F2) go
+        RED."""
+        sig = self._skim_trace(1.585)
         res, ctx = _run(sig, baseline_correction="tangent_skim",
                         skim_ratio=0.05, valley_to_peak_ratio=0.2)
         res_vd, _ = _run(sig)
         self.assertEqual(len(res["rows"]), 2)
         self.assertFalse(any(l.get("code") == "TANGENT_SKIM_APPLIED"
                              for l in ctx.manifest().logs),
-                         "floor≈0.038·small_h is below the one-sided "
-                         "skim_ratio·small_h=0.05·small_h gate — must NOT skim")
+                         "floor=0.03625·small_h (deciding pass) is below the "
+                         "one-sided skim_ratio·small_h=0.05·small_h gate — "
+                         "must NOT skim")
+        # the measured ratio sits inside (legacy lower, spec lower) with a
+        # declared margin on BOTH sides — the pin's margin is asserted,
+        # not just claimed in the docstring
+        ratio = _deciding_pass_floor_ratio(sig)
+        self.assertGreater(ratio, 1.25 * 0.5 * 0.05,
+                           f"floor ratio {ratio:.5f} is not comfortably "
+                           "ABOVE the legacy 0.025·small_h lower — the "
+                           "discriminator must sit between the two gates")
+        self.assertLess(ratio, 0.8 * 0.05,
+                        f"floor ratio {ratio:.5f} is not comfortably "
+                        "BELOW the spec 0.05·small_h lower — the "
+                        "discriminator must sit between the two gates")
         # byte-identical to the vertical-drop baseline (no skim applied)
         self.assertEqual(res["baseline"], res_vd["baseline"],
                          "a below-band valley must leave the baseline "
