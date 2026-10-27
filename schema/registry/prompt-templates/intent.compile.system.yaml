@@ -33,7 +33,7 @@ content: |
   ARGUMENTS (declared per-verb arguments; a name written with '?' is OPTIONAL — the compiler treats its absence as legal):
   - seed — source?:resolvable(labware), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
   - incubate — labware?:resolvable(labware), source?:resolvable(labware), duration?:scalar, temperatureC?:quantity, rpm?:quantity
-  - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
+  - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, volume?:quantity, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
   - resuspend — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
   - dilute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
   - shake — labware?:resolvable(labware), duration?:scalar, rpm?:quantity, temperatureC?:quantity, cycles?:quantity
