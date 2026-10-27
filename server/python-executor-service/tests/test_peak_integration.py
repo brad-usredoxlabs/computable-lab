@@ -121,6 +121,22 @@ def _run_raw(sig, params):
     return res, ctx
 
 
+def _saturated_signal() -> dict:
+    """T1-8 / T1-12's saturated-plateau fixture via the fixture helper
+    ``fx.flat_top`` — a Gaussian clipped to a 30-sample flat plateau at its
+    max (1000 Hz grid) + a thin 150 pA companion at 1.8 min. This is the
+    DECLARED consumer of ``flat_top`` (adversarial review cycle-1, F6: it was
+    previously dead). The values are byte-identical to the formerly
+    hand-built version (verified), so the KERRY assertions are unchanged."""
+    sig = fx.flat_top(1000.0, 1.0, 0.10, plateau_points=30, t0=0.2, t_end=2.2,
+                      offset_pa=5.0)
+    values = list(sig["values"])
+    for i, t in enumerate(sig["axis"]):
+        values[i] += 150.0 * math.exp(-0.5 * ((t - 1.8) / 0.03) ** 2)
+    sig["values"] = values
+    return sig
+
+
 class TestPeakIntegration(unittest.TestCase):
     def _assert_pairing(self, rows):
         """The declared-null invariant, both directions (§A1, bait #1/#4):
@@ -444,20 +460,11 @@ class TestPeakIntegration(unittest.TestCase):
     # T1-8 — saturated plateau (KERRY honesty)
     # ------------------------------------------------------------------
     def test_t1_8_saturated_plateau(self):
-        # hand-built: a Gaussian clipped to a 30-sample flat plateau at its
-        # max (1000 Hz grid) + a thin companion peak (declared, N = 10 —
-        # the G1-proposed count at this grid scale).
-        t0, t_end, dt = 0.2, 2.2, 0.001
-        n = int(round((t_end - t0) / dt)) + 1
-        axis = [t0 + i * dt for i in range(n)]
-        values = [5.0 + 1000.0 * math.exp(-0.5 * ((t - 1.0) / 0.10) ** 2) for t in axis]
-        mid = int(round((1.0 - t0) / dt))
-        for i in range(mid - 15, mid + 15):
-            values[i] = 5.0 + 1000.0  # the 30-sample plateau at max
-        for i, t in enumerate(axis):
-            values[i] += 150.0 * math.exp(-0.5 * ((t - 1.8) / 0.03) ** 2)
-        sig = {"axis": axis, "values": values, "axis_units": "min",
-               "value_units": "pA"}
+        # the saturated-plateau fixture via fx.flat_top (the helper's
+        # declared consumer) + a thin companion peak (declared, N = 10 —
+        # the G1-proposed count at this grid scale). Byte-identical to the
+        # formerly hand-built trace.
+        sig = _saturated_signal()
         res, _ = _run(sig, saturated_min_plateau_points=10)
         self.assertEqual(len(res["rows"]), 2)
         sat, comp = res["rows"]
@@ -588,6 +595,68 @@ class TestPeakIntegration(unittest.TestCase):
         res_c, _ = _run(build(), slope_sensitivity=0.02)
         self.assertNotEqual(res_a["params_digest"], res_c["params_digest"])
 
+    def test_t1_11b_cross_process_determinism_varied_hashseed(self):
+        """Cross-process leg of the byte-identical claim (adversarial review
+        cycle-1, finding F5): the in-process run catches nothing about
+        dict-iteration / hash-order wobble across processes. Run the SAME
+        fixture through the module in two SUBPROCESSES with VARIED
+        PYTHONHASHSEED (and the /usr/bin stdlib gate — no scipy venv) and
+        assert the table JSON / metrics / digest are byte-identical to each
+        OTHER and to the in-process result. PYTHONHASHSEED is the only
+        cross-process nondeterminism the stdlib core can carry (no RNG
+        anywhere — the fixtures are pure functions of declared parameters)."""
+        import tempfile
+        src = os.path.join(os.path.dirname(_HERE), "src")
+        # the same three-peak fixture as T1-11 (declared, deterministic)
+        script = (
+            "import json, sys, math\n"
+            "sys.path.insert(0, {src!r})\n"
+            "from computable_lab_analysis.ctx import Context\n"
+            "from computable_lab_analysis.peak_integration import integrate_peaks\n"
+            "n = int(round((2.6 - 0.2) / 0.001)) + 1\n"
+            "axis = [0.2 + i * 0.001 for i in range(n)]\n"
+            "values = [sum(a * math.exp(-0.5 * ((t - rt) / s) ** 2)"
+            " for (a, rt, s) in [(1000.0, 1.0, 0.10), (1000.0, 1.25, 0.10),"
+            " (300.0, 2.0, 0.05)]) for t in axis]\n"
+            "sig = {{'axis': axis, 'values': values}}\n"
+            "params = {{'baseline_correction': 'vertical_drop', 'baseline_window_s': 12.0,\n"
+            "  'peak_width_s': 12.0, 'slope_sensitivity': 0.001,\n"
+            "  'min_width_factor': 0.2, 'max_width_factor': 3.0,\n"
+            "  'saturated_top_fraction_of_max': 0.005,\n"
+            "  'saturated_min_plateau_points': 50, 'backend': 'stdlib'}}\n"
+            "res = integrate_peaks(Context(), {{'signal1': sig}}, params)\n"
+            "print(json.dumps({{'rows': res['rows'], 'metrics': res['metrics'],\n"
+            "  'params_digest': res['params_digest']}}, sort_keys=True))\n"
+        ).format(src=src)
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(script)
+            path = f.name
+        outs = []
+        try:
+            for seed in ("0", "1"):
+                env = dict(os.environ)
+                env["PYTHONHASHSEED"] = seed
+                out = subprocess.run([sys.executable, path], capture_output=True,
+                                     text=True, timeout=120, env=env)
+                self.assertEqual(out.returncode, 0,
+                                 f"cross-process determinism leg failed "
+                                 f"(PYTHONHASHSEED={seed}): {out.stderr[-500:]}")
+                outs.append(json.loads(out.stdout.strip().splitlines()[-1]))
+        finally:
+            os.unlink(path)
+        # the two hash seeds agree byte-for-byte (cross-process claim)
+        self.assertEqual(outs[0]["params_digest"], outs[1]["params_digest"])
+        self.assertEqual(json.dumps(outs[0]["rows"], sort_keys=True),
+                         json.dumps(outs[1]["rows"], sort_keys=True))
+        self.assertEqual(json.dumps(outs[0]["metrics"], sort_keys=True),
+                         json.dumps(outs[1]["metrics"], sort_keys=True))
+        # and both agree with the in-process result (same claim, same core)
+        res_in, _ = _run(
+            fx.multi_gaussian([(1000.0, 1.0, 0.10), (1000.0, 1.25, 0.10),
+                               (300.0, 2.0, 0.05)], t0=0.2, t_end=2.6))
+        self.assertEqual(outs[0]["params_digest"], res_in["params_digest"])
+        self.assertEqual(outs[0]["rows"], res_in["rows"])
+
     # ------------------------------------------------------------------
     # T1-12 — null/reason pairing invariant over ALL fixtures' outputs
     # ------------------------------------------------------------------
@@ -614,19 +683,10 @@ class TestPeakIntegration(unittest.TestCase):
             "spike": (fx.spike(3000, spike_index=1500, amplitude_pa=1000.0), {}),
             "zeros": (fx.zeros(5000), {}),
         }
-        # the saturated fixture (T1-8's shape) carries the null-area leg
-        t0, t_end, dt = 0.2, 2.2, 0.001
-        n = int(round((t_end - t0) / dt)) + 1
-        axis = [t0 + i * dt for i in range(n)]
-        values = [5.0 + 1000.0 * math.exp(-0.5 * ((t - 1.0) / 0.10) ** 2) for t in axis]
-        mid = int(round((1.0 - t0) / dt))
-        for i in range(mid - 15, mid + 15):
-            values[i] = 5.0 + 1000.0
-        for i, t in enumerate(axis):
-            values[i] += 150.0 * math.exp(-0.5 * ((t - 1.8) / 0.03) ** 2)
+        # the saturated fixture (T1-8's shape) via the shared helper —
+        # the null-area leg (byte-identical to the formerly hand-built)
         fixtures["saturated"] = (
-            {"axis": axis, "values": values, "axis_units": "min",
-             "value_units": "pA"},
+            _saturated_signal(),
             dict(saturated_min_plateau_points=10))
         for name, (sig, over) in fixtures.items():
             res, _ = _run(sig, **over)
