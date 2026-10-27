@@ -157,7 +157,11 @@ def corpus_sha256(corpus_path):
 # The strip is applied per numbered line; the multi-line prompt 10 continues
 # on the UNNUMBERED lines until the next numbered line (or EOF) — those
 # continuation bytes are concatenated verbatim (with their trailing spaces)
-# onto the prompt body.
+# onto the prompt body. A BLANK line (line 20, the corpus separator between
+# 9 and 10, and the file-terminating newline) ENDS the open prompt — it is a
+# corpus separator, not prompt content (the committed file's final newline
+# would otherwise leave a phantom trailing "\n" on prompt 10, and the line-20
+# separator a phantom "\n" on prompt 9).
 SEQ_CORPUS_PREFIX_RE = re.compile(rb"^(\d+)\. (.*)$")
 SEQ_CORPUS_NUMBERS = [9, 10]
 
@@ -181,6 +185,10 @@ def load_sequence_prompts(corpus_path):
                 current = num
                 if body:
                     prompts[num].append(body)
+        elif line == b"":
+            # blank line = corpus separator (line 20) or the file-terminating
+            # newline: ENDS the open prompt (never prompt content).
+            current = None
         elif current is not None:
             # continuation line: append verbatim (trailing spaces survive)
             prompts[current].append(line)
@@ -209,7 +217,7 @@ SEQ_SOURCE_SLICE_SHA256 = "2f220a51c0d897dd68d42daa5fd7b2afa7e47ec63bc9f3936d452
 def sequence_prompts_sha256(prompts):
     """sha256 over the stripped prompts (9 then 10, newline-joined) — the
     'stripped' half of the B1 pair."""
-    joined = "\n".join(prompts[str(n)] for n in SEQ_CORPUS_NUMBERS).encode("utf-8")
+    joined = "\n".join(prompts[n] for n in SEQ_CORPUS_NUMBERS).encode("utf-8")
     return hashlib.sha256(joined).hexdigest()
 
 
@@ -1241,10 +1249,15 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
         else:
             verdict = v_ts
 
+        nav_actions = [
+            f.get("action") for f in frames
+            if isinstance(f, dict) and f.get("type") == "agent_action"
+        ]
         state.update({
             "cards_count": len(cards), "wall": wall, "verdict": verdict,
             "ts_cli_exit": rc,
             "ts_cli_stderr_tail": err_tail[-200:] if (rc or err_tail) else None,
+            "agent_action_frames": nav_actions,
             "done": {k: done.get(k) for k in
                      ("success", "error", "notes", "clarificationNeeded",
                       "sequenceProposal") if k in done},
@@ -1266,8 +1279,13 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
             violations.append("silent shape: success + no proposal + no nav frame "
                               "+ no cards + no named wall (REVISE-GHOST-1 in "
                               "sequence form: whole-suite FAIL)")
-        # B5 hold evidence is asserted for P10 below (needs P9's ids).
-        if idx == 10:
+        # B5 hold evidence is asserted for the PRIMARY P10 turn only (label
+        # 'turn'): its lastActionResult is P9's result (the first result the
+        # held session carries into turn 10). The follow-up nudge turn
+        # ('turn2-folup') legitimately carries P10-turn-1's result instead —
+        # its hold is the history channel, asserted implicitly (it would
+        # re-run the same P10 prompt context).
+        if idx == 10 and label == "turn":
             violations += seq_hold_check(state, hold_ids)
         violations += seq_check_expectation(idx, exp, state,
                                             collect_proposals(results))
@@ -1291,8 +1309,10 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
             for c in cards:
                 if isinstance(c, dict) and c.get("id"):
                     hold_ids.add(str(c["id"]))
-            if isinstance(done.get("error"), str):
-                hold_ids.add("error:" + done["error"][:60])
+            # NOTE: a P9 error wall deliberately produces NO hold id — the
+            # named-wall text is NOT a held-alignment reference. The hold is
+            # then asserted as lastActionResult carrying P9's result object
+            # (the seq_hold_check no-id path).
 
         results[idx] = state
         if verdict is None or violations:
@@ -1330,6 +1350,25 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                          "variants are reviewable.")
                 follow = drive_turn(10, nudge, "turn2-folup")
                 results.setdefault("10-follow", follow)
+                # The OQ3 (c) structural expression is judged over the
+                # COMPLETE proposal set (P9's + every P10 turn, follow-up
+                # included) AFTER the last P10 turn lands (spec §4 P10
+                # operationalized). Re-evaluate here and clear the P10
+                # structural violation if the full set now holds; a
+                # transport/verdict failure of the follow-up still stands.
+                collected = collect_proposals(results)
+                if seq_structural_p10(collected) is None:
+                    state["expectation_violations"] = [
+                        x for x in state["expectation_violations"]
+                        if "OQ3 (c)" not in x]
+                    follow_viol = follow.get("expectation_violations") or []
+                    follow["expectation_violations"] = [
+                        x for x in follow_viol if "OQ3 (c)" not in x]
+                    if (not follow["expectation_violations"]
+                            and follow.get("verdict") is not None):
+                        follow["status"] = "ok"
+                        state["status"] = "ok"
+                        failed = None
 
     digest_after = data_repo_digest(SEQ_DATA_REPO)
     write_free = digest_before == digest_after
@@ -1476,7 +1515,10 @@ SEQ_PROMPTS = {}  # populated in main() after corpus load
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--all", action="store_true", help="drive prompts 1-8 in order")
+    ap.add_argument("--leg", choices=("plate", "sequence"), default="plate",
+                    help="plate (prompts 1-8) or sequence (prompts 9-10, L2-SUITE-B)")
+    ap.add_argument("--all", action="store_true",
+                    help="drive the leg's prompts in order (plate: 1-8; sequence: 9-10)")
     ap.add_argument("--prompts", type=int, action="append", default=None,
                     help="drive only these prompt numbers (repeatable)")
     ap.add_argument("--single", action="store_true",
@@ -1490,6 +1532,33 @@ def main():
                     help="--single debug aid: comma list of pre-placed plate ids "
                          "(e.g. LAB-plate-1) so P3-P8 can bind against them")
     a = ap.parse_args()
+
+    if a.leg == "sequence":
+        # L2-SUITE-B sequence leg: prompts 9-10, ONE held session, layer (a)
+        # write-free against the lane data repo (SEQ_DATA_REPO). The plate
+        # leg's corpus/loader/expectations are never touched.
+        if a.all:
+            selected = list(SEQ_CORPUS_NUMBERS)
+        elif a.prompts:
+            selected = sorted(set(a.prompts))
+        else:
+            ap.error("need --all or --prompts N")
+        bad = [n for n in selected if n not in SEQ_CORPUS_NUMBERS]
+        if bad:
+            ap.error("--leg sequence drives prompts %r only (got %r)"
+                     % (SEQ_CORPUS_NUMBERS, sorted(bad)))
+        if a.single and len(selected) != 1:
+            ap.error("--single drives exactly one prompt (debug aid)")
+        global SEQ_PROMPTS
+        SEQ_PROMPTS = load_sequence_prompts(
+            os.path.join(HERE, "prompts-sequence-leg.txt"))
+        try:
+            return drive_sequence(
+                a.base, selected, a.timeout,
+                os.path.join(HERE, "expectations-sequence"), a.compare)
+        except urllib.error.URLError as e:
+            print("environment error: cannot reach %s: %s" % (a.base, e))
+            return 2
 
     if a.all:
         selected = list(range(1, 9))
