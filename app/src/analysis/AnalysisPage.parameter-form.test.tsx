@@ -175,7 +175,7 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     // undefined/null-valued (toStrictEqual would pass on undefined values, so
     // the key-set assertion is load-bearing).
     expect(arg.parameters).toStrictEqual({ cutoff: 0.5, mode: 'fast' })
-    expect(Object.keys(arg.parameters)).toEqual(['cutoff', 'mode'])
+    expect(Object.keys(arg.parameters ?? {})).toEqual(['cutoff', 'mode'])
     expect(arg.revisionRef).toEqual({ kind: 'record', id: 'REV-N1', type: 'analysis-revision' })
     expect(arg.inputs).toEqual({})
   })
@@ -210,9 +210,11 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     fireEvent.click(runCreateBtn())
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ cutoff: 0.1 })
-    // Open the disclosure, paste JSON → visible override badge; payload = advanced JSON.
-    fireEvent.click(details)
-    expect(details.open).toBe(true)
+    // Open the disclosure (jsdom does not implement the native <summary>
+    // toggle, so the test drives the `open` attribute directly — the
+    // closed-by-default assert above proves the component owns the default),
+    // paste JSON → visible override badge; payload = advanced JSON.
+    details.open = true
     const advInput = screen.getByTestId('analysis-run-params') as HTMLInputElement
     fireEvent.change(advInput, { target: { value: '{"cutoff": 9.5, "mode": "slow"}' } })
     expect(screen.getByTestId('analysis-params-override-json')).toBeDefined()
@@ -261,7 +263,7 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
     // Enabling the advanced override unblocks; the payload is the advanced JSON.
     const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
-    fireEvent.click(details)
+    details.open = true
     fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{"good": 2, "badOneOf": 3}' } })
     await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
     fireEvent.click(runCreateBtn())
@@ -378,7 +380,7 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
       saturated_min_plateau_points: 5,
       backend: 'stdlib',
     })
-    expect(Object.keys(arg.parameters)).toHaveLength(9)
+    expect(Object.keys(arg.parameters ?? {})).toHaveLength(9)
     // Zero JSON-textarea interaction: the advanced disclosure was never opened
     // and the raw input kept its untouched placeholder default.
     const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
