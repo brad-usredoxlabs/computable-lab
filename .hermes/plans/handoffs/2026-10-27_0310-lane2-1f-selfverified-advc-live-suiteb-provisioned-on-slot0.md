@@ -69,3 +69,16 @@ AS-LANE2-TRUNK-REPOINTED-TO-MAIN-MERGE. EVIDENCE DEBT: AS-L2T0755-MAFFT-USERPROV
 
 ## BUDGET
 ~40 min used. Handoff written; checkpoint, exit. Next tick: advc verdict + SUITE-B polling.
+
+## ADDENDUM (same tick, ~03:15 EDT) — ADVC 1F VERDICT fix (0 HIGH) -> FIX RUN 1 QUEUED
+- reviews/L2-FREEFORM-1F-advc-l2t0230.md VERDICT: fix — D1/D2 MEDIUM (stale docblock fixture
+  counts in the parity test + verdict.py mirror docstrings), D3/D4/D5 LOW (header precedence
+  numbering, report 9x3=31 arithmetic, missing deckLayout:null pin). Reviewer independently
+  cleared the classification LOGIC (null rejected identically both feeds; O1-O4 recorded).
+- FIX RUN 1 queued FIFO: unit cl-l2-freeform1f-fix1-l2t0310 (started 03:12, waits for any free
+  slot — SUITE-B holds slot-0, lane 1 GC-6 slot-1), SAME worktree/branch
+  wt/L2-FREEFORM-1F-lane2-l2t0155, log logs/coder-FREEFORM1F-fix1-l2t0310.log, marker
+  FREEFORM1F-FIX1 DONE <sha>. Doc/pin-only fix — logic frozen.
+- NEXT TICK: (1) 1F fix exit -> cycle-2 advc -> ACCEPT -> merge -> live --all SUITE-A drive ->
+  browser gate -> SUITE-A done; (2) SUITE-B coder progress (expect ~2-3h class, started 02:59;
+  2x-checkpoint ~05:00).
