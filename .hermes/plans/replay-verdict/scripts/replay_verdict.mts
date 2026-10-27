@@ -6,9 +6,11 @@
  * replay_spine.mts — reused, NOT mutated) in exactly three ways:
  *   1. cases = harvest fixtures/cases.json (read-only) + the H-A-authorized
  *      SYNTH turns from replay-verdict/synth/synth-cases.SYNTH.json;
- *   2. TWO engine arms per (noun, verb):
- *        armA "pre-ELIG"  — harvest-parity (deps.eligibility absent), so the
- *             fate is directly comparable with the pinned harvest fates;
+ *   2. TWO engine arms per (noun, verb) (advc-cycle-1 D2: armA is named for
+ *      what it actually is — the absence of eligibility data, NOT harvest
+ *      parity. It reproduces the pinned harvest fates for 23/25 harvested
+ *      nouns; the two T9 nouns are the declared db7de009 drift exception):
+ *        armA "eligibility-absent" — deps.eligibility absent;
  *        armB "production" — the shipped resolve_nouns behavior: the
  *             material-eligibility triplet loaded PER call exactly like
  *             resolveNounsPass.ts does (loadMaterialEligibilityIfPresent).
@@ -134,17 +136,80 @@ function slug(s: string): string {
 }
 
 const band = vocab.policies().ambiguity.confidenceAccept;
+
+// ---- D12 (advc-cycle-1): scoring constants are READ FROM THE PRODUCT at ----
+// run time and asserted; a future scoring change fails the harness loudly ----
+// instead of silently leaving REMOTE-CLAMP arithmetic stale. ------------------
+const spineSrc = readFileSync(join(ROOT, 'server/src/resolve/ResolveSpine.ts'), 'utf8');
+const tierBaseM = spineSrc.match(/const TIER_BASE[^=]*=\s*\{([^}]*)\}/);
+const exactBonusM = spineSrc.match(/if \(l === t\) return ([0-9.]+);/);
+const levelBonusM = spineSrc.match(/level === wantLevel \? ([0-9.]+) :/);
+if (!tierBaseM || !exactBonusM || !levelBonusM) {
+  throw new Error('D12 tripwire: could not parse scoring constants from server/src/resolve/ResolveSpine.ts — the product changed shape; re-derive REMOTE-CLAMP arithmetic manually.');
+}
+const tierBase: Record<number, number> = {};
+for (const pair of tierBaseM[1].split(',')) {
+  const m = pair.match(/(\d)\s*:\s*([0-9.]+)/);
+  if (m) tierBase[Number(m[1])] = Number(m[2]);
+}
+const exactBonus = Number(exactBonusM[1]);
+const levelBonus = Number(levelBonusM[1]);
+const EXPECTED_TIER_BASE = { 0: 1.2, 1: 1.0, 2: 0.8, 3: 0.6, 4: 0.4, 5: 0.05 };
+for (const [t, v] of Object.entries(EXPECTED_TIER_BASE)) {
+  if (tierBase[Number(t)] !== v) {
+    throw new Error(`D12 tripwire: ResolveSpine TIER_BASE[${t}] = ${tierBase[Number(t)]} but the verdict harness arithmetic assumed ${v}. Update this harness AND the REMOTE-CLAMP findings together — do not run on stale arithmetic.`);
+  }
+}
+if (exactBonus !== 0.15 || levelBonus !== 0.03) {
+  throw new Error(`D12 tripwire: ResolveSpine matchBonus(exact)=${exactBonus} / levelBonus=${levelBonus} differ from the assumed 0.15 / 0.03 — REMOTE-CLAMP arithmetic would be stale.`);
+}
+const tierMaxConfidence = (t: number) => Math.min(tierBase[t] + exactBonus + levelBonus, 1);
 const clampArithmetic = {
   band_declared: band,
   confidenceOf: 'Math.min(Math.max(score,0),1) (resolutionEngine.ts)',
+  constants_source: 'parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)',
   per_tier_max_confidence_online: {
-    tier0: Math.min(1.2 + 0.15 + 0.03, 1), tier1: Math.min(1.0 + 0.15 + 0.03, 1),
-    tier2: Math.min(0.8 + 0.15 + 0.03, 1), tier3: Math.min(0.6 + 0.15 + 0.03, 1),
-    tier4: Math.min(0.4 + 0.15 + 0.03, 1),
+    tier0: tierMaxConfidence(0), tier1: tierMaxConfidence(1),
+    tier2: tierMaxConfidence(2), tier3: tierMaxConfidence(3),
+    tier4: tierMaxConfidence(4),
   },
-  below_band_floor: [4],
-  note: 'harvest-parity REMOTE-CLAMP arithmetic: tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; tiers 0-2 saturate to 1.0 after the clamp, so tier rank is INVISIBLE in the clarification payload.',
+  below_band_floor: Object.keys(tierBase).map(Number).filter((t) => tierMaxConfidence(t) < band),
+  // D9 correction: tier-2 max is 0.98, NOT 1.0 — only tiers 0-1 saturate to
+  // 1.0 after the clamp. And the invisibility claim is scoped: the CLAMPED
+  // CONFIDENCE hides tier rank, but armB clarification candidates DO carry
+  // `tier` and `referentLevel` as data (fates show them); no attestation-
+  // STRENGTH field exists, and rendering of referentLevel is not evidenced.
+  note: 'REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced.',
 };
+
+// ---- DECLARED CAUSE CLASSES (advc-cycle-1 D4) -------------------------------
+// Spec V2 declares four classes (LOCAL-SUPPRESSION / LEVEL-FILTERING / RANKING /
+// REMOTE-CLAMP). Five noun-fates in this leg carry shapes that fit NONE of the
+// four, so the old artifact output was `instrumented_cause: []` while the prose
+// asserted causes. Per the review's fix direction the two missing classes are
+// DECLARED HERE, once, as data with machine-checkable rules — not invented per
+// case:
+//   WRONG-BIND  (two declared rules, both data):
+//               (a) a binding whose bound record's own label differs from the
+//                   spoken noun (an identity-collapse blob wins the band: the
+//                   record bound is NOT what the scientist said);
+//               (b) a noun carrying a RATIO/COMPOSITION shape token that binds
+//                   a SINGLE local material record — a composition can never BE
+//                   one material; the blob record literally named after the
+//                   whole ratio sentence is the wrong bind even when its label
+//                   happens to equal the noun.
+//   NO-GATE     an unknown-noun + mint offer on a noun carrying a declared
+//               SHAPE TOKEN that no shipped declared gate (nounShape mintRefuse
+//               patterns, catalogShape) matched. A noun with no shape token
+//               stays clean-unknown (T1/T2) — no cause is ever invented.
+const SHAPE_TOKENS: Array<{ name: string; re: RegExp }> = [
+  { name: 'vendor-display-suffix', re: /\|\s*[A-Za-z]{2,6}\s*$/ },   // "… - HB-9999 | ATCC"
+  { name: 'bottle-lot', re: /\b(bottle|fridge)\b|\blot\b/i },          // "the HepG2 bottle, lot LOT-…"
+  { name: 'recipe-composition', re: /^\s*\d+(\.\d+)?\s*%.*\b(in|with)\b/i }, // "10% FBS in DMEM"
+];
+const COMPOSITION_TOKENS: Array<{ name: string; re: RegExp }> = [
+  { name: 'ratio-fraction', re: /^\s*\d+\s*\/\s*\d+\b/ },              // "50/50 Trypsin-EDTA/DMEM…"
+];
 
 for (const turn of turns) {
   const isSynth = (turn as { SYNTH?: boolean }).SYNTH === true;
@@ -183,7 +248,7 @@ for (const turn of turns) {
         (all.filter((e) => e.schemaId.includes('/term.schema.yaml'))
           .map((e) => ({ preferredLabel: String(e.payload.preferredLabel ?? e.payload.name ?? ''), aliases: Array.isArray(e.payload.aliases) ? (e.payload.aliases as string[]) : [] })));
 
-      const runArm = async (armName: 'pre-ELIG (harvest parity)' | 'production (eligibility data loaded)') => {
+      const runArm = async (armName: 'armA eligibility-absent' | 'armB production (eligibility data loaded)') => {
         const tracker = { failed: false, message: undefined as string | undefined };
         const spineAdapter = createSpineAdapter(spine, tracker);
         const labwareHintAdapter = {
@@ -199,7 +264,7 @@ for (const turn of turns) {
             };
           },
         };
-        const eligibility = armName.startsWith('production') ? loadMaterialEligibilityIfPresent() : null;
+        const eligibility = armName.startsWith('armB') ? loadMaterialEligibilityIfPresent() : null;
         const engineDeps = {
           adapters: [spineAdapter, labwareHintAdapter],
           strategies: buildStrategyRegistry(),
@@ -232,32 +297,74 @@ for (const turn of turns) {
         };
       };
 
-      const armA = await runArm('pre-ELIG (harvest parity)');
-      const armB = await runArm('production (eligibility data loaded)');
+      const armA = await runArm('armA eligibility-absent');
+      const armB = await runArm('armB production (eligibility data loaded)');
 
-      // ---------- instrumented-cause classification (per arm pair) ----------
-      const causes: string[] = [];
-      const clsA = armA.fate_classification as Record<string, unknown>;
-      const clsB = armB.fate_classification as Record<string, unknown>;
-      const levelF = (clsA.level_filtered as string[]) ?? [];
-      const levelFb = (clsB.level_filtered as string[]) ?? [];
-      if (levelF.length > 0 || levelFb.length > 0) causes.push(`LEVEL-FILTERING (${[...new Set([...levelF, ...levelFb])].join(', ')})`);
-      const boundA = (clsA.returned_and_bound as string[]).length;
-      const boundB = (clsB.returned_and_bound as string[]).length;
-      if (clsB.catalog_scope_gate_fired === true) causes.push('LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)');
-      else if (boundA > 0 && boundB === 0) causes.push('LOCAL-SUPPRESSION (production bind verdict not PASS — pre-ELIG bound, production clarified)');
-      else if (boundA === 0 && boundB > 0) causes.push('ELIG-UNSUPPRESSION (production bound where pre-ELIG clarified — bind PASS on a level the older arm rejected)');
-      const clarA = (clsA.clarification_reasons as string[]) ?? [];
-      const clarB = (clsB.clarification_reasons as string[]) ?? [];
-      if (clarA.includes('ambiguous-noun') || clarB.includes('ambiguous-noun')) {
-        const cands = new Set((clsB.returned_ranked_in_clarification as string[]) ?? []);
-        causes.push(`RANKING (ambiguous-noun; ${cands.size} clarification candidates)`);
-      }
+      // ---- instrumented-cause classification (advc-cycle-1 D3+D4) ----------
+      // PER ARM, computed from THAT arm's own stage diff (clarification
+      // candidates counted raw AND de-duplicated by label; the mint-offer card
+      // is an affordance, never a candidate count). The old code built counts
+      // from armB only and de-duped by label across the arm pair, which
+      // mis-attributed classes and printed wrong candidate counts.
+      const classifyArm = (
+        arm: typeof armA,
+        other: typeof armA,
+      ): string[] => {
+        const cls = arm.fate_classification as Record<string, unknown>;
+        const oth = other.fate_classification as Record<string, unknown>;
+        const causes: string[] = [];
+        const levelF = (cls.level_filtered as string[]) ?? [];
+        if (levelF.length > 0) causes.push(`LEVEL-FILTERING (${[...new Set(levelF)].join(', ')})`);
+        // WRONG-BIND (declared class, D4): rule (a) bound record's own label !=
+        // spoken noun; rule (b) composition-shaped noun bound as ONE material.
+        let wrongBind = false;
+        for (const b of arm.bindings as Array<{ curie?: string; label?: string; resolvedLabel?: string; level?: string }>) {
+          if (b.resolvedLabel && b.label && b.resolvedLabel.trim().toLowerCase() !== b.label.trim().toLowerCase()) {
+            causes.push(`WRONG-BIND (bound ${b.curie} level=${b.level ?? '?'} label "${b.resolvedLabel}" != spoken noun "${b.label}")`);
+            wrongBind = true;
+          }
+        }
+        if (!wrongBind && (arm.bindings as unknown[]).length > 0) {
+          const comp = COMPOSITION_TOKENS.filter((s) => s.re.test(noun));
+          if (comp.length > 0) {
+            const b0 = (arm.bindings as Array<{ curie?: string; level?: string }>)[0];
+            causes.push(`WRONG-BIND (composition shape ${comp.map((h) => h.name).join(', ')} in "${noun}" bound as ONE material record ${b0.curie} level=${b0.level ?? '?'} — a composition is never a single material)`);
+          }
+        }
+        const boundSelf = (cls.returned_and_bound as string[]).length;
+        const boundOther = (oth.returned_and_bound as string[]).length;
+        const reasons = (cls.clarification_reasons as string[]) ?? [];
+        if (cls.catalog_scope_gate_fired === true) causes.push('LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)');
+        else if (boundSelf === 0 && boundOther > 0) causes.push('LOCAL-SUPPRESSION (other arm bound; this arm clarified instead — bind verdict not PASS)');
+        else if (boundSelf > 0 && boundOther === 0) causes.push('ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)');
+        // RANKING: this arm's OWN ambiguous-noun clarification, counted from
+        // this arm's OWN candidates (raw count + de-dup-by-label count).
+        for (const c of arm.clarifications as Array<{ reason: string; candidates?: Array<{ label: string; ref?: string }> }>) {
+          if (c.reason === 'ambiguous-noun') {
+            const cands = c.candidates ?? [];
+            const labels = new Set(cands.map((x) => x.label));
+            causes.push(`RANKING (ambiguous-noun; ${cands.length} candidates, ${labels.size} distinct labels)`);
+          }
+        }
+        // NO-GATE (declared class, D4): unknown-noun + mint OFFER on a noun that
+        // carries a declared SHAPE TOKEN and no shipped gate fired. Nouns without
+        // a shape token stay clean-unknown (T1/T2) — no cause is invented.
+        const mintOffered = (arm.clarifications as Array<{ reason: string; candidates?: Array<{ label: string }> }>)
+          .some((c) => c.reason === 'unknown-noun' && (c.candidates ?? []).length > 0);
+        if (reasons.includes('unknown-noun') && mintOffered && cls.catalog_scope_gate_fired !== true) {
+          const hit = SHAPE_TOKENS.filter((s) => s.re.test(noun));
+          if (hit.length > 0) causes.push(`NO-GATE (shape token(s) ${hit.map((h) => h.name).join(', ')} in "${noun}"; unknown-noun + mint offered, no shipped declared gate matched)`);
+        }
+        return causes;
+      };
+      (armA as Record<string, unknown>).instrumented_cause = classifyArm(armA, armB);
+      (armB as Record<string, unknown>).instrumented_cause = classifyArm(armB, armA);
+
       const tieredRanked = ranked as Array<{ tier: number; level: string; curie?: string }>;
       const vprPresent = tieredRanked.some((c) => c.curie?.includes('VPR-'));
-      if (vprPresent) causes.push('REMOTE-CLAMP context: local VPR candidate present; any REAL remote vendor tier (4) could never bind (max 0.58 < 0.7) even online — arithmetic pinned in remote_clamp');
+      if (vprPresent) engineResults.push({ arm: `${verb}.material`, remote_clamp_context: 'local VPR candidate present; any REAL remote vendor tier (4) could never bind (max 0.58 < 0.7) even online — arithmetic pinned in remote_clamp (constants parsed from product, D12)' });
 
-      engineResults.push(armA, armB, { arm: `${verb}.material`, instrumented_cause: causes });
+      engineResults.push(armA, armB);
     }
 
     // ---------------- fate JSON (verdict leg — fates only, no panels) -------
@@ -276,8 +383,8 @@ for (const turn of turns) {
       suppressed: stageFate.filter((f) => String(f.fate).startsWith('suppressed')).length,
       arms: engineResults.filter((e) => (e as { instrumented_cause?: string[] }).instrumented_cause)
         .map((e) => `${(e as { arm: string }).arm} => ${((e as { instrumented_cause: string[] }).instrumented_cause).join(' | ') || 'clean'}`),
-      bound_A: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('pre') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
-      bound_B: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('production') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
+      bound_A: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('armA') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
+      bound_B: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('armB') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
     });
   }
 }

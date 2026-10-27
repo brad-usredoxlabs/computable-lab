@@ -9,7 +9,19 @@ BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"          # replay-verdic
 ROOT="$(cd "$BASE/../../.." && pwd)"
 cd "$ROOT"
 
-[ -e node_modules ] || ln -sfn /mnt/vast/home/brad/git/computable-lab/node_modules node_modules
+# D11 (advc-cycle-1): this script MUST NOT create paths outside
+# .hermes/plans/replay-verdict/ (spec Rules). The worktree is expected to
+# already carry node_modules (lane standard provisioning, or tsx on PATH);
+# if neither is available we fail with a diagnostic instead of silently
+# writing a root-level symlink.
+if [ ! -e node_modules ] && ! command -v tsx >/dev/null 2>&1 \
+   && [ ! -x /home/brad/.hermes/hermes-agent/node_modules/.bin/tsx ]; then
+  echo "run-verdict.sh: FATAL - no node_modules in $ROOT and no tsx on PATH." >&2
+  echo "  Provision node_modules in this worktree (lane standard: symlink to the" >&2
+  echo "  main checkout's node_modules) BEFORE running; this script will not" >&2
+  echo "  create it (creating root-level paths violates the lane's file scope)." >&2
+  exit 1
+fi
 
 if [ -x node_modules/.bin/tsx ]; then TSX="$ROOT/node_modules/.bin/tsx"
 elif command -v tsx >/dev/null 2>&1; then TSX="$(command -v tsx)"

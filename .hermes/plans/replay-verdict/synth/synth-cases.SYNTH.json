@@ -3,6 +3,7 @@
   "note": "SYNTH — synthetic utterances, REAL store records. Authorized by H-A=YES in ~/.hermes/cl/lanes/2/decisions/MATRESREPLAY-worksheet-answers-brad.md (Brad, 2026-10-26 ~18:1x EDT, [BRAD, BINDS]). Exactly three cases: 2' (known-vendor product MISSING locally), 3 (explicit physical bottle, W-T11 intent), 6 (\"make 1 mL...\" future instruction, W-T12 intent). NO real transcript exists for any of the three (harvest T11/T12/2' recorded absences). Every artifact derived from this file carries the SYNTH label.",
   "storeBasis": {
     "store": "/home/brad/.computable-lab/worktrees/main/records/ (live main data repo, read-only)",
+    "replayStoreBasisNote": "D10 (advc-cycle-1): the ABSENCE claims below are true of the LIVE store only. The REPLAYED (harvest) store differs: it does NOT contain MAT-NCIT-C185409 (DMEM — analogs MAT-dmem-ykg0/MAT-XCO-0000988 stand in), and it DOES contain an exact FBS concept local:MAT-fbs-3776 (top spine hit, score 1.15, in both T4 fbs and SYNTH-case6 fbs fates) — so 'FBS -> concept-level mint-on-confirm (no local record)' describes the LIVE store, NOT the replay store. Where the replay store carries an exact record the answers file calls absent, the fate evidence (flood, not absence) governs.",
     "verifiedPresent_2026-10-26": [
       { "recordId": "MAT-NCIT-C185409", "kind": "material", "file": "material/MAT-NCIT-C185409__dulbeccos-modified-eagle-medium.yaml", "sha256": "251398681f6112a1380e1093f5c5acfad727468c213aabee77f0a8b81eb53c43" },
       { "recordId": "MAT-MESH-D056945", "kind": "material", "file": "material/MAT-MESH-D056945__hepg2-cell.yaml", "sha256": "4032d8760d6be41084899efc60a413e70debb851f30ae47fc3405e12379428d8" },
@@ -50,7 +51,7 @@
       "intended_binding_ref": "W-T12 [BRAD answers file]: binds NOTHING as an existing instance; becomes a planned step/recipe with the stated quantity as scientist truth; must not fail as unresolvable; must not invent a lot/bottle that does not exist yet.",
       "engine_arms": ["add_material"],
       "real_records_referenced_for_shape": ["MAT-NCIT-C185409", "MAT-MESH-D056945"],
-      "expected_real_records_TO_BIND": ["DMEM -> MAT-NCIT-C185409 (concept); HepG2 -> MAT-MESH-D056945 (concept); FBS -> concept-level mint-on-confirm (no local record per answers file)"],
+      "expected_real_records_TO_BIND": ["DMEM -> MAT-NCIT-C185409 (concept; ABSENT from the replayed harvest store — analogs stand in, see storeBasis.replayStoreBasisNote); HepG2 -> MAT-MESH-D056945 (concept); FBS -> concept-level mint-on-confirm per the answers file (LIVE store has no FBS record; NOTE the replayed harvest store DOES carry local:MAT-fbs-3776 — see storeBasis.replayStoreBasisNote)"],
       "must_not_bind": ["any existing instance/aliquot record (none may be treated as the future product)", "no invented lot"]
     }
   ]

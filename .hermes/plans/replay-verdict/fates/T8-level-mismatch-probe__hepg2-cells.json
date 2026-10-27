@@ -386,7 +386,7 @@
   "engine": [
     {
       "arm": "wash.material",
-      "engine_arm": "pre-ELIG (harvest parity)",
+      "engine_arm": "armA eligibility-absent",
       "eligibility_loaded": false,
       "declared_level": "aliquot",
       "declared_levels_allowed_set": null,
@@ -517,6 +517,7 @@
             "max": 1
           },
           "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
           "per_tier_max_confidence_online": {
             "tier0": 1,
             "tier1": 1,
@@ -524,16 +525,18 @@
             "tier3": 0.78,
             "tier4": 0.5800000000000001
           },
-          "below_band_floor": [
-            4
-          ],
-          "note": "harvest-parity REMOTE-CLAMP arithmetic: tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; tiers 0-2 saturate to 1.0 after the clamp, so tier rank is INVISIBLE in the clarification payload."
+          "below_band_floor": [],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
         }
-      }
+      },
+      "instrumented_cause": [
+        "LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)",
+        "RANKING (ambiguous-noun; 12 candidates, 3 distinct labels)"
+      ]
     },
     {
       "arm": "wash.material",
-      "engine_arm": "production (eligibility data loaded)",
+      "engine_arm": "armB production (eligibility data loaded)",
       "eligibility_loaded": true,
       "declared_level": "aliquot",
       "declared_levels_allowed_set": null,
@@ -685,6 +688,7 @@
             "max": 1
           },
           "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
           "per_tier_max_confidence_online": {
             "tier0": 1,
             "tier1": 1,
@@ -692,18 +696,12 @@
             "tier3": 0.78,
             "tier4": 0.5800000000000001
           },
-          "below_band_floor": [
-            4
-          ],
-          "note": "harvest-parity REMOTE-CLAMP arithmetic: tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; tiers 0-2 saturate to 1.0 after the clamp, so tier rank is INVISIBLE in the clarification payload."
+          "below_band_floor": [],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
         }
-      }
-    },
-    {
-      "arm": "wash.material",
+      },
       "instrumented_cause": [
-        "LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)",
-        "RANKING (ambiguous-noun; 1 clarification candidates)"
+        "LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
       ]
     }
   ],
