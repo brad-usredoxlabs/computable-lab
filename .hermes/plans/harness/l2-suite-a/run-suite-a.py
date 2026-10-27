@@ -67,12 +67,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from lib import context_state, verdict as verdictlib  # noqa: E402
+from lib import sequence_verdict  # noqa: E402  (L2-SUITE-B sequence-leg arm)
 
 DEFAULT_BASE = "http://localhost:3093"
 DATA_REPO = os.environ.get(
     "CL_DATA_REPO", "/home/brad/.computable-lab/worktrees/main")
 RECEIPTS_ROOT = os.environ.get(
     "CL_RECEIPTS", "/home/brad/.hermes/cl/receipts/L2-SUITE-A")
+# L2-SUITE-B addendum §2: the lane-2 backend persists under
+# /home/brad/.computable-lab-lane2 — the SEQUENCE leg's write-free digest
+# target MUST be the lane data repo, not the plate leg's default.
+SEQ_DATA_REPO = os.environ.get(
+    "CL_DATA_REPO", "/home/brad/.computable-lab-lane2/worktrees/main")
+SEQ_RECEIPTS_ROOT = os.environ.get(
+    "CL_SEQ_RECEIPTS", "/home/brad/.hermes/cl/receipts/L2-SUITE-B")
+# The resolved lane actor for the harness's read/assist routes (the lane
+# stack's local-identity header; the orch addendum provisions under the
+# same identity). Assists resolve the ledger actor from it; the catalog /
+# contract read routes REQUIRE a resolved user (x-user-id).
+ACTOR_HEADER = {"x-user-id": "USR-BRAD"}
 
 # The held session's deck identity (OQ1: request-injected, write-free).
 # Unique per run so the held-thread key (event-editor:<runId>) never collides
@@ -124,6 +137,80 @@ def load_prompts(corpus_path):
 
 def corpus_sha256(corpus_path):
     return hashlib.sha256(open(corpus_path, "rb").read()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# sequence-leg corpus (L2-SUITE-B, B1)
+# ---------------------------------------------------------------------------
+# Strip rule (byte-wise, named per spec B1 + SUITE-A's OQ ruling — the SAME
+# regex as prompts-plate-leg.txt's loader, `^(\d+)\. (.*)$`): strip the `N.`
+# list prefix byte-wise — the LIST NUMBER, the DOT, and EXACTLY ONE
+# following space — and take the rest of the line VERBATIM as the prompt
+# body. This is the MERGED convention (SUITE-A B6): the source's double space
+# after `9.` / `10.` (list prefix) leaves ONE leading space in the body, and
+# that space is PROMPT CONTENT — exactly as P4's leading space is. Prompt 10's
+# internal newlines and its trailing spaces SURVIVE (a harness that joins the
+# three lines or strips the trailing spaces is a FAKE suite); the double space
+# in "against it.  Try" is INSIDE the prompt body and survives. The blank line
+# between 9 and 10 (line 20) is a corpus separator, not prompt content.
+#
+# The strip is applied per numbered line; the multi-line prompt 10 continues
+# on the UNNUMBERED lines until the next numbered line (or EOF) — those
+# continuation bytes are concatenated verbatim (with their trailing spaces)
+# onto the prompt body.
+SEQ_CORPUS_PREFIX_RE = re.compile(rb"^(\d+)\. (.*)$")
+SEQ_CORPUS_NUMBERS = [9, 10]
+
+
+def load_sequence_prompts(corpus_path):
+    """Parse the committed sequence-leg corpus: byte-slice of
+    tmp/prompt_files.md lines 19-23. Strip the `N.` prefix (number + dot +
+    one space, the merged SUITE-A convention) per numbered line;
+    continuation lines (no number) append verbatim to the open prompt.
+    Returns {9: str, 10: str}."""
+    raw = open(corpus_path, "rb").read()
+    prompts = {}
+    current = None
+    for line in raw.split(b"\n"):
+        m = SEQ_CORPUS_PREFIX_RE.match(line)
+        if m:
+            num = int(m.group(1))
+            if num in SEQ_CORPUS_NUMBERS:
+                body = m.group(2)
+                prompts[num] = []
+                current = num
+                if body:
+                    prompts[num].append(body)
+        elif current is not None:
+            # continuation line: append verbatim (trailing spaces survive)
+            prompts[current].append(line)
+    out = {}
+    for num in SEQ_CORPUS_NUMBERS:
+        if num in prompts:
+            # join the numbered body + its continuation lines with the
+            # newline bytes that separated them in the source.
+            out[num] = b"\n".join(prompts[num]).decode("utf-8")
+    if sorted(out) != SEQ_CORPUS_NUMBERS:
+        raise SystemExit(
+            "sequence corpus parse error: expected prompts %r, got %r "
+            "(B1: prompts-sequence-leg.txt must byte-match "
+            "tmp/prompt_files.md lines 19-23 modulo the N. prefix strip)"
+            % (SEQ_CORPUS_NUMBERS, sorted(out)))
+    return out
+
+
+# The stripped sha256 pair (B1): the committed file's sha256 (raw bytes) and
+# the sha256 of the VERBATIM prompts joined by a single newline, computed at
+# run time so the receipt can prove the strip rule produced the expected
+# bytes. The source-slice sha256 (2f220a51...) is the composer's pin.
+SEQ_SOURCE_SLICE_SHA256 = "2f220a51c0d897dd68d42daa5fd7b2afa7e47ec63bc9f3936d452a8f0dd2c154"
+
+
+def sequence_prompts_sha256(prompts):
+    """sha256 over the stripped prompts (9 then 10, newline-joined) — the
+    'stripped' half of the B1 pair."""
+    joined = "\n".join(prompts[str(n)] for n in SEQ_CORPUS_NUMBERS).encode("utf-8")
+    return hashlib.sha256(joined).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -823,6 +910,568 @@ def compare_deterministic(compare_dir, results):
                 fails.append("P%d.%s: expected %r got %r"
                              % (idx, field, exp[field], st.get(field)))
     return fails
+
+
+# ---------------------------------------------------------------------------
+# L2-SUITE-B — the SEQUENCE leg (prompts 9-10, branch (a), layer (a) write-free)
+# ---------------------------------------------------------------------------
+# Extends the plate-leg driver (never forking it): ONE held session
+# continuation on the sequences surface, prompts 9-10 VERBATIM
+# (prompts-sequence-leg.txt), posted to /api/ai/assist/stream (the captured
+# sequences-surface shape — aiClient.ts non-event-editor branch). Layer (a)
+# WRITE-FREE: the driver NEVER POSTs /sequences/actions (the write path) or
+# /sequences/actions/apply; it only GETs /sequences/catalog + /sequences/
+# contract (read routes) and POSTs the assist stream (the sequence_action arm
+# PROPOSES and never writes — AgentOrchestrator.ts:2557-2572). Write-free is
+# asserted by digesting the LANE data repo (SEQ_DATA_REPO — addendum §2: the
+# lane-2 backend persists under /home/brad/.computable-lab-lane2) before/after.
+
+def _http_json(base, path, timeout, headers=None):
+    """A read-only JSON GET/POST (catalog/contract). Returns parsed JSON or
+    raises. NEVER a write route."""
+    req = urllib.request.Request(base + path, headers=headers or dict(ACTOR_HEADER))
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def seq_assist_text_from_frames(frames, done):
+    """Mirror useAiChat.buildAssistantContent for the assist stream (model
+    text first, then summary lines; 'Thinking...' fallback). The client caps
+    history content at MAX_HISTORY_CONTENT_CHARS=8000 and trims (useAiChat
+    :191-211); MAX_HISTORY_MESSAGES=20 pairs."""
+    parts = []
+    model_text = ""
+    for f in frames:
+        t = f.get("type")
+        if t == "text_delta":
+            model_text += f.get("delta", "")
+        elif t == "status":
+            parts.append(f.get("message", ""))
+        elif t == "error":
+            parts.append("Error: %s" % f.get("message", ""))
+        elif t == "draft":
+            evs = f.get("events") or []
+            parts.append("Drafted %d event%s" % (len(evs), "" if len(evs) == 1 else "s"))
+    if done:
+        err = done.get("error")
+        if err:
+            parts.append("Error: %s" % err)
+        notes = done.get("notes") or []
+        if notes:
+            parts.append("\n".join(str(n) for n in notes))
+        cn = done.get("clarificationNeeded")
+        if isinstance(cn, str) and cn.strip() and not model_text:
+            model_text = cn
+        if not err and not (done.get("events") or []) and not model_text:
+            parts.append("No events generated.")
+    sections = []
+    if model_text:
+        sections.append(model_text)
+    if parts:
+        sections.append("\n".join(parts))
+    text = "\n\n".join(sections) or "Thinking..."
+    return text[:8000].strip()
+
+
+def _seq_context_identity_sha(ctx):
+    # B5: the held-thread key evidence. The sequences surface's captured
+    # context carries no runId/eventGraphId (deriveContextCacheKey falls to
+    # 'default'), so the identity that must stay byte-stable across the held
+    # turns is (surface, selectedRecordId, availableOperations,
+    # selection, collectionSelection, parameters) — the prompt-independent
+    # fields. Only lastActionResult (and records, if a write ran) may change;
+    # on a write-free layer (a) run, records is static, so the key is
+    # constant across turns.
+    ident = json.dumps(
+        {
+            "surface": "sequences",
+            "selectedRecordId": ctx.get("selectedRecordId"),
+            "availableOperations": ctx.get("availableOperations"),
+            "selection": ctx.get("selection"),
+            "collectionSelection": ctx.get("collectionSelection"),
+            "parameters": ctx.get("parameters"),
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(ident).hexdigest()
+
+
+def _seq_context_from_catalog(catalog, contract, last_action_result):
+    """Build the captured sequences-surface context (SequencesPage.tsx:77
+    aiContext → useAiChat.ts:796 contextPayload = {...surfaceContext}).
+    Conditional spreads mirror the page: residues only when <=20000 and
+    selected; endpoint configuration / oligos / channel / outputArtifactRefs
+    / statement only when present. The lane corpus has no selection, so the
+    selected-record spread is the empty object (faithful, not invented)."""
+    records = []
+    for r in catalog.get("records", []):
+        p = r.get("payload", {})
+        rid = r.get("recordId")
+        entry = {
+            "id": rid,
+            "kind": p.get("kind"),
+            "label": p.get("label") or p.get("name") or p.get("title"),
+            "alphabet": p.get("alphabet"),
+            "length": p.get("length"),
+        }
+        if p.get("residues") is not None:
+            entry["residues"] = p["residues"]
+        if p.get("oligos") is not None:
+            entry["oligos"] = p["oligos"]
+        if p.get("channel_label") is not None:
+            entry["channel"] = p["channel_label"]
+        if p.get("outputArtifactRefs") is not None:
+            entry["outputArtifactRefs"] = p["outputArtifactRefs"]
+        if p.get("statement") is not None:
+            entry["statement"] = p["statement"]
+        records.append(entry)
+    ctx = {
+        "selectedRecordId": "",
+        "records": records,
+        "availableOperations": (contract.get("capabilities") or {}).get("engines"),
+        "selection": {},
+        "collectionSelection": [],
+        "parameters": {},
+    }
+    if last_action_result is not None:
+        ctx["lastActionResult"] = last_action_result
+    return ctx
+
+
+def seq_ref_ids(value, out=None):
+    """Every record-ref id (kind=='record', id str, type != 'record-revision')
+    reachable in a value — the B2 grounding check set. Mirrors the TS
+    classifier's collectRecordRefs."""
+    if out is None:
+        out = []
+    if isinstance(value, list):
+        for v in value:
+            seq_ref_ids(v, out)
+    elif isinstance(value, dict):
+        if (value.get("kind") == "record"
+                and isinstance(value.get("id"), str) and value.get("id")
+                and value.get("type") != "record-revision"):
+            out.append(value["id"])
+        for v in value.values():
+            seq_ref_ids(v, out)
+    return out
+
+
+def seq_verdict_via_nodecli(result, frames, ctx_ids):
+    """Shell out to lib/sequence-leg-cli.ts (node native TS type-stripping).
+    Returns (verdict_or_none, cli_exit, stderr_tail)."""
+    payload = {"result": result}
+    if frames is not None:
+        payload["frames"] = frames
+    payload["context"] = ctx_ids
+    env = dict(os.environ)
+    proc = subprocess.run(
+        ["node", "--no-warnings", os.path.join(HERE, "lib", "sequence-leg-cli.ts")],
+        input=json.dumps(payload).encode("utf-8"),
+        capture_output=True, timeout=60, env=env,
+    )
+    out = proc.stdout.decode("utf-8", errors="replace").strip()
+    err = proc.stderr.decode("utf-8", errors="replace")[-400:]
+    if proc.returncode == 0:
+        return (out or None), 0, err
+    return None, proc.returncode, err
+
+
+def seq_structural_p10(proposals):
+    """OQ3 (c) structural expression — the TWO directional run_blastn
+    variants (identical parameters, differing oriented query refs) PLUS a
+    save_sequence (the AI-authored reverse-complement residues). Structural
+    ONLY: never model-complement correctness (B4: no revcomp vocabulary),
+    never prose. Returns a violation string, or None when the shape holds."""
+    blastns = []
+    has_save_seq = False
+    for p in proposals:
+        if not isinstance(p, dict):
+            continue
+        op = p.get("operation")
+        if op == "save_sequence":
+            has_save_seq = True
+        elif op == "run_blastn":
+            blastns.append(p)
+    if not has_save_seq:
+        return ("no save_sequence proposal (the AI-authored reverse-complement "
+                "residues) among the collected proposals — OQ3 (c) structural "
+                "expression not met (never model-complement correctness, B4)")
+    if len(blastns) < 2:
+        return ("fewer than two run_blastn proposals (got %d) — OQ3 (c) "
+                "two-directional-variant structural expression not met"
+                % len(blastns))
+    a, b = blastns[0], blastns[1]
+    pa = a.get("parameters") or {}
+    pb = b.get("parameters") or {}
+    if pa != pb:
+        return ("the two run_blastn variants differ in parameters %r vs %r — "
+                "OQ3 (c) requires identical parameters, only the oriented "
+                "query refs differ" % (pa, pb))
+    qa = (a.get("inputs") or {}).get("queries")
+    qb = (b.get("inputs") or {}).get("queries")
+    if qa == qb:
+        return ("the two run_blastn variants carry the SAME query ref %r — "
+                "they are not distinct directional variants (queries must "
+                "differ by orientation)" % qa)
+    return None
+
+
+def seq_check_expectation(idx, exp, state, all_proposals, structural=True):
+    """Sequence-leg expectation checks (channel SHAPES only — B9). Returns a
+    list of violation strings (empty = met). The OQ3 (c) structural check is
+    DEFERRED for P10 (structural=False during the per-turn drive) because it
+    is evaluated over the COMPLETE proposal set — P9's + every P10 turn
+    including the follow-up — after the last P10 turn lands."""
+    if not exp:
+        return []
+    v = []
+    verdict = state.get("verdict")
+    # verdict_in (the honest trichotomy — never the silent shape)
+    want = exp.get("verdict_in")
+    if want and verdict not in want:
+        v.append("verdict %r not in %r" % (verdict, want))
+    # grounding_required (B2): a run_mafft proposal's refs must resolve in
+    # context.records. The classifier already refuses an ungrounded proposal
+    # (verdict FAIL); this is the explicit membership assertion for the
+    # receipt.
+    if exp.get("grounding_required") and verdict == "proposal":
+        prop = state.get("done", {}).get("sequenceProposal")
+        if isinstance(prop, dict) and prop.get("operation") == "run_mafft":
+            ctx_ids = state.get("context_record_ids") or []
+            ungrounded = [r for r in seq_ref_ids(prop) if r not in set(ctx_ids)]
+            if ungrounded:
+                v.append("run_mafft proposal ref(s) %r not in context.records "
+                         "(B2: ungrounded)" % ungrounded)
+    # P10: the OQ3 (c) two-directional-variant structural expression.
+    if idx == 10 and structural and exp.get("require_two_directional_variants"):
+        violation = seq_structural_p10(all_proposals)
+        if violation:
+            v.append(violation)
+    return v
+
+
+def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
+    """Drive the sequence leg: ONE held session, prompts 9-10 in order on the
+    sequences surface, layer (a) write-free. Returns an exit code."""
+    seq_run_id = "L2SB-" + time.strftime("%H%M%S")
+    try:
+        contract = _http_json(base, "/api/sequences/contract", timeout)
+        catalog = _http_json(base, "/api/sequences/catalog", timeout)
+    except Exception as e:  # noqa: BLE001
+        print("environment error: cannot read sequences catalog/contract: %s" % e)
+        return 2
+
+    record_ids = [r.get("recordId") for r in catalog.get("records", []) if r.get("recordId")]
+    engine_ids = [(e or {}).get("id") for e in
+                  ((contract.get("capabilities") or {}).get("engines") or [])]
+
+    # The held session state (B5: context byte-stable except the legitimate
+    # lastActionResult result-channel update that carries each turn's result).
+    history = []
+    last_action_result = None
+    key_shas = []
+    results = {}
+    blocked_by = {}
+    failed = None
+    hold_ids = set()
+
+    digest_before = data_repo_digest(SEQ_DATA_REPO)
+
+    def drive_turn(idx, prompt, label):
+        nonlocal last_action_result, failed, history, hold_ids
+        ctx = _seq_context_from_catalog(catalog, contract, last_action_result)
+        key_sha = _seq_context_identity_sha(ctx)
+        key_shas.append({"prompt_idx": idx, "turn": label, "context_identity_sha256": key_sha})
+        body = {"prompt": prompt, "surface": "sequences", "context": ctx,
+                "history": history}
+        request_sha = hashlib.sha256(
+            json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        headers = dict(ACTOR_HEADER)
+        headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(
+            base + "/api/ai/assist/stream",
+            data=json.dumps(body).encode("utf-8"), headers=headers,
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=timeout)
+            status, frames, raw = 200, _read_sse_frames(resp), b""
+        except urllib.error.HTTPError as e:
+            status, frames, raw = e.code, [], e.read()
+        except (TimeoutError, urllib.error.URLError) as e:
+            status, frames, raw = -1, [], str(e).encode("utf-8", errors="replace")
+
+        types, done, error_frames, tool_calls = summarize_frames(frames)
+
+        state = {
+            "prompt": prompt, "prompt_idx": idx, "turn": label,
+            "request_sha": request_sha, "context_identity_sha256": key_sha,
+            "request_body": body,  # the B5 evidence: the ACTUAL captured request
+            "sse_frame_types": types, "http_status": status,
+            "tool_calls": tool_calls,
+            "context_record_ids": record_ids,
+            "context_engine_ids": engine_ids,
+        }
+        if status != 200 or done is None:
+            state.update({"events_count": 0, "cards_count": 0, "wall": False,
+                          "verdict": None, "status": "transport-failure",
+                          "error": "http=%s frames=%s" % (status, types[-3:])})
+            results[idx] = state
+            failed = idx
+            print("P%d verdict=FAIL (transport) http=%s" % (idx, status))
+            return state
+
+        cards = done.get("clarificationRequests") or []
+        error_txt = done.get("error")
+        wall = bool(error_txt) or bool(error_frames)
+
+        ctx_ids = {"recordIds": record_ids, "engineIds": engine_ids}
+        v_ts, rc, err_tail = seq_verdict_via_nodecli(done, frames, ctx_ids)
+        v_py, py_err = (None, None)
+        try:
+            v_py = sequence_verdict.classify(done, frames, ctx_ids)
+        except sequence_verdict.SequenceLegOutcomeError as e:
+            py_err = str(e)
+        if v_ts is None and v_py is None:
+            verdict = None
+        elif v_ts is not None and v_ts != v_py:
+            verdict = v_ts
+            drift_note = "DRIFT: node-cli=%r python=%r" % (v_ts, v_py)
+        else:
+            verdict = v_ts
+
+        state.update({
+            "cards_count": len(cards), "wall": wall, "verdict": verdict,
+            "ts_cli_exit": rc,
+            "ts_cli_stderr_tail": err_tail[-200:] if (rc or err_tail) else None,
+            "done": {k: done.get(k) for k in
+                     ("success", "error", "notes", "clarificationNeeded",
+                      "sequenceProposal") if k in done},
+            "clarification_requests": cards,
+        })
+        if v_py is not None and v_ts is None:
+            state["verdict_drift"] = "python-only verdict %r" % v_py
+        if py_err and verdict is None:
+            state["silent_shape_dump"] = py_err[-400:]
+
+        # Collect every proposal this leg has seen (P9's proposal + each P10
+        # turn's) for the OQ3 (c) two-directional-variant structural check.
+        if isinstance(done.get("sequenceProposal"), dict):
+            state["proposals"] = [done["sequenceProposal"]]
+
+        violations = []
+        exp = load_seq_expectation(idx) if expect_dir else {}
+        if verdict is None:
+            violations.append("silent shape: success + no proposal + no nav frame "
+                              "+ no cards + no named wall (REVISE-GHOST-1 in "
+                              "sequence form: whole-suite FAIL)")
+        # B5 hold evidence is asserted for P10 below (needs P9's ids).
+        if idx == 10:
+            violations += seq_hold_check(state, hold_ids)
+        violations += seq_check_expectation(idx, exp, state,
+                                            collect_proposals(results))
+        state["expectation_violations"] = violations
+        state["status"] = "ok" if (verdict is not None and not violations) else "FAIL"
+
+        # Advance the held session (the legitimate lastActionResult update +
+        # the conversation history — the two real hold mechanisms).
+        last_action_result = done
+        assistant_text = seq_assist_text_from_frames(frames, done)
+        history.append({"role": "user", "content": prompt.strip()})
+        if assistant_text.strip():
+            history.append({"role": "assistant", "content": assistant_text.strip()})
+        history = history[-20:]  # client caps at MAX_HISTORY_MESSAGES=20
+
+        # Record P9's observable ids for the P10 hold check (B5).
+        if idx == 9:
+            prop = done.get("sequenceProposal")
+            if isinstance(prop, dict) and prop.get("requestId"):
+                hold_ids.add(str(prop["requestId"]))
+            for c in cards:
+                if isinstance(c, dict) and c.get("id"):
+                    hold_ids.add(str(c["id"]))
+            if isinstance(done.get("error"), str):
+                hold_ids.add("error:" + done["error"][:60])
+
+        results[idx] = state
+        if verdict is None or violations:
+            failed = idx
+            print("P%d verdict=%s status=FAIL (%s)"
+                  % (idx, verdict, "; ".join(violations[:2])))
+        else:
+            print("P%d verdict=%s" % (idx, verdict))
+        return state
+
+    for idx in selected:
+        prompt = SEQ_PROMPTS[idx]
+        if failed is not None and idx > failed:
+            results[idx] = {"prompt": prompt, "status": "blocked-by-P%d" % failed,
+                            "verdict": None}
+            blocked_by[idx] = failed
+            print("P%d status=blocked-by-P%d (disclosure, no drive)" % (idx, failed))
+            continue
+
+        state = drive_turn(idx, prompt, "turn")
+        # OQ3 (c): P10 needs the TWO directional run_blastn variants + the
+        # save_sequence. If P10's first turn did not deliver the full shape,
+        # the model's one-proposal-per-turn arm means the remaining variant is
+        # authored as the NEXT proposal — drive ONE held follow-up that asks
+        # for the remaining directional variant (still the same held session,
+        # still the captured shape, still write-free). The follow-up is
+        # disclosed in the receipt; it is never a re-type of the corpus.
+        if idx == 10 and state.get("verdict") is not None:
+            collected = collect_proposals(results)
+            if seq_structural_p10(collected) is not None:
+                nudge = ("The reverse-complement directional variant has not been "
+                         "proposed yet. Author it now as the next proposal: compute "
+                         "the reverse-complement residues and propose the remaining "
+                         "run_blastn so both the 5'->3' and the reverse-complement "
+                         "variants are reviewable.")
+                follow = drive_turn(10, nudge, "turn2-folup")
+                results.setdefault("10-follow", follow)
+
+    digest_after = data_repo_digest(SEQ_DATA_REPO)
+    write_free = digest_before == digest_after
+
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out_dir = os.path.join(SEQ_RECEIPTS_ROOT, ts)
+    os.makedirs(out_dir, exist_ok=True)
+    for idx in selected:
+        st = results.get(idx)
+        if st:
+            with open(os.path.join(out_dir, "prompt-%d.json" % idx), "w") as f:
+                json.dump(st, f, indent=2, sort_keys=True)
+    follow = results.get("10-follow")
+    if follow:
+        with open(os.path.join(out_dir, "prompt-10-followup.json"), "w") as f:
+            json.dump(follow, f, indent=2, sort_keys=True)
+
+    meta = {
+        "suite": "L2-SUITE-B sequence leg",
+        "run_id": seq_run_id,
+        "leg": "sequence",
+        "prompts": [idx for idx in selected],
+        "base": base,
+        "data_repo": SEQ_DATA_REPO,
+        "corpus_file_sha256": corpus_sha256(os.path.join(HERE, "prompts-sequence-leg.txt")),
+        "corpus_source_slice_sha256": SEQ_SOURCE_SLICE_SHA256,
+        "corpus_stripped_sha256": sequence_prompts_sha256(SEQ_PROMPTS),
+        "strip_rule": ("strip the N. list prefix byte-wise (number + dot + one "
+                       "space, the merged SUITE-A convention); prompt 10's "
+                       "internal newlines and trailing spaces SURVIVE"),
+        "data_repo_digest_before": digest_before,
+        "data_repo_digest_after": digest_after,
+        "write_free": write_free,
+        "blocked_by": {str(k): v for k, v in blocked_by.items()},
+        "verdicts": {str(k): (v.get("verdict") if isinstance(v, dict) else v.get("status"))
+                     for k, v in results.items()},
+        "key_evidence": key_shas,
+        "hold_ids": sorted(hold_ids),
+    }
+    with open(os.path.join(out_dir, "run-meta.json"), "w") as f:
+        json.dump(meta, f, indent=2, sort_keys=True)
+
+    compare_fail = []
+    if compare_dir:
+        compare_fail = compare_deterministic(compare_dir, results)
+
+    all_ok = (failed is None and write_free and not compare_fail)
+    print("receipts: %s" % out_dir)
+    print("write-free: %s (digest %s… == %s…)"
+          % (write_free, digest_before[:12], digest_after[:12]))
+    if compare_fail:
+        print("determinism compare FAIL: %r" % compare_fail)
+    print("SUITE-VERDICT: %s" % ("PASS" if all_ok else "FAIL"))
+    return 0 if all_ok else 1
+
+
+def load_seq_expectation(idx):
+    p = os.path.join(HERE, "expectations-sequence", "P%d.json" % idx)
+    if os.path.exists(p):
+        return json.load(open(p))
+    return {}
+
+
+def collect_proposals(results):
+    """Every sequenceProposal seen across the driven sequence turns (in order),
+    from each turn's done frame. Feeds the OQ3 (c) structural check."""
+    out = []
+    for idx in (9, 10):
+        st = results.get(idx)
+        if isinstance(st, dict) and isinstance(st.get("proposals"), list):
+            out.extend(st["proposals"])
+    follow = results.get("10-follow")
+    if isinstance(follow, dict) and isinstance(follow.get("proposals"), list):
+        out.extend(follow["proposals"])
+    return out
+
+
+def seq_hold_check(state, hold_ids):
+    """B5 hold assertion for P10: the turn-10 REQUEST must carry turn 9's
+    ACTUAL held state. The two real hold mechanisms: (i) conversation history
+    on the 'sequences' thread — the P10 request body's history contains P9's
+    user prompt; (ii) aiContext.lastActionResult — the P10 request's
+    lastActionResult carries P9's result. Returns a list of violation
+    strings."""
+    v = []
+    body = state.get("request_body") or {}
+    hist = body.get("history") or []
+    user_prompts = [m.get("content", "") for m in hist if m.get("role") == "user"]
+    p9_prompt = SEQ_PROMPTS[9].strip()
+    if p9_prompt and p9_prompt not in user_prompts:
+        v.append("B5 hold: P10 request history does NOT contain P9's prompt "
+                 "(the held conversation was not carried forward)")
+    lar = (body.get("context") or {}).get("lastActionResult")
+    if not hold_ids:
+        # P9 produced no stable id (e.g. a nav-only turn): the hold is the
+        # lastActionResult channel itself carrying P9's result object.
+        if lar is None:
+            v.append("B5 hold: P10 context.lastActionResult is ABSENT — P9's "
+                     "result did not ride into the next turn's context")
+    else:
+        lar_json = json.dumps(lar) if lar is not None else ""
+        if lar_json and not any(h in lar_json for h in hold_ids):
+            v.append("B5 hold: P10 context.lastActionResult does NOT carry any "
+                     "of P9's ids %r (the held-alignment reference is not "
+                     "observable in turn-10 inputs)" % sorted(hold_ids))
+        elif not lar_json:
+            v.append("B5 hold: P10 context.lastActionResult is ABSENT and P9 "
+                     "produced ids %r that must ride forward" % sorted(hold_ids))
+    return v
+
+
+def _read_sse_frames(resp):
+    """Read an opened SSE response to completion; return the parsed frames.
+    Mirrors post_sse's framing (data: lines, blank-line separated)."""
+    frames = []
+    buf = b""
+    while True:
+        chunk = resp.read(1)
+        if not chunk:
+            break
+        buf += chunk
+        if buf.endswith(b"\n\n"):
+            frame = buf.decode("utf-8", errors="replace")
+            buf = b""
+            for line in frame.splitlines():
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    frames.append(json.loads(line[5:].strip()))
+                except Exception:
+                    continue
+    if buf.strip():
+        for line in buf.decode("utf-8", errors="replace").splitlines():
+            if line.startswith("data:"):
+                try:
+                    frames.append(json.loads(line[5:].strip()))
+                except Exception:
+                    pass
+    return frames
+
+
+SEQ_PROMPTS = {}  # populated in main() after corpus load
 
 
 def main():
