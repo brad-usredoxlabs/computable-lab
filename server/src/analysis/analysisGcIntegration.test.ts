@@ -302,7 +302,7 @@ describe('AnalysisRunner + peak_integration (GC-7 integration)', () => {
       title,
       description: 'Reusable peak-integration revision — declared settings, zero hardcoded domain truth.',
       entryScript: referenceEntry(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',  // GC-8 OQ4 fold: __version__ 0.3.0 -> 0.4.0 (shipped at this base's __init__.py)
       methodNotes: REVISION_METHOD_NOTES,
       inputs: [
         { name: 'signal1', dataKind: 'signal', required: true, description: 'channel .CH bytes (per-file DREF)' },
@@ -451,7 +451,7 @@ describe('AnalysisRunner + peak_integration (GC-7 integration)', () => {
     expect(runPayload.outputManifest.reader).toEqual({
       name: 'computable_lab_d_reader',
       version: '1.0.0',
-      sdk_version: '0.3.0',
+      sdk_version: '0.4.0',  // echoes the LIVE __init__.py __version__ (OQ4 bump 0.3.0 -> 0.4.0)
     });
 
     // (b) the ACTUAL engine — engineProvenance with ACTUAL probed versions
@@ -488,7 +488,7 @@ describe('AnalysisRunner + peak_integration (GC-7 integration)', () => {
     expect(effPayload.source_content_sha256).toBe((drefSignal.payload as { contentHash: string }).contentHash);
     expect(effPayload.method_label).toBe('TEST-DECLARED-LABEL');
     // reader block copy rides the artifact too (A3.6).
-    expect((effPayload.reader as { sdk_version: string }).sdk_version).toBe('0.3.0');
+    expect((effPayload.reader as { sdk_version: string }).sdk_version).toBe('0.4.0');
   }, 120000);
 
   it('T2.3 rerun = new immutable run (idempotent re-read + byte-identical old payload + differing digest)', async () => {

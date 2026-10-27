@@ -157,6 +157,12 @@ properties:
               - timed_integration_windows
               - peak_detection
               - deconvolution
+              # GC-8 D1 (orchestrator ruling 2026-10-27_GC-8-D1-capability-enum-ruling.md):
+              # the spec-mandated capability terms for the calibration/quantification
+              # revision pair (spec §A7). Enum widening ratified by the ruling; the
+              # values are NOT invented — the spec text names them.
+              - curve_fitting
+              - weighted_regression
             support:
               type: string
               enum: [supported, approximate, unsupported, unverified]
