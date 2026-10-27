@@ -83,6 +83,14 @@ interface InputSpec {
   path: string;
   /** Inline data handed directly to the SDK (small inline artifact/table). */
   inline?: unknown;
+  /**
+   * GC-6 (D5) — provenance pass-through from the source data-reference: the
+   * DREF's OWN pinned values (sourcePath = the DREF payload.path, contentHash
+   * when the DREF declares one). The reader rides these for channel identity +
+   * hash provenance — no re-hash (GC-5's execute-time re-hash leg is
+   * untouched). Conditional spread only — exactOptionalPropertyTypes (F20).
+   */
+  meta?: { sourcePath: string; contentHash?: string };
 }
 
 export interface RunInputs {
@@ -155,6 +163,10 @@ export class AnalysisRunner {
       // provision re-hashes the streamed bytes and a drift is a NAMED declared
       // failure (DATA_HASH_MISMATCH 409) — closes the submit→execute window.
       let declaredContentHash: string | undefined;
+      // GC-6 (D5): per-input provenance for the data-reference branch only —
+      // the DREF's pinned values handed to the SDK (the reader's meta.source /
+      // channel identity + hash provenance). Absent for the artifact branch.
+      let inputMeta: { sourcePath: string; contentHash?: string } | undefined;
 
       if (ref.type === 'analysis-output-artifact') {
         // Resolve the artifact → its data-reference (or inline) for provisioning.
@@ -198,6 +210,10 @@ export class AnalysisRunner {
         path = payload.path;
         dataKind = dataKind ?? payload.dataKind;
         declaredContentHash = typeof payload.contentHash === 'string' ? payload.contentHash : undefined;
+        // GC-6 (D5): pass the DREF's pinned provenance through to the SDK —
+        // ~4 additive lines (OQ2 ruling: KEEP the touch). Conditional spread:
+        // contentHash only when the DREF declares one (exactOptionalPropertyTypes).
+        inputMeta = { sourcePath: path, ...(declaredContentHash ? { contentHash: declaredContentHash } : {}) };
       } else {
         throw new AnalysisServiceError('BAD_INPUT', `input ${name} must be a data-reference or analysis-output-artifact`, 400);
       }
@@ -227,6 +243,7 @@ export class AnalysisRunner {
       specs[name] = {
         dataKind: dataKind ?? 'table',
         path: outPath,
+        ...(inputMeta ? { meta: inputMeta } : {}),
       };
     }
     return specs;
