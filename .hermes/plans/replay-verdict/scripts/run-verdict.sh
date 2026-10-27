@@ -9,17 +9,29 @@ BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"          # replay-verdic
 ROOT="$(cd "$BASE/../../.." && pwd)"
 cd "$ROOT"
 
-# D11 (advc-cycle-1): this script MUST NOT create paths outside
-# .hermes/plans/replay-verdict/ (spec Rules). The worktree is expected to
-# already carry node_modules (lane standard provisioning, or tsx on PATH);
-# if neither is available we fail with a diagnostic instead of silently
-# writing a root-level symlink.
-if [ ! -e node_modules ] && ! command -v tsx >/dev/null 2>&1 \
+# D11 (advc-cycle-1) + N5 (advc-cycle-2): this script MUST NOT create paths
+# outside .hermes/plans/replay-verdict/ (spec Rules), and its fail-diagnostic
+# must be REACHABLE in the realistic failure mode. Cycle-2 finding N5: the old
+# single guard required the hardcoded hermes-agent tsx fallback to ALSO be
+# missing, so on any host where that fallback exists the script sailed past the
+# guard and tsx died with ERR_MODULE_NOT_FOUND ('ajv'). Root cause: the repo's
+# own module resolution REQUIRES the worktree node_modules — tsx-on-PATH or the
+# fallback is only a LAUNCHER, never a substitute for repo deps. Two reachable
+# branches, neither of which creates any external path:
+if [ ! -d node_modules ]; then
+  echo "run-verdict.sh: FATAL - no node_modules in $ROOT." >&2
+  echo "  The harness imports server/ modules (ajv, yaml, ...); those resolve via" >&2
+  echo "  the WORKTREE's node_modules regardless of which tsx launcher runs, so a" >&2
+  echo "  tsx on PATH does not substitute. Provision node_modules in this worktree" >&2
+  echo "  (lane standard: symlink to the main checkout's node_modules) BEFORE" >&2
+  echo "  running; this script will not create it (root-level paths violate the" >&2
+  echo "  lane's file scope — D11)." >&2
+  exit 1
+fi
+if [ ! -x node_modules/.bin/tsx ] && ! command -v tsx >/dev/null 2>&1 \
    && [ ! -x /home/brad/.hermes/hermes-agent/node_modules/.bin/tsx ]; then
-  echo "run-verdict.sh: FATAL - no node_modules in $ROOT and no tsx on PATH." >&2
-  echo "  Provision node_modules in this worktree (lane standard: symlink to the" >&2
-  echo "  main checkout's node_modules) BEFORE running; this script will not" >&2
-  echo "  create it (creating root-level paths violates the lane's file scope)." >&2
+  echo "run-verdict.sh: FATAL - node_modules present but no tsx launcher (worktree .bin, PATH, or known fallback)." >&2
+  echo "  Install tsx (or provision the main checkout's node_modules) BEFORE running." >&2
   exit 1
 fi
 

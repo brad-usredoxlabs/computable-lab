@@ -518,8 +518,11 @@
             "tier3": 0.78,
             "tier4": 0.5800000000000001
           },
-          "below_band_floor": [],
-          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
         }
       },
       "instrumented_cause": [
@@ -685,8 +688,11 @@
             "tier3": 0.78,
             "tier4": 0.5800000000000001
           },
-          "below_band_floor": [],
-          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
         }
       },
       "instrumented_cause": [

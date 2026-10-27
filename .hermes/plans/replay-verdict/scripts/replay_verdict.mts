@@ -173,14 +173,30 @@ const clampArithmetic = {
     tier2: tierMaxConfidence(2), tier3: tierMaxConfidence(3),
     tier4: tierMaxConfidence(4),
   },
-  below_band_floor: Object.keys(tierBase).map(Number).filter((t) => tierMaxConfidence(t) < band),
+  // N1 (advc-cycle-2): `band` is the OBJECT {min,max} — comparing a number to it
+  // is always false, which silently emptied this field in every fate. The floor
+  // is band.min; tiers whose max confidence is below it are genuinely
+  // unbindable-by-arithmetic (tier-4 0.58, tier-5 0.23 < 0.7).
+  below_band_floor: Object.keys(tierBase).map(Number).filter((t) => tierMaxConfidence(t) < (band as { min: number }).min),
   // D9 correction: tier-2 max is 0.98, NOT 1.0 — only tiers 0-1 saturate to
   // 1.0 after the clamp. And the invisibility claim is scoped: the CLAMPED
   // CONFIDENCE hides tier rank, but armB clarification candidates DO carry
   // `tier` and `referentLevel` as data (fates show them); no attestation-
   // STRENGTH field exists, and rendering of referentLevel is not evidenced.
-  note: 'REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online. After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced.',
+  note: 'REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced.',
 };
+// N1 tripwire (advc-cycle-2, same class as D12): the emitted below_band_floor
+// must equal the arithmetic's truth — tiers 4 and 5 (0.58 / 0.23 < band.min
+// 0.7). If a future band/tier change alters this, the run aborts loudly instead
+// of shipping a silently-empty machine-readable field that contradicts the
+// report's central REMOTE-CLAMP finding.
+{
+  const expected = [4, 5];
+  const got = clampArithmetic.below_band_floor;
+  if (JSON.stringify(got) !== JSON.stringify(expected)) {
+    throw new Error(`N1 tripwire: below_band_floor = [${got}] but the D12-parsed arithmetic expects [${expected}] (tier max vs band.min ${(band as { min: number }).min}). Fix the comparison OR update the REMOTE-CLAMP findings together — do not ship a field that contradicts the prose.`);
+  }
+}
 
 // ---- DECLARED CAUSE CLASSES (advc-cycle-1 D4) -------------------------------
 // Spec V2 declares four classes (LOCAL-SUPPRESSION / LEVEL-FILTERING / RANKING /
@@ -382,7 +398,10 @@ for (const turn of turns) {
       spine_candidates: ranked.filter((c: { curie?: string }) => c.curie).length,
       suppressed: stageFate.filter((f) => String(f.fate).startsWith('suppressed')).length,
       arms: engineResults.filter((e) => (e as { instrumented_cause?: string[] }).instrumented_cause)
-        .map((e) => `${(e as { arm: string }).arm} => ${((e as { instrumented_cause: string[] }).instrumented_cause).join(' | ') || 'clean'}`),
+        // N6 (advc-cycle-2): prefix each line with the engine arm (armA/armB) —
+        // without it both arms print the identical `${verb}.material` prefix and
+        // per-arm causes are unattributable in the summary artifact.
+        .map((e) => `${String((e as { engine_arm?: string }).engine_arm ?? '?').split(' ')[0]} ${(e as { arm: string }).arm} => ${((e as { instrumented_cause: string[] }).instrumented_cause).join(' | ') || 'clean'}`),
       bound_A: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('armA') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
       bound_B: engineResults.flatMap((e) => Array.isArray((e as { fate_classification?: { returned_and_bound?: string[] } }).fate_classification?.returned_and_bound) && (e as { engine_arm?: string }).engine_arm?.startsWith('armB') ? (e as { fate_classification: { returned_and_bound: string[] } }).fate_classification.returned_and_bound : []),
     });

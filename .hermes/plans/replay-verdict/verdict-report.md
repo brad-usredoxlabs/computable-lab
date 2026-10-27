@@ -83,8 +83,11 @@ engine result tuple (bound ids, clarification reasons, candidate count, level_fi
 between each of the 25 pinned harvest noun fates and the matching armA entry in the
 regenerated verdict fate: **armA == pinned harvest for 23/25 nouns.** The two exceptions
 are T9-known-vendor-product__hb-8065 and T9-known-vendor-product__hep-g2-hepg2-hb-8065-atcc
-— the declared db7de009 drift: harvest wash bound [] / clar unknown-noun / 1 candidate /
-level_filtered [concept, vendor-product]; armA wash binds
+— the declared db7de009 drift: harvest wash bound [] / clar unknown-noun / 1 candidate;
+its level_filtered FIELD holds RECORD IDS (four entries: local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl
+and local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB, each duplicated by the trace stream — the
+levels concept/vendor-product are inferable from the ids, the field itself is not level
+names); armA wash binds
 local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB with 0 clarifications. Those two nouns are the
 reproducibility boundary of the section above, not a harness bug.
 
@@ -136,10 +139,15 @@ binding achievable by spine output AND no F fires.
   tier/referentLevel fields the armB candidates DO carry is not evidenced — the user
   literally cannot tell reference from attestation from what the card states).
   F3 partially (see SYNTH half). F4 no. F5 no. F6 see synthesis.
-- INSTRUMENTED CAUSE (per regenerated fates): wash armA LEVEL-FILTERING (concept) +
-  WRONG-BIND (VPR auto-bind, drift D-1); add_material both arms RANKING (2 candidates,
+- INSTRUMENTED CAUSE (per regenerated fates, derive-master-table.mjs output): wash armA
+  LEVEL-FILTERING (local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl) + ELIG-UNSUPPRESSION (armA
+  auto-binds the VPR into the aliquot slot where armB clarifies — drift D-1; the
+  artifact carries NO WRONG-BIND for the branded noun: the bound record's label equals
+  the spoken noun, so the declared label-mismatch rule cannot fire. The drift bind on
+  the BARE noun "HB-8065" DOES carry WRONG-BIND — bound display-form label != spoken
+  noun); add_material both arms RANKING (2 candidates,
   1 distinct label); wash armB LEVEL-FILTERING + LOCAL-SUPPRESSION (ELIG bind-not-PASS ->
-  unknown-noun surface) + REMOTE-CLAMP
+  unknown-noun surface) + NO-GATE (vendor-display-suffix) + REMOTE-CLAMP
   structural (tier-4 max 0.58 < band 0.7: a real remote vendor hit could NEVER bind even
   online — arithmetic parsed from the product in every fate, D12).
 - VERDICT: FAIL (intended two-role binding not expressible; F1/F2 fire).
@@ -373,35 +381,38 @@ room fridge, to A1" (SYNTH-labeled; LOT-20261103 verified absent from the live s
 
 # Instrumented-cause master table
 
-RE-DERIVED (advc-cycle-1 D3) mechanically from the regenerated fate JSONs
-(`engine[].instrumented_cause`, computed per arm), not hand-written. Classes are the
-four declared by spec V2 PLUS the two this leg declared as data in the harness after
+RE-DERIVED (advc-cycle-1 D3, made literally true in advc-cycle-2 N2-N4/B1) by
+`scripts/derive-master-table.mjs`, which reads ONLY the regenerated fate JSONs and
+prints every `engine[].instrumented_cause` string (computed per arm) plus the RANKING
+candidate counts cited below; each cell is the artifact's declared classes (class names
++ the counts they carry), reproducible from that output — not hand-written. Classes are
+the four declared by spec V2 PLUS the two this leg declared as data in the harness after
 the review found shapes outside the four (D4): WRONG-BIND, NO-GATE.
 
 | case | armA (eligibility-absent) | armB (production, eligibility data) |
 |---|---|---|
 | T1, T2 | none (clean unknown; mint affordance = intent; no shape token -> no invented cause) | same |
 | T4 all nouns add_material | RANKING (blob 9/1-label; dmem 20/10-labels; fbs 20; trypsin 20; hepg2 20) | RANKING unchanged (ELIG does not dedupe labels) |
-| T4 all nouns wash | LEVEL-FILTERING + RANKING (8-10 candidates) | LEVEL-FILTERING -> unknown-noun degradation |
+| T4 all nouns wash | LEVEL-FILTERING + RANKING (per-noun wash RANKING counts: blob 8, trypsin 9, dmem 10, fbs 11, hepg2 12 — range 8-12) | LEVEL-FILTERING -> unknown-noun degradation |
 | T5 all nouns add_material | RANKING (e.g. thermo-dmem 17/5-labels) | same |
 | T5 all nouns wash | LEVEL-FILTERING + RANKING | LEVEL-FILTERING -> unknown-noun |
 | T7 components add_material | RANKING (2/2 labels dulbecco+fbs; 20 floods trypsin+hepg2) | same |
-| T7 dulbecco+fbs wash | LEVEL-FILTERING + WRONG-BIND (armA binds MSP-DRAFT spec-level blob) | LEVEL-FILTERING + LOCAL-SUPPRESSION -> unknown-noun |
+| T7 dulbecco+fbs wash | LEVEL-FILTERING + WRONG-BIND + ELIG-UNSUPPRESSION (armA binds MSP-DRAFT spec-level blob) | LEVEL-FILTERING + LOCAL-SUPPRESSION -> unknown-noun |
 | T7 blob noun add_material | none per-arm (clean single bind) | none |
-| T7 blob noun wash | ELIG-UNSUPPRESSION-adjacent: armA binds blob spec record, 0 clar | LOCAL-SUPPRESSION -> unknown-noun + mint |
+| T7 blob noun wash | ELIG-UNSUPPRESSION (artifact string verbatim: "this arm bound where the other arm clarified — bind PASS on a level the other arm rejected"; armA binds blob spec record, 0 clar) | LOCAL-SUPPRESSION -> unknown-noun + mint |
 | T6 both ratio nouns | WRONG-BIND (label-mismatch rule + composition rule) | same WRONG-BIND |
 | T8 wash | LEVEL-FILTERING + RANKING (spec junk survives) | LEVEL-FILTERING -> unknown-noun + mint |
 | T9 add_material (branded) | RANKING: 2 same-label candidates (concept vs VPR) | same, + ELIG traces show both bind-PASS unconstrained |
 | T9 add_material (bare HB-8065) | RANKING (2 cands) | LOCAL-SUPPRESSION (AC-3 gate, 0 cands) |
-| T9 wash (branded) | LEVEL-FILTERING + WRONG-BIND (drift D-1: VPR auto-BINDS aliquot slot) | LEVEL-FILTERING + LOCAL-SUPPRESSION, surface degrades to unknown-noun+mint |
-| T9 wash (bare HB-8065) | LEVEL-FILTERING + WRONG-BIND (drift D-1) | LOCAL-SUPPRESSION (AC-3 gate) |
+| T9 wash (branded) | LEVEL-FILTERING + ELIG-UNSUPPRESSION (drift D-1: armA auto-BINDS the VPR into the aliquot slot; WRONG-BIND's label-mismatch rule does NOT fire here — the bound record's label equals the spoken noun, so the artifact carries no WRONG-BIND for this noun) | LEVEL-FILTERING + LOCAL-SUPPRESSION + NO-GATE (vendor-display-suffix), surface degrades to unknown-noun+mint |
+| T9 wash (bare HB-8065) | LEVEL-FILTERING + WRONG-BIND (drift D-1: bound VPR label "\| ATCC" display form != spoken noun "HB-8065") + ELIG-UNSUPPRESSION | LOCAL-SUPPRESSION (AC-3 gate) |
 | SYNTH 2' branded noun | NO-GATE (vendor-display-suffix) : unknown-noun + mint | NO-GATE : unknown-noun + mint (pattern gap) |
 | SYNTH 2' bare code | none per-arm (clean unknown + mint) | LOCAL-SUPPRESSION (vendor-scope-unknown, 0 candidates — correct, dead-ended) |
 | SYNTH 3 bottle noun | NO-GATE (bottle-lot) : name-string mint offer | same |
 | SYNTH 3 bare HepG2 | add: RANKING flood 20; wash: LEVEL-FILTERING + RANKING | add: RANKING; wash: LEVEL-FILTERING -> unknown-noun |
 | SYNTH 6 recipe noun | NO-GATE (recipe-composition) : recipe-as-material mint | same |
 | SYNTH 6 components | RANKING flood 20 each (fbs 20/9-labels) | same |
-| ALL vendor-remote claims | REMOTE-CLAMP arithmetic: tier-4 max confidence 0.58 < band 0.7 — vendor candidates structurally unbindable through the engine even online; after the clamp only tiers 0-1 saturate to 1.0 (tier-2 max 0.98), so the CLAMPED CONFIDENCE hides tier rank; armB candidates DO carry tier + referentLevel data — absent is an attestation-STRENGTH field, and rendering is not evidenced (D9). Constants parsed from the product at run time (D12 tripwire). | same |
+| ALL vendor-remote claims | REMOTE-CLAMP arithmetic: tier-4 max confidence 0.58 < band.min 0.7 — vendor candidates structurally unbindable through the engine even online; machine-readable support is the structured field `remote_clamp.below_band_floor = [4, 5]` in every fate (N1: computed against band.min, asserted at run time); after the clamp only tiers 0-1 saturate to 1.0 (tier-2 max 0.98), so the CLAMPED CONFIDENCE hides tier rank; armB candidates DO carry tier + referentLevel data — absent is an attestation-STRENGTH field, and rendering is not evidenced (D9). Constants parsed from the product at run time (D12 tripwire). | same |
 
 ## FINDING D-1 (harness drift, from the gate)
 db7de009 made vendor-product records level-'vendor-product', letting a CATALOG record
@@ -500,7 +511,9 @@ E7. Vendor-scope recognition from the utterance: a vendor token in the noun ("| 
 E8. AC-3 scope elicitation must RETURN to product lookup once scope is answered (no
     dead-end zero-candidate card). Cites: SYNTH case 2' bare "HB-9999" armB. [F3]
 E9. Confidence band per purpose: tier-4 max 0.58 vs band floor 0.7 makes vendor hits
-    unbindable-by-arithmetic — either declare band floors per demanded level (data) or
+    unbindable-by-arithmetic — structured evidence: `remote_clamp.below_band_floor =
+    [4, 5]` in every regenerated fate (N1-fixed: the field now carries the real tiers,
+    asserted at run time) — either declare band floors per demanded level (data) or
     give identity-role candidates their own in-band surface; never leave the clamp
     silent. Cites: T9, SYNTH case 2', F3. [F3, memo P4]
 E10. Instance-intent recognition: bottle/lot/location language routes to instance/
