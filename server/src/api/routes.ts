@@ -1270,5 +1270,8 @@ export function registerRoutes(
     fastify.get('/analysis-runs/:id', analysisHandlers.getRun.bind(analysisHandlers));
     fastify.post('/analysis-runs/:id/execute', analysisHandlers.executeRun.bind(analysisHandlers));
     fastify.post('/analysis-artifacts/:id/promote', analysisHandlers.promoteArtifactHandler.bind(analysisHandlers));
+    // GC-10 OQ-1(a) — read-only content route beside its promote sibling.
+    // GET-only: no POST/PUT/DELETE is registered for this path.
+    fastify.get('/analysis-artifacts/:id/content', analysisHandlers.getArtifactContent.bind(analysisHandlers));
   }
 }

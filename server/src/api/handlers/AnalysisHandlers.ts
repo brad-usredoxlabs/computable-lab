@@ -12,6 +12,7 @@ import {
 import { AnalysisRunner } from '../../analysis/analysisRunner.js';
 import { AnalysisAuthoringService, AnalysisAuthoringError } from '../../analysis/analysisAuthoring.js';
 import { promoteArtifact } from '../../analysis/artifactPromotion.js';
+import { getAnalysisArtifactContent } from '../../analysis/analysisArtifactContent.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { resolveAiProfile } from '../../config/types.js';
 
@@ -191,6 +192,26 @@ export function createAnalysisHandlers(ctx: AppContext) {
       try {
         const result = await promoteArtifact(ctx, request.params.id);
         return { success: true, ...result };
+      } catch (err) {
+        if (err instanceof AnalysisServiceError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /** GC-10 OQ-1(a): read-only content route — GET only (a POST must not
+     *  resolve: it is not registered). Streams the DREF-pinned JSON bytes of
+     *  a data-reference-backed analysis artifact. */
+    async getArtifactContent(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        const result = await getAnalysisArtifactContent(ctx, request.params.id);
+        return result;
       } catch (err) {
         if (err instanceof AnalysisServiceError) {
           reply.status(err.statusCode);
