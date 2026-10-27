@@ -320,7 +320,7 @@ describe('AnalysisRunner + d_reader (GC-6 integration)', () => {
     expect(storedManifest.reader).toEqual({
       name: 'computable_lab_d_reader',
       version: '1.0.0',
-      sdk_version: '0.2.0',
+      sdk_version: '0.3.0', // GC-7 (OQ5 fold): the SDK __version__ bump 0.2.0 -> 0.3.0; the reader block echoes the SHIPPED version (legitimate expected-value update, same class as the test_d_reader.py pin the task brief authorized)
     });
 
     // (5) provenance: the artifact's sourceRelations include the input DREFs
