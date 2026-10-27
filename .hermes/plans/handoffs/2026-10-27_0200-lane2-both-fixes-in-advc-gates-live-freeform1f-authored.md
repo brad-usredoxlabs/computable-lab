@@ -78,3 +78,23 @@ inspectEndpoint green). D-1's evidence is now DECIDED (arch ruling), not a debt.
 ## BUDGET
 ~12 min used at handoff write; remaining budget spent — nothing else dispatchable (only
 coder-ready item is merge-gated; both gates in flight; no Brad input owed). Checkpoint, exit.
+
+## ADDENDUM (same tick, ~02:30 EDT) — BOTH GATES ACCEPTED, BOTH MERGED, L2-FREEFORM-1F DISPATCHED
+- advc2 (SUITE-A) and advc3 (MATRES-VERDICT, final) both returned VERDICT: accept 01:59.
+- ORCH SELF-VERIFY both first-hand (SUITE-A: purity/sha/selfcheck-teeth/parity 16/16/tsc 0;
+  MATRES: full-branch purity empty, N1/N6 spots, AC1 NOT-MET intact, _summary sha match).
+- MERGED: SUITE-A -> 14d3901c, MATRES-VERDICT -> aa8f7468 (trunk tip aa8f7468). Stack
+  restarted; :3093/:5193 = 200. B6 supersession DONE (canonical report promoted, .superseded
+  kept). MATRES-VERDICT leg CLOSED; MATRES-REPLAY stays as-is for its other legs.
+- L2-FREEFORM-1F CLAIMED + dispatched: worktree wt/L2-FREEFORM-1F-lane2-l2t0155 (NFS checkout
+  slow — queue unit cl-l2-freeform1f-l2t0155 waits for the tree, THEN takes fleet slot-0;
+  coder not started as of checkpoint; pid = the queue bash, log logs/coder-FREEFORM1F-l2t0155.log).
+  Thin spec .hermes/plans/2026-10-27_0215-L2-FREEFORM-1F-action-delivered-arm.md. Marker
+  'FREEFORM1F DONE <sha>'. On exit: advc (scope aa8f7468...HEAD) -> self-verify -> merge ->
+  THEN the ORCH live --all SUITE-A drive (P1 expected GREEN post-1F) + browser gate.
+- NEXT TICK ORDER: (1) reconcile FREEFORM-1F; (2) on exit -> advc; (3) post-1F-merge: live
+  --all drive (budget a full tick; P1 should flip honest, 8 turns + --compare), then
+  cl-browser-reviewer receipts for SUITE-A acceptance; SUITE-A is the ONLY item not done and
+  it needs those two things. SUITE-B coder-ready in parallel (binaries provisioned) — dispatch
+  on the freed fleet slot once FREEFORM-1F releases it.
+- Fleet: slot-0 = queue (not yet coder); slot-1 = lane 1 (GC-6). Thunderbeast: orch only.
