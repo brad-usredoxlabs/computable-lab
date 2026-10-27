@@ -380,7 +380,7 @@ class TestAttach(unittest.TestCase):
         self.assertEqual(reader, {
             "name": READER_NAME,
             "version": READER_VERSION,
-            "sdk_version": "0.2.0",
+            "sdk_version": "0.3.0",  # GC-7 B1 step 1: __version__ 0.2.0 -> 0.3.0 (OQ5 fold)
         })
         # summary log line per decoded input
         self.assertTrue(any("FID1A.CH" in m for m in messages))
