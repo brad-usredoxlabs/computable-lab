@@ -82,3 +82,18 @@ Author: orchestrator cron tick (started 16:20 EDT) — lane 1 only. All git -c c
   promoted-bytes-vs-envelope wording most substantive), GC-8 cycle-2 2 OBSERVATIONs + cycle-3
   2 OBSERVATIONs (addendum-corrects-in-place convention; all-unit-1/x reports none).
 - EVIDENCE DEBT OPEN: AS-L1T0020-2 ONLY.
+
+### 1716 SECOND ADDENDUM (budget-expiry checkpoint) — GC-10 coder DIED BY TOKEN LIMIT; RESUME = NEXT TICK'S FIRST ACTION
+
+GC-10 l1t1550 EXITED rc=0 17:14:29, log tail = output-token-limit death (AS-L1T1400-2 class),
+NO end-marker. Launcher 2946948 confirmed GONE 17:15 — slot-1 (and slot-0) FREE. Adopted state
+first-hand: legs A-D committed (1ee43190 RED, 73ce6e43 B traceModel, ceef642f C ChromatogramView
+92-green, 06003114 D CompareTraces 107-green, tsc 21/0), leg-E IN-FLIGHT UNCOMMITTED (8 files
++228/-18 — ViewRenderer+tests, AnalysisPage.tsx/.css, ChromatogramView tweak, view-spec.schema.
+yaml enum +22, analysisSchema.test.ts +34). Remaining: commit E after vitest src/analysis green,
+deliverable [F] gate runbook, close battery incl. the report's hard-stop audit (lines 60-69).
+NEXT TICK FIRST ACTION: GC-10 RESUME run (same worktree/branch, free slot, bare-path systemd-run
+launcher, unique l1t<ts>resume log/report tokens, prompt = adopt-don't-re-explore: everything is
+on disk; report-first; end-marker GC10 RESUME DONE <sha>/BLOCKED). The soft-budget rule blocked
+dispatching it this tick (expired 17:05, GC-8 close consumed the tail). Task stays in-progress;
+details in task-list tick_reconcile_20261027T1716.
