@@ -7,7 +7,7 @@ set -u
 cd "$(dirname "$0")/../../../.."
 CLI=.hermes/plans/harness/l2-suite-a/lib/honest-cli.ts
 run() {
-  printf '%s' "$1" | node "$CLI" 2>/tmp/honest-cli-stderr.txt
+  printf '%s' "$1" | node --no-warnings "$CLI" 2>/tmp/honest-cli-stderr.txt
   local rc=$?
   echo "rc=$rc | $(head -1 /tmp/honest-cli-stderr.txt | head -c 140)"
 }

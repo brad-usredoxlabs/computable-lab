@@ -205,7 +205,7 @@ def honest_verdict_via_nodecli(result, context=None):
         payload["context"] = context
     env = dict(os.environ)
     proc = subprocess.run(
-        ["node", os.path.join(HERE, "lib", "honest-cli.ts")],
+        ["node", "--no-warnings", os.path.join(HERE, "lib", "honest-cli.ts")],
         input=json.dumps(payload).encode("utf-8"),
         capture_output=True, timeout=60, env=env)
     out = proc.stdout.decode("utf-8", errors="replace").strip()
