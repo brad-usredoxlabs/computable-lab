@@ -129,7 +129,9 @@ def _deciding_pass_floor_ratio(sig):
     The docstring's 'measured' ratios must be reproducible: this helper
     re-measures them by spying on the module's own pass structure (the spy
     is restored before the run returns), never a stale hand-computed
-    figure. Returns the last (deciding) pass's ratio."""
+    figure. The spy mirrors the pass structure, but the floor/small_h
+    arithmetic is a re-implementation of peak_integration.py:409-421.
+    Returns the last (deciding) pass's ratio."""
     ratios = []
     real = pi._apply_tangent_skim
 
@@ -901,11 +903,11 @@ class TestPeakIntegration(unittest.TestCase):
         # functions, the module's own output — no re-implemented threshold
         # walk, whose 74 samples of front-limb slack a fabricated lift
         # inside it sailed through undetected; adversarial review
-        # cycle-2, MINOR 2). The lifted samples must sit within that span
-        # EXACTLY: the skim only raises the floor between the flanks, so
-        # any sample lifted outside the module's window span would
-        # fabricate signal, and any sample inside the span that was NOT
-        # lifted would leave the connecting line only partially applied.
+        # cycle-2, MINOR 2). No lifted sample before the module's
+        # recomputed front foot, none after the back foot, and the lifted
+        # run is contiguous; the module's window is recomputed on the
+        # emitted baseline, so a fabricated lift that moves the foot is
+        # caught.
         fa, fb = _final_prominence_window_span(sig, res["baseline"])
         self.assertGreaterEqual(lifted[0], fa,
                                 f"lifted sample {lifted[0]} before the "
