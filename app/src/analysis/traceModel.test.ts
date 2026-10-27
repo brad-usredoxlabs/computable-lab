@@ -27,6 +27,9 @@ import {
   colorForTraceInSet,
   decimateForRender,
   extractTrace,
+  mintViewSpecId,
+  parseChromatogramBindings,
+  parseCompareBindings,
   parseMarkerRows,
   parseTraceValue,
   stableTraceOrder,
@@ -50,6 +53,94 @@ function spyFetch(bytes = ''): { fn: (artifactRecordId: string) => Promise<strin
   const calls: string[] = []
   return { calls, fn: async (id: string) => { calls.push(id); return bytes } }
 }
+
+describe('traceModel.parseChromatogramBindings / parseCompareBindings (D6 named guards)', () => {
+  it('accepts well-formed chromatogram bindings; unknown keys are KEPT + audited', () => {
+    const res = parseChromatogramBindings({
+      markersFrom: 'peak_table',
+      markerRtField: 'rt_min',
+      someFutureKey: 42,
+    })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.value.markersFrom).toBe('peak_table')
+      expect(res.value.markerRtField).toBe('rt_min')
+      expect(res.value.audit).toEqual(['someFutureKey'])
+    }
+  })
+
+  it('a non-string known key is a NAMED error (refusing to guess)', () => {
+    const res = parseChromatogramBindings({ markersFrom: { nested: true } })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.path).toBe('bindings.markersFrom')
+      expect(res.error.message).toContain('refusing to guess')
+    }
+  })
+
+  it('accepts well-formed compare bindings (traces + conversion + axisUnits)', () => {
+    const res = parseCompareBindings({
+      traces: [
+        { artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' } },
+        {
+          artifactRef: { id: 'AOUT-000002' },
+          label: 'sample B',
+          conversion: { factor: 1000, toUnit: 'pA', declaredBy: 'brad' },
+        },
+      ],
+      axisUnits: { x: 'min', y: 'pA' },
+      unknown: 'x',
+    })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.value.traces.map((t) => t.artifactId)).toEqual(['AOUT-000001', 'AOUT-000002'])
+      expect(res.value.traces[1]?.conversion).toEqual({ factor: 1000, toUnit: 'pA', declaredBy: 'brad' })
+      expect(res.value.axisUnits).toEqual({ x: 'min', y: 'pA' })
+      expect(res.value.audit).toContain('unknown')
+    }
+  })
+
+  it('a malformed conversion factor is a NAMED error naming the path', () => {
+    const res = parseCompareBindings({
+      traces: [
+        { artifactRef: { id: 'AOUT-000001' } },
+        { artifactRef: { id: 'AOUT-000002' }, conversion: { factor: '1000', toUnit: 'pA', declaredBy: 'brad' } },
+      ],
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.path).toBe('bindings.traces[1].conversion.factor')
+      expect(res.error.message).toContain('not a number')
+    }
+  })
+
+  it('a missing artifactRef.id is a NAMED error', () => {
+    const res = parseCompareBindings({ traces: [{ label: 'no ref' }] })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.path).toBe('bindings.traces[0].artifactRef.id')
+  })
+
+  it('a non-array traces key is a NAMED error', () => {
+    const res = parseCompareBindings({ traces: 'AOUT-000001' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.path).toBe('bindings.traces')
+  })
+
+  it('empty/undefined bindings parse to an empty trace list (a legal compare shape)', () => {
+    expect(parseCompareBindings(undefined).ok).toBe(true)
+    expect(parseCompareBindings({}).ok).toBe(true)
+  })
+})
+
+describe('traceModel.mintViewSpecId (runner max+1 rule, F2 :433-447)', () => {
+  it('mints VSPEC-000001 from an empty list', () => {
+    expect(mintViewSpecId([])).toBe('VSPEC-000001')
+  })
+
+  it('mints max+1 from existing ids (non-matching ids ignored)', () => {
+    expect(mintViewSpecId(['VSPEC-000042', 'other-1', 'VSPEC-000009'])).toBe('VSPEC-000043')
+  })
+})
 
 describe('traceModel hardcode boundary (bait #7 — CI-owned grep pin)', () => {
   // The prod module contains ZERO unit literals and ZERO domain-name literals:

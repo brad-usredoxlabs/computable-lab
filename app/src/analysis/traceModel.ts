@@ -30,6 +30,9 @@ export interface Trace {
   values: number[]
   xUnit?: string
   yUnit?: string
+  /** An explicit data label (legend "source"/sample name) — arrives as DATA
+   *  (artifact label / saved-spec bindings); the TS never invents one. */
+  label?: string
   /** Present only when a declared conversion was applied (display copy). */
   conversion?: DeclaredConversion
 }
@@ -227,6 +230,63 @@ export async function extractTrace(
 }
 
 // ---------------------------------------------------------------------------
+// 1c. resolveCompare — AOUT artifact RECORDS -> labeled traces (compare
+//     data-path; used by the Compare surface + saved-comparison re-render)
+// ---------------------------------------------------------------------------
+
+/** A fetched artifact record envelope (data-only shape). */
+export interface ArtifactRecordShape {
+  recordId?: string
+  payload?: Record<string, unknown>
+}
+
+/**
+ * Resolve one pinned AOUT artifact record into a trace. `inlineValue` rides
+ * the record; otherwise the dref bytes arrive through the OQ-1(a) content
+ * route (the ratified byte source). Legend labels are DATA (the record's
+ * name + any explicit `label` override); nothing is invented here.
+ */
+export async function resolveArtifactTrace(
+  record: ArtifactRecordShape,
+  fetchContent: FetchContent,
+  label?: string,
+): Promise<{ ok: true; trace: Trace } | TraceError> {
+  const payload = record.payload ?? {}
+  const inline = isRecord(payload.inlineValue) ? payload.inlineValue : undefined
+  const runId = typeof (payload.runRef as { id?: string } | undefined)?.id === 'string' ? ((payload.runRef as { id: string }).id) : ''
+  const runTitle = typeof payload.title === 'string' ? payload.title : runId
+  const artifactName = typeof payload.name === 'string' ? payload.name : (record.recordId ?? '')
+  const base: Omit<Trace, 'axis' | 'values' | 'xUnit' | 'yUnit'> = {
+    recordId: record.recordId ?? '',
+    runId,
+    runTitle,
+    artifactName,
+  }
+  if (inline) {
+    const parsed = parseTraceValue(inline)
+    if (!parsed.ok) return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId}: ${parsed.message}` }
+    return { ok: true, trace: { ...base, ...parsed.trace, label } }
+  }
+  const drefId = (payload.dataReferenceRef as { id?: string } | undefined)?.id
+  if (!drefId) {
+    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId} has no readable payload (no inline value, no data reference)` }
+  }
+  const bytes = await fetchContent(record.recordId ?? '')
+  if (!bytes) {
+    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId} content route returned no bytes` }
+  }
+  let parsedJson: unknown
+  try {
+    parsedJson = typeof bytes === 'string' ? JSON.parse(bytes) : bytes
+  } catch {
+    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId} content is not JSON` }
+  }
+  const parsed = parseTraceValue(parsedJson)
+  if (!parsed.ok) return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId}: ${parsed.message}` }
+  return { ok: true, trace: { ...base, ...parsed.trace, label } }
+}
+
+// ---------------------------------------------------------------------------
 // 1b. parseMarkerRows — the peak-table marker extraction (data-only)
 // ---------------------------------------------------------------------------
 
@@ -380,6 +440,161 @@ export function decimateForRender(axis: number[], values: number[], pixelWidth: 
   const seen = new Set(indices)
   const dropped = values.filter((_v, i) => !seen.has(i)).length
   return { indices, droppedCount: dropped }
+}
+
+// ---------------------------------------------------------------------------
+// 6b. closed-shape guards (D6) — named client-side errors, no silent blanks
+// ---------------------------------------------------------------------------
+
+/** A named binding-guard error (rendered verbatim by the renderers). */
+export interface BindingsGuardError {
+  path: string
+  message: string
+}
+
+/** The chromatogram bindings (closed shape; unknown keys pass through and
+ *  are reported for the dev-visible audit line, §D6). */
+export interface ChromatogramBindingsParsed {
+  markersFrom?: string
+  markerRtField?: string
+  markerLabelField?: string
+  markerSaturatedField?: string
+  markerFlagsField?: string
+  baselineFrom?: string
+  baselineField?: string
+  /** Unknown keys (forward-compat — listed, not rejected). */
+  audit: string[]
+}
+
+const CHROMATOGRAM_KNOWN_KEYS = [
+  'markersFrom',
+  'markerRtField',
+  'markerLabelField',
+  'markerSaturatedField',
+  'markerFlagsField',
+  'baselineFrom',
+  'baselineField',
+] as const
+
+/**
+ * Parse a `chromatogram` view's `bindings` free object. Known keys must be
+ * strings when present (named error otherwise); unknown keys are KEPT (the
+ * schema's own additionalProperties stance) and listed in `audit`.
+ */
+export function parseChromatogramBindings(
+  bindings: Record<string, unknown> | undefined,
+): { ok: true; value: ChromatogramBindingsParsed } | { ok: false; error: BindingsGuardError } {
+  const out: ChromatogramBindingsParsed = { audit: [] }
+  for (const [k, v] of Object.entries(bindings ?? {})) {
+    const key = k as (typeof CHROMATOGRAM_KNOWN_KEYS)[number]
+    if ((CHROMATOGRAM_KNOWN_KEYS as readonly string[]).includes(k)) {
+      if (typeof v !== 'string') {
+        return { ok: false, error: { path: `bindings.${k}`, message: `bindings.${k} must be a string — refusing to guess` } }
+      }
+      out[key] = v
+    } else {
+      out.audit.push(k)
+    }
+  }
+  return { ok: true, value: out }
+}
+
+/** One entry of a `trace-compare` view's `bindings.traces`. */
+export interface CompareBindingsTrace {
+  artifactId: string
+  label?: string
+  conversion?: DeclaredConversion
+}
+
+/** The parsed `trace-compare` bindings (closed shape). */
+export interface CompareBindingsParsed {
+  traces: CompareBindingsTrace[]
+  axisUnits?: { x: string; y: string }
+  audit: string[]
+}
+
+/**
+ * Parse a `trace-compare` view's `bindings` free object. `traces` must be an
+ * array of `{ artifactRef: { id }, label?, conversion? }`; a declared
+ * conversion must carry a finite `factor`, a `toUnit` string and a
+ * `declaredBy` string (named error otherwise — "refusing to guess"). Unknown
+ * keys are KEPT and listed in `audit`.
+ */
+export function parseCompareBindings(
+  bindings: Record<string, unknown> | undefined,
+): { ok: true; value: CompareBindingsParsed } | { ok: false; error: BindingsGuardError } {
+  if (!bindings || typeof bindings !== 'object') return { ok: true, value: { traces: [], audit: [] } }
+  const audit: string[] = []
+  const knownTop = new Set(['traces', 'axisUnits'])
+  for (const k of Object.keys(bindings)) {
+    if (!knownTop.has(k)) audit.push(k)
+  }
+  const rawTraces = bindings.traces
+  if (rawTraces !== undefined && !Array.isArray(rawTraces)) {
+    return { ok: false, error: { path: 'bindings.traces', message: 'bindings.traces must be an array — refusing to guess' } }
+  }
+  const traces: CompareBindingsTrace[] = []
+  for (let i = 0; i < (rawTraces?.length ?? 0); i++) {
+    const raw = rawTraces?.[i]
+    if (!raw || typeof raw !== 'object') {
+      return { ok: false, error: { path: `bindings.traces[${i}]`, message: `bindings.traces[${i}] must be an object — refusing to guess` } }
+    }
+    const entry = raw as Record<string, unknown>
+    for (const k of Object.keys(entry)) {
+      if (!['artifactRef', 'label', 'conversion'].includes(k)) audit.push(`traces[${i}].${k}`)
+    }
+    const ref = entry.artifactRef
+    const refId = ref && typeof ref === 'object' ? (ref as { id?: unknown }).id : undefined
+    if (typeof refId !== 'string' || refId.length === 0) {
+      return { ok: false, error: { path: `bindings.traces[${i}].artifactRef.id`, message: `bindings.traces[${i}].artifactRef.id must be a non-empty string — refusing to guess` } }
+    }
+    const out: CompareBindingsTrace = { artifactId: refId }
+    if (typeof entry.label === 'string' && entry.label.length > 0) out.label = entry.label
+    if (entry.conversion !== undefined) {
+      const c = entry.conversion as Record<string, unknown> | undefined
+      if (!c || typeof c !== 'object' || typeof c.factor !== 'number' || !Number.isFinite(c.factor)) {
+        return { ok: false, error: { path: `bindings.traces[${i}].conversion.factor`, message: `bindings.traces[${i}].conversion.factor is not a number — refusing to guess` } }
+      }
+      if (typeof c.toUnit !== 'string' || c.toUnit.length === 0) {
+        return { ok: false, error: { path: `bindings.traces[${i}].conversion.toUnit`, message: `bindings.traces[${i}].conversion.toUnit is not a string — refusing to guess` } }
+      }
+      if (typeof c.declaredBy !== 'string' || c.declaredBy.length === 0) {
+        return { ok: false, error: { path: `bindings.traces[${i}].conversion.declaredBy`, message: `bindings.traces[${i}].conversion.declaredBy is not a string — refusing to guess` } }
+      }
+      out.conversion = { factor: c.factor, toUnit: c.toUnit, declaredBy: c.declaredBy }
+    }
+    traces.push(out)
+  }
+  const out: CompareBindingsParsed = { traces, audit }
+  if (bindings.axisUnits !== undefined) {
+    const au = bindings.axisUnits
+    if (!au || typeof au !== 'object' || typeof (au as { x?: unknown }).x !== 'string' || typeof (au as { y?: unknown }).y !== 'string') {
+      return { ok: false, error: { path: 'bindings.axisUnits', message: 'bindings.axisUnits must be {x:string,y:string} — refusing to guess' } }
+    }
+    out.axisUnits = { x: (au as { x: string }).x, y: (au as { y: string }).y }
+  }
+  return { ok: true, value: out }
+}
+
+// ---------------------------------------------------------------------------
+// 6c. mintViewSpecId — client-side VSPEC-NNNNNN max+1 (mirrors the runner)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mint the next `VSPEC-NNNNNN` id from existing view-spec record ids, using
+ * the runner's max+1 rule (F2 :433-447). Returns `VSPEC-000001` when no
+ * existing ids match the shape (the first is always legal).
+ */
+export function mintViewSpecId(existingIds: readonly string[]): string {
+  let max = 0
+  for (const id of existingIds) {
+    const m = /^VSPEC-(\d+)$/.exec(id)
+    if (m && m[1]) {
+      const n = Number(m[1])
+      if (Number.isFinite(n) && n > max) max = n
+    }
+  }
+  return `VSPEC-${String(max + 1).padStart(6, '0')}`
 }
 
 // ---------------------------------------------------------------------------
