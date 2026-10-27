@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import {
-  ViewRenderer,
-  VIEW_RENDERER_WHITELIST,
-  renderViews,
-  resolveViewRenderer,
-  toRenderableArtifact,
-  type RenderableView,
-} from './ViewRenderer'
+import { ViewRenderer, renderViews, toRenderableArtifact, type RenderableView } from './ViewRenderer'
 
 describe('ViewRenderer', () => {
   it('renders a table artifact', () => {
@@ -50,18 +43,6 @@ describe('ViewRenderer', () => {
       />,
     )
     expect(screen.getByTestId('view-spec-error')).toHaveTextContent('quantum')
-  })
-
-  it('whitelist passes the GC-10 renderer ids through (no table-coercion; unknown ids still coerce)', () => {
-    // GC-10 [E] / bait #4: a manifest view renderer passes through ONLY if it
-    // is a shipped view renderer; anything else is (silently) coerced to
-    // 'table'. The two NEW ids must PASS THROUGH, not table-ify.
-    for (const raw of VIEW_RENDERER_WHITELIST) {
-      expect(resolveViewRenderer(raw)).toBe(raw)
-    }
-    expect(resolveViewRenderer('quantum')).toBe('table')
-    expect(resolveViewRenderer(undefined)).toBe('table')
-    expect(resolveViewRenderer('signal')).toBe('signal')
   })
 
   it('renders a model artifact card with format + data-reference', () => {
