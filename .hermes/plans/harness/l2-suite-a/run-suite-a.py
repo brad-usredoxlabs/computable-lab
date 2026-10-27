@@ -1216,19 +1216,31 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
 
         # BOUNDED TRANSIENT-FALLBACK RETRY (one shot, disclosed in the
         # receipt): the lane stack's assist arm rides a remote model that
-        # can, on an individual turn, fail to emit the required
-        # agent_intent tool call ("The model (...) did not emit the
-        # required agent_intent tool call after N attempts" — a GENERIC
-        # model-transport line, NOT a named capability wall). That is a
-        # transient model flake, not the product's honest outcome, so the
+        # can, on an individual turn, flake on the MODEL-TRANSPORT path —
+        # the server's own generic lines that name NO capability:
+        #   - "did not emit the required agent_intent tool call after N
+        #     attempts" (the agent_intent path gave up);
+        #   - "the model's answer was cut off at its output limit before
+        #     it finished the tool call (finish_reason 'length')" (the
+        #     model ran out of output budget mid-tool-call);
+        #   - "Model returned an empty response (finish_reason=…)" (the
+        #     proxy delivered nothing).
+        # None of these is the product's honest outcome — a named
+        # capability wall ('Select an endpoint for mafft.', a schema
+        # rejection of the PROPOSAL SHAPE, the named term-refusal) names
+        # what is missing and is NEVER retried. On a transport flake the
         # driver re-POSTs the IDENTICAL body exactly once (same prompt,
         # same held context, same history — the hold is not rebuilt) and
-        # the receipt carries retry_count + the first raw error. No retry
-        # on a named wall (that IS the honest outcome) and no retry after
-        # a transport error. NEVER a fake: if the retried turn is the
-        # silent shape too, the verdict stands as the forbidden FAIL.
+        # the receipt carries retry_count + the first raw error. NEVER a
+        # fake: if the retried turn is the silent shape too, the verdict
+        # stands as the forbidden FAIL.
         retry_count = 0
         state_retry_note = None
+        _TRANSPORT_MARKERS = (
+            "did not emit the required agent_intent tool call",
+            "cut off at its output limit",
+            "Model returned an empty response",
+        )
         if status == 200:
             _types_f, _done_f, _err_f_list, _tc_f = summarize_frames(frames)
             _done_f = _done_f if isinstance(_done_f, dict) else {}
@@ -1239,14 +1251,12 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                         isinstance(f, dict) and f.get("type") == "agent_action"
                         for f in frames)
                     and isinstance(_err_f, str) and _err_f.strip()
-                    and "did not emit the required agent_intent tool call"
-                    in _err_f):
+                    and any(mk in _err_f for mk in _TRANSPORT_MARKERS)):
                 retry_count = 1
                 state_retry_note = (
                     "bounded transient-fallback retry (generic "
-                    "'did not emit the required agent_intent tool call' "
-                    "wall on attempt 1, a model-transport flake, NOT a "
-                    "named capability wall): %r" % _err_f[:200])
+                    "model-transport wall on attempt 1 — a model flake, "
+                    "NOT a named capability wall): %r" % _err_f[:200])
                 print("P%d: generic model-transport wall on turn %r — ONE "
                       "bounded re-post of the identical body "
                       "(disclosed as a transient fallback, not a fake)"
