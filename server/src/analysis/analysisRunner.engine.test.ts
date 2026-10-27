@@ -29,6 +29,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initializeApp } from '../server.js';
 import { setupTestWorkspace } from '../test/setupApp.js';
+import type { AppConfig } from '../config/types.js';
 import { RecordRevisionService } from '../revisions/RecordRevisionService.js';
 import { AnalysisService, AnalysisServiceError } from './analysisService.js';
 import { AnalysisRunner } from './analysisRunner.js';
@@ -587,5 +588,39 @@ describe('AnalysisRunner engine gate (GC-5 integration)', () => {
       expect((p.outputManifest as { engine?: unknown } | undefined)?.engine).toBeUndefined();
     }, 90000);
 
+    it('DEFECT 3: a WHITESPACE-ONLY analysis.python config value is treated as absent — the provisioned-venv last-resort trap still fires (ENGINE_UNAVAILABLE, not a silent last-resort run)', async () => {
+      // The shared ctx appConfig is mutated for this leg only and restored
+      // after: `analysis.python: '   '` (whitespace-only) is DECLARED (raw
+      // truthiness) but ABSENT after the resolveInterpreter trim — so it must
+      // count as NO declared interpreter. Pre-fix the trap's raw-truthiness
+      // check saw the whitespace string as "declared", skipped the trap, and
+      // the run fell through to the probe → ENGINE_VERSION_MISMATCH (numpy
+      // absent on the last-resort interpreter) instead of ENGINE_UNAVAILABLE.
+      const engId = await createEngine({
+        runtime_requirements: { interpreter: 'provisioned-venv' },
+        version_constraints: { python: '>=3.13', packages: [{ name: 'numpy', constraint: '==2.5.4' }] },
+      });
+      const { recordId: revId } = await service.createRevision({
+        title: 'whitespace config venv trap',
+        entryScript: 'def run(ctx):\n    return ctx',
+        sdkVersion: '0.1.0',
+        engineRef: { kind: 'record', type: 'analysis-engine', id: engId },
+      });
+      const { recordId: runId } = await service.createRun({
+        title: 'run-whitespace-venv',
+        revisionRef: { kind: 'record', id: revId, type: 'analysis-revision' },
+        inputs: {},
+      });
+      const priorAppConfig = ctx.appConfig;
+      try {
+        ctx.appConfig = { ...(priorAppConfig ?? {}), analysis: { python: '   ' } } as AppConfig;
+        const err = await runner.executeRun(runId).catch((e) => e);
+        expect(err).toBeInstanceOf(AnalysisServiceError);
+        expect((err as AnalysisServiceError).code).toBe('ENGINE_UNAVAILABLE');
+      } finally {
+        ctx.appConfig = priorAppConfig;
+      }
+      expect(((await service.getRun(runId))!.payload as { status: string }).status).toBe('failed');
+    }, 60000);
   });
 });

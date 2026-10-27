@@ -512,7 +512,15 @@ export class AnalysisRunner {
     //     CLA_ANALYSIS_PYTHON → the constructor-injected last-resort).
     const interpreterPath = resolveInterpreter(this.ctx, this.python);
     const declaredPackages = engine.version_constraints?.packages ?? [];
-    const lastResort = !this.ctx.appConfig?.analysis?.python && !process.env.CLA_ANALYSIS_PYTHON;
+    // l1t2245 defect 3: `lastResort` is derived from the RESOLVED
+    // interpreter, not from the raw config/env values. resolveInterpreter
+    // TRIMS both layers, so a whitespace-only `analysis.python` /
+    // CLA_ANALYSIS_PYTHON value counts as ABSENT there (resolution falls
+    // through to the constructor-injected last-resort) — and the trap must
+    // fire exactly when that fall-through happened. Raw truthiness of the
+    // untrimmed values let a whitespace-only declaration bypass the trap
+    // (a silent last-resort run of a provisioned-venv engine).
+    const lastResort = interpreterPath === this.python;
     if (engine.runtime_requirements?.interpreter === 'provisioned-venv' && lastResort && declaredPackages.length > 0) {
       throw new AnalysisServiceError(
         'ENGINE_UNAVAILABLE',
