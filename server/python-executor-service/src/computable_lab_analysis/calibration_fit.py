@@ -67,12 +67,14 @@ CODE_MODEL_UNSUPPORTED = "MODEL_UNSUPPORTED"
 CODE_ORIGIN_CONSTRAINT_UNSUPPORTED = "ORIGIN_CONSTRAINT_UNSUPPORTED"
 CODE_WEIGHTING_UNSUPPORTED = "WEIGHTING_UNSUPPORTED"
 CODE_WEIGHT_UNDEFINED_AT_ZERO = "WEIGHT_UNDEFINED_AT_ZERO"
-# D3: per-point declared weights (levels[i].weight) MUTUALLY EXCLUSIVE with a
+# D3: per-point declared weights (levels[i].weight) are MUTUALLY EXCLUSIVE with a
 # conflicting `weighting` scheme — declaring BOTH channels is a parameter
-# conflict, loud-failed (never silently one channel overrides the other),
-# and the model payload emits an `effective_weighting` marker so the
-# declared-scheme field never says "none" while weights were applied.
-CODE_WEIGHTING_CONFLICT = "WEIGHTING_CONFLICT"
+# conflict, loud-failed (never silently one channel overrides the other) with
+# the declared PARAM_INVALID token (this module's existing invalid-parameter
+# vocabulary; the spec's calibration-leg failure vocabulary enumerates no
+# weighting-conflict token), and the model payload emits an
+# `effective_weighting` marker so the declared-scheme field never says "none"
+# while weights were applied.
 CODE_STATISTIC_UNSUPPORTED = "STATISTIC_UNSUPPORTED"
 CODE_STATISTIC_UNDEFINED = "STATISTIC_UNDEFINED"
 CODE_INPUT_NOT_PROMOTED = "INPUT_NOT_PROMOTED"
@@ -713,7 +715,7 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     # D3: per-point declared weights (levels[i].weight) are MUTUALLY EXCLUSIVE
     # with a conflicting `weighting` scheme (A2.2's scheme channel vs the
     # per-point data channel). Declaring BOTH is a parameter conflict — loud
-    # WEIGHTING_CONFLICT, never a silent override. The original run let the
+    # PARAM_INVALID, never a silent override. The original run let the
     # per-point channel silently win while the payload's `weighting` field
     # still echoed the scheme, so the artifact said "none" while weights
     # 1,1,4 were actually applied — the contradictory echo D3 punishes.
@@ -723,7 +725,7 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     weighted_levels = [lv["index"] for lv in levels if lv["weight"] is not None]
     if weighted_levels and weighting != "none":
         raise CalibrationError(
-            CODE_WEIGHTING_CONFLICT,
+            "PARAM_INVALID",
             f"per-point declared weights (levels{weighted_levels}) conflict with the "
             f"declared weighting scheme '{weighting}' — declare ONE channel: either the "
             f"per-point weights (with weighting: 'none') or the scheme (no per-level "
@@ -1010,7 +1012,7 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     # under the declared identity scheme). The marker is machine-readable
     # from the APPLIED weights, never from the echo:
     #   "none"               — every applied weight is 1.0 (the identity);
-    #   "per_point_declared" — per-level declared weights (C3 channel) were
+    #   "per_point"          — per-level declared weights (C3 channel) were
     #                          applied (weighting was the identity scheme);
     #   <scheme>             — the declared A2.2 scheme was applied (1/x,
     #                          1/x^2, 1/y^2 — never all-1 by construction).
@@ -1018,7 +1020,7 @@ def fit_calibration(ctx: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     if all(w == 1.0 for w in applied_weights):
         effective_weighting = "none"
     elif weighting == "none":
-        effective_weighting = "per_point_declared"
+        effective_weighting = "per_point"
     else:
         effective_weighting = weighting
     model_payload: Dict[str, Any] = {
@@ -1183,7 +1185,7 @@ def _publish(
             "record id the run's inputs map declared for that input) and is OMITTED when no id "
             "exists for the input (e.g. an unpromoted inline artifact input declares no record "
             "id): a filesystem path is NEVER placed under an _id field (D4); "
-            "effective_weighting names the weighting actually applied (none / per_point_declared / "
+            "effective_weighting names the weighting actually applied (none / per_point / "
             "the declared A2.2 scheme) so `weighting` never reports 'none' while non-unit weights "
             "entered the fit (D3)"
         )

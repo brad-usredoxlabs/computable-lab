@@ -188,7 +188,7 @@ class TestC3WeightedNormalEquations(unittest.TestCase):
         # so. The original run's artifact read weighting: "none" for this very
         # fit (the contradictory echo D3 punishes).
         self.assertEqual(model["weighting"], "none")
-        self.assertEqual(model["effective_weighting"], "per_point_declared")
+        self.assertEqual(model["effective_weighting"], "per_point")
 
     def test_c3_weights_invariance_on_exact_data(self):
         """C2 — the SAME exact line with declared weights 1,2,3,4,5 keeps the
@@ -461,10 +461,12 @@ class TestFailureMatrix(unittest.TestCase):
         self.expect_code(cal_params(fixture, weighting="1/y^2"), inputs=inputs,
                          code="WEIGHT_UNDEFINED_AT_ZERO")
 
-    def test_weighting_conflict_per_point_plus_scheme(self):
+    def test_param_invalid_per_point_plus_scheme(self):
         # D3: per-point declared weights (C3's w=1,1,4) are MUTUALLY
         # EXCLUSIVE with a conflicting `weighting` scheme — declaring BOTH is
-        # a loud WEIGHTING_CONFLICT, never a silent override (the original
+        # a loud PARAM_INVALID (this module's declared invalid-parameter
+        # token; the spec's calibration-leg vocabulary enumerates no
+        # weighting-conflict token), never a silent override (the original
         # run let the per-point channel win while the payload still echoed
         # the scheme). `weighting: "none"` is the identity (names no scheme),
         # so C3 (weights + "none") stays legal — only a REAL scheme conflicts.
@@ -472,11 +474,11 @@ class TestFailureMatrix(unittest.TestCase):
         inputs = fx.level_table_payloads(fixture, rt0=1.0, d_rt=1.0)
         levels = fx.level_params(fixture, rt0=1.0, d_rt=1.0, weights=fixture["weights"])
         self.expect_code(cal_params(fixture, levels=levels, weighting="1/x"),
-                         inputs=inputs, code="WEIGHTING_CONFLICT",
+                         inputs=inputs, code="PARAM_INVALID",
                          msg_part="conflict with the declared weighting scheme")
         # the identity combination is NOT a conflict (C3 itself, above).
         res = run_fit(inputs, cal_params(fixture, levels=levels, weighting="none"))
-        self.assertEqual(res["model"]["effective_weighting"], "per_point_declared")
+        self.assertEqual(res["model"]["effective_weighting"], "per_point")
 
     def test_origin_constraint_unsupported_quadratic(self):
         self.expect_code(cal_params(self.fixture, model="quadratic", origin_constraint=True),
