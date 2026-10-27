@@ -36,6 +36,7 @@ from computable_lab_analysis.d_reader import (  # noqa: E402
     READER_NAME,
     READER_VERSION,
     ReaderError,
+    _classify,
     attach,
     decode_run_log,
     decode_sample_xml,
@@ -640,6 +641,177 @@ class TestAdvFixDefs(unittest.TestCase):
             decoded = attach(ctx)
             self.assertEqual(decoded["sampleMeta"]["name"], "MIX")
             self.assertNotIn("params", decoded)
+
+
+# ---------------------------------------------------------------------------
+# ADV-2 defect fixes — pins for the CYCLE-2 adversarial-review regressions
+# (review GC6-advreview-cycle2-l1t0400.md). Both are new MINOR defects the
+# cycle-1 fix run introduced.
+# ---------------------------------------------------------------------------
+class TestAdvFixDefsCycle2(unittest.TestCase):
+    """Pins for the two cycle-2 defects (new regressions of the cycle-1 fix).
+
+    Cycle-2 defect 1: the cycle-1 _classify BOM arm RAISED for ANY BOM-prefixed
+    input whose bytes were not valid strict UTF-16 — so a genuinely BINARY
+    asset that merely starts with FF FE (spec's SINGLE.B-shaped opaque member)
+    aborted the run instead of the X10 opaque skip. Spec D3.3 classifies only
+    BOM+xml as sample_metadata; everything else is opaque. The discriminator
+    must decide "metadata-shaped" from the DECODED LEADING TEXT, not from the
+    input name and not via errors='ignore' (bait #3 still binds).
+
+    Cycle-2 defect 2: the D6 fix set the decoded-artifact ``source`` for
+    file-backed metadata/log inputs to the absolute mount path (handle.path)
+    when meta.sourcePath is absent — a per-run nondeterministic provenance.
+    Spec D7 pins ``source`` = meta.sourcePath / handle name.
+    """
+
+    # --- cycle-2 defect 1: BOM-prefixed BINARY must stay opaque (X10) ---
+
+    def test_c2d1_bom_prefixed_binary_classified_opaque(self):
+        # The reviewer's exact probe shape: FF FE + a 128-byte binary block
+        # (bytes 0x80..0xFF; even length, invalid UTF-16 — strict decode
+        # fails at position 90, a lone UTF-16 surrogate). Shaped like the
+        # spec's SINGLE.B opaque member: NOT metadata-shaped (the bytes after
+        # the BOM are not a decodable text prefix).
+        payload = b"\xff\xfe" + bytes(range(0x80, 0x100))
+        self.assertEqual(_classify(payload, "IN.D/SINGLE.B"), "opaque")
+
+    def test_c2d1_bom_prefixed_binary_attach_skips_opaque(self):
+        # End-to-end through attach(): the run COMPLETES, the member is NOT
+        # decoded, and the X10 named log line is emitted (reviewer's probe
+        # /tmp/gc6c2/probe_overbroad.py behaviour, pinned).
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "SINGLE.B"
+            p.write_bytes(b"\xff\xfe" + bytes(range(0x80, 0x100)))
+            ctx = Context(inputs={
+                "single": {"dataKind": "binary", "path": str(p),
+                           "meta": {"sourcePath": "IN.D/SINGLE.B"}},
+            })
+            decoded = attach(ctx)  # pre-fix: RAISED METADATA_DECODE_FAILED
+            self.assertEqual(decoded, {})  # skipped, never decoded
+            messages = [m["message"] for m in ctx.manifest().logs]
+            joined = " | ".join(messages)
+            self.assertIn("IN.D/SINGLE.B", joined)       # named log line (X10)
+            self.assertIn("skipped as opaque", joined)
+            # the run COMPLETED — reader identity set on the manifest
+            self.assertEqual(ctx.manifest().to_dict()["reader"]["name"], READER_NAME)
+
+    def test_c2d1_classification_is_content_not_name(self):
+        # The discriminator is the BYTES, never the input name:
+        #  - a file NAMED SINGLE.B whose content is a torn raw-ASCII
+        #    metadata head (the reviewer's D1a probe shape: BOM + 7 ASCII
+        #    bytes — odd length, strict UTF-16 decode fails on truncated
+        #    data) is corrupt METADATA → METADATA_DECODE_FAILED, not
+        #    opaque by virtue of its name;
+        #  - a file NAMED SAMPLE.XML whose content is a BOM-prefixed
+        #    binary head (the cycle-2 overbroad probe shape: FF FE +
+        #    128 high bytes — a decodable CJK-style prefix, not text)
+        #    is OPAQUE, not a failure by virtue of its name.
+        torn = b"\xff\xfe<Sample"  # D1a shape: BOM + 7 raw ASCII bytes
+        try:
+            _classify(torn, "IN.D/SINGLE.B")
+        except ReaderError as e:
+            self.assertIn(METADATA_DECODE_FAILED, str(e))
+        else:
+            self.fail("torn metadata head (BOM + ASCII) named SINGLE.B "
+                      "must classify as corrupt metadata — raise, not opaque")
+        binary = b"\xff\xfe" + bytes(range(0x80, 0x100))
+        self.assertEqual(_classify(binary, "SYNTH-001.D/SAMPLE.XML"), "opaque")
+        # a BOM + lone-surrogate file whose leading bytes are NOT metadata
+        # (0x80 0xDC alone — undecodable head) stays opaque, not a raise
+        self.assertEqual(_classify(b"\xff\xfe\x80\xdc", "IN.D/SINGLE.B"), "opaque")
+
+    def test_c2d1_corrupt_metadata_still_raises_through_attach(self):
+        # KEEP the cycle-1 corrupt-metadata behaviour (control the new
+        # narrowing must not break): a file with a VALID metadata head —
+        # BOM + a strict UTF-16 ASCII '<' head — truncated mid-codepoint
+        # must RAISE METADATA_DECODE_FAILED through attach(), naming the
+        # input, with NO opaque-skip log. The shape: BOM + "<?xml
+        # version=" in UTF-16LE (15 chars = 30 bytes), then ONE stray byte
+        # so the strict decode fails on truncated data at the tail — a
+        # torn SAMPLE.XML, not opaque content.
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "SAMPLE.XML"
+            head = "<?xml version=\"1.0\"?>".encode("utf-16-le")[:30]
+            bad.write_bytes(b"\xff\xfe" + head + b"\x41")  # +1 stray byte
+            ctx = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(bad),
+                               "meta": {"sourcePath": "SYNTH-001.D/SAMPLE.XML"}},
+            })
+            try:
+                attach(ctx)
+            except ReaderError as e:
+                self.assertIn(METADATA_DECODE_FAILED, str(e))
+                self.assertIn("SYNTH-001.D/SAMPLE.XML", str(e))
+            else:
+                self.fail("corrupt (truncated) SAMPLE.XML must raise "
+                          "METADATA_DECODE_FAILED through attach() — the "
+                          "opaque narrowing must not swallow corrupt metadata")
+            messages = [m["message"] for m in ctx.manifest().logs]
+            self.assertFalse(any("skipped as opaque" in m for m in messages),
+                             f"corrupt metadata logged as opaque: {messages}")
+
+    # --- cycle-2 defect 2: decoded-artifact source = meta.sourcePath /
+    # --- handle name, NEVER the absolute mount path (spec D7) ---
+
+    def test_c2d2_source_pin_no_meta_sample(self):
+        # A file-backed SAMPLE.XML with NO meta.sourcePath: the decoded
+        # artifact's source is the HANDLE NAME — not the per-run absolute
+        # mount path (the pre-fix value, which made the artifact differ
+        # run-to-run for identical inputs).
+        with tempfile.TemporaryDirectory() as d:
+            xml = Path(d) / "SAMPLE.XML"
+            xml.write_bytes(b"\xff\xfe" + "<Sample><Name>PIN</Name></Sample>".encode("utf-16-le"))
+            ctx = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(xml)},
+            })
+            decoded = attach(ctx)
+            self.assertEqual(decoded["sampleMeta"]["name"], "PIN")
+            # spec D7: source = meta.sourcePath / handle name
+            self.assertEqual(decoded["sampleMeta"]["source"], "sampleMeta")
+            self.assertNotIn(str(d), str(decoded["sampleMeta"]["source"]))  # no tempdir path
+
+    def test_c2d2_source_pin_no_meta_runlog(self):
+        # same pin for the RUN.LOG branch (the other decoder the regression
+        # touched)
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "RUN.LOG"
+            log.write_bytes(b"\xff\xfe" + "  67 41e2 6adb7862    0\r\n".encode("utf-16-le"))
+            ctx = Context(inputs={
+                "runLog": {"dataKind": "binary", "path": str(log)},
+            })
+            decoded = attach(ctx)
+            self.assertEqual(decoded["runLog"]["source"], "runLog")
+            self.assertNotIn(str(d), str(decoded["runLog"]["source"]))
+
+    def test_c2d2_source_prefers_meta_when_present(self):
+        # meta.sourcePath still wins when the runner supplied it (the D5
+        # leg the regression did not touch — guard against over-correction)
+        with tempfile.TemporaryDirectory() as d:
+            xml = Path(d) / "SAMPLE.XML"
+            xml.write_bytes(b"\xff\xfe" + "<Sample><Name>PIN2</Name></Sample>".encode("utf-16-le"))
+            ctx = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(xml),
+                               "meta": {"sourcePath": "SYNTH-001.D/SAMPLE.XML"}},
+            })
+            decoded = attach(ctx)
+            self.assertEqual(decoded["sampleMeta"]["source"], "SYNTH-001.D/SAMPLE.XML")
+
+    def test_c2d2_no_file_log_line_still_uses_path(self):
+        # the DEFECT-6 fix stays intact: the no_file LOG LINE for an inline
+        # input still names <name>.inline via handle.path (what distinguishes
+        # the line from a decoded source). Only the DECODED source was
+        # wrong; the log line was correct and must not change.
+        ctx = Context(inputs={
+            "prevTable": {"dataKind": "table",
+                          "path": "/tmp/nonexistent-dir/prevTable.inline",
+                          "inline": [{"a": 1}]},
+        })
+        decoded = attach(ctx)
+        self.assertEqual(decoded, {})
+        joined = " | ".join(m["message"] for m in ctx.manifest().logs)
+        self.assertIn("prevTable.inline", joined)
+        self.assertIn("skipped as opaque", joined)
 
 
 # ---------------------------------------------------------------------------
