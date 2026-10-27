@@ -413,6 +413,236 @@ class TestAttach(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# ADV-1 defect fixes — pins for the adversarial-review defects (l1t0320)
+# ---------------------------------------------------------------------------
+class TestAdvFixDefs(unittest.TestCase):
+    """Pins for the seven adversarial-review defects (review
+    GC6-advreview-l1t0320.md). Each test names the defect it pins."""
+
+    # --- defect 1 (MAJOR): corrupt metadata through attach() must RAISE,
+    # not be swallowed into "opaque". The X6 tests above call the decoders
+    # directly; this one exercises the PUBLIC attach() path (the review's
+    # probe: BOM + b"<Sample" through attach → no error before the fix).
+    def test_defect1_attach_raises_on_corrupt_sample_xml(self):
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "SAMPLE.XML"
+            bad.write_bytes(b"\xff\xfe<Sample")  # BOM + 7 ASCII bytes: ODD length
+            ctx = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(bad),
+                               "meta": {"sourcePath": "SYNTH-001.D/SAMPLE.XML"}},
+            })
+            try:
+                attach(ctx)
+            except ReaderError as e:
+                self.assertIn(METADATA_DECODE_FAILED, str(e))
+                # names the input (the spec X6 requirement)
+                self.assertIn("SYNTH-001.D/SAMPLE.XML", str(e))
+            else:
+                self.fail("attach() swallowed corrupt metadata — run SUCCEEDED "
+                          "with no metadata and NO named code")
+            # the run must not have completed with an opaque skip log
+            messages = [m["message"] for m in ctx.manifest().logs]
+            self.assertFalse(any("skipped as opaque" in m for m in messages),
+                             f"corrupt metadata logged as opaque: {messages}")
+
+    def test_defect1_attach_raises_on_lone_surrogate(self):
+        # lone-surrogate metadata (even length — not caught by a length check)
+        # must also fail named through attach()
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "RUN.LOG"
+            bad.write_bytes(b"\xff\xfe" + "ab".encode("utf-16-le") + b"\x80\xdc")
+            ctx = Context(inputs={
+                "runLog": {"dataKind": "binary", "path": str(bad)},
+            })
+            try:
+                attach(ctx)
+            except ReaderError as e:
+                self.assertIn(METADATA_DECODE_FAILED, str(e))
+            else:
+                self.fail("attach() swallowed a lone-surrogate RUN.LOG")
+
+    def test_defect1_genuinely_opaque_bom_file_stays_opaque(self):
+        # OPAQUE must remain a real classification (the defect-1 fix must not
+        # over-broaden into "BOM + anything = raise"): a no-BOM binary file
+        # and a BOM XML that is not <Sample> are both skipped-as-opaque.
+        # A BOM text file that is not XML at all stays a (lossless) run_log
+        # per spec D3.3 — decodable metadata text is NOT opaque.
+        with tempfile.TemporaryDirectory() as d:
+            opaque = Path(d) / "SAMPLE.MAC.bak"
+            opaque.write_bytes(b"\x00MACBAK\x00synthetic")  # no BOM, binary-ish
+            other = Path(d) / "METHOD.XML"
+            other.write_bytes(b"\xff\xfe" + "<Other>x</Other>".encode("utf-16-le"))
+            logish = Path(d) / "NOTES.MAC"
+            logish.write_bytes(b"\xff\xfe" + "M A C  b a k".encode("utf-16-le"))
+            ctx = Context(inputs={
+                "macBak": {"dataKind": "binary", "path": str(opaque),
+                           "meta": {"sourcePath": "SYNTH-001.D/SAMPLE.MAC.bak"}},
+                "methodXml": {"dataKind": "binary", "path": str(other),
+                              "meta": {"sourcePath": "SYNTH-001.D/METHOD.XML"}},
+                "logish": {"dataKind": "binary", "path": str(logish),
+                           "meta": {"sourcePath": "SYNTH-001.D/NOTES.MAC"}},
+            })
+            decoded = attach(ctx)
+            self.assertNotIn("macBak", decoded)
+            self.assertNotIn("methodXml", decoded)
+            messages = [m["message"] for m in ctx.manifest().logs]
+            joined = " | ".join(messages)
+            self.assertIn("SAMPLE.MAC.bak", joined)
+            self.assertIn("METHOD.XML", joined)
+            self.assertIn("skipped as opaque", joined)
+            # D3.3: BOM-decodable non-XML text is a run_log, never opaque
+            self.assertEqual(decoded["logish"]["recognized_count"], 0)
+            self.assertEqual(len(decoded["logish"]["lines"]), 1)
+
+    # --- defect 2: axis endpoint pinning — the review's off-by-1-ulp shape
+    # (n=28812, t0=251.4796142578125, t_end=3927.47607421875): the UNPINNED
+    # t0 + (n-1)*dt computation lands at 3927.4760742187505 (delta 4.5e-13).
+    # The reader's header times come back from f32 ticks, so feed the f32-
+    # rounded values — the same round-trip the reader performs.
+    def test_defect2_axis_endpoint_pinned_review_shape(self):
+        import struct as _s
+        t0 = _s.unpack(">f", _s.pack(">f", 251.4796142578125 * 60000.0))[0] / 60000.0
+        t_end = _s.unpack(">f", _s.pack(">f", 3927.47607421875 * 60000.0))[0] / 60000.0
+        n = 28812
+        data = _ch_bytes(raw_levels=list(range(n)), t0_ticks=t0 * 60000.0,
+                         t_end_ticks=t_end * 60000.0)
+        out = read_ch_bytes(data, source="REVIEW.D/FID1A.CH")
+        # the UNPINNED value is provably != t_end (guard: this is a real drift shape)
+        dt = (t_end - t0) / (n - 1)
+        self.assertNotEqual(t0 + (n - 1) * dt, t_end,
+                            "precondition broken: shape no longer drifts unpinned")
+        self.assertEqual(out["axis"][-1], t_end)  # EXACT (decD np.linspace convention)
+        self.assertEqual(out["axis"][0], t0)
+        self.assertEqual(len(out["axis"]), n)
+        # dt itself is the header-derived value, computed once
+        self.assertEqual(out["meta"]["header"]["dt"], dt)
+
+    def test_defect2_axis_endpoint_pinned_small_n(self):
+        # a second shape (n=997) — endpoint exact, interior points on the grid
+        data = _ch_bytes(raw_levels=[100] * 997, escapes=[],
+                         t0_ticks=1.0, t_end_ticks=100000.0)
+        out = read_ch_bytes(data)
+        t0 = out["meta"]["header"]["t0"]
+        t_end = out["meta"]["header"]["t_end"]
+        self.assertEqual(out["axis"][-1], t_end)
+        dt = (t_end - t0) / 996
+        self.assertEqual(out["axis"][500], t0 + 500 * dt)  # interior: grid, not pinned
+
+    # --- defect 3: page == 0 → negative body offset must be a NAMED code,
+    # not a raw struct.error.
+    def test_defect3_page_zero_named_truncation(self):
+        data = bytearray(_ch_bytes(raw_levels=[1, 2, 3], escapes=[]))
+        struct.pack_into(">I", data, 264, 0)  # page 0 → offset = -512
+        e = _read_err(read_ch_bytes, bytes(data), source="page0.D/FID1A.CH")
+        self.assertIn(CH_TRUNCATED, str(e))
+        self.assertNotIn("struct.error", str(e))
+        self.assertIn("page=0", str(e))       # names the header page
+        self.assertIn("-512", str(e))        # names the (negative) offset
+        self.assertIn("page0.D/FID1A.CH", str(e))
+
+    # --- defect 4: odd body length must be CH_TRUNCATED, not a silent drop.
+    def test_defect4_odd_body_byte_truncates(self):
+        data = _ch_bytes(raw_levels=[10, 20, 30], escapes=[])
+        page = struct.unpack_from(">I", data, 264)[0]
+        off = (page - 1) * 512
+        # the review's probe: +1 stray byte → must FAIL (not succeed with n=3),
+        # naming the offset of the DANGLING byte (the last byte, len-1).
+        odd1 = data + b"\x00"
+        e = _read_err(read_ch_bytes, odd1, source="odd.D/FID1A.CH")
+        self.assertIn(CH_TRUNCATED, str(e))
+        self.assertIn(str(len(odd1) - 1), str(e))  # names the dangling byte's offset
+        self.assertNotIn(str(off), str(e))        # not the body-start offset
+        self.assertIn("odd.D/FID1A.CH", str(e))
+        # +3 stray bytes → one whole slot silently discarded before the fix
+        odd3 = data + b"\x00\x00\x00"
+        e = _read_err(read_ch_bytes, odd3, source="odd3.D/FID1A.CH")
+        self.assertIn(CH_TRUNCATED, str(e))
+        self.assertIn(str(len(odd3) - 1), str(e))
+        # even-length body still decodes exactly (the control)
+        out = read_ch_bytes(data)
+        self.assertEqual(out["meta"]["n_points"], 3)
+
+    # --- defect 5: attach() must use the PUBLIC ctx.input_names() seam
+    # (D3.2), not the private _inputs attribute.
+    def test_defect5_attach_uses_input_names_seam(self):
+        # A context object that EXPOSES input_names() but has no _inputs
+        # attribute at all: the pre-fix attach() (getattr(ctx, "_inputs", {}))
+        # silently iterates NOTHING and decodes zero inputs.
+        class SeamCtx:
+            def __init__(self, real):
+                self._real = real
+                self._logs = real.manifest().logs  # same manifest log list
+
+            def input(self, name):
+                return self._real.input(name)
+
+            def input_names(self):
+                return self._real.input_names()
+
+            def log(self, message, *, level="info", code=None):
+                self._real.log(message, level=level, code=code)
+
+            def manifest(self):
+                return self._real.manifest()
+
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "SAMPLE.XML"
+            bad.write_bytes(b"\xff\xfe<Sample")
+            real = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(bad)},
+            })
+            try:
+                attach(SeamCtx(real))
+            except ReaderError as e:
+                self.assertIn(METADATA_DECODE_FAILED, str(e))
+            else:
+                self.fail("attach() did not see the input — it iterates the "
+                          "private _inputs attribute, not ctx.input_names()")
+
+    # --- defect 6: attach() must not CRASH on a non-file input. The runner's
+    # exact inline shape (analysisRunner.ts:195): path: <inputDir>/<name>.inline
+    # with NO file written, inline: <value> → file_bytes() raises
+    # FileNotFoundError pre-fix.
+    def test_defect6_attach_survives_inline_input_runner_shape(self):
+        # the runner's literal spec shape for an inline artifact input
+        inputs = {
+            "signal1": {"dataKind": "signal", "inline": {"axis": [1, 2], "values": [3, 4]}},
+            "prevTable": {"dataKind": "table",
+                          "path": "/tmp/nonexistent-dir/prevTable.inline",
+                          "inline": [{"a": 1}, {"a": 2}]},
+        }
+        ctx = Context(inputs=inputs)
+        decoded = attach(ctx)  # pre-fix: FileNotFoundError / RuntimeError here
+        # non-file inputs are classified opaque and logged (the method-asset
+        # path) — never decoded, never crashed
+        self.assertEqual(decoded, {})
+        messages = [m["message"] for m in ctx.manifest().logs]
+        joined = " | ".join(messages)
+        self.assertIn("prevTable.inline", joined)   # names the input path
+        self.assertIn("skipped as opaque", joined)
+        self.assertNotIn("signal1", decoded)
+        self.assertNotIn("prevTable", decoded)
+        # the manifest reader block is still set (attach completed)
+        self.assertEqual(ctx.manifest().to_dict()["reader"]["name"], READER_NAME)
+
+    def test_defect6_attach_mixed_file_and_inline(self):
+        # a file-backed .D member beside an inline table: the file decodes,
+        # the inline skips, the run completes
+        with tempfile.TemporaryDirectory() as d:
+            xml = Path(d) / "SAMPLE.XML"
+            xml.write_bytes(b"\xff\xfe" + "<Sample><Name>MIX</Name></Sample>".encode("utf-16-le"))
+            ctx = Context(inputs={
+                "sampleMeta": {"dataKind": "binary", "path": str(xml)},
+                "params": {"dataKind": "table",
+                           "path": "/tmp/nonexistent-dir/params.inline",
+                           "inline": {"x": 1}},
+            })
+            decoded = attach(ctx)
+            self.assertEqual(decoded["sampleMeta"]["name"], "MIX")
+            self.assertNotIn("params", decoded)
+
+
+# ---------------------------------------------------------------------------
 # 7. Regression leg — the CSV path stays byte-identical
 # ---------------------------------------------------------------------------
 class TestCsvRegression(unittest.TestCase):
