@@ -29,6 +29,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initializeApp } from '../server.js';
 import { setupTestWorkspace } from '../test/setupApp.js';
+import { RecordRevisionService } from '../revisions/RecordRevisionService.js';
 import { AnalysisService, AnalysisServiceError } from './analysisService.js';
 import { AnalysisRunner } from './analysisRunner.js';
 import { STUB_ECHO_LITERAL } from './engineAdapters.js';
@@ -388,4 +389,96 @@ describe('AnalysisRunner engine gate (GC-5 integration)', () => {
     expect((runEnv!.payload as { status: string }).status).toBe('failed');
     expect((runEnv!.payload as { engineProvenance?: unknown }).engineProvenance).toBeUndefined();
   }, 60000);
+  /**
+   * l1t2245 adversarial-review defects (fix run). RED-first: each leg below
+   * FAILED at 600bec4e (raw: /home/brad/.hermes/cl/lanes/1/gc5-fix1-RED-
+   * l1t2245.txt) and passes after the fixes.
+   */
+  describe('l1t2245 review-defect contract legs', () => {
+    async function pinEngineSnapshot(engineId: string): Promise<string> {
+      const env = (await ctx.store.get(engineId))!;
+      const rev = await new RecordRevisionService(ctx.store).capture(env, 'GC5FIX1-TEST', 'research-use');
+      return rev.recordId;
+    }
+
+    it('DEFECT 1 (execute leg): a CROSS-ENGINE revisionRef (snapshot of another engine) is declared-dead at BOTH gate sites — no silent engine substitution', async () => {
+      const engA = await createEngine();
+      const engB = await createEngine();
+      const snapOfB = await pinEngineSnapshot(engB);
+      // The CREATE gate (shared resolver) rejects first: a revision pinning
+      // ENG-A via a snapshot of ENG-B is not created.
+      let createErr: unknown;
+      try {
+        await service.createRevision({
+          title: 'cross-engine snapshot (create gate)',
+          entryScript: 'def run(ctx):\n    return ctx',
+          sdkVersion: '0.1.0',
+          engineRef: { kind: 'record', type: 'analysis-engine', id: engA, revisionRef: { kind: 'record', type: 'record-revision', id: snapOfB } },
+        });
+      } catch (e) { createErr = e; }
+      expect(createErr).toBeInstanceOf(AnalysisServiceError);
+      expect((createErr as AnalysisServiceError).code).toBe('ENGINE_REF_UNRESOLVED');
+      expect((createErr as AnalysisServiceError).statusCode).toBe(400);
+      const created = await service.list('analysis-revision', 500);
+      expect(created.some((r) => (r.payload as { engineRef?: { revisionRef?: { id?: string } } }).engineRef?.revisionRef?.id === snapOfB)).toBe(false);
+
+      // The EXECUTE gate (shared resolver — one resolver, not two) rejects
+      // identically for a revision that was written carrying the cross-engine
+      // ref (the schema permits the shape; only the resolver's id validation
+      // makes it declared-dead). No run may exist/succeed against it.
+      const crossRevId = 'ANREV-GC5FIX1X';
+      const crossRes = await ctx.store.create({
+        envelope: {
+          recordId: crossRevId,
+          schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml',
+          payload: {
+            kind: 'analysis-revision',
+            id: crossRevId,
+            title: 'cross-engine snapshot (execute gate)',
+            entryScript: 'def run(ctx):\n    return ctx',
+            sdkVersion: '0.1.0',
+            engineRef: { kind: 'record', type: 'analysis-engine', id: engA, revisionRef: { kind: 'record', type: 'record-revision', id: snapOfB } },
+          },
+        },
+        message: 'GC-5 fix1: cross-engine combination revision',
+      });
+      if (!crossRes.success) throw new Error(`cross revision create failed: ${crossRes.error}`);
+      const { recordId: runId } = await service.createRun({
+        title: 'run-cross-engine',
+        revisionRef: { kind: 'record', id: crossRevId, type: 'analysis-revision' },
+        inputs: {},
+      });
+      // The execute-time gate resolves through the SAME shared resolver: the
+      // snapshot's record id (ENG-B) must be validated against the pinned
+      // engineRef.id (ENG-A) — mismatch is a NAMED declared failure, and the
+      // run visibly fails with NO provenance for the engine that never ran.
+      await expect(runner.executeRun(runId)).rejects.toMatchObject({ code: 'ENGINE_REF_UNRESOLVED', statusCode: 400 });
+      const p = (await service.getRun(runId))!.payload as { status: string; engineProvenance?: unknown };
+      expect(p.status).toBe('failed');
+      expect(p.engineProvenance).toBeUndefined();
+    }, 60000);
+
+    it('DEFECT 1 (same-engine snapshot leg): a snapshot of the SAME engine resolves and runs with provenance pinned to the snapshot', async () => {
+      const engId = await createEngine();
+      const snap = await pinEngineSnapshot(engId);
+      const { recordId: revId } = await service.createRevision({
+        title: 'same-engine snapshot',
+        entryScript: 'def run(ctx):\n    return ctx',
+        sdkVersion: '0.1.0',
+        engineRef: { kind: 'record', type: 'analysis-engine', id: engId, revisionRef: { kind: 'record', type: 'record-revision', id: snap } },
+      });
+      const { recordId: runId } = await service.createRun({
+        title: 'run-same-snapshot',
+        revisionRef: { kind: 'record', id: revId, type: 'analysis-revision' },
+        inputs: {},
+      });
+      const res = await runner.executeRun(runId);
+      expect(res.status).toBe('succeeded');
+      const prov = (await service.getRun(runId))!.payload as { engineProvenance?: { engineRecordId: string; engineRef: { id: string; revisionRef?: { id: string } } } };
+      expect(prov.engineProvenance?.engineRecordId).toBe(engId);
+      expect(prov.engineProvenance?.engineRef.id).toBe(engId);
+      expect(prov.engineProvenance?.engineRef.revisionRef?.id).toBe(snap);
+    }, 60000);
+
+  });
 });

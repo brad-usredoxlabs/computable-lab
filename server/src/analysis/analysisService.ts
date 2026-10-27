@@ -89,8 +89,12 @@ const ENGINE_KIND = 'analysis-engine' as const;
  *  - else the CURRENT engine record head (store.get by id).
  * Declared failures only (bait #5, §e matrix): absent / wrong-kind /
  * unresolvable snapshot → ENGINE_REF_UNRESOLVED (400); archived engine →
- * ENGINE_REF_UNRESOLVED (409, state leg named in the message). No fallback,
- * no strip-and-create — the rejection IS the behavior.
+ * ENGINE_REF_UNRESOLVED (409, state leg named in the message). The pinned
+ * engineRef.id is validated against the resolved record: a snapshot whose
+ * sourceRecordId is another record (cross-engine ref) or a payload whose id
+ * differs from the pinned id is ENGINE_REF_UNRESOLVED (400) — an invalid
+ * pinned ref is declared-dead, never silently substituted (l1t2245 defect 1).
+ * No fallback, no strip-and-create — the rejection IS the behavior.
  */
 export async function resolveEngineRef(
   store: import('../store/types.js').RecordStore,
@@ -100,9 +104,13 @@ export async function resolveEngineRef(
   if (engineRef.revisionRef?.id) {
     // The revision pins an IMMUTABLE engine snapshot (REV- record-revision).
     // RRS.read verifies the snapshot's contentHash (F7 snapshot semantics —
-    // the run runs against exactly the pinned bytes).
+    // the run runs against exactly the pinned bytes) AND — with the pinned
+    // engine id passed as sourceRecordId — that the snapshot's sourceRecordId
+    // IS the pinned engine (a cross-engine snapshot of another record is an
+    // INVALID_REVISION here, a NAMED declared failure below; no silent
+    // substitution of one engine for another, l1t2245 defect 1).
     try {
-      const snap = (await new RecordRevisionService(store).read({ id: engineRef.revisionRef.id })).payload.snapshot;
+      const snap = (await new RecordRevisionService(store).read({ id: engineRef.revisionRef.id }, engineRef.id)).payload.snapshot;
       payload = snap as Record<string, unknown>;
     } catch (err) {
       throw new AnalysisServiceError(
@@ -121,6 +129,18 @@ export async function resolveEngineRef(
       );
     }
     payload = env.payload as Record<string, unknown>;
+  }
+  // The resolved payload's record id must BE the pinned engine id. The
+  // sourceRecordId check above covers the snapshot branch structurally; this
+  // comparison is the defense for any path that reaches here (l1t2245
+  // defect 1: an envelope labelled with the pinned id must not carry another
+  // engine's payload).
+  if (payload.id !== engineRef.id) {
+    throw new AnalysisServiceError(
+      'ENGINE_REF_UNRESOLVED',
+      `engine ${engineRef.id} resolves to record '${String(payload.id)}' — the pinned engineRef.id and the resolved record id must match; no engine is substituted`,
+      400,
+    );
   }
   if (payload.kind !== ENGINE_KIND) {
     throw new AnalysisServiceError(
