@@ -150,6 +150,34 @@ describe('ParameterForm — constructs matrix (spec test plan rows 1-10)', () =>
     expect(options).toEqual(['fast', 'slow', 'auto', 'off'])
   })
 
+  it('2b. (D5 probe) numeric and boolean enums emit the ORIGINAL JSON type, not a stringified DOM value', () => {
+    // Reviewer probe P5: an enum of numbers must write the number back — the
+    // DOM select value is a string by nature, so the control must map the
+    // selected value to the matching enum member (index/serialized identity).
+    const numericSchema = { type: 'object', properties: { level: { type: 'number', enum: [1, 2] } } }
+    const onChange = renderForm(numericSchema, {})
+    fireEvent.change(screen.getByTestId(`${P}-level`), { target: { value: '2' } })
+    const emitted = lastChange(onChange)?.level
+    expect(emitted).toBe(2)
+    expect(typeof emitted).toBe('number')
+
+    const boolSchema = { type: 'object', properties: { flag: { type: 'boolean', enum: [true, false] } } }
+    const onBool = renderForm(boolSchema, {})
+    fireEvent.change(screen.getByTestId(`${P}-flag`), { target: { value: 'true' } })
+    const boolEmitted = lastChange(onBool)?.flag
+    expect(boolEmitted).toBe(true)
+    expect(typeof boolEmitted).toBe('boolean')
+    // Option texts remain the verbatim values (spec table: verbatim options).
+    const boolSel = screen.getByTestId(`${P}-flag`) as HTMLSelectElement
+    expect(Array.from(boolSel.querySelectorAll('option:not([disabled])')).map((o) => o.textContent))
+      .toEqual(['true', 'false'])
+    // Pre-selected numeric value round-trips (select shows the original member).
+    const onChange2 = renderForm(numericSchema, { level: 2 })
+    expect(onChange2).toBeDefined()
+    const preSels = screen.getAllByTestId(`${P}-level`)
+    expect((preSels[preSels.length - 1] as HTMLSelectElement).value).toBe('2')
+  })
+
   it('3. nested object group: fieldset legend = group title; children recurse', () => {
     renderForm(groupSchema, {})
     expect(screen.getByText('Integration window').tagName).toBe('LEGEND')
@@ -230,6 +258,20 @@ describe('ParameterForm — constructs matrix (spec test plan rows 1-10)', () =>
     // Reset affordance reverts to the default.
     fireEvent.click(screen.getByTestId(`${P}-gain-reset`))
     expect(lastChange(onChange)).toMatchObject({ gain: 4.5 })
+  })
+
+  it('10b. (D1 probe) a nested-group leaf OFF its default shows the override badge + reset, and reset restores the group default', () => {
+    // Reviewer probe P1: group.seed default 7, value {group:{seed:99}}. The
+    // group also carries an at-default context (top-level leaves at default),
+    // so the nested badge assertion cannot be vacuous.
+    const onChange = renderForm(defaultSchema, { gain: 4.5, name: 'batch-1', group: { seed: 99 } })
+    const badge = screen.queryByTestId(`${P}-group-seed-overridden`)
+    expect(badge, 'nested off-default leaf must show the override badge').not.toBeNull()
+    const reset = screen.queryByTestId(`${P}-group-seed-reset`)
+    expect(reset, 'nested off-default leaf must offer a reset affordance').not.toBeNull()
+    // Reset reverts the nested leaf to its default (group object rebuilt).
+    fireEvent.click(reset as HTMLElement)
+    expect(lastChange(onChange)).toEqual({ gain: 4.5, name: 'batch-1', group: { seed: 7 } })
   })
 
   it('hardcode boundary (spec §A pin, CI-owned): ParameterForm.tsx contains ZERO banned domain tokens', () => {

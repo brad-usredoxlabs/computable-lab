@@ -111,6 +111,43 @@ const UNSUPPORTED_SCHEMA: Record<string, unknown> = {
   },
 }
 
+// D2 probe (reviewer P2): an unsupported construct nested INSIDE an
+// array-item's properties. The renderer shows the unsupported block once a
+// row exists — the submit gate must see that subtree too (single authority).
+const NESTED_UNSUPPORTED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  required: ['good'],
+  properties: {
+    good: { type: 'number' },
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { at: { type: 'number' }, bad: { oneOf: [{ type: 'number' }] } },
+      },
+    },
+  },
+}
+
+// D9 probe: a required leaf TWO objects deep. The pre-forked gate stopped one
+// object deep; the single exported walker must reach the leaf.
+const DEEP_REQUIRED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    a: {
+      type: 'object',
+      properties: {
+        b: {
+          type: 'object',
+          default: {},
+          required: ['leaf'],
+          properties: { leaf: { type: 'number' } },
+        },
+      },
+    },
+  },
+}
+
 // --- Helpers ------------------------------------------------------------------
 
 function wrap(ui: React.ReactNode) {
@@ -404,5 +441,180 @@ describe('AnalysisPage — parameter-form wiring (GC-9 B/C/D/E)', () => {
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
     expect(arg.parameters).toStrictEqual({ events: [{ at: 1.5, kind: 'on' }, { at: 4, kind: 'off' }] })
+  })
+
+  it('W9: (D2 probe P2) an unsupported construct nested inside an array-item subtree blocks submit — the gate sees the same paths the renderer shows', async () => {
+    mockRevisions([{ id: 'REV-N2U', payload: { id: 'REV-N2U', title: 'Nested-unsupported method', parameterSchema: NESTED_UNSUPPORTED_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-N2U')
+    // Fill the required supported control.
+    fireEvent.change(screen.getByTestId(`${P}-good`), { target: { value: '1' } })
+    // Add a row: the unsupported block (items.bad oneOf) now actually renders.
+    fireEvent.click(screen.getByTestId(`${P}-events-add`))
+    const blocks = screen.getAllByTestId(`${P}-unsupported`)
+    expect(blocks.length).toBe(1)
+    expect(blocks[0].textContent ?? '').toContain('bad')
+    // The renderer shows the unsupported node — the gate MUST refuse too.
+    expect(runCreateBtn().disabled, 'gate must refuse while an unsupported node exists').toBe(true)
+    const reason = screen.getByTestId('analysis-params-blocked')
+    expect(reason.textContent).toContain('bad')
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    // The advanced override unblocks, and the payload is the advanced JSON.
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    details.open = true
+    fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{"good": 2, "events": [{"at": 3, "bad": 4}]}' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters)
+      .toStrictEqual({ good: 2, events: [{ at: 3, bad: 4 }] })
+  })
+
+  it('W10: (D9 probe) a required leaf TWO objects deep is gated (single walker reaches every depth)', async () => {
+    mockRevisions([{ id: 'REV-DEEP', payload: { id: 'REV-DEEP', title: 'Deep-required method', parameterSchema: DEEP_REQUIRED_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-DEEP')
+    // No values configured: a.b.leaf (required, two objects deep) is empty →
+    // the gate must name it and refuse.
+    expect(runCreateBtn().disabled, 'gate must see the required leaf two objects deep').toBe(true)
+    const reason = screen.getByTestId('analysis-params-blocked')
+    expect(reason.textContent).toContain('a.b.leaf')
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    // Configure the deep leaf → unblocks, payload carries only the configured path.
+    fireEvent.change(screen.getByTestId(`${P}-a-b-leaf`), { target: { value: '7' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ a: { b: { leaf: 7 } } })
+  })
+
+  it('W11: (D3 probe P3) the Advanced-JSON override does NOT survive a revision switch — stale JSON is never submitted against the new revision', async () => {
+    const schemaA = { type: 'object', properties: { a: { type: 'number' } } }
+    const schemaB = { type: 'object', properties: { b: { type: 'number', default: 2 } } }
+    mockRevisions([
+      { id: 'REV-A', payload: { id: 'REV-A', title: 'A', parameterSchema: schemaA } },
+      { id: 'REV-B', payload: { id: 'REV-B', title: 'B', parameterSchema: schemaB } },
+    ])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-A')
+    // Author an override under revision A.
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    details.open = true
+    fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{"a": 1}' } })
+    expect(screen.getByTestId('analysis-params-override-json')).toBeDefined()
+    // Switch to revision B: the override is cleared back to the pristine
+    // state — the badge is gone and the advanced box no longer holds A's JSON.
+    await selectRev('REV-B')
+    expect(screen.queryByTestId('analysis-params-override-json'), 'badge must not survive the switch').toBeNull()
+    // Form values re-initialize to B's defaults; a submit sends B's values,
+    // never A's stale JSON (F7 poisoned-run class, produced by the UI).
+    expect((screen.getByTestId(`${P}-b`) as HTMLInputElement).value).toBe('2')
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    expect(arg.revisionRef).toEqual({ kind: 'record', id: 'REV-B', type: 'analysis-revision' })
+    expect(arg.parameters).toStrictEqual({ b: 2 })
+    // The stale A JSON was not submitted.
+    expect(JSON.stringify(arg.parameters ?? {})).not.toContain('"a"')
+  })
+
+  it('W12: (D4 probe P4) with nothing configured the preview names the empty state and the payload omits the parameters key', async () => {
+    const optSchema = { type: 'object', properties: { note: { type: 'string' } } }
+    mockRevisions([{ id: 'REV-O1', payload: { id: 'REV-O1', title: 'All-optional method', parameterSchema: optSchema } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-O1')
+    // Nothing configured: buildParameters() → undefined → the call omits the
+    // key. The preview must reflect THAT decision, not a fabricated "{}".
+    const preview = previewText()
+    expect(preview).not.toBe('{}')
+    expect(preview).toContain('(no parameters)')
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    expect('parameters' in arg).toBe(false)
+  })
+
+  it('W13: (D6 probe P6) pruned payloads drop emptied nested objects and empty array elements', async () => {
+    const pruneSchema = {
+      type: 'object',
+      properties: {
+        g: { type: 'object', properties: { x: { type: 'number' } } },
+        k: { type: 'number' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+    }
+    mockRevisions([{ id: 'REV-PR', payload: { id: 'REV-PR', title: 'Prune method', parameterSchema: pruneSchema } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-PR')
+    // Type into the group's child then clear it (group emptied), set k, and
+    // add one empty-string array row.
+    fireEvent.change(screen.getByTestId(`${P}-g-x`), { target: { value: '9' } })
+    fireEvent.change(screen.getByTestId(`${P}-g-x`), { target: { value: '' } })
+    fireEvent.change(screen.getByTestId(`${P}-k`), { target: { value: '3' } })
+    fireEvent.click(screen.getByTestId(`${P}-tags-add`))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
+    // g (emptied nested object) is OMITTED entirely; the empty-string array
+    // element is pruned so the array does not survive as [""].
+    expect(arg.parameters).toStrictEqual({ k: 3 })
+    expect(JSON.stringify(arg.parameters ?? {})).not.toContain('"g"')
+    expect(JSON.stringify(arg.parameters ?? {})).not.toContain('""')
+  })
+
+  it('W14: (D7) the demo literal is the no-schema textarea default ONLY; schema-mode Advanced is seeded from the current form values (or empty)', async () => {
+    const DEMO = '{"window": [0.0, 0.5]}'
+    // Schema mode: the Advanced input must NOT carry the demo literal (it
+    // belongs to no schema); it is seeded from the current form values.
+    mockRevisions([{ id: 'REV-N14', payload: { id: 'REV-N14', title: 'Neutral method', parameterSchema: NEUTRAL_SCHEMA } }])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-N14')
+    const advInput = screen.getByTestId('analysis-run-params') as HTMLInputElement
+    expect(advInput.value, 'schema-mode advanced must not be seeded with the no-schema demo literal').not.toBe(DEMO)
+    // No override badge while untouched (seeded state is not a manual edit).
+    expect(screen.queryByTestId('analysis-params-override-json')).toBeNull()
+    // Edit one form value; re-opening the disclosure reflects the current
+    // form values (the seed tracks the form, not a frozen demo constant).
+    fireEvent.change(screen.getByTestId(`${P}-cutoff`), { target: { value: '0.5' } })
+    fireEvent.change(screen.getByTestId(`${P}-mode`), { target: { value: 'fast' } })
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    details.open = true
+    expect((screen.getByTestId('analysis-run-params') as HTMLInputElement).value).toContain('cutoff')
+    // …and the payload is still form-driven (the seed is not an override).
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ cutoff: 0.5, mode: 'fast' })
+    // The no-schema path keeps the demo literal as the live default (W4 pins
+    // that arm end-to-end; the literal is a single named constant in the page).
+  })
+
+  it('W15: (D8) invalid-advanced-JSON and gate-block reasons carry DISTINCT testids', async () => {
+    mockRevisions([
+      { id: 'REV-U15', payload: { id: 'REV-U15', title: 'Mixed method', parameterSchema: UNSUPPORTED_SCHEMA } },
+    ])
+    render(wrap(<AnalysisPage />))
+    await selectRev('REV-U15')
+    // Gate-block reason (unsupported node) on its own testid.
+    const gateLine = screen.getByTestId('analysis-params-blocked')
+    expect(gateLine.textContent).toContain('badOneOf')
+    // Invalid advanced JSON surfaces on a DIFFERENT testid, while the
+    // gate-block line stays present and distinct (both conditions can coexist).
+    const details = screen.getByTestId('analysis-params-advanced') as HTMLDetailsElement
+    details.open = true
+    fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{not json' } })
+    const invalidLine = screen.getByTestId('analysis-params-invalid-json')
+    expect(invalidLine.textContent).toContain('invalid')
+    // Still blocked (invalid JSON cannot become the override source).
+    expect(runCreateBtn().disabled).toBe(true)
+    // Fix the JSON → invalid line gone, badge lit, submit proceeds with the
+    // advanced payload.
+    fireEvent.change(screen.getByTestId('analysis-run-params'), { target: { value: '{"good": 2, "badOneOf": 3}' } })
+    expect(screen.queryByTestId('analysis-params-invalid-json')).toBeNull()
+    expect(screen.getByTestId('analysis-params-override-json')).toBeDefined()
+    await waitFor(() => expect(runCreateBtn().disabled).toBe(false))
+    fireEvent.click(runCreateBtn())
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0].parameters).toStrictEqual({ good: 2, badOneOf: 3 })
   })
 })
