@@ -398,10 +398,14 @@ def load_expectations(exp_dir):
 
 def answerable_cards(cards):
     """The cards arm's structural shape: a clarification request is ANSWERABLE
-    when it carries an answer form (a non-empty `options` list — the
-    AgentClarificationRequest.options the client renders as pickable rows,
-    types.ts:603). Pure shape, no prose (B9: only channel SHAPES may be
-    asserted; LLM prose is excluded)."""
+    when the CLIENT offers an answer form for it — either a non-empty
+    `options` list (AgentClarificationRequest.options the client renders as
+    pickable rows, types.ts:603) OR the slash-menu picker the client renders
+    for a resolver-backed card (ClarificationPicker.requestHasPicker:
+    menuProvider '/m' | '/l' | '/e' — the ambiguous-noun cards carry their
+    candidates in `unresolvedFact.candidates` + allowCreateLocal and answer
+    via search/mint, options stays []). Pure shape, mirrors PRODUCT code
+    (ClarificationPicker.tsx resolverFor), no prose (B9)."""
     out = []
     for c in cards:
         if not isinstance(c, dict):
@@ -409,6 +413,15 @@ def answerable_cards(cards):
         opts = c.get("options")
         if isinstance(opts, list) and len(opts) > 0:
             out.append(c)
+            continue
+        if c.get("menuProvider") in ("/m", "/l", "/e"):
+            out.append(c)
+            continue
+        uf = c.get("unresolvedFact")
+        if isinstance(uf, dict):
+            cands = uf.get("candidates")
+            if isinstance(cands, list) and len(cands) > 0:
+                out.append(c)
     return out
 
 
