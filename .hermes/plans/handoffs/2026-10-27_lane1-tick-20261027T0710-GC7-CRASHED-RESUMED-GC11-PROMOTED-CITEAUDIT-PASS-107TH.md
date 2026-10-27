@@ -70,9 +70,12 @@ Author: orchestrator cron tick l1t0710 — lane 1 only. All git via -c core.file
    hypothesis), stamp the spec §F5 amendment, dispatch on the free slot. GC-8: branch off CURRENT
    trunk tip, B1 re-pin as its own first commit, sdkVersion 0.3.0 -> 0.4.0 fold per its OQ4.
 5. Slot-1 is FREE right now: next tick, if any gated item opened, grab it immediately.
-6. GC-12..GC-14 spec-composition: no composer running — optionally queue GC-12's composer
-   (thunderbeast, unique draft path DRAFT-<ts>-GC-12-run-sheet-spec.md, end-marker 'GC12 DRAFT
-   COMPLETE') while GC-7 finishes; audit-before-promote as always.
+6. GC-12 COMPOSER LIVE (dispatched this tick at 07:28:30, unit queue-speccomposer-gc12-l1t0735,
+   log logs/speccomposer-GC12-l1t0735.log, prompt prompts/speccomposer-GC12-l1t0735.txt, draft
+   target .hermes/plans/drafts/DRAFT-2026-10-27T0735-GC-12-run-sheet-spec.md, end-marker 'GC12
+   DRAFT COMPLETE'; due ~08:15, 2x ~09:00). On completion: orch cite-audit first-hand (the
+   run-workspace kind-gate :328, GC-4 flow files, mount-accounting pins are its load-bearing set)
+   then promote to .hermes/plans/2026-10-29_GC-12-run-sheet.md + stamp task block.
 
 ## assumptions:
 
