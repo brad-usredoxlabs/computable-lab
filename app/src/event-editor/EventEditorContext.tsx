@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { isRunDeckLock, writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
 import { EMPTY_HISTORY, withEditorHistory, type EditorHistory, type UndoableSnapshot } from './editorHistory'
 import { persistEditorHistory, loadEditorHistory, snapshotFingerprint } from './editorHistoryStorage'
@@ -1213,6 +1213,18 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // default before the record is loaded.
   const runDeckLoadedRef = useRef(false)
   const lastPersistedDeckRef = useRef<string | null>(null)
+  // L2-CHAT-1 regatefix2-fix1 D2 (gate defect D2): the deck the run was
+  // RESOLVED to by a DISAGREEING methodDeckLock — the route opened on the
+  // LOCK, not the record's remembered deck. The persist-on-change effect
+  // below suppresses the one memory write-back for that forced deck:
+  // writing it back would rewrite the record's methodPlatform/
+  // methodVariantId on a mere page load, clobbering the user's remembered
+  // variant (the design intent regatefix2 D1a claimed: "suppress the one
+  // memory write-back ... without clobbering the user's remembered
+  // variant"). A deliberate deck change AWAY from the locked deck clears
+  // the gate and resumes the normal write-back (the user just chose that
+  // deck — persisting that memory is the point of it).
+  const lockResolvedDeckRef = useRef<RunDeckMemory | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1240,23 +1252,51 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   useEffect(() => {
     if (!runId) {
       runDeckLoadedRef.current = false
+      lockResolvedDeckRef.current = null
       dispatch({ type: 'set_run_deck', deck: null })
       return
     }
     let cancelled = false
+    lockResolvedDeckRef.current = null
     apiClient.getRecord(runId)
       .then((record) => {
         if (cancelled) return
         const payload = (record.payload ?? {}) as Record<string, unknown>
         runDeckLoadedRef.current = true
-        if (
+        const memory =
           typeof payload.methodPlatform === 'string'
           && typeof payload.methodVariantId === 'string'
-        ) {
-          dispatch({ type: 'set_run_deck', deck: { platformId: payload.methodPlatform, variantId: payload.methodVariantId } })
-        } else {
-          dispatch({ type: 'set_run_deck', deck: null })
-        }
+            ? { platformId: payload.methodPlatform, variantId: payload.methodVariantId }
+            : null
+        // L2-CHAT-1 regatefix2 D1: the run's methodDeckLock is the
+        // AUTHORITATIVE deck guardrail (eventGraphPersistence.ensureRunDeckLock
+        // refuses any save off the lock — RunDeckLockConflictError). The
+        // mutable memory (methodPlatform/methodVariantId) drives only reload
+        // UX (its own doc comment says so). When a VALID lock exists and
+        // DISAGREES with the memory, resolve to the LOCK: otherwise the route
+        // opens on the memory's deck and every adoption save refuses
+        // (the gate's silent-nothing run: memory manual_freeform, lock
+        // manual_collapsed). No lock (or a matching lock) falls back to the
+        // memory — today's behavior. (regatefix2-fix1 D3: the lock shape is
+        // checked by the ONE exported structural guard,
+        // eventGraphPersistence.isRunDeckLock — the same predicate the
+        // persist path enforces; no inline copy.)
+        const rawLock = payload.methodDeckLock
+        const lockedDeck = isRunDeckLock(rawLock)
+            ? { platformId: rawLock.platformId, variantId: rawLock.variantId }
+            : null
+        const deck =
+          lockedDeck && memory &&
+          (lockedDeck.platformId !== memory.platformId || lockedDeck.variantId !== memory.variantId)
+            ? lockedDeck
+            : memory
+        // regatefix2-fix1 D2: a DISAGREEING lock forced the route onto the
+        // locked deck — remember that, so the persist effect below suppresses
+        // the one memory write-back for the forced deck (no clobber of the
+        // record's remembered variant on load).
+        lockResolvedDeckRef.current =
+          deck === lockedDeck && lockedDeck !== null && deck !== memory ? lockedDeck : null
+        dispatch({ type: 'set_run_deck', deck })
       })
       .catch(() => {
         if (!cancelled) {
@@ -1273,8 +1313,21 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // every change so a reload remembers it — deliberately NOT a lock, just a
   // mutable memory of the last deck the user left the run on. Assumes the
   // platform/variant are valid (the switcher only offers manifest variants).
+  // regatefix2-fix1 D2 (gate defect D2): EXCEPT for the deck the route was
+  // FORCED onto by a disagreeing methodDeckLock — writing that back would
+  // rewrite the record's methodVariantId on a mere page load, clobbering the
+  // user's remembered variant. The write-back stays suppressed while the deck
+  // sits on the locked deck; a deliberate change away from it resumes it.
   useEffect(() => {
     if (!state.runId || !runDeckLoadedRef.current) return
+    const forcedDeck = lockResolvedDeckRef.current
+    if (
+      forcedDeck !== null &&
+      forcedDeck.platformId === state.platformId &&
+      forcedDeck.variantId === state.variantId
+    ) {
+      return
+    }
     const key = `${state.runId}:${state.platformId}:${state.variantId}`
     if (lastPersistedDeckRef.current === key) return
     lastPersistedDeckRef.current = key

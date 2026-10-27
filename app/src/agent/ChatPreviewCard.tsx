@@ -30,13 +30,20 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
   const events = chat.previewEvents ?? []
   const labware = chat.previewLabwareAdditions ?? []
   const unresolved = chat.unresolvedRefs ?? []
+  // L2-CHAT-1 regatefix2 D2: the labware count is the STAGED preview's truth
+  // (the same data the deck bar reads) — chat.previewStagedLabwareCount —
+  // not previewLabwareAdditions alone (the done result's additions: empty on
+  // the shorthand path, the gate's "1 event · 0 new labware" misreport).
+  // The ?? fallback keeps non-deck callers (no staged seam → the hook's own
+  // additions-count fallback already lives in the hook) honest.
+  const labwareCount = chat.previewStagedLabwareCount ?? labware.length
 
   return (
     <section className="chat-preview" data-testid="chat-preview" aria-label="Proposed deck changes">
       <header className="chat-preview__header">
         <span className="chat-preview__title">Proposed deck changes</span>
         <span className="chat-preview__counts">
-          {events.length} event{events.length === 1 ? '' : 's'} · {labware.length} new labware
+          {events.length} event{events.length === 1 ? '' : 's'} · {labwareCount} new labware{labwareCount === 1 ? '' : 's'}
         </span>
       </header>
 
@@ -45,6 +52,18 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
           {unresolved.length} term{unresolved.length === 1 ? '' : 's'} still unresolved — resolve
           them before applying. Nothing has been written.
         </p>
+      ) : null}
+
+      {/* L2-CHAT-1 regatefix2 D1: the adoption REFUSAL wall — a failed Apply
+          (the shared adoption core threw, e.g. the run's deck lock conflict)
+          must be VISIBLE here naming the cause. The hook keeps the preview
+          staged, so this wall sits above the still-actionable controls —
+          never a silent nothing. */}
+      {chat.adoptionError ? (
+        <div className="chat-preview__error" role="alert" data-testid="chat-preview-error">
+          <span className="chat-preview__error-label">Apply failed</span>
+          <span className="chat-preview__error-message">{chat.adoptionError}</span>
+        </div>
       ) : null}
 
       {events.length > 0 ? (

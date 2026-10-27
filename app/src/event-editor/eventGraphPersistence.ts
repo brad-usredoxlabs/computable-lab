@@ -195,7 +195,15 @@ export function hydrateEventEditorGraph(graph: LoadEventGraphResult): {
   }
 }
 
-function isRunDeckLock(value: unknown): value is RunDeckLock {
+/**
+ * The ONE structural guard for a valid run deck lock — the shape both the
+ * persist path (ensureRunDeckLock) and the route-load deck resolution
+ * (EventEditorContext's set_run_deck effect) must agree on. Exported so the
+ * guard lives here exactly once (L2-CHAT-1 regatefix2-fix1 D3: it was
+ * hand-copied inline in the provider — two copies of a guardrail predicate
+ * that must stay byte-consistent).
+ */
+export function isRunDeckLock(value: unknown): value is RunDeckLock {
   return Boolean(value)
     && typeof value === 'object'
     && !Array.isArray(value)

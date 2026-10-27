@@ -6,7 +6,7 @@
  * When used from other pages, the caller provides page-specific context.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { streamAssist, getAiHealth } from '../api/aiClient'
 import { apiClient } from '../api/client'
@@ -222,6 +222,26 @@ export interface UseAiChatReturn {
    * `honestWall` state.
    */
   honestWall: string | null
+  /**
+   * L2-CHAT-1 regatefix2 D1: the adoption REFUSAL the card must show
+   * verbatim — set when the `onPreviewAccept` seam THROWS (e.g. the deck
+   * lock conflict, `RunDeckLockConflictError`), cleared on a fresh apply
+   * attempt, a successful adopt, or a discard. The card renders it as a
+   * role=alert honest wall naming the cause; the staged preview stays
+   * mounted (nothing half-applied — retry stays possible).
+   */
+  adoptionError: string | null
+  /**
+   * L2-CHAT-1 regatefix2 D2: the labware count the card shows — the
+   * STAGED preview's truth, the same data the deck bar reads
+   * (state.preview.previewPlacements via the onStagedExtras seam: a
+   * placement per proposed new labware). Falls back to the done result's
+   * additions count when the surface registers no seam (non-deck
+   * surfaces). The card used to count previewLabwareAdditions alone —
+   * empty on the shorthand path the gate ran ("1 event · 0 new labware"
+   * vs the bar's "1 new labware, 1 event" over the SAME staged preview).
+   */
+  previewStagedLabwareCount: number
   inputText: string
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
   cancelStream: () => void
@@ -414,6 +434,11 @@ export interface UseAiChatOptions {
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
+// regatefix2-fix1 D4: a stable EMPTY for the staged-truth memo dep — a fresh
+// {} per render would churn the dependency whenever no staged seam is
+// registered (non-deck surfaces), recomputing the count every render.
+const EMPTY_STAGED_LABWARES = Object.freeze({})
+
 export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -426,6 +451,12 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // REPORTED failure in plain language, owned by its turn. AiTabPanel's
   // `honestWall` state ported to the generic stack.
   const [honestWall, setHonestWall] = useState<string | null>(null)
+  // L2-CHAT-1 regatefix2 D1 — the adoption REFUSAL the card renders as a
+  // visible honest wall (the onPreviewAccept seam threw; e.g. the deck lock
+  // conflict). Null when the last apply attempt succeeded or was not yet
+  // made. Owned by the apply attempt — cleared on the next attempt, on a
+  // successful adopt, and on discard.
+  const [adoptionError, setAdoptionError] = useState<string | null>(null)
   // L2-CHAT-1 — the revision trail: prompts that produced staged drafts in
   // the current draft chain. Carries back to the server as
   // `draftRevision.revisionHistory` (the structured context AiTabPanel's
@@ -488,6 +519,38 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   onPreviewAcceptRef.current = onPreviewAccept
   const onStagedExtrasRef = useRef(onStagedExtras)
   onStagedExtrasRef.current = onStagedExtras
+  // L2-CHAT-1 regatefix2 D2 — the STAGED labware truth the card shows: the
+  // count of previewLabwares the ghost mount staged on the editor's preview
+  // (the onStagedExtras seam — the same data the deck bar's "N new labware"
+  // reads). The staged truth is a memo DEPENDENCY (regatefix2-fix1 D4), so
+  // the count tracks staged-preview mutations even when no chat turn moves
+  // previewEvents / previewLabwareAdditions. No seam (non-deck surface) or
+  // empty staged labwares → fall back to the done result's additions count —
+  // never a fabricated number, never the misreport of counting only the
+  // additions while the deck stages more (or fewer) labwares. (Placed after
+  // onStagedExtrasRef — an earlier position would hit the ref's temporal
+  // dead zone on the first render.)
+  // regatefix2-fix1 D4 (gate defect D4): read the staged truth ONCE per render
+  // so the count memo can TRACK it as a dependency. The memo used to recompute
+  // only on [previewEvents, previewLabwareAdditions] — a staged-extras change
+  // that did not move those two arrays (an editor-preview mutation without a
+  // new chat turn) left the memo stale and, on the shorthand path (the done
+  // result's additions are EMPTY), the count fell back to 0 (the gate's
+  // "1 event · 0 new labware" misreport). The seam read is a cheap pure read
+  // of the host's editor preview (the same data the deck bar reads);
+  // `?? EMPTY_STAGED_LABWARES` keeps the dep STABLE (a frozen shared object)
+  // when no seam is registered, so non-deck surfaces don't churn the memo.
+  const stagedPreviewLabwares =
+    onStagedExtrasRef.current?.()?.previewLabwares ?? EMPTY_STAGED_LABWARES
+  const previewStagedLabwareCount = useMemo(() => {
+    const staged = Object.keys(stagedPreviewLabwares).length
+    if (staged > 0) return staged
+    return previewLabwareAdditions.length
+    // stagedPreviewLabwares is a per-render dep (the staged truth); the ref
+    // read above keeps it live. The rest of the closure is intentionally
+    // stable (ref-backed), so the deps list is exhaustive by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagedPreviewLabwares, previewEvents, previewLabwareAdditions])
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
@@ -1369,6 +1432,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     if (isAcceptingRef.current) return
     isAcceptingRef.current = true
     setIsAccepting(true)
+    // L2-CHAT-1 regatefix2 D1: a fresh apply attempt supersedes any prior
+    // refusal — the wall belongs to the attempt that produced it (never a
+    // stale error from a previous Apply beside a fresh preview).
+    setAdoptionError(null)
     const eventsToAccept = previewEvents
     const labwareAdditionsToApply = previewLabwareAdditions
     try {
@@ -1407,6 +1474,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           setPreviewEventStatesMap(new Map())
           setUnresolvedRefs([])
         })
+        setAdoptionError(null)
         revisionTrailRef.current = []
         stagedSourceRef.current = null
         const adoptedEvents = adoption.eventCount ?? 0
@@ -1524,6 +1592,29 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           timestamp: Date.now(),
         },
       ])
+    } catch (err: unknown) {
+      // L2-CHAT-1 regatefix2 D1: the adoption seam THREW (e.g. the deck lock
+      // conflict — persist refused because the route resolved off the run's
+      // methodDeckLock). Before this catch the error escaped as an uncaught
+      // page error and the pane showed NOTHING (the gate's "silent nothing").
+      // Now: the refusal is NAMED — the error's class + message verbatim on
+      // the hook-owned wall (the card renders it as role=alert), and a
+      // system line in the conversation — and the staged preview STAYS
+      // mounted (nothing half-applied; the scientist sees the cause and can
+      // retry or discard). Never silently materialize, never silently drop.
+      const errName = err instanceof Error && err.name && err.name !== 'Error' ? err.name : null
+      const errMessage = err instanceof Error ? err.message : String(err)
+      const message = errName ? `${errName}: ${errMessage}` : errMessage
+      setAdoptionError(message)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: `Apply failed — ${message} Nothing was written; the proposed preview stays staged.`,
+          timestamp: Date.now(),
+        },
+      ])
     } finally {
       isAcceptingRef.current = false
       setIsAccepting(false)
@@ -1605,6 +1696,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
+    // L2-CHAT-1 regatefix2 D1: a discard supersedes any prior refusal — the
+    // preview is gone, so the refusal's wall goes with it.
+    setAdoptionError(null)
     // L2-CHAT-1: discard ends the draft chain.
     revisionTrailRef.current = []
     stagedSourceRef.current = null
@@ -1722,6 +1816,8 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     honestWall,
+    adoptionError,
+    previewStagedLabwareCount,
     inputText,
     sendPrompt,
     cancelStream,
