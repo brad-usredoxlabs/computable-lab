@@ -514,12 +514,22 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
     for name in ctx.input_names():
         handle = ctx.input(name)
         meta_source = handle.meta.get("sourcePath") if isinstance(handle.meta, dict) else None
+        # DECODED artifacts pin source = meta.sourcePath / handle name (spec
+        # D7) — NEVER the absolute mount path: a per-run input directory
+        # would make the stored artifact differ run-to-run for identical
+        # inputs (cycle-2 adversarial-review defect 2 — the D6 fix leaked
+        # handle.path into the decoders; the signal branch at :473 was
+        # already correct). ``source`` below is the LOG-LINE identity only:
+        # for a no_file inline input it names <name>.inline via handle.path.
         source = meta_source or (handle.path or handle.name)
         # Defect 6 — only FILE-BACKED handles are decoded. Non-file inputs
         # (the runner's inline shape: path <inputDir>/<name>.inline with no
         # file written, or no path and no inline bytes) take the method-asset
         # opaque path: named log line, never a crash with a non-reader error.
         role, data, read_err = _handle_bytes(handle, source)
+        # The DECODED source (spec D7 pin): meta.sourcePath or the handle
+        # name — deterministic across runs, never a mount path.
+        decoded_source = meta_source or handle.name
         if role == "no_file":
             ctx.log(
                 f"d_reader: {name} ({source}) → opaque: no readable file "
@@ -559,7 +569,7 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
                     code="D_READER_ESCAPE_TAG",
                 )
         elif role == "sample_metadata":
-            out = decode_sample_xml(data, source=source)
+            out = decode_sample_xml(data, source=decoded_source)
             decoded[name] = out
             ctx.log(
                 f"d_reader: {name} → {role}: sample '{out['name']}' "
@@ -568,7 +578,7 @@ def attach(ctx) -> Dict[str, Dict[str, Any]]:
                 code="D_READER_SAMPLE",
             )
         elif role == "run_log":
-            out = decode_run_log(data, source=source)
+            out = decode_run_log(data, source=decoded_source)
             decoded[name] = out
             ctx.log(
                 f"d_reader: {name} → {role}: {len(out['lines'])} lines, "
