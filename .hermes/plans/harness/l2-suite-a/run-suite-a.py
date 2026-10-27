@@ -1347,7 +1347,11 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
             exp10 = load_seq_expectation(10) if expect_dir else {}
             if exp10.get("require_two_directional_variants"):
                 primary = state  # the P10 primary turn (results[10])
-                turns_left = 2  # bounded: at most 2 follow-up P10 turns
+                turns_left = 3  # bounded: at most 3 follow-up P10 turns —
+                # the OQ3 (c) shape (save_sequence + 2x run_blastn) needs up
+                # to 3 follow-up turns when the primary produced no proposal
+                # (the one-proposal-per-turn arm).
+                fol_n = 2  # forward label counter (turn2-folup, turn3-folup, ...)
                 while (turns_left > 0
                        and seq_structural_p10(collect_proposals(results))
                        is not None):
@@ -1371,13 +1375,14 @@ def drive_sequence(base, selected, timeout, expect_dir, compare_dir):
                                  "so BOTH the 5'->3' and the reverse-complement "
                                  "variants are reviewable and comparable.")
                     follow = drive_turn(10, nudge,
-                                        "turn%d-folup" % (turns_left + 1))
+                                        "turn%d-folup" % fol_n)
                     # drive_turn wrote results[10] = follow; RESTORE the
                     # primary so prompt-10.json stays the primary P10
                     # receipt and the follow-up turn(s) ride the separate
                     # "10-follow" list receipts.
                     results[10] = primary
                     results.setdefault("10-follow", []).append(follow)
+                    fol_n += 1
                     turns_left -= 1
                 # Judge over the COMPLETE proposal set (P9 + every P10
                 # turn) now that all P10 turns have landed.
