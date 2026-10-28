@@ -164,11 +164,27 @@
    arbitrary pixel widths: the grid columns shrink (minmax), the middle
    column's content wraps, and the overlay svg is responsive to the column
    it lands in (width:100% + viewBox; no fixed svg width in the tree). */
-.compare-surface { display: flex; flex-direction: column; gap: .5rem; border: 1px solid #d1d5db; border-radius: 8px; padding: .75rem; background: #fff; width: 100%; min-width: 0; box-sizing: border-box; }
+.compare-surface { display: flex; flex-direction: column; gap: .5rem; border: 1px solid #d1d5db; border-radius: 8px; padding: .75rem; background: #fff; width: 100%; min-width: 0; box-sizing: border-box; container-type: inline-size; }
 .compare-surface__header { display: flex; align-items: center; justify-content: space-between; }
 .compare-surface__header h2 { margin: 0; font-size: 1rem; }
-.compare-surface__body { display: grid; grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) minmax(7.5rem, 16rem); gap: .75rem; align-items: start; }
+.compare-surface__body { display: grid; grid-template-columns: 1fr; gap: .75rem; align-items: start; }
 .compare-surface__body > * { min-width: 0; }
+/* FIX3 defect 3 (advreview cycle 3, D3-NEW MAJOR): the F2 three-track rule
+   minmax(9rem,14rem) minmax(0,1fr) minmax(7.5rem,16rem) let the side tracks
+   grow to their maxima first and collapse the overlay track to ~2px at the
+   532px pane (measured [224,2,256]). The body now stacks to a single column
+   by default; at >= 40rem (640px @ the 16px root font) the EXACT F2 track
+   split is restored, so wide panes render identically to the F2 review.
+   No new px: rem breakpoints only. Measured (real Chromium 151): 400px
+   [374] no overflow; 532px [506] no overflow; 700px [224,170,256]; 1000px
+   [224,470,256]. The stacked dividers are the same-file rules below. */
+@container (min-width: 40rem) {
+  .compare-surface__body { grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) minmax(7.5rem, 16rem); }
+}
+@container (max-width: 39.9375rem) {
+  .compare-surface__select { border-right: 0; padding-right: 0; }
+  .compare-surface__saved { border-left: 0; padding-left: 0; }
+}
 .compare-surface__select { display: flex; flex-direction: column; gap: .5rem; border-right: 1px dashed #e5e7eb; padding-right: .5rem; }
 .compare-surface__run { display: flex; flex-direction: column; gap: .25rem; }
 .compare-surface__run-toggle { text-align: left; font-weight: 600; font-size: .85rem; }
