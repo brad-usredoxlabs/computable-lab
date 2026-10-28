@@ -938,6 +938,47 @@
   cursor: progress;
 }
 
+/* L2-SUITE-A-uifix2 FIX2 [D5]: the VISIBLE create-local (mint) row on the
+   clarification card. The card's prompt promises "…or create a local term"
+   (the spine's tier-5 mint-local, architecture §2) — the affordance used to
+   live only inside the (closed) popover's floor row, i.e. dead chrome. The
+   row renders whenever the server allowed minting (allowCreateLocal) and
+   the question carries a name (the seeded query). */
+.message-log__clarification-mint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px dashed var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-log__clarification-mint:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+}
+
+.message-log__clarification-mint:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.message-log__clarification-mint__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* ---- Protocol Builder CTA banner (PDF tab with no candidate) ---- */
 
 .ai-tab__section--protocol {
