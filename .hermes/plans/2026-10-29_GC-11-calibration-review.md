@@ -24,24 +24,94 @@ OQ RULINGS (orchestrator, within approved intent):
 DISPATCH GATE: NOT dispatchable until GC-8 AND GC-9 AND GC-10 are MERGED to cl/integration-1
 (task deps), and every [Gn] cite is re-anchored against shipped code at claim (AMEND-AT-MERGE).
 
-# GC-11 spec DRAFT: /analysis — calibration review view: table <-> curve <-> residual selection
+## RE-ANCHOR FOLD (cl-spec-composer, tick l1t1925, 2026-10-27 ~19:30-20:45 EDT)
 
-DRAFT by cl-spec-composer (lane 1, run 2026-10-27T06:20 EDT, trunk `cl/integration-1` @ code tip
-`a015a594` / docs tip `cdc004ce` — GC-1..GC-6 + GC-2R merged; GC-7 coder LIVE in
-`wt/gc-7-lane1-l1t0520`, GC-8/9/10 specs PROMOTED but code UNMERGED). NOT orchestrator-reviewed;
-not dispatchable until promoted AND deps GC-8/GC-9/GC-10 merge. Every [F] cite below was opened
-FIRST-HAND this session against `/mnt/vast/home/brad/git/cl-integration-1` (git
-`-c core.fileMode=false`); the load-bearing baselines were EXECUTED in-session (marked [F-run]).
+GATE SATISFIED: GC-7/8/9/10 ALL MERGED (trunk tip `891185da`). Every [G7]/[G8]/[G9]/[G10] AMEND-
+AT-MERGE cite has been RE-ANCHORED against shipped code first-hand this session (or corrected where
+shipped reality diverges from the promoted spec's assumption — see the old->new table in
+`## RE-ANCHOR l1t1925` at the bottom). [Gn] status legend retired: the spec now cites SHIPPED
+path:line only. Baselines re-captured live @ 891185da: app vitest src/analysis **13 files 115/115
+GREEN**, app tsc **21 error lines / 0 in src/analysis**, server tsc **0**, server
+analysisSchema.test.ts **13/13** — all [F-run].
+
+MATERIAL CORRECTIONS the coder MUST know (full detail in the RE-ANCHOR table):
+1. **The whitelist moved.** It is no longer an inline list in AnalysisPage.tsx (draft F3 :201-203).
+   Shipped: `VIEW_RENDERER_WHITELIST` const + pure `resolveViewRenderer` in **ViewRenderer.tsx:38-53**
+   (GC-10 [E]); AnalysisPage only CALLS it (:389). The enum+union+whitelist+arm trifecta is now
+   schema :36 + ViewRenderer.tsx :26/:38/:arm — AnalysisPage.tsx needs NO whitelist edit.
+2. **selectRun does NOT set the manifest.** Shipped selectRun (AnalysisPage.tsx:355-364) fetches the
+   run payload ONLY; `manifest` is set only by execute (:345). The ?run= landing must seed
+   manifest+artifactRefs CLIENT-SIDE from the fetched `payload.outputManifest` +
+   `manifest.artifactRefs` (the exact channel CompareTraces.tsx:103-104 already consumes) — zero
+   execute calls, PB-CH-5 intact. See D3 (corrected).
+3. **Calibration payloads are `{rows, columns, ...}` OBJECTS, not bare arrays.** Shipped TableView
+   (ViewRenderer.tsx:60-86) renders `Array.isArray(inlineValue) ? rows : []` — GC-8's published
+   `calibration_table_view`/`calibration_model_view` render "No rows" TODAY. The composite reads
+   `.rows` itself; never rely on TableView for calibration artifacts.
+4. **`peak_source` is a STRING** `"<input_name>:row<idx>"` (calibration_fit.py:797), not a structure.
+   Row->input-name = split before `:row`; the record-id hop rides the run's frozen
+   `inputs[<name>].id` (analysis-run.schema.yaml:44-49 ref objects) — chain re-verified in D2.
+5. **`source_point_ref.artifact_or_dref_id` is OMITTED for unpromoted inline level inputs**
+   (calibration_fit.py:987-992; the shipped spine asserts the omission at
+   analysisGcCalibrationChaining.test.ts:440-446). Never treat its absence as an error.
+6. **The statistic-undefined REASON is not in the model payload.** `statistic_value: null` carries no
+   reason key (reasons live in the `calibration_statistic` METRIC, calibration_fit.py:1221-1223).
+   The honest null arm renders `null` + the verbatim `statistic_definition` — D1 corrected.
+7. **Recalc prefill cannot ride the shared run-creation region:** GC-9's selection-change effect
+   (AnalysisPage.tsx:169-179) RESETS `paramValues` to schema defaults, stomping any prefill.
+   D4 corrected to a dedicated second ParameterForm instance (controlled props shipped for exactly
+   this: ParameterForm.tsx:25-31 incl. `testIdPrefix`).
+8. **No calibration-shaped lane data exists on :3092 today, and no python-entry-script engine
+   record** (all 5 lane engines are STUB/stub-echo). The browser gate CANNOT run until the gate
+   fixtures are minted — exact recipe + existing record inventory in the new **Appendix A**.
+9. Task block MOVED: task-list.md **:8405-8423** (was :8158-8177); the hard lines hold VERBATIM
+   (re-read 8411-8422 this session).
+
+NEW OPEN QUESTIONS (recommendations stated; no policy invented):
+- **OQ-5 (gate prerequisite) — python engine for the live gate.** The :3092 lane has ZERO
+  python-entry-script engine records; the engine gate REFUSES a last-resort interpreter
+  (analysisRunner.ts:540-544 — "a silent system run is refused"), so running the GC-8 entry script
+  live needs an `analysis-engine` record (adapter `python-entry-script`, capabilities
+  curve_fitting/weighted_regression `supported` — both shipped in the enum, schema :162-163) AND a
+  resolved interpreter on the lane stack (config `analysis.python` / CLA_ANALYSIS_PYTHON). Checked:
+  live GET /api/records?kind=analysis-engine (5 STUB), analysisRunner engineGate :511-596, engine
+  adapter enum shipped [python-entry-script, stub-echo]. RECOMMENDATION: orch mints the engine +
+  confirms interpreter resolution on the lane stack BEFORE dispatching the browser gate; the coder
+  may seed revisions/runs via the API (GC-9 OQ-3 seeding posture) but interpreter provisioning is
+  stack config, not coder scope.
+- **OQ-6 (design, flagged for ratification) — recalc region = dedicated ParameterForm instance.**
+  Alternative A (recommended, now spec'd in D4): the composite footer owns its own ParameterForm
+  instance + own createAnalysisRun submit (carries the source run's FROZEN inputs — the shared
+  createRun hardcodes `inputs: {}` at AnalysisPage.tsx:327, so the shared path cannot carry them
+  without touching GC-9's region). Alternative B: prefill the shared region — mechanically broken by
+  the :169-179 defaults-reset (correction 7) and entangles GC-9's submit gate semantics. Checked:
+  ParameterForm props/classify (array-object items ARE expressible — ParameterForm.tsx:109,350-395,
+  and the real GC-8 `levels[]` schema is exactly that shape,
+  analysisGcCalibrationChaining.test.ts:94-113). No GC-9 FILE edits under either door.
+
+PRIOR OQ rulings (OQ-1 ?run= seam / OQ-2 re-anchor mandate [THIS FOLD DISCHARGES IT] / OQ-3 defer
+creation UI / OQ-4 honest dref arm) all HOLD unchanged; the ?run= consumer is verified UNshipped
+(grep `?run=` + useSearchParams across app/src/analysis = 0 hits) so it still lands with GC-11.
+
+# GC-11 spec: /analysis — calibration review view: table <-> curve <-> residual selection
+
+DRAFT by cl-spec-composer (2026-10-27T06:20 EDT, trunk @ a015a594); **RE-ANCHORED IN PLACE by
+cl-spec-composer run l1t1925 (2026-10-27 ~20:45 EDT) against trunk `cl/integration-1` tip
+`891185da` — GC-7/8/9/10 ALL MERGED.** Every [Gn] cite is now a first-hand shipped [F] cite (old
+->new map in `## RE-ANCHOR l1t1925` at the bottom). Baselines re-executed in-session @ 891185da
+(marked [F-run]). Dispatchable once the orchestrator ratifies OQ-5/OQ-6 and mints the gate
+fixtures (Appendix A). Every [F] cite was opened FIRST-HAND this session against
+`/mnt/vast/home/brad/git/cl-integration-1` (git `-c core.fileMode=false`); NEVER read
+`/mnt/vast/home/brad/git/computable-lab` or :3001/:5174.
 
 ## Status legend
 
-- **[F]** = confirmed fact, cite opened first-hand this session (path:line into trunk @ a015a594).
-- **[F-run]** = behavior/number proven by executing a command in-session (baselines below).
-- **[G7] / [G8] / [G9] / [G10]** = shape from the PROMOTED specs `.hermes/plans/2026-10-28_GC-7-
-  integration-revision.md`, `2026-10-28_GC-8-calibration-revision.md`, `2026-10-28_GC-9-parameter-
-  forms.md`, `2026-10-29_GC-10-chromatogram-compare.md` (cited by their spec-file line numbers).
-  NONE of that code is merged — every [Gn] cite is an **AMEND-AT-MERGE** item: re-anchor against the
-  SHIPPED artifacts/fixtures/exports at dispatch claim, never assume shipped.
+- **[F]** = confirmed fact, cite opened first-hand this session (path:line into trunk @ 891185da).
+- **[F-run]** = behavior/number proven by executing a command in-session (baselines + live lane API).
+- ~~[G7]/[G8]/[G9]/[G10]~~ — RETIRED at re-anchor: all four deps are MERGED; every former [Gn]
+  cite below is rewritten against the shipped code (python module
+  `server/python-executor-service/src/computable_lab_analysis/`, the server spine test
+  `server/src/analysis/analysisGcCalibrationChaining.test.ts`, the shipped client components).
 - **[I]** = inference / design decision of this spec, flagged for the orchestrator.
 
 ## Goal (one sentence)
@@ -58,200 +128,288 @@ results wear a data-derived visual distinction; and where every column header re
 
 ## Authority (read in this order; scope is theirs, not mine)
 
-1. Task block GC-11, `/home/brad/.hermes/cl/lanes/1/task-list.md:8158-8177` — description (:8165-
-   :8169) and `verified by` (:8174-8175) are BINDING (re-quoted verbatim below). `files:` (:8176) =
+1. Task block GC-11, `/home/brad/.hermes/cl/lanes/1/task-list.md:8405-8423` (moved from the
+   draft's :8158-8177 — content VERBATIM-identical, re-read this session) — description (:8411-
+   :8416) and `verified by` (:8420-8422) are BINDING (re-quoted verbatim below). `files:` (:8423) =
    "app/src/analysis/ (calibration renderer + wiring + tests), view-spec enum". deps: GC-8, GC-9,
-   GC-10 (:8163).
+   GC-10 (:8410) — ALL MERGED (GC-8 4b7e2b4c, GC-10 891185da; GC-9 earlier on the GC-8-side track).
 2. The task's hard lines (verbatim clauses that bind design): *selecting a calibration-table row
    highlights its point + residual and links to its originating run*; *Changes (point inclusion,
    model params) spawn a NEW analysis-run — completed models are never mutated*; *Uncalibrated vs
    quantitative results visually distinct*; *Full-text column headers (no 'Man...' truncation)*.
-3. GC-8 promoted spec — THE artifact contract this renderer consumes: calibration_table columns
-   [G8:276-297 §A1], fit/statistic/residual definitions [G8:299-360 §A2], artifact + provenance
-   contract incl. the `calibration_model` payload and `source_point_ref` per fit point
-   [G8:443-456 §A6], the two-revisions/two-modules shape [G8:256-274 §A0], `levels[]`-as-parameters
-   with per-level `fit`/`required` [G8:458-474 §A7, :695-701 OQ5].
-4. GC-10 promoted spec — the renderer precedent: handwritten SVG + pure model module (OQ-2 RATIFIED
-   at [G10:629]), new-id-per-shipped-component (OQ-3 RATIFIED: "GC-11 adds `calibration-curve` the
-   same way" [G10:631]), enum-widening trifecta + whitelist trap ([G10:512-518] baits #3/#4),
-   read-only artifact-content route RATIFIED [G10:620-627] (NOT needed here — see F7).
-5. GC-9 promoted spec — the labeled-controls surface the recalculation rides: ParameterForm props
-   [G9:176-213 §A], submit/payload rules [G9:214-244 §B], default pre-fill + visible overrides
-   [G9:246-256 §C], OQ ratifications [G9:479-488].
-6. GC-7 promoted spec — peak_table columns the originating-run link lands on [G7:302-322 §A1];
-   GC-10 owns its chromatogram renderer for the source-run surface, GC-11 does not re-render traces.
-7. Handoffs `.hermes/plans/handoffs/` 101st-104th — commit-after-every-step (83rd §3), UI gates go
-   through the orch deterministic-Playwright route FIRST (91st §4), GC-7 LIVE-worker checkpoint
-   (104th: do NOT read `wt/gc-7-lane1-l1t0520` unmerged state as fact).
+3. GC-8's SHIPPED calibration module — THE artifact contract this renderer consumes:
+   `server/python-executor-service/src/computable_lab_analysis/calibration_fit.py` — calibration_-
+   table columns `CAL_TABLE_COLUMNS` (:1070-1073), per-column definitions `_CAL_SCHEMA_NOTE`
+   (:1090-1105), the `calibration_model` payload build (:1026-1055), per-fit-point `source_point_-
+   ref` with the D4 omission rule (:973-1009), publish + the two `table` views it emits
+   (:1143-1227), the named-statistic definitions `STATISTIC_DEFINITIONS` (:950-961). The server
+   spine `server/src/analysis/analysisGcCalibrationChaining.test.ts` pins the live shapes end-to-
+   end (CAL_PARAMS_SCHEMA :79-113 is the REAL `levels[]` parameterSchema GC-11's form must render).
+   The quantified-table contract lives in `quantification.py` (`quant_payload` :820-829,
+   AREA_PERCENT_HONESTY :86, unit-named amount columns :560-561).
+4. GC-10's SHIPPED renderer precedent: `app/src/analysis/ChromatogramView.tsx` (handwritten SVG +
+   bindings-guarded props :86-96), `traceModel.ts` (pure module, bindings guards :451-587),
+   `ViewRenderer.tsx` (whitelist-as-pure-function :38-53, sibling resolution via the `siblings`
+   prop :155/:169-181 — the exact machinery GC-11 rides), `CompareTraces.tsx` (the dref-content
+   consumer :103-104). GC-10's ratified OQs (handwritten SVG, new-id-per-component: "GC-11 adds
+   `calibration-curve` the same way") stand ratified — the enum comment at
+   `schema/knowledge/view-spec.schema.yaml:31-36` documents the precedent.
+5. GC-9's SHIPPED labeled-controls surface: `app/src/analysis/ParameterForm.tsx` — props
+   `{schema, value, onChange, disabled, testIdPrefix}` (:25-31), classify incl. array-object
+   (:100-110), the row-block array arms (:350-395), `pruneEmpty` (:452), `collectGateIssues`
+   (:500), `collectDefaults` (:561); the page-side submit discipline in AnalysisPage.tsx (:280-337).
+6. GC-7's SHIPPED peak_table columns (the originating-run link's source shape): the spine's
+   MINIMAL_PEAK_TABLE_ENTRY (analysisGcCalibrationChaining.test.ts:65-77) mirrors GC-7's published
+   columns; GC-10's ChromatogramView consumes peak tables via `DEFAULT_MARKER_FIELDS`
+   (ChromatogramView.tsx:41). GC-11 does not re-render traces.
+7. Handoffs `.hermes/plans/handoffs/` — latest 124th (`2026-10-27_lane1-tick-20261027T1825-GC10-
+   MERGED-891185da-BROWSERGATE-RUNNING-124TH.md`): commit-after-every-step (83rd §3), UI gates go
+   through the orch deterministic-Playwright route FIRST (91st §4), and the 124th's own lesson —
+   gate fixtures are orch-minted via the API with schema-typed ref-objects (422 on bare ids).
 
 ## Oriented facts — shipped reality [F], every line opened first-hand
 
-### F1. The renderer dispatch GC-11 widens
+### F1. The renderer dispatch GC-11 widens (SHIPPED, GC-10 landed)
 
-- [F] `app/src/analysis/ViewRenderer.tsx:25` — `RenderableView.renderer` union
-  `'table' | 'signal' | 'metric' | 'static-figure' | 'model' | 'binary'`; switch at :123-143;
-  `default:` arm = visible `Unsupported renderer:` error (`view-spec__error`,
-  testid `view-spec-error`, :137-141). GC-10 [G10:301] adds `chromatogram` + `trace-compare` arms
-  ahead of GC-11 — re-anchor at claim.
-- [F] `ViewRenderer.tsx:34-61 TableView` — headers are the UNION of row-object keys rendered as
-  `<th key={c}>{c}</th>` (:47) with `String(r[c] ?? '')` cells (:54); `RenderableArtifact` (:10-19)
+- [F] `app/src/analysis/ViewRenderer.tsx:26` — `RenderableView.renderer` union
+  `'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'model' |
+  'binary'` (GC-10's two ids ARE in it now); switch at :157-201; `default:` arm = visible
+  `Unsupported renderer:` error (`view-spec__error`, testid `view-spec-error`, :195-200). GC-11's
+  `calibration-curve` arm lands at :192 (between `trace-compare` and `model`), ahead of `default:`
+  exactly like GC-10's arms (their comment :166-168 states the rule: new arms BEFORE `default:` so
+  the closed-set error is preserved).
+- [F] `ViewRenderer.tsx:59-86 TableView` — headers are the UNION of row-object keys rendered as
+  `<th key={c}>{c}</th>` (:72) with `String(r[c] ?? '')` cells (:79); `RenderableArtifact` (:11-20)
   carries NO per-column label field, so **the artifact's property names ARE the headers** — the
   "full-text column headers, no 'Man...'" clause is (a) a ban on introducing CSS truncation and
-  (b) GC-8's column names rendering verbatim (`response_raw_pa_min` et al. [G8:281-294]). No
-  ellipsis/`text-overflow`/`nowrap` exists on `.view-spec__table` today (grep
-  `ellip|text-overflow|nowrap` in `app/src/analysis/AnalysisPage.css` → 0 hits [F-run in-session]).
-- [F] `ViewRenderer.tsx:156-176 renderViews(views, artifacts)` — per-view map, matches view ->
-  artifact by NAME; **no cross-view state bus** — the table<->curve<->residual selection state lives
-  INSIDE one composite component (same finding as [G10 F1] bears on GC-10's sync design).
-- [F] `app/src/analysis/ViewRenderer.compat.test.tsx:39-44` — source-pin:
+  (b) GC-8's column names rendering verbatim (`response_raw_pa_min` et al., CAL_TABLE_COLUMNS).
+  **NEW AT RE-ANCHOR (correction 3): TableView reads `Array.isArray(inlineValue) ? value : []`
+  (:62) — GC-8's calibration payloads are `{rows, columns, ...}` OBJECTS (calibration_fit.py
+  :1157-1164), so GC-8's shipped `calibration_table_view` renders "No rows" through TableView
+  TODAY. The composite table reads `.rows` from the object itself; a reviewer who "discovers" the
+  empty table-view is discovering shipped GC-8/TableView reality, not a GC-11 regression.** No
+  ellipsis/`text-overflow`/`nowrap` exists on `.view-spec__table` (grep `ellip|text-overflow` in
+  `app/src/analysis/AnalysisPage.css` → 0 hits [F-run]; the single `white-space: nowrap` at :211
+  belongs to `.analysis-compare-btn`, a button, not a table — leave it).
+- [F] `ViewRenderer.tsx:215-235 renderViews(views, artifacts)` — per-view map, matches view ->
+  artifact by NAME, passes `siblings={artifacts}` (:231); **no cross-view state bus** — the
+  table<->curve<->residual selection state lives INSIDE one composite component.
+- [F] `app/src/analysis/ViewRenderer.compat.test.tsx:38-51` — source-pin:
   `readFileSync('src/analysis/ViewRenderer.tsx')` asserts ZERO occurrences of
-  `['quantum','heatmap','scatter','component-tree']` + presence of `view-spec__error`.
+  `['quantum','heatmap','scatter','component-tree']` (:46-48) + presence of `view-spec__error`
+  (:50). The comment (:38-45) was ALREADY amended by GC-10 to name its task-mandated widening.
   **CRITICAL for GC-11: the banned list contains the literal word `scatter` — the new arm id is
   `calibration-curve` and ViewRenderer.tsx must never contain the string "scatter" (comment or
-  otherwise). All "scatter" prose lives in CalibrationCurveView.tsx / docs.** (GC-10's [G10 bait #1]
-  rule applies: amend the PB-CH-5 COMMENT to name the task-mandated widening; add assertions,
-  never delete/weaken.)
+  otherwise). All "scatter" prose lives in CalibrationCurveView.tsx / docs.** GC-11's edit = amend
+  THAT COMMENT again (name task :8412's mandate) + ADD assertions; never delete/weaken.
 
-### F2. The view-spec enum — GC-11 adds exactly ONE value, and nobody upstream proposed it for GC-11
+### F2. The view-spec enum — GC-11 adds exactly ONE value
 
-- [F] `schema/knowledge/view-spec.schema.yaml:29-31` — enum `[ table, signal, metric,
-  static-figure ]` on trunk today.
-- [G8:144-146, 454-456] GC-8's spec B4 mints **no** enum value ("The interactive calibration-curve
-  view is GC-11's item"); GC-8's revisions publish `table` views only.
-- [G10:249-251, 277] GC-10's promoted spec extends the enum to `[table, signal, metric,
-  static-figure, chromatogram, trace-compare]` — its proposal does NOT include calibration-curve
-  (its OUT-of-scope [G10:263] explicitly excludes GC-11's renderer), and its OQ-3 ratification
-  says GC-11 adds `calibration-curve` **the same way** [G10:631].
+- [F] `schema/knowledge/view-spec.schema.yaml:36` — enum `[ table, signal, metric, static-figure,
+  chromatogram, trace-compare ]` (GC-10's widening SHIPPED; the `calibration-curve` addition lands
+  on THIS line, appending one member; the :31-35 comment block gets a GC-11 line mirroring it).
+- [F] GC-8 shipped publishes `table` views ONLY: calibration_fit.py:1226-1227
+  (`ctx.view("calibration_table_view", "table", ...)` + model view) — it minted no enum value and
+  never proposed one. Confirmed no upstream proposal exists for calibration-curve anywhere in the
+  shipped schema/tests (grep view-spec enum legs: analysisSchema.test.ts :159-196 has quantum-
+  reject + chromatogram/trace-compare accepts only [F-run read]).
 - **[I] Consequence (checked, not invented):** GC-11 adds exactly one enum member —
-  `calibration-curve` — on top of GC-10's shipped four+two, in GC-11's own commit, reusing
-  GC-10's widened shape verbatim. No second proposal exists or is needed.
+  `calibration-curve` — on top of GC-10's six, in GC-11's own commit. No second proposal needed.
 
-### F3. The AnalysisPage silent-coercion whitelist (must move in the same commit)
+### F3. The whitelist — SHIPPED as a pure function in ViewRenderer.tsx (AnalysisPage edit no longer needed)
 
-- [F] `app/src/analysis/AnalysisPage.tsx:194-207` — the page's view whitelist
-  `(['table','signal','metric','static-figure'] as const).includes(...)` **silently coerces any
-  other renderer string to `'table'`** (:201-203). GC-10 lands `chromatogram`/`trace-compare` into
-  this list (its bait #4 mandates one commit); GC-11's `calibration-curve` MUST land in the
-  whitelist + TS union + schema enum + dispatch arm in ONE commit or the curve silently table-ifies
-  (same trap, same defense).
-- [F] `AnalysisPage.tsx:209-214` — **client-synthesized views precedent**: model/binary artifacts
+- **[CORRECTED AT RE-ANCHOR — the draft's F3 cite is superseded.]** The silent-coercion whitelist is
+  no longer an inline literal in AnalysisPage.tsx. GC-10 [E] extracted it:
+  `app/src/analysis/ViewRenderer.tsx:38-45 VIEW_RENDERER_WHITELIST` (as-const array) +
+  `:49-53 resolveViewRenderer(raw)` (pure: shipped id passes, anything else -> `'table'`).
+  AnalysisPage's `rendered` useMemo CALLS it at AnalysisPage.tsx:389 (`renderer:
+  resolveViewRenderer(vv.renderer)`). **GC-11's trifecta = schema enum :36 + TS union :26 +
+  WHITELIST array :38-45 + dispatch arm — ALL FOUR IN ViewRenderer.tsx + schema, ONE commit;
+  AnalysisPage.tsx needs NO whitelist hunk.** Same trap, same defense: a `calibration-curve`
+  manifest view must pass through resolveViewRenderer, never table-coerce.
+- [F] `AnalysisPage.tsx:394-400` — **client-synthesized views precedent**: model/binary artifacts
   without a manifest view get a synthesized `model`/`binary` card view client-side. This is the
-  door GC-11 rides for its composite view (§D1): the GC-8 revisions publish `table` views [G8:454];
+  door GC-11 rides for its composite view (§D1): the GC-8 revisions publish `table` views only;
   GC-11 synthesizes the `calibration-curve` composite client-side when a run's manifest carries a
   calibration_table-shaped AND calibration_model-shaped artifact (structural gate, §D1 — not name
   sniffing), AND the widened enum makes a persisted `calibration-curve` view-spec record validate +
-  dispatch honestly for the forward path (orch can seed one via /records — server validates on
-  create [G10 F5] RecordStoreImpl:568).
-- [F] `AnalysisPage.tsx:179-217 rendered` useMemo builds `RenderableArtifact[]` from
-  `manifest.artifacts` + `artifactRefs` via `toRenderable` (:334-352) — inline values arrive here
-  verbatim (calibration artifacts are inline, F7), and `artifactRefs[name].artifactRecordId` gives
-  the AOUT record id for every artifact (§D2's run-link rides this).
-- [F] mount accounting pin: `app/src/analysis/AnalysisPage.no-execute.test.tsx:1-12,38-40` — mount
-  fires EXACTLY `listAnalysisRevisions` + `listAnalysisRuns`, zero else. Any GC-11 mount-time fetch
-  must be gated to the `?run=` deep-link param being present (SequencesPage precedent, F6) and the
-  suite re-runs unmodified as proof.
+  dispatch honestly for the forward path (orch can seed one via POST /records — routes.ts:238
+  createRecord; live proof captured at the GC-10 gate: renderer 'chromatogram' -> 201, 'quantum'
+  -> 422 closed-set naming the enum, 124th handoff §Verification-4).
+- [F] `AnalysisPage.tsx:367-403 rendered` useMemo builds `RenderableArtifact[]` from
+  `manifest.artifacts` + `artifactRefs` via `toRenderable` (:578-596) — inline values arrive here
+  verbatim as `inlineValue` (calibration artifacts are inline, F7), and `artifactRefs[name].artifactRecordId`
+  gives the AOUT record id for every artifact (§D2's run-link rides this).
+- [F] mount accounting pin: `app/src/analysis/AnalysisPage.no-execute.test.tsx:44-56` — mount
+  fires EXACTLY `listAnalysisRevisions` + `listAnalysisRuns` (:48-49), zero else. Any GC-11 mount-time
+  fetch must be gated to the `?run=` deep-link param being present (SequencesPage precedent, F6)
+  and the suite re-runs unmodified as proof.
 
-### F4. GC-8's artifacts, as specified (AMEND-AT-MERGE shapes — the renderer's whole input)
+### F4. GC-8's SHIPPED artifacts — the renderer's whole input (structural const table, re-anchored)
 
-- [G8:443-450 §A6] Three inline `table`-kind artifacts per CAL run: `calibration_table` (rows =
-  §A1 columns), `calibration_model` (`{model_version, model, equation, coefficients, weighting,
-  origin_constraint, statistic_name, statistic_value, statistic_definition, residual_basis,
-  response_quantity, amount_unit, fit_points: [{amount, response, weight, relative_residual,
-  source_input, source_peak_index, source_point_ref}], x_min, x_max, calibration_run_id,
-  params_digest, calibration_scope: "analytical"}`), `effective_parameters`.
-- [G8:281-297 §A1] calibration_table columns: `level, compound_label, compound_ref, amount,
-  rt_target_min, rt_window_min, peak_source, response_raw_pa_min, response_ratio, fit_point,
-  relative_residual, flags` — every null paired with a reason code in `flags`; `fit_point` is the
-  per-level DECLARED inclusion boolean [G8:292].
-- [G8:289, 448] **the originating-run pointer exists and is machine-readable**: `peak_source`
-  (which input name + peak row) on the table row, and `source_point_ref = {artifact_or_dref_id,
-  input_name, peak_row_index}` on each model fit point. The AOUT artifact record carries
-  `runRef` [F: `schema/knowledge/analysis-output-artifact.schema.yaml:27-30 runRef property, :83
-  required: [kind,id,title,runRef,name,dataKind]`] — so row -> artifact record -> `runRef.id` =
-  originating analysis-run, via the EXISTING `apiClient.getRecord` (client.ts:2296 [F]) — zero
-  server change (§D2).
-- [G8:319-334] the named statistic is echoed data: `statistic_name` + `statistic_value` +
-  `statistic_definition` (definition emitted verbatim so a reader never guesses); residuals are
-  `relative_residual` (%) on the FIT response quantity, `residual_basis` says which in words;
-  excluded points carry `EXCLUDED_FROM_FIT` [G8:293]. **The renderer renders these strings/numbers
-  verbatim — it computes NO statistic of its own.**
-- [G8:341-353] failure vocabulary, [G8:467-474 §A7] parameter lists: point inclusion lives in the
-  `levels[]` parameter, per-level `fit` (required boolean) — the recalculation control is a `fit`
-  checkbox rendered by GC-9's ParameterForm over the GC-8 revision's parameterSchema (§D4).
-- [G8:414-421 §A4] quantified results: `quantified_peak_table` carries `model_artifact_id`,
-  `model_params_digest`, the amount columns named with the model's declared unit, `area_percent`
-  in its OWN column, and the schema honesty sentence ("area_percent is ... NOT a mass fraction,
-  NOT a concentration...") — **this is the data the calibrated/uncalibrated distinction reads from
-  (§D5); no new artifact kinds, no new fields needed.**
+The draft's [G8] table is SUPERSEDED. Everything below was opened first-hand in
+`server/python-executor-service/src/computable_lab_analysis/calibration_fit.py` @ 891185da; the
+live-shape proof is the shipped spine `server/src/analysis/analysisGcCalibrationChaining.test.ts`
+(T2 spine runs the REAL entry script through the REAL runner in-process).
 
-### F5. What GC-7/GC-8 runs look like client-side (never-mutate + spawn-new-run plumbing, all shipped)
+- [F] THREE inline `table`-kind artifacts per CAL run, published by `fit_calibration`
+  (calibration_fit.py `_publish` :1143-1209):
+  - `calibration_table` (:1175) — inline value is an OBJECT, not an array (:1157-1164):
+    `{rows: [...], columns: [...], amount_unit, istd, calibration_scope: "analytical", params_digest}`.
+    Row keys = `CAL_TABLE_COLUMNS` (:1070-1073), verbatim: `level, compound_label, compound_ref,
+    amount, rt_target_min, rt_window_min, peak_source, response_raw_pa_min, response_ratio,
+    fit_point, relative_residual, flags`. Per-column definitions ride the artifact's own
+    `schema.columns.<col>.definition` (from `_CAL_SCHEMA_NOTE` :1090-1105) — tooltips copy those.
+    `fit_point` is the per-level DECLARED inclusion boolean copied from `levels[].fit` (:772);
+    excluded rows carry `EXCLUDED_FROM_FIT` in `flags` (:92 REASON constant); every null numeric
+    cell names its reason code in `flags` (the invariant documented :1104).
+  - `calibration_model` (:1193) — payload built :1026-1055. Keys (ALL shipped): `model_version: 1`
+    (:104), `model` (`"linear" | "linear_through_origin" | "quadratic"`, MODEL_ENUM :42),
+    `equation` (explicit string, `_equation` :537-558), `coefficients` (**keyed object, NOT an
+    array** — `{slope, intercept}` for linear/linear_through_origin (:463/:473), `{c0, c1, c2}` for
+    quadratic (:525); the shipped evaluator `_predict` :528-534 shows the exact key-per-model
+    reading GC-11's line geometry copies), `weighting`, **`effective_weighting` (SHIPPED FIELD THE
+    DRAFT'S TABLE LACKED** — names the weighting actually applied, :1013-1025; render it beside
+    `weighting`, they can differ by design), `origin_constraint`, `statistic_name`,
+    `statistic_value`, `statistic_definition`, `residual_basis` (a data sentence, :1037-1041),
+    `response_quantity`, `amount_unit`, `fit_points` (below), `x_min` / `x_max` (min/max of the
+    FIT point amounts, :968), `calibration_run_id` (declared echo or null), `params_digest`,
+    `calibration_scope: "analytical"`.
+  - `effective_parameters` (:1209) — `{parameters, params_digest, source_content_sha256?}`.
+- [F] `fit_points[]` per entry (:971-1010): `{amount, response, weight, relative_residual,
+  source_input, source_peak_index, source_point_ref}` where `source_point_ref =
+  {artifact_or_dref_id?, input_name, peak_row_index, contentHash?}`. **Divergences from the draft
+  table, BINDING:** `artifact_or_dref_id` is OMITTED (never null, never a path) when the input
+  declares no record id — unpromoted inline level inputs (the common spine case; the module's own
+  doc :973-992, asserted by the spine at analysisGcCalibrationChaining.test.ts:440-446
+  `expect('artifact_or_dref_id' in ref).toBe(false)`); `contentHash` is also optional. Never treat
+  either absence as an error; the link chain falls back to `inputs[input_name]` (D2).
+- [F] **`peak_source` is a STRING** — `f"{input_name}:row{first_idx}"` (:797; null + NO_MATCHING_-
+  PEAK flags when unmatched :769). The draft assumed a structure; parse = split on the LAST `:row`.
+- [F] `response_quantity` VALUES are `"raw_area_pa_min"` / `"area_ratio"` (:47-48, set :737 by
+  istd-mode) — **these are NOT table column names**. Mapping the curve needs (one const-table row,
+  data-driven, zero branching on domain words): `response_quantity === "area_ratio"` -> plot the
+  table's `response_ratio` column; `"raw_area_pa_min"` -> `response_raw_pa_min`. The draft's "column
+  PICK" assumption holds; its literal values did not.
+- [F] The named statistic is echoed data: `statistic_name` + `statistic_value` +
+  `statistic_definition` (`STATISTIC_DEFINITIONS` :950-961 — definitions emitted verbatim).
+  **Divergence (correction 6): when `statistic_value` is null the REASON (STATISTIC_UNDEFINED /
+  ZERO_OBSERVED) is NOT in the model payload** — it only rides the `calibration_statistic` METRIC
+  (:1221-1223). The composite renders null honestly as `null` + the verbatim definition; it does
+  NOT invent a reason string (the row-level flags already carry per-point reasons).
+  Residuals are `relative_residual` (%) on the fit response quantity, `(fitted-observed)/observed*100`
+  (`_relative_residual` :559-565); observed==0 -> null + ZERO_OBSERVED. **The renderer renders these
+  strings/numbers verbatim — it computes NO statistic of its own** (fit-line SAMPLING via the
+  shipped `_predict` key rule is geometry, not analysis — D7).
+- [F] Point-inclusion control data: the `levels[]` parameter with per-level required booleans
+  `fit`/`required` — the REAL shipped parameterSchema shape is `CAL_PARAMS_SCHEMA` at
+  analysisGcCalibrationChaining.test.ts:79-113: `levels` = `{type:'array', minItems:1, items:
+  {type:'object', required:[level, compound_label, amount, rt_target_min, rt_window_min, fit,
+  required], properties:{... fit:{type:'boolean'}, required:{type:'boolean'}, weight:{type:'number'},
+  input_names:{type:'array'}, compound_ref:{type:['object','string','null']}}}}`. GC-9's
+  ParameterForm classifies exactly this as `array-object` (ParameterForm.tsx:100-109 repeatable row
+  blocks :350-395) — **the `fit`-checkbox edit IS expressible, no rescope needed** (this resolves
+  the draft's OQ-2 anxiety with shipped evidence; see OQ-6 for WHERE the form instance lives).
+- [F] Quantified results (`quantification.py`): `quant_payload` (:820-829) = `{rows, columns,
+  model_artifact_id, model_params_digest, extrapolation_policy, amount_semantics,
+  calibration_scope, params_digest}`; the amount columns are UNIT-NAMED dynamically — `amt_col =
+  f"amount_{unit_slug}"`, `rep_col = f"amount_reported_{unit_slug}"` (:560-561), `model_artifact_-
+  id` may be null (:546-551 layout-declared extraction) while `model_params_digest` is always
+  echoed (:551). **D5 classifier correction: `model_artifact_id` can be null on a real quantified
+  table — classify quantitative on `model_params_digest` presence (always present, :823-824), NOT
+  on `model_artifact_id`.** `area_percent` rides its own column with `AREA_PERCENT_HONESTY` in the
+  schema (:86, column note :844) — copied verbatim, never rewritten.
+- [F-run] The AOUT artifact record proves the run pointer live: `GET
+  http://localhost:3092/api/records?kind=analysis-output-artifact` returned payloads carrying
+  `runRef: {kind:'record', id:'ANR-*', type:'analysis-run'}` on every record; schema requires it
+  (`schema/knowledge/analysis-output-artifact.schema.yaml:27-34 runRef property, :83 required
+  [kind,id,title,runRef,name,dataKind]`). Row -> AOUT record -> `runRef.id` = originating
+  analysis-run via the EXISTING `apiClient.getRecord` (client.ts:2296) — zero server change (§D2).
+
+### F5. Client-side run plumbing (never-mutate + spawn-new-run, all shipped, line numbers re-verified)
 
 - [F] `app/src/shared/api/client.ts` — `createAnalysisRun` :3235-3245 (POST /analysis-runs; body
-  `{title, revisionRef, inputs, parameters?}`), `executeAnalysisRun` :3251-3261, `getAnalysisRun`
-  :3247-3249 (full payload incl. frozen `parameters` + `revisionRef`), `listAnalysisRuns` :3231,
-  `getRecord` :2296, `createRecord` :2456, `listRecordsByKind` :2135.
-- [F] `server/src/api/routes.ts:1268-1272` — analysis-runs list/create/get/execute + promote routes
-  shipped; **no PUT/PATCH/UPDATE route exists for runs or artifacts — mutation is server-side
-  impossible today; GC-11 keeps it that way (never propose one).**
-- [F] `schema/knowledge/analysis-run.schema.yaml:44-53` — run `inputs`/`parameters` frozen at
-  submit; `revisionRef` required (:164). A recalculation = `createAnalysisRun` with the SOURCE
-  run's `revisionRef` + a NEW parameters object → new recordId; the old run's stored payload is
-  re-read unchanged after (immutability proof, bait #6).
+  `{title, revisionRef, inputs, parameters?}` — inputs is a RECORD of ref objects, the frozen
+  source-run `payload.inputs` shape passes straight through), `executeAnalysisRun` :3251-3261,
+  `getAnalysisRun` :3247-3249 (full payload incl. frozen `parameters`, `revisionRef`,
+  `outputManifest`, `outputArtifactRefs` — verified live [F-run] on ANR-GC10A), `listAnalysisRuns`
+  :3231, `getRecord` :2296, `createRecord` :2456, `listRecordsByKind` :2135,
+  `getAnalysisArtifactContent` :3279 (GC-10's content client — NOT needed here, F7).
+- [F] `server/src/api/routes.ts:1268-1275` — analysis-runs list/create/get/execute + artifact
+  promote (:1272) + GC-10's read-only content route (:1275, GET-only); **no PUT/PATCH route exists
+  for runs or artifacts — mutation is server-side impossible today; GC-11 keeps it that way (never
+  propose one).**
+- [F] `schema/knowledge/analysis-run.schema.yaml` — `inputs` name->ref frozen at submit (:44-49),
+  `parameters` (:51-53), `revisionRef` required (:30, required list :166). A recalculation =
+  `createAnalysisRun` with the SOURCE run's `revisionRef` + `inputs` + a NEW parameters object ->
+  new recordId; the old run's stored payload is re-read unchanged after (immutability proof, bait #6).
+- [F] **Execute-on-new-run re-read path (shipped, matters for D4):** analysisRunner.ts:666 — a
+  second execute of a SUCCEEDED run returns the STORED manifest untouched (idempotent re-read).
+  GC-11 never re-executes a completed run; execute fires once, on the NEW id (the page's existing
+  create->execute click pattern, AnalysisPage.tsx:339-353).
 
-### F6. Where the "originating run" link can actually land (checked exhaustively)
+### F6. Where the "originating run" link can actually land (re-checked exhaustively @ 891185da)
 
-- [F] `app/src/App.tsx:202` — `/runs/:runId` renders `RunWorkspacePage`, whose server half
+- [F] `app/src/App.tsx:202` region — `/runs/:runId` renders `RunWorkspacePage`, whose server half
   `RunWorkspaceService.getRunWorkspace` **rejects any record whose payload.kind !== 'run'**
-  (`server/src/run-workspace/RunWorkspaceService.ts:328` — returns null → 404 for an
+  (`server/src/run-workspace/RunWorkspaceService.ts:328` — returns null -> 404 for an
   `analysis-run` record [F-run read this session]). `/runs/:runId` is the DNA/event run sheet —
   NOT a destination for analysis runs today (GC-12's run-sheet is where GC run surfaces land).
-- [F] `/registry` (App.tsx:225, RegistryHostPage) has NO record-selection deep link —
-  `RecordRegistryPage.tsx` contains zero `useSearchParams` [F-run grep]; a link there cannot
-  preselect a record.
-- [F] Precedent that works: `app/src/sequences/SequencesPage.tsx:37` — "ISEQ-2 §4b deep-link
-  consumer: /lab/sequences?record=<id> selects that record once" — the house pattern for
-  select-on-arrival is a QUERY PARAM on the surface that hosts the entity.
-- **[I] Therefore §D3's answer:** the originating-run link is `/analysis?run=<AREF-recordId>`;
-  AnalysisPage grows a one-shot consumer: on mount, if `?run=` is present, click-select it via the
-  EXISTING `selectRun` path (`AnalysisPage.tsx:167-176`, `getAnalysisRun` on selection — the same
-  fetches a manual click fires; mount accounting unchanged when the param is absent, F3). Landing
-  on the source run shows ITS results (GC-10's chromatogram/peak table renders it) — the traceability
-  loop closes on surfaces that already exist. Flagged as OQ-1 (low-risk; GC-12 may later add a
-  first-class run-sheet destination — a link href is the seam, not the wall).
+- [F] `/registry` (App.tsx:225) has NO record-selection deep link — `RecordRegistryPage.tsx`
+  contains ZERO `useSearchParams` [F-run grep -c = 0]; a link there cannot preselect a record.
+- [F] `?run=` is NOT yet consumed anywhere: grep `?run=` across app/src -> 0 hits; grep
+  useSearchParams across app/src/analysis -> 0 hits [F-run]. The consumer lands WITH GC-11 (OQ-1
+  ruling stands, nothing shipped stole the seam).
+- [F] Precedent that works: `app/src/sequences/SequencesPage.tsx:37-41` — "ISEQ-2 §4b deep-link
+  consumer: /lab/sequences?record=<id> selects that record once" — a `deepLinkRef` one-shot guard
+  firing after the first catalog load (:41). The house pattern for select-on-arrival is a QUERY
+  PARAM on the surface that hosts the entity.
+- **[I] Therefore §D3's answer:** the originating-run link is `/analysis?run=<ANR-recordId>`;
+  AnalysisPage grows a one-shot consumer on the SHIPPED selection machinery (corrected mechanics
+  in D3 — selectRun alone does not render views). Landing on the source run shows ITS results
+  (GC-10's chromatogram/peak table renders it) — the traceability loop closes on surfaces that
+  already exist. Flagged OQ-1, RULED; GC-12 may later add a first-class run-sheet destination —
+  a link href is the seam, not the wall.
 
 ### F7. No payload-fetch problem for GC-11 (unlike GC-10) — stated so nobody over-builds
 
-- [F-run] GC-8's artifacts are INLINE by contract: tables are tens-to-hundreds of rows, far under
-  the 50,000-char storage-routing threshold (`server/src/analysis/analysisRunner.ts:314-340` — blob
-  artifacts always -> storage, object JSON >= 50k -> dref, small values stay inlineValue; [G8:128-130]
-  states "Calibration payloads are tens-to-hundreds of rows — inline is honest"). The persisted
-  manifest carries inline `value` per artifact [G10 F4 re analysisRunner.ts:476-479] and
-  `getAnalysisRun` delivers it. **GC-11 needs ZERO byte-serving: do NOT call GC-10's
+- [F] GC-8's artifacts are INLINE by contract: tables are tens-to-hundreds of rows, far under the
+  50,000-char storage-routing threshold — `server/src/analysis/analysisRunner.ts:391-395`
+  (`isLarge`: string length OR `JSON.stringify(page.value).length >= 50_000` -> storage+dref;
+  small values stay inline; blob artifacts ALWAYS storage :397). The spine asserts calibration
+  inline-ness directly: `inlineValue).toBeDefined(); // inline (small)`
+  (analysisGcCalibrationChaining.test.ts:378 [F-run read]). The persisted manifest carries inline
+  `value` per artifact and `getAnalysisRun` delivers it (live proof: ANR-GC10A manifest artifact
+  has `value` [F-run]). **GC-11 needs ZERO byte-serving: do NOT call GC-10's
   `/analysis-artifacts/:id/content` route for the curve (§D7); if a calibration artifact ever
-  arrives dref-backed (pathological size), render the named honest error arm, not a fake.**
+  arrives dref-backed (pathological size), render the named honest error arm, not a fake** (OQ-4
+  ruling; the client method + ChromatogramView's fetch pattern ChromatogramView.tsx:96-110 exist as
+  precedent IF the orch ever re-rules).
 
-### F8. Baselines executed this session [F-run] (cwd traps included)
+### F8. Baselines re-executed this session @ 891185da [F-run] (cwd traps included)
 
-- [F-run] `cd app && npx vitest run src/analysis` → **7 files, 22/22 GREEN** (15.85s, 06:35).
-  TRAP: app vitest MUST run with cwd = `app/` (compat source-pin reads relative paths).
+- [F-run] `cd app && npx vitest run src/analysis` → **13 files, 115/115 GREEN** (20.04s, 19:42).
+  TRAP (123rd handoff, live at GC-10): app vitest MUST run with cwd = `app/` — the compat source-
+  pin reads relative paths; running from repo root fakes 5 ENOENT failures.
 - [F-run] `npm run typecheck -w app` → **21 `error TS` lines, ZERO inside src/analysis**.
-- [F-run] `npm run typecheck -w server` → **0 errors**.
+- [F-run] `npm run typecheck -w server` → **0 errors**; `cd server && npx vitest run
+  src/analysis/analysisSchema.test.ts` → **13/13** (20:43) — GC-11's +1 positive leg grows this to 14.
 - [F] `app/tsconfig.json` strict, NO `exactOptionalPropertyTypes` in app (server/tsconfig.json:13
-  only) — same posture as GC-9 F6/GC-10 F6; payload shapes still OMIT absent keys.
-- [F] `app/package.json` deps read whole: **NO chart library** (no d3/chart.js/visx/plotly);
-  react-router-dom present (`useSearchParams` available, zero new dep). GC-10's handwritten-SVG
-  route is RATIFIED precedent [G10:629].
-- [F] YAML-reload trap (task-list env facts; GC-5 F22): `tsx --watch` does NOT reload YAML — the
-  enum edit needs `cl-lane-stack.sh 1 restart` before any curl proof. NEVER :3001/:5174.
-- [F] GC-7 coder LIVE in `wt/gc-7-lane1-l1t0520` (104th handoff) — at GC-11's claim GC-7 is long
-  merged; until then NOTHING from that worktree is fact.
+  only) — same posture GC-9/GC-10 shipped; payload shapes still OMIT absent keys (GC-8's own
+  module doctrine: omission, never null-placeholder — calibration_fit.py:987-992).
+- [F] `app/package.json` deps: **NO chart library** (grep d3/chart.js/visx/plotly/recharts = 0
+  [F-run]); react-router-dom ^6.28.0 present (:41, `useSearchParams` available, zero new dep).
+  GC-10's handwritten-SVG route is SHIPPED precedent.
+- [F] YAML-reload trap (GC-5 F22, proven again at the GC-10 gate): `tsx --watch` does NOT reload
+  YAML — the enum edit needs `cl-lane-stack.sh 1 restart` before any curl proof. NEVER :3001/:5174.
+- [F] GC-7/8/9/10 worktrees are dead history — trunk @ 891185da is the ONLY source of fact.
 
-## Acceptance criteria — verbatim from the task list (task-list.md:8174-8175)
+## Acceptance criteria — verbatim from the task list (task-list.md:8420-8422)
 
 > Vitest render/selection tests; browser receipt: reviewer identifies an outlier, jumps to its
 > source run, and triggers a versioned recalculation via labeled controls.
 
-Description clauses that also bind (task-list.md:8165-8169), mapped in §Acceptance mapping:
+Description clauses that also bind (task-list.md:8411-8416), mapped in §Acceptance mapping:
 
 > Calibration-curve view (view-spec renderer): scatter + fit line, equation, named correlation
 > statistic, residuals per point, included/excluded markers; selecting a calibration-table row
@@ -274,27 +432,33 @@ Description clauses that also bind (task-list.md:8165-8169), mapped in §Accepta
 | "Vitest render/selection tests" | calibrationModel.test.ts + CalibrationCurveView.test.tsx + AnalysisPage.calibration.test.tsx | verif 1-2 |
 | "browser receipt: outlier -> source run -> versioned recalculation via labeled controls" | D1 outlier affordance + D2 link + D4 labeled recalc | verif 5 (a)-(d) |
 
-## Files IN scope
+## Files IN scope (re-anchored @ 891185da)
 
-- `app/src/analysis/ViewRenderer.tsx` (union +1 id `calibration-curve`, dispatch +1 arm; existing
-  arms untouched; compat COMMENT amended per bait #1 — assertions only added)
+- `app/src/analysis/ViewRenderer.tsx` (union +1 id `calibration-curve` :26; WHITELIST array +1
+  :38-45; dispatch +1 arm before `default:`; existing arms untouched; GC-11 imports nothing new
+  beyond './CalibrationCurveView')
 - `app/src/analysis/CalibrationCurveView.tsx` (NEW — composite curve + residual strip + table +
   selection + run-link + recalc affordance; §D1-D4)
-- `app/src/analysis/calibrationModel.ts` (NEW — pure, no DOM: structural artifact-shape guards,
-  row<->fit-point join, outlier identification by `max |relative_residual|` OVER THE ARTIFACT'S OWN
-  residuals [G8:327] with NO invented threshold, provenance classifier quantitative/uncalibrated —
-  §D2/D5)
-- `app/src/analysis/AnalysisPage.tsx` (whitelist +1 in the same commit; `?run=` deep-link consumer
-  (§D3/F6); client-synthesized calibration-curve view pairing (§D1); provenance badges (§D5) —
-  GC-9's parameter-form regions and GC-10's Compare regions UNTOUCHABLE)
+- `app/src/analysis/calibrationModel.ts` (NEW — pure, no DOM: structural artifact-shape guards
+  over the `{rows, columns}` payload objects, row<->fit-point join, response_quantity->column
+  mapping const table [F4], outlier identification by `max |relative_residual|` OVER THE
+  ARTIFACT'S OWN residuals with NO invented threshold, provenance classifier quantitative/
+  uncalibrated — §D2/D5)
+- `app/src/analysis/AnalysisPage.tsx` (synthesis pairing in the `rendered` useMemo — gated to the
+  calibration pair only, GC-10's chromatogram/trace-compare hunks UNTOUCHED; `?run=` deep-link
+  consumer + the manifest-seed fix (§D3, corrected); provenance badges (§D5); recalc submit
+  region (§D4, OQ-6 door A). **NO whitelist hunk — resolveViewRenderer's array lives in
+  ViewRenderer.tsx now (F3).** GC-9's parameter-form regions (:159-301, :447-490) UNTOUCHABLE
+  except additive mount of a NEW sibling region)
 - `app/src/analysis/AnalysisPage.css` (calibration chrome; NO text-overflow/ellipsis on table
   headers — bait #7)
 - `app/src/analysis/CalibrationCurveView.test.tsx`, `calibrationModel.test.ts`,
-  `AnalysisPage.calibration.test.tsx` (NEW; do NOT grow frozen ViewRenderer.test.tsx)
-- `schema/knowledge/view-spec.schema.yaml` (renderer enum + `calibration-curve`, on top of GC-10's
-  two; bindings comment block documents the curve's bindings, §D1)
+  `AnalysisPage.calibration.test.tsx` (NEW; do NOT grow frozen ViewRenderer.test.tsx — GC-10's D6
+  restored it byte-identical to f571e2b9 and the reviewer WILL diff it again)
+- `schema/knowledge/view-spec.schema.yaml` (renderer enum :36 + `calibration-curve`, on top of
+  GC-10's two; bindings comment block :38-53 documents the curve's bindings, §D1)
 - `server/src/analysis/analysisSchema.test.ts` (+1 positive leg `calibration-curve`; quantum leg
-  untouched — mirrors GC-10's [G10:449] trifecta)
+  untouched — mirrors GC-10's shipped legs :170-196; 13 -> 14 tests)
 - `app/src/analysis/ViewRenderer.compat.test.tsx` (comment amend + ADDED legs only: the banned-list
   leg itself, incl. the `scatter` literal, stays byte-true)
 
@@ -634,3 +798,27 @@ spot-check the [F] line cites (compat banned-literal :42, whitelist :201, RunWor
 
 GC11 DRAFT COMPLETE
 
+
+## ORCHESTRATOR RATIFICATION FOLD (tick l1t2155, 2026-10-27 ~21:50 EDT)
+
+RE-ANCHOR ACCEPTED. Cite-audit of the fold's load-bearing corrections done first-hand by the
+orchestrator against trunk @ b000379e (= code tip 891185da): VIEW_RENDERER_WHITELIST +
+resolveViewRenderer at ViewRenderer.tsx:38-53 with AnalysisPage calling only (:389) — CONFIRMED;
+selectRun sets only activeRun, manifest set only by execute — CONFIRMED (AnalysisPage.tsx:355-364
+read myself); TableView `Array.isArray(inlineValue) ? value : []` empty-arm at
+ViewRenderer.tsx:60-63 — CONFIRMED. Corrections 4-9 accepted on the composer's first-hand trail.
+
+OQ-5 RATIFIED as recommended: the ORCHESTRATOR mints the analysis-engine record (adapter
+python-entry-script, curve_fitting + weighted_regression supported) and confirms interpreter
+resolution on the lane stack BEFORE the browser gate; coder may seed via API only. Gate is
+orch-blocked on this, not coder-blocked.
+OQ-6 RATIFIED: Alternative A (dedicated ParameterForm instance in the composite footer, own
+createAnalysisRun submit carrying the source run's frozen inputs) APPROVED. No GC-9 file edits.
+
+DISPATCH-GATE: OPEN. GC-7/8/9/10 code merged (trunk code tip 891185da); re-anchor landed;
+OQ-5/OQ-6 resolved. Coder dispatches off trunk with the mandated re-anchor table (corrections
+1-9) IN THE BRIEF VERBATIM. Note for the coder: GC-10's fix-run-2 delta (0bc58c87..ec983170:
+traceInteraction.ts shared hook, AnalysisPage hydration, CSS) is NOT yet on trunk — it lands as
+a follow-up merge before/with this item's gate; code off the current trunk and do NOT edit
+CompareTraces/ChromatogramView beyond what the calibration view needs (the hydration + hook
+arrive via the GC-10 follow-up merge, not via GC-11).
