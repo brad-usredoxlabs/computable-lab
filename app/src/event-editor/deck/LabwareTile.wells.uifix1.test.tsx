@@ -56,7 +56,8 @@ describe('LabwareTile — L2-SUITE-A-uifix1 D4: affected well footprints reach t
       />,
     )
     // The tile-level attention surface flips (the existing badge contract).
-    expect(screen.getByTestId?.('tile') ?? document.querySelector('.tile')).not.toBeNull()
+    const tileEl = screen.queryByTestId('tile') ?? document.querySelector('.tile')
+    expect(tileEl).not.toBeNull()
     const tile = document.querySelector('.tile')!
     expect(tile.getAttribute('data-affected')).toBe('true')
     // THE WELL SET: every drawn well cell is identified…

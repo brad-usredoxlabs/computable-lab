@@ -1,5 +1,6 @@
 import type { DragEvent } from 'react'
 import type { Labware } from '../../types/labware'
+import type { WellId } from '../../types/plate'
 import type { EventEditorPlacement, LabwareOrientation } from '../types'
 import { LabwareGlyph } from './LabwareGlyph'
 
@@ -18,6 +19,15 @@ interface LabwareTileProps {
    * proposal before accepting.
    */
   affected?: boolean
+  /**
+   * L2-SUITE-A-uifix1 D4 — the per-well footprint to mark on the glyph
+   * (data-driven from the event record: buildEventWellIndex over committed +
+   * preview events' details.wells). The drawn well cells whose id is in the
+   * set carry `data-affected-well="true"`; the tile-level `data-affected`
+   * flips true when the set is non-empty (the existing attention surface +
+   * "Preview" tag stay). Absent → no per-well markers.
+   */
+  affectedWells?: ReadonlySet<WellId>
   onRemove?: () => void
   onRotate?: () => void
   onFocus?: () => void
@@ -37,10 +47,16 @@ export function LabwareTile({
   height,
   ghost = false,
   affected = false,
+  affectedWells,
   onRemove,
   onRotate,
   onFocus,
 }: LabwareTileProps) {
+  // L2-SUITE-A-uifix1 D4: the per-well footprint flips the tile-level
+  // attention surface too — the set is the data source, the boolean prop is
+  // the preview-only caller's flag (DeckSlot's previewIndex); OR'd, so a
+  // committed-event footprint on a deck tile reads "affected" as well.
+  const affectedActive = affected || (affectedWells?.size ?? 0) > 0
   const sized =
     width && height
       ? { w: width, h: height }
@@ -64,7 +80,9 @@ export function LabwareTile({
     ? `${labware.name} · proposed — click to drill in and inspect, then Accept to keep`
     : affected
       ? `${labware.name} · affected by preview — click to inspect`
-      : `${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`
+      : (affectedWells?.size ?? 0) > 0
+        ? `${labware.name} · affected by event — click to inspect`
+        : `${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`
 
   return (
     <div
@@ -72,7 +90,7 @@ export function LabwareTile({
       data-variant={variant}
       data-orientation={orientation}
       data-ghost={ghost ? 'true' : 'false'}
-      data-affected={affected && !ghost ? 'true' : 'false'}
+      data-affected={affectedActive && !ghost ? 'true' : 'false'}
       draggable={!ghost}
       onDragStart={ghost ? undefined : handleDragStart}
       onClick={(event) => {
@@ -85,7 +103,7 @@ export function LabwareTile({
       style={{ width: sized.w, height: sized.h }}
       title={tileTitle}
     >
-      <LabwareGlyph labware={labware} orientation={orientation} />
+      <LabwareGlyph labware={labware} orientation={orientation} affectedWells={affectedWells} />
       <span className="tile__name">{labware.name}</span>
       {ghost ? <span className="tile__ghost-tag">Proposed</span> : null}
       {!ghost && affected ? <span className="tile__affected-tag">Preview</span> : null}

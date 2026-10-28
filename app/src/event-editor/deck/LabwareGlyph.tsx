@@ -1,4 +1,5 @@
 import type { Labware } from '../../types/labware'
+import type { WellId } from '../../types/plate'
 import type { LabwareOrientation } from '../types'
 import { InstrumentGlyph } from './InstrumentGlyphs'
 
@@ -17,6 +18,16 @@ import { InstrumentGlyph } from './InstrumentGlyphs'
 interface LabwareGlyphProps {
   labware: Labware
   orientation: LabwareOrientation
+  /**
+   * L2-SUITE-A-uifix1 D4 — the well footprint to mark on the drawn glyph:
+   * every well cell of a GRID-addressed labware carries `data-well-id`
+   * (row letter A+ / column digit 1+, the repo's wellId convention —
+   * wellUtils.ts:26), and the cells whose id is in this set carry
+   * `data-affected-well="true"`. Absent → no per-well markers (the tile
+   * glyph is unchanged). Data-driven by the caller (buildEventWellIndex),
+   * never a hardcoded well list.
+   */
+  affectedWells?: ReadonlySet<WellId>
 }
 
 interface GlasswareSvgProps {
@@ -195,7 +206,7 @@ function CultureFlaskSvg({ color }: GlasswareSvgProps) {
   )
 }
 
-export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
+export function LabwareGlyph({ labware, orientation, affectedWells }: LabwareGlyphProps) {
   const profile = inferProfile(labware)
   const glasswareType = inferGlasswareType(labware)
   // Fall back to currentColor (the tile text color) — SVG presentation
@@ -278,6 +289,27 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
     const isTubeset = profile === 'tubeset'
     const isTiprack = profile === 'tiprack'
     const r = isTubeset ? tubesetWellRadius(labware.geometry.maxVolume_uL) : CELL * 0.34
+    // L2-SUITE-A-uifix1 D4: well-id markers for grid-addressed labware —
+    // drawn (row, col) → wellId in the LAYOUT's axes (before the portrait
+    // transpose above swapped cols/rows), so the id is the labware's own
+    // addressing, not the tile's drawing order. Non-grid labware (single /
+    // linear) has no per-well addressing: no markers, no crash.
+    const isGrid = labware.addressing.type === 'grid'
+    const wellIdAt = (row: number, col: number): WellId | null => {
+      if (!isGrid) return null
+      const letter = String.fromCharCode(65 + row)
+      return `${letter}${col + 1}`
+    }
+    const mark = (row: number, col: number) => {
+      const id = wellIdAt(row, col)
+      if (id === null || !affectedWells?.has(id)) return {}
+      return { 'data-well-id': id, 'data-affected-well': 'true' }
+    }
+    const markOff = (row: number, col: number) => {
+      const id = wellIdAt(row, col)
+      if (id === null) return {}
+      return { 'data-well-id': id }
+    }
     for (let row = 0; row < drawnRows; row++) {
       for (let col = 0; col < drawnCols; col++) {
         const cx = PAD + col * CELL + CELL / 2
@@ -294,6 +326,8 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
               rx={1}
               fill={color}
               fillOpacity={0.55}
+              {...markOff(row, col)}
+              {...mark(row, col)}
             />,
           )
         } else {
@@ -307,6 +341,8 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
               fillOpacity={isTiprack ? undefined : 0.55}
               stroke={color}
               strokeWidth={isTiprack ? 1 : 0.5}
+              {...markOff(row, col)}
+              {...mark(row, col)}
             />,
           )
         }
