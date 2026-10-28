@@ -145,6 +145,10 @@ export function CalibrationCurveView(props: {
 
   // --- state (all hooks run unconditionally, before any early return) ------
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  // FIX1 D4: the MOST RECENT selection drives the source-run link (the task's
+  // hard line (b): selecting a row links to ITS originating run). Null when
+  // nothing is selected (the link then defaults to the outlier).
+  const [lastSelected, setLastSelected] = useState<string | null>(null)
   const [params, setParams] = useState<Record<string, unknown>>(() => frozenParams(page))
   const [formOpen, setFormOpen] = useState(false)
   const [resolved, setResolved] = useState<{ href: string; title: string } | null>(null)
@@ -159,6 +163,13 @@ export function CalibrationCurveView(props: {
       else next.add(key)
       return next
     })
+    setLastSelected((prev) => {
+      const wasSelected = selected.has(key)
+      return wasSelected ? (prev === key ? null : prev) : key
+    })
+    // The previously RESOLVED anchor (if any) was for the old link target —
+    // a selection change invalidates it (re-resolve on click).
+    setResolved(null)
   }
   const sel = (key: string): Record<string, string> => (selected.has(key) ? { 'data-selected': 'true' } : {})
 
@@ -254,14 +265,20 @@ export function CalibrationCurveView(props: {
   const sy = (y: number): number => H - PAD - ((y - yMin) / (yMax - yMin)) * plotH
   const drawLine = lineY0 !== null && lineY1 !== null
 
-  // --- source-run link (§D2): the OUTLIER's input, falling back to the first
-  // row's input. Chain: inputs[name].id -> getRecord(id) -> payload.runRef.id
-  // -> /analysis?run=<that ANR id>. Click-gated (zero fetch before the click).
+  // --- source-run link (§D2 + FIX1 D4): the SELECTED row's OWN source input
+  // (its peak_source — the D5 join carries it even for excluded rows, which
+  // have no fit point) drives the link (hard line (b): selecting a row links
+  // to ITS originating run); with NO selection the default is the OUTLIER,
+  // falling back to the first row. Chain: inputs[name].id -> getRecord(id)
+  // -> payload.runRef.id -> /analysis?run=<that ANR id>. Click-gated (zero
+  // fetch before the click).
   const inputs = frozenInputs(page)
-  const candidateNames: string[] = []
+  const selectedPoint = lastSelected !== null ? points.find((p) => p.key === lastSelected) : undefined
   const outlierPoint = points.find((p) => outlierKeys.has(p.key))
-  if (outlierPoint?.sourceInput) candidateNames.push(outlierPoint.sourceInput)
   const firstPoint = points[0]
+  const candidateNames: string[] = []
+  if (selectedPoint?.sourceInput) candidateNames.push(selectedPoint.sourceInput)
+  if (outlierPoint?.sourceInput && !candidateNames.includes(outlierPoint.sourceInput)) candidateNames.push(outlierPoint.sourceInput)
   if (firstPoint?.sourceInput && !candidateNames.includes(firstPoint.sourceInput)) candidateNames.push(firstPoint.sourceInput)
   let declared: { name: string; ref: { kind?: string; id?: string; type?: string } } | null = null
   for (const name of candidateNames) {

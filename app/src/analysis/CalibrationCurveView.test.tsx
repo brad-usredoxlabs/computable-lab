@@ -417,6 +417,78 @@ describe('D2 — the source-run link resolves from the frozen inputs (click-gate
   })
 })
 
+// --- FIX1 D4 RED — the source-run link FOLLOWS the selected row's OWN ----
+// peak_source (hard line (b): "selecting a calibration-table row highlights
+// its point + residual AND links to its originating run"). Default (no
+// selection) = the outlier. Excluded rows resolve via their own peak_source
+// (no fit point exists for them — the D5 join carries it).
+
+describe('D2 link — FIX1 D4: the link follows the SELECTED row, defaulting to the outlier', () => {
+  const GET_RECORD_BY_AOUT: Record<string, { payload: { runRef: { id: string } } }> = {
+    'AOUT-SRC-1': { payload: { runRef: { id: 'ANR-SRC-1' } } },
+    'AOUT-SRC-2': { payload: { runRef: { id: 'ANR-SRC-2' } } },
+    'AOUT-SRC-3': { payload: { runRef: { id: 'ANR-SRC-3' } } },
+  }
+
+  it('selecting row 2 -> the link target CHANGES from the outlier default to row 2\'s source input', async () => {
+    vi.mocked(apiClient.getRecord).mockImplementation((id: string) => Promise.resolve(GET_RECORD_BY_AOUT[id] as never))
+    // Default (nothing selected): the outlier (level 3) is the link target.
+    renderView()
+    let reason = screen.getByTestId('calibration-source-run-unresolved')
+    expect(reason.textContent).toContain('level_3')
+    fireEvent.click(screen.getByTestId('calibration-resolve-source-run'))
+    let link = (await screen.findByTestId('calibration-source-run')) as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('/analysis?run=ANR-SRC-3')
+
+    // Select row 2 -> the link now follows row 2's OWN peak_source input
+    // (level_2), even though the outlier is still level 3.
+    fireEvent.click(screen.getByTestId('calibration-row-level_2'))
+    reason = screen.getByTestId('calibration-source-run-unresolved')
+    expect(reason.textContent).toContain('level_2')
+    fireEvent.click(screen.getByTestId('calibration-resolve-source-run'))
+    link = (await screen.findByTestId('calibration-source-run')) as HTMLAnchorElement
+    expect(apiClient.getRecord).toHaveBeenLastCalledWith('AOUT-SRC-2')
+    expect(link.getAttribute('href')).toBe('/analysis?run=ANR-SRC-2')
+  })
+
+  it('selecting an EXCLUDED row resolves its source run via its OWN peak_source (it has no fit point)', async () => {
+    const page: PageContext = {
+      activeRunId: 'ANR-CAL-1',
+      revisions: PAGE_CTX.revisions,
+      sourceRun: {
+        recordId: 'ANR-CAL-1',
+        payload: {
+          id: 'ANR-CAL-1',
+          title: 'TEST calibration run',
+          status: 'succeeded',
+          revisionRef: { id: 'ANREV-CAL-1' },
+          inputs: { ...SOURCE_INPUTS, level_5: { kind: 'record', id: 'AOUT-SRC-5', type: 'analysis-output-artifact' } },
+          parameters: CAL_PARAMS,
+        },
+      },
+    }
+    vi.mocked(apiClient.getRecord).mockResolvedValue({ payload: { runRef: { id: 'ANR-SRC-5' } }, id: 'AOUT-SRC-5' } as never)
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    // Row level 5 is excluded (fit_point false) — its source input comes from
+    // its own peak_source (level_5:row0), which no fit point exists for.
+    fireEvent.click(screen.getByTestId('calibration-row-level_5'))
+    const reason = screen.getByTestId('calibration-source-run-unresolved')
+    expect(reason.textContent).toContain('level_5')
+    fireEvent.click(screen.getByTestId('calibration-resolve-source-run'))
+    const link = (await screen.findByTestId('calibration-source-run')) as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('/analysis?run=ANR-SRC-5')
+  })
+
+  it('clearing the selection returns the link to the outlier default', () => {
+    renderView()
+    fireEvent.click(screen.getByTestId('calibration-row-level_2'))
+    expect(screen.getByTestId('calibration-source-run-unresolved').textContent).toContain('level_2')
+    fireEvent.click(screen.getByTestId('calibration-row-level_2')) // toggle off
+    expect(screen.getByTestId('calibration-source-run-unresolved').textContent).toContain('level_3')
+  })
+})
 // --- D7: the honest dref arm ---------------------------------------------------
 
 describe('D7 — a dref-backed calibration artifact renders the NAMED honest arm', () => {
