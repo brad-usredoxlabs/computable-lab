@@ -1297,17 +1297,20 @@ describe('D7 — FIX2 M2: the recalc gate over the REAL shipped parameterSchema 
 
 // --- RGF D7 — the recalc submit's DISABLED state is visually distinguishable --
 // (RUNGATE1 DEFECT-7: the disabled and enabled submits 'both render as
-// identical borderless text' — the button carries no page chrome class and
-// no :disabled styling exists in CalibrationCurveView.css, so only the
-// presence/absence of the reason line tells the operator which state.
-// Fix, in-component (AnalysisPage.css is FROZEN — its
-// `.analysis button:disabled { opacity: .5; cursor: not-allowed }`
-// discipline is the page's authority; this button simply opts into the
-// page's `analysis button` chrome by joining its class list): the disabled
-// state now reads as a disabled button (reduced opacity + not-allowed
-// cursor) and never as live chrome.)
+// identical borderless text' — the button carried no class-scoped styling,
+// so only the presence/absence of the reason line told the operator which
+// state. The closure the component OWNS: the button's OWN class
+// (`.calibration-curve__recalc-submit`) carries the disabled treatment in
+// CalibrationCurveView.css (opacity .5 + not-allowed, mirroring the frozen
+// page discipline) AND an explicit inline state style — opacity 0.5 +
+// not-allowed when blocked, opacity 1 + pointer when live. Note: the frozen
+// AnalysisPage.css `.analysis button:disabled` rules are DESCENDANT selectors
+// and the composite renders in `.analysis-right`, not `.analysis` — the
+// button does NOT join the `analysis` class list (that class matches the bare
+// `.analysis` CONTAINER box rule on the button itself, a real-browser layout
+// defect the first fix cycle shipped; RGF2 removed it).)
 
-describe('RGF D7 — the recalc submit disabled state is visually distinguishable (page :disabled chrome)', () => {
+describe('RGF D7 — the recalc submit disabled state is visually distinguishable (own-class :disabled treatment)', () => {
   const renderRecalcOpen = (page: PageContext) => {
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
@@ -1322,15 +1325,18 @@ describe('RGF D7 — the recalc submit disabled state is visually distinguishabl
     const submit = renderRecalcOpen(pageWithRealSchema(REAL_CAL_FROZEN_PARAMS))
     expect(submit.disabled).toBe(true)
     expect(screen.getByTestId('calibration-recalc-blocked').textContent).toContain('Cannot submit')
-    // The button carries the page's button chrome class (the frozen
-    // AnalysisPage.css `.analysis button:disabled` discipline — the page
-    // already renders disabled buttons as opacity .5 + not-allowed; the
-    // defect was that THIS button opted out of that chrome).
-    expect(submit.classList.contains('analysis')).toBe(true)
-    // jsdom's style resolution does not apply stylesheet :disabled rules,
-    // so the OPACITY assertion is the computed-value proxy that the
-    // page-discipline fix actually produces at render time (a plain
-    // unstyled button computes the default opaque 1):
+    // The button carries its OWN button-scoped class (the disabled treatment
+    // lives in CalibrationCurveView.css on `.calibration-curve__recalc-submit:disabled`,
+    // mirroring the frozen page discipline) — RGF1's false claim was that the
+    // page's `.analysis button:disabled` discipline applied because the button
+    // joined the `analysis` class list; it is a DESCENDANT selector and this
+    // button is not inside `.analysis` (the composite renders in
+    // `.analysis-right`).
+    expect(submit.classList.contains('calibration-curve__recalc-submit')).toBe(true)
+    // jsdom's style resolution does not apply stylesheet :disabled rules, so
+    // the OPACITY assertion is the computed-value proxy that the component's
+    // OWN state style writes at render time (a plain unstyled button computes
+    // the default opaque 1):
     expect(getComputedStyle(submit).opacity).toBe('0.5')
     expect(getComputedStyle(submit).cursor).toBe('not-allowed')
   })
@@ -1350,11 +1356,25 @@ describe('RGF D7 — the recalc submit disabled state is visually distinguishabl
     const submit = renderRecalcOpen(page)
     expect(submit.disabled).toBe(false)
     expect(screen.queryByTestId('calibration-recalc-blocked')).toBeNull()
-    // The live button keeps FULL opacity (never the page's reduced-opacity
-    // disabled treatment) and a cursor that is NOT not-allowed — the
-    // distinguishable pair with the disabled state above.
+    // The live button keeps FULL opacity (never the reduced-opacity disabled
+    // treatment) and a cursor that is NOT not-allowed — the distinguishable
+    // pair with the disabled state above.
     expect(getComputedStyle(submit).opacity).toBe('1')
     expect(getComputedStyle(submit).cursor).not.toBe('not-allowed')
+  })
+
+  it('the submit carries NO class that matches the frozen page CONTAINER box rule (RGF2: the first fix shipped className="analysis" on the button)', () => {
+    // AnalysisPage.css:1-7 (FROZEN): `.analysis { display:flex;
+    // flex-direction:column; gap:1rem; padding:1rem 1.25rem 2rem;
+    // max-width:720px; }`. The button is NOT inside an `.analysis` element
+    // (the composite renders in `.analysis-right`, AnalysisPage.tsx:706), so
+    // its class list must not contain `analysis` — carrying it matches the
+    // bare CONTAINER rule ON the button: flex-column with 1rem 1.25rem 2rem
+    // padding and max-width 720px (a real-browser layout defect jsdom cannot
+    // see — the class absence is the assertable half of this fix).
+    const submit = renderRecalcOpen(pageWithRealSchema(REAL_CAL_FROZEN_PARAMS))
+    expect(submit.classList.contains('analysis'), 'the frozen page CONTAINER class must not sit on the button').toBe(false)
+    expect(Array.from(submit.classList), 'only the button-scoped class(es) remain').not.toContain('analysis')
   })
 })
 
