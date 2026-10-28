@@ -108,3 +108,19 @@ verify then via the storage-devices API/UI surface (routes surface grep found no
 route; verify via the GC-4 registration panel at gate time or GET whatever surface GC-4 shipped).
 AS-L1T0015 NEW: gc-fid-nas entry added at l1t2355; LOAD UNVERIFIED until next restart ->
 evidence_debt=true (cleared by a gate/surface proof the device lists).
+
+## Late addition 2 (same tick, ~00:22): GC-11 CODER EXITED CLEAN — ADV CYCLE 1 LIVE AT CHECKPOINT
+
+GC-11 coder exited rc=0 00:15:59 with end-marker GC11 DONE 1ca3e514 (clusters A RED -> B 42/42 ->
+C composite -> E 7/7 -> F grep-pins). Slot-1 released. ADVERSARIAL CYCLE 1 DISPATCHED 00:21:20 on
+unit run-p110098-i58816747 (bash-script form; launcher scripts/launch-advreview-GC11-cycle1-
+l1t0020.sh, log logs/advreview-GC11-cycle1-l1t0020.log, prompt prompts/advreview-GC11-cycle1-
+l1t0020.txt, report /home/brad/.hermes/cl/reviews/GC11-advreview-cycle1-l1t0020.md; diff base
+10a8c63b..HEAD, GC-10 regression guards + AnalysisPage.css-forbidden check in the brief).
+NEXT TICK: read the report + trail; on ACCEPT -> orch verify (vitest inside app/, tsc vs 21-line
+baseline, ViewRenderer.test.tsx 0-byte vs f571e2b9, server suites, git diff open first-hand) ->
+MERGE (--no-ff, expect AnalysisPage.tsx conflict, GC-10 hydration/hook regions win) -> restart ->
+browser gate receipts/GC-11/RUNGATE1/ (fixtures SEEDED this tick, tell reviewer ANR-000013 +
+ANREV-000008/ANREV-000007 ids + gc-fid-nas now in lane config pending that same restart load).
+On FIX -> fix run to SAME worktree wt/gc-11-lane1-l1t2200 with defect list verbatim (grab a free
+appliance-2 slot; slot-0 showed HELD at 00:07 — flock -n is the arbiter, pid files are stale-prone).
