@@ -86,8 +86,12 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
         // no labware and carries no offer binding (same index as the slot
         // surface).
         [...new Set(state.placements.map((p) => p.labwareId))],
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS
+        // marker — a batch that offered MORE THAN ONE distinct vessel
+        // forbids the placed-vessel fallback (never guess its target).
+        state.committedOfferAmbiguousByEvent,
       ),
-    [state.events, state.preview, state.committedOfferByEvent, state.placements],
+    [state.events, state.preview, state.committedOfferByEvent, state.placements, state.committedOfferAmbiguousByEvent],
   )
   const ghostLawnPlacements = useMemo(
     () =>

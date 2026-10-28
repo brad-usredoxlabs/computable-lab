@@ -25,6 +25,22 @@ import type { WellId } from '../../types/plate'
 import type { AiResolvedLabware } from '../../types/ai'
 import type { EventEditorPreview } from '../EventEditorContext'
 
+/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch OFFER BINDING is
+ *  TRI-STATE — `null` alone conflated "no offer" with "multiple offers" and
+ *  let the placed-vessel fallback GUESS on the genuinely-ambiguous case:
+ *    - a string recordId   : the batch's SINGLE-vessel offer (attribution);
+ *    - the ABSENT entry     : the batch carried NO offer (fallback allowed);
+ *    - the ambiguous marker : the batch offered MORE THAN ONE distinct vessel
+ *                             (fallback FORBIDDEN — never guess).
+ *  The marker is a shared token (never a recordId), exported so the reducer
+ *  that captures the binding at commit time and any future reader speak the
+ *  same tri-state. (Pre-fix shape: `Record<string, string | null>` — kept as
+ *  the first two arms of this one; callers passing the old shape still mean
+ *  exactly what they meant: a recordId or "no offer".) */
+export const OFFER_BINDING_AMBIGUOUS = Symbol('offer-binding-ambiguous')
+
+type OfferBindingValue = string | null | typeof OFFER_BINDING_AMBIGUOUS
+
 /** labwareId → the set of WellIds touched by at least one committed or
  *  preview event on that labware (empty set is never stored).
  *
@@ -62,8 +78,11 @@ export function buildEventWellIndex(
    *  staged (the preview's own resolvedLabwares). The binding rides each
    *  committed batch, so a later turn committing over it cannot re-route (or
    *  erase) an earlier turn's events. Absent/empty entry = "no offer" (the
-   *  event self-attributes, or attribute-less events attribute to nothing). */
-  committedOfferByEvent?: Record<string, string | null>,
+   *  event self-attributes, or attribute-less events attribute to nothing).
+   *  L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): TRI-STATE — the value may also
+   *  be the OFFER_BINDING_AMBIGUOUS marker (the batch offered >1 distinct
+   *  vessel: the placed-vessel fallback is then FORBIDDEN — never guess). */
+  committedOfferByEvent?: Record<string, OfferBindingValue>,
   /** L2-SUITE-A-uifix2 FIX2 (D2): the ids of the labware vessels CURRENTLY
    *  PLACED on the deck (committed placements — the tiles that exist). A
    *  well-bearing event with NO explicit labware reference AND no per-batch
@@ -75,30 +94,56 @@ export function buildEventWellIndex(
    *  attribute to. Absent/empty = "the deck holds no placed vessels" (the
    *  pre-fix behavior holds byte-for-byte). */
   placedLabwareIds?: string[],
+  /** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): per-event AMBIGUOUS-OFFER
+   *  marker — eventId → true when THAT event's batch offered MORE THAN ONE
+   *  distinct vessel (captured at commit time, when the batch's
+   *  resolvedLabwares were still visible). For such an event the
+   *  placed-vessel fallback is FORBIDDEN — the target is genuinely
+   *  ambiguous (never guess); an absent entry means the batch carried no
+   *  offer (the D2 fallback is allowed). Equivalent to carrying the
+   *  OFFER_BINDING_AMBIGUOUS marker in `committedOfferByEvent` — both are
+   *  honored. */
+  committedOfferAmbiguousByEvent?: Record<string, boolean>,
 ): Map<string, Set<WellId>> {
   const byLabware = new Map<string, Set<WellId>>()
 
-  // The batch's single-vessel offer — the only case where an offer-less event's
-  // target is unambiguous. Multiple (distinct) offers => no guess; zero offers
-  // => no attribution. Per arm: the STAGED arm's binding is the preview's own
-  // resolvedLabwares (a preview is one turn's batch, so one offer covers all
-  // its events); the COMMITTED arm's is this event's OWN entry in
-  // `committedOfferByEvent` (the binding captured when ITS batch was staged —
-  // the fix for the pre-fix single global field that re-routed/erased an
-  // earlier turn's events, D1).
-  const singleVesselOffer = (binding?: AiResolvedLabware[] | null): string | null => {
+  // The batch's offer, TRI-STATE (L2-SUITE-A-uifix2 FIX3, advc1 defect 3):
+  // the single-vessel recordId, or the AMBIGUOUS marker when the batch
+  // offered MORE THAN ONE distinct vessel — that is the case this module
+  // documents as "genuinely ambiguous ... attributes to NOTHING". Pre-fix
+  // both "zero offers" and "multiple offers" collapsed to null and the
+  // placed-vessel fallback GUESSED on the multiple case. Per arm: the STAGED
+  // arm's binding is the preview's own resolvedLabwares (a preview is one
+  // turn's batch, so one offer covers all its events); the COMMITTED arm's
+  // is this event's OWN entry in `committedOfferByEvent` (the binding
+  // captured when ITS batch was staged — the fix for the pre-fix single
+  // global field that re-routed/erased an earlier turn's events, D1) or its
+  // `committedOfferAmbiguousByEvent` marker (captured at the same time —
+  // the binding is not persisted, so the ambiguity must ride the batch too).
+  const offerOfBatch = (
+    binding?: AiResolvedLabware[] | null,
+  ): string | typeof OFFER_BINDING_AMBIGUOUS | null => {
     const ids = (binding ?? [])
       .map((offer) => offer.recordId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
-    return new Set(ids).size === 1 ? ids[0] : null
+    const distinct = new Set(ids)
+    if (distinct.size > 1) return OFFER_BINDING_AMBIGUOUS
+    return distinct.size === 1 ? (ids[0] as string) : null
   }
-  const stagedOffer = singleVesselOffer(preview?.resolvedLabwares)
-  const committedOfferOf = (eventId: string): string | null => {
+  const stagedOffer = offerOfBatch(preview?.resolvedLabwares)
+  const committedOfferOf = (eventId: string): OfferBindingValue => {
     const bound = committedOfferByEvent?.[eventId]
-    return typeof bound === 'string' && bound.length > 0 ? bound : null
+    if (bound === OFFER_BINDING_AMBIGUOUS) return OFFER_BINDING_AMBIGUOUS
+    if (typeof bound === 'string' && bound.length > 0) return bound
+    if (committedOfferAmbiguousByEvent?.[eventId] === true) return OFFER_BINDING_AMBIGUOUS
+    return null
   }
 
-  const add = (event: PlateEvent, offerRecordId: string | null) => {
+  const add = (event: PlateEvent, offer: string | typeof OFFER_BINDING_AMBIGUOUS | null) => {
+    // The offer's recordId for attribution — the AMBIGUOUS marker means
+    // "no guess": the event attributes to NOTHING (it still self-attributes
+    // above when it carries an explicit labware reference).
+    const offerRecordId: string | null = offer === OFFER_BINDING_AMBIGUOUS ? null : offer
     const details = event.details as Record<string, unknown>
     // The labware references, mirroring collectEventLabwareIds
     // (previewProjection.ts) so the two walkers stay in sync.
@@ -158,7 +203,12 @@ export function buildEventWellIndex(
         byLabware.set(offerRecordId, set)
       }
       for (const well of all) set.add(well)
-    } else if (unique.length === 0 && offerRecordId === null && all.length > 0) {
+    } else if (
+      unique.length === 0
+      && offer !== OFFER_BINDING_AMBIGUOUS
+      && offerRecordId === null
+      && all.length > 0
+    ) {
       // L2-SUITE-A-uifix2 FIX2 (D2): the REAL committed shape — an accepted
       // add_material targeting an ALREADY-PLACED plate carries wells but NO
       // explicit labware reference AND no per-batch offer binding (the draft
@@ -167,6 +217,9 @@ export function buildEventWellIndex(
       // the target unambiguous (the plate the tile carries); multiple distinct
       // placed vessels are genuinely ambiguous => attribute to NOTHING
       // (never guess); zero placed vessels => nothing to attribute to.
+      // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the fallback fires ONLY on
+      // "no offer binding" — an AMBIGUOUS offer (the batch offered several
+      // vessels) is exactly the case that attributes to NOTHING.
       const placed = new Set(
         (placedLabwareIds ?? [])
           .filter((id): id is string => typeof id === 'string' && id.length > 0),

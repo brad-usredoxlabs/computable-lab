@@ -326,6 +326,19 @@ export interface EventEditorState {
    * bound to an offer" — read it as `state.committedOfferByEvent ?? {}`.
    */
   committedOfferByEvent?: Record<string, string | null>
+  /**
+   * L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS-OFFER
+   * marker, keyed by eventId — true when THAT event's batch offered MORE
+   * THAN ONE distinct vessel. `committedOfferByEvent` is tri-state: a
+   * recordId = the batch's single offer, an absent entry = the batch
+   * carried no offer (the deck's placed-vessel fallback is allowed), and
+   * this marker = the batch was genuinely ambiguous (the fallback is
+   * FORBIDDEN — the placed-vessel guess is exactly what the never-guess
+   * note at eventWellIndex.ts forbids). Captured at the same instant as
+   * `committedOfferByEvent` (commit time, when the batch's resolvedLabwares
+   * are still visible) and cleared with it. Same optionality contract.
+   */
+  committedOfferAmbiguousByEvent?: Record<string, boolean>
   graphLemurSource: EventEditorGraphLemurSource | null
   fixIt: FixItState
   /**
@@ -475,6 +488,7 @@ const initialState: EventEditorState = {
   tipState: { kind: 'empty' },
   preview: null,
   committedOfferByEvent: {},
+  committedOfferAmbiguousByEvent: {},
   graphLemurSource: null,
   fixIt: {
     isOpen: false,
@@ -615,32 +629,35 @@ function normalizePreviewPlacementLocations(
   return changed ? { ...preview, previewPlacements } : preview
 }
 
-/** L2-SUITE-A-uifix2-fix1 [D1]: the SINGLE-vessel recordId of a batch's
- *  resolved-labware OFFER — the only case where an offer-less event's target
- *  is unambiguous. Multiple (distinct) vessels => ambiguous => null (never
- *  guess); zero vessels => null. */
-function singleVesselRecordId(binding?: AiResolvedLabware[] | null): string | null {
-  const ids = (binding ?? [])
-    .map((offer) => offer.recordId)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
-  return new Set(ids).size === 1 ? ids[0] : null
-}
-
-/** L2-SUITE-A-uifix2-fix1 [D1]: the per-batch committed offer binding for the
- *  events of ONE preview — every event in the batch carries the SINGLE-vessel
- *  recordId of the preview's own resolvedLabwares (the offer live when the
- *  batch was staged). No single-vessel offer => an empty binding (offer-less
- *  events in the batch attribute to nothing; events with an explicit labware
- *  ref self-attribute). The binding rides the committed events, so a later
- *  turn committing over them cannot re-route (or erase) them. */
-function committedBindingForPreview(
+/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch offer capture for
+ *  the events of ONE preview — the TRI-STATE that `null` used to conflate:
+ *    - the batch's SINGLE distinct vessel  -> binding[ev] = that recordId;
+ *    - NO vessel (zero offers)             -> binding[ev] = null
+ *      (absent-ish entry: the placed-vessel fallback is ALLOWED);
+ *    - MORE THAN ONE distinct vessel       -> binding[ev] = null AND
+ *      ambiguous[ev] = true (the explicit ambiguous marker: the batch's
+ *      target is genuinely ambiguous, so the placed-vessel fallback is
+ *      FORBIDDEN — never guess; the batch's real target may be a vessel
+ *      that is not even placed yet).
+ *  Both maps ride the committed events (merged into the running state maps
+ *  at commit time), so a later turn cannot re-route (or erase) them. */
+function committedOfferCapturesForPreview(
   events: PlateEvent[],
   preview: { resolvedLabwares?: AiResolvedLabware[] },
-): Record<string, string | null> {
-  const recordId = singleVesselRecordId(preview.resolvedLabwares)
+): { binding: Record<string, string | null>; ambiguous: Record<string, boolean> } {
+  const ids = (preview.resolvedLabwares ?? [])
+    .map((offer) => offer.recordId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const distinct = new Set(ids)
+  const recordId = distinct.size === 1 ? (ids[0] as string) : null
+  const isAmbiguous = distinct.size > 1
   const binding: Record<string, string | null> = {}
-  for (const event of events) binding[event.eventId] = recordId
-  return binding
+  const ambiguous: Record<string, boolean> = {}
+  for (const event of events) {
+    binding[event.eventId] = recordId
+    if (isAmbiguous) ambiguous[event.eventId] = true
+  }
+  return { binding, ambiguous }
 }
 
 /** L2-SUITE-A-uifix2-fix1 [D1]: merge a per-batch committed offer binding
@@ -699,7 +716,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         // offer is not a record field) — the accepted-then-reloaded arm rides
         // defect 5 / the deck-variant item, so the per-batch binding is
         // cleared (a different graph's events are not bound to a stale offer).
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the ambiguous marker is
+        // part of the same per-batch capture — cleared with it.
         committedOfferByEvent: {},
+        committedOfferAmbiguousByEvent: {},
         graphLemurSource: null,
         tipState: { kind: 'empty' },
       }
@@ -995,6 +1015,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       // them (the pre-fix single top-level field OVERWROTE the binding on every
       // commit and applied it to ALL committed events — the exact re-route the
       // pre-fix comment claimed was prevented).
+      // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the capture is TRI-STATE —
+      // a batch that offered MORE THAN ONE distinct vessel is genuinely
+      // ambiguous, so its events also carry the ambiguous marker: the deck's
+      // placed-vessel fallback must NOT guess their target (it may be a
+      // vessel that is not even placed yet). The marker rides the batch,
+      // merged like the binding.
+      const { binding: committedBinding, ambiguous: committedAmbiguous } =
+        committedOfferCapturesForPreview(committedEvents, preview)
       return {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
@@ -1006,8 +1034,15 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         preview: null,
         committedOfferByEvent: mergeCommittedOfferBinding(
           state.committedOfferByEvent ?? {},
-          committedBindingForPreview(committedEvents, preview),
+          committedBinding,
         ),
+        // Per-event merge, keeping each event's OWN marker (an earlier
+        // turn's ambiguity is never erased by a later commit — the same
+        // per-batch discipline as the binding).
+        committedOfferAmbiguousByEvent: {
+          ...(state.committedOfferAmbiguousByEvent ?? {}),
+          ...committedAmbiguous,
+        },
       }
     }
     case 'open_fixit': {

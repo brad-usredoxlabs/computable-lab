@@ -140,3 +140,71 @@ describe('buildEventWellIndex — L2-SUITE-A-uifix2 FIX2 [D2]: the real committe
     expect(index.get(PLATE)?.has('B2')).toBe(true)
   })
 })
+
+/**
+ * L2-SUITE-A-uifix2 FIX3 (advc1 defect 3, MINOR) — the placed-vessel fallback
+ * must fire only on "NO offer binding", never on "MULTIPLE offer bindings".
+ * Pre-fix, `null` in the per-batch binding meant BOTH (EventEditorContext's
+ * singleVesselRecordId collapses zero and multiple offers to the same
+ * sentinel), so a batch that offered TWO distinct vessels — the case this
+ * module documents (header:50-53) as "genuinely ambiguous ... attributes to
+ * NOTHING" — painted its wells on the deck's single placed vessel (the
+ * reviewer's probe: committed {e1:null} + placements ['PLATE-1'] attributed).
+ * The binding is TRI-STATE:
+ *   absent entry      = the batch carried no offer  -> fallback ALLOWED
+ *   a recordId        = the batch's single offer    -> offer attribution
+ *   ambiguous marker  = the batch offered >1 vessel -> fallback FORBIDDEN
+ * (the marker rides per-event for committed batches — captured at commit
+ * time, when the batch's resolvedLabwares are still visible; the STAGED arm
+ * reads its own preview's resolvedLabwares directly).
+ */
+describe('buildEventWellIndex — L2-SUITE-A-uifix2 FIX3 [ADVC3]: a MULTI-OFFER batch is ambiguous — the placed-vessel fallback never guesses', () => {
+  it('attributes a COMMITTED add_material to NOTHING when its batch offered MULTIPLE vessels (explicit ambiguous marker), even with a single placed labware', () => {
+    const committed = [committedAddMaterialNoRef(B1H6)]
+    // The batch offered two distinct vessels: the target is genuinely
+    // ambiguous (the reviewer's probe shape {e1:null} + placements
+    // ['PLATE-1'] must NOT attribute).
+    const index = buildEventWellIndex(committed, null, {}, [PLATE], { [committed[0]!.eventId]: true })
+    expect(index.size).toBe(0)
+  })
+
+  it('attributes a STAGED add_material to NOTHING when the turn offered MULTIPLE vessels (its preview carries two resolvedLabwares), even with a single placed labware', () => {
+    const staged: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [committedAddMaterialNoRef(['A1', 'B1'], 'evt-staged-multi')],
+      resolvedLabwares: [
+        { recordId: 'lbw-vessel-A' },
+        { recordId: 'lbw-vessel-B' },
+      ],
+    } as unknown as EventEditorPreview
+    // While STAGED the batch's real target is the OTHER not-yet-placed
+    // vessel — painting on the single placed vessel is the exact guess the
+    // never-guess note forbids.
+    const index = buildEventWellIndex([], staged, {}, [PLATE])
+    expect(index.size).toBe(0)
+  })
+
+  it('a NO-offer batch (absent marker) still falls back to the single placed labware (the D2 arm is preserved — tri-state, not blanket refusal)', () => {
+    const committed = [committedAddMaterialNoRef(['A1'])]
+    // No ambiguous marker for this event: the batch genuinely carried no
+    // offer -> the D2 single-placed-vessel attribution still applies.
+    const index = buildEventWellIndex(committed, null, {}, [PLATE], {})
+    expect(index.get(PLATE)?.size).toBe(1)
+  })
+
+  it('an event WITH an explicit labware reference is unaffected by the ambiguous marker (the reference self-attributes)', () => {
+    const transfer: PlateEvent = {
+      eventId: 'EVT-multi',
+      event_type: 'transfer',
+      details: {
+        source: { labwareId: 'lbw-src', wells: ['A1'] },
+        target: { labwareId: 'lbw-dst', wells: ['B1', 'B2'] },
+      },
+    } as unknown as PlateEvent
+    const index = buildEventWellIndex([transfer], null, {}, [PLATE], { 'EVT-multi': true })
+    expect(index.get('lbw-src')?.size).toBe(1)
+    expect(index.get('lbw-dst')?.size).toBe(2)
+    expect(index.get(PLATE)).toBeUndefined()
+  })
+})

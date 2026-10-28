@@ -66,8 +66,12 @@ export function DeckSlot({ slot }: DeckSlotProps) {
         // no labware and carries no offer binding (the real committed shape
         // of an accepted add_material onto an already-placed plate).
         [...new Set(state.placements.map((p) => p.labwareId))],
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS
+        // marker — a batch that offered MORE THAN ONE distinct vessel
+        // forbids the placed-vessel fallback (never guess its target).
+        state.committedOfferAmbiguousByEvent,
       ),
-    [state.events, state.preview, state.committedOfferByEvent, state.placements],
+    [state.events, state.preview, state.committedOfferByEvent, state.placements, state.committedOfferAmbiguousByEvent],
   )
   const affectedWells = placement
     ? eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET
