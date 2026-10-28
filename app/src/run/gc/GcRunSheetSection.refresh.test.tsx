@@ -174,8 +174,10 @@ describe('GcRunSheetSection — user-triggered refresh (the C leg)', () => {
     render(wrap(<GcRunSheetSection runId={RUN_ID} />))
     const sheet = await screen.findByTestId('gc-run-sheet')
     expect(sheet).toBeDefined()
-    // Mount state: the entry row WITHOUT the ACQP ref.
-    expect(screen.getByTestId('gc-row-ISEN-RC-1')).toBeDefined()
+    // Mount state: the entry row WITHOUT the ACQP ref. Awaited — the row
+    // renders in the entry-fetch phase (after the probe), so a sync read
+    // right after finding the header would race under a heavy batch.
+    expect(await screen.findByTestId('gc-row-ISEN-RC-1')).toBeDefined()
     expect(screen.queryByTestId('gc-cell-ISEN-RC-1-acquisitionPackageRef')).toBeNull()
     const sequenceProbeCalls = () =>
       vi

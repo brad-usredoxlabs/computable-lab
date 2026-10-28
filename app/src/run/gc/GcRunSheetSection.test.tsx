@@ -187,10 +187,15 @@ describe('GcRunSheetSection — the GC case (a linked sequence renders the sheet
   it('renders the sheet with BOTH entries and the full-column table', async () => {
     mockProbe([LINKED_SEQUENCE, UNLINKED_SEQUENCE])
     render(wrap(<GcRunSheetSection runId={RUN_ID} />))
+    // Two-phase render: the sheet header appears when the PROBE resolves; the
+    // rows appear when the ENTRY fetch (getRecord per entry) resolves. Await
+    // the rows (the second phase) so this is load-timing-robust — a sync
+    // getByTestId right after finding the header would race the entry fetch
+    // under a heavy parallel batch.
     expect(await screen.findByTestId('gc-run-sheet')).toBeDefined()
-    expect(screen.getByTestId('gc-run-table')).toBeDefined()
-    // Both entries appear (in entryRefs order).
-    expect(screen.getByTestId('gc-row-ISEN-GC12-A-001')).toBeDefined()
+    expect(await screen.findByTestId('gc-run-table')).toBeDefined()
+    // Both entries appear (in entryRefs order) — awaited (entry-fetch phase).
+    expect(await screen.findByTestId('gc-row-ISEN-GC12-A-001')).toBeDefined()
     expect(screen.getByTestId('gc-row-ISEN-GC12-A-002')).toBeDefined()
     // The full columns incl. the honesty arms (bait #9).
     expect(screen.getByTestId('gc-cell-ISEN-GC12-A-001-sampleName')).toHaveTextContent('RES35077-4')
