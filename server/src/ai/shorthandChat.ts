@@ -1296,6 +1296,37 @@ export function malformedShorthandRepairPrompt(
 }
 
 // ---------------------------------------------------------------------------
+// Empty-shorthand repair (L2-SUITE-A-uifix2 FIX2, D4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The ONE repair prompt for the EMPTY-shorthand model-output gap (gate
+ * re-gate-3 D4: P5/P7 arrived with intent=event_shorthand and NO shorthand
+ * YAML — junk envelope keys or a bare clarification, never a document).
+ * Same discipline as malformedShorthandRepairPrompt: the contract is QUOTED
+ * from the registered vocabulary (data, never prose-invented), the original
+ * request is restated, and the re-ask demands the SAME intent with the
+ * `shorthand` field present. Origin-based: only the empty-shorthand guard
+ * emits it — a schema-REJECTED non-empty document keeps its own prompt.
+ */
+export function emptyShorthandRepairPrompt(prompt: string): string {
+  return [
+    'Your agent_intent call used intent "event_shorthand" but the `shorthand` field was EMPTY — there is no scientist-intent document to compile, so nothing could be drafted.',
+    'Re-emit the agent_intent call with intent "event_shorthand" and a COMPLETE `shorthand` document for this request: ' + prompt,
+    'The contract: a scientist-intent YAML document — top-level `intentId` + `actions[]` (each action carries `action` from the CLOSED vocabulary plus natural-language noun labels and numeric parameters); optional `unresolved`. No resolved record ids, no deck slots, no event primitives.',
+    'The shape the schema accepts (the verb is the VALUE of the `action` key):',
+    'intentId: <short id>',
+    'actions:',
+    '  - action: add_material',
+    '    material: "DMEM"',
+    '    volumeUl: 100',
+    '    targetWells: [A1]',
+    defaultScientistIntentVocabulary().contractBlock(),
+    'If the request genuinely CANNOT be drafted (a missing fact you cannot resolve), still emit the `shorthand` document with the action described and put the missing fact under `unresolved` — an empty `shorthand` field is never an acceptable answer.',
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Compile result → AgentResult (the proposal shape ChangesPanel already renders)
 // ---------------------------------------------------------------------------
 
