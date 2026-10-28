@@ -17,7 +17,7 @@
  * beforeAll (with an explicit hook timeout — initializeApp is slow) and
  * cached, so no individual test carries the bootstrap cost.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -25,6 +25,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { initializeApp } from '../../server.js';
 import { setupTestWorkspace } from '../../test/setupApp.js';
 import { createRunSheetHandlers } from './RunSheetHandlers.js';
+import * as acquisitionPackageModule from '../../storage/acquisitionPackage.js';
 import type { AppContext } from '../../server.js';
 
 const DEVICE_ID = 'nas0'; // test device id — config DATA, not a real config id
@@ -497,5 +498,91 @@ describe('fix-cycle-1 D1: the analysis-inputs authorization deny paths', () => {
     const body = await c.handlers.analysisInputs(req(undefined, { id: 'ACQP-401' }, { 'x-user-id': UNKNOWN_USER }), r.reply);
     expect(r.status()).toBe(401);
     expect(body).toMatchObject({ error: 'UNAUTHENTICATED' });
+  });
+});
+
+/**
+ * GC-12 fix-cycle-2 (D4, adv gate §4 DEFECT 1) — the register body is
+ * `RegisterAcquisitionPackageInput` VERBATIM (spec D4, unsuperseded part):
+ * the handler must ACCEPT and FORWARD `roles` (typed as the service's
+ * PackageFileRole map) and `sourceRunRef`, not declare-and-drop them.
+ * The pins inspect the service input via a module-namespace spy
+ * (vi.spyOn on the acquisitionPackage namespace — the established house
+ * pattern, cf. AgentOrchestrator.*.test.ts runChatbotCompile spies) so the
+ * body contract and the service contract cannot drift apart again:
+ *   - a register call carrying roles + sourceRunRef reaches
+ *     registerAcquisitionPackage with both fields;
+ *   - a call without them must NOT put the keys on the input object at all
+ *     (conditional-spread omission, exactOptionalPropertyTypes-safe — never
+ *     `{ roles: undefined }`).
+ */
+describe('fix-cycle-2 D4: the register body is RegisterAcquisitionPackageInput verbatim', () => {
+  it('forwards roles and sourceRunRef to registerAcquisitionPackage (the body contract = the service contract)', async () => {
+    const c = await ctx();
+    const entryId = await c.makeEntry();
+    const key = await writeFullDotD(c.mountRoot, 'VERBATIM.D');
+    const roles = { 'FID1A.CH': 'signal_channel', 'RUN.LOG': 'method_asset' };
+    const sourceRunRef = { kind: 'record' as const, id: 'RUN-RSH-TEST', type: 'run' as const };
+
+    const spy = vi.spyOn(acquisitionPackageModule, 'registerAcquisitionPackage');
+    try {
+      const r = mockReply();
+      const body = await c.handlers.register(
+        req({
+          deviceId: DEVICE_ID,
+          directoryKey: key,
+          entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' },
+          roles,
+          sourceRunRef,
+        }),
+        r.reply,
+      );
+      expect(r.status()).toBe(200);
+      expect(body).toMatchObject({ entryRecordId: entryId });
+      // The service saw the WHOLE documented input — roles and sourceRunRef
+      // included, verbatim.
+      expect(spy).toHaveBeenCalledTimes(1);
+      const serviceInput = spy.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+      expect(serviceInput).toBeDefined();
+      expect(serviceInput.roles).toEqual(roles);
+      expect(serviceInput.sourceRunRef).toEqual(sourceRunRef);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('omits roles/sourceRunRef from the service input when the body does not send them (the keys are ABSENT, not undefined)', async () => {
+    const c = await ctx();
+    const entryId = await c.makeEntry();
+    const key = await writeFullDotD(c.mountRoot, 'VERBATIM-ABSENT.D');
+
+    const spy = vi.spyOn(acquisitionPackageModule, 'registerAcquisitionPackage');
+    try {
+      const r = mockReply();
+      const body = await c.handlers.register(
+        req({
+          deviceId: DEVICE_ID,
+          directoryKey: key,
+          entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' },
+        }),
+        r.reply,
+      );
+      expect(r.status()).toBe(200);
+      expect(body).toMatchObject({ entryRecordId: entryId });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const serviceInput = spy.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+      expect(serviceInput).toBeDefined();
+      // Omitted, not undefined: the conditional-spread idiom means the keys
+      // do not exist on the object at all (the exactOptionalPropertyTypes
+      // contract — `{ roles: undefined }` would be a type error AND a
+      // semantic change).
+      expect('roles' in serviceInput).toBe(false);
+      expect('sourceRunRef' in serviceInput).toBe(false);
+      // The required fields still flow verbatim.
+      expect(serviceInput.deviceId).toBe(DEVICE_ID);
+      expect(serviceInput.directoryKey).toBe(key);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

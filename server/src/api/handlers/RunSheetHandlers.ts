@@ -52,6 +52,7 @@ import {
   packageAnalysisInputs,
   AcquisitionPackageError,
   type RegisterAcquisitionPackageInput,
+  type PackageFileRole,
 } from '../../storage/acquisitionPackage.js';
 import { StorageError } from '../../storage/types.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
@@ -59,12 +60,19 @@ import type { AccessAction } from '../../security/AccessControlService.js';
 /** The register body: the GC-4 RegisterAcquisitionPackageInput + the
  *  GC-12-added `entryRef` (the instrument-sequence-entry the package
  *  attaches to). deviceId is the CONFIG storage device id (from GET /config)
- *  — NEVER a mount path (bait #7). */
+ *  — NEVER a mount path (bait #7).
+ *
+ *  fix-cycle-2 D4: the body is the service input VERBATIM (spec D4) —
+ *  `roles` is typed as the service's own `PackageFileRole` map (imported,
+ *  never re-declared) and `sourceRunRef` is accepted too, so the body
+ *  contract and the RegisterAcquisitionPackageInput contract cannot drift
+ *  apart again. */
 interface RegisterBody {
   deviceId?: string;
   directoryKey?: string;
-  roles?: Record<string, string>;
+  roles?: Record<string, PackageFileRole>;
   sampleRef?: { kind: 'record'; id: string; type: string; label?: string };
+  sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string };
   entryRef?: { kind: 'record'; id: string; type: string };
 }
 
@@ -146,11 +154,16 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       }
 
       // The GC-4 registration flow (CALL IT, don't edit it — spec OUT-stop).
-      // Conditional spreads for optional fields (exactOptionalPropertyTypes).
+      // Conditional spreads for optional fields (exactOptionalPropertyTypes):
+      // the body is RegisterAcquisitionPackageInput verbatim (spec D4), so
+      // every documented field is forwarded — roles and sourceRunRef
+      // included — or omitted entirely (never `{x: undefined}`).
       const input: RegisterAcquisitionPackageInput = {
         deviceId,
         directoryKey,
         ...(body.sampleRef ? { sampleRef: body.sampleRef } : {}),
+        ...(body.roles ? { roles: body.roles } : {}),
+        ...(body.sourceRunRef ? { sourceRunRef: body.sourceRunRef } : {}),
       };
       let result;
       try {
