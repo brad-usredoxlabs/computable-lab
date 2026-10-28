@@ -64,6 +64,17 @@ export function buildEventWellIndex(
    *  erase) an earlier turn's events. Absent/empty entry = "no offer" (the
    *  event self-attributes, or attribute-less events attribute to nothing). */
   committedOfferByEvent?: Record<string, string | null>,
+  /** L2-SUITE-A-uifix2 FIX2 (D2): the ids of the labware vessels CURRENTLY
+   *  PLACED on the deck (committed placements — the tiles that exist). A
+   *  well-bearing event with NO explicit labware reference AND no per-batch
+   *  offer binding (the REAL committed shape of an accepted add_material
+   *  targeting an already-placed plate: details.wells, no labwareId anywhere)
+   *  attributes to the deck's SINGLE placed vessel — the vessel the tile
+   *  carries. Multiple (distinct) placed vessels => genuinely ambiguous =>
+   *  attribute to NOTHING (never guess). Zero placed vessels => nothing to
+   *  attribute to. Absent/empty = "the deck holds no placed vessels" (the
+   *  pre-fix behavior holds byte-for-byte). */
+  placedLabwareIds?: string[],
 ): Map<string, Set<WellId>> {
   const byLabware = new Map<string, Set<WellId>>()
 
@@ -147,6 +158,28 @@ export function buildEventWellIndex(
         byLabware.set(offerRecordId, set)
       }
       for (const well of all) set.add(well)
+    } else if (unique.length === 0 && offerRecordId === null && all.length > 0) {
+      // L2-SUITE-A-uifix2 FIX2 (D2): the REAL committed shape — an accepted
+      // add_material targeting an ALREADY-PLACED plate carries wells but NO
+      // explicit labware reference AND no per-batch offer binding (the draft
+      // carried no resolvedLabware offer for the existing vessel). The deck's
+      // own tile list is the attribution source: a SINGLE placed vessel makes
+      // the target unambiguous (the plate the tile carries); multiple distinct
+      // placed vessels are genuinely ambiguous => attribute to NOTHING
+      // (never guess); zero placed vessels => nothing to attribute to.
+      const placed = new Set(
+        (placedLabwareIds ?? [])
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      )
+      if (placed.size === 1) {
+        const [vesselId] = placed
+        let set = byLabware.get(vesselId)
+        if (!set) {
+          set = new Set()
+          byLabware.set(vesselId, set)
+        }
+        for (const well of all) set.add(well)
+      }
     }
   }
 

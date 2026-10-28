@@ -76,8 +76,18 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
   // preview events' details.wells) — the lawn tiles mark the actual wells
   // the events touch, staged OR accepted (same index as the slot surface).
   const eventWellIndex = useMemo(
-    () => buildEventWellIndex(state.events, state.preview, state.committedOfferByEvent),
-    [state.events, state.preview, state.committedOfferByEvent],
+    () =>
+      buildEventWellIndex(
+        state.events,
+        state.preview,
+        state.committedOfferByEvent,
+        // L2-SUITE-A-uifix2 FIX2 (D2): the deck's placed vessels — the
+        // attribution fallback for a well-bearing committed event that names
+        // no labware and carries no offer binding (same index as the slot
+        // surface).
+        [...new Set(state.placements.map((p) => p.labwareId))],
+      ),
+    [state.events, state.preview, state.committedOfferByEvent, state.placements],
   )
   const ghostLawnPlacements = useMemo(
     () =>
