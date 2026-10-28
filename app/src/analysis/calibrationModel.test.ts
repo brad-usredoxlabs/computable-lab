@@ -358,6 +358,66 @@ describe('joinCurvePoints — FIX1 D5: the join keys on the shipped link, NOT am
   })
 })
 
+// --- FIX2 OBS O-C + O-B: join termination + the amount-collision arm --------
+// O-C: the shipped keyFor loop `while (seenKeys.has(k)) k = \`${base}-${rowIdx}\``
+// never MUTATES k on a repeat — when the natural suffix is itself a claimed base
+// it spins forever (adversarial names X / X-2 / X). The bounded suffix counter
+// makes it TERMINATE (RED: the old loop is an unbounded spin — captured by probe,
+// never by a vitest worker that would hang). O-B: a row with an unparseable
+// peak_source whose amount is COLLIDED by two fit points must resolve its source
+// to UNRESOLVED (null) — not the last writer's input (the closed unambiguous
+// NO_MATCHING_PEAK pin stays green).
+describe('joinCurvePoints — FIX2 OBS O-C/O-B: bounded key suffix + amount-collision arm', () => {
+  // The reviewer's adversarial name shape: base X claimed by row 0, X-2 claimed
+  // by row 1, then row 2 re-asks for base X — the natural suffix X-2 is ALREADY
+  // claimed, so the old loop recomputes X-2 forever. The bounded counter must
+  // terminate with a unique key.
+  it('O-C: adversarial colliding names terminate with UNIQUE keys (no infinite loop)', () => {
+    const rows: Record<string, unknown>[] = [
+      { level: 1, amount: 1, peak_source: 'X:row0', response_ratio: 3, fit_point: true, relative_residual: 0, flags: [] },
+      { level: 2, amount: 2, peak_source: 'X-2:row0', response_ratio: 5, fit_point: true, relative_residual: 0, flags: [] },
+      { level: 3, amount: 3, peak_source: 'X:row1', response_ratio: 9, fit_point: true, relative_residual: 0, flags: [] },
+    ]
+    // The old keyFor would spin forever here (RED evidence via the standalone
+    // probe — a vitest run on the old code times out the worker). The fixed
+    // join must RETURN with every key unique.
+    const j = joinCurvePoints(rows, [], 'response_ratio')
+    expect(j.length).toBe(3)
+    const keys = j.map((p) => p.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    // Row 2 (base X, suffix X-2 both claimed) gets the bounded counter key.
+    expect(keys[2]).toBe('X-2-2')
+  })
+
+  it('O-B: a row with NO parseable peak_source whose amount is COLLIDED by two fit points resolves sourceInput to null (named unresolved, not a last-writer guess)', () => {
+    const rows: Record<string, unknown>[] = [
+      { level: 1, amount: 2, peak_source: null, response_ratio: 9, fit_point: true, relative_residual: 0, flags: ['NO_MATCHING_PEAK'] },
+    ]
+    const fps: Record<string, unknown>[] = [
+      { amount: 2, response: 5, source_input: 'level_2', source_point_ref: { input_name: 'level_2', peak_row_index: 0 } },
+      { amount: 2, response: 9.5, source_input: 'level_3', source_point_ref: { input_name: 'level_3', peak_row_index: 0 } },
+    ]
+    // Two fit points share amount 2 — the amount-keyed fallback is AMBIGUOUS.
+    // RED (old code): the last writer's source_input (level_3) was returned —
+    // a provenance lie. GREEN: named unresolved (null).
+    const j = joinCurvePoints(rows, fps, 'response_ratio')
+    expect(j[0].sourceInput).toBeNull()
+  })
+
+  it('O-B: the UNAMBIGUOUS amount case keeps the honest fallback (the closed NO_MATCHING_PEAK pin)', () => {
+    const rows: Record<string, unknown>[] = [
+      { level: 1, amount: 1, peak_source: null, response_ratio: 3, fit_point: true, relative_residual: 0, flags: ['NO_MATCHING_PEAK'] },
+    ]
+    const fps: Record<string, unknown>[] = [
+      { amount: 1, response: 3, source_input: 'level_1', source_point_ref: { input_name: 'level_1', peak_row_index: 0 } },
+    ]
+    // Exactly one fit point at amount 1 — the amount key is unambiguous, so the
+    // degraded fallback names level_1 (the behavior the closed leg pins).
+    const j = joinCurvePoints(rows, fps, 'response_ratio')
+    expect(j[0].sourceInput).toBe('level_1')
+  })
+})
+
 // --- outlier (max over the artifact OWN residuals, no threshold) -------------
 
 describe('maxResidualIndexes — presentation pointer, no scientific threshold', () => {

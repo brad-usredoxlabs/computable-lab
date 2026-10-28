@@ -272,6 +272,11 @@ export function joinCurvePoints(
   const byLink = new Map<string, FpEntry>()
   const byName = new Map<string, FpEntry>()
   const byAmount = new Map<number, FpEntry>()
+  // FIX2 OBS O-B: how many fit points share each amount — an amount COLLISION
+  // (count > 1) makes the amount-keyed fallback AMBIGUOUS (it would attribute
+  // the LAST WRITER's source input — a provenance lie). Tracked here so the
+  // join can name the source UNRESOLVED instead of guessing.
+  const byAmountCount = new Map<number, number>()
   for (const fp of fitPoints) {
     if (!isRecord(fp)) continue
     const refRaw = fp.source_point_ref
@@ -284,15 +289,27 @@ export function joinCurvePoints(
     const entry: FpEntry = { fp, sourceInput: srcIn, amount: amt }
     if (ref !== null) byLink.set(peakSourceKey(ref), entry)
     if (srcIn !== null) byName.set(srcIn, entry)
-    if (amt !== null) byAmount.set(amt, entry)
+    if (amt !== null) {
+      byAmount.set(amt, entry)
+      byAmountCount.set(amt, (byAmountCount.get(amt) ?? 0) + 1)
+    }
   }
   const seenKeys = new Set<string>()
   const keyFor = (base: string, rowIdx: number): string => {
-    // Collision-safe: a key already claimed by an earlier row gets the row
-    // index suffixed — duplicate keys are impossible by construction (the
-    // D5 defect: the amount-keyed join produced the same key for two rows).
+    // Collision-safe: a key already claimed by an earlier row gets a BOUNDED
+    // suffix (the row index, then an incrementing counter) — duplicate keys
+    // are impossible by construction (the D5 defect: the amount-keyed join
+    // produced the same key for two rows). FIX2 OBS O-C: the shipped loop
+    // `while (seenKeys.has(k)) k = \`${base}-${rowIdx}\`` NEVER MUTATES k on
+    // a repeat — when the natural suffix is itself a claimed base it spins
+    // forever (adversarial names A / A-1 / A-1). The bounded counter makes
+    // the loop TERMINATE: base, then base-<rowIdx>, then base-<rowIdx>-2 …
     let k = base
-    while (seenKeys.has(k)) k = `${base}-${rowIdx}`
+    let suffix = 0
+    while (seenKeys.has(k)) {
+      suffix += 1
+      k = suffix === 1 ? `${base}-${rowIdx}` : `${base}-${rowIdx}-${suffix}`
+    }
     seenKeys.add(k)
     return k
   }
@@ -305,8 +322,14 @@ export function joinCurvePoints(
       parsed !== null ? (byLink.get(peakSourceKey(parsed)) ?? byName.get(parsed.inputName)) : undefined
     // Degraded fallback ONLY when the row carries no parseable peak_source:
     // amount-equality against the fit points (geometry, never a provenance
-    // claim when the row's own link is present).
-    const fromAmount: FpEntry | undefined = parsed === null && amount !== null ? byAmount.get(amount) : undefined
+    // claim when the row's own link is present). FIX2 OBS O-B: when MORE THAN
+    // ONE fit point shares the amount (a collision), the amount-keyed lookup
+    // is AMBIGUOUS — it would attribute the LAST WRITER's source input (a
+    // provenance lie), so the source is NAMED UNRESOLVED (null) instead of
+    // guessed. The unambiguous case (exactly one fit point at the amount)
+    // keeps the honest fallback (the NO_MATCHING_PEAK degraded path).
+    const amountAmbiguous = amount !== null && (byAmountCount.get(amount) ?? 0) > 1
+    const fromAmount: FpEntry | undefined = parsed === null && amount !== null && !amountAmbiguous ? byAmount.get(amount) : undefined
     const inputName = parsed !== null ? parsed.inputName : (fromRow !== undefined ? fromRow.sourceInput : fromAmount !== undefined ? fromAmount.sourceInput : null)
     const tag = levelTag(row)
     const key = keyFor(inputName ?? (tag !== '' ? tag : `row-${rowIdx}`), rowIdx)

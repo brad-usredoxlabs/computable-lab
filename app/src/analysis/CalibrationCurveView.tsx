@@ -303,11 +303,19 @@ export function CalibrationCurveView(props: {
   const declaredName = declared !== null ? declared.name : candidateNames[candidateNames.length - 1] ?? '?'
   const isDrefInput = declaredRef !== null && declaredRef.type === 'data-reference'
   const pendingInputId = declaredRef !== null && declaredRef.type !== 'data-reference' ? (declaredRef.id ?? null) : null
-  const unresolvedReason = isDrefInput
-    ? `the source input “${declaredName}” is a data reference (promoted); the run link needs the promote seam to resolve it — no dead anchor is rendered`
-    : pendingInputId !== null
-      ? `click “resolve” to load the source run for input “${declaredName}” (record ${pendingInputId})`
-      : `input “${declaredName}” is not declared in the run's frozen inputs; the source run cannot be resolved`
+  // FIX2 OBS O-B: NO candidate point carries a resolvable source input
+  // (every peak_source absent/unparseable, or an ambiguous amount collision
+  // the join names UNRESOLVED) — the named unresolved arm: no dead anchor,
+  // no guess. (The generic "?" arm below is unreachable with a named
+  // candidate, so it stays for the empty-candidate edge.)
+  const noResolvableSource = candidateNames.length === 0
+  const unresolvedReason = noResolvableSource
+    ? `no row carries a resolvable source input (peak_source absent or an ambiguous amount the join names unresolved); the source run cannot be linked — no dead anchor is rendered`
+    : isDrefInput
+      ? `the source input “${declaredName}” is a data reference (promoted); the run link needs the promote seam to resolve it — no dead anchor is rendered`
+      : pendingInputId !== null
+        ? `click “resolve” to load the source run for input “${declaredName}” (record ${pendingInputId})`
+        : `input “${declaredName}” is not declared in the run's frozen inputs; the source run cannot be resolved`
 
   const onResolve = (): void => {
     if (pendingInputId === null || resolving) return
@@ -633,7 +641,7 @@ export function CalibrationCurveView(props: {
         // levels' rows have no matching levels[] entry in the run's frozen
         // parameters, so their fit flag cannot be changed through this form.
         <div className="calibration-curve__fit-unmatched" data-testid="calibration-fit-unmatched">
-          level {unmatchedLevels.map((t) => `level ${t}`).join(', ')}: no matching entry in the run's parameters levels array — the fit checkbox is disabled (the
+          {unmatchedLevels.map((t) => `level ${t}`).join(', ')}: no matching entry in the run's parameters levels array — the fit checkbox is disabled (the
           row's own inclusion is shown; changing it requires a revision whose levels array names that level).
         </div>
       ) : null}

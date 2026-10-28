@@ -503,6 +503,68 @@ describe('D2 link — FIX1 D4: the link follows the SELECTED row, defaulting to 
   })
 })
 
+// --- FIX2 OBS O-B: the source-run link never guesses on an amount collision --
+// (cycle-2 §4 O-B: when a row's peak_source is unparseable (NO_MATCHING_PEAK),
+// the join falls back to an AMOUNT-keyed fit point for the run link — the
+// provenance-by-amount the D5 fix removed for the primary path. An amount
+// COLLISION there attributes the LAST WRITER's source input (a provenance
+// lie: the row's run link points at another level's run). The closed
+// calibrationModel.test.ts NO_MATCHING_PEAK pin (unambiguous amount ->
+// sourceInput 'level_1') stays untouched; the fix is COLLISION-ONLY: when
+// more than one fit point shares the amount, the source is NAMED UNRESOLVED
+// (sourceInput null) instead of guessed. RED: before the fix the view
+// resolves the last writer's input and offers a "resolve" button (the lie);
+// GREEN: no resolve button, the named unresolved arm instead.)
+describe('FIX2 OBS O-B — the source-run link is a NAMED unresolved arm on an amount collision (never a last-writer guess)', () => {
+  it('a single unparseable-peak_source row whose amount is COLLIDED by two fit points: no resolve button, named unresolved arm', () => {
+    // ONE table row: no parseable peak_source (null), amount 2. TWO fit points
+    // share amount 2 (level_2 + level_3) — a legal duplicate amount, so the
+    // amount-keyed fallback is AMBIGUOUS. The row's source input must be
+    // unresolved (null), NOT the last writer's (level_3).
+    const page: PageContext = {
+      activeRunId: 'ANR-CAL-1',
+      revisions: PAGE_CTX.revisions,
+      sourceRun: {
+        recordId: 'ANR-CAL-1',
+        payload: {
+          id: 'ANR-CAL-1',
+          title: 'TEST calibration run',
+          status: 'succeeded',
+          revisionRef: { id: 'ANREV-CAL-1' },
+          inputs: {
+            level_2: { kind: 'record', id: 'AOUT-SRC-2', type: 'analysis-output-artifact' },
+            level_3: { kind: 'record', id: 'AOUT-SRC-3', type: 'analysis-output-artifact' },
+          },
+          parameters: CAL_PARAMS,
+        },
+      },
+    }
+    vi.mocked(apiClient.getRecord).mockResolvedValue({ payload: { runRef: { id: 'ANR-SRC-3' } }, id: 'AOUT-SRC-3' } as never)
+    const tablePayload = {
+      ...TABLE_PAYLOAD,
+      rows: [
+        { level: 1, amount: 2, peak_source: null, response_raw_pa_min: 9000, response_ratio: 9, fit_point: true, relative_residual: 0, flags: ['NO_MATCHING_PEAK'] },
+      ],
+    }
+    const modelPayload = {
+      ...MODEL_PAYLOAD,
+      fit_points: [
+        { amount: 2, response: 5, source_input: 'level_2', source_point_ref: { input_name: 'level_2', peak_row_index: 0 } },
+        { amount: 2, response: 9.5, source_input: 'level_3', source_point_ref: { input_name: 'level_3', peak_row_index: 0 } },
+      ],
+    }
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(tablePayload)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(modelPayload)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    // The source-run link is the DISABLED unresolved button (no anchor
+    // rendered), and there is NO "resolve" button — the amount collision is
+    // NAMED unresolved, never resolved to the last writer's (level_3) run.
+    expect((screen.getByTestId('calibration-source-run') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByTestId('calibration-source-run-unresolved')).not.toBeNull()
+    expect(screen.queryByTestId('calibration-resolve-source-run')).toBeNull()
+  })
+})
+
 // --- FIX1 D6 RED — the fit checkbox is keyed on the ROW's OWN inclusion ---
 // (fit_point), applied via the model's setLevelFit LEVEL TAG — never the
 // OPTIONAL input_names (a legal run omits them: CAL_PARAMS_SCHEMA's items
