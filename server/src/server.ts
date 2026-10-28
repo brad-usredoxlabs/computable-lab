@@ -75,6 +75,7 @@ import {
   createChemistryHandlers,
   createIngestionHandlers,
   createRunWorkspaceHandlers,
+  createRunSheetHandlers,
   createRecordSearchHandlers,
   createOntologyTermHandlers,
   createVerbActionMapHandlers,
@@ -883,6 +884,9 @@ export async function createServer(
   );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
+  // GC-12 (deliverable D): the GC run-sheet attach + Analyze glue (thin
+  // wrapper over the GC-4 shipped registration service).
+  const runSheetHandlers = createRunSheetHandlers(ctx);
   const checkinHandlers = createCheckinHandlers({
     ctx,
     ...(aiProfile?.inference ? {
@@ -1608,6 +1612,7 @@ export async function createServer(
       checkinHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
+      runSheetHandlers,
       runDraftHandlers,
       platformHandlers,
       labSettingsHandlers,

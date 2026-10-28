@@ -58,6 +58,7 @@ import type { ExtractHandlers } from './handlers/ExtractHandlers.js';
 import type { MaterialAIHandlers } from './handlers/MaterialAIHandlers.js';
 import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
 import type { RunWorkspaceHandlers } from './handlers/RunWorkspaceHandlers.js';
+import type { RunSheetHandlers } from './handlers/RunSheetHandlers.js';
 import type { RunDraftHandlers } from './handlers/RunDraftHandlers.js';
 import type { RelatedRecordsHandlers } from './handlers/RelatedRecordsHandlers.js';
 import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js';
@@ -152,6 +153,7 @@ export interface RouteOptions {
   materialAIHandlers?: MaterialAIHandlers;
   semanticsHandlers?: SemanticsHandlers;
   runWorkspaceHandlers?: RunWorkspaceHandlers;
+  runSheetHandlers?: RunSheetHandlers;
   runDraftHandlers?: RunDraftHandlers;
   aiRecordDraftHandlers?: AiRecordDraftHandlers;
   readinessHandlers?: ReadinessHandlers;
@@ -421,6 +423,17 @@ export function registerRoutes(
     fastify.get('/runs/:id/workspace', runWorkspaceHandlers.getRunWorkspace.bind(runWorkspaceHandlers));
     fastify.get('/runs/:id/analysis-bundle', runWorkspaceHandlers.getRunAnalysisBundle.bind(runWorkspaceHandlers));
     fastify.get('/runs/:id/ai-context', runWorkspaceHandlers.getRunAiContext.bind(runWorkspaceHandlers));
+  }
+
+  // GC-12 (deliverable D): the GC run-sheet attach + Analyze routes. Thin glue
+  // over the GC-4 shipped registration service (CALL IT, don't edit it). The
+  // conditional pattern mirrors runWorkspaceHandlers above — absent handler
+  // (e.g. a server built without the run-sheet leg) registers nothing.
+  const { runSheetHandlers } = options;
+
+  if (runSheetHandlers) {
+    fastify.post('/acquisition-packages/register', runSheetHandlers.register.bind(runSheetHandlers));
+    fastify.post('/acquisition-packages/:id/analysis-inputs', runSheetHandlers.analysisInputs.bind(runSheetHandlers));
   }
 
   // ============================================================================

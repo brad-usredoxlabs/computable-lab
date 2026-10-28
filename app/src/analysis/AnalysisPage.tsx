@@ -456,6 +456,11 @@ export function AnalysisPage() {
     setError(null)
     let parameters: Record<string, unknown> | undefined
     try { parameters = buildParameters() } catch { setError('Invalid parameters JSON'); setBusy(false); return }
+    // (The `?gc=` run-sheet prefill was removed in fix-cycle-1 per the
+    // architect ruling GC12-D3-answer (OPT-A): the run sheet creates the run
+    // in place and lands /analysis?run=<id>, so /analysis's create form takes
+    // its inputs from the plain createRun path only — inputs: {} for a plain
+    // new run, the form's buildParameters for parameters.)
     try {
       const res = await apiClient.createAnalysisRun({
         title: runTitle.trim() || 'run',
