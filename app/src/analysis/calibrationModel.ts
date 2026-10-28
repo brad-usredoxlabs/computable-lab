@@ -448,6 +448,12 @@ export function applyLevelOverrides(
 
 export interface CalibrationBindings {
   modelArtifact?: string
+  /** The artifact COLUMN used as the row's display label (schema
+   * view-spec.schema.yaml:57-58). VALIDATED here; NOT YET CONSUMED by the
+   * composite renderer (rows label themselves by the table's own `level`
+   * column — the D5 join's shipped key). Recorded as a reserved binding
+   * surface, not a defect (review O2, FIX1 disposition: comment, not
+   * scope-expansion — the default label is data-derived and correct). */
   rowLabelField?: string
   outlierTopN: number
 }
