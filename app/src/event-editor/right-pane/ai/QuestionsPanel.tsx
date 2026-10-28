@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { ClarificationPicker, requestHasPicker } from './ClarificationPicker'
+import { ClarificationPicker, requestHasPicker, openClarificationPicker } from './ClarificationPicker'
 import { ParameterAnswerInput } from './ParameterAnswerInput'
 import { ShorthandView } from './ChangesPanel'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
@@ -128,7 +128,16 @@ export function QuestionsPanel({
                   <button
                     type="button"
                     className="questions-panel__change-btn"
-                    onClick={() => onChangeQuestion(request.id)}
+                    onClick={() => {
+                      onChangeQuestion(request.id)
+                      // L2-SUITE-A-uifix2 [C]: the pickers are now open-on-request
+                      // (no auto-open). "Change" reopens this card's picker leg —
+                      // it must also OPEN the picker, or the reopened card is a
+                      // closed search field with no rows (the pre-fix auto-open
+                      // is what made the rows appear). openClarificationPicker
+                      // moves the single-open key here (closing any sibling).
+                      if (requestHasPicker(request)) openClarificationPicker(request.id)
+                    }}
                   >
                     Change
                   </button>

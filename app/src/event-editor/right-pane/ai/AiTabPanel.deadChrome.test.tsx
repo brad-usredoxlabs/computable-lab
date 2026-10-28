@@ -155,8 +155,16 @@ async function emitClarificationTurn(result: Record<string, unknown>) {
 }
 
 /** Pick the resolver's first suggestion through the picker leg (the SAME leg
- *  the first pick and every re-pick use). */
+ *  the first pick and every re-pick use).
+ *
+ * L2-SUITE-A-uifix2 [C]: the picker is open-on-request (no auto-open on
+ * mount), so the pick gesture is: click the search field to open it (the
+ * single-open store key moves here), then pick the row. The click is a no-op
+ * when the picker is already open (e.g. just reopened by the "Change"
+ * affordance), so it is safe on every path. */
 async function pickSuggestion(label: string) {
+  const field = screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement
+  fireEvent.click(field)
   const row = await screen.findByText(label)
   await act(async () => {
     fireEvent.mouseDown(row)

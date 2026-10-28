@@ -207,7 +207,12 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
       clarifications: [],
     })
 
+    // L2-SUITE-A-uifix2 [C]: the picker is open-on-request (no auto-open on
+    // mount), so the pick gesture is: click the search field to open it, then
+    // type. The field is seeded with the fact label already (the adapter seeds
+    // the query), so the click — not a same-value change — is the opener.
     const input = screen.getByPlaceholderText(/mint a local term/i) as HTMLInputElement
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: MINTED_LABEL } })
     const mintRow = await screen.findByText(`Create local term "${MINTED_LABEL}"`)
     fireEvent.mouseDown(mintRow)
@@ -245,7 +250,10 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
       clarifications: [{ label: 'sample (gate 2025)', reason: 'unknown-noun' }],
     })
 
+    // L2-SUITE-A-uifix2 [C]: open-on-request — click the field to open before
+    // typing (the field is seeded with the label, so the click is the opener).
     const input = screen.getByPlaceholderText(/mint a local term/i) as HTMLInputElement
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: MINTED_LABEL } })
     const mintRow = await screen.findByText(`Create local term "${MINTED_LABEL}"`)
     fireEvent.mouseDown(mintRow)
@@ -355,7 +363,10 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
       ...HELD_RES,
       clarifications: [{ label: 'sample (gate 2025)', reason: 'unknown-noun' }],
     })
+    // L2-SUITE-A-uifix2 [C]: open-on-request — click the field to open before
+    // typing (the field is seeded with the label, so the click is the opener).
     const input = screen.getByPlaceholderText(/mint a local term/i) as HTMLInputElement
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: MINTED_LABEL } })
     const mintRow = await screen.findByText(`Create local term "${MINTED_LABEL}"`)
     fireEvent.mouseDown(mintRow)
@@ -452,6 +463,10 @@ describe('ProtocolLocalizationThread — one mint affordance per noun on the hel
 
     // The picker's mint floor row (straight quotes, resolvers.ts:70) is the
     // card's ONE mint affordance.
+    // L2-SUITE-A-uifix2 [C]: open-on-request — open the picker (click the field)
+    // before asserting the floor row; it no longer auto-opens on mount.
+    const input = screen.getByPlaceholderText(/mint a local term/i) as HTMLInputElement
+    fireEvent.click(input)
     const mintRows = await screen.findAllByText(`Create local term "${FACT_LABEL}"`)
     expect(mintRows).toHaveLength(1)
   })
