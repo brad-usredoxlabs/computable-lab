@@ -178,6 +178,21 @@ export function AnalysisPage() {
     }
   }, [])
 
+  // FIX1 D2: the recalc-completion wiring (spec D4: "then select the new
+  // run"). The calibration composite's footer fires onRecalcDone(newId)
+  // AFTER the new run's execute settles; the page SELECTS it (selectRun —
+  // activeRun + activeRunId) and REFRESHES the runs list so the new run is
+  // visible in the list. selectRun + refresh are the page's OWN callbacks —
+  // the callback is threaded through renderViews -> ViewRenderer (the
+  // persisted-record door carries none; the composite's named arms cover it).
+  const onRecalcDone = useCallback(
+    (newId: string) => {
+      void selectRun(newId)
+      void refresh()
+    },
+    [selectRun, refresh],
+  )
+
   // GC-11 D3: the `?run=` deep-link consumer (the /analysis?run=<id> seam,
   // OQ-1; SequencesPage's one-shot deepLinkRef precedent). On mount WITH the
   // param present, selectRun(runId) fires ONCE — then the param is stripped.
@@ -497,8 +512,8 @@ export function AnalysisPage() {
         ]
       })(),
     ]
-    return renderViews(views, artifacts)
-  }, [manifest, artifactRefs, activeRun, revisions])
+    return renderViews(views, artifacts, onRecalcDone)
+  }, [manifest, artifactRefs, activeRun, revisions, onRecalcDone])
 
   const activeStatus = activeRun?.payload.status ?? (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '')
   const activeProcessed = manifest && (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '') === 'succeeded'

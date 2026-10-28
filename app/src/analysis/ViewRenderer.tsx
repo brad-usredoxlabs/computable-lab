@@ -154,10 +154,16 @@ export function ViewRenderer({
   view,
   artifact,
   siblings,
+  onRecalcDone,
 }: {
   view: RenderableView
   artifact: RenderableArtifact
   siblings?: RenderableArtifact[]
+  /** FIX1 D2: the calibration composite's recalc-completion callback — the
+   * page threads its selectRun + refresh here (spec D4 "then select the new
+   * run"). Optional: the persisted-record door carries none (the composite's
+   * own named arms cover the footer; no dead chrome). */
+  onRecalcDone?: (runId: string) => void
 }) {
   switch (view.renderer) {
     case 'table':
@@ -224,6 +230,7 @@ export function ViewRenderer({
             revisions: Array.isArray(page?.revisions) ? page.revisions : [],
             sourceRun: page?.sourceRun ?? null,
           }}
+          onRecalcDone={onRecalcDone}
         />
       )
     }
@@ -253,6 +260,7 @@ export function toRenderableArtifact(
 export function renderViews(
   views: RenderableView[],
   artifacts: RenderableArtifact[],
+  onRecalcDone?: (runId: string) => void,
 ): ReactNode[] {
   return views.map((view) => {
     const artifact = artifacts.find((a) => a.name === view.artifact)
@@ -266,7 +274,7 @@ export function renderViews(
     return (
       <div key={view.id} className="view-spec">
         <div className="view-spec__title">{view.title}</div>
-        <ViewRenderer view={view} artifact={artifact} siblings={artifacts} />
+        <ViewRenderer view={view} artifact={artifact} siblings={artifacts} onRecalcDone={onRecalcDone} />
       </div>
     )
   })
