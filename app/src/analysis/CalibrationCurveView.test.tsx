@@ -266,14 +266,19 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
     expect(Math.abs(y2 - expectedTop)).toBeLessThan(0.5)
   })
 
-  it('renders one residual bar per row with the artifact OWN relative_residual (verbatim, no recompute)', () => {
+  it('renders one residual bar per row with the artifact OWN relative_residual (the bar shows the display precision; FULL precision stays in the table cell)', () => {
     const { container } = renderView()
     const bars = container.querySelectorAll('[data-testid^="calibration-residual-"]')
     expect(bars.length).toBe(5)
-    // The outlier row's bar carries its own number; editing the artifact
-    // residual would move the bar (the UI recomputes nothing).
+    // The outlier row's bar carries its own number (display precision —
+    // RGF D5: a stable bounded display; the bar is the strip, not the
+    // precision record). Editing the artifact residual would move the bar
+    // (the UI recomputes nothing).
     const outlierBar = container.querySelector('[data-testid="calibration-residual-level_3"]')
-    expect(outlierBar?.textContent ?? '').toContain('33.333333')
+    expect(outlierBar?.textContent ?? '').toBe('33.3333')
+    // Full precision stays in the TABLE (the row cell renders the artifact
+    // number verbatim — the strip's bounded display never replaces it).
+    expect(screen.getByTestId('calibration-row-level_3').textContent).toContain('33.333333')
   })
 
   it('labels the residual basis verbatim', () => {
@@ -299,6 +304,83 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
   })
 })
 
+// --- RGF D5 — residual-strip labels are STABLE AND READABLE ---------------
+// (RUNGATE1 DEFECT-5: the fixed 24px bars held the FULL-precision numbers —
+// `7.0000000000000435` rendered as `7.000`, `-16.15…` as `-16.1`, the text
+// overflowing the bar and touching its neighbours; with a zero residual the
+// bar collapsed to 2px and the label was unreadable. The rendered number
+// must be STABLE and READABLE (a fixed-decimal display, the precision const
+// is display-only); full precision stays in the table + the artifact.)
+
+describe('RGF D5 — residual-strip labels: fixed-decimal display (stable, readable)', () => {
+  it('a residual label renders as a BOUNDED fixed-decimal display (the float literal is never the label)', () => {
+    const { container } = renderView()
+    // The outlier row's own residual (33.333333) renders as a bounded
+    // fixed-decimal display — RED (full-precision String(n)): the bar's
+    // text was the float literal (8+ digits after the point), wider than
+    // any 24px bar and touching its neighbours.
+    const bar = container.querySelector('[data-testid="calibration-residual-level_3"]') as HTMLElement
+    const label = bar.textContent ?? ''
+    expect(label).not.toContain('33.333333333')
+    // Bounded: one decimal point, a limited fraction (the display-precision
+    // const) — a float's 17 significant digits never render.
+    expect(label).toMatch(/^-?\d+\.\d{1,4}$/)
+    expect(label.length).toBeLessThanOrEqual(12)
+    // The zero-residual bars still carry a READABLE label (not a 2px gap of
+    // nothing) — the fixture's level_1 residual is 0.
+    const zeroBar = container.querySelector('[data-testid="calibration-residual-level_1"]') as HTMLElement
+    expect(zeroBar.textContent ?? '').toMatch(/^-?\d+\.\d{1,4}$/)
+    // RGF2 (D5 half-closure): the zero-residual bar's rendered HEIGHT is also
+    // readable — not just its string. The component writes height:0 for a
+    // zero residual; the legible floor is the CSS rule (asserted below), so
+    // the jsdom-assertable claim is that the bar does NOT pin itself to a
+    // sub-label inline height.
+    expect((zeroBar.style.height ?? '0px'), 'the zero bar writes height 0 (the CSS floor controls, not a 2px pin)').toBe('0px')
+    // Full precision STAYS in the table (the table cell is verbatim data).
+    expect(screen.getByTestId('calibration-row-level_3').textContent).toContain('33.333333')
+  })
+
+  it('a zero/low-residual bar has a legible height FLOOR written by the component (the label does not spill a 2px bar)', () => {
+    // RUNGATE1 DEFECT-5, second half (RGF1 left it unfixed): 'with a zero
+    // residual the bar collapsed to 2px and the label was unreadable'. The
+    // bar height is Math.min(64, |residual|*1.5) -> 0 for a zero residual;
+    // the rendered height is then whatever the CSS rule sets (RGF1:
+    // min-height: 2px — a 2px strip under a ~0.6rem label, ~10px,
+    // overflow:visible). The floor must be (a) COMPONENT-WRITTEN — a rule in
+    // CalibrationCurveView.css the test reads (jsdom does not apply the
+    // stylesheet, so the rule is asserted as the component's own written
+    // value, not an unapplied-stylesheet assumption), and (b) at least the
+    // label's own line box (font-size 0.6rem x line-height 1 = 9.6px) so the
+    // in-bar label fits.
+    const css = readFileSync('src/analysis/CalibrationCurveView.css', 'utf8')
+    const m = css.match(/\.calibration-curve__residual-bar\s*{[^}]*}/)
+    expect(m, 'the bar rule exists in the lane CSS (the floor must be component-written, not inherited)').not.toBeNull()
+    const hm = m![0].match(/min-height:\s*(\d+(?:\.\d+)?)(px|rem)/)
+    expect(hm, 'the bar rule WRITES a min-height floor (RGF1 shipped 2px — the label spilled it)').not.toBeNull()
+    const floorPx = hm![2] === 'rem' ? parseFloat(hm![1]) * 16 : parseFloat(hm![1])
+    // The label's line box: 0.6rem font-size x line-height 1 (same rule).
+    expect(floorPx, 'the floor must at least cover the label line box (9.6px)').toBeGreaterThanOrEqual(9.6)
+    // RENDERED (component-written) geometry: the zero-residual bar does not
+    // pin a sub-floor inline height — height:0 leaves the floor (above) in
+    // control, so the rendered bar is >= the floor and the ~10px label fits.
+    const { container } = renderView()
+    const zeroBar = container.querySelector('[data-testid="calibration-residual-level_1"]') as HTMLElement
+    expect(zeroBar.style.height ?? '0px').toBe('0px')
+    expect(zeroBar.textContent ?? '').toMatch(/^-?\d+\.\d{1,4}$/)
+    // The floor is a FLOOR, not a cap: the outlier bar (residual 33.333333)
+    // still encodes its magnitude — rendered ABOVE the floor, <= 64px.
+    const outlierBar = container.querySelector('[data-testid="calibration-residual-level_3"]') as HTMLElement
+    const outlierH = parseFloat(outlierBar.style.height)
+    expect(outlierH).toBeGreaterThan(floorPx)
+    expect(outlierH).toBeLessThanOrEqual(64)
+    // The EXCLUDED bar (no residual, no label) is unaffected by the
+    // legibility claim — it carries no inline label and its 2px pin stays
+    // the component's explicit written value.
+    const excludedBar = container.querySelector('[data-testid="calibration-residual-level_5"]') as HTMLElement
+    expect(excludedBar.textContent ?? '').not.toMatch(/^-?\d+\.\d{1,4}$/)
+  })
+})
+
 describe('D1 — included/excluded markers + outlier affordance (no threshold invented)', () => {
   it('excluded rows render a HOLLOW marker and their own flags reason stays visible', () => {
     const { container } = renderView()
@@ -312,6 +394,140 @@ describe('D1 — included/excluded markers + outlier affordance (no threshold in
     expect(container.querySelector('[data-testid="calibration-point-level_3"]')?.getAttribute('data-outlier')).toBe('true')
     expect(container.querySelector('[data-testid="calibration-row-level_3"]')?.getAttribute('data-outlier')).toBe('true')
     expect(container.querySelector('[data-testid="calibration-point-level_1"]')?.getAttribute('data-outlier')).toBeNull()
+  })
+})
+
+// --- RGF D2 — the outlier point is VISIBLY marked in the plot ----------------
+// (RUNGATE1 DEFECT-2, major: at 1:1 the four filled markers are
+// indistinguishable — the flagged point differed only in a
+// stroke-dasharray 2,2 with stroke = fill = rgb(63,121,196) and 1px width,
+// a rim in the SAME colour as the fill, invisible. Fix: a contrasting halo
+// RING at the same centre (larger radius, a stroke that is NOT the point's
+// fill colour) — data-derived (only the flagged point carries it).)
+
+describe('RGF D2 — the outlier point renders a contrasting halo ring (visible at 1:1)', () => {
+  it('the flagged point carries a halo: same centre, LARGER radius, contrasting stroke; non-outliers carry none', () => {
+    const { container } = renderView()
+    const outlier = container.querySelector('[data-testid="calibration-point-level_3"]') as SVGElement
+    expect(outlier.getAttribute('data-outlier')).toBe('true')
+    // The halo circle: same centre as the point, a LARGER radius (a ring
+    // AROUND the marker), and a stroke colour that CONTRASTS the point's
+    // fill (the defect was stroke == fill — invisible at 1:1).
+    const halo = Array.from(container.querySelectorAll('circle')).find(
+      (c) =>
+        c.getAttribute('data-outlier-halo') === 'true' &&
+        c.getAttribute('cx') === outlier.getAttribute('cx') &&
+        c.getAttribute('cy') === outlier.getAttribute('cy'),
+    )
+    expect(halo, 'a halo circle at the outlier point centre').toBeDefined()
+    expect(Number(halo!.getAttribute('r'))).toBeGreaterThan(Number(outlier.getAttribute('r')))
+    expect(halo!.getAttribute('stroke'), 'the halo stroke contrasts the point fill').not.toBe(outlier.getAttribute('fill'))
+    // Non-outlier points carry NO halo (the marking follows the data, not
+    // decoration on every point).
+    const level1 = container.querySelector('[data-testid="calibration-point-level_1"]') as SVGElement
+    const level1Halo = Array.from(container.querySelectorAll('circle')).find(
+      (c) =>
+        c.getAttribute('data-outlier-halo') === 'true' &&
+        c.getAttribute('cx') === level1.getAttribute('cx') &&
+        c.getAttribute('cy') === level1.getAttribute('cy'),
+    )
+    expect(level1Halo).toBeUndefined()
+  })
+})
+
+// --- RGF D4 — the x-domain includes ALL plotted points (fit AND excluded) ---
+// (RUNGATE1 DEFECT-4: the gate's excluded level_5 (amount 5) was drawn at
+// cx=826.67 in a viewBox 0 0 640 320 — the x-domain was the model's
+// FIT-only x_min/x_max (1..4), so an excluded point beyond the fit range
+// was silently CLIPPED out of the plot: 4 markers for a 5-row table. Every
+// table row must have a visible marker. The fit LINE still spans only the
+// fit x-range — the line is the fit's geometry, the domain is the POINTS'.)
+describe('RGF D4 — an excluded point outside the fit x-range stays VISIBLE (domain covers all points)', () => {
+  /** Model: 5 levels (1..5) in the table, but the FIT spans x 1..4 only
+   * (level 5 excluded — the gate's ANR-000013 shape: x_min/x_max come from
+   * the fit points). Linear 2x+1 -> y 3..9 over the fit range. */
+  const MODEL_FIT_TO_4 = {
+    ...JSON.parse(JSON.stringify(MODEL_PAYLOAD)),
+    x_min: 1,
+    x_max: 4,
+  }
+
+  it('an excluded point BEYOND the fit x-range renders INSIDE the viewBox (not clipped)', () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_FIT_TO_4)) }
+    const { container } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />)
+    const excluded = container.querySelector('[data-testid="calibration-point-level_5"]') as SVGElement
+    const cx = Number(excluded.getAttribute('cx'))
+    const cy = Number(excluded.getAttribute('cy'))
+    // The marker exists and is INSIDE the 0 0 640 320 viewBox (a clip means
+    // cx > 640, or off-plot cy). RED (fit-only domain [1,4]): cx = 826.67.
+    expect(excluded).not.toBeNull()
+    expect(cx).toBeGreaterThan(0)
+    expect(cx).toBeLessThanOrEqual(640)
+    expect(cy).toBeGreaterThan(0)
+    expect(cy).toBeLessThanOrEqual(320)
+  })
+
+  it('the fit LINE still spans only the FIT x-range (the domain extension is for the points, not the fit)', () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_FIT_TO_4)) }
+    const { container } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />)
+    const line = container.querySelector('[data-testid="calibration-fit-line"]') as SVGLineElement
+    // Domain [1,5] (points incl. the excluded level 5 at x=5): the line's
+    // endpoints sit at the fit range's own x (1 and 4), NOT at the extended
+    // domain edge (5). x1 = 16 (x=1); x2 = sx(4) = 16 + (4-1)/4 * 608 = 472
+    // (PAD 16, plotW 608, domain width 4).
+    expect(line).not.toBeNull()
+    expect(Number(line.getAttribute('x1'))).toBeCloseTo(16, 1)
+    expect(Number(line.getAttribute('x2'))).toBeCloseTo(472, 1)
+  })
+})
+
+// --- RGF D1 — the calibration table is READABLE at a narrow pane ----------
+// (RUNGATE1 DEFECT-1, major: 13 columns squeezed into a 444px table in the
+// ~510px results pane at 1280px — each header cell 23–43px wide x 112px
+// tall, so `level` rendered as `l/e/v/e/l` and `response_raw_pa_min` as
+// `res/p/ons/e/_raw/_pa/_mi/n`; data cells broke numbers mid-digit
+// (`-16.15384615384614` -> `-16.1/538…`). Root cause (per the receipt):
+// width:100% on the table with no min-width and no horizontal scroll
+// container. Fix: a scroll container + per-column min-widths derived from
+// the header NAMES (data-driven — the width follows the name's length; no
+// per-name table, no invented column names). The wrap-never-truncate
+// discipline stands (no text-overflow/ellipsis — the verif-6 pin): cells
+// wrap only if the content exceeds the min-width, never truncate.)
+
+describe('RGF D1 — the table is readable at a narrow pane (scroll container + per-column min-widths)', () => {
+  it('the table sits in its OWN horizontal-scroll container (not pinned to the pane width)', () => {
+    renderView()
+    const table = screen.getByTestId('calibration-table') as HTMLTableElement
+    // The scroll container is the table's PARENT with its own testid (the
+    // gate measured the table at 444px == the pane: no scroll seam existed).
+    const scrollEl = table.parentElement
+    expect(scrollEl, 'the table has a parent scroll container').not.toBeNull()
+    expect(scrollEl?.getAttribute('data-testid')).toBe('calibration-table-scroll')
+    // The table is NOT forced to the container's width (the defect's
+    // width:100% pin — it now may be wider and the container scrolls).
+    expect(table.style.width).toBe('')
+  })
+
+  it('every header cell reserves its FULL name on one line (min-width from the header name, per column)', () => {
+    renderView()
+    const table = screen.getByTestId('calibration-table') as HTMLTableElement
+    const ths = Array.from(table.querySelectorAll('thead th'))
+    // 12 artifact-declared columns + the fit-checkbox column (fixture data).
+    expect(ths.length).toBe(TABLE_PAYLOAD.columns.length + 1)
+    for (const th of ths) {
+      const min = getComputedStyle(th).minWidth
+      expect(min, `header "${th.textContent}" reserves a min-width`).not.toBe('0px')
+      expect(min, `header "${th.textContent}" reserves a min-width`).not.toBe('auto')
+    }
+    // Data cells get the SAME per-column floor as their header (a narrow td
+    // would re-squeeze the column below its header's reservation).
+    const bodyCells = Array.from(table.querySelectorAll('tbody tr:first-child td'))
+    expect(bodyCells.length).toBe(ths.length)
+    for (const td of bodyCells) {
+      expect(getComputedStyle(td).minWidth, `data cell reserves the column min-width`).not.toBe('0px')
+    }
   })
 })
 
@@ -648,6 +864,29 @@ describe('D6 — the fit checkbox: initial state from the row OWN inclusion; tog
     expect((screen.getByTestId('calibration-fit-level_2') as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByTestId('calibration-fit-level_2') as HTMLInputElement).checked).toBe(true) // row's own fit_point
     expect(screen.getByTestId('calibration-fit-unmatched').textContent).toContain('level 2')
+  })
+})
+
+// --- RGF D6 — the source-run line's inline siblings are SEPARATED ---------
+// (RUNGATE1 DEFECT-6: the inline button + reason span + resolve button ran
+// together in the rendered text — `…source runclick "resolve"…(record
+// AOUT-000016)resolve` — no whitespace between the inline siblings; the
+// operator reads `runclick` / `016)resolve` as one token.)
+
+describe('RGF D6 — the source-run line: inline siblings are separated (no run-together text)', () => {
+  it('the disabled button, the reason span and the resolve button are whitespace-separated in the rendered line', () => {
+    renderView()
+    const text = screen.getByTestId('calibration-run-line').textContent ?? ''
+    // RED (no separators): the button's own text ("source run") butts
+    // against the reason's leading word ("click …"), and the reason's
+    // closing "(record …)" butts against the resolve button's text.
+    expect(text).not.toContain('runclick')
+    expect(text).not.toContain(')resolve')
+    // The reason span is bounded by whitespace on BOTH sides inside the
+    // line (button → space → reason → space → resolve button).
+    const reason = screen.getByTestId('calibration-source-run-unresolved').textContent ?? ''
+    expect(text).toContain(`${reason} resolve`)
+    expect(text).toContain('source run ' + reason)
   })
 })
 
@@ -1102,6 +1341,89 @@ describe('D7 — FIX2 M2: the recalc gate over the REAL shipped parameterSchema 
   })
 })
 
+// --- RGF D7 — the recalc submit's DISABLED state is visually distinguishable --
+// (RUNGATE1 DEFECT-7: the disabled and enabled submits 'both render as
+// identical borderless text' — the button carried no class-scoped styling,
+// so only the presence/absence of the reason line told the operator which
+// state. The closure the component OWNS: the button's OWN class
+// (`.calibration-curve__recalc-submit`) carries the disabled treatment in
+// CalibrationCurveView.css (opacity .5 + not-allowed, mirroring the frozen
+// page discipline) AND an explicit inline state style — opacity 0.5 +
+// not-allowed when blocked, opacity 1 + pointer when live. Note: the frozen
+// AnalysisPage.css `.analysis button:disabled` rules are DESCENDANT selectors
+// and the composite renders in `.analysis-right`, not `.analysis` — the
+// button does NOT join the `analysis` class list (that class matches the bare
+// `.analysis` CONTAINER box rule on the button itself, a real-browser layout
+// defect the first fix cycle shipped; RGF2 removed it).)
+
+describe('RGF D7 — the recalc submit disabled state is visually distinguishable (own-class :disabled treatment)', () => {
+  const renderRecalcOpen = (page: PageContext) => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    return screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+  }
+
+  it('a blocked submit reads as a DISABLED button (page :disabled chrome, not identical live chrome)', () => {
+    // The REAL shipped schema's unrenderable constructs block the labeled
+    // form (the gate's ANR-000013 state — the submit's disabled=true arm).
+    const submit = renderRecalcOpen(pageWithRealSchema(REAL_CAL_FROZEN_PARAMS))
+    expect(submit.disabled).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-blocked').textContent).toContain('Cannot submit')
+    // The button carries its OWN button-scoped class (the disabled treatment
+    // lives in CalibrationCurveView.css on `.calibration-curve__recalc-submit:disabled`,
+    // mirroring the frozen page discipline) — RGF1's false claim was that the
+    // page's `.analysis button:disabled` discipline applied because the button
+    // joined the `analysis` class list; it is a DESCENDANT selector and this
+    // button is not inside `.analysis` (the composite renders in
+    // `.analysis-right`).
+    expect(submit.classList.contains('calibration-curve__recalc-submit')).toBe(true)
+    // jsdom's style resolution does not apply stylesheet :disabled rules, so
+    // the OPACITY assertion is the computed-value proxy that the component's
+    // OWN state style writes at render time (a plain unstyled button computes
+    // the default opaque 1):
+    expect(getComputedStyle(submit).opacity).toBe('0.5')
+    expect(getComputedStyle(submit).cursor).toBe('not-allowed')
+  })
+
+  it('an enabled submit keeps the LIVE page chrome (the two states now differ in the computed style)', () => {
+    // The minimal gate schema with a satisfied required control: the gate
+    // passes, the submit is live.
+    const MIN_SCHEMA = { type: 'object', required: ['model'], properties: { model: { type: 'string' } } }
+    const page: PageContext = {
+      ...PAGE_CTX,
+      revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'TEST cal revision', parameterSchema: MIN_SCHEMA } }],
+      sourceRun: {
+        recordId: 'ANR-CAL-1',
+        payload: { id: 'ANR-CAL-1', title: 'TEST calibration run', status: 'succeeded', revisionRef: { id: 'ANREV-CAL-1' }, inputs: SOURCE_INPUTS, parameters: { model: 'linear' } },
+      },
+    }
+    const submit = renderRecalcOpen(page)
+    expect(submit.disabled).toBe(false)
+    expect(screen.queryByTestId('calibration-recalc-blocked')).toBeNull()
+    // The live button keeps FULL opacity (never the reduced-opacity disabled
+    // treatment) and a cursor that is NOT not-allowed — the distinguishable
+    // pair with the disabled state above.
+    expect(getComputedStyle(submit).opacity).toBe('1')
+    expect(getComputedStyle(submit).cursor).not.toBe('not-allowed')
+  })
+
+  it('the submit carries NO class that matches the frozen page CONTAINER box rule (RGF2: the first fix shipped className="analysis" on the button)', () => {
+    // AnalysisPage.css:1-7 (FROZEN): `.analysis { display:flex;
+    // flex-direction:column; gap:1rem; padding:1rem 1.25rem 2rem;
+    // max-width:720px; }`. The button is NOT inside an `.analysis` element
+    // (the composite renders in `.analysis-right`, AnalysisPage.tsx:706), so
+    // its class list must not contain `analysis` — carrying it matches the
+    // bare CONTAINER rule ON the button: flex-column with 1rem 1.25rem 2rem
+    // padding and max-width 720px (a real-browser layout defect jsdom cannot
+    // see — the class absence is the assertable half of this fix).
+    const submit = renderRecalcOpen(pageWithRealSchema(REAL_CAL_FROZEN_PARAMS))
+    expect(submit.classList.contains('analysis'), 'the frozen page CONTAINER class must not sit on the button').toBe(false)
+    expect(Array.from(submit.classList), 'only the button-scoped class(es) remain').not.toContain('analysis')
+  })
+})
+
 // --- FIX1 D7 RED — the recalc submit rides the SHIPPED GATE ------------------
 // (spec D4: "the shipped gate collectGateIssues applies to the recalc form too —
 // a blocked recalc names its reason (no dead chrome)"). The shipped onRecalc
@@ -1199,5 +1521,72 @@ describe('D7 — FIX1: the recalc submit is gated by collectGateIssues (shipped 
     await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as Record<string, unknown>
     expect(body.parameters).toEqual(VALID)
+  })
+})
+
+// --- RGF D3 RED — the composite edit state is keyed to the ACTIVE RUN ------
+// (RUNGATE1 DEFECT-3, probe2 receipts: `params/selected/formOpen` are
+// initialised with `useState(() => frozenParams(page))` and the component is
+// NOT re-keyed when page.activeRunId changes — the page's selectRun path
+// re-renders the SAME instance with the new run's page context. A pending
+// edit on run A therefore survives onto run B's display (phantom
+// `level 3: fit true -> false` + a checkbox contradicting the displayed
+// run's own fit_point cell), and a recalc opened after the switch would POST
+// run A's edited parameters against run B's frozen refs — the M1 provenance
+// class. GC-9 discipline: a selection change clears manual edits; a RUN
+// change is the stronger case.)
+
+/** The recalc-run's OWN stored parameters (the gate probe's ANR-000014
+ * shape: level 3 excluded) — a DIFFERENT run, same revision/inputs. */
+const CAL_PARAMS_LEVEL3_EXCLUDED: Record<string, unknown> = {
+  ...JSON.parse(JSON.stringify(CAL_PARAMS)),
+  levels: (JSON.parse(JSON.stringify(CAL_PARAMS)).levels as Record<string, unknown>[]).map((lv, i) => (i === 2 ? { ...lv, fit: false } : lv)),
+}
+
+function pageForRun(runId: string, title: string, parameters: Record<string, unknown>): PageContext {
+  return {
+    activeRunId: runId,
+    revisions: PAGE_CTX.revisions,
+    sourceRun: {
+      recordId: runId,
+      payload: {
+        id: runId,
+        title,
+        status: 'succeeded',
+        revisionRef: { id: 'ANREV-CAL-1' },
+        inputs: SOURCE_INPUTS,
+        parameters,
+      },
+    },
+  }
+}
+
+describe('RGF D3 — the composite edit state is keyed to the active run (a run switch re-keys it)', () => {
+  it('toggle fit -> switch runs -> switch back: the checkbox matches the run OWN stored fit and the diff says (no pending changes)', () => {
+    const pageA = pageForRun('ANR-CAL-1', 'TEST calibration run', CAL_PARAMS)
+    const pageB = pageForRun('ANR-CAL-2', 'TEST recalc run', CAL_PARAMS_LEVEL3_EXCLUDED)
+    const artifact: RenderableArtifact = { id: 'AOUT-CAL-TABLE', name: 'calibration_table', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'AOUT-CAL-MODEL', name: 'calibration_model', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    const { rerender } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageA} onRecalcDone={() => {}} />)
+    // Run A's own stored state: level 3 fit = true, no pending changes.
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
+    // A PENDING edit (toggled, never submitted).
+    fireEvent.click(screen.getByTestId('calibration-fit-level_3'))
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toContain('level 3: fit true -> false')
+    // Switch to run B: the component instance is NOT re-mounted (same element
+    // type — the page's selectRun path re-renders it), only re-rendered with
+    // run B's page context (B's own stored fit for level 3 is false).
+    rerender(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageB} onRecalcDone={() => {}} />)
+    expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-2')
+    // Back to run A. RED (unkeyed state): the pending edit survives — the
+    // checkbox shows run A's OLD edit against run A's data and the diff claims
+    // a change the run never had. GREEN: the state re-keys to run A's OWN
+    // frozen parameters (checkbox = the run's stored fit, diff = none).
+    rerender(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageA} onRecalcDone={() => {}} />)
+    expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-1')
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
   })
 })

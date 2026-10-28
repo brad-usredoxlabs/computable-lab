@@ -53,7 +53,12 @@
 
 .calibration-curve__residual-bar {
   width: 24px;
-  min-height: 2px;
+  /* RGF2 (D5 half-closure): the label line box is 0.6rem font-size x
+     line-height 1 = 9.6px; RGF1's 2px floor let the ~10px label spill a
+     2px strip on a zero residual (height:0 wrote by the component). The
+     floor ties to the label line box so the in-bar label fits; non-zero
+     bars still encode their magnitude above it (Math.min(64, |r|*1.5)). */
+  min-height: 12px;
   background: #8e44ad;
   font-size: 0.6rem;
   line-height: 1;
@@ -74,7 +79,14 @@
 }
 
 .calibration-curve__table {
-  width: 100%;
+  /* RGF D1: the table was pinned to the pane (width:100%) — 13 columns
+     squeezed into 444px wrapped every header to 1–3 letters per line.
+     min-width:100% keeps the fill-when-narrow look while letting the
+     table grow PAST the pane (the per-column floors) — the
+     calibration-table-scroll seam (overflow-x: auto) then scrolls it
+     instead of crushing it. Still no truncation (D6): content wraps;
+     the verif-6 pin forbids any truncation rule in this file. */
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
 }
@@ -119,6 +131,27 @@
   border-radius: 4px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* RGF D7 (fix cycle 2): the recalc submit's OWN button-scoped class. The
+   first fix cycle shipped className="analysis" on the button — a FALSE
+   mechanism: the frozen AnalysisPage.css `.analysis button:disabled` rules
+   are DESCENDANT selectors and the composite renders in `.analysis-right`,
+   not `.analysis`, so the button never inherited that discipline; the class
+   instead matched the bare `.analysis` CONTAINER rule (display:flex;
+   flex-direction:column; gap:1rem; padding:1rem 1.25rem 2rem;
+   max-width:720px) ON the button — an unintended box in a real browser. The
+   disabled treatment lives HERE, on the button's own class, mirroring the
+   frozen page discipline (the inline state style in the component writes
+   the same values at render time — the jsdom-observable half). */
+.calibration-curve__recalc-submit {
+  font: inherit;
+  cursor: pointer;
+}
+
+.calibration-curve__recalc-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .calibration-curve__unresolved,

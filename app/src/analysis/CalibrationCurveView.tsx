@@ -18,7 +18,7 @@
  * model's structured coefficients for line geometry via the shipped _predict
  * key rule (calibrationModel.predictAt).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import { ParameterForm, collectGateIssues, pruneEmpty } from './ParameterForm'
 import type { RenderableArtifact } from './ViewRenderer'
@@ -41,6 +41,23 @@ import './CalibrationCurveView.css'
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
+
+/** RGF D5: the residual-strip label's DISPLAY precision (display-only —
+ * a stable, bounded width so the 24px-scale strip stays readable; the
+ * FULL-precision number stays in the table cell + the artifact, verbatim).
+ * Not a domain value: it formats the artifact's OWN number for the strip. */
+const RESIDUAL_DISPLAY_DECIMALS = 4
+
+/** RGF D1: the per-column WIDTH FLOOR (display geometry only). RUNGATE1
+ * DEFECT-1: the 13-column table was pinned to the ~510px pane (width:100%,
+ * no min-widths, no scroll container) so every header wrapped to 1–3
+ * letters per line (`level` -> `l/e/v/e/l`). The floor is derived from the
+ * column NAME's own length — data-driven, no per-name table, no invented
+ * column names (verif-6): a header reserves enough width for its full name
+ * on one line; anything longer still WRAPS (the D6 discipline — never
+ * truncates). Display-only: it measures the artifact's own column names
+ * for pixels; no domain value is invented. */
+const columnMinWidth = (name: string): string => `${Math.max(80, Math.round(name.length * 9))}px`
 
 /** The page surface the AnalysisPage passes (structural — this view never
  * imports the page). `sourceRun` is the active run's fetched payload
@@ -157,6 +174,34 @@ export function CalibrationCurveView(props: {
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // RGF D3: the composite's EDIT STATE IS KEYED TO THE ACTIVE RUN. The page's
+  // shared landing (selectRun) re-renders THIS SAME component instance with
+  // the new run's page context (view ids are stable across runs — renderViews
+  // keys on view.id, which the synthesis door keeps constant) — so without a
+  // re-key, a pending edit made on run A survives onto run B's display
+  // (phantom `level 3: fit true -> false` + a checkbox contradicting the
+  // displayed run's own stored fit flag) and a recalc opened after the switch
+  // would POST run A's edited parameters against run B's frozen refs (the M1
+  // provenance class). GC-9 discipline: a selection change clears manual
+  // edits; a RUN change is the stronger case — the ref-guarded effect resets
+  // every per-run piece of state to the NEW run's own frozen values when
+  // page.activeRunId actually changes (guarded on the id, never the page
+  // object — the page is rebuilt by the page's render memo on every render).
+  const lastActiveRunRef = useRef<string>(page.activeRunId)
+  useEffect(() => {
+    if (lastActiveRunRef.current === page.activeRunId) return
+    lastActiveRunRef.current = page.activeRunId
+    setParams(frozenParams(page))
+    setSelected(new Set())
+    setLastSelected(null)
+    setFormOpen(false)
+    setResolved(null)
+    setResolveError(null)
+    setRecalcAdvanced({ manual: null, seed: '' })
+    setSubmitting(false)
+    setResolving(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page.activeRunId])
   // FIX2 M2: the recalc region's OWN raw-JSON override door (the page's
   // advancedSeed pattern, scoped to THIS form — not the page's shared
   // region, not the schema-less legacy demo literal). `manual` is a manual
@@ -247,23 +292,39 @@ export function CalibrationCurveView(props: {
   const outlierKeys = new Set(outlierIdx.map((i) => includedPoints[i]?.key).filter((k): k is string => typeof k === 'string'))
 
   // --- geometry (render-only math on artifact numbers) ---------------------
+  // RGF D4: the X-DOMAIN covers EVERY plotted point (fit AND excluded —
+  // every table row must have a visible marker), while the FIT LINE still
+  // spans only the FIT's own x-range (the artifact's x_min/x_max — data,
+  // never a recompute; the shipped _predict key rule samples it). Before,
+  // the domain WAS the fit range, so an excluded point beyond it (the
+  // gate's level_5 at cx=826 in a 640 viewBox) was silently clipped.
   const W = 640
   const H = 320
   const PAD = 16
   const plotW = W - PAD * 2
   const plotH = H - PAD * 2
-  let x0 = model.xMin
-  let x1 = model.xMax
   const amounts = points.filter((p) => p.amount !== null).map((p) => p.amount as number)
-  if (x0 === undefined && amounts.length > 0) x0 = Math.min(...amounts)
-  if (x1 === undefined && amounts.length > 0) x1 = Math.max(...amounts)
+  const fitAmounts = points.filter((p) => p.included && p.amount !== null).map((p) => p.amount as number)
+  // The fit's own range (the line's span): the model's declared x_min/x_max,
+  // falling back to the INCLUDED points' amounts when undeclared (the
+  // shipped fallback, unchanged).
+  let lineX0 = model.xMin
+  let lineX1 = model.xMax
+  if (lineX0 === undefined && fitAmounts.length > 0) lineX0 = Math.min(...fitAmounts)
+  if (lineX1 === undefined && fitAmounts.length > 0) lineX1 = Math.max(...fitAmounts)
+  // The domain: ALL plotted points, widened to contain the fit range (so
+  // the line's endpoints always sit inside the plot).
+  let x0 = amounts.length > 0 ? Math.min(...amounts) : lineX0
+  let x1 = amounts.length > 0 ? Math.max(...amounts) : lineX1
+  if (lineX0 !== undefined) x0 = x0 === undefined ? lineX0 : Math.min(x0, lineX0)
+  if (lineX1 !== undefined) x1 = x1 === undefined ? lineX1 : Math.max(x1, lineX1)
   if (x0 === undefined || x1 === undefined || !(x1 > x0)) {
     x0 = 0
     x1 = 1
   }
   const yVals = points.filter((p) => p.response !== null).map((p) => p.response as number)
-  const lineY0 = predictAt(model.model, model.coefficients, x0)
-  const lineY1 = predictAt(model.model, model.coefficients, x1)
+  const lineY0 = predictAt(model.model, model.coefficients, lineX0 ?? x0)
+  const lineY1 = predictAt(model.model, model.coefficients, lineX1 ?? x1)
   let yMin = yVals.length > 0 ? Math.min(...yVals) : 0
   let yMax = yVals.length > 0 ? Math.max(...yVals) : 1
   if (lineY0 !== null) yMin = Math.min(yMin, lineY0)
@@ -274,6 +335,11 @@ export function CalibrationCurveView(props: {
   }
   const sx = (x: number): number => PAD + ((x - x0) / (x1 - x0)) * plotW
   const sy = (y: number): number => H - PAD - ((y - yMin) / (yMax - yMin)) * plotH
+  // The line's own span: the fit range when the model declares one (or the
+  // included amounts fell back to it); the domain when the fit range is
+  // entirely undeclared (the predictAt fallback above samples the domain).
+  const lineDrawX0 = lineX0 ?? x0
+  const lineDrawX1 = lineX1 ?? x1
   const drawLine = lineY0 !== null && lineY1 !== null
 
   // --- source-run link (§D2 + FIX1 D4): the SELECTED row's OWN source input
@@ -553,29 +619,55 @@ export function CalibrationCurveView(props: {
           {points.map((p) => {
             if (p.amount === null || p.response === null) return null
             const excluded = !p.included
+            const isOutlier = outlierKeys.has(p.key)
+            const cx = sx(p.amount)
+            const cy = sy(p.response)
+            // RGF D2: the outlier's contrasting HALO ring (RUNGATE1
+            // DEFECT-2: the flagged point differed only in a 1px dashed
+            // rim with stroke == fill = the point's OWN colour — invisible
+            // at 1:1). The ring sits at the same centre with a LARGER
+            // radius and a stroke that CONTRASTS the point's fill (a red
+            // halo on the blue points; the excluded/hollow points are
+            // unfilled, so the ring reads against the background either
+            // way). Data-derived: only the flagged point(s) carry it —
+            // the flag is the artifact's own max |residual| (no threshold
+            // invented). fill=none keeps the ring from occluding the
+            // marker or the fit line.
             return (
-              <circle
-                key={p.key}
-                className="calibration-curve__point"
-                data-testid={`calibration-point-${p.key}`}
-                cx={sx(p.amount)}
-                cy={sy(p.response)}
-                r={excluded ? 3 : 5}
-                fill={excluded ? 'none' : '#3f79c4'}
-                stroke="#3f79c4"
-                onClick={() => toggle(p.key)}
-                {...sel(p.key)}
-                {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}
-              />
+              <g key={p.key}>
+                {isOutlier ? (
+                  <circle
+                    data-outlier-halo="true"
+                    cx={cx}
+                    cy={cy}
+                    r={(excluded ? 3 : 5) + 4}
+                    fill="none"
+                    stroke="#c0392b"
+                    strokeWidth="2"
+                  />
+                ) : null}
+                <circle
+                  className="calibration-curve__point"
+                  data-testid={`calibration-point-${p.key}`}
+                  cx={cx}
+                  cy={cy}
+                  r={excluded ? 3 : 5}
+                  fill={excluded ? 'none' : '#3f79c4'}
+                  stroke="#3f79c4"
+                  onClick={() => toggle(p.key)}
+                  {...sel(p.key)}
+                  {...(isOutlier ? { 'data-outlier': 'true' } : {})}
+                />
+              </g>
             )
           })}
           {drawLine ? (
             <line
               className="calibration-curve__fitline"
               data-testid="calibration-fit-line"
-              x1={sx(x0)}
+              x1={sx(lineDrawX0)}
               y1={sy(lineY0 as number)}
-              x2={sx(x1)}
+              x2={sx(lineDrawX1)}
               y2={sy(lineY1 as number)}
               stroke="#c0392b"
               strokeWidth="1.5"
@@ -590,11 +682,11 @@ export function CalibrationCurveView(props: {
             key={p.key}
             className="calibration-curve__residual-bar"
             data-testid={`calibration-residual-${p.key}`}
-            style={{ height: p.residual === null ? 2 : Math.min(64, Math.abs(p.residual) * 1.5) }}
+            style={{ height: p.residual === null ? 2 : Math.min(64, Math.abs(p.residual) * 1.5) || 0 }}
             onClick={() => toggle(p.key)}
             {...sel(p.key)}
           >
-            {p.residual === null ? (p.flags.join(' ') || 'no residual') : String(p.residual)}
+            {p.residual === null ? (p.flags.join(' ') || 'no residual') : p.residual.toFixed(RESIDUAL_DISPLAY_DECIMALS)}
           </div>
         ))}
       </div>
@@ -605,37 +697,58 @@ export function CalibrationCurveView(props: {
         </div>
       ) : null}
 
-      <table className="calibration-curve__table" data-testid="calibration-table">
-        <thead>
-          <tr>
+      {/* RGF D1: the table's OWN horizontal-scroll seam (the defect: the
+          table was pinned to the pane — width:100%, no scroll container —
+          so 13 columns squeezed into 444px wrapped headers to 1–3 letters
+          per line). The seam lets the table size to its columns' floors;
+          the pane scrolls it instead of crushing it. The per-column
+          min-widths (header AND data cell — same floor per column) are
+          derived from the column NAME's length (data-driven, display-only;
+          the wrap-never-truncate discipline stands: longer content wraps,
+          never truncates). */}
+      <div data-testid="calibration-table-scroll" style={{ overflowX: 'auto' }}>
+        <table className="calibration-curve__table" data-testid="calibration-table">
+          <colgroup>
             {tableGuard.value.columns.map((c) => (
-              <th key={c} data-testid={`calibration-header-${c}`}>
-                {c}
-              </th>
+              <col key={c} style={{ minWidth: columnMinWidth(c) }} />
             ))}
-            <th data-testid="calibration-header-fit">fit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.key} className="calibration-curve__row" data-testid={`calibration-row-${p.key}`} onClick={() => toggle(p.key)} {...sel(p.key)} {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}>
+            <col style={{ minWidth: columnMinWidth('fit') }} />
+          </colgroup>
+          <thead>
+            <tr>
               {tableGuard.value.columns.map((c) => (
-                <td key={c}>{p.row[c] === undefined || p.row[c] === null ? '' : String(p.row[c])}</td>
+                <th key={c} data-testid={`calibration-header-${c}`} style={{ minWidth: columnMinWidth(c) }}>
+                  {c}
+                </th>
               ))}
-              <td>
-                <input
-                  type="checkbox"
-                  data-testid={`calibration-fit-${p.key}`}
-                  checked={fitChecked(p)}
-                  disabled={fitUnmatched(p)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onFitToggle(p, e.target.checked)}
-                />
-              </td>
+              <th data-testid="calibration-header-fit" style={{ minWidth: columnMinWidth('fit') }}>
+                fit
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.key} className="calibration-curve__row" data-testid={`calibration-row-${p.key}`} onClick={() => toggle(p.key)} {...sel(p.key)} {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}>
+                {tableGuard.value.columns.map((c, i) => (
+                  <td key={c} style={{ minWidth: columnMinWidth(tableGuard.value.columns[i]) }}>
+                    {p.row[c] === undefined || p.row[c] === null ? '' : String(p.row[c])}
+                  </td>
+                ))}
+                <td style={{ minWidth: columnMinWidth('fit') }}>
+                  <input
+                    type="checkbox"
+                    data-testid={`calibration-fit-${p.key}`}
+                    checked={fitChecked(p)}
+                    disabled={fitUnmatched(p)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onFitToggle(p, e.target.checked)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {unmatchedLevels.length > 0 ? (
         // FIX1 D6: the UNMATCHED state is NAMED (no silent no-op) — these
         // levels' rows have no matching levels[] entry in the run's frozen
@@ -661,11 +774,15 @@ export function CalibrationCurveView(props: {
                 source run
               </button>
             )}
+            {' '}
             <span data-testid="calibration-source-run-unresolved">{unresolvedReason}</span>
             {pendingInputId !== null && !resolving ? (
-              <button type="button" data-testid="calibration-resolve-source-run" onClick={onResolve}>
-                resolve
-              </button>
+              <>
+                {' '}
+                <button type="button" data-testid="calibration-resolve-source-run" onClick={onResolve}>
+                  resolve
+                </button>
+              </>
             ) : null}
           </span>
         )}
@@ -736,9 +853,11 @@ export function CalibrationCurveView(props: {
                 ) : null}
                 <button
                   type="button"
+                  className="calibration-curve__recalc-submit"
                   data-testid="calibration-recalc-submit"
                   onClick={onRecalc}
                   disabled={submitting || recalcBlocked}
+                  style={{ opacity: submitting || recalcBlocked ? 0.5 : 1, cursor: submitting || recalcBlocked ? 'not-allowed' : 'pointer' }}
                 >
                   {submitting ? 'submitting…' : 'submit recalculation'}
                 </button>

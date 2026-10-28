@@ -497,3 +497,62 @@ describe('GC-11 FIX1 O3 — a persisted calibration-curve view is never duplicat
     expect(screen.getAllByTestId('calibration-curve').length).toBe(1)
   })
 })
+
+// --- RGF D3 (page level) — the gate probe2 flow through the REAL selectRun --
+// path (list click, not rerender): a pending edit made while run A is
+// displayed must NOT survive onto run B's display or back onto A's. Both
+// runs are calibration runs (the gate's ANR-000013 -> ANR-000014 -> back
+// flow): the synthesized composite keeps the SAME view id across runs
+// ('synthesized-calibration-curve'), so React preserves the component
+// INSTANCE across the switch — only the page context (run id + frozen
+// params) changes. (A switch onto a non-calibration run unmounts the
+// composite and re-mounts it fresh — the defect only bites cal->cal.)
+describe('RGF D3 — a run switch clears the composite pending edits (gate probe2 flow, real selectRun)', () => {
+  /** Run B (ANR-CAL-2): its OWN stored parameters differ from run A's —
+   * level 1 stored fit = false (a real recalc run's stored shape). */
+  const RUN_B_PARAMS = { model: 'linear', levels: [{ level: 1, fit: false }] }
+  function landingPayloadWithParams(parameters: Record<string, unknown>) {
+    const base = landingPayload(
+      [
+        { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+        { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+      ],
+      ['calibration_table', 'calibration_model'],
+    )
+    return { ...base, parameters }
+  }
+
+  it('toggle fit -> select the other cal run -> select the first back: checkbox == the run OWN stored fit, diff (no pending changes)', async () => {
+    vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({
+      runs: [CAL_RUN, { recordId: 'ANR-CAL-2', payload: { id: 'ANR-CAL-2', title: 'TEST recalc run', status: 'succeeded' } }],
+      total: 2,
+    })
+    vi.mocked(apiClient.getAnalysisRun).mockImplementation(async (id: string) => {
+      if (id === 'ANR-CAL-9') {
+        return { record: { recordId: 'ANR-CAL-9', payload: landingPayloadWithParams(CAL_PARAMS) } } as never
+      }
+      return { record: { recordId: 'ANR-CAL-2', payload: { ...landingPayloadWithParams(RUN_B_PARAMS), id: 'ANR-CAL-2', title: 'TEST recalc run' } } } as never
+    })
+    render(wrap(<AnalysisPage />, '/analysis?run=ANR-CAL-9'))
+    await waitFor(() => expect(screen.queryByTestId('calibration-curve')).not.toBeNull(), { timeout: 10000 })
+    // Run A's own stored state (params level 1 fit true; the row's own
+    // fit_point true agree — no pending change).
+    expect((screen.getByTestId('calibration-fit-level_1') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
+    // A PENDING edit (toggled, never submitted) — the gate's toggle step.
+    fireEvent.click(screen.getByTestId('calibration-fit-level_1'))
+    expect((screen.getByTestId('calibration-fit-level_1') as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toContain('level 1: fit true -> false')
+    // Switch to the OTHER calibration run via the list (the real selectRun).
+    fireEvent.click(screen.getByRole('button', { name: 'TEST recalc run' }))
+    await waitFor(() => expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-2'), { timeout: 10000 })
+    // Switch BACK to run A via the list. RED (unkeyed state): the pending
+    // edit survives — the checkbox shows run A's OLD edit and the diff claims
+    // a change the run never had. GREEN: the state re-keys to run A's OWN
+    // frozen parameters.
+    fireEvent.click(screen.getByRole('button', { name: 'TEST calibration run' }))
+    await waitFor(() => expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-9'), { timeout: 10000 })
+    expect((screen.getByTestId('calibration-fit-level_1') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
+  }, 30000)
+})
