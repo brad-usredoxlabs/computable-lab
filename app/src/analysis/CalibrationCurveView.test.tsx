@@ -183,18 +183,6 @@ function renderView(pageCtx: PageContext = PAGE_CTX, bindings?: Record<string, u
   return { ...out, onRecalcDone }
 }
 
-function renderWith(pageCtx: PageContext, artifact: RenderableArtifact, modelArtifact: RenderableArtifact, bindings?: Record<string, unknown>) {
-  return render(
-    <CalibrationCurveView
-      artifact={artifact}
-      modelArtifact={modelArtifact}
-      bindings={bindings}
-      page={pageCtx}
-      onRecalcDone={() => {}}
-    />,
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -259,7 +247,7 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
       <CalibrationCurveView
         artifact={artifact}
         modelArtifact={modelArtifact}
-        page={PAGE as object as never}
+        page={PAGE_CTX}
         onRecalcDone={() => {}}
       />,
     )
@@ -319,7 +307,7 @@ describe('D2 — row <-> point <-> residual selection is two-way', () => {
     } }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     const { container } = render(
-      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE as object as never} onRecalcDone={() => {}} />,
+      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />,
     )
     const header = container.querySelector('th[data-testid="calibration-header-measurement_response_raw_pa_min_extended_test_name"]')
     expect(header?.textContent).toBe('measurement_response_raw_pa_min_extended_test_name')
@@ -355,7 +343,7 @@ describe('D2 — the source-run link resolves from the frozen inputs (click-gate
 
   it('renders a NAMED disabled state for a dref-typed input (no dead # anchor, names the promote seam)', () => {
     const page = {
-      ...PAGE,
+      ...PAGE_CTX,
       sourceRun: {
         recordId: 'ANR-CAL-1',
         payload: {
@@ -382,7 +370,7 @@ describe('D2 — the source-run link resolves from the frozen inputs (click-gate
 
   it('renders a NAMED disabled state when the input is not declared in the frozen inputs', () => {
     const page = {
-      ...PAGE,
+      ...PAGE_CTX,
       sourceRun: {
         recordId: 'ANR-CAL-1',
         payload: { id: 'ANR-CAL-1', title: 't', status: 'succeeded', revisionRef: { id: 'ANREV-CAL-1' }, inputs: {}, parameters: CAL_PARAMS },
@@ -409,7 +397,7 @@ describe('D7 — a dref-backed calibration artifact renders the NAMED honest arm
     }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     const { container } = render(
-      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE as object as never} onRecalcDone={() => {}} />,
+      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />,
     )
     const arm = container.querySelector('[data-testid="calibration-dref-unsupported"]')
     expect(arm).not.toBeNull()
@@ -426,7 +414,7 @@ describe('bindings guard — malformed bindings render the named error arm', () 
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     const { container } = render(
-      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} bindings={{ bogus: true } as Record<string, unknown>} page={PAGE as object as never} onRecalcDone={() => {}} />,
+      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} bindings={{ bogus: true } as Record<string, unknown>} page={PAGE_CTX} onRecalcDone={() => {}} />,
     )
     const err = container.querySelector('[data-testid="view-spec-error"]')
     expect(err).not.toBeNull()
@@ -447,7 +435,7 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
   })
 
   it('toggling a row fit checkbox arms a visible diff line and the form value picks up the new fit flag', () => {
-    const { container } = renderView()
+    renderView()
     fireEvent.click(screen.getByTestId('calibration-fit-level_2'))
     expect(screen.getByTestId('calibration-recalc-diff').textContent).toContain('level 2: fit true -> false')
     fireEvent.click(screen.getByTestId('calibration-recalc-open'))
@@ -497,17 +485,17 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
   it('the source run payload is byte-identical before/after the recalc (never mutated)', async () => {
     vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ success: true, recordId: 'ANR-RECALC-9', run: {} } as never)
     vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({ success: true, recordId: 'ANR-RECALC-9', status: 'succeeded', manifest: { artifacts: [], views: [], metrics: [] }, artifactRefs: {} } as never)
-    const before = JSON.stringify(PAGE.sourceRun)
+    const before = JSON.stringify(PAGE_CTX.sourceRun)
     renderView()
     fireEvent.click(screen.getByTestId('calibration-fit-level_2'))
     fireEvent.click(screen.getByTestId('calibration-recalc-open'))
     fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
-    await screen.findByTestId('analysis-right') // let the submit settle
-    expect(JSON.stringify(PAGE.sourceRun)).toBe(before)
+    await new Promise((r) => setTimeout(r, 0)) // let create/execute resolve
+    expect(JSON.stringify(PAGE_CTX.sourceRun)).toBe(before)
   })
 
   it('no parameterSchema on the run revision -> NAMED disabled state (never a silent raw-JSON requirement)', () => {
-    const page = { ...PAGE, revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'legacy' } }] }
+    const page = { ...PAGE_CTX, revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'legacy' } }] }
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     render(

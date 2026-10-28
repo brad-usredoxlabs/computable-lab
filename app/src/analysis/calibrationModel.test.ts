@@ -261,9 +261,9 @@ describe('maxResidualIndexes — presentation pointer, no scientific threshold',
     )
     expect(idx).toEqual([2])
   })
-  it('respects outlierTopN=2 (descending by absolute residual)', () => {
+  it('respects outlierTopN=2 (descending by absolute residual; ties keep row order)', () => {
     const idx = maxResidualIndexes(TABLE_PAYLOAD.rows as Record<string, unknown>[], 2)
-    expect(idx).toEqual([2, 1])
+    expect(idx).toEqual([2, 0])
   })
   it('ignores null residuals (the ZERO_OBSERVED rows carry flags, not a number)', () => {
     const rows = TABLE_PAYLOAD.rows.map((r) => ({ ...r })) as Record<string, unknown>[]
