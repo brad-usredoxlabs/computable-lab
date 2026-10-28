@@ -18,7 +18,7 @@
  * model's structured coefficients for line geometry via the shipped _predict
  * key rule (calibrationModel.predictAt).
  */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import { ParameterForm, collectGateIssues, pruneEmpty } from './ParameterForm'
 import type { RenderableArtifact } from './ViewRenderer'
@@ -157,6 +157,15 @@ export function CalibrationCurveView(props: {
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // FIX2 M2: the recalc region's OWN raw-JSON override door (the page's
+  // advancedSeed pattern, scoped to THIS form — not the page's shared
+  // region, not the schema-less legacy demo literal). `manual` is a manual
+  // edit of the override text (pristine ≠ override); `seed` is kept in sync
+  // with the current form values so the box opens showing what the form
+  // will send. The override becomes ACTIVE on the first manual edit (page
+  // discipline: pristine seed is never an override).
+  const [recalcAdvanced, setRecalcAdvanced] = useState<{ manual: string | null; seed: string }>({ manual: null, seed: '' })
+  const recalcAdvancedText = recalcAdvanced.manual ?? recalcAdvanced.seed
 
   const toggle = (key: string): void => {
     setSelected((prev) => {
@@ -371,35 +380,124 @@ export function CalibrationCurveView(props: {
 
   const diffLine = levelDiff(frozenParams(page), params)
 
-  /** FIX1 D7: the recalc submit rides the SHIPPED gate (spec D4: "the shipped
-   * gate collectGateIssues applies to the recalc form too — a blocked recalc
-   * names its reason (no dead chrome)"). Same classify authority as the
-   * page's create-run gate (AnalysisPage pCollectGateIssues, :99-115); the
-   * reason wording mirrors that contract. Computed LIVE from the pending
-   * form values (a form edit re-gates on the next render). */
+  // --- FIX2 M2: the recalc submit gate — the SHIPPED gate mirrored --------
+  // (cycle-2 M2: gating on collectGateIssues(...).unsupported UNCONDITIONALLY
+  // blocked EVERY recalculation when the revision carried the REAL shipped
+  // calibration parameterSchema — istd:{type:'object'} (no properties),
+  // calibration_run_id:{type:['string','null']}, levels[].compound_ref
+  // multi-type and levels[].input_names:{type:'array'} (no items) all
+  // classify "unsupported" in ParameterForm.classify — the submit was
+  // permanently disabled for every real CAL run and receipt (c) unreachable.
+  // FIX (orch-ratified): mirror the SHIPPED page gate exactly —
+  // AnalysisPage pCollectGateIssues (:99-115) blocks the unsupported arm
+  // ONLY when the recalc region's own raw-JSON override is NOT overriding;
+  // missing/invalidNumbers ALWAYS block (the override bypasses the
+  // unrenderable constructs, never the required/finite-number discipline).
+  // The override door is scoped to the recalc form (seeded from the current
+  // form values — the page's advancedSeed pattern; NOT the schema-less
+  // legacy door — the noschema fallback's honesty stays) and ParameterForm
+  // stays UNEDITED (import/reuse only, OQ-6 door A). A blocked recalc names
+  // its reason (no dead chrome).)
+
+  /** Parse the override text as a JSON object (null when it is not one).
+   *  Same parse the submit consumes (no forked parse paths — the page's
+   *  asAdvancedRecord contract). */
+  const asAdvancedRecord = (text: string): Record<string, unknown> | null => {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return null
+    }
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+  }
+
+  const recalcAdvancedActive = recalcAdvanced.manual !== null
+
+  // Invalid override JSON is a DISTINCT condition from the submit-gate block
+  // (the page's D8 discipline: its own testid, its own line) — and an
+  // unparseable override does NOT unblock (it cannot carry the parameters).
+  const recalcAdvancedInvalid = useMemo(() => {
+    if (parameterSchema === undefined || !recalcAdvancedActive) return false
+    if (recalcAdvancedText.trim() === '') return true
+    return asAdvancedRecord(recalcAdvancedText) === null
+    // parameterSchema only gates the CHECK (the no-schema fallback has no
+    // override door at all); recalcAdvancedActive/Text are the inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parameterSchema, recalcAdvancedActive, recalcAdvancedText])
+
+  /** The override seed: the CURRENT form values as sorted JSON (the page's
+   *  advancedSeed — the box opens showing what the form will send). Kept
+   *  pristine until the first manual edit. */
+  const recalcAdvancedSeed = useMemo(
+    () => (Object.keys(params).length > 0 ? sortedParamsJson(params) : ''),
+    [params],
+  )
+  // Keep the pristine (non-manual) override text in sync with the seed; a
+  // manual edit, once made, is authoritative until cleared (the page's D3
+  // discipline, scoped to this region).
+  useEffect(() => {
+    setRecalcAdvanced((prev) => (prev.manual === null && prev.seed !== recalcAdvancedSeed ? { manual: null, seed: recalcAdvancedSeed } : prev))
+  }, [recalcAdvancedSeed])
+
+  /** FIX1 D7 / FIX2 M2: the recalc submit rides the SHIPPED gate (spec D4:
+   * "the shipped gate collectGateIssues applies to the recalc form too — a
+   * blocked recalc names its reason (no dead chrome)"). Same classify
+   * authority as the page's create-run gate (AnalysisPage pCollectGateIssues,
+   * :99-115); the reason wording mirrors that contract. FIX2 M2: the
+   * unsupported arm blocks ONLY while the raw-JSON override is NOT overriding
+   * (the page's exact semantics — the override carries the parameters for
+   * the constructs the labeled form cannot render); missing/invalidNumbers
+   * ALWAYS block. Computed LIVE from the pending form values (a form edit
+   * re-gates on the next render). */
   // (a mocked/absent gate function is treated as an EMPTY gate — the chrome
   // stays live and the handler's own guard decides; the real module always
   // returns the issues object).
   const recalcGate = parameterSchema !== undefined ? collectGateIssues(parameterSchema, params) ?? { missing: [] as string[], invalidNumbers: [] as string[], unsupported: [] as string[] } : { missing: [] as string[], invalidNumbers: [] as string[], unsupported: [] as string[] }
+  const recalcOverrideActive = recalcAdvancedActive && !recalcAdvancedInvalid
   const recalcBlocked =
-    recalcGate.missing.length > 0 || recalcGate.invalidNumbers.length > 0 || recalcGate.unsupported.length > 0
-  const recalcGateReason = recalcGate.unsupported.length > 0
-    ? `Cannot submit: unsupported construct(s) at ${recalcGate.unsupported.join(', ')}`
-    : recalcGate.missing.length > 0
-      ? `Cannot submit: missing required parameter(s): ${recalcGate.missing.join(', ')}`
-      : recalcGate.invalidNumbers.length > 0
-        ? `Cannot submit: invalid number(s): ${recalcGate.invalidNumbers.join(', ')}`
+    (recalcGate.unsupported.length > 0 && !recalcOverrideActive) ||
+    recalcGate.missing.length > 0 ||
+    recalcGate.invalidNumbers.length > 0
+  const recalcGateReason = recalcGate.missing.length > 0
+    ? `Cannot submit: missing required parameter(s): ${recalcGate.missing.join(', ')}`
+    : recalcGate.invalidNumbers.length > 0
+      ? `Cannot submit: invalid number(s): ${recalcGate.invalidNumbers.join(', ')} — enter a finite number or clear the field`
+      : recalcGate.unsupported.length > 0
+        ? `Cannot submit: unsupported construct(s) at ${recalcGate.unsupported.join(', ')} — the labeled form cannot render these; open "Advanced: edit raw JSON" below and set the full parameter JSON to submit them`
         : ''
 
-  /** FIX1 D7: the EXACT parameters object the submit will send — the PRUNED
-   * pending values (pruneEmpty, the page's buildParameters :357 discipline):
-   * untouched optionals, emptied objects and empty array elements are all
-   * OMITTED, never undefined/null/''-valued. undefined = the body omits the
-   * `parameters` key entirely. */
+  /** The EXACT parameters object the submit will send (FIX1 D7 / FIX2 M2):
+   *  the parsed OVERRIDE JSON when the override is active (a full parameter
+   *  JSON — the constructs the labeled form cannot render included verbatim),
+   *  else the PRUNED form values (pruneEmpty — the page's buildParameters
+   *  :357 discipline: untouched optionals, emptied objects and empty array
+   *  elements are all OMITTED, never undefined/null/''-valued).
+   *  undefined = the body omits the `parameters` key entirely. */
   const buildRecalcParameters = (): Record<string, unknown> | undefined => {
+    if (recalcOverrideActive) {
+      const rec = asAdvancedRecord(recalcAdvancedText)
+      if (rec === null) throw new Error('Advanced JSON must be a JSON object')
+      return rec
+    }
     const pruned = pruneEmpty(params) ?? params
     return Object.keys(pruned).length > 0 ? pruned : undefined
   }
+
+  /** The frozen preview (the page's contract, override-aware): the EXACT
+   *  sorted-keys JSON the submit will send — the parsed override when the
+   *  override is active, else the pruned form values. When the submit would
+   *  omit the `parameters` key the preview NAMES that decision (the page's
+   *  NO_PARAMS_PREVIEW wording — kept as a local literal here to avoid a
+   *  view->page module cycle; the page's const stays its authority). */
+  const recalcPreviewText = (() => {
+    try {
+      const p = buildRecalcParameters()
+      return p === undefined ? '(no parameters)' : sortedParamsJson(p)
+    } catch {
+      return null
+    }
+  })()
 
   /** The fit checkbox for a point (D4 point inclusion, FIX1 D6): its checked
    * state is the point's OWN levels[] row's `fit` value when a levels[] row
@@ -588,8 +686,40 @@ export function CalibrationCurveView(props: {
                   onChange={(next) => setParams(next)}
                   disabled={submitting}
                 />
+                {/* FIX2 M2: the recalc region's OWN raw-JSON override door
+                    (the page's advancedSeed pattern, scoped to this form —
+                    NOT the schema-less legacy door: the noschema fallback
+                    below stays the honesty arm, and the seed is the current
+                    form values, never the no-schema demo literal). The
+                    labeled form renders what it can; this box carries the
+                    FULL parameter JSON for the constructs it cannot. */}
+                {recalcAdvancedActive ? (
+                  <div className="calibration-curve__recalc-override" data-testid="calibration-recalc-override">
+                    Advanced JSON overrides the form
+                  </div>
+                ) : null}
+                <details className="calibration-curve__recalc-advanced" data-testid="calibration-recalc-advanced">
+                  <summary>Advanced: edit raw JSON</summary>
+                  <input
+                    data-testid="calibration-recalc-params"
+                    value={recalcAdvancedText}
+                    onChange={(e) => setRecalcAdvanced({ manual: e.target.value, seed: recalcAdvancedSeed })}
+                    className="analysis__mono"
+                  />
+                  <button type="button" onClick={() => setRecalcAdvanced({ manual: null, seed: recalcAdvancedSeed })} data-testid="calibration-recalc-advanced-clear">
+                    Clear — back to the form
+                  </button>
+                </details>
+                {recalcAdvancedInvalid ? (
+                  // Page D8 discipline: invalid override JSON is a DISTINCT
+                  // condition — its own testid + line, never conflated with
+                  // the submit-gate block line.
+                  <div className="calibration-curve__recalc-invalid-json" data-testid="calibration-recalc-invalid-json">
+                    Advanced JSON is invalid — fix it (or Clear back to the form) before submitting; the override does not apply until it parses
+                  </div>
+                ) : null}
                 <div className="calibration-curve__recalc-preview" data-testid="calibration-recalc-preview">
-                  {Object.keys(params).length > 0 ? sortedParamsJson(params) : '(no parameters)'}
+                  {recalcPreviewText}
                 </div>
                 {recalcBlocked ? (
                   <div className="calibration-curve__recalc-blocked" data-testid="calibration-recalc-blocked">

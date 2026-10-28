@@ -797,6 +797,249 @@ describe('D4 recalc — FIX1 D1: the revision is the source run FROZEN revisionR
   })
 })
 
+// --- FIX2 M2 RED — the recalc gate over the REAL shipped parameterSchema ---
+// (cycle-2 M2: collectGateIssues(...).unsupported blocked EVERY recalculation
+// when the revision carried the REAL calibration parameterSchema —
+// istd:{type:'object'} (no properties), calibration_run_id:{type:['string',
+// 'null']}, levels[].compound_ref:{type:['object','string','null']} and
+// levels[].input_names:{type:'array'} (no items) ALL classify "unsupported"
+// in ParameterForm.classify — so the submit was permanently disabled for
+// every real CAL run and receipt (c) was unreachable. The cycle-1 tests
+// dodged this with a synthetic minimal schema. FIX (orch-ratified): mirror
+// the SHIPPED page gate exactly — the unsupported arm blocks ONLY while the
+// recalc region's own raw-JSON override is INACTIVE (the page's
+// pCollectGateIssues / advancedSeed pattern, AnalysisPage.tsx:99-115);
+// missing/invalidNumbers ALWAYS block. ParameterForm.tsx UNEDITED —
+// import/reuse only (OQ-6 door A).)
+
+/** The REAL shipped calibration parameterSchema — copied VERBATIM from
+ * server/src/analysis/analysisGcCalibrationChaining.test.ts:79-113
+ * (CAL_PARAMS_SCHEMA). NOT a synthetic minimal schema: the multi-type and
+ * items-less nodes are the shipped shape the form must survive. */
+const REAL_CAL_PARAMETER_SCHEMA = {
+  type: 'object',
+  required: ['model', 'weighting', 'origin_constraint', 'correlation_statistic', 'amount_unit',
+    'istd', 'extrapolation', 'fail_on_out_of_range', 'levels'],
+  properties: {
+    model: { type: 'string', enum: ['linear', 'linear_through_origin', 'quadratic'] },
+    weighting: { type: 'string', enum: ['none', '1/x', '1/x^2', '1/y^2'] },
+    origin_constraint: { type: 'boolean' },
+    correlation_statistic: { type: 'string', enum: ['none', 'weighted_r_squared', 'plain_r_squared', 'spearman'] },
+    amount_unit: { type: 'string' },
+    istd: { type: 'object' },
+    extrapolation: { type: 'string', enum: ['reject', 'allow_within_declared_extension'] },
+    fail_on_out_of_range: { type: 'boolean' },
+    allow_inline_inputs: { type: 'boolean' },
+    calibration_run_id: { type: ['string', 'null'] },
+    levels: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        required: ['level', 'compound_label', 'amount', 'rt_target_min', 'rt_window_min', 'fit', 'required'],
+        properties: {
+          level: { type: 'integer' },
+          compound_label: { type: 'string' },
+          compound_ref: { type: ['object', 'string', 'null'] },
+          amount: { type: 'number' },
+          rt_target_min: { type: 'number' },
+          rt_window_min: { type: 'number', exclusiveMinimum: 0 },
+          fit: { type: 'boolean' },
+          required: { type: 'boolean' },
+          input_names: { type: 'array' },
+          weight: { type: 'number' },
+        },
+      },
+    },
+  },
+}
+
+/** VALID frozen parameters over the REAL schema: every required key present,
+ * level 2 excluded (fit: false) — a real CAL run's stored parameters (the
+ * spine's CAL_PARAMS shape, two levels). */
+const REAL_CAL_FROZEN_PARAMS = {
+  model: 'linear',
+  weighting: 'none',
+  origin_constraint: false,
+  correlation_statistic: 'weighted_r_squared',
+  amount_unit: 'ng/uL',
+  istd: { role: 'none' },
+  extrapolation: 'reject',
+  fail_on_out_of_range: true,
+  allow_inline_inputs: true,
+  levels: [
+    { level: 1, compound_label: 'TEST-CMPD-A', compound_ref: { id: 'LC-CMPD-1' }, amount: 1, rt_target_min: 1, rt_window_min: 0.25, fit: true, required: true, input_names: ['level_1'] },
+    { level: 2, compound_label: 'TEST-CMPD-B', compound_ref: { id: 'LC-CMPD-2' }, amount: 2, rt_target_min: 2, rt_window_min: 0.25, fit: false, required: true, input_names: ['level_2'] },
+  ],
+}
+/** The raw-JSON override the scientist submits for the constructs the
+ * labeled form cannot render (a full parameter JSON — the override door's
+ * point): the same valid frozen parameters with the model switched. */
+const REAL_CAL_OVERRIDE_PARAMS = { ...JSON.parse(JSON.stringify(REAL_CAL_FROZEN_PARAMS)), model: 'quadratic' }
+
+function pageWithRealSchema(parameters: Record<string, unknown>): PageContext {
+  return {
+    activeRunId: 'ANR-CAL-1',
+    revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'TEST cal revision', parameterSchema: REAL_CAL_PARAMETER_SCHEMA } }],
+    sourceRun: {
+      recordId: 'ANR-CAL-1',
+      payload: {
+        id: 'ANR-CAL-1',
+        title: 'TEST calibration run',
+        status: 'succeeded',
+        revisionRef: { id: 'ANREV-CAL-1' },
+        inputs: SOURCE_INPUTS,
+        parameters,
+      },
+    },
+  }
+}
+
+describe('D7 — FIX2 M2: the recalc gate over the REAL shipped parameterSchema (raw-JSON override door)', () => {
+  beforeEach(async () => {
+    // The mock module's re-exported gate functions wired to the REAL
+    // implementations (same harness as the FIX1 D7 block — the view's gate
+    // computation imports them; the form component stays the mock).
+    const real = await vi.importActual<typeof import('./ParameterForm')>('./ParameterForm')
+    pfHolder.gate = real.collectGateIssues
+    pfHolder.prune = real.pruneEmpty
+  })
+
+  const REAL_ARTIFACTS = () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    return { artifact, modelArtifact }
+  }
+
+  it('(i) labeled-only mode over the REAL schema is BLOCKED with the NAMED unsupported reason (no dead chrome)', () => {
+    // The REAL schema's unrenderable constructs (istd object-without-
+    // properties, calibration_run_id multi-type, levels[].compound_ref
+    // multi-type, levels[].input_names items-less array) classify
+    // "unsupported" — the labeled form cannot render them, so the submit is
+    // blocked and the reason NAMES the paths (never a silent grey button).
+    const { artifact, modelArtifact } = REAL_ARTIFACTS()
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithRealSchema(REAL_CAL_FROZEN_PARAMS)} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const submit = screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    const blocked = screen.getByTestId('calibration-recalc-blocked')
+    expect(blocked.textContent).toContain('Cannot submit: unsupported construct(s) at')
+    // The named paths include the shipped unrenderable nodes (the reviewer's
+    // probe: istd, calibration_run_id, levels[*].compound_ref/input_names).
+    expect(blocked.textContent).toContain('istd')
+    expect(blocked.textContent).toContain('calibration_run_id')
+    expect(blocked.textContent).toContain('levels[0].compound_ref')
+    // A forced click still POSTs nothing (the handler refuses, not just the
+    // disabled attribute).
+    fireEvent.click(submit)
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
+  })
+
+  it('(ii) with the raw-JSON override ACTIVE the submit POSTs the OVERRIDE parameters (the real-shape recalc becomes reachable)', async () => {
+    // RED (FIX2): the recalc region had NO raw-JSON override door — the
+    // unsupported arm blocked every recalc on the REAL schema, so this test
+    // cannot even find the door (calibration-recalc-advanced absent).
+    const newRunId = 'ANR-RECALC-M2'
+    vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ recordId: newRunId } as never)
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({ success: true, recordId: newRunId, status: 'succeeded', manifest: { artifacts: [], views: [], metrics: [] }, artifactRefs: {} } as never)
+    const { artifact, modelArtifact } = REAL_ARTIFACTS()
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithRealSchema(REAL_CAL_FROZEN_PARAMS)} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    // The override door exists in the recalc region, scoped to the recalc
+    // form (seeded from the current form values — the page's advancedSeed
+    // pattern; NOT the schema-less legacy demo literal).
+    const details = screen.getByTestId('calibration-recalc-advanced') as HTMLDetailsElement
+    details.open = true
+    const input = screen.getByTestId('calibration-recalc-params') as HTMLInputElement
+    // Seed = the current (frozen) form values as the seed's CANONICAL form:
+    // the box opens showing what the form would send — never the no-schema
+    // demo literal. (The seed state is the pretty sortedParamsJson string;
+    // a DOM <input> value strips newlines by platform design (jsdom
+    // included — verified empirically: assigning pretty JSON to .value
+    // returns it newline-free), so the DOM-faithful assertion PARSES the
+    // input value and deep-compares it (key-order-agnostic) to the frozen
+    // params — a different object would still fail.)
+    expect(JSON.parse(input.value)).toEqual(REAL_CAL_FROZEN_PARAMS)
+    // No override active yet: still blocked (arm (i)).
+    expect((screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByTestId('calibration-recalc-override')).toBeNull()
+    // Activate the override with the FULL parameter JSON (the constructs the
+    // labeled form cannot render included verbatim).
+    fireEvent.change(input, { target: { value: JSON.stringify(REAL_CAL_OVERRIDE_PARAMS) } })
+    // The override badge is visible (the page's override-discipline chrome)
+    // and the submit UNBLOCKS (unsupported bypassed; the real params satisfy
+    // every required control).
+    expect(screen.getByTestId('calibration-recalc-override').textContent).toContain('Advanced JSON overrides the form')
+    const submit = screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+    expect(submit.disabled).toBe(false)
+    expect(screen.queryByTestId('calibration-recalc-blocked')).toBeNull()
+    // The frozen preview shows the EXACT override JSON that will be sent
+    // (sorted-keys, the page's preview contract). (The DOM node's raw text
+    // child — textContent normalizes whitespace and would collapse the
+    // pretty-printed JSON; firstChild may be a comment node, so take the
+    // first TEXT node.)
+    const previewNode = screen.getByTestId('calibration-recalc-preview')
+    const previewText = Array.from(previewNode.childNodes).find((n) => n.nodeType === 3)?.nodeValue ?? ''
+    expect(previewText).toBe(sortedParamsJson(REAL_CAL_OVERRIDE_PARAMS))
+    // The submit POSTs the OVERRIDE parameters (the full JSON, verbatim).
+    fireEvent.click(submit)
+    await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as Record<string, unknown>
+    expect(body.parameters).toEqual(REAL_CAL_OVERRIDE_PARAMS)
+    expect((body.parameters as { levels: Record<string, unknown>[] }).levels[1].fit).toBe(false)
+    // execute fires on the NEW id; the completion callback fires.
+    await vi.waitFor(() => expect(apiClient.executeAnalysisRun).toHaveBeenCalledTimes(1))
+    expect(apiClient.executeAnalysisRun).toHaveBeenCalledWith(newRunId)
+  })
+
+  it('(iii) missing-required STILL blocks: inactive override (block + no POST) and even with the override ACTIVE the missing arm names the missing controls', async () => {
+    const { artifact, modelArtifact } = REAL_ARTIFACTS()
+    // Frozen params with ONE of the nine required keys present: the missing
+    // arm AND the unsupported arm both fire.
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithRealSchema({ model: 'linear' })} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    // Override INACTIVE: blocked (the named reason exists) and a forced
+    // click POSTs nothing.
+    const submit = screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-blocked').textContent).toContain('Cannot submit')
+    fireEvent.click(submit)
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    // Override ACTIVE (a valid JSON object — the override itself omits the
+    // required keys): the missing arm STILL blocks (override bypasses
+    // unsupported, NOT missing/invalidNumbers) and the reason NAMES the
+    // missing required parameters — the labeled-form gate arms stay live.
+    const details = screen.getByTestId('calibration-recalc-advanced') as HTMLDetailsElement
+    details.open = true
+    fireEvent.change(screen.getByTestId('calibration-recalc-params'), { target: { value: JSON.stringify({ model: 'linear' }) } })
+    expect(submit.disabled).toBe(true)
+    const blocked = screen.getByTestId('calibration-recalc-blocked')
+    expect(blocked.textContent).toContain('Cannot submit: missing required parameter(s):')
+    expect(blocked.textContent).toContain('weighting')
+    expect(blocked.textContent).toContain('levels')
+    fireEvent.click(submit)
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
+  })
+
+  it('(iii-c) invalid override JSON is its own NAMED condition (distinct testid, page D8 discipline) and blocks the submit', () => {
+    const { artifact, modelArtifact } = REAL_ARTIFACTS()
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithRealSchema(REAL_CAL_FROZEN_PARAMS)} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const details = screen.getByTestId('calibration-recalc-advanced') as HTMLDetailsElement
+    details.open = true
+    fireEvent.change(screen.getByTestId('calibration-recalc-params'), { target: { value: '{not json' } })
+    // The invalid-JSON line names the condition on its OWN testid (never
+    // conflated with the gate-block line), and the override does NOT
+    // unblock (an unparseable override cannot carry the parameters).
+    expect(screen.getByTestId('calibration-recalc-invalid-json').textContent).toContain('invalid')
+    expect((screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+  })
+})
+
 // --- FIX1 D7 RED — the recalc submit rides the SHIPPED GATE ------------------
 // (spec D4: "the shipped gate collectGateIssues applies to the recalc form too —
 // a blocked recalc names its reason (no dead chrome)"). The shipped onRecalc
