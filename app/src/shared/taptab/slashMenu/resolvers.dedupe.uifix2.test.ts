@@ -168,7 +168,7 @@ describe('L2-SUITE-A-uifix2 D — duplicative candidate chrome (dead-chrome rule
     // Both layers survive (different entityKinds = different layers, both
     // legitimately answer the card) — but they are NO LONGER byte-identical:
     // the visible rows (badge + label + subtitle) differ.
-    const visible = dataRows.map((s) => `${s.badge} ${s.label} ${s.subtitle}`)
+    const visible = dataRows.map((s) => `${s.badge}\u0000${s.label}\u0000${s.subtitle}`)
     expect(new Set(visible).size).toBe(visible.length)
     // And neither row re-spells its own badge word.
     for (const s of dataRows) {
