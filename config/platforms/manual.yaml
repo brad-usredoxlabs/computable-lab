@@ -25,6 +25,21 @@ variants:
         row: 1
         col: 1
         reachable: true
+    # Overflow bench: every other slot-capable variant declares one (the
+    # robot decks' side lawns, the freeform bench's surface). Without it a
+    # lawn placement committed to this deck (the draft/commit path never
+    # stamps a lawn surfaceId — the schema default is 'primary',
+    # event-graph.schema.yaml) has NO rendering surface: the record's
+    # placements grow but the deck tile count stays 1. A `surface` (the
+    # PRIMARY bench), not a `sideLawn` — committed placements carry no
+    # surfaceId, so they resolve to 'primary'; sideLawn placements are
+    # stamped 'side' on drop and would never match. Sized 340×280mm: a
+    # compact spare bench that fits an SBS plate (127×85) plus a 5×16 rack
+    # (220×77), legible, uncluttered.
+    surface:
+      kind: lawn
+      widthMm: 340
+      heightMm: 280
   - id: manual_collapsed
     title: Manual Technician Mode
     slots: []
