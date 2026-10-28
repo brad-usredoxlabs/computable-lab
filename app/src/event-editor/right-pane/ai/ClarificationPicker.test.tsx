@@ -12,6 +12,10 @@ vi.mock('../../../shared/taptab/slashMenu/resolvers', () => ({
   resolveMaterial: (q: string, ctx: unknown) => resolveMaterial(q, ctx),
   resolveLabware: (q: string, ctx: unknown) => resolveLabware(q, ctx),
   resolveEquipment: (q: string, ctx: unknown) => resolveEquipment(q, ctx),
+  // L2-SUITE-A-uifix2 FIX2 [D5]: the product now reads the shared mint-row
+  // label helper from this module — the mock must export it or the render
+  // throws (undefined is not a function) on ANY card.
+  mintLocalTermLabel: (q: string) => `Create local term "${q}"`,
 }))
 
 // Ground ontology picks to a local record (the real one hits the API).
@@ -372,5 +376,33 @@ describe('a material question with no words does not show another material', () 
     // mockReset() — so no `.then` fires against a reset mock / unmounted state.
     await new Promise((r) => setTimeout(r, 250))
     expect(resolveLabware).toHaveBeenCalled()
+  })
+
+  /**
+   * L2-SUITE-A-uifix2 FIX3 (advc1 defect 4, MINOR) — the mint row's mandate
+   * includes the "rows empty" precondition: a card that carries candidate
+   * OPTIONS does not need (and must not advertise) the mint affordance.
+   * Pre-fix, showMintRow never looked at request.options, so a card with
+   * allowCreateLocal + a seeded query + TWO options still rendered the
+   * visible mint row (the reviewer's probe: MINT_ROW_WITH_2_OPTIONS=true) —
+   * the duplicate-mint temptation the criterion exists to prevent (a
+   * candidate row answers the question without a new local term).
+   */
+  it('hides the mint row when the question carries CANDIDATE options (rows non-empty — a candidate answers without a mint)', () => {
+    // allowCreateLocal true + seeded query + TWO server options: the card's
+    // own rows answer the question, so the create-local affordance is dead
+    // chrome (and a duplicate-mint temptation) — the row must be ABSENT.
+    resolveMaterial.mockResolvedValue([])
+    const request: AiClarificationRequest = {
+      ...materialRequest,
+      id: 'clar-mint-rows',
+      allowCreateLocal: true,
+      options: [
+        { id: 'opt-1', label: 'CHO cells (vial A)' },
+        { id: 'opt-2', label: 'CHO cells (vial B)' },
+      ],
+    }
+    render(<ClarificationPicker request={request} onPick={vi.fn()} />)
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
   })
 })

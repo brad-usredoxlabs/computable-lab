@@ -415,8 +415,18 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // CLOSED: an OPEN popover with a query carries the resolver's own mint:<q>
   // floor row (one mint affordance per open state — no duplicate), and a
   // candidate row answers the question without one.
+  // L2-SUITE-A-uifix2 FIX3 (advc1 defect 4): AND ONLY WHEN THE CARD CARRIES
+  // NO CANDIDATE ROWS — the mandate's "rows empty" precondition. A card with
+  // server options has rows that answer the question, so the mint row is
+  // dead chrome on it (and the duplicate-mint temptation the criterion
+  // exists to prevent); pre-fix the check was absent (allowCreateLocal +
+  // seeded query + two options still rendered the row).
   const showMintRow =
-    canMint && request.allowCreateLocal === true && query.trim().length > 0 && !open
+    canMint
+    && request.allowCreateLocal === true
+    && query.trim().length > 0
+    && !open
+    && (request.options?.length ?? 0) === 0
 
   // Badge colours are per-badge semantics (tokens.ts badgeStyles) — the SAME
   // inline mechanism the popover's mint floor row uses.
