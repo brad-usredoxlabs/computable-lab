@@ -25,6 +25,17 @@ DO NOT build this on the L2-SUITE-A D3 root-cause claim. The re-drive traced D3'
 - Server store tests: server/src/ai-threads/AiThreadStore.test.ts (8 tests green at tip) + AiThreadStore.conversation.test.ts. Handler-level fastify.inject pattern is established (e.g. server/src/api/handlers/InventoryShelfHandlers.test.ts:93).
 - App hydration test pattern: app/src/shared/hooks/useAiChat.hydration.test.ts (vi.mock('../api/aiThreadClient')) — reuse this shape for the new app tests.
 
+## BINDING AMENDMENT — ARCHITECT RULING 2026-10-28 (orch l2t2015): ONE DECK PER THREAD
+Amendments A-1..A-5 in `/home/brad/.hermes/cl/lanes/2/decisions/SUITEA-D3-deck-thread-scope-l2t2015.md`
+are BINDING and OVERRIDE §§4.1/4.3/4.4/4.5/4.7 of this draft wherever they conflict
+(thread key = (userId, endpoint, scope, threadId); scope = deck eventGraphId or reserved
+"_"; second header x-cl-thread-scope inside threadHeaders(); file layout
+var/ai-threads/{user}/{endpoint}/{scope}/{threadId}.json; scope-filtered thread list;
+added acceptance criteria (4)(5)(6) from the ruling). Read the decision file IN FULL
+before dispatch; it also PINS edges (unsaved deck under "_", per-tab distinct ids under one
+scope, tab-duplicate map inheritance) and requires NO Brad re-approval (same goal, files,
+dispatch count). The D3 leak scenario is closed by acceptance (6) when SUITE-A re-gates.
+
 ## 4. Design (numbered decisions; smallest change each)
 
 4.1 CLIENT MINT (aiThreadClient.ts). Add a module-level `getThreadTabId(): string` that lazily mints `crypto.randomUUID()` ONCE per tab into sessionStorage key `cl.ai-thread-tab-id` and returns it; every subsequent call returns the stored value (mint-once). Guard `typeof sessionStorage === 'undefined'` like base.ts guards localStorage (return a per-call ephemeral id, never throw, in non-browser contexts). All three wrappers (getThread/appendThreadMessage/promoteThread) automatically carry it — legacy callers need no edits.
