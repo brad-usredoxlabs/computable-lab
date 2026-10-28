@@ -716,11 +716,15 @@ export function CalibrationCurveView(props: {
                 source run
               </button>
             )}
+            {' '}
             <span data-testid="calibration-source-run-unresolved">{unresolvedReason}</span>
             {pendingInputId !== null && !resolving ? (
-              <button type="button" data-testid="calibration-resolve-source-run" onClick={onResolve}>
-                resolve
-              </button>
+              <>
+                {' '}
+                <button type="button" data-testid="calibration-resolve-source-run" onClick={onResolve}>
+                  resolve
+                </button>
+              </>
             ) : null}
           </span>
         )}

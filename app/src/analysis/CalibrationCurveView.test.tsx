@@ -735,6 +735,29 @@ describe('D6 — the fit checkbox: initial state from the row OWN inclusion; tog
   })
 })
 
+// --- RGF D6 — the source-run line's inline siblings are SEPARATED ---------
+// (RUNGATE1 DEFECT-6: the inline button + reason span + resolve button ran
+// together in the rendered text — `…source runclick "resolve"…(record
+// AOUT-000016)resolve` — no whitespace between the inline siblings; the
+// operator reads `runclick` / `016)resolve` as one token.)
+
+describe('RGF D6 — the source-run line: inline siblings are separated (no run-together text)', () => {
+  it('the disabled button, the reason span and the resolve button are whitespace-separated in the rendered line', () => {
+    renderView()
+    const text = screen.getByTestId('calibration-run-line').textContent ?? ''
+    // RED (no separators): the button's own text ("source run") butts
+    // against the reason's leading word ("click …"), and the reason's
+    // closing "(record …)" butts against the resolve button's text.
+    expect(text).not.toContain('runclick')
+    expect(text).not.toContain(')resolve')
+    // The reason span is bounded by whitespace on BOTH sides inside the
+    // line (button → space → reason → space → resolve button).
+    const reason = screen.getByTestId('calibration-source-run-unresolved').textContent ?? ''
+    expect(text).toContain(`${reason} resolve`)
+    expect(text).toContain('source run ' + reason)
+  })
+})
+
 // --- D7: the honest dref arm ---------------------------------------------------
 
 describe('D7 — a dref-backed calibration artifact renders the NAMED honest arm', () => {
