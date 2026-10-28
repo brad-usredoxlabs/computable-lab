@@ -1242,10 +1242,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   Boolean((result as { deckLayout?: unknown }).deckLayout) ? 'a deck layout' : null,
                   (result.instrumentApplianceJobs?.length ?? 0) > 0 ? 'appliance jobs' : null,
                 ].filter((part): part is string => part !== null)
+                // L2-SUITE-A-uifix1 D2: the clause carries a VERB. The parts
+                // are bare noun phrases; joining them after "it" rendered
+                // "it a deck layout" (the gate's broken copy). "it delivered
+                // only <parts>" is grammatical for every combination.
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
-                      ? ` — it ${unmountable.join(' and ')}`
+                      ? ` — it delivered only ${unmountable.join(' and ')}`
                       : notesDelivered
                         ? ' — it delivered only notes'
                         : ''
