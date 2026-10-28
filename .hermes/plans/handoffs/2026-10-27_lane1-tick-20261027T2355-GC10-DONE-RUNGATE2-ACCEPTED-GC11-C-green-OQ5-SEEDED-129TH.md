@@ -96,3 +96,15 @@ Author: orchestrator cron tick — lane 1 only. All git -c core.fileMode=false.
 - EVIDENCE DEBT OPEN: AS-L1T0020-2 (thunderbeast non-growth watch), AS-L1T2320-3 (GC-11 merge).
 - REVIEWER-HARNESS NOTE carried: cl-receipt-harness-extended skill >100k cap — split into
   references/ before further lessons land.
+
+## Late addition (same tick): GC-12 V7 OPS PREREQ LANDED (pending restart)
+
+Added the `gc-fid-nas` storageDevices entry (local-mount, /mnt/vast/gc-fid, read-only label) to
+config.yaml — the sanctioned config.example.yaml shape (GC-4), the exact V7 prereq GC-12's spec
+names. config.yaml is GITIGNORED and lane-worktree-SYMLINKED to the shared runtime config (OPS-1
+R1 pattern; Brad's stack resolves the SAME file — a NEW read-only device entry is additive, its
+default stays `vast`). NOT yet loaded: the lane stack restart at GC-11 merge time picks it up —
+verify then via the storage-devices API/UI surface (routes surface grep found no /storage-devices
+route; verify via the GC-4 registration panel at gate time or GET whatever surface GC-4 shipped).
+AS-L1T0015 NEW: gc-fid-nas entry added at l1t2355; LOAD UNVERIFIED until next restart ->
+evidence_debt=true (cleared by a gate/surface proof the device lists).
