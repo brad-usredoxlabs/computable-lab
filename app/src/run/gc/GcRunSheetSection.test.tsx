@@ -95,8 +95,8 @@ vi.mock('../../shared/api/client', () => ({
     executeAnalysisRun: vi.fn(),
     getConfig: vi.fn().mockResolvedValue({
       storageDevices: [
-        { id: 'vast', label: 'Lab NAS (vast)', kind: 'local-mount', default: true, mountPath: '/mnt/vast/computable-lab-data' },
-        { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/mnt/vast/gc-fid' },
+        { id: 'vast', label: 'Lab NAS (vast)', kind: 'local-mount', default: true, mountPath: '/nas/lab-data' },
+        { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/nas/gc-fid' },
       ],
     }),
   },
@@ -138,7 +138,7 @@ beforeEach(() => {
   vi.mocked(apiClient.listAnalysisRevisions).mockResolvedValue({ revisions: [], total: 0 })
   vi.mocked(apiClient.getConfig).mockResolvedValue({
     storageDevices: [
-      { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/mnt/vast/gc-fid' },
+      { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/nas/gc-fid' },
     ],
   } as never)
   // The entry fetch (one getRecord per distinct linked entryRef) resolves the

@@ -50,9 +50,14 @@ vi.mock('../../shared/api/client', () => {
 })
 
 const ENTRY = 'ISEN-ATT-1'
+// The config fixture: id + label are the ONLY fields the panel consumes
+// (bait #7 — the mount path is config data the panel NEVER types/echoes).
+// The mountPath values are SYNTHETIC (the fixture is not the lane's real
+// config); the "no path rendered" assertion checks a path SHAPE, not a
+// hardcoded NAS root (the diff must stay NAS-root-grep-0 — bait #7).
 const DEVICES = [
-  { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/mnt/vast/gc-fid' },
-  { id: 'vast', label: 'Lab NAS (vast)', kind: 'local-mount', default: true, mountPath: '/mnt/vast/computable-lab-data' },
+  { id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount', mountPath: '/nas/gc-fid' },
+  { id: 'vast', label: 'Lab NAS (vast)', kind: 'local-mount', default: true, mountPath: '/nas/lab-data' },
 ]
 
 function mockDevices(list: unknown[]) {
@@ -81,7 +86,12 @@ describe('GcAttachPanel — device dropdown is config data (bait #7)', () => {
     expect(sel.options.length).toBe(2)
     const labels = Array.from(sel.options).map((o) => o.textContent)
     expect(labels).toEqual(['GC FID NAS (read-only)', 'Lab NAS (vast)'])
-    expect(labels.join(' ')).not.toContain('/mnt/vast')
+    // No mount path is rendered as option text (bait #7): the device id and
+    // label are shown; a path (a leading '/' or the synthetic fixture roots)
+    // never is.
+    for (const label of labels) {
+      expect(label).not.toMatch(/^\/|\/nas\//)
+    }
     // Defaulted to the config's `default: true` device.
     expect(sel.value).toBe('vast')
   })
