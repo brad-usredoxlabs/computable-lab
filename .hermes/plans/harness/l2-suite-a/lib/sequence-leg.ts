@@ -84,6 +84,19 @@ const CAPABILITY_CLASS_TOKENS = [
   'nothing was focused',
   'nothing was retrieved',
   'nothing was projected',
+  // The compileWorkspaceAction structural-refusal family: every
+  // "A <verb>-<thing> action requires a `<field>`" / "requires a target"
+  // diagnostic names the exact gap the model's envelope left open
+  // (compileWorkspaceAction.ts:650 missing-`surface`, :666 missing-target,
+  // :479/:499 missing tab/recordId). Surfaced live 2026-10-27 (drive
+  // L2SB-195104 P9, UNSUPPORTED_SURFACE on notes): the text NAMED the gap
+  // but the token list never enumerated this family -> silent-shape raise.
+  // Two keys, each a stable substring of the server's OWN diagnostic texts:
+  // 'requires a `' covers the backticked-field refusals, 'requires a target'
+  // the focus-family. Deliberately NOT a bare 'requires a' — a generic prose
+  // line containing that phrase must stay a THROW (fixture (g) class).
+  'requires a `',
+  'requires a target',
 ];
 
 function channelDump(result: Record<string, unknown>): string {

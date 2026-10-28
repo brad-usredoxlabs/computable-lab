@@ -4,8 +4,9 @@
  * fixtures: grounded proposal, ungrounded-ref proposal -> forbidden, cards,
  * named wall, generic-failure -> forbidden)").
  *
- * The three encodings fed the SAME seven fixtures (the five spec §3
- * fixtures + the two resume-run notes-channel fixtures):
+ * The three encodings fed the SAME nine fixtures (the five spec §3
+ * fixtures + the two resume-run notes-channel fixtures + the two
+ * missing-surface-family fixtures (h)/(i), orch l2t2015):
  *   1. THE TS CLASSIFIER — .hermes/plans/harness/l2-suite-a/lib/
  *      sequence-leg.ts (classifySequenceLegOutcome — the ONE TS
  *      implementation home for the sequence trichotomy; additive, never
@@ -48,6 +49,14 @@
  *       STILL be the forbidden silent shape (B6 stands on the notes
  *       channel too) — the live P9 drive's silent-shape FAIL is what
  *       motivated this fixture.
+ *   (h) missing-surface compile refusal (orch l2t2015, live drive
+ *       L2SB-195104 P9): success:true + notes + a pipeline_diagnostics
+ *       frame carrying UNSUPPORTED_SURFACE's "An open-surface action
+ *       requires a `surface`..." — the server's OWN structural-refusal
+ *       family, named gap → "honest-failure";
+ *   (i) generic prose that merely contains "requires a" without naming a
+ *       backticked field or a target → still FORBIDDEN (the (h) token
+ *       family must not launder vague prose — B6).
  *
  * The forbidden shapes carry expected='THROW': the classifier's throw
  * contract (nonzero exit on the CLIs, SequenceLegOutcomeError on the TS
@@ -182,6 +191,40 @@ const FIXTURES: Array<{
     context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
     expected: 'THROW',
   },
+  {
+    name: '(h) missing-surface compile refusal on notes + pipeline_diagnostics frame (live drive L2SB-195104 P9 shape → honest-failure)',
+    result: {
+      success: true,
+      notes: [
+        'An open-surface action requires a `surface` naming a registered surface id.',
+      ],
+    },
+    frames: [
+      {
+        type: 'pipeline_diagnostics',
+        outcome: 'gap',
+        diagnostics: [
+          {
+            pass_id: 'workspace-action-compile',
+            code: 'UNSUPPORTED_SURFACE',
+            severity: 'error',
+            message: 'An open-surface action requires a `surface` naming a registered surface id.',
+          },
+        ],
+      },
+    ],
+    context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
+    expected: 'honest-failure',
+  },
+  {
+    name: '(i) generic prose containing "requires a" but naming no backticked field (success + no deliverable → forbidden)',
+    result: {
+      success: true,
+      notes: ['The request requires a little more context before it can run.'],
+    },
+    context: { recordIds: [...SEQUENCE_RECORD_IDS], engineIds: [...ENGINE_IDS] },
+    expected: 'THROW',
+  },
 ];
 
 /** The stdin/stdout CLI contract (both CLIs): the fixture's JSON document on
@@ -279,11 +322,14 @@ describe('L2-SUITE-B sequence-leg parity pin (spec §3: ONE trichotomy, three fe
       ]);
     }
     // the expected column is spec §3's own verdicts, verbatim (plus the
-    // two resume-run fixtures (f)/(g) that lock the notes-channel fix)
+    // two resume-run fixtures (f)/(g) that lock the notes-channel fix and
+    // the (h)/(i) missing-surface-family pair, orch l2t2015)
     expect(verdicts.map((r) => r[0])).toEqual([
       'proposal',
       'THROW',
       'cards',
+      'honest-failure',
+      'THROW',
       'honest-failure',
       'THROW',
       'honest-failure',
