@@ -55,6 +55,7 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS, SHORTHAND_ARG_KEYS } from './coerceAgentIntent.js';
+import { deckLayoutChoiceWall, resolveDeckVariantFromText } from './deckLayoutResolution.js';
 import { ledgerAnswerText } from '../workspace-session/ledgerQuery.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import {
@@ -1018,6 +1019,16 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   resolveSpine?: import('./resolveDraftMaterials.js').SpineLike;
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
+  /**
+   * L2-SUITE-A-uifix2 FIX2 (D1) — the platform manifest registry
+   * (config/platforms/*.yaml via loadPlatformRegistry). The deck_layout
+   * model-output gap resolves a MISSING variantId against the platform's
+   * DECLARED variant TITLES (data, never a TS vocabulary list) and degrades
+   * a naming-miss to a plain-language choice wall built from those titles.
+   * Optional — omitted ⇒ a variantId-less deck_layout is an honest plain
+   * refusal (no jargon, no raw validator string).
+   */
+  platformRegistry?: import('../platform-registry/PlatformRegistry.js').PlatformRegistry;
   /**
    * PB-CH-1 — the declarative work-surface registry
    * (schema/registry/surfaces/surfaces.yaml via loadDefaultSurfacesRegistry).
@@ -2892,12 +2903,39 @@ export function createAgentOrchestrator(
             if (agentIntent.intent === 'deck_layout') {
               const variantId = agentIntent.variantId;
               const platformId = agentIntent.platformId ?? context.activeDeckScope?.platformId ?? 'manual';
-              const ok = typeof variantId === 'string' && variantId.length > 0;
+              const registry = deps.platformRegistry;
+              // L2-SUITE-A-uifix2 FIX2 (D1): the model sometimes emits a
+              // deck_layout intent WITHOUT the variantId (gate re-gate-3 P1).
+              // Handle the model-output gap honestly, against the platform
+              // manifest (DATA — config/platforms/*.yaml):
+              //   1. a missing variantId is RESOLVED from the request text
+              //      against the declared variant TITLES (the freeform bench
+              //      is mounted, not refused);
+              //   2. a declared variantId is delivered verbatim; an
+              //      undeclared one is refused with the plain-language wall;
+              //   3. the wall NEVER leaks implementation vocabulary — the
+              //      raw validator string is retired.
+              let resolvedVariantId = typeof variantId === 'string' && variantId.length > 0
+                ? variantId
+                : registry
+                  ? (resolveDeckVariantFromText(registry, platformId, prompt) ?? undefined)
+                  : undefined;
+              let declared = true;
+              if (registry && typeof resolvedVariantId === 'string') {
+                declared = registry.getVariant(platformId, resolvedVariantId) !== null;
+              }
+              const ok = declared && typeof resolvedVariantId === 'string' && resolvedVariantId.length > 0;
+              const deckError = !ok
+                ? (registry
+                    ? deckLayoutChoiceWall(registry, platformId)
+                      ?? `I could not switch the deck layout from that request. Tell me which layout you want and I will switch to it.`
+                    : 'I could not switch the deck layout from that request. Tell me which layout you want and I will switch to it.')
+                : undefined;
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: ok, durationMs: 0 });
               const elapsed = Date.now() - t0;
               const deckResult: AgentResult = ok
-                ? { success: true, deckLayout: { platformId, variantId: variantId as string } }
-                : { success: false, error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).' };
+                ? { success: true, deckLayout: { platformId, variantId: resolvedVariantId as string } }
+                : { success: false, error: deckError as string };
               const summary: AgentSummary = {
                 traceId: tid,
                 surface: surfaceName,

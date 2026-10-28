@@ -215,18 +215,19 @@ describe('L2-FREEFORM-1 acceptance #2 — assertHonestOutcome trichotomy hook', 
   // H4: error outranks the action arm. A failed turn with a well-formed
   // deckLayout alongside is the honest failure, never action-delivered (the
   // server's emit site makes the two mutually exclusive; the order is
-  // defensive, and this pins it).
+  // defensive, and this pins it). uifix2-fix2 D1: the fixture quotes the NEW
+  // plain-language wall (the raw validator string is retired).
   it('(i) error + delivered deckLayout classifies "honest-failure" (H4: error outranks the action arm)', () => {
     const verdict = assertHonestOutcome({
       success: false,
-      error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+      error: 'I could not tell which Manual layout you want. The Manual deck offers: Single SBS Plate, Manual Technician Mode or Manual Bench (freeform). Name one and I will switch to it.',
       deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
     });
     expect(verdict).toBe('honest-failure');
     expect(
       classifyHonestOutcome({
         success: false,
-        error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+        error: 'I could not tell which Manual layout you want. The Manual deck offers: Single SBS Plate, Manual Technician Mode or Manual Bench (freeform). Name one and I will switch to it.',
         deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
       }),
     ).toBe('honest-failure');
