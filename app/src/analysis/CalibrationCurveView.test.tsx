@@ -16,6 +16,7 @@
  * Commits BEFORE CalibrationCurveView.tsx exists (RED: Cannot find module).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { apiClient } from '../shared/api/client'
 import { CalibrationCurveView, type PageContext, sortedParamsJson } from './CalibrationCurveView'
@@ -182,6 +183,33 @@ function renderView(pageCtx: PageContext = PAGE_CTX, bindings?: Record<string, u
   )
   return { ...out, onRecalcDone }
 }
+
+// --- the verif-6 hardcode grep pin, CI-owned (bait #2/#3 pre-emption) ------
+
+describe('hardcode grep pin — zero domain literals in prod TS (verif 6)', () => {
+  it("the VIEW file names no artifact property (all live in calibrationModel's const tables)", () => {
+    const source = readFileSync('src/analysis/CalibrationCurveView.tsx', 'utf8')
+    // The property-name literals (and the banned `scatter` renderer word,
+    // F1) must be ABSENT from the view file — a wrong pick or a widened
+    // renderer set is a defect the reviewer hunts for.
+    for (const banned of ['response_ratio', 'fit_point', 'relative_residual', 'equation', 'EXCLUDED_FROM_FIT', 'FAME', 'ChemStation', 'ng/uL', 'scatter']) {
+      expect(source, `banned literal ${banned} in the view file`).not.toContain(banned)
+    }
+  })
+
+  it('the MODEL file carries no instrument/vendor/unit domain literals', () => {
+    const source = readFileSync('src/analysis/calibrationModel.ts', 'utf8')
+    for (const banned of ['FAME', 'ChemStation', 'ng/uL', 'scatter']) {
+      expect(source, `banned literal ${banned} in the model file`).not.toContain(banned)
+    }
+  })
+
+  it('the composite CSS has no truncation rules (D6: wrap, never truncate)', () => {
+    const css = readFileSync('src/analysis/CalibrationCurveView.css', 'utf8')
+    expect(css).not.toContain('text-overflow')
+    expect(css).not.toContain('ellipsis')
+  })
+})
 
 beforeEach(() => {
   vi.clearAllMocks()

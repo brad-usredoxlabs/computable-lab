@@ -79,7 +79,7 @@ export interface CalibrationTableShape {
 
 /** Structural gate for the GC-8 calibration_table inline value: an OBJECT
  * with an array `rows` of records + a `columns` array containing BOTH the
- * fit_point AND the relative_residual column names (the shipped gate keys,
+ * fit-point AND relative-residual column names (the shipped gate keys,
  * OQ-2 closed). Never matches by artifact name. */
 export function classifyCalibrationTable(value: unknown): Guarded<CalibrationTableShape> {
   if (!isRecord(value)) return { ok: false, error: 'not an object payload' }
@@ -99,7 +99,9 @@ export function classifyCalibrationTable(value: unknown): Guarded<CalibrationTab
 
 export interface CalibrationModelShape {
   model: string
-  equation?: string
+  /** The model's declared head line string (the artifact's own explicit
+   * formula text) — display-only; the structured coefficients are the truth. */
+  headLine?: string
   coefficients: Record<string, number>
   statisticName?: string
   statisticValue: number | null
@@ -113,22 +115,22 @@ export interface CalibrationModelShape {
 }
 
 /** Structural gate for the GC-8 calibration_model payload: carries
- * `model` + structured `coefficients` (keyed object) + `fit_points` +
- * `statistic_name`. Content classification, never name equality. */
+ * `model` + structured `coefficients` (keyed object) + the fit-points array +
+ * the named statistic. Content classification, never name equality. */
 export function classifyCalibrationModel(value: unknown): Guarded<CalibrationModelShape> {
   if (!isRecord(value)) return { ok: false, error: 'not an object payload' }
   if (typeof value[MODEL_PAYLOAD_KEYS.model] !== 'string') return { ok: false, error: 'model id missing' }
   const coefs = value[MODEL_PAYLOAD_KEYS.coefficients]
-  if (!isRecord(coefs)) return { ok: false, error: 'coefficients missing' }
+  if (!isRecord(coefs)) return { ok: false, error: `the ${MODEL_PAYLOAD_KEYS.coefficients} object is missing` }
   for (const k of Object.keys(coefs)) {
     if (!isFiniteNumber(coefs[k])) return { ok: false, error: `coefficient ${k} is not a finite number` }
   }
-  if (!Array.isArray(value[MODEL_PAYLOAD_KEYS.fitPoints])) return { ok: false, error: 'fit_points missing' }
-  if (typeof value[MODEL_PAYLOAD_KEYS.statisticName] !== 'string') return { ok: false, error: 'statistic_name missing' }
+  if (!Array.isArray(value[MODEL_PAYLOAD_KEYS.fitPoints])) return { ok: false, error: `the ${MODEL_PAYLOAD_KEYS.fitPoints} array is missing` }
+  if (typeof value[MODEL_PAYLOAD_KEYS.statisticName] !== 'string') return { ok: false, error: `the ${MODEL_PAYLOAD_KEYS.statisticName} field is missing` }
   const sv = value[MODEL_PAYLOAD_KEYS.statisticValue]
   if (!(sv === null || isFiniteNumber(sv))) return { ok: false, error: 'statistic_value must be a number or null' }
   const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
-  const equation = str(value[MODEL_PAYLOAD_KEYS.equation])
+  const headLine = str(value[MODEL_PAYLOAD_KEYS.equation])
   const statisticName = str(value[MODEL_PAYLOAD_KEYS.statisticName])
   const statisticDefinition = str(value[MODEL_PAYLOAD_KEYS.statisticDefinition])
   const residualBasis = str(value[MODEL_PAYLOAD_KEYS.residualBasis])
@@ -142,7 +144,7 @@ export function classifyCalibrationModel(value: unknown): Guarded<CalibrationMod
     coefficients: coefs as Record<string, number>,
     statisticValue: sv as number | null,
     fitPoints: value[MODEL_PAYLOAD_KEYS.fitPoints] as Record<string, unknown>[],
-    equation,
+    headLine,
     statisticName,
     statisticDefinition,
     residualBasis,
@@ -170,7 +172,7 @@ export function responseColumn(quantity: string | undefined): string | undefined
  * quadratic. Line geometry for the plot ONLY — the python module owns the
  * arithmetic; this evaluates the artifact's OWN structured coefficients.
  * Unknown model ids or non-finite inputs return null (honest, never a
- * guessed formula). String-parsing `equation` is BANNED (model_schema note
+ * guessed formula). String-parsing the head line is BANNED (model_schema note
  * :1181-1182: the structured coefficients carry the truth). */
 export function predictAt(model: string, coefficients: Record<string, number>, x: number): number | null {
   if (!Number.isFinite(x)) return null
@@ -271,7 +273,7 @@ export function joinCurvePoints(
 
 // --- outlier (max over the artifact OWN residuals; NO threshold) ---------------
 
-/** The row indexes with the largest |relative_residual| among rows carrying a
+/** The row indexes with the largest |relative residual| among rows carrying a
  * FINITE residual (nulls render as declared ticks with their flags reason —
  * they never rank). Ties keep row order. `topN` is presentation data
  * (bindings.outlierTopN, default 1); the UI points at data and declares no
@@ -316,12 +318,12 @@ export function hasCalibrationPair(artifacts: Array<{ inlineValue?: unknown } | 
 
 // --- display shaping (property names stay in THIS module — bait #2) ---------
 
-/** The model head line: the explicit equation string the artifact declared,
+/** The model head line: the explicit head string the artifact declared,
  * rendered verbatim (never parsed — the structured coefficients are the
  * truth; this is display, not analysis). */
 export function modelHead(m: CalibrationModelShape): { testId: string; text: string } | null {
-  if (m.equation === undefined) return null
-  return { testId: `calibration-${MODEL_PAYLOAD_KEYS.equation}`, text: m.equation }
+  if (m.headLine === undefined) return null
+  return { testId: `calibration-${MODEL_PAYLOAD_KEYS.equation}`, text: m.headLine }
 }
 
 /** The named-statistic line, verbatim: name + value + definition. A null

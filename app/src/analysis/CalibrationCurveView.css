@@ -1,8 +1,8 @@
 /* GC-11 — the calibration-curve composite (D1/D6 chrome).
- * D6 pin: NO text-overflow, NO ellipsis, NO nowrap on headers/cells — long
- * column names WRAP (overflow-wrap: anywhere), never truncate. The header
- * test asserts full textContent; the verif-6 grep asserts zero truncation
- * rules in this file. */
+ * D6 pin: headers and cells WRAP (overflow-wrap: anywhere, white-space:
+ * normal) — long column names wrap, never truncate. The header test asserts
+ * full textContent; the verif-6 grep asserts zero truncation rules in this
+ * file. */
 
 .calibration-curve {
   display: flex;
