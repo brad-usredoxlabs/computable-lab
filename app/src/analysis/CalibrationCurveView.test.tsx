@@ -1295,6 +1295,69 @@ describe('D7 — FIX2 M2: the recalc gate over the REAL shipped parameterSchema 
   })
 })
 
+// --- RGF D7 — the recalc submit's DISABLED state is visually distinguishable --
+// (RUNGATE1 DEFECT-7: the disabled and enabled submits 'both render as
+// identical borderless text' — the button carries no page chrome class and
+// no :disabled styling exists in CalibrationCurveView.css, so only the
+// presence/absence of the reason line tells the operator which state.
+// Fix, in-component (AnalysisPage.css is FROZEN — its
+// `.analysis button:disabled { opacity: .5; cursor: not-allowed }`
+// discipline is the page's authority; this button simply opts into the
+// page's `analysis button` chrome by joining its class list): the disabled
+// state now reads as a disabled button (reduced opacity + not-allowed
+// cursor) and never as live chrome.)
+
+describe('RGF D7 — the recalc submit disabled state is visually distinguishable (page :disabled chrome)', () => {
+  const renderRecalcOpen = (page: PageContext) => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    return screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+  }
+
+  it('a blocked submit reads as a DISABLED button (page :disabled chrome, not identical live chrome)', () => {
+    // The REAL shipped schema's unrenderable constructs block the labeled
+    // form (the gate's ANR-000013 state — the submit's disabled=true arm).
+    const submit = renderRecalcOpen(pageWithRealSchema(REAL_CAL_FROZEN_PARAMS))
+    expect(submit.disabled).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-blocked').textContent).toContain('Cannot submit')
+    // The button carries the page's button chrome class (the frozen
+    // AnalysisPage.css `.analysis button:disabled` discipline — the page
+    // already renders disabled buttons as opacity .5 + not-allowed; the
+    // defect was that THIS button opted out of that chrome).
+    expect(submit.classList.contains('analysis')).toBe(true)
+    // jsdom's style resolution does not apply stylesheet :disabled rules,
+    // so the OPACITY assertion is the computed-value proxy that the
+    // page-discipline fix actually produces at render time (a plain
+    // unstyled button computes the default opaque 1):
+    expect(getComputedStyle(submit).opacity).toBe('0.5')
+    expect(getComputedStyle(submit).cursor).toBe('not-allowed')
+  })
+
+  it('an enabled submit keeps the LIVE page chrome (the two states now differ in the computed style)', () => {
+    // The minimal gate schema with a satisfied required control: the gate
+    // passes, the submit is live.
+    const MIN_SCHEMA = { type: 'object', required: ['model'], properties: { model: { type: 'string' } } }
+    const page: PageContext = {
+      ...PAGE_CTX,
+      revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'TEST cal revision', parameterSchema: MIN_SCHEMA } }],
+      sourceRun: {
+        recordId: 'ANR-CAL-1',
+        payload: { id: 'ANR-CAL-1', title: 'TEST calibration run', status: 'succeeded', revisionRef: { id: 'ANREV-CAL-1' }, inputs: SOURCE_INPUTS, parameters: { model: 'linear' } },
+      },
+    }
+    const submit = renderRecalcOpen(page)
+    expect(submit.disabled).toBe(false)
+    expect(screen.queryByTestId('calibration-recalc-blocked')).toBeNull()
+    // The live button keeps FULL opacity (never the page's reduced-opacity
+    // disabled treatment) and a cursor that is NOT not-allowed — the
+    // distinguishable pair with the disabled state above.
+    expect(getComputedStyle(submit).opacity).toBe('1')
+    expect(getComputedStyle(submit).cursor).not.toBe('not-allowed')
+  })
+})
+
 // --- FIX1 D7 RED — the recalc submit rides the SHIPPED GATE ------------------
 // (spec D4: "the shipped gate collectGateIssues applies to the recalc form too —
 // a blocked recalc names its reason (no dead chrome)"). The shipped onRecalc

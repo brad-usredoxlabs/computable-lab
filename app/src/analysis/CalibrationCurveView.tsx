@@ -853,9 +853,11 @@ export function CalibrationCurveView(props: {
                 ) : null}
                 <button
                   type="button"
+                  className="analysis"
                   data-testid="calibration-recalc-submit"
                   onClick={onRecalc}
                   disabled={submitting || recalcBlocked}
+                  style={{ opacity: submitting || recalcBlocked ? 0.5 : 1, cursor: submitting || recalcBlocked ? 'not-allowed' : 'pointer' }}
                 >
                   {submitting ? 'submitting…' : 'submit recalculation'}
                 </button>
