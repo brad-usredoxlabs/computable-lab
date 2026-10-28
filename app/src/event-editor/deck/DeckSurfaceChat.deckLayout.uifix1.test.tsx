@@ -262,4 +262,75 @@ describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches 
     const wall = document.querySelector('[data-testid="honest-wall"]')?.textContent
     expect(wall ?? '').toContain('deck layout')
   })
+
+  it('F3: a MOUNTED deckLayout turn does not get a wall claiming "nothing was applied"', async () => {
+    // The D2/D1 defect: with the D1 seam wired, a deck_layout turn MOUNTS
+    // the layout (setPlatform+setVariant) yet the wall still closed with
+    // "Nothing was proposed and nothing was applied." — the user sees the
+    // deck switch AND a wall asserting nothing was applied.
+    frames(
+      { type: 'status', message: 'working' },
+      {
+        type: 'done',
+        result: {
+          success: true,
+          notes: [],
+          deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+        },
+      },
+    )
+    const deck = renderDeckChat()
+    await act(async () => {
+      deck.reread()
+      const input = document.querySelector('.sequence-chat textarea') as HTMLTextAreaElement
+      fireEvent.change(input, { target: { value: 'Navigate to the freeform manual deck' } })
+      const send = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Send')
+      fireEvent.click(send!)
+    })
+    await awaitTurnComplete(deck)
+    // The layout MOUNTED (the D1 claim)…
+    expect(mocks.setVariant).toHaveBeenCalledWith('manual_freeform')
+    // …so the wall must not claim nothing was applied.
+    await act(async () => {
+      deck.reread()
+    })
+    const wall = document.querySelector('[data-testid="honest-wall"]')?.textContent ?? ''
+    expect(wall).toContain('a deck layout')
+    expect(wall).not.toContain('Nothing was proposed and nothing was applied.')
+    expect(wall).toContain('The deck layout was applied to the deck.')
+  })
+
+  it('F4: a REJECTED mount (manifest guard miss) does NOT suppress the empty-success bubble', async () => {
+    // The D1 defect: deckLayoutDelivered was keyed on the seam being
+    // REGISTERED, not on the mount SUCCEEDING. On a manifest-guard miss the
+    // deck does not change, yet the bubble ("did not propose any changes")
+    // was suppressed as if it had.
+    frames(
+      { type: 'status', message: 'working' },
+      {
+        type: 'done',
+        result: {
+          success: true,
+          notes: [],
+          deckLayout: { platformId: 'manual', variantId: 'manual_not_a_variant' },
+        },
+      },
+    )
+    const deck = renderDeckChat()
+    await act(async () => {
+      deck.reread()
+      const input = document.querySelector('.sequence-chat textarea') as HTMLTextAreaElement
+      fireEvent.change(input, { target: { value: 'switch to a deck variant that does not exist' } })
+      const send = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Send')
+      fireEvent.click(send!)
+    })
+    await awaitTurnComplete(deck)
+    // The mount was rejected — the deck did not change…
+    expect(mocks.setVariant).not.toHaveBeenCalled()
+    // …so the honest empty-success bubble must NOT be over-suppressed.
+    await act(async () => {
+      deck.reread()
+    })
+    expect(document.body.textContent).toContain('AI completed the task but did not propose any changes.')
+  })
 })

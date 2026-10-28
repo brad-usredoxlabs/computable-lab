@@ -193,7 +193,16 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           <p>{message.content}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
-          {message.clarification && renderClarificationBlock(message)}
+          {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
+              When the typed requests ride the message (the universal done
+              arm feeds BOTH fields from one payload — useAiChat done arm),
+              the typed arm is canonical: it renders EVERY request as a
+              card. The legacy block arm then renders the same first
+              request a SECOND time (the gate's blocks=2 pickers=2). It
+              stays for messages carrying only the legacy field (hydrated
+              history / legacy surfaces that never populate
+              clarificationRequests). */}
+          {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
           {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request))}
         </div>)}
       </div>

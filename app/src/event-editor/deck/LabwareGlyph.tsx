@@ -1,6 +1,7 @@
 import type { Labware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
 import type { LabwareOrientation } from '../types'
+import { createWellId } from '../../shared/utils/wellUtils'
 import { InstrumentGlyph } from './InstrumentGlyphs'
 
 /**
@@ -21,8 +22,9 @@ interface LabwareGlyphProps {
   /**
    * L2-SUITE-A-uifix1 D4 — the well footprint to mark on the drawn glyph:
    * every well cell of a GRID-addressed labware carries `data-well-id`
-   * (row letter A+ / column digit 1+, the repo's wellId convention —
-   * wellUtils.ts:26), and the cells whose id is in this set carry
+   * (the labware's LAYOUT addressing — row letter A+ / column digit 1+, the
+   * repo's wellId convention, createWellId in shared/utils/wellUtils.ts), and
+   * the cells whose id is in this set carry
    * `data-affected-well="true"`. Absent → no per-well markers (the tile
    * glyph is unchanged). Data-driven by the caller (buildEventWellIndex),
    * never a hardcoded well list.
@@ -289,16 +291,23 @@ export function LabwareGlyph({ labware, orientation, affectedWells }: LabwareGly
     const isTubeset = profile === 'tubeset'
     const isTiprack = profile === 'tiprack'
     const r = isTubeset ? tubesetWellRadius(labware.geometry.maxVolume_uL) : CELL * 0.34
-    // L2-SUITE-A-uifix1 D4: well-id markers for grid-addressed labware —
-    // drawn (row, col) → wellId in the LAYOUT's axes (before the portrait
-    // transpose above swapped cols/rows), so the id is the labware's own
-    // addressing, not the tile's drawing order. Non-grid labware (single /
-    // linear) has no per-well addressing: no markers, no crash.
+    // L2-SUITE-A-uifix1 D4 (+ F2/F5 fix1): well-id markers for grid-addressed
+    // labware — each drawn cell is identified by its id in the labware's
+    // LAYOUT's axes: the labware's own addressing, not the tile's drawing
+    // order. The id is the repo's one wellId convention (createWellId,
+    // wellUtils.ts) — no inline re-implementation. In portrait the drawn
+    // grid above was transposed ([cols, rows] swapped), so the drawn loop
+    // indices are the layout's (col, row) and must be mapped back before
+    // building the id — otherwise portrait drew the layout's columns as row
+    // letters (I/J/K/L on an 8-row plate) and marked each physical well
+    // with a different well's id. Non-grid labware (single / linear) has no
+    // per-well addressing: no markers, no crash.
     const isGrid = labware.addressing.type === 'grid'
     const wellIdAt = (row: number, col: number): WellId | null => {
       if (!isGrid) return null
-      const letter = String.fromCharCode(65 + row)
-      return `${letter}${col + 1}`
+      const [layoutRow, layoutCol] =
+        orientation === 'portrait' ? [col, row] : [row, col]
+      return createWellId(layoutRow, layoutCol)
     }
     const mark = (row: number, col: number) => {
       const id = wellIdAt(row, col)

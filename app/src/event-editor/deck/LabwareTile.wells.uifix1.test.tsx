@@ -19,6 +19,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LabwareTile } from './LabwareTile'
 import type { Labware } from '../../types/labware'
+import { getAllWellIds } from '../../shared/utils/wellUtils'
+import { PLATE_CONFIGS, type PlateConfig } from '../../types/plate'
 import type { EventEditorPlacement } from '../types'
 
 const plate96: Labware = {
@@ -41,6 +43,15 @@ const B1H6 = Array.from({ length: 42 }, (_, i) => {
   const row = 'BCDEFGH'[Math.floor(i / 6)] as string
   return `${row}${(i % 6) + 1}`
 })
+
+// A NON-square footprint (rows E-G × cols 6-9 — a 3×4 rectangular slice):
+// transposed ids are DISTINCT from layout ids for most of its cells, so this
+// catches a transpose that a square footprint would mask. In the bugged
+// (drawn-axis) code a layout well (r,c) drawn in portrait got the id
+// letter(c)+(r+1) — so E6..I9 (r 4..6, c 5..8) rendered as
+// {F5,G5,H5,I5,F6,G6,H6,I6,F7,G7,H7,I7}, and drawn rows I..L produced the
+// 32 impossible ids (I1..L8) the gate's probe counted.
+const E6_I9 = new Set(['E6', 'E7', 'E8', 'E9', 'F6', 'F7', 'F8', 'F9', 'G6', 'G7', 'G8', 'G9'])
 
 afterEach(cleanup)
 
@@ -82,5 +93,51 @@ describe('LabwareTile — L2-SUITE-A-uifix1 D4: affected well footprints reach t
     )
     expect(document.querySelectorAll('[data-affected-well="true"]').length).toBe(0)
     expect(document.querySelector('.tile')!.getAttribute('data-affected')).toBe('false')
+  })
+
+  it('F2: a PORTRAIT placement marks the affected cells with the labware LAYOUT ids — zero impossible ids, footprint on the right cells', () => {
+    // The D4 gap the gate found: portrait transposes the DRAWN grid
+    // ([cols,rows]=[rows,cols]) but the well id was built from the DRAWN
+    // loop indices, so (a) drawn rows beyond the layout's row count produced
+    // impossible ids (I1..L8 on an 8-row plate — the gate's 32 invalidIds)
+    // and (b) every marked cell carried the id of a DIFFERENT physical well.
+    const portraitPlacement: EventEditorPlacement = {
+      placementId: 'pl-p',
+      labwareId: 'lbw-plate',
+      location: { kind: 'slot', slotId: 'PLATE' },
+      orientation: 'portrait',
+    }
+    render(
+      <LabwareTile
+        labware={plate96}
+        placement={portraitPlacement}
+        orientation="portrait"
+        variant="slot"
+        affectedWells={E6_I9}
+      />,
+    )
+    // Every drawn well cell is identified by its LAYOUT id — the drawn
+    // 8×12 transpose draws 96 cells, and the id space is the plate's own
+    // 8×12 (A1..H12), so the multiset of ids equals the plate's addressing
+    // exactly: ZERO impossible ids (the bugged code produced 32 of I1..L8).
+    const cells = document.querySelectorAll('[data-well-id]')
+    expect(cells.length).toBe(96)
+    const plateConfig: PlateConfig = {
+      ...PLATE_CONFIGS['96'],
+      rows: 8,
+      columns: 12,
+    }
+    const plateIds = getAllWellIds(plateConfig)
+    const drawnIds = Array.from(cells).map((el) => el.getAttribute('data-well-id'))
+    expect(new Set(drawnIds).size).toBe(96)
+    expect(drawnIds.every((id) => plateIds.includes(id!))).toBe(true)
+    // THE POSITION CLAIM: the affected footprint marks on the cells that
+    // ARE the layout wells E6..G9 — the bugged code marked a transposed
+    // slice (F5..I7) instead, and the affected set E6..G9 would have hit
+    // only the 4 cells the transposition happens to agree on.
+    const marked = document.querySelectorAll('[data-affected-well="true"]')
+    expect(marked.length).toBe(E6_I9.size)
+    const markedIds = new Set(Array.from(marked).map((el) => el.getAttribute('data-well-id')))
+    for (const well of E6_I9) expect(markedIds.has(well)).toBe(true)
   })
 })

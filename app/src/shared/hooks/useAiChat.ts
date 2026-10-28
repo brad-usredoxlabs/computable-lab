@@ -363,12 +363,14 @@ export interface UseAiChatOptions {
    * native editor actions the manual deck bar uses
    * (`actions.setPlatform` + `actions.setVariant`) — the client guards the
    * variant against the platform manifest (the server validates loosely).
-   * When the callback is registered the turn counts as MOUNTABLE: the false
-   * empty-success bubble is suppressed (the deck visibly changed — the turn
-   * DID propose something) and the honest wall stays (it names the delivered
-   * channel — the honest report for this turn).
+   * Returns whether the layout was ACCEPTED (mounted) — the surface's guard
+   * may REFUSE (unknown platform/variant), and the done arm gates the
+   * empty-success bubble on the mount SUCCEEDING, not on the seam being
+   * registered (L2-SUITE-A-uifix1 F4 fix1: a refused mount left the deck
+   * unchanged while the bubble was suppressed as if it had changed). A
+   * handler returning void (legacy callers) is treated as accepted.
    */
-  onDeckLayout?: (deckLayout: { platformId: string; variantId: string }) => void
+  onDeckLayout?: (deckLayout: { platformId: string; variantId: string }) => boolean | void
   /**
    * L2-CHAT-1: called when the staged preview is discarded (Discard). Deck
    * surfaces use it to clear the ghosted preview.
@@ -1281,21 +1283,32 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
-            // L2-SUITE-A-uifix1 D1: a deckLayout done is a DELIVERABLE turn —
-            // mount it through the host's native editor action (the SAME
-            // actions the manual deck bar uses: setPlatform + setVariant)
-            // BEFORE the empty-success accounting, so the bubble decision sees
-            // the delivery. The host guards the variant against the platform
-            // manifest (the server validates loosely). Without a registered
+            // L2-SUITE-A-uifix1 D1 (+ F4 fix1): a deckLayout done is a
+            // DELIVERABLE turn — mount it through the host's native editor
+            // action (the SAME actions the manual deck bar uses: setPlatform
+            // + setVariant) BEFORE the empty-success accounting, so the
+            // bubble decision sees the delivery. The host guards the variant
+            // against the platform manifest (the server validates loosely)
+            // and REPORTS the refusal (boolean return). Without a registered
             // seam the turn falls through to the honest wall below, which
             // NAMES the delivered channel — still honest, just unmounted.
-            const deckLayoutDelivered =
-              Boolean((result as { deckLayout?: unknown }).deckLayout) &&
-              onDeckLayoutRef.current !== undefined
+            // F4: the bubble gate keys on the mount SUCCEEDING, not on the
+            // seam being REGISTERED — a refused mount (manifest-guard miss)
+            // left the deck unchanged while suppressing the bubble.
+            const deckLayoutPayload = (result as { deckLayout?: { platformId?: unknown; variantId?: unknown } }).deckLayout
+            let deckLayoutDelivered =
+              Boolean(deckLayoutPayload) && onDeckLayoutRef.current !== undefined
             if (deckLayoutDelivered) {
-              const layout = (result as { deckLayout?: { platformId?: unknown; variantId?: unknown } }).deckLayout
-              if (typeof layout?.platformId === 'string' && typeof layout.variantId === 'string') {
-                onDeckLayoutRef.current?.({ platformId: layout.platformId, variantId: layout.variantId })
+              if (typeof deckLayoutPayload?.platformId === 'string' && typeof deckLayoutPayload.variantId === 'string') {
+                const accepted = onDeckLayoutRef.current?.({ platformId: deckLayoutPayload.platformId, variantId: deckLayoutPayload.variantId })
+                // A void return (handlers that predate the acceptance
+                // contract) counts as accepted; an explicit false is the
+                // surface's guard refusing — the deck did NOT change.
+                deckLayoutDelivered = accepted !== false
+              } else {
+                // A deckLayout the seam cannot read (no platform/variant
+                // ids) is never mounted — not a delivery.
+                deckLayoutDelivered = false
               }
             }
             if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents) {
@@ -1332,6 +1345,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 // are bare noun phrases; joining them after "it" rendered
                 // "it a deck layout" (the gate's broken copy). "it delivered
                 // only <parts>" is grammatical for every combination.
+                // L2-SUITE-A-uifix1 F3 fix1: when the deck layout was
+                // MOUNTED this turn (accepted by the surface), the closing
+                // clause must say so — the old "Nothing was proposed and
+                // nothing was applied." contradicted a deck the user just
+                // watched switch (the D2/D1 gate read).
+                const closing = deckLayoutDelivered
+                  ? ' The deck layout was applied to the deck.'
+                  : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
@@ -1339,15 +1360,17 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                       : notesDelivered
                         ? ' — it delivered only notes'
                         : ''
-                  } and asked no questions. Nothing was proposed and nothing was applied.`,
+                  } and asked no questions.${closing}`,
                 )
               }
-              // L2-SUITE-A-uifix1 D3+D1: the bubble claims NOTHING was
-              // proposed. It is false when the turn asked a question (the
+              // L2-SUITE-A-uifix1 D3+D1 (+ F4 fix1): the bubble claims NOTHING
+              // was proposed. It is false when the turn asked a question (the
               // clarification cards ARE the proposal — the gate's P4/P5/P6
-              // "success-with-nothing") and when it delivered a deck layout
-              // the deck surface mounted (the deck visibly changed). The wall
-              // above stays on its own gate (askedQuestion suppresses it; a
+              // "success-with-nothing") and when the deck layout MOUNTED
+              // (deckLayoutDelivered — the surface's seam reported acceptance;
+              // F4: a REFUSED mount — the guard's false — leaves the bubble
+              // up because the deck did NOT visibly change). The wall above
+              // stays on its own gate (askedQuestion suppresses it; a
               // delivered deckLayout is NAMED in it — the arms must not
               // contradict each other, which is exactly the gate's D3 read:
               // wall=null beside a bubble claiming nothing was proposed).
