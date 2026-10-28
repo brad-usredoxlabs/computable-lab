@@ -33,6 +33,7 @@ import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import { foldSameNounCards } from '../compiler/resolution/clarificationDedupe.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
@@ -177,10 +178,12 @@ function applyMintGate(stub: Record<string, unknown>): {
   stub: Record<string, unknown>;
   flipped: Array<{ label: string; reason: string }>;
   collapsedMintCopies: string[];
+  foldedNouns: string[];
 } {
   const shape = loadNounShape();
   const flipped: Array<{ label: string; reason: string }> = [];
   const collapsedMintCopies: string[] = [];
+  const foldedNouns: string[] = [];
   const gateCard = (card: Record<string, unknown> | undefined): void => {
     if (!card) return;
     const fact = card.unresolvedFact as Record<string, unknown> | undefined;
@@ -224,7 +227,32 @@ function applyMintGate(stub: Record<string, unknown>): {
   ];
   for (const card of cards) gateCard(card);
   for (const card of cards) collapseMintDuplicates(card);
-  return { stub: copy, flipped, collapsedMintCopies };
+  // L2-SUITE-A-uifix3 D4 (disclosed re-pin delta): the shipped SAME-RESPONSE
+  // same-noun fold — the canned stub ships the blob noun's two same-action
+  // cards (unknown-noun + unrealized-mixture-blob-material, one mint row
+  // each); the real pipeline now folds them to the specific card. Apply the
+  // SAME shipped rule (foldSameNounCards) to the stub so the honesty
+  // contract (canned stub === real payload) holds; the legacy clarification
+  // head re-points at the surviving requests[0] when its card was folded
+  // away. The canned app/e2e stub itself stays byte-unchanged.
+  const requests = (copy.clarificationRequests ?? []) as Array<Record<string, unknown>>;
+  const folded = foldSameNounCards(requests as never) as Array<Record<string, unknown>>;
+  if (folded.length !== requests.length) {
+    copy.clarificationRequests = folded;
+    const keptIds = new Set(folded.map((c) => c.id));
+    const head = copy.clarification as Record<string, unknown> | undefined;
+    if (head && !keptIds.has(head.id) && folded[0]) {
+      copy.clarification = { ...folded[0] };
+    }
+    for (const noun of new Set(
+      requests
+        .filter((c) => !keptIds.has(c.id))
+        .map((c) => String((c.unresolvedFact as Record<string, unknown> | undefined)?.label ?? c.query ?? '')),
+    )) {
+      foldedNouns.push(noun);
+    }
+  }
+  return { stub: copy, flipped, collapsedMintCopies, foldedNouns };
 }
 
 describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for its deck state', () => {
@@ -283,6 +311,11 @@ describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarificatio
     // DUPLICATE mint copy collapses 2 -> 1 (the shipped keyed mint dedup).
     // Nothing else moved.
     expect(gated.collapsedMintCopies).toEqual(['plate']);
+    // L2-SUITE-A-uifix3 D4 disclosed re-pin delta: the blob noun's
+    // same-action pair (unknown-noun + unrealized-mixture-blob-material)
+    // folds to ONE card (the shipped same-response fold) — the canned
+    // stub's pre-fold 3-card bar is the D4 defect shape.
+    expect(gated.foldedNouns).toEqual(['50:50 Trypsin-EDTA/DMEM']);
     expect(comparable(gated.stub)).toEqual(comparable(real as unknown as Record<string, unknown>));
   });
 
@@ -303,20 +336,22 @@ describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarificatio
     expect(applyMintGate(stub).flipped.some((f) => f.label === 'plate')).toBe(false);
   });
 
-  it('the real canonical compile bars the unseeded plate noun too: reasons [unknown-noun(plate), unknown-noun(blob), unrealized-mixture-blob-material(blob)], events []', async () => {
+  it('the real canonical compile bars the unseeded plate noun too: POST-FOLD (L2-SUITE-A-uifix3 D4) reasons [unknown-noun(plate), unrealized-mixture-blob-material(blob)] - the blob noun same-action pair (unknown-noun + blob) folds to the specific card, events []', async () => {
     const real = await realResult(CANONICAL_DOC, undefined);
     expect(real.success).toBe(true);
     expect(real.events).toEqual([]);
     const requests = real.clarificationRequests as unknown as Array<Record<string, unknown>>;
-    expect(requests.length).toBe(3);
+    // PRE-FOLD this bar shipped THREE cards (the blob noun's unknown-noun +
+    // unrealized-mixture-blob-material pair, same single mint action — the
+    // regate-5 D4 shape); the same-response fold now ships ONE card per
+    // noun+action: the plate card + the specific blob card.
+    expect(requests.length).toBe(2);
     expect(requests.map((r) => (r.unresolvedFact as Record<string, unknown>).reason)).toEqual([
-      'unknown-noun',
       'unknown-noun',
       'unrealized-mixture-blob-material',
     ]);
     expect(requests.map((r) => (r.unresolvedFact as Record<string, unknown>).label)).toEqual([
       'plate',
-      '50:50 Trypsin-EDTA/DMEM',
       '50:50 Trypsin-EDTA/DMEM',
     ]);
     // SH-QA-1: the head id is the CONTENT join id of the first bar fact

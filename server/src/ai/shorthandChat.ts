@@ -46,6 +46,7 @@ import type {
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import { foldSameNounCards } from '../compiler/resolution/clarificationDedupe.js';
 import {
   formatFractionString,
   loadFractionConvention,
@@ -1392,7 +1393,7 @@ export function shorthandResultFromCompile(
   },
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
-    const requests = clarificationsFromUnresolvedFacts(compiled.clarifications);
+    const requests = foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications));
     const legacy = legacyClarificationFromRequests(requests);
     // L2-FREEFORM-1 H4 (OQ4 ruling): the requestId-identity loop detector.
     // THIS turn's asks advance the ledger unconditionally (count = prior +
@@ -1509,7 +1510,12 @@ export function shorthandResultFromCompile(
     reason: `other: ${gap.message}`,
   }));
   const requests = compiled.clarifications.length > 0
-    ? clarificationsFromUnresolvedFacts(compiled.clarifications)
+    // L2-SUITE-A-uifix3 D4 (regate-5): the same-response same-noun fold —
+    // the same unresolved noun asked through two reason codes (the engine's
+    // ambiguous-noun + the producer's unrealized-mixture-blob-material)
+    // with the same only-action ships ONE card (the specific reason), not
+    // two identical mint cards. Same choke as the no-events arm above.
+    ? foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications))
     : [];
   return {
     success: true,
