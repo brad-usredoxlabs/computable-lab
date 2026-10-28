@@ -53,7 +53,12 @@
 
 .calibration-curve__residual-bar {
   width: 24px;
-  min-height: 2px;
+  /* RGF2 (D5 half-closure): the label line box is 0.6rem font-size x
+     line-height 1 = 9.6px; RGF1's 2px floor let the ~10px label spill a
+     2px strip on a zero residual (height:0 wrote by the component). The
+     floor ties to the label line box so the in-bar label fits; non-zero
+     bars still encode their magnitude above it (Math.min(64, |r|*1.5)). */
+  min-height: 12px;
   background: #8e44ad;
   font-size: 0.6rem;
   line-height: 1;

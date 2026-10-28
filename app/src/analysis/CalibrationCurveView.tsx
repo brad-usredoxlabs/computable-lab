@@ -682,7 +682,7 @@ export function CalibrationCurveView(props: {
             key={p.key}
             className="calibration-curve__residual-bar"
             data-testid={`calibration-residual-${p.key}`}
-            style={{ height: p.residual === null ? 2 : Math.min(64, Math.abs(p.residual) * 1.5) }}
+            style={{ height: p.residual === null ? 2 : Math.min(64, Math.abs(p.residual) * 1.5) || 0 }}
             onClick={() => toggle(p.key)}
             {...sel(p.key)}
           >

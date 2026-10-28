@@ -330,8 +330,54 @@ describe('RGF D5 — residual-strip labels: fixed-decimal display (stable, reada
     // nothing) — the fixture's level_1 residual is 0.
     const zeroBar = container.querySelector('[data-testid="calibration-residual-level_1"]') as HTMLElement
     expect(zeroBar.textContent ?? '').toMatch(/^-?\d+\.\d{1,4}$/)
+    // RGF2 (D5 half-closure): the zero-residual bar's rendered HEIGHT is also
+    // readable — not just its string. The component writes height:0 for a
+    // zero residual; the legible floor is the CSS rule (asserted below), so
+    // the jsdom-assertable claim is that the bar does NOT pin itself to a
+    // sub-label inline height.
+    expect((zeroBar.style.height ?? '0px'), 'the zero bar writes height 0 (the CSS floor controls, not a 2px pin)').toBe('0px')
     // Full precision STAYS in the table (the table cell is verbatim data).
     expect(screen.getByTestId('calibration-row-level_3').textContent).toContain('33.333333')
+  })
+
+  it('a zero/low-residual bar has a legible height FLOOR written by the component (the label does not spill a 2px bar)', () => {
+    // RUNGATE1 DEFECT-5, second half (RGF1 left it unfixed): 'with a zero
+    // residual the bar collapsed to 2px and the label was unreadable'. The
+    // bar height is Math.min(64, |residual|*1.5) -> 0 for a zero residual;
+    // the rendered height is then whatever the CSS rule sets (RGF1:
+    // min-height: 2px — a 2px strip under a ~0.6rem label, ~10px,
+    // overflow:visible). The floor must be (a) COMPONENT-WRITTEN — a rule in
+    // CalibrationCurveView.css the test reads (jsdom does not apply the
+    // stylesheet, so the rule is asserted as the component's own written
+    // value, not an unapplied-stylesheet assumption), and (b) at least the
+    // label's own line box (font-size 0.6rem x line-height 1 = 9.6px) so the
+    // in-bar label fits.
+    const css = readFileSync('src/analysis/CalibrationCurveView.css', 'utf8')
+    const m = css.match(/\.calibration-curve__residual-bar\s*{[^}]*}/)
+    expect(m, 'the bar rule exists in the lane CSS (the floor must be component-written, not inherited)').not.toBeNull()
+    const hm = m![0].match(/min-height:\s*(\d+(?:\.\d+)?)(px|rem)/)
+    expect(hm, 'the bar rule WRITES a min-height floor (RGF1 shipped 2px — the label spilled it)').not.toBeNull()
+    const floorPx = hm![2] === 'rem' ? parseFloat(hm![1]) * 16 : parseFloat(hm![1])
+    // The label's line box: 0.6rem font-size x line-height 1 (same rule).
+    expect(floorPx, 'the floor must at least cover the label line box (9.6px)').toBeGreaterThanOrEqual(9.6)
+    // RENDERED (component-written) geometry: the zero-residual bar does not
+    // pin a sub-floor inline height — height:0 leaves the floor (above) in
+    // control, so the rendered bar is >= the floor and the ~10px label fits.
+    const { container } = renderView()
+    const zeroBar = container.querySelector('[data-testid="calibration-residual-level_1"]') as HTMLElement
+    expect(zeroBar.style.height ?? '0px').toBe('0px')
+    expect(zeroBar.textContent ?? '').toMatch(/^-?\d+\.\d{1,4}$/)
+    // The floor is a FLOOR, not a cap: the outlier bar (residual 33.333333)
+    // still encodes its magnitude — rendered ABOVE the floor, <= 64px.
+    const outlierBar = container.querySelector('[data-testid="calibration-residual-level_3"]') as HTMLElement
+    const outlierH = parseFloat(outlierBar.style.height)
+    expect(outlierH).toBeGreaterThan(floorPx)
+    expect(outlierH).toBeLessThanOrEqual(64)
+    // The EXCLUDED bar (no residual, no label) is unaffected by the
+    // legibility claim — it carries no inline label and its 2px pin stays
+    // the component's explicit written value.
+    const excludedBar = container.querySelector('[data-testid="calibration-residual-level_5"]') as HTMLElement
+    expect(excludedBar.textContent ?? '').not.toMatch(/^-?\d+\.\d{1,4}$/)
   })
 })
 
