@@ -253,6 +253,23 @@ export interface UseAiChatReturn {
   setPreviewEventState: (eventId: string, state: PreviewEventState) => void
   setPreviewEvents: (events: PlateEvent[]) => void
   commitAcceptedPreviewEvents: () => Promise<void>
+  /**
+   * L2-SUITE-A-uifix2 FIX2 [D6]: the one-shot CLEAR for a staged chat preview
+   * that was committed by ANOTHER acceptor — the deck bar (PreviewActionBar →
+   * adoptStagedPreview → commitPreview). The deck bar commits the EDITOR
+   * preview (state.preview nulls inside the reducer) but leaves the chat
+   * hook's `previewEvents` staged: `hasPreview` stays true, so the
+   * ChatPreviewCard keeps ACTIVE Apply/Discard chrome over an already-applied
+   * batch (dead chrome + a second-Apply risk), and the next send's
+   * `revising` check (sendPrompt) sees the stale staged batch and appends a
+   * "Previous preview was auto-rejected." line — though the batch was
+   * ACCEPTED, not rejected. The deck bar calls this (through the registered
+   * chat) from its post-adoption hook, naming the persisted commit's sha so
+   * the summary is honest about what superseded the staged state. A no-op
+   * when nothing is staged (the chat-Apply adopter already cleared it — the
+   * one-adopter invariant holds either way).
+   */
+  clearStagedPreviewForExternalCommit: (commitSha?: string) => void
   clearHistory: () => void
   applyToGraph: (message: ChatMessage) => void
   executeInstrumentApplianceJob: (job: InstrumentApplianceJob) => Promise<void>
@@ -285,6 +302,11 @@ export interface DeckAdoptionOutcome {
   eventCount?: number
   placementCount?: number
   labwareCount?: number
+  /** L2-SUITE-A-uifix2 FIX2 [D6]: the persisted commit's sha (the record's
+   *  advanced contentSha) — present on a completed adoption (the deck core
+   *  carries `persisted.commit.sha`). The external-commit clear seam uses it
+   *  to name the commit that supersedes the chat-side staged state. */
+  commitSha?: string
 }
 
 /**
@@ -801,15 +823,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         setPreviewEvents([])
         setPreviewLabwareAdditions([])
         setUnresolvedRefs([])
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateMessageId(),
-            role: 'system',
-            content: 'Previous preview was auto-rejected.',
-            timestamp: Date.now(),
-          },
-        ])
+        // L2-SUITE-A-uifix2 FIX2 [D6]: no "auto-rejected" line. A send that
+        // supersedes a staged preview is a REVISE turn — the staged draft
+        // rides back as draftRevision context (revisingSource above); it was
+        // not rejected (no discard happened, and after a deck-bar accept the
+        // staged state is already cleared by
+        // clearStagedPreviewForExternalCommit, so this branch is unreachable
+        // for it). The stale "Previous preview was auto-rejected." pill was
+        // dead chrome sitting ABOVE the still-active card (the gate's D6) and
+        // mislabeled the outcome — the revision context is the honest record.
       }
 
       const userMsg: ChatMessage = {
@@ -1627,10 +1649,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         const adoptedEvents = adoption.eventCount ?? 0
         const adoptedLabware = adoption.labwareCount ?? 0
         const adoptedPlacements = adoption.placementCount ?? 0
+        const adoptedCommitSha =
+          typeof adoption.commitSha === 'string' && adoption.commitSha.length > 0
+            ? adoption.commitSha
+            : undefined
         const adoptedSummary = [
           `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
           adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
           adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
+          adoptedCommitSha ? `commit ${adoptedCommitSha}` : null,
         ]
           .filter(Boolean)
           .join(' ')
@@ -1926,6 +1953,44 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   }, [previewEvents, previewEventStates, previewLabwareAdditions])
 
   // ------------------------------------------------------------------
+  // L2-SUITE-A-uifix2 FIX2 [D6]: external-commit clear (the deck-bar adopter)
+  // ------------------------------------------------------------------
+  const clearStagedPreviewForExternalCommit = useCallback(
+    (commitSha?: string) => {
+      // A no-op when nothing is staged: the chat-Apply adopter
+      // (acceptPreview/acceptPreviewWithResolutions) already cleared the
+      // staged state — one adopter, one clear (the one-adopter invariant
+      // holds either way).
+      if (previewEvents.length === 0 && previewLabwareAdditions.length === 0) return
+      flushSync(() => {
+        setPreviewEvents([])
+        setPreviewLabwareAdditions([])
+        setPreviewEventStatesMap(new Map())
+        setUnresolvedRefs([])
+      })
+      // The accept ENDS the draft chain (mirror acceptPreview/rejectPreview)
+      // and records the outcome as an ACCEPT — the batch was applied by the
+      // deck bar (commitPreview), not rejected; the stale "auto-rejected"
+      // line the next send used to append is gone (sendPrompt's `revising`
+      // check no longer sees a staged batch).
+      revisionTrailRef.current = []
+      stagedSourceRef.current = null
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: commitSha
+            ? `Proposal applied (commit ${commitSha}).`
+            : 'Proposal applied.',
+          timestamp: Date.now(),
+        },
+      ])
+    },
+    [previewEvents, previewLabwareAdditions],
+  )
+
+  // ------------------------------------------------------------------
   // Clear chat history
   // ------------------------------------------------------------------
   const clearHistory = useCallback(() => {
@@ -1974,6 +2039,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     setPreviewEventState,
     setPreviewEvents: setPreviewEventsTestOnly,
     commitAcceptedPreviewEvents,
+    clearStagedPreviewForExternalCommit,
     clearHistory,
     applyToGraph,
     executeInstrumentApplianceJob,
