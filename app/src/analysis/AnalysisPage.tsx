@@ -30,9 +30,11 @@ interface RunPayload {
   revisionRef?: { id?: string }
   inputs?: Record<string, { id?: string; type?: string }>
   parameters?: Record<string, unknown>
-  /** GC-11 D3: the ?run= landing seeds the manifest + artifactRefs CLIENT-SIDE
-   * from this already-fetched field (the CompareTraces :103-104 channel) —
-   * zero execute calls, zero extra fetches. */
+  /** GC-11 D3 / FIX2 M1: the run landing seeds the manifest + artifactRefs
+   * CLIENT-SIDE from this already-fetched field (the CompareTraces :103-104
+   * channel) — the ?run= deep link, the list/execute selectRun path and the
+   * recalc-completion landing all consume it. Zero execute calls, zero
+   * extra fetches. */
   outputManifest?: {
     artifacts?: unknown[]
     views?: unknown[]
@@ -167,24 +169,51 @@ export function AnalysisPage() {
 
   useEffect(() => { void refresh() }, [refresh])
 
+  // FIX2 M1: the run LANDING — selectRun is now the shared landing path for
+  // EVERY way a run becomes active (list click, execute(), the ?run= deep
+  // link, the recalc-completion onRecalcDone). It fetches the run's payload
+  // AND seeds manifest + artifactRefs CLIENT-SIDE from the ALREADY-FETCHED
+  // payload.outputManifest (the CompareTraces :103-104 channel — zero
+  // execute calls, zero extra fetches). Shipped selectRun set ONLY
+  // activeRunId + activeRun and setManifest existed only in execute() and
+  // the deep-link effect — so a recalc-completion landing kept the SOURCE
+  // run's figures rendered under the NEW run's id (cycle-2 M1: a provenance
+  // lie). The results pane renders from `manifest`; a landed run that never
+  // seeded it renders the previous run's artifacts.
   const selectRun = useCallback(async (runId: string) => {
     setActiveRunId(runId)
     setError(null)
     try {
       const { record } = await apiClient.getAnalysisRun(runId)
-      setActiveRun({ recordId: record.recordId, payload: record.payload as unknown as RunPayload })
+      const payload = record.payload as unknown as RunPayload
+      setActiveRun({ recordId: record.recordId, payload })
+      // The client-side manifest seed (the deep-link channel, D3 corrected
+      // mechanics): the fetched payload already carries the manifest — the
+      // run's OWN stored outputManifest (a SUCCEEDED run's results), not a
+      // stale sibling's. Runs without a stored manifest (not-yet-succeeded)
+      // leave the pane to the execute() path (the authoritative
+      // just-executed artifacts).
+      const om = payload.outputManifest
+      if (om && Array.isArray(om.artifacts)) {
+        setManifest({ artifacts: om.artifacts, views: om.views ?? [], metrics: om.metrics ?? [] })
+        setArtifactRefs(om.artifactRefs ?? {})
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [])
 
-  // FIX1 D2: the recalc-completion wiring (spec D4: "then select the new
-  // run"). The calibration composite's footer fires onRecalcDone(newId)
-  // AFTER the new run's execute settles; the page SELECTS it (selectRun —
-  // activeRun + activeRunId) and REFRESHES the runs list so the new run is
-  // visible in the list. selectRun + refresh are the page's OWN callbacks —
-  // the callback is threaded through renderViews -> ViewRenderer (the
-  // persisted-record door carries none; the composite's named arms cover it).
+  // FIX1 D2 / FIX2 M1: the recalc-completion wiring (spec D4: "then select
+  // the new run"). The calibration composite's footer fires
+  // onRecalcDone(newId) AFTER the new run's execute settles; the page LANDS
+  // it through the SHARED landing path (selectRun — activeRun + activeRunId
+  // + the client-side manifest/artifactRefs seed from the fetched
+  // payload.outputManifest, so the results pane renders the NEW run's own
+  // figures, never the source run's under the new id) and REFRESHES the runs
+  // list so the new run is visible in the list. selectRun + refresh are the
+  // page's OWN callbacks — the callback is threaded through renderViews ->
+  // ViewRenderer (the persisted-record door carries none; the composite's
+  // named arms cover it).
   const onRecalcDone = useCallback(
     (newId: string) => {
       void selectRun(newId)
@@ -195,14 +224,12 @@ export function AnalysisPage() {
 
   // GC-11 D3: the `?run=` deep-link consumer (the /analysis?run=<id> seam,
   // OQ-1; SequencesPage's one-shot deepLinkRef precedent). On mount WITH the
-  // param present, selectRun(runId) fires ONCE — then the param is stripped.
-  // CORRECTED mechanics (re-anchor fold correction 2): the shipped selectRun
-  // sets ONLY activeRun — `manifest` is set only by execute. A ?run= landing
-  // on a SUCCEEDED run therefore ALSO seeds manifest + artifactRefs
-  // CLIENT-SIDE from the ALREADY-FETCHED payload.outputManifest (the exact
-  // channel CompareTraces :103-104 consumes) — NO execute call, NO extra
-  // fetch. When the param is absent this effect does nothing (the no-execute
-  // suite stays green unmodified — that IS the mount-accounting proof).
+  // param present, the SHARED landing (selectRun) fires ONCE — it fetches
+  // the run's payload and seeds manifest + artifactRefs CLIENT-SIDE from the
+  // ALREADY-FETCHED payload.outputManifest (the CompareTraces :103-104
+  // channel) — NO execute call, NO extra fetch — then the param is stripped.
+  // When the param is absent this effect does nothing (the no-execute suite
+  // stays green unmodified — that IS the mount-accounting proof).
   const [searchParams, setSearchParams] = useSearchParams()
   const deepLinkDoneRef = useRef(false)
   const deepLinkRun = searchParams.get('run')
@@ -211,15 +238,10 @@ export function AnalysisPage() {
     if (!runs.some((r) => r.recordId === deepLinkRun)) return
     deepLinkDoneRef.current = true
     void (async () => {
-      const { record } = await apiClient.getAnalysisRun(deepLinkRun)
-      setActiveRunId(deepLinkRun)
-      const payload = record.payload as unknown as RunPayload
-      setActiveRun({ recordId: record.recordId, payload })
-      const om = payload.outputManifest
-      if (om && Array.isArray(om.artifacts)) {
-        setManifest({ artifacts: om.artifacts, views: om.views ?? [], metrics: om.metrics ?? [] })
-        setArtifactRefs(om.artifactRefs ?? {})
-      }
+      // FIX2 M1: the deep link REUSES the shared landing (selectRun) — one
+      // fetch, the client-side manifest seed included (the CompareTraces
+      // :103-104 channel, zero execute calls). The param strip is unchanged.
+      await selectRun(deepLinkRun)
       const next = new URLSearchParams(searchParams)
       next.delete('run')
       setSearchParams(next, { replace: true })
@@ -417,17 +439,19 @@ export function AnalysisPage() {
       setActiveRunId(runId)
       setManifest(res.manifest)
       setArtifactRefs(res.artifactRefs ?? {})
-      // FIX1 D3: the shipped execute set activeRunId + manifest but NEVER
-      // activeRun — and the calibration synthesis door (spec D1) gates on
-      // activeRun, so a run executed from this page rendered its results as
-      // two raw "No rows" tables with no composite. selectRun(runId) is the
-      // shipped consumer (getAnalysisRun -> setActiveRun; the same channel
-      // the ?run= deep-link seam uses) — it sets activeRun from the run's
-      // OWN payload (revisionRef + frozen inputs + parameters), which the
-      // composite's footer needs (the D1/D4/D7 mechanics ride it). The
-      // manifest still comes from the execute response (the authoritative
-      // artifacts/views of THIS execution); refresh() below updates the
-      // runs list (the run's status moved).
+      // FIX1 D3 / FIX2 M1: the shipped execute set activeRunId + manifest
+      // but NEVER activeRun — and the calibration synthesis door (spec D1)
+      // gates on activeRun, so a run executed from this page rendered its
+      // results as two raw "No rows" tables with no composite. selectRun(runId)
+      // is the SHARED landing (getAnalysisRun -> setActiveRun + the
+      // client-side manifest seed; the same channel the ?run= deep-link seam
+      // and the recalc-completion landing use) — it sets activeRun from the
+      // run's OWN payload (revisionRef + frozen inputs + parameters), which
+      // the composite's footer needs (the D1/D4/D7 mechanics ride it). The
+      // manifest set ABOVE (from the execute response) is the authoritative
+      // artifacts/views of THIS execution — the selectRun seed that follows
+      // reads the SAME stored manifest back from the payload (idempotent);
+      // refresh() below updates the runs list (the run's status moved).
       void selectRun(runId)
       await refresh()
     } catch (err) {

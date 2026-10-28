@@ -367,6 +367,118 @@ describe('GC-11 FIX1 D2 — the recalc completion is wired (onRecalcDone -> sele
   })
 })
 
+// --- FIX2 M1 RED — the recalc completion LANDS like the ?run= deep-link ----
+// (cycle-2 M1: onRecalcDone = selectRun(newId) + refresh, and selectRun set
+// ONLY activeRunId + activeRun — setManifest existed ONLY in the deep-link
+// effect and execute(). The results pane therefore kept the SOURCE run's
+// figures (equation/residuals) rendered under the NEW run's id — a provenance
+// lie. Spec D4: the completion must land like the deep-link path: the new
+// run's manifest/artifactRefs are seeded CLIENT-SIDE from the fetched
+// payload.outputManifest (the CompareTraces :103-104 channel).)
+
+/** The NEW run's OWN output manifest: the recalc's artifacts (new equation,
+ * the level-3 point EXCLUDED with the shipped flag, new residuals). */
+const RECALC_TABLE = {
+  rows: [
+    { level: 1, amount: 1, peak_source: 'level_1:row0', response_ratio: 3.5, fit_point: true, relative_residual: 0, flags: [] },
+    { level: 2, amount: 2, peak_source: 'level_2:row0', response_ratio: 6.5, fit_point: true, relative_residual: 0, flags: [] },
+    { level: 3, amount: 3, peak_source: 'level_3:row0', response_ratio: 9.5, fit_point: false, relative_residual: null, flags: ['EXCLUDED_FROM_FIT'] },
+  ],
+  columns: ['level', 'amount', 'peak_source', 'response_ratio', 'fit_point', 'relative_residual', 'flags'],
+  amount_unit: 'ng/uL',
+}
+const RECALC_MODEL = {
+  model: 'linear',
+  equation: 'y = 3.000000x + 0.500000',
+  coefficients: { slope: 3, intercept: 0.5 },
+  statistic_name: 'weighted_r_squared',
+  statistic_value: 0.999,
+  statistic_definition: 'weighted R^2 over the fitted response quantity',
+  residual_basis: 'relative residual on the fitted response quantity, percent',
+  response_quantity: 'area_ratio',
+  fit_points: [
+    { amount: 1, response: 3.5, relative_residual: 0, source_input: 'level_1', source_point_ref: { input_name: 'level_1' } },
+    { amount: 2, response: 6.5, relative_residual: 0, source_input: 'level_2', source_point_ref: { input_name: 'level_2' } },
+  ],
+  x_min: 1,
+  x_max: 2,
+}
+function recalcPayload() {
+  return {
+    id: 'ANR-RECALC-1',
+    title: 'recalc of ANR-CAL-9',
+    status: 'succeeded',
+    revisionRef: { id: 'ANREV-CAL-1' },
+    inputs: { level_1: { kind: 'record', id: 'AOUT-SRC-1', type: 'analysis-output-artifact' } },
+    parameters: CAL_PARAMS,
+    outputManifest: {
+      artifacts: [
+        { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(RECALC_TABLE)) },
+        { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(RECALC_MODEL)) },
+      ],
+      views: [],
+      metrics: [],
+      artifactRefs: { calibration_table: { artifactRecordId: 'AOUT-RECALC-T' }, calibration_model: { artifactRecordId: 'AOUT-RECALC-M' } },
+    },
+  }
+}
+
+describe('GC-11 FIX2 M1 — the recalc completion lands like the deep-link (the NEW run manifest seeds client-side)', () => {
+  it('after a completed recalc the results pane renders the NEW run equation + its excluded point (never the SOURCE figures under the NEW id)', async () => {
+    // (test timeout raised: the RED proof waits out the broken landing — the
+    // new run line appears while the equation STAYS the source's.)
+    vi.mocked(apiClient.getAnalysisRun).mockImplementation(async (id: string) => {
+      if (id === 'ANR-CAL-9') {
+        return { record: { recordId: 'ANR-CAL-9', payload: landingPayload(
+          [
+            { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+            { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+          ],
+          ['calibration_table', 'calibration_model'],
+        ) } } as never
+      }
+      // The recalc's OWN landing fetch: the new run's payload carries its OWN
+      // outputManifest (the client-side seed channel — zero execute calls).
+      return { record: { recordId: 'ANR-RECALC-1', payload: recalcPayload() } } as never
+    })
+    vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ recordId: 'ANR-RECALC-1' } as never)
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({
+      success: true,
+      recordId: 'ANR-RECALC-1',
+      status: 'succeeded',
+      manifest: { artifacts: [], views: [], metrics: [] },
+      artifactRefs: {},
+    } as never)
+    // The runs list gains the new run AFTER the recalc completes (the
+    // refresh() — activeProcessed needs the list entry to be 'succeeded').
+    vi.mocked(apiClient.listAnalysisRuns)
+      .mockResolvedValueOnce({ runs: [CAL_RUN], total: 1 })
+      .mockResolvedValueOnce({ runs: [CAL_RUN, { recordId: 'ANR-RECALC-1', payload: { id: 'ANR-RECALC-1', title: 'recalc of ANR-CAL-9', status: 'succeeded' } }], total: 2 })
+    render(wrap(<AnalysisPage />, '/analysis?run=ANR-CAL-9'))
+    await waitFor(() => expect(screen.queryByTestId('calibration-curve')).not.toBeNull(), { timeout: 10000 })
+    // The SOURCE run's equation before the recalc.
+    expect(screen.getByTestId('calibration-equation').textContent).toBe('y = 2.000000x + 1.000000')
+    // Submit the recalc (the view's gated submit; the page fixture's schema
+    // gate passes over the frozen parameters).
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
+    // FIX2 M1 RED (selectRun seeded NO manifest): the run line says the new
+    // run's id while the equation is STILL the source run's.
+    await waitFor(
+      () => expect(screen.getByTestId('calibration-equation').textContent).toBe('y = 3.000000x + 0.500000'),
+      { timeout: 10000 },
+    )
+    // The header run line names the NEW run (the landing is complete — not
+    // just selected) and the NEW point set renders (level 3 excluded ->
+    // hollow marker, its residual the new run's null+flag, not the source's).
+    expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-RECALC-1')
+    expect((screen.getByTestId('calibration-point-level_3') as unknown as SVGElement).getAttribute('fill')).toBe('none')
+    expect(screen.getByTestId('calibration-residual-level_3').textContent).toContain('EXCLUDED_FROM_FIT')
+    // The landing fetched the new run's OWN payload (the seed channel).
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledWith('ANR-RECALC-1')
+  }, 20000)
+})
+
 describe('GC-11 FIX1 O3 — a persisted calibration-curve view is never duplicated by the synthesis', () => {
   it('a manifest that ALREADY carries a calibration-curve view renders ONE composite (synthesize only if absent)', async () => {
     vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
