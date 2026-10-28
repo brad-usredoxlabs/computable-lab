@@ -18,7 +18,7 @@
  * model's structured coefficients for line geometry via the shipped _predict
  * key rule (calibrationModel.predictAt).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import { ParameterForm, collectGateIssues, pruneEmpty } from './ParameterForm'
 import type { RenderableArtifact } from './ViewRenderer'
@@ -157,6 +157,34 @@ export function CalibrationCurveView(props: {
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // RGF D3: the composite's EDIT STATE IS KEYED TO THE ACTIVE RUN. The page's
+  // shared landing (selectRun) re-renders THIS SAME component instance with
+  // the new run's page context (view ids are stable across runs — renderViews
+  // keys on view.id, which the synthesis door keeps constant) — so without a
+  // re-key, a pending edit made on run A survives onto run B's display
+  // (phantom `level 3: fit true -> false` + a checkbox contradicting the
+  // displayed run's own stored fit flag) and a recalc opened after the switch
+  // would POST run A's edited parameters against run B's frozen refs (the M1
+  // provenance class). GC-9 discipline: a selection change clears manual
+  // edits; a RUN change is the stronger case — the ref-guarded effect resets
+  // every per-run piece of state to the NEW run's own frozen values when
+  // page.activeRunId actually changes (guarded on the id, never the page
+  // object — the page is rebuilt by the page's render memo on every render).
+  const lastActiveRunRef = useRef<string>(page.activeRunId)
+  useEffect(() => {
+    if (lastActiveRunRef.current === page.activeRunId) return
+    lastActiveRunRef.current = page.activeRunId
+    setParams(frozenParams(page))
+    setSelected(new Set())
+    setLastSelected(null)
+    setFormOpen(false)
+    setResolved(null)
+    setResolveError(null)
+    setRecalcAdvanced({ manual: null, seed: '' })
+    setSubmitting(false)
+    setResolving(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page.activeRunId])
   // FIX2 M2: the recalc region's OWN raw-JSON override door (the page's
   // advancedSeed pattern, scoped to THIS form — not the page's shared
   // region, not the schema-less legacy demo literal). `manual` is a manual

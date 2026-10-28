@@ -1201,3 +1201,70 @@ describe('D7 — FIX1: the recalc submit is gated by collectGateIssues (shipped 
     expect(body.parameters).toEqual(VALID)
   })
 })
+
+// --- RGF D3 RED — the composite edit state is keyed to the ACTIVE RUN ------
+// (RUNGATE1 DEFECT-3, probe2 receipts: `params/selected/formOpen` are
+// initialised with `useState(() => frozenParams(page))` and the component is
+// NOT re-keyed when page.activeRunId changes — the page's selectRun path
+// re-renders the SAME instance with the new run's page context. A pending
+// edit on run A therefore survives onto run B's display (phantom
+// `level 3: fit true -> false` + a checkbox contradicting the displayed
+// run's own fit_point cell), and a recalc opened after the switch would POST
+// run A's edited parameters against run B's frozen refs — the M1 provenance
+// class. GC-9 discipline: a selection change clears manual edits; a RUN
+// change is the stronger case.)
+
+/** The recalc-run's OWN stored parameters (the gate probe's ANR-000014
+ * shape: level 3 excluded) — a DIFFERENT run, same revision/inputs. */
+const CAL_PARAMS_LEVEL3_EXCLUDED: Record<string, unknown> = {
+  ...JSON.parse(JSON.stringify(CAL_PARAMS)),
+  levels: (JSON.parse(JSON.stringify(CAL_PARAMS)).levels as Record<string, unknown>[]).map((lv, i) => (i === 2 ? { ...lv, fit: false } : lv)),
+}
+
+function pageForRun(runId: string, title: string, parameters: Record<string, unknown>): PageContext {
+  return {
+    activeRunId: runId,
+    revisions: PAGE_CTX.revisions,
+    sourceRun: {
+      recordId: runId,
+      payload: {
+        id: runId,
+        title,
+        status: 'succeeded',
+        revisionRef: { id: 'ANREV-CAL-1' },
+        inputs: SOURCE_INPUTS,
+        parameters,
+      },
+    },
+  }
+}
+
+describe('RGF D3 — the composite edit state is keyed to the active run (a run switch re-keys it)', () => {
+  it('toggle fit -> switch runs -> switch back: the checkbox matches the run OWN stored fit and the diff says (no pending changes)', () => {
+    const pageA = pageForRun('ANR-CAL-1', 'TEST calibration run', CAL_PARAMS)
+    const pageB = pageForRun('ANR-CAL-2', 'TEST recalc run', CAL_PARAMS_LEVEL3_EXCLUDED)
+    const artifact: RenderableArtifact = { id: 'AOUT-CAL-TABLE', name: 'calibration_table', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'AOUT-CAL-MODEL', name: 'calibration_model', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    const { rerender } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageA} onRecalcDone={() => {}} />)
+    // Run A's own stored state: level 3 fit = true, no pending changes.
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
+    // A PENDING edit (toggled, never submitted).
+    fireEvent.click(screen.getByTestId('calibration-fit-level_3'))
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toContain('level 3: fit true -> false')
+    // Switch to run B: the component instance is NOT re-mounted (same element
+    // type — the page's selectRun path re-renders it), only re-rendered with
+    // run B's page context (B's own stored fit for level 3 is false).
+    rerender(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageB} onRecalcDone={() => {}} />)
+    expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-2')
+    // Back to run A. RED (unkeyed state): the pending edit survives — the
+    // checkbox shows run A's OLD edit against run A's data and the diff claims
+    // a change the run never had. GREEN: the state re-keys to run A's OWN
+    // frozen parameters (checkbox = the run's stored fit, diff = none).
+    rerender(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageA} onRecalcDone={() => {}} />)
+    expect(screen.getByTestId('calibration-run-line').textContent).toContain('ANR-CAL-1')
+    expect((screen.getByTestId('calibration-fit-level_3') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toBe('(no pending changes)')
+  })
+})
