@@ -13,7 +13,7 @@
  * `handleClarificationAnswer` round-trips it into the next agent turn.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 import { resolveMaterial, resolveLabware, resolveEquipment } from '../../../shared/taptab/slashMenu/resolvers'
 import { SlashSuggestionList } from '../../../shared/taptab/slashMenu/SlashSuggestionList'
@@ -42,6 +42,70 @@ function resolverFor(request: AiClarificationRequest): SlashResolver | null {
  */
 export function requestHasPicker(request: AiClarificationRequest): boolean {
   return resolverFor(request) !== null
+}
+
+/**
+ * L2-SUITE-A-uifix2 [C] — the single-open picker store. The re-gate (DEFECT 3,
+ * the prior-gate D7 class): EVERY clarification card auto-opened its picker and
+ * the pickers STACKED over the transcript (10 → 13 → 15 → 16 open
+ * [role=listbox] across P4–P6, still open after a full page load).
+ *
+ * The fix is open-on-request with a single open picker. The open key is module
+ * state (not a React context): the pickers live in DIFFERENT components across
+ * the transcript (ChatLog's typed-clarification arm, the QuestionsPanel,
+ * ClarificationPanel) and there is no shared provider above them — a module
+ * store + useSyncExternalStore is the one mechanism that coordinates them.
+ * At most ONE picker is open; opening one closes the previously-open one; a
+ * fresh mount (page load) starts CLOSED (no open key), so a reload restores no
+ * open pickers. The key is the QUESTION's identity (request.id) — stable
+ * across the card's renders.
+ */
+const pickerOpenState: { key: string | null } = { key: null }
+const pickerListeners = new Set<() => void>()
+function notifyPickers(): void {
+  for (const l of pickerListeners) l()
+}
+
+/**
+ * Open one picker programmatically (the "Change" affordance on an ANSWERED
+ * card re-opens its picker). The store key is the single source of truth, so
+ * this moves the key to `id` — opening it and closing every other picker
+ * (single-open). Exported (not a React API) so QuestionsPanel's Change button
+ * can reopen a card's picker without reaching into its internals.
+ */
+export function openClarificationPicker(id: string): void {
+  pickerOpenState.key = id
+  notifyPickers()
+}
+
+/**
+ * Open state for one picker. The input renders ALWAYS (the answer affordance);
+ * only the popover/listbox is gated on `open`, and the resolver runs only when
+ * open (no auto-search on mount). `open` is the single-open store key === this
+ * picker's question id: opening this one moves the key (closing every sibling);
+ * dismissal — picking a row (onPick), an outside mousedown, or Escape — clears
+ * it; a fresh mount (page load) sees storeKey=null, so reloads restore NO open
+ * pickers.
+ */
+function useClarificationPickerOpen(key: string) {
+  const storeKey = useSyncExternalStore(
+    (callback) => {
+      pickerListeners.add(callback)
+      return () => pickerListeners.delete(callback)
+    },
+    () => pickerOpenState.key,
+  )
+  const openPicker = () => {
+    pickerOpenState.key = key
+    notifyPickers()
+  }
+  const closePicker = () => {
+    if (pickerOpenState.key === key) {
+      pickerOpenState.key = null
+      notifyPickers()
+    }
+  }
+  return { open: storeKey === key, openPicker, closePicker }
 }
 
 /**
@@ -161,7 +225,27 @@ export interface ClarificationPickerProps {
 }
 
 export function ClarificationPicker({ request, onPick }: ClarificationPickerProps) {
+  // L2-SUITE-A-uifix2 [C]: open-on-request + single-open. The input (the answer
+  // affordance) renders always; the popover/listbox + the resolver run only
+  // when open (no auto-open on mount, no stacking, no open pickers on reload).
+  const { open, openPicker, closePicker } = useClarificationPickerOpen(request.id)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState(request.query ?? '')
+
+  // L2-SUITE-A-uifix2 [C]: release the single-open key on unmount. If THIS
+  // picker is the open one and its card is removed (collapse, re-bar, page
+  // unmount), the open key must not leak — a fresh mount (a page load, or the
+  // next card) must never inherit an open state. This is also what makes
+  // "page load restores NO open pickers" hold: every unmounted picker clears
+  // the key, so a reload starts closed.
+  useEffect(() => {
+    return () => {
+      if (pickerOpenState.key === request.id) {
+        pickerOpenState.key = null
+        notifyPickers()
+      }
+    }
+  }, [request.id])
   // The suggestion popover is anchored under the field; near the bottom of a
   // phone viewport it must flip ABOVE the field instead of hanging off-screen.
   const [listAbove, setListAbove] = useState(false)
@@ -186,7 +270,11 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   }, [request.id, request.query])
 
   useEffect(() => {
-    if (!resolver) return
+    // L2-SUITE-A-uifix2 [C]: gated on `open` — the resolver runs only when the
+    // picker is opened on request (the re-gate's auto-open-on-mount is the
+    // stacking defect). Opening re-runs it with the seeded query; typing while
+    // open re-runs it per keystroke (debounced). A closed picker never resolves.
+    if (!resolver || !open) return
     // A MATERIAL search with no words shows nothing. Observed 2026-09-20: a card
     // whose question named no material ("Which material should be added to A2?")
     // ran the /m resolver with '', and the seeds came back looking like ANOTHER
@@ -232,8 +320,26 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       clearTimeout(timer)
     }
     // `request.id` matters: with the same resolver (both are /m questions) a new
-    // question would otherwise reuse the cached search result.
-  }, [query, resolver, request.id])
+    // question would otherwise reuse the cached search result. `open` is the
+    // new gate (the resolver no longer auto-runs on mount).
+  }, [query, resolver, request.id, open])
+
+  // L2-SUITE-A-uifix2 [C]: dismiss-on-outside-click — a mousedown outside the
+  // picker (anywhere in the transcript) closes it. The gate's pickers stacked
+  // because nothing ever dismissed them; the outside click is the standard
+  // popover dismissal. (The single-open store also closes a sibling when the
+  // user opens another card's picker.)
+  useEffect(() => {
+    if (!open) return
+    const handler = (event: MouseEvent) => {
+      const node = containerRef.current
+      if (node && event.target instanceof Node && !node.contains(event.target)) {
+        closePicker()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open, closePicker])
 
   if (!resolver) return null
 
@@ -246,7 +352,12 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         const mention = item.resolveMention ? await item.resolveMention() : item.mention
         if (!mention) return
         const answer = await groundedAnswerFromMention(request, mention)
-        if (answer) onPick(answer, request)
+        if (answer) {
+          onPick(answer, request)
+          // Dismiss-on-select: a pick answers the question, so the picker
+          // closes (no open picker lingering beside the answered card).
+          closePicker()
+        }
       } finally {
         setBusy(false)
       }
@@ -287,7 +398,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     && (!request.materialLayer || request.materialLayer === 'material')
 
   return (
-    <div className="message-log__clarification-picker">
+    <div className="message-log__clarification-picker" ref={containerRef}>
       <input
         type="text"
         className="message-log__clarification-search"
@@ -296,29 +407,44 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         autoComplete="off"
         spellCheck={false}
         disabled={busy}
-        onChange={(e) => setQuery(e.target.value)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => openPicker()}
+        onChange={(e) => {
+          // Typing into a closed field opens it (open-on-request); typing
+          // while open re-runs the (debounced) resolver.
+          if (!open) openPicker()
+          setQuery(e.target.value)
+        }}
         onKeyDown={(e) => {
+          // Escape collapses the open picker (dismiss-on-key).
+          if (e.key === 'Escape') {
+            if (open) closePicker()
+            return
+          }
           // Forward arrow/enter to the list so the card is keyboard-usable.
           if (listRef.current?.onKeyDown(e.nativeEvent)) e.preventDefault()
         }}
       />
-      <div
-        ref={anchorRef}
-        className={
-          listAbove
-            ? 'message-log__clarification-popover message-log__clarification-popover--above'
-            : 'message-log__clarification-popover'
-        }
-        data-testid="clarification-popover"
-      >
-        <SlashSuggestionList
-          ref={listRef}
-          items={items}
-          loading={loading}
-          emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
-          command={command}
-        />
-      </div>
+      {open ? (
+        <div
+          ref={anchorRef}
+          className={
+            listAbove
+              ? 'message-log__clarification-popover message-log__clarification-popover--above'
+              : 'message-log__clarification-popover'
+          }
+          data-testid="clarification-popover"
+        >
+          <SlashSuggestionList
+            ref={listRef}
+            items={items}
+            loading={loading}
+            emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
+            command={command}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

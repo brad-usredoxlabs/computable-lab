@@ -83,12 +83,35 @@
   color: var(--cl-text-faint);
 }
 
-.chat-preview__event-label {
+/* L2-SUITE-A-uifix2 [B] — the event row's text group: the verb label and the
+   human-readable detail line (mix "75 uL · 3 cycles") stack under each other,
+   the Drop/Include toggle stays at the row's right edge. The label was the
+   flex fill before; the group now fills and the detail rides beneath it. */
+.chat-preview__event-text {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-preview__event-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The detail line is dim (it is the human-readable summary of a field the
+   raw-JSON "View changes" modal also carries — secondary, not a second title).
+   No dead chrome: it renders only when there is a displayable field. */
+.chat-preview__event-details {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-text-dim);
+  font-size: 11px;
 }
 
 .chat-preview__toggle {

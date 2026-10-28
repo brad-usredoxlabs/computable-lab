@@ -22,17 +22,72 @@
 import { getAffectedWells } from '../../types/events'
 import type { PlateEvent } from '../../types/events'
 import type { WellId } from '../../types/plate'
+import type { AiResolvedLabware } from '../../types/ai'
 import type { EventEditorPreview } from '../EventEditorContext'
 
 /** labwareId → the set of WellIds touched by at least one committed or
- *  preview event on that labware (empty set is never stored). */
+ *  preview event on that labware (empty set is never stored).
+ *
+ *  L2-SUITE-A-uifix2 A: the resolved-labware OFFER (the AiResolvedLabware list
+ *  that rides the turn's draft payload and is consumed client-side by the
+ *  preview path — draftPreview.ts's resolved arm keys the editor labware by
+ *  recordId) is the client-side attribution source for COMMITTED events that
+ *  carry wells but NO explicit labware reference (the compiled add_material:
+ *  `details.wells` but no `labwareId` at event or details level). NO server
+ *  record-shape change.
+ *
+ *  L2-SUITE-A-uifix2-fix1 [D1]: the binding is PER-BATCH, not per-deck. The
+ *  STAGED (preview) arm reads its own binding off `preview.resolvedLabwares`
+ *  (a preview is a single turn's batch, so one offer covers all its events).
+ *  The COMMITTED arm reads `committedOfferByEvent` — a map from eventId to the
+ *  offer recordId that was LIVE when THAT event's batch was staged — so a
+ *  second accepted turn can neither re-route an earlier turn's wells onto its
+ *  own vessel nor erase them when its batch carries no offer. The pre-fix
+ *  single top-level field (one offer applied to ALL committed events) is the
+ *  defect this fixes. The accepted-then-reloaded arm is OUT (the offer is not
+ *  persisted to the record — it rides defect 5 / the deck-variant item).
+ *
+ *  Attribution is single-vessel only: an offer-less event attributes to the
+ *  single vessel its OWN batch's binding offers. When a batch offers MULTIPLE
+ *  vessels (or none) the target is genuinely ambiguous and the event attributes
+ *  to NOTHING (we never guess). An event WITH an explicit labware reference
+ *  always self-attributes and is never re-routed by the offer. The P7 mix arm
+ *  is OUT of scope (WELLSET-RESOLVER-1's remit): a mix carries a labwareId but
+ *  NO wells, so it is left untouched — never fabricated. */
 export function buildEventWellIndex(
   committedEvents: PlateEvent[],
   preview: EventEditorPreview | null,
+  /** L2-SUITE-A-uifix2-fix1 [D1]: PER-BATCH committed binding — a map from
+   *  eventId to the offer recordId that was live when THAT event's batch was
+   *  staged (the preview's own resolvedLabwares). The binding rides each
+   *  committed batch, so a later turn committing over it cannot re-route (or
+   *  erase) an earlier turn's events. Absent/empty entry = "no offer" (the
+   *  event self-attributes, or attribute-less events attribute to nothing). */
+  committedOfferByEvent?: Record<string, string | null>,
 ): Map<string, Set<WellId>> {
   const byLabware = new Map<string, Set<WellId>>()
 
-  const add = (event: PlateEvent) => {
+  // The batch's single-vessel offer — the only case where an offer-less event's
+  // target is unambiguous. Multiple (distinct) offers => no guess; zero offers
+  // => no attribution. Per arm: the STAGED arm's binding is the preview's own
+  // resolvedLabwares (a preview is one turn's batch, so one offer covers all
+  // its events); the COMMITTED arm's is this event's OWN entry in
+  // `committedOfferByEvent` (the binding captured when ITS batch was staged —
+  // the fix for the pre-fix single global field that re-routed/erased an
+  // earlier turn's events, D1).
+  const singleVesselOffer = (binding?: AiResolvedLabware[] | null): string | null => {
+    const ids = (binding ?? [])
+      .map((offer) => offer.recordId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    return new Set(ids).size === 1 ? ids[0] : null
+  }
+  const stagedOffer = singleVesselOffer(preview?.resolvedLabwares)
+  const committedOfferOf = (eventId: string): string | null => {
+    const bound = committedOfferByEvent?.[eventId]
+    return typeof bound === 'string' && bound.length > 0 ? bound : null
+  }
+
+  const add = (event: PlateEvent, offerRecordId: string | null) => {
     const details = event.details as Record<string, unknown>
     // The labware references, mirroring collectEventLabwareIds
     // (previewProjection.ts) so the two walkers stay in sync.
@@ -77,9 +132,25 @@ export function buildEventWellIndex(
       }
       for (const well of wells) set.add(well)
     }
+    // L2-SUITE-A-uifix2 A: an event that carries wells but names NO labware
+    // (the compiled add_material: details.wells with no labwareId at event or
+    // details level) attributes to the turn's single-vessel offer — the vessel
+    // the pipeline bound it against (resolvedLabwares rides the SAME turn's
+    // draft payload; the preview path already consumes it to key the editor
+    // labware by recordId). Multiple offers => ambiguous target => attribute
+    // to nothing (never guess). An event WITH an explicit reference self-
+    // attributed above and is never re-routed here (unique is non-empty).
+    if (unique.length === 0 && offerRecordId !== null && all.length > 0) {
+      let set = byLabware.get(offerRecordId)
+      if (!set) {
+        set = new Set()
+        byLabware.set(offerRecordId, set)
+      }
+      for (const well of all) set.add(well)
+    }
   }
 
-  for (const event of committedEvents) add(event)
-  for (const event of preview?.previewEvents ?? []) add(event)
+  for (const event of committedEvents) add(event, committedOfferOf(event.eventId))
+  for (const event of preview?.previewEvents ?? []) add(event, stagedOffer)
   return byLabware
 }

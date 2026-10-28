@@ -923,6 +923,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
       const files = attachments?.map((a) => a.file)
 
+      // L2-SUITE-A-uifix2 E: whether a navigation agent_action frame was
+      // DELIVERED this turn (the handler applied it without reporting a block
+      // diagnostic). Set in the agent_action branch below (the frame rides the
+      // stream BEFORE the done frame), consumed by the empty-success gate so a
+      // turn that navigated the workspace is not reported as "nothing was
+      // proposed" — the same delivered-change arm as deckLayoutDelivered.
+      let navActionDelivered = false
+
       try {
         for await (const event of streamAssist(
           prompt,
@@ -1114,6 +1122,13 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             if (agentActionRef.current) {
               try {
                 const diagnostic = agentActionRef.current(event.action)
+                // L2-SUITE-A-uifix2 E: a DELIVERED navigation. The handler
+                // applied the action and reported no block (a void return /
+                // undefined = accepted — the same convention as onDeckLayout's
+                // void). A diagnostic string means the action was REFUSED
+                // (the workspace did not visibly change) and must NOT count as
+                // a delivery (F4 parity: a refused mount leaves the bubble up).
+                navActionDelivered = diagnostic === undefined
                 if (diagnostic) {
                   setMessages((prev) => [
                     ...prev,
@@ -1374,7 +1389,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               // delivered deckLayout is NAMED in it — the arms must not
               // contradict each other, which is exactly the gate's D3 read:
               // wall=null beside a bubble claiming nothing was proposed).
-              if (!askedQuestion && !deckLayoutDelivered) {
+              // L2-SUITE-A-uifix2 E: and when a navigation agent_action was
+              // DELIVERED (navActionDelivered — the onAgentAction handler
+              // applied it without a block diagnostic). The banked wire
+              // (L2-SUITE-B prompt-9.json) delivered an open-surface nav frame
+              // + done.notes "Action sent — see the workspace."; the headless
+              // classifier grades the turn 'proposal' via the nav frame, so the
+              // pane's "nothing was proposed" bubble CONTRADICTS the delivered
+              // action. Same delivered-change arm as deckLayoutDelivered.
+              if (!askedQuestion && !deckLayoutDelivered && !navActionDelivered) {
                 setMessages((prev) => [
                   ...prev,
                   {

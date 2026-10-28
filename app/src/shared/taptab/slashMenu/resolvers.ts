@@ -734,7 +734,7 @@ function materialSuggestions(
   // layers and both legitimately answer an unscoped '/m' card, so the key
   // includes the kind.
   const labelKeys = seenLabels ?? new Set<string>()
-  return [...formulationItems, ...items]
+  const rows = [...formulationItems, ...items]
     .filter((item) => {
       if (seen.has(item.recordId)) return false
       seen.add(item.recordId)
@@ -766,8 +766,18 @@ function materialSuggestions(
       // local tier.
       const isComposition = aggregateComponentTokens(item.title).length > 1
       const badge = isComposition ? VOCABULARY_BADGE.composition : materialBadge(entityKind)
+      // L2-SUITE-A-uifix2 [D]: the composition row's SUBTITLE must not re-spell
+      // its own badge word. It used to be the 'Composition' tier word (identical
+      // to the badge), so every composition row rendered `Composition <label>
+      // Composition` — the badge text twice (re-gate DEFECT 4). The subtitle
+      // now carries the LAYER the row is: a local record reads the honest
+      // local-record word, a formulation reads its layer word. Two layers that
+      // share a title then render DISTINCTLY (the layer is the differentiator
+      // the badge dropped), and the badge renders exactly once per row.
       const subtitle = isComposition
-        ? VOCABULARY_SUBTITLE.composition
+        ? entityKind === 'material'
+          ? VOCABULARY_SUBTITLE.local
+          : materialBadge(entityKind)
         : entityKind === 'material'
           ? VOCABULARY_SUBTITLE.local
           : (item.subtitle || item.recordId)
@@ -789,6 +799,13 @@ function materialSuggestions(
         mention,
       }
     })
+  // L2-SUITE-A-uifix2 [D]: dedupe rows by their RENDERED identity (badge +
+  // label + subtitle) — a row that would render byte-identically to an
+  // earlier row is duplicative chrome (the dead-chrome rule). The survivor
+  // is the first in rank order, keeping its real recordId (presentation
+  // only: selection still lands a real record, never an invented term).
+  // Idempotent (a second pass changes nothing).
+  return dedupeSuggestionRows(rows)
 }
 
 function materialMentionKind(kind: string): MaterialMentionKind {
@@ -797,6 +814,39 @@ function materialMentionKind(kind: string): MaterialMentionKind {
   if (kind === 'aliquot') return 'aliquot'
   if (kind === 'vendor-product') return 'vendor-product'
   return 'material'
+}
+
+/**
+ * L2-SUITE-A-uifix2 [D] (re-gate DEFECT 4, MINOR dead-chrome rule): collapse
+ * suggestion rows that RENDER byte-identically — same badge + label +
+ * subtitle — to a single row, keeping the FIRST in rank order (the caller has
+ * already rank-sorted) with its real recordId. A row that would paint
+ * indistinguishably next to an earlier row is duplicative chrome.
+ *
+ * Presentation only: the surviving row keeps its real `key` / `recordId`, so
+ * selection still lands a real record — never an invented or merged term.
+ * Rows that differ in any visible field (badge, label, OR subtitle) are
+ * distinct candidates and all survive. Idempotent: a second pass over the
+ * output changes nothing.
+ *
+ * NOTE on the scope of this dedup: it is keyed on the row's RENDERED identity,
+ * not its recordId — so it is a safety net for rows that (a) came from
+ * distinct records but (b) render the same words. The primary duplication in
+ * the re-gate (the composition row re-spelling its own badge word) is fixed
+ * UPSTREAM in the row builder (materialSuggestions), which makes the two
+ * same-titled layers render DISTINCTLY (layer in the subtitle). This function
+ * catches any residual byte-identical pair.
+ */
+export function dedupeSuggestionRows(rows: SlashSuggestion[]): SlashSuggestion[] {
+  const seen = new Set<string>()
+  const out: SlashSuggestion[] = []
+  for (const row of rows) {
+    const rendered = [row.badge, row.label, row.subtitle ?? ''].join('\u0000')
+    if (seen.has(rendered)) continue
+    seen.add(rendered)
+    out.push(row)
+  }
+  return out
 }
 
 /**

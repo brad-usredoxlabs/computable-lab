@@ -24,6 +24,43 @@ function eventLabel(event: { eventId: string; event_type?: string; stepId?: stri
   return event.stepId ? `${kind} · ${event.stepId}` : kind
 }
 
+/**
+ * L2-SUITE-A-uifix2 [B] — the human-readable detail line for a staged event,
+ * derived declaratively from the event's `details` (a field descriptor, not a
+ * per-verb if-chain). The re-gate: the mix's volume 75 / cycles 3 existed only
+ * in the "View changes" raw-JSON modal, never on the proposal card (the spec's
+ * P7 arm requires them on the card).
+ *
+ * Volume is honest to the two wire shapes the compile actually emits:
+ *  - mix: `details.volume` is a PLAIN NUMBER (unit implied uL — the modal's
+ *    `{"volume": 75, "cycles": 3, "labwareId": ...}`) → "75 uL";
+ *  - add_material / transfer: `details.volume` is `{ value, unit }` → "100 uL".
+ * Cycles ride the mix (`details.cycles`). No displayable field → null (a dead
+ * empty line would be dead chrome).
+ */
+function eventDetailLine(event: { details?: unknown }): string | null {
+  const details = event.details as Record<string, unknown> | undefined
+  if (!details || typeof details !== 'object') return null
+  const parts: string[] = []
+  const volume = details.volume
+  if (typeof volume === 'number' && Number.isFinite(volume)) {
+    parts.push(`${volume} uL`)
+  } else if (
+    volume &&
+    typeof volume === 'object' &&
+    typeof (volume as { value?: unknown }).value === 'number'
+  ) {
+    const v = volume as { value: number; unit?: unknown }
+    const unit = typeof v.unit === 'string' && v.unit.length > 0 ? v.unit : 'uL'
+    parts.push(`${v.value} ${unit}`)
+  }
+  if (typeof details.cycles === 'number' && Number.isFinite(details.cycles)) {
+    const cycles = details.cycles
+    parts.push(`${cycles} cycle${cycles === 1 ? '' : 's'}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
   if (!chat.hasPreview) return null
 
@@ -76,7 +113,17 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
                 key={event.eventId}
                 className={dropped ? 'chat-preview__event chat-preview__event--dropped' : 'chat-preview__event'}
               >
-                <span className="chat-preview__event-label">{eventLabel(event)}</span>
+                <span className="chat-preview__event-text">
+                  <span className="chat-preview__event-label">{eventLabel(event)}</span>
+                  {(() => {
+                    const detail = eventDetailLine(event)
+                    return detail ? (
+                      <span className="chat-preview__event-details" data-testid="chat-preview-event-details">
+                        {detail}
+                      </span>
+                    ) : null
+                  })()}
+                </span>
                 <button
                   type="button"
                   className="chat-preview__toggle"

@@ -29,6 +29,26 @@ const materialRequest: AiClarificationRequest = {
   options: [],
 }
 
+/**
+ * L2-SUITE-A-uifix2 [C]: the picker is now OPEN-ON-REQUEST (the re-gate's
+ * auto-open-on-mount was the stacking defect). These behavior pins keep their
+ * intent (resolver runs seeded, picks ground + route, empty-state copy, new
+ * question re-searches) — they just OPEN the picker first, the way a
+ * scientist does (click the answer field).
+ */
+function openPickerFor(container: HTMLElement, text?: string) {
+  const input = container.querySelector(
+    'input.message-log__clarification-search',
+  ) as HTMLInputElement
+  if (!input) throw new Error('no picker input in container')
+  fireEvent.click(input)
+  if (text !== undefined) {
+    // A SEPARATE change (next tick) so the open + query land and the resolver
+    // runs for the typed text (not just the seeded query).
+    fireEvent.change(input, { target: { value: text } })
+  }
+}
+
 afterEach(() => {
   cleanup()
   resolveMaterial.mockReset()
@@ -83,10 +103,12 @@ describe('ClarificationPicker', () => {
   it('runs the material resolver seeded with the request query and routes a pick to onPick', async () => {
     resolveMaterial.mockResolvedValue([hit])
     const onPick = vi.fn()
-    render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
+    const { container } = render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
 
     // seeded query
     expect((screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement).value).toBe('CHO')
+    // open-on-request: the resolver runs when the picker is opened (not on mount).
+    openPickerFor(container)
     await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
     expect(resolveMaterial.mock.calls[0][0]).toBe('CHO')
 
@@ -110,7 +132,8 @@ describe('ClarificationPicker', () => {
     resolveMaterial.mockResolvedValue([ontologyHit])
     groundMaterialRef.mockResolvedValue({ kind: 'record', id: 'MAT-dmem', type: 'material', label: 'DMEM (local)' })
     const onPick = vi.fn()
-    render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
+    const { container } = render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
+    openPickerFor(container)
 
     const row = await screen.findByText("Dulbecco's Modified Eagle's Medium")
     fireEvent.mouseDown(row)
@@ -137,7 +160,8 @@ describe('ClarificationPicker', () => {
     }
     resolveMaterial.mockResolvedValue([mintHit])
     const onPick = vi.fn()
-    render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
+    const { container } = render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
+    openPickerFor(container)
 
     const row = await screen.findByText('Create local term "CHO"')
     fireEvent.mouseDown(row)
@@ -160,13 +184,14 @@ describe('ClarificationPicker', () => {
 
   it('uses the labware resolver for /l clarifications', async () => {
     resolveLabware.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, kind: 'labware', menuProvider: '/l', query: '' }}
         onPick={vi.fn()}
       />,
     )
     expect(screen.getByPlaceholderText(/Search labware/i)).toBeTruthy()
+    openPickerFor(container)
     await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
     expect(resolveMaterial).not.toHaveBeenCalled()
   })
@@ -174,13 +199,14 @@ describe('ClarificationPicker', () => {
 
   it('uses the equipment resolver for /e clarifications', async () => {
     resolveEquipment.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, kind: 'equipment', menuProvider: '/e', query: 'reader' }}
         onPick={vi.fn()}
       />,
     )
     expect(screen.getByPlaceholderText(/Search equipment/i)).toBeTruthy()
+    openPickerFor(container)
     await waitFor(() => expect(resolveEquipment).toHaveBeenCalled())
     expect(resolveMaterial).not.toHaveBeenCalled()
     expect(resolveLabware).not.toHaveBeenCalled()
@@ -196,12 +222,13 @@ describe('mint empty-state copy only appears where a mint floor actually exists 
 
   it('a /l card with a non-empty query and zero resolver hits shows plain "No matches", never the mint-inviting copy', async () => {
     resolveLabware.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, id: 'clar-l-1', kind: 'general', menuProvider: '/l', query: 'microcentrifuge tube' }}
         onPick={vi.fn()}
       />,
     )
+    openPickerFor(container)
     await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
     expect(await screen.findByText('No matches')).toBeTruthy()
     expect(screen.queryByText(MINT_COPY)).toBeNull()
@@ -209,12 +236,13 @@ describe('mint empty-state copy only appears where a mint floor actually exists 
 
   it('a /e card with a non-empty query and zero resolver hits shows plain "No matches", never the mint-inviting copy', async () => {
     resolveEquipment.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, id: 'clar-e-1', kind: 'general', menuProvider: '/e', query: 'plate reader' }}
         onPick={vi.fn()}
       />,
     )
+    openPickerFor(container)
     await waitFor(() => expect(resolveEquipment).toHaveBeenCalled())
     expect(await screen.findByText('No matches')).toBeTruthy()
     expect(screen.queryByText(MINT_COPY)).toBeNull()
@@ -222,24 +250,26 @@ describe('mint empty-state copy only appears where a mint floor actually exists 
 
   it('the /m material card KEEPS the mint-inviting copy (the mint floor row exists there)', async () => {
     resolveMaterial.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, id: 'clar-m-1', materialLayer: 'material' }}
         onPick={vi.fn()}
       />,
     )
+    openPickerFor(container)
     await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
     expect(await screen.findByText(MINT_COPY)).toBeTruthy()
   })
 
   it('a layer-scoped /m card (aliquot) keeps plain "No matches" — minting is never an answer to "which aliquot?"', async () => {
     resolveMaterial.mockResolvedValue([])
-    render(
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, id: 'clar-m-2', materialLayer: 'aliquot' }}
         onPick={vi.fn()}
       />,
     )
+    openPickerFor(container)
     await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
     expect(await screen.findByText('No matches')).toBeTruthy()
     expect(screen.queryByText(MINT_COPY)).toBeNull()
@@ -280,7 +310,8 @@ describe('a NEW question must not show the PREVIOUS material’s options', () =>
     }
     // The PREVIOUS question: a stateful parent (QuestionsPanel) reuses this
     // component for the next question rather than remounting it.
-    const { rerender } = render(<ClarificationPicker request={clofibrateRequest} onPick={vi.fn()} />)
+    const { container, rerender } = render(<ClarificationPicker request={clofibrateRequest} onPick={vi.fn()} />)
+    openPickerFor(container)
     await waitFor(() => expect(screen.getByText('1 mM Clofibrate in DMSO')).toBeTruthy())
 
     const hepg2Request: AiClarificationRequest = {
@@ -293,6 +324,8 @@ describe('a NEW question must not show the PREVIOUS material’s options', () =>
       materialLayer: 'material',
     }
     rerender(<ClarificationPicker request={hepg2Request} onPick={vi.fn()} />)
+    // A new question (new id) starts CLOSED; open it to re-search.
+    openPickerFor(container, 'HepG2')
 
     await waitFor(() => expect(screen.getByText('HepG2')).toBeTruthy())
     // …and the previous material is gone, not merged alongside it.
@@ -316,12 +349,28 @@ describe('a material question with no words does not show another material', () 
   })
 
   it('still lets a labware question browse an empty query — that IS the answer', async () => {
-    render(
+    // TEST-HYGIENE (fix1 D5): the resolver must return a SETTLED promise. The
+    // product's `.then` (ClarificationPicker.tsx:308) reads the resolved rows;
+    // an unimplemented mock returns `undefined`, so the debounced callback's
+    // `resolver(...).then` throws `Cannot read properties of undefined (reading
+    // 'then')` after the test body ends (vitest prints "Unhandled Errors ... may
+    // cause false positive tests"). Give the mock a settled value and flush the
+    // 150ms debounce + the `.then` microtask so the promise chain settles
+    // WITHIN the test while the mock is still valid. The product `.then` path
+    // is untouched (pre-existing).
+    resolveLabware.mockResolvedValue([])
+    const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, kind: 'labware', menuProvider: '/l', query: '' }}
         onPick={vi.fn()}
-      />,
+      />
     )
+    openPickerFor(container)
     await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
+    // Let the debounced resolver's promise chain settle (past the 150ms debounce
+    // + the `.then` microtask) BEFORE afterEach's cleanup() unmount and
+    // mockReset() — so no `.then` fires against a reset mock / unmounted state.
+    await new Promise((r) => setTimeout(r, 250))
+    expect(resolveLabware).toHaveBeenCalled()
   })
 })
