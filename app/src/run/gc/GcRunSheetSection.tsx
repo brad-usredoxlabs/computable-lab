@@ -1,5 +1,5 @@
 /**
- * GC-12 (deliverable B/E) — GcRunSheetSection: the additive GC run-sheet
+ * GC-12 (deliverable B/C) — GcRunSheetSection: the additive GC run-sheet
  * section on /runs/:runId.
  *
  * D1 gating (bait #2): the section renders NOTHING when the probe finds no
@@ -14,9 +14,13 @@
  * flow-back (D5) reads entry.analysisRunRefs via getAnalysisRun (existing
  * route); the append-only history is the entry's own data (bait #8).
  *
- * This container owns the probe + the table (GcRunTable) + the per-entry
- * results flow-back. The method/sample/attach/analyze chrome lives in the
- * sibling components (GcMethodSelect, GcSampleAdd, GcAttachPanel).
+ * The section renders the full-column table (GcRunTable), the per-entry
+ * results flow-back, and the interactive chrome (GcSectionChrome: method
+ * select, sample add, the per-entry GcAttachPanel attach slot, and the
+ * Analyze handoff). A user action (sample add / attach / analyze) triggers a
+ * RE-PROBE + entry refetch (onEntryUpdated) so the new row / ACQP ref /
+ * appended analysis-run ref shows in the table — that refresh is
+ * user-triggered, never a mount fetch.
  */
 import { useEffect, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
@@ -26,6 +30,8 @@ import {
   type SequencePayload,
 } from './gcRunSheetModel'
 import { GcRunTable, type GcRunTableEntry } from './GcRunTable'
+import { GcSectionChrome, type GcChromeEntry } from './GcSectionChrome'
+import './gcRunSheet.css'
 
 /** A rendered row: the fetched entry + its append-only analysis-run history. */
 interface LinkedRow {
@@ -62,32 +68,45 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   const [entries, setEntries] = useState<Record<string, EntryPayload>>({})
   const [probed, setProbed] = useState(false)
   const [statuses, setStatuses] = useState<Record<string, Record<string, string>>>({})
-  // The dedupe ref (D7/bait #5): the probe fires at most once per runId — a
-  // re-render (e.g. after the entry fetch resolves) must NOT re-fire it.
+  // The user-triggered refresh tick (sample add / attach / analyze): the
+  // sequence probe re-runs (a user action, NOT a mount call — the D7 pin
+  // counts MOUNT calls only) and the linked entries re-fetch, so the new
+  // data shows (the appended entry ROW / the ACQP ref / the appended
+  // analysis-run ref). The probe's on-mount call stays EXACTLY once per
+  // runId; the refresh re-probe is gated on the user action.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const refresh = () => setRefreshTick((t) => t + 1)
+  // The dedupe ref (D7/bait #5): the MOUNT probe fires at most once per
+  // runId — a re-render (e.g. after the entry fetch resolves) must NOT
+  // re-fire it. A user-triggered refresh intentionally re-runs the probe
+  // (keyed on runId+refreshTick; the mount call is the refreshTick===0 pass).
   const probeDoneRef = useRef<string | null>(null)
 
-  // D1 probe (ONE listRecordsByKind, deduped on runId). The payload is typed
-  // at the use site (findLinkedSequences) — the client returns untyped
-  // envelopes; we never widen the API surface.
+  // D1 probe (ONE listRecordsByKind on mount, deduped on runId). The payload
+  // is typed at the use site (findLinkedSequences) — the client returns
+  // untyped envelopes; we never widen the API surface.
   useEffect(() => {
-    if (probeDoneRef.current === runId) return
+    const key = refreshTick === 0 ? runId : `${runId}@${refreshTick}`
+    if (probeDoneRef.current === key) return
     let cancelled = false
-    probeDoneRef.current = runId
+    probeDoneRef.current = key
     apiClient
       .listRecordsByKind('instrument-sequence', 500)
       .then((res) => {
-        if (!cancelled) {
-          setSequences(res.records)
-          setProbed(true)
-        }
+        if (!cancelled) setSequences(res.records)
       })
       .catch(() => {
+        /* the probe failed: the linkage falls back to the last non-empty
+           result (never a fabricated sheet, never a flash to nothing on a
+           refresh in-flight) */
+      })
+      .finally(() => {
         if (!cancelled) setProbed(true)
       })
     return () => {
       cancelled = true
     }
-  }, [runId])
+  }, [runId, refreshTick])
 
   // The linkage (header runRef OR entry runRef — the entry payload is the
   // schema-guaranteed REQUIRED runRef). Zero links = render NOTHING (bait #2).
@@ -101,12 +120,21 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
         entries,
       )
     : []
+  // The last NON-EMPTY linkage (render guard, REFRESH only): a user-triggered
+  // re-probe in-flight must not flash the section to nothing (the user
+  // action's result is what is landing). The MOUNT path is unaffected:
+  // at refreshTick 0 an empty linkage renders NOTHING (bait #2, byte-
+  // identical DNA).
+  const linkedRef = useRef<ReturnType<typeof findLinkedSequences>>([])
+  if (linkedSequences.length > 0) linkedRef.current = linkedSequences
+  const linked =
+    refreshTick === 0 || linkedSequences.length > 0 ? linkedSequences : linkedRef.current
 
   // The distinct linked entry ids (in entryRefs order).
   const linkedEntryIds: string[] = []
   {
     const seen = new Set<string>()
-    for (const seq of linkedSequences) {
+    for (const seq of linked) {
       for (const ref of seq.payload.entryRefs ?? []) {
         if (!seen.has(ref.id)) {
           seen.add(ref.id)
@@ -117,6 +145,8 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   }
 
   // Fetch the linked entries (one getRecord per distinct entryRef).
+  // Re-fires on a user-triggered refresh (attach / sample-add / analyze
+  // append changed the records) — never on its own.
   useEffect(() => {
     if (linkedEntryIds.length === 0) return
     let cancelled = false
@@ -137,7 +167,7 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkedEntryIds.join(',')])
+  }, [linkedEntryIds.join(','), refreshTick])
 
   // The rendered rows (linked entries that resolved to payloads).
   const rows: LinkedRow[] = linkedEntryIds.flatMap((id) => {
@@ -188,19 +218,28 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   }, [runIdsKey])
 
   // D1/bait #2: zero linked sequences = NOTHING (the DNA case, byte-identical).
-  if (linkedSequences.length === 0) return null
+  if (linked.length === 0) return null
 
   const tableEntries: GcRunTableEntry[] = rows.map((r) => ({ recordId: r.recordId, payload: r.payload }))
+  // The chrome's sequence header ref (the FIRST linked sequence — sample add
+  // appends its new entry ref to the header's entryRefs).
+  const firstSeq = linked[0]
+  const sequenceRef = {
+    recordId: firstSeq.recordId,
+    entryRefs: (firstSeq.payload.entryRefs ?? []) as Array<{ kind: 'record'; id: string; type: string }>,
+  }
+  const chromeEntries: GcChromeEntry[] = rows.map((r) => ({ recordId: r.recordId, payload: r.payload }))
 
   return (
     <section data-testid="gc-run-sheet" className="gc-run-sheet">
       <h2 data-testid="gc-run-sheet-title">
-        {'GC run sheet ' + linkedSequences.map((s) => s.payload.title).filter(Boolean).join(' · ')}
+        {'GC run sheet ' + linked.map((s) => s.payload.title).filter(Boolean).join(' · ')}
       </h2>
       <GcRunTable entries={tableEntries} />
       {rows.map((row) => (
         <GcResultsList key={row.recordId} entry={row} status={statuses[row.recordId] ?? {}} />
       ))}
+      <GcSectionChrome entries={chromeEntries} runId={runId} sequenceRef={sequenceRef} onEntryUpdated={refresh} />
     </section>
   )
 }

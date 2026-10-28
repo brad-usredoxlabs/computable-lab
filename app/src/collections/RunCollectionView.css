@@ -433,3 +433,41 @@
     display: none;
   }
 }
+
+/* GC-12 (D2): the GC run-sheet create form (additive — the inline form the
+   "New GC run sheet" action opens on /runs). */
+.run-collection__gc-create {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--cl-border, #d0d7de);
+  border-radius: 8px;
+  background: var(--cl-surface-subtle, #f6f8fa);
+  max-width: 480px;
+}
+
+.run-collection__gc-create label {
+  font-size: 12px;
+  color: var(--cl-text-muted, #6e7781);
+}
+
+.run-collection__gc-create input,
+.run-collection__gc-create select {
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border, #d0d7de);
+  border-radius: 6px;
+}
+
+.run-collection__gc-create__notready,
+.gc-run-create__notready {
+  font-size: 12px;
+  color: var(--cl-text-muted, #6e7781);
+}
+
+.gc-run-create__note {
+  font-size: 12px;
+  color: var(--cl-text-error, #cf222e);
+}

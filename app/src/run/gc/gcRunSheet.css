@@ -1,0 +1,109 @@
+/* GC-12 (deliverable C) — the GC run-sheet section chrome styles.
+ * Loaded by GcRunSheetSection (the section owns the whole subtree: table,
+ * chrome, attach panels). Kept scoped under .gc-run-sheet so the section's
+ * additive mount never restyles the DNA run workspace. */
+
+.gc-run-sheet {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--cl-border, #d0d7de);
+  border-radius: 8px;
+  background: var(--cl-surface-subtle, #f6f8fa);
+}
+
+.gc-run-sheet h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+/* The full-column table: horizontal scroll for wide sheets (the columns are
+ * data-driven — a wide vendor payload scrolls, it is never dropped). */
+.gc-run-table {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.gc-run-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.gc-run-table th,
+.gc-run-table td {
+  border: 1px solid var(--cl-border, #d0d7de);
+  padding: 0.3rem 0.55rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.gc-run-table thead th {
+  background: var(--cl-surface, #fff);
+  position: sticky;
+  top: 0;
+}
+
+/* The interactive chrome (method / samples / analyze). */
+.gc-chrome {
+  border-top: 1px solid var(--cl-border, #d0d7de);
+  padding-top: 0.75rem;
+}
+
+.gc-chrome__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.gc-chrome__notready {
+  color: var(--cl-text-muted, #6e7781);
+  font-size: 0.9rem;
+}
+
+.gc-chrome__note {
+  color: var(--cl-text-error, #cf222e);
+  font-size: 0.9rem;
+}
+
+.gc-chrome__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  border: 1px dashed var(--cl-border, #d0d7de);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.gc-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.gc-attach__error {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  font-size: 0.85rem;
+  color: var(--cl-text-error, #cf222e);
+}
+
+.gc-results {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.gc-results ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.gc-results li {
+  display: flex;
+  gap: 0.5rem;
+}
