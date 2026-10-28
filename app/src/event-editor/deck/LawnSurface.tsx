@@ -76,8 +76,8 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
   // preview events' details.wells) — the lawn tiles mark the actual wells
   // the events touch, staged OR accepted (same index as the slot surface).
   const eventWellIndex = useMemo(
-    () => buildEventWellIndex(state.events, state.preview),
-    [state.events, state.preview],
+    () => buildEventWellIndex(state.events, state.preview, state.turnOfferLabwares),
+    [state.events, state.preview, state.turnOfferLabwares],
   )
   const ghostLawnPlacements = useMemo(
     () =>

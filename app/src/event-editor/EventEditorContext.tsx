@@ -17,7 +17,7 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
-import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
+import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiResolvedLabware, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
 import type { DraftTermRow } from './right-pane/ai/TermPanel'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
@@ -99,6 +99,17 @@ export interface EventEditorPreview {
   alsoPlace?: AiAlsoPlace
   /** Proposed concrete labware additions that produced preview labware. */
   labwareAdditions?: AiLabwareAddition[]
+  /**
+   * L2-SUITE-A-uifix2 A: the draft's resolved placement offers — the
+   * labware hints the compile bound against REAL inventory records. The
+   * preview path's resolved arm already consumes these to PLACE the ghost
+   * (keyed by recordId); the deck's event-well index reads the SAME field to
+   * ATTRIBUTE the draft's well-bearing-but-unbound events (an add_material
+   * with `details.wells` and no `labwareId`) to the offered vessel — so the
+   * staged (preview) arm marks the tile's wells, not just the ghost. Absent
+   * on previews that carried no offers.
+   */
+  resolvedLabwares?: AiResolvedLabware[]
   /** Ontology terms proposed during draft compile; draftOnly entries materialize on Accept. */
   ontologyBindings?: DraftOntologyBinding[]
   /** Vendor protocol candidate GraphLemur used as source material for this preview. */
@@ -289,6 +300,24 @@ export interface EventEditorState {
   events: PlateEvent[]
   tipState: TipState
   preview: EventEditorPreview | null
+  /**
+   * L2-SUITE-A-uifix2 A: the resolved-labware offer of the turn whose events
+   * were MOST RECENTLY COMMITTED (the just-accepted arm). A committed event
+   * that carries wells but no explicit labware reference (the compiled
+   * add_material) cannot attribute itself — the offer the pipeline bound it
+   * against is not in the record. So the deck's event-well index reads this
+   * binding for the committed arm. Set on `commit_preview` from the preview's
+   * OWN resolvedLabwares (the binding that was live when the events were
+   * staged), cleared on a fresh draft and on a deck load. NOT persisted (the
+   * offer is not a record field — the accepted-then-reloaded arm rides
+   * defect 5 / the deck-variant item). Not part of the undo/redo snapshot
+   * (it is turn-scoped, not a deck mutation the user can undo).
+   *
+   * OPTIONAL (house state-field pattern): older reducer snapshots / test
+   * state literals predate the field, so absent means "no live offer
+   * binding" — read it as `state.turnOfferLabwares ?? []`.
+   */
+  turnOfferLabwares?: AiResolvedLabware[]
   graphLemurSource: EventEditorGraphLemurSource | null
   fixIt: FixItState
   /**
@@ -437,6 +466,7 @@ const initialState: EventEditorState = {
   events: [],
   tipState: { kind: 'empty' },
   preview: null,
+  turnOfferLabwares: [],
   graphLemurSource: null,
   fixIt: {
     isOpen: false,
@@ -615,6 +645,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         focusPlacementId: null,
         selection: null,
         preview: null,
+        // L2-SUITE-A-uifix2 A: a fresh deck load has no offer binding (the
+        // offer is not a record field) — the accepted-then-reloaded arm rides
+        // defect 5 / the deck-variant item, so the binding is cleared.
+        turnOfferLabwares: [],
         graphLemurSource: null,
         tipState: { kind: 'empty' },
       }
@@ -863,6 +897,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return {
         ...state,
         preview,
+        // L2-SUITE-A-uifix2 A: a fresh draft supersedes the just-committed
+        // turn's offer — the committed events from that turn no longer ride
+        // the live binding (the binding now belongs to the STAGED preview).
+        turnOfferLabwares: [],
         ...(droppedFocus ? { focusPlacementId: null, selection: null } : {}),
       }
     }
@@ -895,6 +933,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         eventGraphId: action.eventGraphId ?? state.eventGraphId,
         eventGraphSave: action.eventGraphCommit ?? state.eventGraphSave,
         preview: null,
+        // L2-SUITE-A-uifix2 A: the just-accepted arm. The committed events
+        // from this preview keep the offer binding that was LIVE when they
+        // were staged (the preview's OWN resolvedLabwares) so the deck's
+        // event-well index can attribute a well-bearing-but-unbound event
+        // (the compiled add_material) to the vessel the pipeline bound it
+        // against. NOT persisted — a reloaded deck has no binding (the
+        // accepted-then-reloaded arm rides defect 5 / the deck-variant item).
+        turnOfferLabwares: preview.resolvedLabwares ?? [],
       }
     }
     case 'open_fixit': {

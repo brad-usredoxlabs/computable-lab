@@ -486,6 +486,12 @@ export function buildPreviewFromDraft({
       previewEquipments,
       ...(recordCreations.length > 0 ? { recordCreations } : {}),
       ...(alsoPlace ? { alsoPlace } : {}),
+      // L2-SUITE-A-uifix2 A: carry the draft's resolved offers WITH the
+      // preview so the deck's event-well index can attribute the staged
+      // (preview) arm's well-bearing-but-unbound events to the offered
+      // vessel (the staged arm must mark the tile's wells, not just the
+      // ghost). Absent when the draft offered nothing (exactOptional).
+      ...(resolvedLabwares.length > 0 ? { resolvedLabwares } : {}),
       previewPlacements,
       // Expand any compact well ranges the AI emitted ("A1:H12") into literal
       // wells, so committed events keep the existing per-well format.
