@@ -33,6 +33,8 @@ import type {
   AiAgentActionEnvelope,
   AiDraftRevisionContext,
   DraftOntologyBinding,
+  AiClarification,
+  AiClarificationRequest,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -454,6 +456,41 @@ export interface UseAiChatOptions {
 // {} per render would churn the dependency whenever no staged seam is
 // registered (non-deck surfaces), recomputing the count every render.
 const EMPTY_STAGED_LABWARES = Object.freeze({})
+
+/**
+ * L2-SUITE-A-uifix1 D3 — the LEGACY clarification shape the ChatLog
+ * clarification BLOCK arm (ChatLog.tsx:196) consumes, derived from a typed
+ * request when the done payload carries only `clarificationRequests`.
+ *
+ * Why: the server's needs-clarification arm (shorthandChat.ts:1342+) returns
+ * the typed requests; the gate's P4/P5/P6 browser turns consumed exactly that
+ * shape (events=0, clarificationRequests=1|2|1) and rendered zero cards.
+ * ChatLog has TWO render arms — the legacy `message.clarification` block
+ * (196) and the typed `message.clarificationRequests` cards (197). The hook
+ * already rode the typed requests verbatim (1169-1171); the legacy field
+ * stayed absent, and the false empty-success bubble (which fired
+ * UNCONDITIONALLY — see the done arm below) claimed "did not propose any
+ * changes" beside the turn's own questions. Deriving the legacy shape from
+ * the FIRST request keeps both arms fed from ONE payload — the picker
+ * (menuProvider '/m') and the option list ('choice') both render.
+ */
+function legacyClarificationFromRequests(
+  requests: AiClarificationRequest[] | undefined,
+): AiClarification | null {
+  const first = requests?.[0]
+  if (!first) return null
+  const kind: AiClarification['entityType'] =
+    first.entityType ?? first.kind
+  return {
+    id: first.id,
+    prompt: first.prompt,
+    entityType: kind,
+    menuProvider: first.menuProvider,
+    options: first.options,
+    ...(first.query !== undefined ? { query: first.query } : {}),
+    ...(first.allowCreateLocal !== undefined ? { allowCreateLocal: first.allowCreateLocal } : {}),
+  }
+}
 
 export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -1180,7 +1217,20 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                       streamEvents: [...accumulated],
                       ...(result.sequenceProposal ? { sequenceProposal: result.sequenceProposal, sequenceProposalRequest: prompt } : {}),
                       events: normalizedPreviewEvents,
-                      clarification: result.clarification,
+                      // L2-SUITE-A-uifix1 D3: the done payload's
+                      // clarificationRequests ride the typed arm (ChatLog.tsx:197)
+                      // AND seed the LEGACY clarification shape (ChatLog.tsx:196
+                      // block arm) when the server sent requests without the
+                      // legacy field — the gate's P4/P5/P6 turns carried exactly
+                      // that shape, and with the legacy field absent neither
+                      // arm had the full card (the picker arm needed the
+                      // request's menuProvider/query; the block arm needed the
+                      // legacy field itself). Deriving keeps both arms fed
+                      // from ONE payload — never a second source of truth.
+                      clarification:
+                        result.clarification ??
+                        legacyClarificationFromRequests(result.clarificationRequests) ??
+                        undefined,
                       // L2-CHAT-1 FIX3 D4b: typed clarification requests ride
                       // the message so ChatLog's existing arm (ChatLog.tsx)
                       // renders them — a done carrying only these is NOT an
@@ -1292,12 +1342,16 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   } and asked no questions. Nothing was proposed and nothing was applied.`,
                 )
               }
-              // L2-SUITE-A-uifix1 D1: the bubble claims NOTHING was proposed.
-              // It is false when the turn delivered a deck layout the deck
-              // surface mounted (the deck visibly changed — the turn DID
-              // propose something). The wall above stays (it NAMES the
-              // delivered channel — the honest report for this turn).
-              if (!deckLayoutDelivered) {
+              // L2-SUITE-A-uifix1 D3+D1: the bubble claims NOTHING was
+              // proposed. It is false when the turn asked a question (the
+              // clarification cards ARE the proposal — the gate's P4/P5/P6
+              // "success-with-nothing") and when it delivered a deck layout
+              // the deck surface mounted (the deck visibly changed). The wall
+              // above stays on its own gate (askedQuestion suppresses it; a
+              // delivered deckLayout is NAMED in it — the arms must not
+              // contradict each other, which is exactly the gate's D3 read:
+              // wall=null beside a bubble claiming nothing was proposed).
+              if (!askedQuestion && !deckLayoutDelivered) {
                 setMessages((prev) => [
                   ...prev,
                   {
