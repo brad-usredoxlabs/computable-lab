@@ -92,3 +92,49 @@ healthy). Actions: reconciled coder+fleet+queues, verified uifix3 forward motion
 (commits+report first-hand), re-verified DEGEN-RETRY-1 grounding cites, dispatched its
 spec composer, linked draft path in task block under queue lock, this handoff.
 No task marked done.
+
+## CHECKPOINT ADDENDUM 18:05 EDT (same tick, budget extension)
+
+**UIFIX3 coder DIED at 17:49:45 EDT — token-cap death class, but PARTIAL DELIVERY.**
+Log tail: 'HTTP 400: prepared prompt exceeds Engine max_context 262144' then
+CODER_EXITED rc=0. Worktree carries FIVE defect commits on 2d6d7b7a (diff-stat verified
+first-hand: 15 files +975/-21, all in approved scope — app/ deck+card+picker files,
+server shorthandChat + NEW clarificationDedupe.ts + tests):
+- 405808de D1 (report section CLOSED, honest copy 'applied to this view')
+- 32b613b2 D2 (committed well footprint at rest)
+- fdf01866 D4 (same-noun+only-action -> ONE card; disclosed stale-pin re-pins
+  cueCascade T6/T7, e2eStubHonesty same-shipped-fold pattern; 4 stale pins disclosed)
+- c82302f6 D5 (select-on-focus replaces seeded search)
+- e7dc88d6 D6 (card face shows declared detail fields)
+D3-CHROME NOT DONE (report placeholder). No DONE marker, no STATUS: complete.
+
+**RESUME RUN DISPATCHED 17:56:51 EDT (same worktree/branch, D3-CHROME ONLY):** unit
+cl-l2-coder-uifix3-resume-l2t1735 (launcher
+scripts/launch-coder-SUITEA-uifix3-resume-l2t1735.sh, self-reexec flock slot-1 pattern,
+LOCK-ACQUIRED verified in log, prompt carry verified), coder pid 1929104, log
+logs/coder-SUITEA-uifix3-resume-l2t1735.log, APPENDS its report section to the SAME
+report file (resume-scoped '## D3-CHROME (resume run)' + final Commits list — unique
+section, no overwrite). Lean context by design (one spec section, one defect) to dodge a
+repeat 262K-prompt death. Stagger: this was a fleet coder launch at 17:56 — the prior
+:18080 start was 17:00 and that coder is DEAD (exited 17:49), so the gate's alive
+condition did not bind. DO NOT re-dispatch while 1929104 alive; expected ~15-30 min
+(thin task).
+Slot-1 pid file now: UIFIX3RESUME-1929096-2026-10-28T17:56:51-04:00.
+Fleet live coders at checkpoint: 1 (lane-2 resume). Slot-0 free (lane-1 stale GC12 pid
+file, flock free).
+
+Composer DEGEN-RETRY-1 still active (thunderbeast), draft not yet on disk at 18:04.
+
+REVISED NEXT-TICK ENTRY POINT: on resume coder exit (marker 'L2SUITEA-UIFIX3 DONE
+<sha>' appended to deliverables/L2-SUITE-A-uifix3-report.l2t2015.md): orch self-verify
+(full three-dot diff 2d6d7b7a..HEAD — touched vitest files cwd=worktree: the 4 new/edited
+uifix3 test files + re-pinned cueCascade/e2eStubHonesty; app tsc vs floor 20; server tsc
+0 at base per coder's disclosed missing-module debt note — re-derive honestly) -> advc
+CYCLE-1 on 2d6d7b7a..HEAD (cloud, report reviews/L2-SUITE-A-uifix3-advc1-l2t<tick>.md;
+give it the report's disclosed-delta list for the 4 re-pinned tests) -> ACCEPT -> merge
+--no-ff -> RE-GATE 6 per l2t2015 handoff (re-seed + D7 plan-data fix +
+AS-L2T2015-D1-COPY-ROUTE reload check). If resume dies token-capped again WITH D3-CHROME
+still placeholder but report otherwise complete: the five landed defects + D3-CHROME can
+proceed to advc as-is ONLY if orch closes D3-CHROME evidence gap is impossible — it is a
+named gate defect; a second death = escalate approach change (orch-authored Playwright
+repro then smaller coder slice), not acceptance without it.
