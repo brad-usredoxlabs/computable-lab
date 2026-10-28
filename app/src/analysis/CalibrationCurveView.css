@@ -74,7 +74,14 @@
 }
 
 .calibration-curve__table {
-  width: 100%;
+  /* RGF D1: the table was pinned to the pane (width:100%) — 13 columns
+     squeezed into 444px wrapped every header to 1–3 letters per line.
+     min-width:100% keeps the fill-when-narrow look while letting the
+     table grow PAST the pane (the per-column floors) — the
+     calibration-table-scroll seam (overflow-x: auto) then scrolls it
+     instead of crushing it. Still no truncation (D6): content wraps;
+     the verif-6 pin forbids any truncation rule in this file. */
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
 }

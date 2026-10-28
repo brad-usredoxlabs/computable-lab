@@ -399,6 +399,54 @@ describe('RGF D4 — an excluded point outside the fit x-range stays VISIBLE (do
   })
 })
 
+// --- RGF D1 — the calibration table is READABLE at a narrow pane ----------
+// (RUNGATE1 DEFECT-1, major: 13 columns squeezed into a 444px table in the
+// ~510px results pane at 1280px — each header cell 23–43px wide x 112px
+// tall, so `level` rendered as `l/e/v/e/l` and `response_raw_pa_min` as
+// `res/p/ons/e/_raw/_pa/_mi/n`; data cells broke numbers mid-digit
+// (`-16.15384615384614` -> `-16.1/538…`). Root cause (per the receipt):
+// width:100% on the table with no min-width and no horizontal scroll
+// container. Fix: a scroll container + per-column min-widths derived from
+// the header NAMES (data-driven — the width follows the name's length; no
+// per-name table, no invented column names). The wrap-never-truncate
+// discipline stands (no text-overflow/ellipsis — the verif-6 pin): cells
+// wrap only if the content exceeds the min-width, never truncate.)
+
+describe('RGF D1 — the table is readable at a narrow pane (scroll container + per-column min-widths)', () => {
+  it('the table sits in its OWN horizontal-scroll container (not pinned to the pane width)', () => {
+    renderView()
+    const table = screen.getByTestId('calibration-table') as HTMLTableElement
+    // The scroll container is the table's PARENT with its own testid (the
+    // gate measured the table at 444px == the pane: no scroll seam existed).
+    const scrollEl = table.parentElement
+    expect(scrollEl, 'the table has a parent scroll container').not.toBeNull()
+    expect(scrollEl?.getAttribute('data-testid')).toBe('calibration-table-scroll')
+    // The table is NOT forced to the container's width (the defect's
+    // width:100% pin — it now may be wider and the container scrolls).
+    expect(table.style.width).toBe('')
+  })
+
+  it('every header cell reserves its FULL name on one line (min-width from the header name, per column)', () => {
+    renderView()
+    const table = screen.getByTestId('calibration-table') as HTMLTableElement
+    const ths = Array.from(table.querySelectorAll('thead th'))
+    // 12 artifact-declared columns + the fit-checkbox column (fixture data).
+    expect(ths.length).toBe(TABLE_PAYLOAD.columns.length + 1)
+    for (const th of ths) {
+      const min = getComputedStyle(th).minWidth
+      expect(min, `header "${th.textContent}" reserves a min-width`).not.toBe('0px')
+      expect(min, `header "${th.textContent}" reserves a min-width`).not.toBe('auto')
+    }
+    // Data cells get the SAME per-column floor as their header (a narrow td
+    // would re-squeeze the column below its header's reservation).
+    const bodyCells = Array.from(table.querySelectorAll('tbody tr:first-child td'))
+    expect(bodyCells.length).toBe(ths.length)
+    for (const td of bodyCells) {
+      expect(getComputedStyle(td).minWidth, `data cell reserves the column min-width`).not.toBe('0px')
+    }
+  })
+})
+
 // --- D2: two-way selection ----------------------------------------------------
 
 describe('D2 — row <-> point <-> residual selection is two-way', () => {

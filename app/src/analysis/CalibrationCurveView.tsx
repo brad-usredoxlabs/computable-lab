@@ -48,6 +48,17 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Not a domain value: it formats the artifact's OWN number for the strip. */
 const RESIDUAL_DISPLAY_DECIMALS = 4
 
+/** RGF D1: the per-column WIDTH FLOOR (display geometry only). RUNGATE1
+ * DEFECT-1: the 13-column table was pinned to the ~510px pane (width:100%,
+ * no min-widths, no scroll container) so every header wrapped to 1–3
+ * letters per line (`level` -> `l/e/v/e/l`). The floor is derived from the
+ * column NAME's own length — data-driven, no per-name table, no invented
+ * column names (verif-6): a header reserves enough width for its full name
+ * on one line; anything longer still WRAPS (the D6 discipline — never
+ * truncates). Display-only: it measures the artifact's own column names
+ * for pixels; no domain value is invented. */
+const columnMinWidth = (name: string): string => `${Math.max(80, Math.round(name.length * 9))}px`
+
 /** The page surface the AnalysisPage passes (structural — this view never
  * imports the page). `sourceRun` is the active run's fetched payload
  * (inputs + parameters are the FROZEN values the recalc carries). */
@@ -660,37 +671,58 @@ export function CalibrationCurveView(props: {
         </div>
       ) : null}
 
-      <table className="calibration-curve__table" data-testid="calibration-table">
-        <thead>
-          <tr>
+      {/* RGF D1: the table's OWN horizontal-scroll seam (the defect: the
+          table was pinned to the pane — width:100%, no scroll container —
+          so 13 columns squeezed into 444px wrapped headers to 1–3 letters
+          per line). The seam lets the table size to its columns' floors;
+          the pane scrolls it instead of crushing it. The per-column
+          min-widths (header AND data cell — same floor per column) are
+          derived from the column NAME's length (data-driven, display-only;
+          the wrap-never-truncate discipline stands: longer content wraps,
+          never truncates). */}
+      <div data-testid="calibration-table-scroll" style={{ overflowX: 'auto' }}>
+        <table className="calibration-curve__table" data-testid="calibration-table">
+          <colgroup>
             {tableGuard.value.columns.map((c) => (
-              <th key={c} data-testid={`calibration-header-${c}`}>
-                {c}
-              </th>
+              <col key={c} style={{ minWidth: columnMinWidth(c) }} />
             ))}
-            <th data-testid="calibration-header-fit">fit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.key} className="calibration-curve__row" data-testid={`calibration-row-${p.key}`} onClick={() => toggle(p.key)} {...sel(p.key)} {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}>
+            <col style={{ minWidth: columnMinWidth('fit') }} />
+          </colgroup>
+          <thead>
+            <tr>
               {tableGuard.value.columns.map((c) => (
-                <td key={c}>{p.row[c] === undefined || p.row[c] === null ? '' : String(p.row[c])}</td>
+                <th key={c} data-testid={`calibration-header-${c}`} style={{ minWidth: columnMinWidth(c) }}>
+                  {c}
+                </th>
               ))}
-              <td>
-                <input
-                  type="checkbox"
-                  data-testid={`calibration-fit-${p.key}`}
-                  checked={fitChecked(p)}
-                  disabled={fitUnmatched(p)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onFitToggle(p, e.target.checked)}
-                />
-              </td>
+              <th data-testid="calibration-header-fit" style={{ minWidth: columnMinWidth('fit') }}>
+                fit
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.key} className="calibration-curve__row" data-testid={`calibration-row-${p.key}`} onClick={() => toggle(p.key)} {...sel(p.key)} {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}>
+                {tableGuard.value.columns.map((c, i) => (
+                  <td key={c} style={{ minWidth: columnMinWidth(tableGuard.value.columns[i]) }}>
+                    {p.row[c] === undefined || p.row[c] === null ? '' : String(p.row[c])}
+                  </td>
+                ))}
+                <td style={{ minWidth: columnMinWidth('fit') }}>
+                  <input
+                    type="checkbox"
+                    data-testid={`calibration-fit-${p.key}`}
+                    checked={fitChecked(p)}
+                    disabled={fitUnmatched(p)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onFitToggle(p, e.target.checked)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {unmatchedLevels.length > 0 ? (
         // FIX1 D6: the UNMATCHED state is NAMED (no silent no-op) — these
         // levels' rows have no matching levels[] entry in the run's frozen
