@@ -409,7 +409,7 @@ describe('D2 — the source-run link resolves from the frozen inputs (click-gate
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     render(
-      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page as object as never} onRecalcDone={() => {}} />,
+      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page as object as never} onRecalcDone={() => {}} />
     )
     const reason = screen.getByTestId('calibration-source-run-unresolved')
     expect(reason.textContent).toContain('level_1')
@@ -530,10 +530,97 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     render(
-      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page as object as never} onRecalcDone={() => {}} />,
+      <CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page as object as never} onRecalcDone={() => {}} />
     )
     fireEvent.click(screen.getByTestId('calibration-recalc-open'))
     expect(screen.getByTestId('calibration-recalc-noschema').textContent).toContain('parameterSchema')
     expect(screen.queryByTestId('calibration-recalc-submit')).toBeNull()
+  })
+})
+
+// --- FIX1 D1 RED — the recalc binds the SOURCE RUN'S FROZEN revisionRef, ----
+// never page.revisions[0] (the reviewer's single-revision fixture masked it:
+// with ONE revision, [0] is incidentally the source run's own revision).
+
+const CAL_SCHEMA_B = {
+  type: 'object',
+  required: ['model'],
+  properties: { model: { type: 'string', enum: ['linear', 'quadratic'] } },
+}
+/** Multi-revision page: the page's FIRST revision is a UNRELATED legacy
+ * revision WITHOUT a parameterSchema (the lane's ANREV-000001..5 shape); the
+ * source run's frozen revisionRef names the SECOND revision, which carries
+ * the parameterSchema. The form must render the source run's revision's
+ * schema (spec D4 verbatim: "the dedicated ParameterForm over the ACTIVE
+ * RUN'S REVISION's parameterSchema"). */
+const PAGE_CTX_MULTI_REV: PageContext = {
+  activeRunId: 'ANR-CAL-1',
+  revisions: [
+    { recordId: 'ANREV-LEGACY-1', payload: { id: 'ANREV-LEGACY-1', title: 'legacy, no schema' } },
+    { recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'TEST cal revision', parameterSchema: CAL_SCHEMA_B } },
+  ],
+  sourceRun: {
+    recordId: 'ANR-CAL-1',
+    payload: {
+      id: 'ANR-CAL-1',
+      title: 'TEST calibration run',
+      status: 'succeeded',
+      revisionRef: { id: 'ANREV-CAL-1' },
+      inputs: SOURCE_INPUTS,
+      parameters: { model: 'linear' },
+    },
+  },
+}
+
+describe('D4 recalc — FIX1 D1: the revision is the source run FROZEN revisionRef, never revisions[0]', () => {
+  it('the labeled form renders the SOURCE RUN revision parameterSchema when [0] is an unrelated schema-less revision', () => {
+    // RED (revisions[0]-keyed): [0] has no parameterSchema -> the shipped
+    // code renders the noschema arm and the labeled form never opens.
+    renderView(PAGE_CTX_MULTI_REV)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const formMock = screen.getByTestId('calibration-recalc-mock')
+    expect(JSON.parse(formMock.getAttribute('data-value') ?? '{}')).toEqual({ model: 'linear' })
+    // The form is over the source run's revision's schema, not the first
+    // page entry's (the first entry has none at all).
+    expect(screen.queryByTestId('calibration-recalc-noschema')).toBeNull()
+  })
+
+  it('submit carries the SOURCE RUN revisionRef (revisions[0] is never consulted)', async () => {
+    const newRunId = 'ANR-RECALC-D1'
+    vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ success: true, recordId: newRunId, run: {} } as never)
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({ success: true, recordId: newRunId, status: 'succeeded', manifest: { artifacts: [], views: [], metrics: [] }, artifactRefs: {} } as never)
+    const { onRecalcDone } = renderView(PAGE_CTX_MULTI_REV)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
+    await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    // RED (revisions[0]-keyed): the body carried the UNRELATED legacy
+    // revision (or an empty id with an empty list) — never the source's.
+    expect(apiClient.createAnalysisRun).toHaveBeenLastCalledWith(expect.objectContaining({
+      revisionRef: { kind: 'record', id: 'ANREV-CAL-1', type: 'analysis-revision' },
+    }))
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalledWith(expect.objectContaining({
+      revisionRef: expect.objectContaining({ id: 'ANREV-LEGACY-1' }),
+    }))
+    // onRecalcDone fires after the NEW run's execute settles.
+    await vi.waitFor(() => expect(onRecalcDone).toHaveBeenCalledWith(newRunId))
+  })
+
+  it('the source revision ABSENT from the page list -> NAMED disabled state (never a malformed empty-id POST)', () => {
+    const page: PageContext = {
+      ...PAGE_CTX_MULTI_REV,
+      revisions: [{ recordId: 'ANREV-LEGACY-1', payload: { id: 'ANREV-LEGACY-1', title: 'legacy, no schema' } }],
+    }
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const arm = screen.getByTestId('calibration-recalc-noschema')
+    // The named state names the MISSING REVISION (not just "no schema").
+    expect(arm.textContent).toContain('ANREV-CAL-1')
+    expect(arm.textContent).toContain('parameterSchema')
+    expect(screen.queryByTestId('calibration-recalc-submit')).toBeNull()
+    // And nothing is ever POSTed with an empty revision id.
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
   })
 })

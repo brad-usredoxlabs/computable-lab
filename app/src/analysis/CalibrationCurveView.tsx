@@ -306,15 +306,30 @@ export function CalibrationCurveView(props: {
   // --- recalc submit (§D4 / OQ-6 door A): create a NEW run, execute it, and
   // report the new id. The source run is never mutated (the inputs + the
   // frozen parameters are carried/copied, never read-live).
-  const revisionId = page.revisions[0]?.recordId ?? ''
-  const revisionSchema = isRecord(page.revisions[0]?.payload) ? page.revisions[0].payload.parameterSchema : undefined
+  // FIX1 D1: the revision is the SOURCE RUN'S FROZEN revisionRef
+  // (analysis-run.schema.yaml:30 — required), NOT page.revisions[0]. The
+  // page's revision list is looked up ONLY to fetch the chosen revision's
+  // parameterSchema (the form must render over the ACTIVE RUN'S REVISION's
+  // parameterSchema, spec D4); the run is created against the frozen ref.
+  // A missing revision in the page list (stale list / legacy run) renders a
+  // NAMED disabled state — never a malformed empty-id POST (D4's no-schema
+  // fallback, mirrored here for the missing-revision case).
+  const sourceRevisionRef = (() => {
+    const p = page.sourceRun
+    if (!isRecord(p) || !isRecord(p.payload)) return null
+    const rr = p.payload.revisionRef
+    return isRecord(rr) && typeof rr.id === 'string' ? (rr.id as string) : null
+  })()
+  const sourceRevision = sourceRevisionRef !== null ? page.revisions.find((r) => r.recordId === sourceRevisionRef) : undefined
+  const revisionSchema = sourceRevision !== undefined && isRecord(sourceRevision.payload) ? sourceRevision.payload.parameterSchema : undefined
   const parameterSchema = isRecord(revisionSchema) ? (revisionSchema as Record<string, unknown>) : undefined
+  const revisionMissing = sourceRevisionRef !== null && sourceRevision === undefined
   const onRecalc = (): void => {
-    if (submitting) return
+    if (submitting || sourceRevisionRef === null || sourceRevision === undefined || !parameterSchema) return
     setSubmitting(true)
     const body: Record<string, unknown> = {
       title: `recalc of ${page.activeRunId}`,
-      revisionRef: { kind: 'record', id: revisionId, type: 'analysis-revision' },
+      revisionRef: { kind: 'record', id: sourceRevisionRef, type: 'analysis-revision' },
       inputs: frozenInputs(page),
     }
     if (Object.keys(params).length > 0) body.parameters = params
@@ -502,7 +517,9 @@ export function CalibrationCurveView(props: {
               </>
             ) : (
               <div className="calibration-curve__recalc-noschema" data-testid="calibration-recalc-noschema">
-                The run's revision declares no parameterSchema; the recalculation cannot be opened (the run-list path stays available).
+                {revisionMissing
+                  ? `The source run's revision (${sourceRevisionRef}) is not in the page's revision list (no parameterSchema available); the recalculation cannot be opened (the run-list path stays available).`
+                  : "The run's revision declares no parameterSchema; the recalculation cannot be opened (the run-list path stays available)."}
               </div>
             )}
           </div>
