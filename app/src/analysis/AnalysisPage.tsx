@@ -7,6 +7,7 @@
  * `SurfaceContext(surface:'analysis', active=run, selection=input refs)`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
@@ -19,6 +20,7 @@ import {
 import { CompareTraces } from './CompareTraces'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
 import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
+import { classifyCalibrationModel, classifyCalibrationTable, classifyResultView, hasCalibrationPair } from './calibrationModel'
 import './AnalysisPage.css'
 
 interface RunPayload {
@@ -33,7 +35,11 @@ interface RunPayload {
    *  dataReferenceId?}), views, metrics }` — the runner's own persisted shape).
    *  Selecting such a run hydrates the rendered views from this payload, so
    *  the interactive chromatogram is reachable for any SAVED run (not only
-   *  one just executed this session). */
+   *  one just executed this session). GC-11 D3 / FIX2 M1: the SHARED landing
+   *  `selectRun` seeds manifest + artifactRefs CLIENT-SIDE from this
+   *  already-fetched field (the CompareTraces channel) — the ?run= deep link,
+   *  the list/execute path and the recalc-completion landing all consume it.
+   *  Zero execute calls, zero extra fetches. */
   outputManifest?: {
     artifacts?: unknown[]
     views?: unknown[]
@@ -191,6 +197,100 @@ export function AnalysisPage() {
   }, [])
 
   useEffect(() => { void refresh() }, [refresh])
+
+  // FIX2 M1: the run LANDING — selectRun is now the shared landing path for
+  // EVERY way a run becomes active (list click, execute(), the ?run= deep
+  // link, the recalc-completion onRecalcDone). It fetches the run's payload
+  // AND seeds manifest + artifactRefs CLIENT-SIDE from the ALREADY-FETCHED
+  // payload.outputManifest (the CompareTraces :103-104 channel — zero
+  // execute calls, zero extra fetches). Shipped selectRun set ONLY
+  // activeRunId + activeRun and setManifest existed only in execute() and
+  // the deep-link effect — so a recalc-completion landing kept the SOURCE
+  // run's figures rendered under the NEW run's id (cycle-2 M1: a provenance
+  // lie). The results pane renders from `manifest`; a landed run that never
+  // seeded it renders the previous run's artifacts.
+  const selectRun = useCallback(async (runId: string) => {
+    setActiveRunId(runId)
+    setError(null)
+    try {
+      const { record } = await apiClient.getAnalysisRun(runId)
+      const payload = record.payload as unknown as RunPayload
+      setActiveRun({ recordId: record.recordId, payload })
+      // The client-side manifest seed (the deep-link channel, D3 corrected
+      // mechanics): the fetched payload already carries the manifest — the
+      // run's OWN stored outputManifest (a SUCCEEDED run's results), not a
+      // stale sibling's. Runs without a stored manifest (not-yet-succeeded)
+      // leave the pane to the execute() path (the authoritative
+      // just-executed artifacts).
+      // Hydrate the rendered views from the SAVED run's payload (GC-10
+      // defect 1) with the ALWAYS-REPLACE semantics the stale-manifest guard
+      // pins (AnalysisPage.compare.test.tsx): a succeeded run WITHOUT a
+      // persisted manifest shows its OWN named empty state, never a stale
+      // sibling's views. GC-11 M1: this is the seed for EVERY landing — list
+      // click, execute, deep link, recalc completion.
+      const om = isRecord(payload.outputManifest) ? payload.outputManifest : null
+      setManifest(
+        om
+          ? {
+              artifacts: Array.isArray(om.artifacts) ? om.artifacts : [],
+              views: Array.isArray(om.views) ? om.views : [],
+              metrics: Array.isArray(om.metrics) ? om.metrics : [],
+            }
+          : { artifacts: [], views: [], metrics: [] },
+      )
+      setArtifactRefs(artifactRefsFromRecord(payload))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [])
+
+  // FIX1 D2 / FIX2 M1: the recalc-completion wiring (spec D4: "then select
+  // the new run"). The calibration composite's footer fires
+  // onRecalcDone(newId) AFTER the new run's execute settles; the page LANDS
+  // it through the SHARED landing path (selectRun — activeRun + activeRunId
+  // + the client-side manifest/artifactRefs seed from the fetched
+  // payload.outputManifest, so the results pane renders the NEW run's own
+  // figures, never the source run's under the new id) and REFRESHES the runs
+  // list so the new run is visible in the list. selectRun + refresh are the
+  // page's OWN callbacks — the callback is threaded through renderViews ->
+  // ViewRenderer (the persisted-record door carries none; the composite's
+  // named arms cover it).
+  const onRecalcDone = useCallback(
+    (newId: string) => {
+      void selectRun(newId)
+      void refresh()
+    },
+    [selectRun, refresh],
+  )
+
+  // GC-11 D3: the `?run=` deep-link consumer (the /analysis?run=<id> seam,
+  // OQ-1; SequencesPage's one-shot deepLinkRef precedent). On mount WITH the
+  // param present, the SHARED landing (selectRun) fires ONCE — it fetches
+  // the run's payload and seeds manifest + artifactRefs CLIENT-SIDE from the
+  // ALREADY-FETCHED payload.outputManifest (the CompareTraces :103-104
+  // channel) — NO execute call, NO extra fetch — then the param is stripped.
+  // When the param is absent this effect does nothing (the no-execute suite
+  // stays green unmodified — that IS the mount-accounting proof).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkDoneRef = useRef(false)
+  const deepLinkRun = searchParams.get('run')
+  useEffect(() => {
+    if (deepLinkDoneRef.current || !deepLinkRun || runs.length === 0) return
+    if (!runs.some((r) => r.recordId === deepLinkRun)) return
+    deepLinkDoneRef.current = true
+    void (async () => {
+      // FIX2 M1: the deep link REUSES the shared landing (selectRun) — one
+      // fetch, the client-side manifest seed included (the CompareTraces
+      // :103-104 channel, zero execute calls). The param strip is unchanged.
+      await selectRun(deepLinkRun)
+      const next = new URLSearchParams(searchParams)
+      next.delete('run')
+      setSearchParams(next, { replace: true })
+    })()
+    // The deepLinkDoneRef guard + the `runs` length gate make this fire exactly
+    // once (the one-shot rule); searchParams/setSearchParams are stable refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkRun, runs])
 
   // GC-9 (deliverable C + fix1 D3/D7): (re)initialize the form values from the
   // selected revision's schema defaults AND clear any manual advanced-JSON
@@ -380,44 +480,27 @@ export function AnalysisPage() {
       setActiveRunId(runId)
       setManifest(res.manifest)
       setArtifactRefs(res.artifactRefs ?? {})
+      // FIX1 D3 / FIX2 M1: the shipped execute set activeRunId + manifest
+      // but NEVER activeRun — and the calibration synthesis door (spec D1)
+      // gates on activeRun, so a run executed from this page rendered its
+      // results as two raw "No rows" tables with no composite. selectRun(runId)
+      // is the SHARED landing (getAnalysisRun -> setActiveRun + the
+      // client-side manifest seed; the same channel the ?run= deep-link seam
+      // and the recalc-completion landing use) — it sets activeRun from the
+      // run's OWN payload (revisionRef + frozen inputs + parameters), which
+      // the composite's footer needs (the D1/D4/D7 mechanics ride it). The
+      // manifest set ABOVE (from the execute response) is the authoritative
+      // artifacts/views of THIS execution — the selectRun seed that follows
+      // reads the SAME stored manifest back from the payload (idempotent);
+      // refresh() below updates the runs list (the run's status moved).
+      void selectRun(runId)
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [refresh])
-
-  const selectRun = useCallback(async (runId: string) => {
-    setActiveRunId(runId)
-    setError(null)
-    try {
-      const { record } = await apiClient.getAnalysisRun(runId)
-      const payload = record.payload as unknown as RunPayload
-      setActiveRun({ recordId: record.recordId, payload })
-      // Hydrate the rendered views from the SAVED run's payload (defect 1):
-      // a succeeded run's record already carries `outputManifest` + the
-      // name-keyed `artifactRefs` (the SAME shape `execute` returns), so the
-      // interactive views are reachable by SELECTING a saved run — executing
-      // is not required. Selecting ALWAYS replaces the previous run's
-      // manifest state: a succeeded run without a persisted manifest (view-
-      // less, or never succeeded) must show its OWN named empty state, never
-      // a stale sibling run's views.
-      const om = isRecord(payload.outputManifest) ? payload.outputManifest : null
-      setManifest(
-        om
-          ? {
-              artifacts: Array.isArray(om.artifacts) ? om.artifacts : [],
-              views: Array.isArray(om.views) ? om.views : [],
-              metrics: Array.isArray(om.metrics) ? om.metrics : [],
-            }
-          : { artifacts: [], views: [], metrics: [] },
-      )
-      setArtifactRefs(artifactRefsFromRecord(payload))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [])
+  }, [refresh, selectRun])
 
   // Rebuild renderable artifacts + views from the last executed manifest.
   const rendered = useMemo(() => {
@@ -454,12 +537,65 @@ export function AnalysisPage() {
         artifact: a.name,
         renderer: (a.dataKind === 'model' ? 'model' : 'binary') as 'model' | 'binary',
       })),
+      // GC-11 D1 (client-synthesis door): when the manifest's artifacts
+      // STRUCTURALLY pair a calibration table with a calibration model (the
+      // calibrationModel gates — content classification, NEVER name equality),
+      // synthesize ONE calibration-curve view. GC-8's shipped module publishes
+      // `table` views only (calibration_fit.py:1226-1227), so today's runs have
+      // no persisted view for the composite; the structural gate (not
+      // `name === 'calibration_table'`) is the pairing authority. The page
+      // context (frozen inputs + the active revision's parameterSchema) rides
+      // `bindings.page` so the composite's run-link + recalc footer work.
+      ...(() => {
+        const tableArtifact = artifacts.find((a) => classifyCalibrationTable(a.inlineValue).ok)
+        const modelArtifact = artifacts.find((a) => a !== tableArtifact && classifyCalibrationModel(a.inlineValue).ok)
+        // FIX1 O3: synthesize ONLY when the manifest carries no persisted
+        // calibration-curve view (the persisted-record door). The shipped
+        // code always appended the synthesized view, so a manifest that
+        // ALREADY carries one (the enum's reason to exist, spec D1 door 1)
+        // rendered TWO composites.
+        const hasPersistedCurve = (manifest.views ?? []).some((v) => {
+          const vv = v as { renderer?: string }
+          return vv.renderer === 'calibration-curve'
+        })
+        if (!tableArtifact || !modelArtifact || !activeRun || hasPersistedCurve) return []
+        return [
+          {
+            id: 'synthesized-calibration-curve',
+            title: 'Calibration curve',
+            artifact: tableArtifact.name,
+            renderer: 'calibration-curve' as const,
+            bindings: {
+              modelArtifact: modelArtifact.name,
+              page: {
+                activeRunId: activeRun.recordId,
+                revisions: revisions.map((r) => ({ recordId: r.recordId, payload: r.payload as unknown as Record<string, unknown> })),
+                sourceRun: { recordId: activeRun.recordId, payload: activeRun.payload },
+              },
+            },
+          },
+        ]
+      })(),
     ]
-    return renderViews(views, artifacts)
-  }, [manifest, artifactRefs])
+    return renderViews(views, artifacts, onRecalcDone)
+  }, [manifest, artifactRefs, activeRun, revisions, onRecalcDone])
 
   const activeStatus = activeRun?.payload.status ?? (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '')
   const activeProcessed = manifest && (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '') === 'succeeded'
+
+  // GC-11 D5: the results provenance badge — quantitative iff the manifest
+  // STRUCTURALLY pairs a calibration table with a calibration model (the
+  // same structural gate as the synthesis door; content, never names) or an
+  // artifact carries the quantified-table digest (classifyResultView).
+  // Data-derived, additive chrome on the results header — zero change to the
+  // render arms (bait #13: a DNA/generic run degrades to the uncalibrated
+  // badge WITHOUT error and never blanks a view).
+  const provenance: 'quantitative' | 'uncalibrated' = useMemo(() => {
+    if (!manifest) return 'uncalibrated'
+    const inlineValues = (manifest.artifacts ?? []).map((a) => (a as { value?: unknown }).value)
+    if (hasCalibrationPair(inlineValues.map((v) => ({ inlineValue: v })))) return 'quantitative'
+    return inlineValues.some((v) => classifyResultView(v, false) === 'quantitative') ? 'quantitative' : 'uncalibrated'
+  }, [manifest])
 
   const leftPane = (
     <div className="analysis" data-testid="analysis-page">
@@ -578,6 +714,22 @@ export function AnalysisPage() {
           {activeRun?.payload.title ?? (activeRunId ? runs.find((r) => r.recordId === activeRunId)?.payload.title : null) ?? 'Results'}
         </span>
         {activeStatus ? <span className={`analysis__status analysis__status--${activeStatus}`}>{activeStatus}</span> : null}
+        {/* GC-11 D5: the results provenance badge (additive chrome — the
+            quantitative/uncalibrated distinction is data-derived from the
+            manifest's own artifacts, never a policy in TS). */}
+        {activeProcessed ? (
+          <span
+            className={`analysis__status results-provenance--${provenance}`}
+            data-testid={`results-provenance-${provenance}`}
+            style={
+              provenance === 'quantitative'
+                ? { background: '#1f6f43', color: '#fff', border: '1px solid #1f6f43' }
+                : { background: 'transparent', color: '#1f6f43', border: '1px solid #1f6f43' }
+            }
+          >
+            {provenance === 'quantitative' ? 'quantitative — calibration model applied' : 'uncalibrated — no calibration model applied'}
+          </span>
+        ) : null}
         {/* GC-10 [E] (D4): the prominent Compare action. Visible whenever the
             runs list exists; disabled+reason when < 2 succeeded runs (no dead
             chrome — the reason names what is missing). Opening is view-only. */}

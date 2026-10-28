@@ -33,7 +33,12 @@ properties:
     # The static `signal` polyline is preserved unchanged (OQ-3); these are
     # NEW ids. bindings/options below remain the free objects that absorb the
     # renderer-specific data — no `properties` addition is needed.
-    enum: [ table, signal, metric, static-figure, chromatogram, trace-compare ]
+    # GC-11 [D1]: + `calibration-curve` (the calibration review composite —
+    # task :8412 "Calibration-curve view (view-spec renderer)"). Its data-only
+    # spec rides `bindings`: modelArtifact (sibling artifact NAME) + optional
+    # rowLabelField / outlierTopN + the opaque `page` context (run id,
+    # revisions, frozen source run) the client-synthesis door binds.
+    enum: [ table, signal, metric, static-figure, chromatogram, trace-compare, calibration-curve ]
 
   # Field/axis bindings onto the artifact payload (e.g. { x: 'time', y: 'intensity' }).
   # GC-10 canonical shapes (all optional, data-only; unknown keys pass through —
@@ -49,6 +54,11 @@ properties:
   #                                    type:'analysis-output-artifact', label?: '…' },
   #                 conversion?: { factor: number, toUnit: string, declaredBy: string } } ]
   #     axisUnits: { x: '<unit string as seen>', y: '<unit string as seen>' }  # audit echo
+  #   calibration-curve (GC-11 [D1]):
+  #     modelArtifact: "<sibling artifact NAME>"   # the calibration_model payload
+  #     rowLabelField / outlierTopN                # presentation data (optional)
+  #     page: { activeRunId, revisions[], sourceRun }  # opaque page context the
+  #                                                     client-synthesis door binds
   #   Colour is NOT spec data: it is derived (stable rank within the trace list
   #   sorted by artifact record id); the `options` colours are presentation-only.
   bindings:
