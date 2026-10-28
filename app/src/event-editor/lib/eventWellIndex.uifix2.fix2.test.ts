@@ -27,7 +27,7 @@
  * and an explicit-reference event is never re-routed.
  */
 import { describe, expect, it } from 'vitest'
-import { buildEventWellIndex } from './eventWellIndex'
+import { buildEventWellIndex, OFFER_BINDING_AMBIGUOUS } from './eventWellIndex'
 import type { PlateEvent } from '../../types/events'
 import type { EventEditorPreview } from '../EventEditorContext'
 
@@ -203,6 +203,62 @@ describe('buildEventWellIndex — L2-SUITE-A-uifix2 FIX3 [ADVC3]: a MULTI-OFFER 
       },
     } as unknown as PlateEvent
     const index = buildEventWellIndex([transfer], null, {}, [PLATE], { 'EVT-multi': true })
+    expect(index.get('lbw-src')?.size).toBe(1)
+    expect(index.get('lbw-dst')?.size).toBe(2)
+    expect(index.get(PLATE)).toBeUndefined()
+  })
+
+  /**
+   * L2-SUITE-A-uifix2 FIX4 (advc2 cycle-2, defect 2): the TRI-STATE IS
+   * ENFORCED AT THE BINDING BOUNDARY. The reviewer's cycle-1 probe —
+   * `buildEventWellIndex([addMaterial(wells, no labwareId)], null,
+   * { e1: null }, ['PLATE-1'])` — still ATTRIBUTED at HEAD, because an
+   * EXPLICIT null in the binding map meant "no offer" and the placed-vessel
+   * fallback fired on it. The product's >1 case wrote exactly that null (the
+   * binding map and the parallel ambiguity map were TWO sources of truth for
+   * one fact and could drift). Final shape: an explicit null is the legacy
+   * /pre-fix sentinel — it behaves as AMBIGUOUS (the fallback is forbidden,
+   * never guess), an absent entry is "no offer" (the D2 fallback is allowed),
+   * a recordId is the single offer, and the producer (FIX4 defect 1) no
+   * longer writes null for any case, so the two maps cannot drift.
+   */
+  it('the mandate cycle-1 probe: an EXPLICIT null binding attributes to NOTHING (null = the legacy multi-offer sentinel, never "no offer")', () => {
+    const committed = [committedAddMaterialNoRef(['A1', 'B1'], 'e1')]
+    // The cycle-1 probe verbatim: committed {e1:null} + a single placed
+    // vessel. Pre-fix this painted the batch's wells on the placed vessel —
+    // the guess the never-guess rule forbids.
+    const index = buildEventWellIndex(committed, null, { e1: null }, [PLATE])
+    expect(index.size).toBe(0)
+  })
+
+  it('an explicit null is treated exactly like the ambiguous marker (the reviewer probe {e1:null} + {e1:true} is still NOTHING)', () => {
+    const committed = [committedAddMaterialNoRef(['A1', 'B1'], 'e1')]
+    const index = buildEventWellIndex(committed, null, { e1: null }, [PLATE], { e1: true })
+    expect(index.size).toBe(0)
+    // And the symbol form remains the canonical marker (the reviewer PROBE2 leg).
+    const bySymbol = buildEventWellIndex(committed, null, { e1: OFFER_BINDING_AMBIGUOUS }, [PLATE])
+    expect(bySymbol.size).toBe(0)
+  })
+
+  it('a NO-offer batch (ABSENT entry) still falls back to the single placed labware even when the deck holds it (D2 preserved — the boundary change only re-classifies explicit null)', () => {
+    const committed = [committedAddMaterialNoRef(['A1'], 'e1')]
+    // Absent entry = no offer = the D2 arm (this is the same fact the D2
+    // no-offer batch now produces, since the producer no longer writes a
+    // null sentinel into the map).
+    const index = buildEventWellIndex(committed, null, {}, [PLATE])
+    expect(index.get(PLATE)?.size).toBe(1)
+  })
+
+  it('an explicit null does NOT re-route an event WITH an explicit labware reference (the reference still self-attributes)', () => {
+    const transfer: PlateEvent = {
+      eventId: 'EVT-null',
+      event_type: 'transfer',
+      details: {
+        source: { labwareId: 'lbw-src', wells: ['A1'] },
+        target: { labwareId: 'lbw-dst', wells: ['B1', 'B2'] },
+      },
+    } as unknown as PlateEvent
+    const index = buildEventWellIndex([transfer], null, { 'EVT-null': null }, [PLATE])
     expect(index.get('lbw-src')?.size).toBe(1)
     expect(index.get('lbw-dst')?.size).toBe(2)
     expect(index.get(PLATE)).toBeUndefined()

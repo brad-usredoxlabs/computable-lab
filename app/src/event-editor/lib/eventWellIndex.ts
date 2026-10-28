@@ -25,18 +25,30 @@ import type { WellId } from '../../types/plate'
 import type { AiResolvedLabware } from '../../types/ai'
 import type { EventEditorPreview } from '../EventEditorContext'
 
-/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch OFFER BINDING is
- *  TRI-STATE — `null` alone conflated "no offer" with "multiple offers" and
- *  let the placed-vessel fallback GUESS on the genuinely-ambiguous case:
+/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2, defect 2):
+ *  the per-batch OFFER BINDING is TRI-STATE — `null` alone conflated "no
+ *  offer" with "multiple offers" and let the placed-vessel fallback GUESS on
+ *  the genuinely-ambiguous case. Final shape (one fact, one representation —
+ *  the legacy `null` entry is NOT a third state, it is the sentinel the
+ *  cycle-1 multi-offer bug rode on and is classified as AMBIGUOUS):
  *    - a string recordId   : the batch's SINGLE-vessel offer (attribution);
  *    - the ABSENT entry     : the batch carried NO offer (fallback allowed);
  *    - the ambiguous marker : the batch offered MORE THAN ONE distinct vessel
- *                             (fallback FORBIDDEN — never guess).
+ *                             (fallback FORBIDDEN — never guess);
+ *    - an EXPLICIT null     : the legacy /pre-fix sentinel (the old producer
+ *                             wrote `null` for BOTH zero and multiple
+ *                             offers) — it behaves as the ambiguous marker:
+ *                             the placed-vessel fallback is FORBIDDEN (never
+ *                             guess). The cycle-1 reviewer probe
+ *                             ({e1:null} + ['PLATE-1']) must attribute to
+ *                             NOTHING, not to the placed vessel.
  *  The marker is a shared token (never a recordId), exported so the reducer
  *  that captures the binding at commit time and any future reader speak the
- *  same tri-state. (Pre-fix shape: `Record<string, string | null>` — kept as
- *  the first two arms of this one; callers passing the old shape still mean
- *  exactly what they meant: a recordId or "no offer".) */
+ *  same tri-state. The current producer (EventEditorContext's
+ *  committedOfferCapturesForPreview) writes ONLY the recordId case and the
+ *  marker case — it never writes `null` — so the binding map and the
+ *  ambiguity map cannot drift (the explicit null exists for legacy callers
+ *  only, and it fails safe: as AMBIGUOUS, never as "no offer"). */
 export const OFFER_BINDING_AMBIGUOUS = Symbol('offer-binding-ambiguous')
 
 type OfferBindingValue = string | null | typeof OFFER_BINDING_AMBIGUOUS
@@ -64,12 +76,15 @@ type OfferBindingValue = string | null | typeof OFFER_BINDING_AMBIGUOUS
  *  persisted to the record — it rides defect 5 / the deck-variant item).
  *
  *  Attribution is single-vessel only: an offer-less event attributes to the
- *  single vessel its OWN batch's binding offers. When a batch offers MULTIPLE
- *  vessels (or none) the target is genuinely ambiguous and the event attributes
- *  to NOTHING (we never guess). An event WITH an explicit labware reference
- *  always self-attributes and is never re-routed by the offer. The P7 mix arm
- *  is OUT of scope (WELLSET-RESOLVER-1's remit): a mix carries a labwareId but
- *  NO wells, so it is left untouched — never fabricated. */
+ *  single vessel its OWN batch's binding offers (the D2 placed-vessel
+ *  fallback, and only when the deck holds exactly ONE placed vessel). A
+ *  batch that offered MULTIPLE vessels is genuinely ambiguous and its events
+ *  attribute to NOTHING (we never guess); the ABSENT binding entry (no offer
+ *  at all) is the ONLY shape that allows the fallback. An event WITH an
+ *  explicit labware reference always self-attributes and is never re-routed
+ *  by the offer. The P7 mix arm is OUT of scope (WELLSET-RESOLVER-1's
+ *  remit): a mix carries a labwareId but NO wells, so it is left untouched —
+ *  never fabricated. */
 export function buildEventWellIndex(
   committedEvents: PlateEvent[],
   preview: EventEditorPreview | null,
@@ -78,10 +93,16 @@ export function buildEventWellIndex(
    *  staged (the preview's own resolvedLabwares). The binding rides each
    *  committed batch, so a later turn committing over it cannot re-route (or
    *  erase) an earlier turn's events. Absent/empty entry = "no offer" (the
-   *  event self-attributes, or attribute-less events attribute to nothing).
+   *  event self-attributes, or attribute-less events fall back per the D2
+   *  placed-vessel rule).
    *  L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): TRI-STATE — the value may also
    *  be the OFFER_BINDING_AMBIGUOUS marker (the batch offered >1 distinct
-   *  vessel: the placed-vessel fallback is then FORBIDDEN — never guess). */
+   *  vessel: the placed-vessel fallback is then FORBIDDEN — never guess).
+   *  L2-SUITE-A-uifix2 FIX4 (advc2 cycle-2, defect 2): an EXPLICIT null is
+   *  the legacy /pre-fix sentinel (the old producer wrote it for BOTH zero
+   *  and multiple offers) — it is classified as AMBIGUOUS: the fallback is
+   *  FORBIDDEN (never guess), never as "no offer". Only an ABSENT entry is
+   *  "no offer". */
   committedOfferByEvent?: Record<string, OfferBindingValue>,
   /** L2-SUITE-A-uifix2 FIX2 (D2): the ids of the labware vessels CURRENTLY
    *  PLACED on the deck (committed placements — the tiles that exist). A
@@ -107,19 +128,25 @@ export function buildEventWellIndex(
 ): Map<string, Set<WellId>> {
   const byLabware = new Map<string, Set<WellId>>()
 
-  // The batch's offer, TRI-STATE (L2-SUITE-A-uifix2 FIX3, advc1 defect 3):
-  // the single-vessel recordId, or the AMBIGUOUS marker when the batch
-  // offered MORE THAN ONE distinct vessel — that is the case this module
-  // documents as "genuinely ambiguous ... attributes to NOTHING". Pre-fix
-  // both "zero offers" and "multiple offers" collapsed to null and the
-  // placed-vessel fallback GUESSED on the multiple case. Per arm: the STAGED
-  // arm's binding is the preview's own resolvedLabwares (a preview is one
-  // turn's batch, so one offer covers all its events); the COMMITTED arm's
-  // is this event's OWN entry in `committedOfferByEvent` (the binding
-  // captured when ITS batch was staged — the fix for the pre-fix single
-  // global field that re-routed/erased an earlier turn's events, D1) or its
-  // `committedOfferAmbiguousByEvent` marker (captured at the same time —
-  // the binding is not persisted, so the ambiguity must ride the batch too).
+  // The batch's offer, TRI-STATE (L2-SUITE-A-uifix2 FIX3, advc1 defect 3;
+  // boundary enforced at FIX4, advc2 cycle-2 defect 2): the single-vessel
+  // recordId, or the AMBIGUOUS marker when the batch offered MORE THAN ONE
+  // distinct vessel — that is the case this module documents as "genuinely
+  // ambiguous ... attributes to NOTHING". Pre-fix both "zero offers" and
+  // "multiple offers" collapsed to a null entry and the placed-vessel
+  // fallback GUESSED on the multiple case. Per arm: the STAGED arm's binding
+  // is the preview's own resolvedLabwares (a preview is one turn's batch, so
+  // one offer covers all its events); the COMMITTED arm's is this event's
+  // OWN entry in `committedOfferByEvent` (the binding captured when ITS
+  // batch was staged — the fix for the pre-fix single global field that
+  // re-routed/erased an earlier turn's events, D1), its
+  // `committedOfferAmbiguousByEvent` marker (captured at the same time — the
+  // binding is not persisted, so the ambiguity must ride the batch too), or
+  // an EXPLICIT null entry (the legacy /pre-fix sentinel — the old producer
+  // wrote it for BOTH zero and multiple offers): classified as the AMBIGUOUS
+  // marker, never as "no offer", so the cycle-1 probe ({e1:null} + a single
+  // placed vessel) attributes to NOTHING. Only an ABSENT entry is "no
+  // offer" (the D2 placed-vessel fallback is allowed).
   const offerOfBatch = (
     binding?: AiResolvedLabware[] | null,
   ): string | typeof OFFER_BINDING_AMBIGUOUS | null => {
@@ -135,6 +162,11 @@ export function buildEventWellIndex(
     const bound = committedOfferByEvent?.[eventId]
     if (bound === OFFER_BINDING_AMBIGUOUS) return OFFER_BINDING_AMBIGUOUS
     if (typeof bound === 'string' && bound.length > 0) return bound
+    // L2-SUITE-A-uifix2 FIX4 (advc2 cycle-2, defect 2): an EXPLICIT null is
+    // the legacy /pre-fix sentinel (the old producer wrote it for BOTH zero
+    // and multiple offers) — it behaves as the ambiguous marker, NEVER as
+    // "no offer". Only an ABSENT entry (bound === undefined) is "no offer".
+    if (bound === null) return OFFER_BINDING_AMBIGUOUS
     if (committedOfferAmbiguousByEvent?.[eventId] === true) return OFFER_BINDING_AMBIGUOUS
     return null
   }
