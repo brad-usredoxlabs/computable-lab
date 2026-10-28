@@ -306,18 +306,26 @@ export interface EventEditorState {
    * that carries wells but no explicit labware reference (the compiled
    * add_material) cannot attribute itself — the offer the pipeline bound it
    * against is not in the record. So the deck's event-well index reads this
-   * binding for the committed arm. Set on `commit_preview` from the preview's
-   * OWN resolvedLabwares (the binding that was live when the events were
-   * staged), cleared on a fresh draft and on a deck load. NOT persisted (the
-   * offer is not a record field — the accepted-then-reloaded arm rides
-   * defect 5 / the deck-variant item). Not part of the undo/redo snapshot
-   * (it is turn-scoped, not a deck mutation the user can undo).
+   * binding for the committed arm.
+   *
+   * L2-SUITE-A-uifix2-fix1 [D1]: the binding is PER-BATCH (keyed by eventId),
+   * not one offer applied to every committed event. A second accepted turn
+   * used to OVERWRITE the single top-level field and re-route (or erase) the
+   * first turn's footprints — the exact failure the pre-fix comment claimed
+   * was prevented. Each committed event now carries the offer recordId that
+   * was live when ITS batch was staged (`commit_preview` merges
+   * `committedBindingForPreview` into the running map, never resetting the
+   * map); a later turn commits a NEW batch over the old one without touching
+   * the earlier binding. Cleared only on a deck load (the offer is not a
+   * record field — the accepted-then-reloaded arm rides defect 5 / the
+   * deck-variant item). NOT part of the undo/redo snapshot (turn-scoped, not
+   * a deck mutation the user can undo).
    *
    * OPTIONAL (house state-field pattern): older reducer snapshots / test
-   * state literals predate the field, so absent means "no live offer
-   * binding" — read it as `state.turnOfferLabwares ?? []`.
+   * state literals predate the field, so absent means "no committed event is
+   * bound to an offer" — read it as `state.committedOfferByEvent ?? {}`.
    */
-  turnOfferLabwares?: AiResolvedLabware[]
+  committedOfferByEvent?: Record<string, string | null>
   graphLemurSource: EventEditorGraphLemurSource | null
   fixIt: FixItState
   /**
@@ -466,7 +474,7 @@ const initialState: EventEditorState = {
   events: [],
   tipState: { kind: 'empty' },
   preview: null,
-  turnOfferLabwares: [],
+  committedOfferByEvent: {},
   graphLemurSource: null,
   fixIt: {
     isOpen: false,
@@ -607,6 +615,48 @@ function normalizePreviewPlacementLocations(
   return changed ? { ...preview, previewPlacements } : preview
 }
 
+/** L2-SUITE-A-uifix2-fix1 [D1]: the SINGLE-vessel recordId of a batch's
+ *  resolved-labware OFFER — the only case where an offer-less event's target
+ *  is unambiguous. Multiple (distinct) vessels => ambiguous => null (never
+ *  guess); zero vessels => null. */
+function singleVesselRecordId(binding?: AiResolvedLabware[] | null): string | null {
+  const ids = (binding ?? [])
+    .map((offer) => offer.recordId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  return new Set(ids).size === 1 ? ids[0] : null
+}
+
+/** L2-SUITE-A-uifix2-fix1 [D1]: the per-batch committed offer binding for the
+ *  events of ONE preview — every event in the batch carries the SINGLE-vessel
+ *  recordId of the preview's own resolvedLabwares (the offer live when the
+ *  batch was staged). No single-vessel offer => an empty binding (offer-less
+ *  events in the batch attribute to nothing; events with an explicit labware
+ *  ref self-attribute). The binding rides the committed events, so a later
+ *  turn committing over them cannot re-route (or erase) them. */
+function committedBindingForPreview(
+  events: PlateEvent[],
+  preview: { resolvedLabwares?: AiResolvedLabware[] },
+): Record<string, string | null> {
+  const recordId = singleVesselRecordId(preview.resolvedLabwares)
+  const binding: Record<string, string | null> = {}
+  for (const event of events) binding[event.eventId] = recordId
+  return binding
+}
+
+/** L2-SUITE-A-uifix2-fix1 [D1]: merge a per-batch committed offer binding
+ *  INTO the running state binding, keeping each event's OWN entry. A new
+ *  batch's events are bound to the offer live when THAT batch was staged; an
+ *  earlier turn's events keep the binding captured when THEY were staged —
+ *  a later turn neither re-routes nor erases them. */
+function mergeCommittedOfferBinding(
+  prev: Record<string, string | null>,
+  added: Record<string, string | null>,
+): Record<string, string | null> {
+  const next: Record<string, string | null> = { ...prev }
+  for (const [eventId, recordId] of Object.entries(added)) next[eventId] = recordId
+  return next
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
@@ -647,8 +697,9 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         preview: null,
         // L2-SUITE-A-uifix2 A: a fresh deck load has no offer binding (the
         // offer is not a record field) — the accepted-then-reloaded arm rides
-        // defect 5 / the deck-variant item, so the binding is cleared.
-        turnOfferLabwares: [],
+        // defect 5 / the deck-variant item, so the per-batch binding is
+        // cleared (a different graph's events are not bound to a stale offer).
+        committedOfferByEvent: {},
         graphLemurSource: null,
         tipState: { kind: 'empty' },
       }
@@ -897,10 +948,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return {
         ...state,
         preview,
-        // L2-SUITE-A-uifix2 A: a fresh draft supersedes the just-committed
-        // turn's offer — the committed events from that turn no longer ride
-        // the live binding (the binding now belongs to the STAGED preview).
-        turnOfferLabwares: [],
+        // L2-SUITE-A-uifix2-fix1 [D1]: a fresh draft does NOT touch the
+        // committed per-batch binding. The committed events from the prior
+        // turn keep the offer captured when THEY were staged (the pre-fix code
+        // cleared the single global field here, which ERASED the prior turn's
+        // footprints the moment a new draft was staged — half of the D1
+        // re-route/erase defect). The new preview's own events are attributed
+        // via the staged arm (preview.resolvedLabwares), independent of the
+        // committed binding.
         ...(droppedFocus ? { focusPlacementId: null, selection: null } : {}),
       }
     }
@@ -924,23 +979,35 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       if (!preview) return state
       // After commit, preview placements live in state.placements under the
       // same placementIds, so focus stays valid without further fixup.
+      const committedEvents = action.previewEvents ?? preview.previewEvents
+      // L2-SUITE-A-uifix2 A: the just-accepted arm. The committed events from
+      // this preview keep the offer binding that was LIVE when they were
+      // staged (the preview's OWN resolvedLabwares) so the deck's event-well
+      // index can attribute a well-bearing-but-unbound event (the compiled
+      // add_material) to the vessel the pipeline bound it against. NOT
+      // persisted — a reloaded deck has no binding (the accepted-then-reloaded
+      // arm rides defect 5 / the deck-variant item).
+      // L2-SUITE-A-uifix2-fix1 [D1]: the binding is PER-BATCH (keyed by
+      // eventId) and MERGED into the running map — each committed event is
+      // bound to the single-vessel offer of ITS OWN batch (this preview). An
+      // earlier turn's events keep the binding captured when THEY were staged,
+      // so this turn neither re-routes them onto this turn's vessel nor erases
+      // them (the pre-fix single top-level field OVERWROTE the binding on every
+      // commit and applied it to ALL committed events — the exact re-route the
+      // pre-fix comment claimed was prevented).
       return {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
         equipments: { ...state.equipments, ...(preview.previewEquipments ?? {}) },
         placements: [...state.placements, ...preview.previewPlacements],
-        events: [...state.events, ...(action.previewEvents ?? preview.previewEvents)],
+        events: [...state.events, ...committedEvents],
         eventGraphId: action.eventGraphId ?? state.eventGraphId,
         eventGraphSave: action.eventGraphCommit ?? state.eventGraphSave,
         preview: null,
-        // L2-SUITE-A-uifix2 A: the just-accepted arm. The committed events
-        // from this preview keep the offer binding that was LIVE when they
-        // were staged (the preview's OWN resolvedLabwares) so the deck's
-        // event-well index can attribute a well-bearing-but-unbound event
-        // (the compiled add_material) to the vessel the pipeline bound it
-        // against. NOT persisted — a reloaded deck has no binding (the
-        // accepted-then-reloaded arm rides defect 5 / the deck-variant item).
-        turnOfferLabwares: preview.resolvedLabwares ?? [],
+        committedOfferByEvent: mergeCommittedOfferBinding(
+          state.committedOfferByEvent ?? {},
+          committedBindingForPreview(committedEvents, preview),
+        ),
       }
     }
     case 'open_fixit': {

@@ -56,8 +56,8 @@ export function DeckSlot({ slot }: DeckSlotProps) {
   // tile marks the actual wells the event touches (staged OR accepted),
   // not just a binary "some preview event touches this labware" flag.
   const eventWellIndex = useMemo(
-    () => buildEventWellIndex(state.events, state.preview, state.turnOfferLabwares),
-    [state.events, state.preview, state.turnOfferLabwares],
+    () => buildEventWellIndex(state.events, state.preview, state.committedOfferByEvent),
+    [state.events, state.preview, state.committedOfferByEvent],
   )
   const affectedWells = placement
     ? eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET
