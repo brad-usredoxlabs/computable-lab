@@ -69,6 +69,42 @@ describe('useAiChat — L2-SUITE-A-uifix1 D2: the honest wall names its channel 
     )
   })
 
+  it('UIFIX3 D1: a DELIVERED deck layout says "applied to this view" — never "applied to the deck" (the layout is view-session-only; the record never carries the variant, so a "deck" claim would silently reverse on reload)', async () => {
+    // regate-5 gate D1: P1 "Navigate to the freeform manual deck" mounted
+    // the freeform variant client-only (setPlatform+setVariant — the seam),
+    // the record's methodContext.deckVariant stayed "default", a reload
+    // reverted to "Single SBS Plate", and the wall still claimed
+    // "The deck layout was applied to the deck." — a claim that silently
+    // reverses. The mount seam (onDeckLayout) is what makes
+    // deckLayoutDelivered true; with it registered and accepting, the
+    // closing clause must scope the claim to the VIEW.
+    frames({
+      type: 'done',
+      result: {
+        success: true,
+        notes: [],
+        deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
+      },
+    })
+    const { result } = renderHook(
+      () => useAiChat({ aiContext, onDeckLayout: () => true }),
+    )
+    await act(async () => {
+      result.current.sendPrompt('Navigate to the freeform manual deck')
+    })
+    const wall = await waitFor(() => {
+      if (!result.current.honestWall) throw new Error('wall never set')
+      return result.current.honestWall!
+    }, { timeout: 4000 })
+    // The honest, view-scoped claim…
+    expect(wall).toContain('The deck layout was applied to this view.')
+    // …and the overclaim is gone (it would reverse silently on reload).
+    expect(wall).not.toContain('applied to the deck')
+    expect(wall).toBe(
+      'Draft produced no events — it delivered only a deck layout and asked no questions. The deck layout was applied to this view.',
+    )
+  })
+
   it('a multi-part unmountable delivery joins grammatically (verb present, parts named)', async () => {
     frames({
       type: 'done',

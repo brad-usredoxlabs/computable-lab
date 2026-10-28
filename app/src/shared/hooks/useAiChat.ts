@@ -1388,7 +1388,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 // nothing was applied." contradicted a deck the user just
                 // watched switch (the D2/D1 gate read).
                 const closing = deckLayoutDelivered
-                  ? ' The deck layout was applied to the deck.'
+                  // L2-SUITE-A-uifix3 D1 (regate-5): the layout mount is
+                  // VIEW-SESSION-ONLY — the record never carries the variant
+                  // (methodContext.deckVariant stays "default"; a reload
+                  // reverts the deck), so the wall must not claim the DECK:
+                  // "applied to the deck." overclaimed and silently reversed
+                  // on reload (gate D1: freeform in session, Single SBS
+                  // Plate after reload, same wall text). Scope it to the view.
+                  ? ' The deck layout was applied to this view.'
                   : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
