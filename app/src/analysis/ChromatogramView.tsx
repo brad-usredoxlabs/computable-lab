@@ -35,6 +35,7 @@ import {
   parseTraceValue,
   type MarkerRow,
 } from './traceModel'
+import { fmt, nearestIndex, tickValues, useTraceInteraction } from './traceInteraction'
 
 /** The single sanctioned fallback field-name table (shipped column names AS
  *  DATA — the one exception to the bait #7 grep pin; bindings override it). */
@@ -64,20 +65,6 @@ const PAD_T = 14
 const PAD_B = 30
 const PLOT_W = W - PAD_L - PAD_R
 const PLOT_H = H - PAD_T - PAD_B
-
-/** Binary-search the nearest axis index to x (axis is ascending). */
-function nearestIndex(axis: number[], x: number): number {
-  if (axis.length === 0) return -1
-  let lo = 0
-  let hi = axis.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (axis[mid]! < x) lo = mid + 1
-    else hi = mid
-  }
-  if (lo > 0 && Math.abs(axis[lo - 1]! - x) < Math.abs(axis[lo]! - x)) return lo - 1
-  return lo
-}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -141,27 +128,22 @@ export function ChromatogramView({
     return x1 > x0 ? { x0, x1 } : { x0: x0 - 0.5, x1: x1 + 0.5 }
   }, [parsed])
 
-  const [domain, setDomain] = useState<Domain | null>(null)
-  useEffect(() => {
-    if (fullDomain) setDomain(fullDomain)
-  }, [fullDomain])
-
-  // ---- Interaction state (component-local; never persisted) ----
-  const [sel, setSel] = useState<{ a: number; b: number } | null>(null)
-  const [drag, setDrag] = useState<{ mode: 'zoom' | 'pan'; startPx: number; start: Domain } | null>(null)
-  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
+  // ---- Interaction state (the SHARED x-domain model, traceInteraction —
+  //      the same zoom/pan/reset/hover logic the Compare overlay consumes;
+  //      component-local view state, never persisted) ----
+  const inter = useTraceInteraction({
+    svgRef,
+    fullDomain,
+    plot: { padL: PAD_L, plotW: PLOT_W },
+    viewBoxWidth: W,
+  })
+  const { domain, sel, hoverX } = inter
   const [activePeak, setActivePeak] = useState<string | null>(null)
 
-  const dom = domain ?? fullDomain
   const xToPx = (x: number): number => {
-    if (!dom) return PAD_L
-    const span = dom.x1 - dom.x0 || 1
-    return PAD_L + ((x - dom.x0) / span) * PLOT_W
-  }
-  const pxToX = (px: number): number => {
-    if (!dom) return 0
-    const span = dom.x1 - dom.x0 || 1
-    return dom.x0 + ((px - PAD_L) / PLOT_W) * span
+    if (!domain) return PAD_L
+    const span = domain.x1 - domain.x0 || 1
+    return PAD_L + ((x - domain.x0) / span) * PLOT_W
   }
   const yExtent = useMemo(() => {
     if (!parsed) return { y0: 0, y1: 1 }
@@ -174,14 +156,6 @@ export function ChromatogramView({
     return { y0, y1 }
   }, [parsed])
   const yToPx = (y: number): number => PAD_T + PLOT_H - ((y - yExtent.y0) / (yExtent.y1 - yExtent.y0 || 1)) * PLOT_H
-
-  const clientToPx = (clientX: number): number => {
-    const el = svgRef.current
-    if (!el) return PAD_L
-    const rect = el.getBoundingClientRect()
-    if (!rect.width) return PAD_L
-    return (clientX - rect.left) * (W / rect.width)
-  }
 
   // ---- Markers (from the sibling peak-table artifact) ----
   // D2 contract: the caller resolves `markersFrom` by NAME and passes the
@@ -218,58 +192,27 @@ export function ChromatogramView({
   )
 
   const polyline = useMemo(() => {
-    if (!parsed || !dom) return ''
+    if (!parsed || !domain) return ''
     const pts: string[] = []
     for (const i of slice.indices) {
       const x = parsed.axis[i]!
-      if (x < dom.x0 || x > dom.x1) continue
+      if (x < domain.x0 || x > domain.x1) continue
       pts.push(`${xToPx(x).toFixed(2)},${yToPx(parsed.values[i]!).toFixed(2)}`)
     }
     return pts.join(' ')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsed, slice, dom, yExtent])
+  }, [parsed, slice, domain, yExtent])
 
-  // ---- Pointer handlers ----
-  function onPointerDown(e: React.MouseEvent) {
-    if (!dom) return
-    e.preventDefault()
-    const px = clientToPx(e.clientX)
-    setDrag({ mode: e.shiftKey ? 'pan' : 'zoom', startPx: px, start: dom })
-  }
-  function onPointerMove(e: React.MouseEvent) {
-    if (!dom || !parsed) return
-    const px = clientToPx(e.clientX)
-    if (drag) {
-      if (drag.mode === 'zoom') {
-        setSel({ a: Math.min(drag.startPx, px), b: Math.max(drag.startPx, px) })
-      } else {
-        const dxData = (px - drag.startPx) / PLOT_W * (drag.start.x1 - drag.start.x0)
-        setDomain({ x0: drag.start.x0 - dxData, x1: drag.start.x1 - dxData })
-      }
-      return
-    }
-    // Hover readout: nearest RAW point to the hovered data-x (never decimated).
-    const hx = pxToX(px)
-    const i = nearestIndex(parsed.axis, hx)
-    if (i >= 0) setHover({ x: parsed.axis[i]!, y: parsed.values[i]! })
-  }
-  function onPointerUp() {
-    if (drag?.mode === 'zoom' && sel && sel.b - sel.a > 2) {
-      const x0 = pxToX(sel.a)
-      const x1 = pxToX(sel.b)
-      setDomain({ x0: Math.min(x0, x1), x1: Math.max(x0, x1) })
-    }
-    setDrag(null)
-    setSel(null)
-  }
-  function onPointerLeave() {
-    setHover(null)
-  }
-  function reset() {
-    if (fullDomain) setDomain(fullDomain)
-    setSel(null)
-    setHover(null)
-  }
+  // ---- Hover readout: the SHARED interaction exposes the data-x under the
+  //      cursor (inter.hoverX); snap it to the nearest RAW sample (the
+  //      readout reads raw points, never decimated — §D5). ----
+  const hover = useMemo(() => {
+    if (hoverX === null || !parsed) return null
+    const i = nearestIndex(parsed.axis, hoverX)
+    if (i < 0) return null
+    return { x: parsed.axis[i]!, y: parsed.values[i]! }
+  }, [hoverX, parsed])
+  const { reset } = inter
 
   // ---- Named error / empty states (never a thrown render) ----
   if (fetchError) {
@@ -281,7 +224,7 @@ export function ChromatogramView({
       </div>
     )
   }
-  if (!parsed || !dom) {
+  if (!parsed || !domain) {
     return (
       <div className="view-spec__chromatogram" data-testid="view-spec-chromatogram">
         <div className="view-spec__empty" data-testid="chromatogram-empty">
@@ -293,14 +236,14 @@ export function ChromatogramView({
 
   const xUnit = parsed.xUnit
   const yUnit = parsed.yUnit
-  const xTicks = tickValues(dom.x0, dom.x1, 5)
+  const xTicks = tickValues(domain.x0, domain.x1, 5)
   const yTicks = tickValues(yExtent.y0, yExtent.y1, 5)
 
   return (
     <div
       className="view-spec__chromatogram"
       data-testid="view-spec-chromatogram"
-      data-x-domain={dom ? `${dom.x0}:${dom.x1}` : undefined}
+      data-x-domain={domain ? `${domain.x0}:${domain.x1}` : undefined}
     >
       <div className="chromatogram__toolbar">
         <button type="button" onClick={reset} data-testid="chromatogram-reset" className="chromatogram__reset">
@@ -327,10 +270,10 @@ export function ChromatogramView({
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         data-testid="chromatogram-svg"
-        onMouseDown={onPointerDown}
-        onMouseMove={onPointerMove}
-        onMouseUp={onPointerUp}
-        onMouseLeave={onPointerLeave}
+        onMouseDown={inter.svgHandlers.onMouseDown}
+        onMouseMove={inter.svgHandlers.onMouseMove}
+        onMouseUp={inter.svgHandlers.onMouseUp}
+        onMouseLeave={inter.svgHandlers.onMouseLeave}
       >
         {/* plot frame */}
         <rect x={PAD_L} y={PAD_T} width={PLOT_W} height={PLOT_H} className="chromatogram__frame" />
@@ -429,17 +372,3 @@ export function ChromatogramView({
   )
 }
 
-/** 5 evenly spaced tick values (inclusive endpoints). */
-function tickValues(x0: number, x1: number, count: number): number[] {
-  if (x1 <= x0) return [x0]
-  const out: number[] = []
-  for (let i = 0; i < count; i++) out.push(x0 + ((x1 - x0) * i) / (count - 1))
-  return out
-}
-
-/** Compact number formatting for readout/labels (no unit literals). */
-function fmt(v: number): string {
-  if (!Number.isFinite(v)) return String(v)
-  if (Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0)) return v.toExponential(2)
-  return String(Math.round(v * 1000) / 1000)
-}

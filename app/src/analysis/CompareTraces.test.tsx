@@ -9,7 +9,7 @@
  *    rescaled before the entry (the raw polylines are unchanged)
  *  - Save as view writes ONE server-validated view-spec pinning the AOUT ids
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { apiClient } from '../shared/api/client'
@@ -289,5 +289,171 @@ describe('CompareTraces hardcode boundary (bait #7 source-pin)', () => {
     for (const unit of ['pA', 'AU', 'min']) {
       expect(source, `forbidden quoted unit literal '${unit}'`).not.toMatch(new RegExp(`['"\`]${unit}['"\`]`))
     }
+  })
+})
+
+describe('CompareTraces — FIX2R DEFECT 4: the saved label (run title) stamps at save and WINS on reload', () => {
+  // The saved spec pins each trace with `label` = the RUN title (stamped at
+  // save time — the record data, never invented). On reload the legend must
+  // show the PINNED label, not the AOUT artifact record's own title.
+  const SAVED_LABELED = {
+    recordId: 'VSPEC-000007',
+    payload: {
+      renderer: 'trace-compare',
+      id: 'VSPEC-000007',
+      title: 'Trace comparison',
+      bindings: {
+        traces: [
+          { artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact', label: 'GC10 seed run A (standard)' } },
+          { artifactRef: { kind: 'record', id: 'AOUT-000002', type: 'analysis-output-artifact', label: 'GC10 seed run B (sample)' } },
+        ],
+        axisUnits: { x: 'min', y: 'pA' },
+      },
+    },
+  }
+  const AOUT_1 = {
+    recordId: 'AOUT-000001',
+    payload: {
+      kind: 'analysis-output-artifact',
+      name: 'sig',
+      title: 'GC10 A signal trace', // the AOUT record's OWN title — must NOT win
+      inlineValue: { axis: [0, 1, 2], values: [0, 2, 0], axis_units: 'min', value_units: 'pA' },
+    },
+  }
+  const AOUT_2 = {
+    recordId: 'AOUT-000002',
+    payload: {
+      kind: 'analysis-output-artifact',
+      name: 'sig',
+      title: 'GC10 B signal trace',
+      inlineValue: { axis: [0, 1, 2], values: [0, 5, 0], axis_units: 'min', value_units: 'pA' },
+    },
+  }
+
+  it('save stamps `label` = the run title onto each bindings.traces[].artifactRef', async () => {
+    vi.mocked(apiClient.createRecord).mockResolvedValue({
+      record: { recordId: 'VSPEC-000008', payload: {} },
+      validation: {},
+      lint: {},
+    } as never)
+    setup(RUN_B_PA)
+    await selectBoth()
+    const btn = screen.getByTestId('compare-save')
+    await waitFor(() => expect((btn as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(btn)
+    await waitFor(() => expect(screen.getByTestId('compare-save-result').textContent).toContain('VSPEC-000008'))
+    const [, payload] = vi.mocked(apiClient.createRecord).mock.calls[0]!
+    const p = payload as { bindings: { traces: Array<{ artifactRef: { id: string; label?: string } }> } }
+    const labels = p.bindings.traces
+      .filter((t) => t.artifactRef.id === 'AOUT-000001' || t.artifactRef.id === 'AOUT-000002')
+      .map((t) => t.artifactRef.label)
+      .sort()
+    // The run titles (from the run records — the live selection's identity),
+    // stamped onto the ref objects at save time.
+    expect(labels).toEqual(['Run A', 'Run B'])
+  })
+
+  it('reload: the saved label WINS over the AOUT record title in the legend', async () => {
+    // Mocks BEFORE render: the saved-list effect fires at mount.
+    vi.mocked(apiClient.listRecordsByKind).mockResolvedValue({ records: [SAVED_LABELED as never], total: 1 })
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) =>
+      Promise.resolve((id === 'AOUT-000001' ? AOUT_1 : AOUT_2) as never),
+    )
+    render(<CompareTraces runs={RUNS} open onClose={() => {}} />)
+    fireEvent.click(await screen.findByTestId('compare-saved-load-VSPEC-000007'))
+    const legend = await screen.findByTestId('compare-legend')
+    await waitFor(() => expect(legend.textContent).toContain('GC10 seed run A (standard)'))
+    expect(legend.textContent).toContain('GC10 seed run B (sample)')
+    // The AOUT records' own titles do NOT replace the run identity.
+    expect(legend.textContent).not.toContain('GC10 A signal trace')
+    expect(legend.textContent).not.toContain('GC10 B signal trace')
+    // The overlay renders from the pinned ids (the label does not gate it).
+    expect(screen.getByTestId('compare-trace-polyline-AOUT-000001')).toBeDefined()
+    expect(screen.getByTestId('compare-trace-polyline-AOUT-000002')).toBeDefined()
+  })
+
+  it('reload: a saved spec WITHOUT a label falls back to the AOUT-record-title derivation', async () => {
+    const UNLABELED = {
+      ...SAVED_LABELED,
+      recordId: 'VSPEC-000009',
+      payload: {
+        ...SAVED_LABELED.payload,
+        id: 'VSPEC-000009',
+        bindings: {
+          traces: [
+            { artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' } },
+            { artifactRef: { kind: 'record', id: 'AOUT-000002', type: 'analysis-output-artifact' } },
+          ],
+          axisUnits: { x: 'min', y: 'pA' },
+        },
+      },
+    }
+    vi.mocked(apiClient.listRecordsByKind).mockResolvedValue({ records: [UNLABELED as never], total: 1 })
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) =>
+      Promise.resolve((id === 'AOUT-000001' ? AOUT_1 : AOUT_2) as never),
+    )
+    render(<CompareTraces runs={RUNS} open onClose={() => {}} />)
+    fireEvent.click(await screen.findByTestId('compare-saved-load-VSPEC-000009'))
+    const legend = await screen.findByTestId('compare-legend')
+    await waitFor(() => expect(legend.textContent).toContain('GC10 A signal trace'))
+    expect(legend.textContent).toContain('GC10 B signal trace')
+  })
+})
+
+describe('CompareTraces — FIX2R DEFECT 2: the overlay carries the shared interaction (hover readout / zoom / reset)', () => {
+  // The compare overlay must expose the SAME affordances as the single-trace
+  // chromatogram via the SHARED hook (traceInteraction): a Reset control,
+  // a hover readout (numeric x/y + data-carried units), drag-select zoom,
+  // and the domain restored by Reset. jsdom has no layout, so the SVG rect
+  // is stubbed (the same mirror-geometry technique as ChromatogramView.test):
+  // W=720, PAD_L=52, PLOT_W=654.
+  const W = 720
+  const PAD_L = 52
+  const PLOT_W = 654
+
+  beforeEach(() => {
+    const svgProto = SVGElement.prototype as unknown as { getBoundingClientRect: () => unknown }
+    vi.spyOn(svgProto, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, width: W, height: 300, x: 0, y: 0, right: W, bottom: 300,
+      toJSON: () => ({}),
+    } as DOMRect)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('Reset + hover readout exist; hover shows numeric x/y with units; drag-select zooms the x-domain; Reset restores it', async () => {
+    setup(RUN_B_PA)
+    await selectBoth()
+    const svg = screen.getByTestId('compare-overlay-svg') as unknown as SVGElement
+    // The affordances EXIST (the gate found zero pointer handlers + no reset
+    // control on this surface).
+    expect(screen.getByTestId('compare-reset')).toBeDefined()
+    expect(screen.queryByTestId('compare-readout')).toBeNull()
+    // Full extent on first paint (visible-set x extent: 0..2).
+    expect(svg.getAttribute('data-x-domain')).toBe('0:2')
+
+    // HOVER: moving the pointer over the plot exposes the readout (numeric
+    // x/y + the data-carried units — one row per visible trace).
+    // clientX = PAD_L + PLOT_W/2 -> data-x = 1.0 (the exact sample index 1).
+    fireEvent.mouseMove(svg, { clientX: PAD_L + PLOT_W / 2 })
+    const readout = screen.getByTestId('compare-readout')
+    expect(readout.textContent).toContain('1 min')
+    expect(readout.textContent).toContain('pA')
+
+    // ZOOM: a drag-select over [0.5, 1.5] data-x narrows the x-domain.
+    // px of data-x: PAD_L + (x / 2) * PLOT_W -> 215.5 and 542.5.
+    fireEvent.mouseDown(svg, { clientX: PAD_L + (0.5 / 2) * PLOT_W })
+    fireEvent.mouseMove(svg, { clientX: PAD_L + (1.5 / 2) * PLOT_W })
+    fireEvent.mouseUp(svg, { clientX: PAD_L + (1.5 / 2) * PLOT_W })
+    await waitFor(() => {
+      const d = (svg.getAttribute('data-x-domain') ?? '').split(':').map(Number)
+      expect(d[0]).toBeCloseTo(0.5, 5)
+      expect(d[1]).toBeCloseTo(1.5, 5)
+    })
+
+    // RESET: restores the FULL visible-set extent.
+    fireEvent.click(screen.getByTestId('compare-reset'))
+    await waitFor(() => expect(svg.getAttribute('data-x-domain')).toBe('0:2'))
   })
 })
