@@ -139,19 +139,22 @@ export function classifyCalibrationModel(value: unknown): Guarded<CalibrationMod
   const num = (v: unknown): number | undefined => (isFiniteNumber(v) ? v : undefined)
   const xMin = num(value[MODEL_PAYLOAD_KEYS.xMin])
   const xMax = num(value[MODEL_PAYLOAD_KEYS.xMax])
+  // Omit-absent discipline (bait #8): an optional key whose payload value is
+  // ABSENT is OMITTED from the returned shape — never present-with-undefined
+  // (the GC-8 module doctrine: omission, never null/undefined placeholders).
   const out: CalibrationModelShape = {
     model: str(value[MODEL_PAYLOAD_KEYS.model]) ?? '',
     coefficients: coefs as Record<string, number>,
     statisticValue: sv as number | null,
     fitPoints: value[MODEL_PAYLOAD_KEYS.fitPoints] as Record<string, unknown>[],
-    headLine,
-    statisticName,
-    statisticDefinition,
-    residualBasis,
-    responseQuantity,
-    amountUnit,
-    xMin,
-    xMax,
+    ...(headLine !== undefined ? { headLine } : {}),
+    ...(statisticName !== undefined ? { statisticName } : {}),
+    ...(statisticDefinition !== undefined ? { statisticDefinition } : {}),
+    ...(residualBasis !== undefined ? { residualBasis } : {}),
+    ...(responseQuantity !== undefined ? { responseQuantity } : {}),
+    ...(amountUnit !== undefined ? { amountUnit } : {}),
+    ...(xMin !== undefined ? { xMin } : {}),
+    ...(xMax !== undefined ? { xMax } : {}),
   }
   return { ok: true, value: out }
 }
@@ -218,14 +221,18 @@ export interface CurvePoint {
 }
 
 /** Parse the peak_source STRING `<input_name>:row<idx>` (calibration_fit.py:797)
- * — split on the LAST `:row`. Returns null when absent/malformed (honest). */
+ * — split on the LAST `:row`. The index must be an explicit non-negative
+ * integer literal (`Number('')` is 0 — an empty index is malformed and
+ * rejected). Returns null when absent/malformed (honest). */
 export function parsePeakSource(peakSource: unknown): { inputName: string; rowIndex: number } | null {
   if (typeof peakSource !== 'string') return null
   const i = peakSource.lastIndexOf(':row')
   if (i <= 0) return null
   const inputName = peakSource.slice(0, i)
-  const idx = Number(peakSource.slice(i + ':row'.length))
-  if (inputName.length === 0 || !Number.isInteger(idx) || idx < 0) return null
+  const idxText = peakSource.slice(i + ':row'.length)
+  if (!/^\d+$/.test(idxText)) return null
+  const idx = Number(idxText)
+  if (inputName.length === 0 || !Number.isInteger(idx)) return null
   return { inputName, rowIndex: idx }
 }
 
@@ -234,41 +241,93 @@ function levelTag(row: Record<string, unknown>): string {
   return typeof lv === 'string' || typeof lv === 'number' ? String(lv) : ''
 }
 
-/** Join the table rows to the model's fit points keyed on AMOUNT (the
- * declared x variable). Row-level truth (included/excluded, flags, residual,
- * peak_source) comes from the ROW; the fit-point cross-check (source_input)
- * rides the matched entry. Rows without a matching fit point keep their row
- * data with sourceInput null (never dropped, never invented). */
+/** Join the table rows to the model's fit points on the SHIPPED LINK, never
+ * on amount (FIX1 D5: duplicate standard amounts are legal declared data and
+ * the amount-keyed join collapsed provenance + produced duplicate row keys —
+ * reviewer probe). Authority chain per row:
+ *   1. the row's OWN `peak_source` string `<input>:row<idx>` (calibration_fit.
+ *      py:797) parsed via parsePeakSource — matched against the fit point's
+ *      `source_point_ref` {input_name, peak_row_index};
+ *   2. else the fit point whose `source_input` / `source_point_ref.input_name`
+ *      equals the parsed input name (a ref WITHOUT peak_row_index still
+ *      resolves by name — the spine's unpromoted-inline case);
+ *   3. else the row keeps its own peak_source input name (an excluded row has
+ *      NO fit point at all — python builds fit_points only for fit levels —
+ *      and its source input still resolves for the run link).
+ * Row-level truth (included/excluded, flags, residual) always comes from the
+ * ROW; the fit-point cross-check (source_input) rides the matched entry.
+ * Degraded paths (honest, never invented): a row with NO parseable
+ * `peak_source` (python's NO_MATCHING_PEAK case) falls back to the fit point
+ * whose amount equals the row's amount (geometry equality only — the last
+ * resolvable link), and a row with no resolvable input keeps its level tag /
+ * row index as its key with sourceInput null. Keys are collision-safe: a key
+ * already claimed by an earlier row is suffixed with the row index, so
+ * duplicate React keys / testids are impossible by construction. */
 export function joinCurvePoints(
   rows: Record<string, unknown>[],
   fitPoints: Record<string, unknown>[],
   responseCol: string,
 ): CurvePoint[] {
-  const byAmount = new Map<number, Record<string, unknown>>()
+  type FpEntry = { fp: Record<string, unknown>; sourceInput: string | null; amount: number | null }
+  const byLink = new Map<string, FpEntry>()
+  const byName = new Map<string, FpEntry>()
+  const byAmount = new Map<number, FpEntry>()
   for (const fp of fitPoints) {
-    if (isRecord(fp) && isFiniteNumber(fp.amount)) byAmount.set(fp.amount, fp)
+    if (!isRecord(fp)) continue
+    const refRaw = fp.source_point_ref
+    const ref =
+      isRecord(refRaw) && typeof refRaw.input_name === 'string' && isFiniteNumber(refRaw.peak_row_index)
+        ? { inputName: refRaw.input_name as string, rowIndex: refRaw.peak_row_index as number }
+        : null
+    const srcIn = typeof fp.source_input === 'string' ? (fp.source_input as string) : (ref !== null ? ref.inputName : null)
+    const amt = isFiniteNumber(fp.amount) ? (fp.amount as number) : null
+    const entry: FpEntry = { fp, sourceInput: srcIn, amount: amt }
+    if (ref !== null) byLink.set(peakSourceKey(ref), entry)
+    if (srcIn !== null) byName.set(srcIn, entry)
+    if (amt !== null) byAmount.set(amt, entry)
   }
-  return rows.map((row) => {
+  const seenKeys = new Set<string>()
+  const keyFor = (base: string, rowIdx: number): string => {
+    // Collision-safe: a key already claimed by an earlier row gets the row
+    // index suffixed — duplicate keys are impossible by construction (the
+    // D5 defect: the amount-keyed join produced the same key for two rows).
+    let k = base
+    while (seenKeys.has(k)) k = `${base}-${rowIdx}`
+    seenKeys.add(k)
+    return k
+  }
+  return rows.map((row, rowIdx) => {
     const amount = isFiniteNumber(row[CAL_ARTIFACT_COLUMNS.amount]) ? (row[CAL_ARTIFACT_COLUMNS.amount] as number) : null
-    const fp = amount !== null ? byAmount.get(amount) : undefined
-    const residualRaw = row[CAL_ARTIFACT_COLUMNS.relativeResidual]
-    const flagsRaw = row[CAL_ARTIFACT_COLUMNS.flags]
-    const peakSourceRaw = row[CAL_ARTIFACT_COLUMNS.peakSource]
-    const srcRef = isRecord(fp?.source_point_ref) ? fp.source_point_ref : undefined
-    const inputName = typeof srcRef?.input_name === 'string' ? srcRef.input_name : (typeof fp?.source_input === 'string' ? fp.source_input : null)
-    const key = inputName ?? (levelTag(row) || `row-${rows.indexOf(row)}`)
+    const parsed = parsePeakSource(row[CAL_ARTIFACT_COLUMNS.peakSource])
+    // The row's OWN shipped link is the primary input-name authority — it
+    // names the row's input even when the row is excluded (no fit point).
+    const fromRow: FpEntry | undefined =
+      parsed !== null ? (byLink.get(peakSourceKey(parsed)) ?? byName.get(parsed.inputName)) : undefined
+    // Degraded fallback ONLY when the row carries no parseable peak_source:
+    // amount-equality against the fit points (geometry, never a provenance
+    // claim when the row's own link is present).
+    const fromAmount: FpEntry | undefined = parsed === null && amount !== null ? byAmount.get(amount) : undefined
+    const inputName = parsed !== null ? parsed.inputName : (fromRow !== undefined ? fromRow.sourceInput : fromAmount !== undefined ? fromAmount.sourceInput : null)
+    const tag = levelTag(row)
+    const key = keyFor(inputName ?? (tag !== '' ? tag : `row-${rowIdx}`), rowIdx)
     return {
       key,
       row,
       amount,
       response: isFiniteNumber(row[responseCol]) ? (row[responseCol] as number) : null,
       included: row[CAL_ARTIFACT_COLUMNS.fitPoint] === true,
-      residual: isFiniteNumber(residualRaw) ? (residualRaw as number) : null,
+      residual: isFiniteNumber(row[CAL_ARTIFACT_COLUMNS.relativeResidual]) ? (row[CAL_ARTIFACT_COLUMNS.relativeResidual] as number) : null,
       sourceInput: inputName,
-      peakSource: typeof peakSourceRaw === 'string' ? peakSourceRaw : null,
-      flags: Array.isArray(flagsRaw) ? (flagsRaw as unknown[]).filter((f): f is string => typeof f === 'string') : [],
+      peakSource: typeof row[CAL_ARTIFACT_COLUMNS.peakSource] === 'string' ? (row[CAL_ARTIFACT_COLUMNS.peakSource] as string) : null,
+      flags: Array.isArray(row[CAL_ARTIFACT_COLUMNS.flags])
+        ? (row[CAL_ARTIFACT_COLUMNS.flags] as unknown[]).filter((f): f is string => typeof f === 'string')
+        : [],
     }
   })
+}
+
+function peakSourceKey(ps: { inputName: string; rowIndex: number }): string {
+  return `${ps.inputName}:row${ps.rowIndex}`
 }
 
 // --- outlier (max over the artifact OWN residuals; NO threshold) ---------------

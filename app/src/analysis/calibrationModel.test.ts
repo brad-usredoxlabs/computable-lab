@@ -22,6 +22,7 @@ import {
   joinCurvePoints,
   maxResidualIndexes,
   parseCalibrationBindings,
+  parsePeakSource,
   predictAt,
   responseColumn,
   setLevelFit,
@@ -180,6 +181,32 @@ describe('classifyCalibrationModel — structural, never name-based', () => {
   it('rejects undefined (dref-backed model artifact)', () => {
     expect(classifyCalibrationModel(undefined).ok).toBe(false)
   })
+
+  // FIX1 O5 — omit-absent discipline (the project's omit-absent rule, bait #8):
+  // optional string/number keys whose payload value is absent must be OMITTED
+  // from the returned shape, not present with an undefined value.
+  it('OMITS absent optional keys (never present-with-undefined — omit-absent rule)', () => {
+    const p: Record<string, unknown> = { ...MODEL_PAYLOAD }
+    delete p.equation
+    delete p.statistic_definition
+    delete p.residual_basis
+    delete p.amount_unit
+    delete p.x_min
+    delete p.x_max
+    const r = classifyCalibrationModel(p)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value).not.toHaveProperty('headLine')
+      expect(r.value).not.toHaveProperty('statisticDefinition')
+      expect(r.value).not.toHaveProperty('residualBasis')
+      expect(r.value).not.toHaveProperty('amountUnit')
+      expect(r.value).not.toHaveProperty('xMin')
+      expect(r.value).not.toHaveProperty('xMax')
+      // The present optionals still arrive verbatim.
+      expect(r.value.statisticName).toBe('weighted_r_squared')
+      expect(r.value.responseQuantity).toBe('area_ratio')
+    }
+  })
 })
 
 // --- response quantity -> column (data-driven, bait #2) ----------------------
@@ -236,11 +263,25 @@ describe('joinCurvePoints — rows x fit_points keyed on amount', () => {
     expect(j[4].included).toBe(false)
   })
 
-  it('keeps rows whose fit point is missing (sourceInput null, honest)', () => {
+  it('a row whose fit point is missing keeps its row data; its source input now resolves from its OWN peak_source (FIX1 D4/D5 contract — the fit point is a cross-check, the row link is the authority)', () => {
     const fp = (MODEL_PAYLOAD.fit_points as Record<string, unknown>[]).slice(0, 2)
     const j = joinCurvePoints(TABLE_PAYLOAD.rows as Record<string, unknown>[], fp, 'response_ratio')
-    expect(j[3].sourceInput).toBeNull()
+    // Row level 4 has no fit point in the list (sliced away) but its OWN
+    // shipped peak_source names its input — D4: the run link must follow the
+    // row's own link even when no fit point exists.
+    expect(j[3].sourceInput).toBe('level_4')
     expect(j[3].residual).toBe(0)
+  })
+
+  it('a row with NO parseable peak_source falls back to the amount-matched fit point source (degraded honest path — the NO_MATCHING_PEAK case)', () => {
+    const rows: Record<string, unknown>[] = [
+      { level: 1, amount: 1, peak_source: null, response_ratio: 3, fit_point: true, relative_residual: 0, flags: ['NO_MATCHING_PEAK'] },
+    ]
+    const fps: Record<string, unknown>[] = [
+      { amount: 1, response: 3, source_input: 'level_1', source_point_ref: { input_name: 'level_1', peak_row_index: 0 } },
+    ]
+    const j = joinCurvePoints(rows, fps, 'response_ratio')
+    expect(j[0].sourceInput).toBe('level_1')
   })
 
   it('reads the response column per the response_quantity map (fixture-flip proof)', () => {
@@ -248,6 +289,72 @@ describe('joinCurvePoints — rows x fit_points keyed on amount', () => {
     expect(jRaw[2].response).toBe(9500)
     const jRatio = joinCurvePoints(TABLE_PAYLOAD.rows as Record<string, unknown>[], MODEL_PAYLOAD.fit_points as Record<string, unknown>[], 'response_ratio')
     expect(jRatio[2].response).toBe(9.5)
+  })
+})
+
+// --- FIX1 D5 RED — the join must key on the SHIPPED link, never on amount ----
+// The reviewer's vite-node probe (GC11-advreview-cycle1 §3 D5): two levels
+// sharing an amount (the reviewer's levels 1/2/3, amounts 1/2/2) collapsed the
+// provenance under the amount-keyed join — row level 2 got level_3's
+// source_input and both rows carried the same React key. Duplicate standard
+// amounts are legal declared parameter data; the join must use the row's OWN
+// shipped peak_source string "<input>:row<idx>" (calibration_fit.py:797) vs the
+// fit point's source_point_ref {input_name, peak_row_index}, and the row key
+// must be unique per row.
+
+describe('joinCurvePoints — FIX1 D5: the join keys on the shipped link, NOT amount', () => {
+  // The reviewer's own fixture shape: levels 1/2/3, amounts 1/2/2. Row level
+  // 2's peak_source names level_2 (its OWN input) while both amount-2 rows
+  // share the x value; fit_points carries the per-level refs.
+  const DUP_ROWS: Record<string, unknown>[] = [
+    { level: 1, amount: 1, peak_source: 'level_1:row0', response_ratio: 3, fit_point: true, relative_residual: 0, flags: [] },
+    { level: 2, amount: 2, peak_source: 'level_2:row3', response_ratio: 5, fit_point: true, relative_residual: 1.2, flags: [] },
+    { level: 3, amount: 2, peak_source: 'level_3:row7', response_ratio: 9, fit_point: true, relative_residual: 2.4, flags: [] },
+  ]
+  const DUP_FPS: Record<string, unknown>[] = [
+    { amount: 1, response: 3, source_input: 'level_1', source_point_ref: { input_name: 'level_1', peak_row_index: 0 } },
+    { amount: 2, response: 5, source_input: 'level_2', source_point_ref: { input_name: 'level_2', peak_row_index: 3 } },
+    { amount: 2, response: 9, source_input: 'level_3', source_point_ref: { input_name: 'level_3', peak_row_index: 7 } },
+  ]
+
+  it('two rows sharing an amount keep their OWN source inputs (no provenance collapse)', () => {
+    const j = joinCurvePoints(DUP_ROWS, DUP_FPS, 'response_ratio')
+    expect(j.length).toBe(3)
+    expect(j[0].sourceInput).toBe('level_1')
+    // RED (amount-keyed join): the amount-2 rows both resolve to the LAST
+    // writer (level_3) — row level 2 must keep its OWN input name.
+    expect(j[1].sourceInput).toBe('level_2')
+    expect(j[2].sourceInput).toBe('level_3')
+  })
+
+  it('every row key is unique on duplicate-amount data (duplicate React keys are impossible)', () => {
+    const j = joinCurvePoints(DUP_ROWS, DUP_FPS, 'response_ratio')
+    const keys = j.map((p) => p.key)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('an EXCLUDED row (no fit point) still resolves its source input from its own peak_source', () => {
+    // Python builds fit_points only for fit levels (calibration_fit.py:845-853):
+    // the excluded row is absent from the fit_points list entirely.
+    const rows: Record<string, unknown>[] = [
+      { level: 1, amount: 1, peak_source: 'level_1:row0', response_ratio: 3, fit_point: true, relative_residual: 0, flags: [] },
+      { level: 2, amount: 2, peak_source: 'level_2:row1', response_ratio: 11, fit_point: false, relative_residual: null, flags: ['EXCLUDED_FROM_FIT'] },
+    ]
+    const fps: Record<string, unknown>[] = [
+      { amount: 1, response: 3, source_input: 'level_1', source_point_ref: { input_name: 'level_1', peak_row_index: 0 } },
+    ]
+    const j = joinCurvePoints(rows, fps, 'response_ratio')
+    expect(j[1].included).toBe(false)
+    expect(j[1].sourceInput).toBe('level_2') // from the row's OWN peak_source, not a fit point
+    expect(j[1].peakSource).toBe('level_2:row1')
+  })
+
+  it('parsePeakSource is the join authority (split on the LAST :row; honest null on malformed)', () => {
+    expect(parsePeakSource('level_2:row3')).toEqual({ inputName: 'level_2', rowIndex: 3 })
+    expect(parsePeakSource('a:b:row12')).toEqual({ inputName: 'a:b', rowIndex: 12 })
+    expect(parsePeakSource('row0')).toBeNull()
+    expect(parsePeakSource(null)).toBeNull()
+    expect(parsePeakSource('level_1:row')).toBeNull()
   })
 })
 
