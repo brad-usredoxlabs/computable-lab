@@ -687,6 +687,17 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               // them left a persisted question with nothing to pick (or, before
               // ChatLog was guarded, a bordered EMPTY box).
               ...(m.metadata?.clarification ? { clarification: m.metadata.clarification as NonNullable<ChatMessage['clarification']> } : {}),
+              // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
+              // mark the RESTORED message. Its answer inputs (the picker's
+              // search field, the option buttons) do NOT survive a reload in
+              // any answerable form — the typed requests are session-only and
+              // the legacy field carries no `restored`-suppressed live state —
+              // so ChatLog renders NEITHER for a historical card turn (inputs
+              // belong to live staged cards only). Without the flag the
+              // legacy-only menu-backed shape fell into ChatLog's block arm
+              // and mounted the real ClarificationPicker, whose search input
+              // always renders: the gate's 8 bare "Search labware…" boxes.
+              restored: true,
               timestamp: Date.parse(m.createdAt) || Date.now(),
             }))
           hydrated.forEach((m) => persistedIdsRef.current.add(m.id))
@@ -1388,7 +1399,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 // nothing was applied." contradicted a deck the user just
                 // watched switch (the D2/D1 gate read).
                 const closing = deckLayoutDelivered
-                  ? ' The deck layout was applied to the deck.'
+                  // L2-SUITE-A-uifix3 D1 (regate-5): the layout mount is
+                  // VIEW-SESSION-ONLY — the record never carries the variant
+                  // (methodContext.deckVariant stays "default"; a reload
+                  // reverts the deck), so the wall must not claim the DECK:
+                  // "applied to the deck." overclaimed and silently reversed
+                  // on reload (gate D1: freeform in session, Single SBS
+                  // Plate after reload, same wall text). Scope it to the view.
+                  ? ' The deck layout was applied to this view.'
                   : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${

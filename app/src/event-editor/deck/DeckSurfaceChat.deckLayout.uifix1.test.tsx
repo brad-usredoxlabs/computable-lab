@@ -297,7 +297,12 @@ describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches 
     const wall = document.querySelector('[data-testid="honest-wall"]')?.textContent ?? ''
     expect(wall).toContain('a deck layout')
     expect(wall).not.toContain('Nothing was proposed and nothing was applied.')
-    expect(wall).toContain('The deck layout was applied to the deck.')
+    // L2-SUITE-A-uifix3 D1 (regate-5): the mount is view-session-only — the
+    // record never carries the variant (methodContext.deckVariant stays
+    // "default"), so the wall scopes the claim to the VIEW. The old
+    // "applied to the deck." overclaimed and silently reversed on reload.
+    expect(wall).toContain('The deck layout was applied to this view.')
+    expect(wall).not.toContain('applied to the deck')
   })
 
   it('F4: a REJECTED mount (manifest guard miss) does NOT suppress the empty-success bubble', async () => {

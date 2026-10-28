@@ -112,6 +112,20 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
    */
   function renderClarificationBlock(message: ChatMessage) {
     const clarification = message.clarification!
+    // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice): a
+    // THREAD-RESTORED message (the useAiChat getThread hydrate marks it
+    // `restored: true`) renders NEITHER the picker NOR the option buttons —
+    // its answer inputs belong to live staged cards only. A restored
+    // menu-backed clarifier (options: [], menuProvider '/l'/'/m') otherwise
+    // falls through to the picker arm below and mounts the real
+    // ClarificationPicker, whose search input ALWAYS renders (only the
+    // popover is open-gated) — the gate's 8 bare <input placeholder="Search
+    // labware…"> boxes floating above "You …" with no question. The question
+    // text itself is the message content, already rendered in the main loop
+    // (`<p>{message.content}</p>`), so "render neither" preserves the record
+    // of what was asked while dropping the dead chrome. Live turns carry no
+    // `restored` flag and render byte-unchanged (the controls pin this).
+    if (message.restored) return null
     const options = clarification.options ?? []
     const request = clarificationRequest(clarification)
     const promptDiffers = message.content !== clarification.prompt

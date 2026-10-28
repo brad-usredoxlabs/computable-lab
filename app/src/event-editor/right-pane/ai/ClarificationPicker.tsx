@@ -253,6 +253,9 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // phone viewport it must flip ABOVE the field instead of hanging off-screen.
   const [listAbove, setListAbove] = useState(false)
   const anchorRef = useRef<HTMLDivElement>(null)
+  // L2-SUITE-A-uifix3 D5 (regate-5): the seeded search field — see the
+  // onFocus select() on the input below.
+  const searchRef = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<SlashSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -469,6 +472,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       <input
         type="text"
         className="message-log__clarification-search"
+        ref={searchRef}
         value={query}
         placeholder={placeholder}
         autoComplete="off"
@@ -477,6 +481,15 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => openPicker()}
+        onFocus={() => {
+          // L2-SUITE-A-uifix3 D5 (regate-5): the field is pre-seeded with the
+          // unresolved noun (query is initialized to it — opening the card
+          // filters to the noun, preserved). A controlled value APPENDS on a
+          // keystroke, so the gate's "golden bead plate" + typed "bead"
+          // dead-ended at "golden bead platebead" → No matches. Selecting the
+          // whole seed on focus makes the first keystroke REPLACE the seed.
+          searchRef.current?.select()
+        }}
         onChange={(e) => {
           // Typing into a closed field opens it (open-on-request); typing
           // while open re-runs the (debounced) resolver.

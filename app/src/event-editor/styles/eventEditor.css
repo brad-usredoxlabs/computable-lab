@@ -938,6 +938,21 @@
   position: relative;
 }
 
+/* L2-SUITE-A-uifix3 D2 (regate-5): the per-WELL footprint mark. The tile-level
+   outline above (data-affected) is the attention surface; the PAINTED well is
+   the deliverable — without a rule here the glyph cells carry
+   data-affected-well="true" in the DOM (the gate trail's markedWells ["A1"])
+   yet stay visually identical to their neighbors: the gate's pixel diff
+   showed only the tile rectangle changing at accept, and the mark absent
+   after a reload. Paint the well cell's interior (fill + stroke), preview
+   color (same family as the tile's affected outline/tag). The attribute is
+   set by LabwareGlyph on the exact affected cells only, so the rule is
+   data-driven — no per-well styling decisions in code. */
+.event-editor [data-affected-well="true"] {
+  fill: var(--cl-preview, #be4bdb);
+  stroke: var(--cl-preview, #be4bdb);
+}
+
 /* ---- Protocol-planning per-step layering (past dimmed, current highlighted) ---- */
 
 .event-editor .tile[data-past-step='true'] {

@@ -35,8 +35,18 @@ function eventLabel(event: { eventId: string; event_type?: string; stepId?: stri
  *  - mix: `details.volume` is a PLAIN NUMBER (unit implied uL — the modal's
  *    `{"volume": 75, "cycles": 3, "labwareId": ...}`) → "75 uL";
  *  - add_material / transfer: `details.volume` is `{ value, unit }` → "100 uL".
- * Cycles ride the mix (`details.cycles`). No displayable field → null (a dead
- * empty line would be dead chrome).
+ * Cycles ride the mix (`details.cycles`).
+ *
+ * L2-SUITE-A-uifix3 D6 (regate-5): the descriptor also reads the DECLARED
+ * detail fields the other verbs carry — `duration` (a plain string, the
+ * record's own wording: "overnight") and `temperature` (the two wire shapes
+ * the compile emits: `{ value, unit }` per IncubateDetails, and the plain
+ * number the committed incubate record carries — unit implied °C, the repo's
+ * one temperature convention: the liquid-handling vocab's temperature_C "°C",
+ * EquipmentTile "55 °C", events.ts eventLabel "at 37°C"). Still a field
+ * descriptor: whatever displayable fields the record carries, in the record's
+ * order — no per-kind switch table, no fabricated values.
+ * No displayable field → null (a dead empty line would be dead chrome).
  */
 function eventDetailLine(event: { details?: unknown }): string | null {
   const details = event.details as Record<string, unknown> | undefined
@@ -57,6 +67,29 @@ function eventDetailLine(event: { details?: unknown }): string | null {
   if (typeof details.cycles === 'number' && Number.isFinite(details.cycles)) {
     const cycles = details.cycles
     parts.push(`${cycles} cycle${cycles === 1 ? '' : 's'}`)
+  }
+  // L2-SUITE-A-uifix3 D6: the declared duration field — a plain string in the
+  // record's own wording (the committed incubate record carries "overnight";
+  // nothing is parsed or re-formatted, the value is displayed as-is).
+  if (typeof details.duration === 'string' && details.duration.trim().length > 0) {
+    parts.push(details.duration)
+  }
+  // L2-SUITE-A-uifix3 D6: the declared temperature field, honest to the two
+  // wire shapes (same discipline as the volume arm): { value, unit } keeps
+  // the record's unit verbatim; a plain number is the committed record shape
+  // (the IncubateDetails numeric form) — the unit implied by the repo's one
+  // temperature convention (°C), never a second unit invented.
+  const temperature = details.temperature
+  if (typeof temperature === 'number' && Number.isFinite(temperature)) {
+    parts.push(`${temperature} °C`)
+  } else if (
+    temperature &&
+    typeof temperature === 'object' &&
+    typeof (temperature as { value?: unknown }).value === 'number'
+  ) {
+    const t = temperature as { value: number; unit?: unknown }
+    const unit = typeof t.unit === 'string' && t.unit.length > 0 ? t.unit : '°C'
+    parts.push(`${t.value} ${unit}`)
   }
   return parts.length > 0 ? parts.join(' · ') : null
 }

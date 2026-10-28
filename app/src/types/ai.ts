@@ -624,6 +624,23 @@ export interface ChatMessage {
   clarification?: AiClarification
   /** Typed clarification cards that can be answered with menu-backed refs. */
   clarificationRequests?: AiClarificationRequest[]
+  /**
+   * L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice): set ONLY
+   * by the thread hydrate (useAiChat's getThread restore) on a message that
+   * came back from a RELOAD, not produced live in this session. ChatLog uses
+   * it to render NEITHER the picker NOR the option buttons for a historical
+   * card turn — the answer inputs belong to live staged cards only. A restored
+   * menu-backed clarifier (options: [], menuProvider '/l'/'/m') otherwise
+   * falls into ChatLog's legacy block arm and mounts the real
+   * ClarificationPicker, whose search input ALWAYS renders (only the popover
+   * is open-gated) — the gate's 8 bare <input placeholder="Search labware…">
+   * boxes with no question. Live turns carry no `restored` flag and render
+   * byte-unchanged. Keying on this explicit marker (not `streamEvents`
+   * presence, not an id prefix) suppresses ONLY thread-restored turns: a live
+   * legacy-only turn that never populates `clarificationRequests` still
+   * renders its answerable inputs.
+   */
+  restored?: boolean
   /** Proposed concrete labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
   /** Proposed generic/constrained labware requirements from the AI */

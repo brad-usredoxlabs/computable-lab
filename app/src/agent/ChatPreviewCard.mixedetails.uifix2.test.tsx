@@ -120,6 +120,32 @@ describe('ChatPreviewCard — L2-SUITE-A-uifix2 B: the mix volume/cycles are hum
   })
 
   it('an event with no displayable detail shows no detail line (no dead chrome)', () => {
+    // L2-SUITE-A-uifix3 D6 re-pin: the pre-fix leg pinned an incubate with
+    // `temperature: 37` to render NO detail line — that pin WAS the defect
+    // (the card face showed kind only, the declared detail never reached it).
+    // Post-fix a temperature IS a displayable detail; the no-detail arm is
+    // now the genuinely empty details (a dead empty line would be dead chrome).
+    const chat = stubChat({
+      hasPreview: true,
+      previewEvents: [
+        {
+          eventId: 'EVT-incubate',
+          event_type: 'incubate',
+          details: { labwareId: 'lbw-seed-plate-96-flat' },
+        },
+      ] as never,
+      previewLabwareAdditions: [],
+      previewStagedLabwareCount: 0,
+    })
+    renderCard(chat)
+    const card = screen.getByTestId('chat-preview')
+    expect(card.querySelector('.chat-preview__event-details')).toBeNull()
+  })
+
+  it('D6: the pre-fix pin (incubate temperature 37) now renders the detail — the declared field reached the card face', () => {
+    // The exact pre-fix pin shape, re-pinned to the post-fix behavior: the
+    // temperature the record carries is on the card (the unit implied °C per
+    // the repo's temperature convention).
     const chat = stubChat({
       hasPreview: true,
       previewEvents: [
@@ -134,7 +160,6 @@ describe('ChatPreviewCard — L2-SUITE-A-uifix2 B: the mix volume/cycles are hum
     })
     renderCard(chat)
     const card = screen.getByTestId('chat-preview')
-    // No volume/cycles field to surface → no detail line (dead chrome is a defect).
-    expect(card.querySelector('.chat-preview__event-details')).toBeNull()
+    expect(card.querySelector('.chat-preview__event-details')?.textContent).toBe('37 °C')
   })
 })
