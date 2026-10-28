@@ -24,7 +24,7 @@
  * (getAnalysisRun -> payload.outputManifest / outputArtifactRefs); artifact
  * bytes via extractTrace (inline OR the OQ-1(a) content route).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import {
   applyDeclaredConversion,
@@ -41,6 +41,12 @@ import {
   type Trace,
   type TraceError,
 } from './traceModel'
+// The SHARED x-domain interaction (traceInteraction): the compare overlay
+// carries the SAME affordances as the single-trace chromatogram — hover
+// readout (numeric x/y + data-carried units), drag-select zoom, Shift-drag
+// pan, Reset (the runbook §2d "the compare surface carries the same reset
+// control"). The logic lives in the hook ONCE; it is not forked here.
+import { fmt, nearestIndex, tickValues, useTraceInteraction } from './traceInteraction'
 
 // Fixed viewBox geometry (handwritten SVG; no chart dependency).
 const W = 720
@@ -78,12 +84,6 @@ interface SelectedArtifact {
   artifactId: string
   /** The full run record (extractTrace's input). */
   runRecord: { recordId: string; payload: Record<string, unknown> }
-}
-
-function fmt(v: number): string {
-  if (!Number.isFinite(v)) return String(v)
-  if (Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0)) return v.toExponential(2)
-  return String(Math.round(v * 1000) / 1000)
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -331,26 +331,82 @@ export function CompareTraces({
     return { x0, x1, y0, y1 }
   }, [overlay])
 
-  const xToPx = (x: number): number => (domain ? PAD_L + ((x - domain.x0) / (domain.x1 - domain.x0 || 1)) * PLOT_W : PAD_L)
+  // Stable-identity cache for the hook's fullDomain (value-keyed; see xDomain
+  // below). MUST be declared before the xDomain useMemo — the memo's callback
+  // runs during the first render, before any line below it has executed.
+  const xDomainRef = useRef<{ key: string; d: { x0: number; x1: number } } | null>(null)
+
+  const xDomain = useMemo(() => {
+    // The x-extent of the VISIBLE traces is the reset target for the shared
+    // x-domain interaction: hiding a trace re-derives the full extent from
+    // what remains (leg-e: axes recompute from VISIBLE traces only).
+    // Value-keyed so the object identity is STABLE while the extent is
+    // stable — the hook's reset-on-fullDomain-change effect must not fire on
+    // every render (it would erase a zoomed domain the user just set).
+    if (!domain) return null
+    const key = `${domain.x0}:${domain.x1}`
+    const cached = xDomainRef.current
+    if (cached && cached.key === key) return cached.d
+    const d = { x0: domain.x0, x1: domain.x1 }
+    xDomainRef.current = { key, d }
+    return d
+  }, [domain])
+
+  // ---- The SHARED x-domain interaction (useTraceInteraction — the SAME
+  //      zoom / pan / reset / hover logic as the single-trace chromatogram;
+  //      runbook §2d "the compare surface carries the same reset control").
+  //      The y-extent is NOT zoomable (it stays the visible-set full extent;
+  //      the x-domain zooms/pans over the fixed y — standard compare
+  //      semantics). ----
+  const overlaySvgRef = useRef<SVGSVGElement | null>(null)
+  const inter = useTraceInteraction({
+    svgRef: overlaySvgRef,
+    fullDomain: xDomain,
+    plot: { padL: PAD_L, plotW: PLOT_W },
+    viewBoxWidth: W,
+  })
+  const { domain: activeXDomain, sel, hoverX } = inter
+
+  const xToPx = (x: number): number => (activeXDomain ? PAD_L + ((x - activeXDomain.x0) / (activeXDomain.x1 - activeXDomain.x0 || 1)) * PLOT_W : PAD_L)
   const yToPx = (y: number): number => (domain ? PAD_T + PLOT_H - ((y - domain.y0) / (domain.y1 - domain.y0 || 1)) * PLOT_H : PAD_T)
 
   const polylines = useMemo(() => {
-    if (!domain) return []
+    if (!activeXDomain || !domain) return []
     const buckets = Math.max(1, Math.floor(PLOT_W))
     return overlay.map((o) => {
       const slice = decimateForRender(o.trace.axis, o.trace.values, buckets)
       const pts: string[] = []
       for (const i of slice.indices) {
         const x = o.trace.axis[i]!
-        if (x < domain.x0 || x > domain.x1) continue
+        if (x < activeXDomain.x0 || x > activeXDomain.x1) continue
         pts.push(`${xToPx(x).toFixed(2)},${yToPx(o.trace.values[i]!).toFixed(2)}`)
       }
       return { color: o.color, points: pts.join(' '), dropped: slice.droppedCount }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlay, domain])
+  }, [overlay, activeXDomain, domain])
 
   const totalDropped = polylines.reduce((s, p) => s + p.dropped, 0)
+
+  // ---- Hover readout (numeric x/y + the data-carried units) ----
+  // One row per VISIBLE (converted) trace at the x-nearest sample: the x is
+  // the shared axis (snapped via the shared nearest-sample authority — RAW
+  // points, never decimated), the y is each trace's value at that x.
+  const hoverReadout = useMemo(() => {
+    if (hoverX === null || overlay.length === 0) return null
+    const anchor = overlay[0]!.trace
+    const ai = nearestIndex(anchor.axis, hoverX)
+    if (ai < 0) return null
+    const hx = anchor.axis[ai]!
+    const rows = overlay
+      .map((o) => {
+        const j = nearestIndex(o.trace.axis, hx)
+        if (j < 0) return null
+        return { recordId: o.trace.recordId, color: o.color, y: o.trace.values[j]! }
+      })
+      .filter((r): r is { recordId: string; color: string; y: number } => r !== null)
+    return { hx, rows }
+  }, [hoverX, overlay])
 
   // ---- Save as view (ONE view-spec record; server-validated) ----
   const saveAsView = useCallback(async () => {
@@ -363,7 +419,13 @@ export function CompareTraces({
           c && c.factor !== '' && Number.isFinite(Number(c.factor)) && c.toUnit !== '' && c.declaredBy !== ''
             ? { factor: Number(c.factor), toUnit: c.toUnit, declaredBy: c.declaredBy }
             : undefined
-        return { trace: t, ...(conv ? { conversion: conv } : {}) }
+        // Stamp the stable identity label AT SAVE TIME (the run title, from
+        // RECORD data — never invented): a reloaded saved comparison renders
+        // the legend from the PINNED id + this label, not from the AOUT
+        // record's own title (defect 4). The view-spec schema allows `label`
+        // on each traces[] ref-object (ref.schema.yaml); buildCompareViewSpec
+        // Payload rides it onto the ref.
+        return { trace: t, ...(t.runTitle ? { label: t.runTitle } : {}), ...(conv ? { conversion: conv } : {}) }
       })
       const { records } = await apiClient.listRecordsByKind('view-spec', 5000)
       const id = mintViewSpecId(records.map((r) => r.recordId))
@@ -533,51 +595,86 @@ export function CompareTraces({
             </div>
           ))}
           {gate.ok && domain ? (
-            <svg
-              className="compare-overlay__svg"
-              width="100%"
-              viewBox={`0 0 ${W} ${H}`}
-              role="img"
-              data-testid="compare-overlay-svg"
-              data-x-domain={`${domain.x0}:${domain.x1}`}
-              data-y-domain={`${domain.y0}:${domain.y1}`}
-            >
-              <rect x={PAD_L} y={PAD_T} width={PLOT_W} height={PLOT_H} className="compare-overlay__frame" />
-              {tickValues(domain.x0, domain.x1, 5).map((t, i) => (
-                <g key={`xt-${i}`}>
-                  <line x1={xToPx(t)} y1={PAD_T + PLOT_H} x2={xToPx(t)} y2={PAD_T + PLOT_H + 4} className="compare-overlay__tick" />
-                  <text x={xToPx(t)} y={PAD_T + PLOT_H + 16} className="compare-overlay__ticklabel">
-                    {fmt(t)}
-                  </text>
-                </g>
-              ))}
-              {tickValues(domain.y0, domain.y1, 5).map((t, i) => (
-                <g key={`yt-${i}`}>
-                  <line x1={PAD_L - 4} y1={yToPx(t)} x2={PAD_L} y2={yToPx(t)} className="compare-overlay__tick" />
-                  <text x={PAD_L - 8} y={yToPx(t) + 3} textAnchor="end" className="compare-overlay__ticklabel">
-                    {fmt(t)}
-                  </text>
-                </g>
-              ))}
-              <text x={PAD_L + PLOT_W / 2} y={H - 4} textAnchor="middle" className="compare-overlay__axislabel">
-                {axisXUnit ?? 'x'}
-              </text>
-              <text x={12} y={PAD_T + PLOT_H / 2} textAnchor="middle" transform={`rotate(-90 12 ${PAD_T + PLOT_H / 2})`} className="compare-overlay__axislabel">
-                {axisYUnit ?? 'y'}
-              </text>
-              {polylines.map((pl, i) => (
-                <polyline
-                  key={i}
-                  points={pl.points}
-                  fill="none"
-                  stroke={pl.color}
-                  strokeWidth="1.4"
-                  className="compare-overlay__trace"
-                  data-artifact={overlay[i]?.trace.recordId}
-                  data-testid={`compare-trace-polyline-${overlay[i]?.trace.recordId}`}
-                />
-              ))}
-            </svg>
+            <div className="compare-overlay">
+              {/* The SAME interaction affordances as the single-trace
+                  chromatogram (runbook §2d): Reset restores the full
+                  visible-set extent; the readout shows numeric x/y with the
+                  data-carried units (one row per visible trace). */}
+              <div className="compare-overlay__toolbar">
+                <button type="button" onClick={inter.reset} data-testid="compare-reset" className="compare-overlay__reset">
+                  Reset
+                </button>
+                {hoverReadout && (
+                  <span className="compare-overlay__readout" data-testid="compare-readout">
+                    {hoverReadout.rows.map((r) => (
+                      <span key={r.recordId} className="compare-overlay__readout-row" style={{ color: r.color }}>
+                        {fmt(hoverReadout.hx)}
+                        {axisXUnit ? ` ${axisXUnit}` : ''} / {fmt(r.y)}
+                        {axisYUnit ? ` ${axisYUnit}` : ''}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+              <svg
+                ref={overlaySvgRef}
+                className="compare-overlay__svg"
+                width="100%"
+                viewBox={`0 0 ${W} ${H}`}
+                role="img"
+                data-testid="compare-overlay-svg"
+                data-x-domain={activeXDomain ? `${activeXDomain.x0}:${activeXDomain.x1}` : undefined}
+                data-y-domain={`${domain.y0}:${domain.y1}`}
+                onMouseDown={inter.svgHandlers.onMouseDown}
+                onMouseMove={inter.svgHandlers.onMouseMove}
+                onMouseUp={inter.svgHandlers.onMouseUp}
+                onMouseLeave={inter.svgHandlers.onMouseLeave}
+              >
+                <rect x={PAD_L} y={PAD_T} width={PLOT_W} height={PLOT_H} className="compare-overlay__frame" />
+                {tickValues(activeXDomain ? activeXDomain.x0 : domain.x0, activeXDomain ? activeXDomain.x1 : domain.x1, 5).map((t, i) => (
+                  <g key={`xt-${i}`}>
+                    <line x1={xToPx(t)} y1={PAD_T + PLOT_H} x2={xToPx(t)} y2={PAD_T + PLOT_H + 4} className="compare-overlay__tick" />
+                    <text x={xToPx(t)} y={PAD_T + PLOT_H + 16} className="compare-overlay__ticklabel">
+                      {fmt(t)}
+                    </text>
+                  </g>
+                ))}
+                {tickValues(domain.y0, domain.y1, 5).map((t, i) => (
+                  <g key={`yt-${i}`}>
+                    <line x1={PAD_L - 4} y1={yToPx(t)} x2={PAD_L} y2={yToPx(t)} className="compare-overlay__tick" />
+                    <text x={PAD_L - 8} y={yToPx(t) + 3} textAnchor="end" className="compare-overlay__ticklabel">
+                      {fmt(t)}
+                    </text>
+                  </g>
+                ))}
+                <text x={PAD_L + PLOT_W / 2} y={H - 4} textAnchor="middle" className="compare-overlay__axislabel">
+                  {axisXUnit ?? 'x'}
+                </text>
+                <text x={12} y={PAD_T + PLOT_H / 2} textAnchor="middle" transform={`rotate(-90 12 ${PAD_T + PLOT_H / 2})`} className="compare-overlay__axislabel">
+                  {axisYUnit ?? 'y'}
+                </text>
+                {polylines.map((pl, i) => (
+                  <polyline
+                    key={i}
+                    points={pl.points}
+                    fill="none"
+                    stroke={pl.color}
+                    strokeWidth="1.4"
+                    className="compare-overlay__trace"
+                    data-artifact={overlay[i]?.trace.recordId}
+                    data-testid={`compare-trace-polyline-${overlay[i]?.trace.recordId}`}
+                  />
+                ))}
+                {/* hover cursor (the shared hover-x snapped to a RAW sample) */}
+                {hoverReadout && (
+                  <line x1={xToPx(hoverReadout.hx)} y1={PAD_T} x2={xToPx(hoverReadout.hx)} y2={PAD_T + PLOT_H} className="compare-overlay__hover" />
+                )}
+                {/* zoom selection rectangle (the shared drag-select) */}
+                {sel && (
+                  <rect x={Math.min(sel.a, sel.b)} y={PAD_T} width={Math.abs(sel.b - sel.a)} height={PLOT_H} className="compare-overlay__sel" data-testid="compare-zoom-selection" />
+                )}
+              </svg>
+            </div>
           ) : (
             <div className="compare-surface__hint">Select at least one trace from a succeeded run to overlay.</div>
           )}
@@ -603,8 +700,11 @@ export function CompareTraces({
                     />
                     <span className="compare-surface__swatch" style={{ background: color }} />
                     <span>
-                      {t.label ? `${t.label} · ` : ''}
-                      {t.runTitle || t.runId} · {t.artifactName}
+                      {/* The identity: the SAVED label (the run title stamped
+                          at save time) WINS over the derivation from the AOUT
+                          record (defect 4); live selections (no label) fall
+                          back to today's derivation. */}
+                      {t.label ? `${t.label} · ${t.artifactName}` : `${t.runTitle || t.runId} · ${t.artifactName}`}
                     </span>
                   </div>
                 )
@@ -679,12 +779,4 @@ export function CompareTraces({
       </div>
     </div>
   )
-}
-
-/** 5 evenly spaced tick values (inclusive endpoints). */
-function tickValues(x0: number, x1: number, count: number): number[] {
-  if (x1 <= x0) return [x0]
-  const out: number[] = []
-  for (let i = 0; i < count; i++) out.push(x0 + ((x1 - x0) * i) / (count - 1))
-  return out
 }
