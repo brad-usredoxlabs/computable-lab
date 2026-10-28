@@ -687,6 +687,17 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               // them left a persisted question with nothing to pick (or, before
               // ChatLog was guarded, a bordered EMPTY box).
               ...(m.metadata?.clarification ? { clarification: m.metadata.clarification as NonNullable<ChatMessage['clarification']> } : {}),
+              // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
+              // mark the RESTORED message. Its answer inputs (the picker's
+              // search field, the option buttons) do NOT survive a reload in
+              // any answerable form — the typed requests are session-only and
+              // the legacy field carries no `restored`-suppressed live state —
+              // so ChatLog renders NEITHER for a historical card turn (inputs
+              // belong to live staged cards only). Without the flag the
+              // legacy-only menu-backed shape fell into ChatLog's block arm
+              // and mounted the real ClarificationPicker, whose search input
+              // always renders: the gate's 8 bare "Search labware…" boxes.
+              restored: true,
               timestamp: Date.parse(m.createdAt) || Date.now(),
             }))
           hydrated.forEach((m) => persistedIdsRef.current.add(m.id))
