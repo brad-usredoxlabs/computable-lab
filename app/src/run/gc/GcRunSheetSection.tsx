@@ -82,6 +82,28 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   // (keyed on runId+refreshTick; the mount call is the refreshTick===0 pass).
   const probeDoneRef = useRef<string | null>(null)
 
+  // GC-12 fix-cycle-1 (D2): a runId change on the SAME component instance
+  // (back/forward, OpenTabs, ProtocolTabPanel links — all the same
+  // /runs/:runId route) must NOT leak the previous run's state. refreshTick
+  // (state), the linked-entries map, and the dedupe ref all survive a
+  // same-route param change, so a stale "last non-empty linkage" (and the
+  // cross-run write it enables via the live chrome) could render run A's
+  // sheet under run B's URL. Reset every per-run piece of state to a
+  // fresh-mount value the moment runId changes. This is a render-time reset
+  // (the documented "adjust state when a prop changes" idiom, guarded by
+  // prevRunIdRef so it fires exactly once per change) rather than an effect,
+  // so the new runId's MOUNT probe fires EXACTLY once (an effect reset would
+  // race the probe effect's refreshTick key and double-fire it).
+  const prevRunIdRef = useRef(runId)
+  if (prevRunIdRef.current !== runId) {
+    prevRunIdRef.current = runId
+    setRefreshTick(0) // a new run starts at its MOUNT pass, not a refresh
+    setEntries({}) // never show another run's entry payloads
+    setProbed(false)
+    setSequences([])
+    probeDoneRef.current = null // re-arm the dedupe for the new runId
+  }
+
   // D1 probe (ONE listRecordsByKind on mount, deduped on runId). The payload
   // is typed at the use site (findLinkedSequences) — the client returns
   // untyped envelopes; we never widen the API surface.
@@ -125,10 +147,22 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   // action's result is what is landing). The MOUNT path is unaffected:
   // at refreshTick 0 an empty linkage renders NOTHING (bait #2, byte-
   // identical DNA).
-  const linkedRef = useRef<ReturnType<typeof findLinkedSequences>>([])
-  if (linkedSequences.length > 0) linkedRef.current = linkedSequences
+  // GC-12 fix-cycle-1 (D2): the guard is SCOPED TO THE CURRENT runId — it
+  // stores the runId the linkage was resolved for and the fallback is used
+  // ONLY when that runId matches. After a runId change the guard is empty
+  // (a new run has no prior linkage), so the section can NEVER render a
+  // linkage whose sequences were resolved for a different runId.
+  const linkedRef = useRef<{ forRunId: string; value: ReturnType<typeof findLinkedSequences> }>({
+    forRunId: '',
+    value: [],
+  })
+  if (linkedSequences.length > 0) linkedRef.current = { forRunId: runId, value: linkedSequences }
   const linked =
-    refreshTick === 0 || linkedSequences.length > 0 ? linkedSequences : linkedRef.current
+    refreshTick === 0 || linkedSequences.length > 0
+      ? linkedSequences
+      : linkedRef.current.forRunId === runId
+        ? linkedRef.current.value
+        : []
 
   // The distinct linked entry ids (in entryRefs order).
   const linkedEntryIds: string[] = []

@@ -1,8 +1,12 @@
 /**
  * GC-12 (deliverable A) — the GC run-sheet model: pure functions for the
- * sequence-link probe, the full-column run-table row projection, the
- * append-only analysisRunRefs merge (rerun keeps history), and the Analyze
- * handoff payload builder (ids only — no embedded payloads).
+ * sequence-link probe, the full-column run-table row projection, and the
+ * append-only analysisRunRefs merge (rerun keeps history).
+ *
+ * (The Analyze handoff payload builder + its `?gc=` round-trip tests were
+ * removed in fix-cycle-1 per the architect ruling GC12-D3-answer (OPT-A):
+ * the run sheet creates the analysis run in place and lands /analysis?run=
+ * <id>; the ?gc= handoff was the loser and is deleted as dead chrome.)
  *
  * Pure: no fetch, no React, no DOM. The component layer (GcRunSheetSection)
  * consumes these; the probe accounting pin (D7) lives on the component.
@@ -12,9 +16,6 @@ import {
   findLinkedSequences,
   entryRunTableRows,
   appendAnalysisRunRef,
-  buildGcHandoff,
-  gcHandoffUrlParam,
-  parseGcHandoffParam,
   positionText,
   amountText,
   type Envelope,
@@ -176,63 +177,5 @@ describe('appendAnalysisRunRef (rerun keeps history — bait #8)', () => {
   it('treats an absent array as empty (first analyze starts the history)', () => {
     const merged = appendAnalysisRunRef(undefined, { kind: 'record', id: 'ANR-1', type: 'analysis-run' })
     expect(merged.map((r) => r.id)).toEqual(['ANR-1'])
-  })
-})
-
-describe('buildGcHandoff (the Analyze payload — bait #10: ids only)', () => {
-  it('carries revisionRef + pinned input ids + title + parameters — NEVER file bytes or payloads', () => {
-    const payload = buildGcHandoff({
-      title: 'FAME sheet run',
-      revisionId: 'ANREV-000006',
-      inputs: {
-        signal: { kind: 'record', id: 'DREF-000101', type: 'data-reference' },
-        package: { kind: 'record', id: 'DREF-000102', type: 'data-reference' },
-      },
-      parameters: { baseline_window_s: 20, peak_width_s: 5 },
-    })
-    expect(payload.title).toBe('FAME sheet run')
-    expect(payload.revisionRef).toEqual({ kind: 'record', type: 'analysis-revision', id: 'ANREV-000006' })
-    expect(payload.inputs).toEqual({
-      signal: { kind: 'record', id: 'DREF-000101', type: 'data-reference' },
-      package: { kind: 'record', id: 'DREF-000102', type: 'data-reference' },
-    })
-    expect(payload.parameters).toEqual({ baseline_window_s: 20, peak_width_s: 5 })
-    // Frozen-input discipline: ids + declared parameters only.
-    const serialized = JSON.stringify(payload)
-    expect(serialized).not.toContain('contentHash')
-    expect(serialized).not.toContain('bytes')
-  })
-
-  it('omits parameters when the form produced none (the NO_PARAMS decision)', () => {
-    const payload = buildGcHandoff({
-      title: 't',
-      revisionId: 'ANREV-1',
-      inputs: { signal: { kind: 'record', id: 'D', type: 'data-reference' } },
-    })
-    expect('parameters' in payload).toBe(false)
-  })
-
-  it('the URL round-trip carries ids only (through a real URLSearchParams, bait #10)', () => {
-    const payload = buildGcHandoff({
-      title: 'my sheet',
-      revisionId: 'ANREV-9',
-      inputs: { signal: { kind: 'record', id: 'DREF-1', type: 'data-reference' } },
-    })
-    // The model value is plain JSON; the URL LAYER (URLSearchParams) encodes
-    // it. Prove the round-trip the way the router will read it back.
-    const url = new URL('http://localhost/analysis')
-    url.searchParams.set('gc', gcHandoffUrlParam(payload))
-    const parsed = parseGcHandoffParam(url.searchParams.get('gc'))
-    expect(parsed).not.toBeNull()
-    expect(parsed!.title).toBe('my sheet')
-    expect(parsed!.revisionRef.id).toBe('ANREV-9')
-    expect(parsed!.inputs.signal.id).toBe('DREF-1')
-  })
-
-  it('parseGcHandoffParam refuses malformed values (never a crash)', () => {
-    expect(parseGcHandoffParam('not-json')).toBeNull()
-    expect(parseGcHandoffParam('[1,2]')).toBeNull()
-    // Missing revisionId is not a valid handoff.
-    expect(parseGcHandoffParam(JSON.stringify({ title: 'x' }))).toBeNull()
   })
 })

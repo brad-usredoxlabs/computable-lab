@@ -5,9 +5,16 @@
  * No fetch, no React, no DOM, no config. The component layer
  * (GcRunSheetSection) owns the probe accounting pin (D7); this module owns
  * the LINKING rule, the FULL-COLUMN row projection (bait #9: every declared
- * entry column incl. the *Uninterpreted / uninterpreted honesty arms), the
- * append-only analysisRunRefs merge (bait #8: rerun keeps history), and the
- * Analyze handoff payload (bait #10: ids only — never file bytes or payloads).
+ * entry column incl. the *Uninterpreted / uninterpreted honesty arms), and
+ * the append-only analysisRunRefs merge (bait #8: rerun keeps history).
+ *
+ * (The `?gc=` Analyze handoff — buildGcHandoff / gcHandoffUrlParam /
+ * parseGcHandoffParam / GcHandoffInput / GcHandoffPayload — was DELETED in
+ * fix-cycle-1 per the architect ruling GC12-D3-answer (OPT-A): the run sheet
+ * creates the analysis run in place (Flow A) and lands /analysis?run=<id>;
+ * the ?gc= prefill path was the loser and its removal is the no-dead-chrome
+ * clause. The created run's parameters come from the revision's
+ * parameterSchema defaults (collectDefaults) — see GcSectionChrome.analyze.)
  *
  * The row projection walks the entry payload generically (no per-column
  * whitelist in TS): the schema's declared columns are the data; the table
@@ -261,103 +268,6 @@ export function appendAnalysisRunRef(
   const base: RecordRef[] = Array.isArray(existing) ? [...existing] : []
   if (base.some((r) => r.id === newRef.id)) return base
   return [...base, newRef]
-}
-
-/**
- * The Analyze handoff (D4, bait #10/#11): the pinned inputs come from the
- * server's VERIFY-FIRST analysis-inputs route (never client-resolved from
- * the ACQP payload) and the payload carries IDS ONLY — revisionRef, the
- * data-reference input ids, the title, and the revision-declared parameters.
- * No file bytes, no embedded YAML, no parameter defaults the revision does
- * not declare.
- */
-export interface GcHandoffInput {
-  title: string
-  /** The analysis-revision recordId the run will be created against. */
-  revisionId: string
-  /** The pinned inputs from packageAnalysisInputs (signal + package drefs). */
-  inputs: Record<string, { kind: 'record'; id: string; type: string }>
-  /** The revision-declared parameters (from the GC-9 ParameterForm state). */
-  parameters?: Record<string, unknown>
-}
-
-export interface GcHandoffPayload {
-  title: string
-  revisionRef: { kind: 'record'; type: 'analysis-revision'; id: string }
-  inputs: Record<string, { kind: 'record'; id: string; type: string }>
-  parameters?: Record<string, unknown>
-}
-
-/** Strip non-id noise from an inputs map so the handoff is ids-only. */
-function idsOnlyInputs(
-  inputs: Record<string, { kind: 'record'; id: string; type: string }>,
-): Record<string, { kind: 'record'; id: string; type: string }> {
-  const out: Record<string, { kind: 'record'; id: string; type: string }> = {}
-  for (const [name, ref] of Object.entries(inputs)) {
-    if (isRecord(ref) && typeof ref.id === 'string' && ref.id.length > 0) {
-      out[name] = { kind: 'record', id: ref.id, type: typeof ref.type === 'string' ? ref.type : 'data-reference' }
-    }
-  }
-  return out
-}
-
-export function buildGcHandoff(input: GcHandoffInput): GcHandoffPayload {
-  const out: GcHandoffPayload = {
-    title: input.title,
-    revisionRef: { kind: 'record', type: 'analysis-revision', id: input.revisionId },
-    inputs: idsOnlyInputs(input.inputs),
-  }
-  if (input.parameters && Object.keys(input.parameters).length > 0) {
-    out.parameters = input.parameters
-  }
-  return out
-}
-
-/** Serialize a handoff into the `?gc=` param value. The router's
- *  `searchParams.get('gc')` returns the DECODED value, so the model works
- *  with the plain JSON string (URL-encoding is the URL layer's job, not the
- *  payload's — bait #10: ids only, no smuggling). */
-export function gcHandoffUrlParam(payload: GcHandoffPayload): string {
-  return JSON.stringify(payload)
-}
-
-/** Parse + validate a `?gc=` param back into a handoff (null when invalid). */
-export function parseGcHandoffParam(raw: string | null): GcHandoffPayload | null {
-  if (!raw) return null
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  if (!isRecord(value)) return null
-  if (typeof value.title !== 'string') return null
-  const revRef = value.revisionRef
-  if (!isRecord(revRef) || revRef.kind !== 'record' || typeof revRef.id !== 'string' || revRef.id.length === 0) {
-    return null
-  }
-  const inputs = value.inputs
-  if (!isRecord(inputs)) return null
-  const cleanInputs: Record<string, { kind: 'record'; id: string; type: string }> = {}
-  for (const [name, ref] of Object.entries(inputs)) {
-    if (!isRecord(ref) || ref.kind !== 'record' || typeof ref.id !== 'string' || ref.id.length === 0) {
-      return null
-    }
-    cleanInputs[name] = {
-      kind: 'record',
-      id: ref.id,
-      type: typeof ref.type === 'string' ? ref.type : 'data-reference',
-    }
-  }
-  const out: GcHandoffPayload = {
-    title: value.title,
-    revisionRef: { kind: 'record', type: 'analysis-revision', id: revRef.id },
-    inputs: cleanInputs,
-  }
-  if (isRecord(value.parameters) && Object.keys(value.parameters).length > 0) {
-    out.parameters = value.parameters
-  }
-  return out
 }
 
 export { RECORD_REF_KEYS }

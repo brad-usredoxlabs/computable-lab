@@ -45,8 +45,8 @@ function mockReply() {
   return { reply, status: () => status };
 }
 
-function req(body: Record<string, unknown> | undefined, params: Record<string, string> = {}): FastifyRequest {
-  return { body, params } as unknown as FastifyRequest;
+function req(body: Record<string, unknown> | undefined, params: Record<string, string> = {}, headers: Record<string, string> = {}): FastifyRequest {
+  return { body, params, headers } as unknown as FastifyRequest;
 }
 
 /** A canonical synthetic FID .D tree (GC-4's required membership: the .CH
@@ -67,6 +67,12 @@ interface Ctx {
   mountRoot: string;
   wsDir: string;
   handlers: ReturnType<typeof createRunSheetHandlers>;
+  /** The seeded ACTIVE test user — the identity fallback (resolveRequestUser
+   *  with no headers) resolves headerless calls to the first active non-admin
+   *  user, so this is the known authorized principal the happy-path tests run
+   *  as. The 401/403 deny tests distinguish an authenticated-but-denied
+   *  caller (x-user-id = a DIFFERENT active user) from an unauthenticated one. */
+  testerUser: string;
   makeEntry(): Promise<string>;
 }
 
@@ -114,6 +120,32 @@ async function ctx(): Promise<Ctx> {
     logLevel: 'silent',
   });
   const handlers = createRunSheetHandlers(app);
+  // Seed a valid ACTIVE user so the identity fallback (resolveRequestUser with
+  // no headers — the way the existing happy-path tests call the handlers)
+  // resolves to a KNOWN authorized principal instead of the admin bootstrap
+  // (which is created without the schema-required `email` and is the wrong
+  // principal to test authorization through). The gate is now exercised by
+  // every register/analysis-inputs call, so the harness must carry a resolvable
+  // user. A headerless call resolves to this first active non-admin user.
+  const testerUser = 'USR-RSH-TESTER';
+  {
+    const u = await app.store.create({
+      envelope: {
+        recordId: testerUser,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/user.schema.yaml',
+        payload: {
+          kind: 'user',
+          recordId: testerUser,
+          username: 'rsh-tester',
+          displayName: 'Run Sheet Tester',
+          email: 'rsh-tester@example.com',
+          status: 'active',
+        },
+      },
+      message: `test user ${testerUser}`,
+    });
+    if (!u.success) throw new Error(`tester user create failed: ${u.error}`);
+  }
   const makeEntry = async (): Promise<string> => {
     const recordId = `ISEN-RSH-${Math.random().toString(36).slice(2, 8)}`;
     const res = await app.store.create({
@@ -135,7 +167,7 @@ async function ctx(): Promise<Ctx> {
     if (!res.success) throw new Error(`entry create failed: ${res.error}`);
     return recordId;
   };
-  cached = { app, mountRoot: MOUNT, wsDir: WS, handlers, makeEntry };
+  cached = { app, mountRoot: MOUNT, wsDir: WS, handlers, testerUser, makeEntry };
   return cached;
 }
 
@@ -331,5 +363,139 @@ describe('POST /acquisition-packages/:id/analysis-inputs (the verify-first trust
       signal: { kind: 'record', type: 'data-reference', id: expect.stringMatching(/^DREF-/) },
       package: { kind: 'record', type: 'data-reference', id: expect.stringMatching(/^DREF-/) },
     });
+  });
+});
+
+/**
+ * GC-12 fix-cycle-1 (D1) — the AUTHORIZATION DENY PATHS. The register and
+ * analysis-inputs routes are write/read channels on caller-supplied record
+ * ids; the fix requires the SAME gate the RecordHandlers use (resolve the
+ * request user + canAccess on the target) and 401/403 with the existing error
+ * shape ({ error, message }, no code field). These pins prove the gate DENIES:
+ *   register   → 403 (no write grant on the entry; no mint, no mutation) and
+ *                401 (unknown/inactive x-user-id).
+ *   analysis-in → 403 (no read grant on the package) and 401 (unknown/inactive).
+ * A headerless request resolves (via the identity fallback) to the seeded
+ * authorized tester, so the deny tests select a DIFFERENT principal with an
+ * explicit x-user-id. Fixtures are created idempotently against the shared
+ * cached ctx.
+ */
+const OTHER = 'USR-RSH-OTHER'; // an active user with NO grant on the deny fixtures
+const UNKNOWN_USER = 'USR-DOES-NOT-EXIST-9'; // unresolved → 401
+
+async function ensureActiveUser(recordId: string, username: string): Promise<void> {
+  const c = await ctx();
+  const existing = await c.app.store.get(recordId);
+  if (existing) return;
+  const res = await c.app.store.create({
+    envelope: {
+      recordId,
+      schemaId: 'https://computable-lab.com/schema/computable-lab/user.schema.yaml',
+      payload: {
+        kind: 'user',
+        recordId,
+        username,
+        displayName: username,
+        email: `${username}@example.com`,
+        status: 'active',
+      },
+    },
+    message: `test user ${recordId}`,
+  });
+  if (!res.success) throw new Error(`user create failed: ${res.error}`);
+}
+
+/** A private access-policy on `resourceId` owned by the tester with NO grants
+ *  — every other user is denied read/write on that resource. The ACL recordId
+ *  is derived from the (unique per test) resource id so fixtures never collide.
+ *  `resourceKind` is the ref's `type` (required for record refs, ref.schema.yaml). */
+async function createDenyAcl(resourceId: string, resourceKind: string): Promise<void> {
+  const c = await ctx();
+  const aclId = `ACL-DENY-${resourceId.toUpperCase().replace(/[^A-Z0-9]/g, '-')}`;
+  if (await c.app.store.get(aclId)) return;
+  const res = await c.app.store.create({
+    envelope: {
+      recordId: aclId,
+      schemaId: 'https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml',
+      payload: {
+        kind: 'access-policy',
+        recordId: aclId,
+        resourceRef: { kind: 'record', id: resourceId, type: resourceKind },
+        visibility: 'private',
+        ownerUserId: 'USR-RSH-TESTER',
+        grants: [],
+      },
+    },
+    message: `deny acl ${aclId} for ${resourceId}`,
+  });
+  if (!res.success) throw new Error(`acl create failed: ${res.error}`);
+}
+
+describe('fix-cycle-1 D1: the register authorization deny paths', () => {
+  it('403 FORBIDDEN: an authenticated user with no write grant on the entry cannot attach (no mint, no mutation)', async () => {
+    const c = await ctx();
+    await ensureActiveUser(OTHER, 'rsh-other');
+    const entryId = await c.makeEntry();
+    await createDenyAcl(entryId, 'instrument-sequence-entry');
+    await writeFullDotD(c.mountRoot, 'DENY.D');
+
+    const before = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({ deviceId: DEVICE_ID, directoryKey: 'DENY.D', entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' } }, {}, { 'x-user-id': OTHER }),
+      r.reply,
+    );
+    expect(r.status()).toBe(403);
+    expect(body).toMatchObject({ error: 'FORBIDDEN' });
+    // The gate denied BEFORE the package was minted (zero new ACQP records)…
+    const after = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    expect(after).toBe(before);
+    // …and BEFORE the entry was mutated.
+    const entry = await c.app.store.get(entryId);
+    expect((entry?.payload as Record<string, unknown>).acquisitionPackageRef).toBeUndefined();
+  });
+
+  it('401 UNAUTHENTICATED: an unknown/inactive x-user-id cannot attach', async () => {
+    const c = await ctx();
+    const entryId = await c.makeEntry();
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({ deviceId: DEVICE_ID, directoryKey: 'x.D', entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' } }, {}, { 'x-user-id': UNKNOWN_USER }),
+      r.reply,
+    );
+    expect(r.status()).toBe(401);
+    expect(body).toMatchObject({ error: 'UNAUTHENTICATED' });
+  });
+});
+
+describe('fix-cycle-1 D1: the analysis-inputs authorization deny paths', () => {
+  it('403 FORBIDDEN: an authenticated user with no read grant on the package cannot resolve its inputs', async () => {
+    const c = await ctx();
+    await ensureActiveUser(OTHER, 'rsh-other');
+    const entryId = await c.makeEntry();
+    // Register a package AS the authorized tester (headerless fallback) so a
+    // real, resolvable ACQP id exists to deny reads on.
+    const key = await writeFullDotD(c.mountRoot, 'INDENY.D');
+    const rr = mockReply();
+    const reg = await c.handlers.register(
+      req({ deviceId: DEVICE_ID, directoryKey: key, entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' } }),
+      rr.reply,
+    );
+    expect(rr.status()).toBe(200);
+    const pkgId = (reg as { packageRecordId: string }).packageRecordId;
+    await createDenyAcl(pkgId, 'acquisition-package');
+
+    const r = mockReply();
+    const body = await c.handlers.analysisInputs(req(undefined, { id: pkgId }, { 'x-user-id': OTHER }), r.reply);
+    expect(r.status()).toBe(403);
+    expect(body).toMatchObject({ error: 'FORBIDDEN' });
+  });
+
+  it('401 UNAUTHENTICATED: an unknown/inactive x-user-id cannot resolve inputs', async () => {
+    const c = await ctx();
+    const r = mockReply();
+    const body = await c.handlers.analysisInputs(req(undefined, { id: 'ACQP-401' }, { 'x-user-id': UNKNOWN_USER }), r.reply);
+    expect(r.status()).toBe(401);
+    expect(body).toMatchObject({ error: 'UNAUTHENTICATED' });
   });
 });

@@ -21,7 +21,6 @@ import { CompareTraces } from './CompareTraces'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
 import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
 import { classifyCalibrationModel, classifyCalibrationTable, classifyResultView, hasCalibrationPair } from './calibrationModel'
-import { parseGcHandoffParam } from '../run/gc/gcRunSheetModel'
 import './AnalysisPage.css'
 
 interface RunPayload {
@@ -185,22 +184,6 @@ export function AnalysisPage() {
   // GC-10 [E]: the Compare surface (D4) — a prominent header action over the
   // results pane. Open state is view-only (no record written by opening).
   const [compareOpen, setCompareOpen] = useState(false)
-  // GC-12 (deliverable E): the `?gc=` prefill (the run-sheet Analyze handoff).
-  // When the page lands WITH a legal `?gc=` param (ids only — revisionRef +
-  // pinned input ids + title, never payloads; bait #10), the one-shot consumer
-  // below selects the named revision (the EXISTING GC-9 selection effect then
-  // renders the generated ParameterForm from that revision's parameterSchema)
-  // and stashes the pinned inputs + title here. createRun freezes these pinned
-  // inputs (not the empty object) — the verify-first inputs the run-sheet's
-  // analysis-inputs route resolved (bait #11: the route call was the trust
-  // boundary; the URL carries the ids it returned). Absent param = null = the
-  // create form behaves EXACTLY as before (the no-execute accounting suite
-  // stays green unmodified — param-absent = zero calls).
-  const [gcPrefill, setGcPrefill] = useState<{
-    title: string
-    inputs: Record<string, { kind: 'record'; id: string; type: string }>
-    parameters?: Record<string, unknown>
-  } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -308,52 +291,6 @@ export function AnalysisPage() {
     // once (the one-shot rule); searchParams/setSearchParams are stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkRun, runs])
-
-  // GC-12 (deliverable E): the `?gc=` prefill consumer — a SIBLING one-shot in
-  // the SAME house style as the `?run=` deep link above (own done-ref, own
-  // param strip, param-absent = zero calls). It is the run-sheet Analyze
-  // landing: the URL carries the verify-first pinned input ids (bait #11: the
-  // analysis-inputs route was the trust boundary) + the named revision + a
-  // title (ids only, never payloads — bait #10). On mount WITH a legal param
-  // (gated on `revisions.length > 0` so the named revision exists in the list,
-  // mirroring the ?run= `runs.length` gate) it:
-  //   1. selects the named revision (setSelectedRevId) — the EXISTING GC-9
-  //      selection-change effect then seeds the form from that revision's
-  //      parameterSchema AND renders the generated ParameterForm (we do NOT
-  //      re-implement the form; the seam is the selection),
-  //   2. stashes the pinned inputs + title in gcPrefill (createRun freezes
-  //      them — the run gets the verify-first inputs, not an empty object),
-  //   3. strips the param (replace) — one-shot.
-  // It does NOT call selectRun (that lands an EXISTING run; this PREFILLS A
-  // NEW run's create form) and it does NOT execute/fetch anything — Execute
-  // stays a click on /analysis (GC-9/11 no-execute accounting survives, bait
-  // #5). When the param is absent, gcPrefill stays null and createRun behaves
-  // EXACTLY as before (the no-execute suite stays green unmodified).
-  const gcPrefillDoneRef = useRef(false)
-  const gcParam = searchParams.get('gc')
-  useEffect(() => {
-    if (gcPrefillDoneRef.current || !gcParam || revisions.length === 0) return
-    const handoff = parseGcHandoffParam(gcParam)
-    if (!handoff) return
-    const named = revisions.find((r) => r.recordId === handoff.revisionRef.id)
-    if (!named) return
-    gcPrefillDoneRef.current = true
-    setSelectedRevId(named.recordId)
-    if (handoff.title) setRunTitle(handoff.title)
-    setGcPrefill({
-      title: handoff.title,
-      inputs: handoff.inputs,
-      ...(handoff.parameters ? { parameters: handoff.parameters } : {}),
-    })
-    const next = new URLSearchParams(searchParams)
-    next.delete('gc')
-    setSearchParams(next, { replace: true })
-    // The gcPrefillDoneRef guard + the `revisions` length gate make this fire
-    // exactly once (the one-shot rule); searchParams/setSearchParams are
-    // stable refs. (Sibling to the ?run= consumer — its own ref, its own
-    // strip; the two params are independent.)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gcParam, revisions])
 
   // GC-9 (deliverable C + fix1 D3/D7): (re)initialize the form values from the
   // selected revision's schema defaults AND clear any manual advanced-JSON
@@ -519,30 +456,26 @@ export function AnalysisPage() {
     setError(null)
     let parameters: Record<string, unknown> | undefined
     try { parameters = buildParameters() } catch { setError('Invalid parameters JSON'); setBusy(false); return }
-    // GC-12 (deliverable E): the `?gc=` prefill freezes the verify-first
-    // pinned inputs (the run-sheet's analysis-inputs route resolved them —
-    // bait #11) into the run, not an empty object. Absent prefill = the
-    // EXACT pre-GC-12 semantics (inputs: {}).
+    // (The `?gc=` run-sheet prefill was removed in fix-cycle-1 per the
+    // architect ruling GC12-D3-answer (OPT-A): the run sheet creates the run
+    // in place and lands /analysis?run=<id>, so /analysis's create form takes
+    // its inputs from the plain createRun path only — inputs: {} for a plain
+    // new run, the form's buildParameters for parameters.)
     try {
       const res = await apiClient.createAnalysisRun({
         title: runTitle.trim() || 'run',
         revisionRef: { kind: 'record', id: selectedRevId, type: 'analysis-revision' },
-        inputs: gcPrefill ? gcPrefill.inputs : {},
-        // A prefill-carrying run prefers the handoff's parameter values when
-        // the form has not been edited; the form's own buildParameters
-        // (the GC-9 parameter path) stays authoritative for a plain run.
+        inputs: {},
         ...(parameters ? { parameters } : {}),
-        ...(parameters === undefined && gcPrefill?.parameters ? { parameters: gcPrefill.parameters } : {}),
       })
       setActiveRunId(res.recordId)
-      setGcPrefill(null) // one-shot: the prefill is consumed by the created run
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [selectedRevId, runTitle, buildParameters, refresh, gcPrefill])
+  }, [selectedRevId, runTitle, buildParameters, refresh])
 
   const execute = useCallback(async (runId: string) => {
     setBusy(true)

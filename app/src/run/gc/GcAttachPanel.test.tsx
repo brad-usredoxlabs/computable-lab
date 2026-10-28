@@ -188,3 +188,39 @@ describe('GcAttachPanel — the not-configured arm (dead-chrome clause)', () => 
     expect(screen.queryByTestId(`gc-attach-register-${ENTRY}`)).toBeNull()
   })
 })
+
+/**
+ * GC-12 fix-cycle-1 (O1) — the getConfig FAILURE arm. Any config fetch
+ * failure (transport/4xx/5xx) used to fall through to the "No storage
+ * devices are configured…" empty-state reason — a lie that reported a
+ * transport failure as a missing config entry. Precedent
+ * (OwnershipPolicySection's loadError arm): a fetch failure renders a NAMED
+ * error row instead.
+ */
+describe('GcAttachPanel — the getConfig failure arm (fix-cycle-1 O1: error row, never the empty-state lie)', () => {
+  it('a config fetch FAILURE renders a NAMED error row — never "No storage devices are configured"', async () => {
+    vi.mocked(apiClient.getConfig).mockRejectedValue(new Error('500: internal server error'))
+    render(<GcAttachPanel entryId={ENTRY} onAttached={vi.fn()} />)
+    // The error row names the real cause (the config fetch failed)…
+    const err = await screen.findByTestId(`gc-attach-configerror-${ENTRY}`)
+    expect(err.textContent).toContain('500: internal server error')
+    // …and the empty-state LIE does not render (the scientist is not told a
+    // config entry is missing when the real cause was a failed fetch).
+    expect(screen.queryByTestId(`gc-attach-notconfigured-${ENTRY}`)).toBeNull()
+    expect(screen.queryByText(/No storage devices are configured/)).toBeNull()
+    // No device dropdown / register button — the capability is honestly
+    // absent until the config loads.
+    expect(screen.queryByTestId(`gc-attach-device-${ENTRY}`)).toBeNull()
+    expect(screen.queryByTestId(`gc-attach-register-${ENTRY}`)).toBeNull()
+  })
+
+  it('a resolved empty config still renders the not-configured reason (failure and empty remain distinct states)', async () => {
+    // Guards the O1 fix from over-correcting: an EMPTY (but successful)
+    // config is the genuine not-configured state — the error row must not
+    // fire there.
+    mockDevices([])
+    render(<GcAttachPanel entryId={ENTRY} onAttached={vi.fn()} />)
+    expect(await screen.findByTestId(`gc-attach-notconfigured-${ENTRY}`)).toBeDefined()
+    expect(screen.queryByTestId(`gc-attach-configerror-${ENTRY}`)).toBeNull()
+  })
+})

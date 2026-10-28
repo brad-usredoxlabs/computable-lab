@@ -40,6 +40,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
+import { collectDefaults } from '../../analysis/ParameterForm'
 import {
   appendAnalysisRunRef,
   type EntryPayload,
@@ -187,6 +188,18 @@ export function GcSectionChrome({
       const inputs = await apiClient.getPackageAnalysisInputs(pkgId)
       // The pinned handoff title (ids only — bait #10) names the entry.
       const title = `GC run-sheet ${entry.recordId}`
+      // GC-12 fix-cycle-1 (D3, architect ruling OPT-A / amend V7(f)): the
+      // created run carries the revision's parameter defaults. The run sheet
+      // does NOT render a ParameterForm (Flow A: it creates and lands the
+      // created run), so the created run would otherwise carry NO parameters.
+      // Get the selected revision, collect its parameterSchema defaults
+      // (collectDefaults — the same source the GC-9 form pre-fills from), and
+      // pass them as the run's parameters (set ONLY when non-empty — a
+      // revision with no declared defaults creates a run with none, never a
+      // fabricated `{}`).
+      const revEnv = await apiClient.getRecord(revisionId)
+      const revPayload = revEnv.payload as { parameterSchema?: Record<string, unknown> }
+      const params = collectDefaults(revPayload.parameterSchema)
       const res = await apiClient.createAnalysisRun({
         title,
         revisionRef: { kind: 'record', id: revisionId, type: 'analysis-revision' },
@@ -194,6 +207,7 @@ export function GcSectionChrome({
           signal: { kind: 'record', id: inputs.signal.id, type: 'data-reference' },
           package: { kind: 'record', id: inputs.package.id, type: 'data-reference' },
         },
+        ...(Object.keys(params).length > 0 ? { parameters: params } : {}),
       })
       if (!res.recordId) {
         throw new Error('The analysis-run create returned no record id.')

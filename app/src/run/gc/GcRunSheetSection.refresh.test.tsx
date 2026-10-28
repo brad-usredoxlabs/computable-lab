@@ -54,6 +54,25 @@ const ENTRY_ATTACHED: { recordId: string; payload: EntryPayload } = {
   },
 }
 
+// The analysis revision the Analyze handoff selects. GC-12 fix-cycle-1 (D3,
+// architect ruling OPT-A): the run sheet's Analyze now getRecords the
+// selected revision and applies its parameterSchema defaults to the created
+// run (the amended V7(f): the created run carries parameters). This fixture
+// declares DEFAULTS so the amended receipt is non-trivially pinned.
+const REVISION: { recordId: string; payload: { title: string; parameterSchema: Record<string, unknown> } } = {
+  recordId: 'ANREV-RC-1',
+  payload: {
+    title: 'GC FID revision',
+    parameterSchema: {
+      type: 'object',
+      properties: {
+        baseline_window_s: { type: 'number', default: 20 },
+        peak_width_s: { type: 'number', default: 5 },
+      },
+    },
+  },
+}
+
 // The entry AFTER the Analyze append: the ACQP ref + the PRIOR ref + the NEW
 // appended ref (bait #8: the history grew, never replaced).
 const ENTRY_ANALYZED: { recordId: string; payload: EntryPayload } = {
@@ -115,6 +134,7 @@ function setStage(stage: 'bare' | 'attached' | 'analyzed') {
   const entryEnv = stageMap[stage]
   vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
     if (id === 'ISEQ-RC-1') return env as never
+    if (id === REVISION.recordId) return REVISION as never // the Analyze collectDefaults getRecord
     if (id === entryEnv.recordId) return entryEnv as never
     throw new Error(`404: ${id}`)
   })
@@ -222,6 +242,19 @@ describe('GcRunSheetSection — user-triggered refresh (the C leg)', () => {
 
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledWith('ACQP-RC-77')
+
+    // GC-12 fix-cycle-1 (D3, amended V7(f)): the created run carries the
+    // revision's parameterSchema defaults (collectDefaults applied — the run
+    // sheet does not render a ParameterForm, so the run would otherwise
+    // carry NO parameters).
+    const createArg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as {
+      parameters?: Record<string, unknown>
+      inputs: Record<string, { id: string }>
+    }
+    expect(createArg.parameters).toEqual({ baseline_window_s: 20, peak_width_s: 5 })
+    // The verify-first pinned inputs are still the run's inputs (unchanged).
+    expect(createArg.inputs.signal.id).toBe('DREF-RC-1')
+    expect(createArg.inputs.package.id).toBe('DREF-RC-2')
 
     // The appended ref lands in the table (BOTH refs — bait #8: history kept).
     await screen.findByTestId('gc-cell-ISEN-RC-1-analysisRunRefs')

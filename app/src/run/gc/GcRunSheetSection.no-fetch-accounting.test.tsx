@@ -16,7 +16,7 @@
  * the leg-F deliverable — "accounting pin + docs").
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, act, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../../shared/shell'
 import { OpenTabsProvider } from '../../shared/shell/OpenTabsContext'
@@ -225,5 +225,78 @@ describe('GcRunSheetSection — D7 no-fetch-accounting pin (bait #5)', () => {
     })
     expect(probeCalls()).toBe(2) // exactly one per runId
     expect(screen.queryByTestId('gc-run-sheet')).toBeNull()
+  })
+
+  /**
+   * GC-12 fix-cycle-1 (D2) — the reviewer-specified PROBE: one user action on
+   * GC run A (refreshTick>0), then a runId change to a no-sequence run B in
+   * the SAME component instance -> the section renders NOTHING. Pre-fix, the
+   * sticky "last non-empty linkage" (linkedRef, never cleared on runId change
+   * while refreshTick>0) rendered run A's sheet under run B's URL — cross-run
+   * data exposure (bait #2 / D1 violation) and a live chrome whose
+   * sequenceRef pointed at run A's header (a cross-run write).
+   */
+  it('D2 probe: refreshTick>0 on run A, then runId -> no-sequence run B renders NOTHING (no stale cross-run linkage)', async () => {
+    // Run A (GC-linked) mounts; the sheet shows.
+    const { rerender } = render(wrap(RUN_GC, 'd2'))
+    const sheet = await screen.findByTestId('gc-run-sheet')
+    expect(sheet).toBeDefined()
+    expect(probeCalls()).toBe(1) // the mount probe
+
+    // One USER action on run A: an NAS attach (the cheapest full click path
+    // that triggers onEntryUpdated -> refreshTick 1). Attach via ENTRY_2 —
+    // ENTRY_1 already carries an acquisitionPackageRef, so its attach toggle
+    // is absent (hasPkg). Override the config to expose a device and the
+    // register to resolve (the default harness returns no devices, so the
+    // attach panel's not-configured arm would otherwise have no register
+    // button).
+    vi.mocked(apiClient.getConfig).mockResolvedValue({
+      storageDevices: [{ id: 'gc-fid-nas', label: 'GC FID NAS (read-only)', kind: 'local-mount' }],
+    } as never)
+    vi.mocked(apiClient.registerAcquisitionPackage).mockResolvedValue({
+      packageRecordId: 'ACQP-D2-1',
+      packagePayload: { id: 'ACQP-D2-1' },
+      entryRecordId: ENTRY_2.recordId,
+    } as never)
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    // The attach toggle appears only once the entry row has fetched (rows
+    // non-empty); await it so the click is deterministic (a sync read right
+    // after the section header can race the entry-fetch phase).
+    await screen.findByTestId(`gc-attach-toggle-${ENTRY_2.recordId}`)
+    fireEvent.click(screen.getByTestId(`gc-attach-toggle-${ENTRY_2.recordId}`))
+    const dev = (await screen.findByTestId(`gc-attach-device-${ENTRY_2.recordId}`)) as HTMLSelectElement
+    fireEvent.change(dev, { target: { value: 'gc-fid-nas' } })
+    fireEvent.change(screen.getByTestId(`gc-attach-key-${ENTRY_2.recordId}`), { target: { value: '2026-10-28/D2.D' } })
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY_2.recordId}`))
+    // The user-triggered refresh landed: the sequence probe fired a SECOND
+    // time (mount + 1) — refreshTick is now >0 on run A.
+    await waitFor(() => {
+      expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(probeCalls()).toBe(2)
+    })
+
+    // Now navigate to run B — the SAME component instance (same key), and
+    // run B links NO sequence (the mock probe returns only the run-A-linked
+    // sequence, so run B's probe resolves an empty linkage).
+    rerender(wrap(RUN_DNA, 'd2'))
+    // The new run's MOUNT probe fires exactly ONCE (at most once per runId).
+    await waitFor(() => {
+      expect(probeCalls()).toBe(3)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(probeCalls()).toBe(3) // mount A + refresh A + mount B — no double probe
+    // THE PROBE: run B renders NOTHING — never run A's stale sheet, never
+    // run A's rows under run B's URL (bait #2: the DNA page is byte-identical).
+    expect(screen.queryByTestId('gc-run-sheet')).toBeNull()
+    expect(screen.queryByTestId(`gc-row-${ENTRY_1.recordId}`)).toBeNull()
+    expect(screen.queryByTestId(`gc-row-${ENTRY_2.recordId}`)).toBeNull()
+    // And the cross-run WRITE surface is gone: no live chrome (its
+    // sequenceRef used to point at run A's header).
+    expect(screen.queryByTestId('gc-chrome-toggle')).toBeNull()
+    expect(screen.queryByTestId('gc-sample-add-btn')).toBeNull()
   })
 })

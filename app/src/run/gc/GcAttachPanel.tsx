@@ -46,6 +46,12 @@ export function GcAttachPanel({
   const [directoryKey, setDirectoryKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ token: string; message: string } | null>(null)
+  // GC-12 fix-cycle-1 (O1): a getConfig FAILURE (transport/4xx/5xx) is not
+  // the "no devices configured" state — falling through to the empty-state
+  // reason told the scientist a config entry was missing when the real cause
+  // was a failed config fetch. The error is tracked separately and rendered
+  // as an error row (precedent: OwnershipPolicySection's loadError arm).
+  const [configError, setConfigError] = useState<string | null>(null)
 
   // The device dropdown is CONFIG DATA (GET /config) — never a hardcoded
   // path (bait #7). The mount path is NEVER rendered as an input.
@@ -57,13 +63,17 @@ export function GcAttachPanel({
         if (cancelled) return
         const list = cfg.storageDevices ?? []
         setDevices(list)
+        setConfigError(null)
         // Default to the default device (the config's `default: true`) — the
         // scientist still picks explicitly (the dropdown is live).
         const def = list.find((d) => (d as { default?: boolean }).default) ?? list[0]
         if (def) setDeviceId(def.id)
       })
-      .catch(() => {
-        /* no config = the not-configured arm renders below */
+      .catch((err) => {
+        // GC-12 fix-cycle-1 (O1): a fetch failure is a NAMED error, not a
+        // fabricated "no devices" — the error row renders the real cause and
+        // never lies about the config's contents.
+        if (!cancelled) setConfigError(err instanceof Error ? err.message : String(err))
       })
     return () => {
       cancelled = true
@@ -111,6 +121,20 @@ export function GcAttachPanel({
     } finally {
       setBusy(false)
     }
+  }
+
+  // GC-12 fix-cycle-1 (O1): a config FETCH failure renders a NAMED error row
+  // (precedent: OwnershipPolicySection's loadError arm) — never the
+  // "No storage devices are configured" empty-state lie, which a
+  // transport/4xx/5xx failure used to fall through to.
+  if (configError) {
+    return (
+      <div className="gc-attach" data-testid={`gc-attach-${entryId}`}>
+        <span className="gc-attach__error gc-attach__error--config" role="alert" data-testid={`gc-attach-configerror-${entryId}`}>
+          Could not load the storage device config: {configError}
+        </span>
+      </div>
+    )
   }
 
   // The not-configured arm (dead-chrome clause): no devices = a stated
