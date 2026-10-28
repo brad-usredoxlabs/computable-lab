@@ -300,6 +300,20 @@ export function classifyResultView(inlineValue: unknown, hasCalibrationPair: boo
   return 'uncalibrated'
 }
 
+/** The manifest-level half of the D5 classifier: true iff the manifest's
+ * artifacts STRUCTURALLY pair a calibration table with a calibration model
+ * (both gates pass on some artifact — content, never names). */
+export function hasCalibrationPair(artifacts: Array<{ inlineValue?: unknown } | undefined>): boolean {
+  let hasTable = false
+  let hasModel = false
+  for (const a of artifacts) {
+    if (!a) continue
+    if (classifyCalibrationTable(a.inlineValue).ok) hasTable = true
+    if (classifyCalibrationModel(a.inlineValue).ok) hasModel = true
+  }
+  return hasTable && hasModel
+}
+
 // --- display shaping (property names stay in THIS module — bait #2) ---------
 
 /** The model head line: the explicit equation string the artifact declared,
@@ -397,6 +411,13 @@ export function parseCalibrationBindings(raw: unknown): Guarded<CalibrationBindi
       case 'outlierTopN':
         if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) return { ok: false, error: `bindings.${k} must be a positive integer` }
         out.outlierTopN = v
+        break
+      case 'page':
+        // Opaque pass-through: the client-synthesis door (the /analysis page)
+        // binds the page context (active run id, revisions, frozen source run)
+        // so the composite's run-link + recalc footer have their data. It is
+        // NOT domain data — the view's PageContext typing owns its shape; the
+        // persisted-record door carries no such key (and no such page).
         break
       default:
         return { ok: false, error: `unknown bindings key: ${k}` }

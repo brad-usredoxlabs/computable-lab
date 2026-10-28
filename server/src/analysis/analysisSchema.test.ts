@@ -199,4 +199,19 @@ describe('view-spec schema', () => {
       },
     }).valid).toBe(true);
   });
+
+  // GC-11 [D1]: the calibration review composite's NEW enum id validates
+  // (task :8412 "Calibration-curve view (view-spec renderer)"; the schema
+  // comment block documents its data-only bindings). The quantum rejection
+  // above stays — the closed-set error is preserved for unshipped renderers.
+  it('accepts a calibration-curve view (GC-11 new enum id, data-only bindings)', () => {
+    expect(validateFor(IDS.view)({
+      kind: 'view-spec',
+      id: 'VSPEC-000201',
+      title: 'calibration review',
+      artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' },
+      renderer: 'calibration-curve',
+      bindings: { modelArtifact: 'calibration_model', outlierTopN: 1 },
+    }).valid).toBe(true);
+  });
 });

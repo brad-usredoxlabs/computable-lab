@@ -7,6 +7,7 @@
  */
 import type { ReactNode } from 'react'
 import { ChromatogramView } from './ChromatogramView'
+import { CalibrationCurveView } from './CalibrationCurveView'
 
 export interface RenderableArtifact {
   id: string
@@ -23,7 +24,7 @@ export interface RenderableView {
   id: string
   title: string
   artifact: string
-  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'model' | 'binary'
+  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'calibration-curve' | 'model' | 'binary'
   bindings?: Record<string, unknown>
   options?: Record<string, unknown>
 }
@@ -33,6 +34,9 @@ export interface RenderableView {
  *  shipped view renderer; anything else is (silently) coerced to 'table' (the
  *  compatibility error arm never fires for these). GC-10 extends the set with
  *  `chromatogram` + `trace-compare` — both must PASS THROUGH, not table-coerce.
+ *  GC-11 extends the set with `calibration-curve` (the calibration review
+ *  composite — task :8412 "Calibration-curve view (view-spec renderer)"),
+ *  also passing through, never table-coerced.
  *  Extracted as a pure function so the whitelist is unit-testable in isolation
  *  (the reviewer's "chromatogram is not table-coerced" leg). */
 export const VIEW_RENDERER_WHITELIST = [
@@ -42,6 +46,7 @@ export const VIEW_RENDERER_WHITELIST = [
   'static-figure',
   'chromatogram',
   'trace-compare',
+  'calibration-curve',
 ] as const
 
 export type WhitelistedRenderer = (typeof VIEW_RENDERER_WHITELIST)[number]
@@ -189,6 +194,39 @@ export function ViewRenderer({
           trace-compare views render through the Compare surface (select runs → Compare traces)
         </div>
       )
+    // GC-11: the calibration review composite (curve + residual strip + table
+    // with shared selection). The model artifact is resolved by NAME from the
+    // siblings via `bindings.modelArtifact` (the markersFrom pattern, :169-181);
+    // when the binding is absent the first sibling is offered as the model
+    // candidate — the composite's own structural gate (calibrationModel)
+    // decides whether the shapes actually pair, so a wrong sibling degrades to
+    // a NAMED error arm, never a faked curve. The page context (frozen inputs
+    // + the revision's parameterSchema) rides `bindings.page` from the
+    // client-synthesis door (the /analysis page); the persisted-record door
+    // carries none, and the composite's own named arms then cover the
+    // run-link and recalc footer (no dead chrome — the same honest-degrade
+    // rule as trace-compare's named state, but the PLOT still renders).
+    case 'calibration-curve': {
+      const bindings = view.bindings ?? {}
+      const modelFrom = typeof bindings.modelArtifact === 'string' ? (bindings.modelArtifact as string) : undefined
+      const modelArtifact =
+        modelFrom && siblings ? siblings.find((a) => a.name === modelFrom) : (siblings?.find((a) => a.name !== artifact.name) ?? undefined)
+      const page = bindings.page as
+        | { activeRunId?: string; revisions?: Array<{ recordId: string; payload: Record<string, unknown> }>; sourceRun?: unknown }
+        | undefined
+      return (
+        <CalibrationCurveView
+          artifact={artifact}
+          modelArtifact={modelArtifact}
+          bindings={bindings}
+          page={{
+            activeRunId: page?.activeRunId ?? artifact.id,
+            revisions: Array.isArray(page?.revisions) ? page.revisions : [],
+            sourceRun: page?.sourceRun ?? null,
+          }}
+        />
+      )
+    }
     case 'model':
     case 'binary':
       return <ModelView artifact={artifact} />
