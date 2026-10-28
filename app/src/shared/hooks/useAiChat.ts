@@ -33,6 +33,8 @@ import type {
   AiAgentActionEnvelope,
   AiDraftRevisionContext,
   DraftOntologyBinding,
+  AiClarification,
+  AiClarificationRequest,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -352,6 +354,24 @@ export interface UseAiChatOptions {
    */
   onProposalDrafted?: (draft: AiProposalDraft) => void
   /**
+   * L2-SUITE-A-uifix1 D1: called when a done delivers a `deckLayout`
+   * (the server's deck_layout turn — `AgentOrchestrator` returns
+   * `{ success: true, deckLayout: { platformId, variantId } }`). The universal
+   * done arm had NO mount arm for it (the "NO universal arm" comment below),
+   * so a "navigate to the freeform deck" turn left the deck unchanged and
+   * only an honest wall showed. Deck-owning surfaces wire it to the SAME
+   * native editor actions the manual deck bar uses
+   * (`actions.setPlatform` + `actions.setVariant`) — the client guards the
+   * variant against the platform manifest (the server validates loosely).
+   * Returns whether the layout was ACCEPTED (mounted) — the surface's guard
+   * may REFUSE (unknown platform/variant), and the done arm gates the
+   * empty-success bubble on the mount SUCCEEDING, not on the seam being
+   * registered (L2-SUITE-A-uifix1 F4 fix1: a refused mount left the deck
+   * unchanged while the bubble was suppressed as if it had changed). A
+   * handler returning void (legacy callers) is treated as accepted.
+   */
+  onDeckLayout?: (deckLayout: { platformId: string; variantId: string }) => boolean | void
+  /**
    * L2-CHAT-1: called when the staged preview is discarded (Discard). Deck
    * surfaces use it to clear the ghosted preview.
    */
@@ -439,7 +459,42 @@ export interface UseAiChatOptions {
 // registered (non-deck surfaces), recomputing the count every render.
 const EMPTY_STAGED_LABWARES = Object.freeze({})
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras }: UseAiChatOptions): UseAiChatReturn {
+/**
+ * L2-SUITE-A-uifix1 D3 — the LEGACY clarification shape the ChatLog
+ * clarification BLOCK arm (ChatLog.tsx:196) consumes, derived from a typed
+ * request when the done payload carries only `clarificationRequests`.
+ *
+ * Why: the server's needs-clarification arm (shorthandChat.ts:1342+) returns
+ * the typed requests; the gate's P4/P5/P6 browser turns consumed exactly that
+ * shape (events=0, clarificationRequests=1|2|1) and rendered zero cards.
+ * ChatLog has TWO render arms — the legacy `message.clarification` block
+ * (196) and the typed `message.clarificationRequests` cards (197). The hook
+ * already rode the typed requests verbatim (1169-1171); the legacy field
+ * stayed absent, and the false empty-success bubble (which fired
+ * UNCONDITIONALLY — see the done arm below) claimed "did not propose any
+ * changes" beside the turn's own questions. Deriving the legacy shape from
+ * the FIRST request keeps both arms fed from ONE payload — the picker
+ * (menuProvider '/m') and the option list ('choice') both render.
+ */
+function legacyClarificationFromRequests(
+  requests: AiClarificationRequest[] | undefined,
+): AiClarification | null {
+  const first = requests?.[0]
+  if (!first) return null
+  const kind: AiClarification['entityType'] =
+    first.entityType ?? first.kind
+  return {
+    id: first.id,
+    prompt: first.prompt,
+    entityType: kind,
+    menuProvider: first.menuProvider,
+    options: first.options,
+    ...(first.query !== undefined ? { query: first.query } : {}),
+    ...(first.allowCreateLocal !== undefined ? { allowCreateLocal: first.allowCreateLocal } : {}),
+  }
+}
+
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -510,6 +565,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // callbacks above) so the done handler always calls the LATEST handler.
   const onProposalDraftedRef = useRef(onProposalDrafted)
   onProposalDraftedRef.current = onProposalDrafted
+  // L2-SUITE-A-uifix1 D1: the deck_layout seam — same stable-ref convention.
+  const onDeckLayoutRef = useRef(onDeckLayout)
+  onDeckLayoutRef.current = onDeckLayout
   const onPreviewDiscardedRef = useRef(onPreviewDiscarded)
   onPreviewDiscardedRef.current = onPreviewDiscarded
   // L2-CHAT-1 FIX3 D1+D3: the COMPLETE-adopter seam + the staged-extras
@@ -1161,7 +1219,20 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                       streamEvents: [...accumulated],
                       ...(result.sequenceProposal ? { sequenceProposal: result.sequenceProposal, sequenceProposalRequest: prompt } : {}),
                       events: normalizedPreviewEvents,
-                      clarification: result.clarification,
+                      // L2-SUITE-A-uifix1 D3: the done payload's
+                      // clarificationRequests ride the typed arm (ChatLog.tsx:197)
+                      // AND seed the LEGACY clarification shape (ChatLog.tsx:196
+                      // block arm) when the server sent requests without the
+                      // legacy field — the gate's P4/P5/P6 turns carried exactly
+                      // that shape, and with the legacy field absent neither
+                      // arm had the full card (the picker arm needed the
+                      // request's menuProvider/query; the block arm needed the
+                      // legacy field itself). Deriving keeps both arms fed
+                      // from ONE payload — never a second source of truth.
+                      clarification:
+                        result.clarification ??
+                        legacyClarificationFromRequests(result.clarificationRequests) ??
+                        undefined,
                       // L2-CHAT-1 FIX3 D4b: typed clarification requests ride
                       // the message so ChatLog's existing arm (ChatLog.tsx)
                       // renders them — a done carrying only these is NOT an
@@ -1212,6 +1283,34 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // L2-SUITE-A-uifix1 D1 (+ F4 fix1): a deckLayout done is a
+            // DELIVERABLE turn — mount it through the host's native editor
+            // action (the SAME actions the manual deck bar uses: setPlatform
+            // + setVariant) BEFORE the empty-success accounting, so the
+            // bubble decision sees the delivery. The host guards the variant
+            // against the platform manifest (the server validates loosely)
+            // and REPORTS the refusal (boolean return). Without a registered
+            // seam the turn falls through to the honest wall below, which
+            // NAMES the delivered channel — still honest, just unmounted.
+            // F4: the bubble gate keys on the mount SUCCEEDING, not on the
+            // seam being REGISTERED — a refused mount (manifest-guard miss)
+            // left the deck unchanged while suppressing the bubble.
+            const deckLayoutPayload = (result as { deckLayout?: { platformId?: unknown; variantId?: unknown } }).deckLayout
+            let deckLayoutDelivered =
+              Boolean(deckLayoutPayload) && onDeckLayoutRef.current !== undefined
+            if (deckLayoutDelivered) {
+              if (typeof deckLayoutPayload?.platformId === 'string' && typeof deckLayoutPayload.variantId === 'string') {
+                const accepted = onDeckLayoutRef.current?.({ platformId: deckLayoutPayload.platformId, variantId: deckLayoutPayload.variantId })
+                // A void return (handlers that predate the acceptance
+                // contract) counts as accepted; an explicit false is the
+                // surface's guard refusing — the deck did NOT change.
+                deckLayoutDelivered = accepted !== false
+              } else {
+                // A deckLayout the seam cannot read (no platform/variant
+                // ids) is never mounted — not a delivery.
+                deckLayoutDelivered = false
+              }
+            }
             if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents) {
               // A turn that asked a question or surfaced an error delivered
               // something the pane shows — the wall ("asked no questions")
@@ -1242,26 +1341,51 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   Boolean((result as { deckLayout?: unknown }).deckLayout) ? 'a deck layout' : null,
                   (result.instrumentApplianceJobs?.length ?? 0) > 0 ? 'appliance jobs' : null,
                 ].filter((part): part is string => part !== null)
+                // L2-SUITE-A-uifix1 D2: the clause carries a VERB. The parts
+                // are bare noun phrases; joining them after "it" rendered
+                // "it a deck layout" (the gate's broken copy). "it delivered
+                // only <parts>" is grammatical for every combination.
+                // L2-SUITE-A-uifix1 F3 fix1: when the deck layout was
+                // MOUNTED this turn (accepted by the surface), the closing
+                // clause must say so — the old "Nothing was proposed and
+                // nothing was applied." contradicted a deck the user just
+                // watched switch (the D2/D1 gate read).
+                const closing = deckLayoutDelivered
+                  ? ' The deck layout was applied to the deck.'
+                  : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
-                      ? ` — it ${unmountable.join(' and ')}`
+                      ? ` — it delivered only ${unmountable.join(' and ')}`
                       : notesDelivered
                         ? ' — it delivered only notes'
                         : ''
-                  } and asked no questions. Nothing was proposed and nothing was applied.`,
+                  } and asked no questions.${closing}`,
                 )
               }
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `sys-${Date.now()}`,
-                  role: 'system',
-                  content: 'AI completed the task but did not propose any changes.',
-                  timestamp: Date.now(),
-                  isStreaming: false,
-                },
-              ])
+              // L2-SUITE-A-uifix1 D3+D1 (+ F4 fix1): the bubble claims NOTHING
+              // was proposed. It is false when the turn asked a question (the
+              // clarification cards ARE the proposal — the gate's P4/P5/P6
+              // "success-with-nothing") and when the deck layout MOUNTED
+              // (deckLayoutDelivered — the surface's seam reported acceptance;
+              // F4: a REFUSED mount — the guard's false — leaves the bubble
+              // up because the deck did NOT visibly change). The wall above
+              // stays on its own gate (askedQuestion suppresses it; a
+              // delivered deckLayout is NAMED in it — the arms must not
+              // contradict each other, which is exactly the gate's D3 read:
+              // wall=null beside a bubble claiming nothing was proposed).
+              if (!askedQuestion && !deckLayoutDelivered) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `sys-${Date.now()}`,
+                    role: 'system',
+                    content: 'AI completed the task but did not propose any changes.',
+                    timestamp: Date.now(),
+                    isStreaming: false,
+                  },
+                ])
+              }
             }
             break
           }

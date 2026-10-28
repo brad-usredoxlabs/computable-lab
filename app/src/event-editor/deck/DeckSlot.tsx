@@ -1,6 +1,7 @@
 import { useMemo, useState, type DragEvent } from 'react'
 import { getDeckSlotLockedOrientation, getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import type { PlatformSlotManifest } from '../../types/platformRegistry'
+import type { WellId } from '../../types/plate'
 import { useEventEditor } from '../EventEditorContext'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
 import { AddToDeckDialog } from './AddToDeckDialog'
@@ -9,8 +10,11 @@ import {
   buildPreviewWellIndex,
   previewPlacementForSlot,
 } from '../lib/previewProjection'
+import { buildEventWellIndex } from '../lib/eventWellIndex'
 import type { EventEditorPlacement, LabwareOrientation } from '../types'
 import type { Labware } from '../../types/labware'
+
+const EMPTY_WELL_SET: ReadonlySet<WellId> = new Set()
 
 interface DeckSlotProps {
   slot: PlatformSlotManifest
@@ -47,6 +51,20 @@ export function DeckSlot({ slot }: DeckSlotProps) {
   const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
   const committedAffected =
     placement != null && previewIndex.byLabware.has(placement.labwareId)
+  // L2-SUITE-A-uifix1 D4: the per-well footprint DATA source — committed
+  // events AND the staged preview's events (buildEventWellIndex), so the
+  // tile marks the actual wells the event touches (staged OR accepted),
+  // not just a binary "some preview event touches this labware" flag.
+  const eventWellIndex = useMemo(
+    () => buildEventWellIndex(state.events, state.preview),
+    [state.events, state.preview],
+  )
+  const affectedWells = placement
+    ? eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET
+    : undefined
+  const ghostAffectedWells = previewPlacement
+    ? eventWellIndex.get(previewPlacement.labwareId) ?? EMPTY_WELL_SET
+    : undefined
 
   const title = [
     `Slot ${slot.id}`,
@@ -167,6 +185,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
           orientation={placement.orientation}
           variant="slot"
           affected={committedAffected}
+          affectedWells={affectedWells}
           onRemove={handleRemove}
           onRotate={!orientationLock ? handleRotate : undefined}
           onFocus={() => actions.setFocus(placement.placementId)}
@@ -178,6 +197,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
           orientation={previewPlacement.orientation}
           variant="slot"
           ghost
+          affectedWells={ghostAffectedWells}
           onFocus={() => actions.setFocus(previewPlacement.placementId)}
         />
       ) : (

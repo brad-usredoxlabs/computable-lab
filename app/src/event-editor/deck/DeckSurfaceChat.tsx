@@ -22,6 +22,7 @@ import { useEffect, useMemo } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import type { AiContext } from '../../types/aiContext'
+import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { useSetChatFocus } from '../../agent/ChatFocusContext'
 import { useDeckGhostMount } from './useDeckGhostMount'
 import {
@@ -134,6 +135,33 @@ export function DeckSurfaceChat() {
       },
     ) as Promise<HookDeckAdoptionOutcome>
 
+  // L2-SUITE-A-uifix1 D1 (+ F4 fix1): a deck_layout done is MOUNTED through
+  // the SAME native editor actions the manual deck bar uses (setPlatform +
+  // setVariant) — the universal done arm (useAiChat) has no deck of its own,
+  // so it hands the delivered layout to this surface. The client guards the
+  // variant against the platform manifest: the server validates loosely, the
+  // deck must not switch to a variant the manifest does not declare.
+  // Returns whether the layout was ACCEPTED: the done arm gates the
+  // empty-success bubble on the mount SUCCEEDING, not on this seam being
+  // registered (a refused mount must not suppress the bubble — the deck
+  // did not change).
+  // A plain function (never memoized): it must see the LATEST editor state at
+  // the moment the done lands, and useAiChat always invokes the current
+  // closure through a ref (same convention as onProposalDrafted).
+  const onDeckLayout = (deckLayout: { platformId: string; variantId: string }): boolean => {
+    const platform = getPlatformManifest(state.platforms, deckLayout.platformId)
+    if (!platform) return false
+    const variant = getVariantManifest(state.platforms, deckLayout.platformId, deckLayout.variantId)
+    if (!variant) return false
+    // Platform-first: the action family is platform-first so a cross-platform
+    // deck switch also works (set_platform resets to the platform default,
+    // then set_variant applies the delivered one). Same-platform turns pay
+    // for the no-op first dispatch (the reducer short-circuits it).
+    actions.setPlatform(deckLayout.platformId)
+    actions.setVariant(deckLayout.variantId)
+    return true
+  }
+
   useSurfaceChat({
     aiContext,
     endpoint: 'event-editor',
@@ -142,6 +170,7 @@ export function DeckSurfaceChat() {
     // clears the preview (the hook's discard seam is a no-op — adoption is
     // the deck's PreviewActionBar's job — so the clear rides the editor).
     onProposalDrafted,
+    onDeckLayout,
     onPreviewDiscarded: () => {
       onPreviewDiscarded()
       actions.clearPreview()
