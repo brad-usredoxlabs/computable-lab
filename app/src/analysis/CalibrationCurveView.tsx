@@ -23,6 +23,7 @@ import { apiClient } from '../shared/api/client'
 import { ParameterForm } from './ParameterForm'
 import type { RenderableArtifact } from './ViewRenderer'
 import {
+  CAL_ARTIFACT_COLUMNS,
   classifyCalibrationModel,
   classifyCalibrationTable,
   joinCurvePoints,
@@ -31,6 +32,7 @@ import {
   parseCalibrationBindings,
   predictAt,
   responseColumn,
+  setLevelFit,
   statisticText,
   type CurvePoint,
 } from './calibrationModel'
@@ -94,25 +96,25 @@ function frozenParams(page: PageContext): Record<string, unknown> {
   return isRecord(params) ? params : {}
 }
 
-/** Find the params levels[] row whose input_names include the point's key. */
-function levelRowIndex(params: Record<string, unknown>, key: string): number {
+/** FIX1 D6: find the params levels[] row for a point's LEVEL TAG (data from
+ * the row's own `level` cell — the shipped key, never the OPTIONAL input_names
+ * which a legal run omits: CAL_PARAMS_SCHEMA's items.required has no
+ * input_names, and python only DEFAULTS it internally). Returns -1 when the
+ * tag is absent or matches no levels[] row (the UNMATCHED state — named in
+ * the UI, never a silent no-op). */
+function levelTagOf(p: CurvePoint): string | null {
+  const lv = p.row[CAL_ARTIFACT_COLUMNS.level]
+  return typeof lv === 'string' || typeof lv === 'number' ? String(lv) : null
+}
+function levelRowIndex(params: Record<string, unknown>, tag: string | null): number {
+  if (tag === null) return -1
   const levels = params.levels
   if (!Array.isArray(levels)) return -1
-  return levels.findIndex((lv) => isRecord(lv) && Array.isArray(lv.input_names) && (lv.input_names as unknown[]).includes(key))
-}
-
-/** Toggle a level's fit flag by the point's key — a NEW object (bait #6: the
- * source is never mutated). No-op when no matching level row exists. */
-function toggleLevelFit(params: Record<string, unknown>, key: string, next: boolean): Record<string, unknown> {
-  const levels = params.levels
-  if (!Array.isArray(levels)) return params
-  const nextLevels = levels.map((lv) => {
-    if (isRecord(lv) && Array.isArray(lv.input_names) && (lv.input_names as unknown[]).includes(key)) {
-      return { ...lv, fit: next }
-    }
-    return lv
+  return (levels as unknown[]).findIndex((lv) => {
+    if (!isRecord(lv)) return false
+    const t = lv.level
+    return t === Number(tag) || (t !== undefined && String(t) === tag)
   })
-  return { ...params, levels: nextLevels }
 }
 
 /** The pending-diff line: for each levels[] index whose fit changed vs the
@@ -364,17 +366,33 @@ export function CalibrationCurveView(props: {
 
   const diffLine = levelDiff(frozenParams(page), params)
 
-  /** The fit checkbox for a point (D4 point inclusion): its checked state is
-   * the FROZEN level row's own `fit` value for this key (data, not policy);
-   * toggling writes into the dedicated form's levels[] value. */
+  /** The fit checkbox for a point (D4 point inclusion, FIX1 D6): its checked
+   * state is the point's OWN levels[] row's `fit` value when a levels[] row
+   * matches the point's LEVEL TAG (the shipped key — never the OPTIONAL
+   * input_names, which a legal run omits), else the row's OWN inclusion
+   * (p.included — the row's declared inclusion flag). A point whose level tag
+   * matches
+   * NO levels[] row is UNMATCHED: its checkbox is disabled (toggling it
+   * cannot change a levels array that doesn't name it) and a NAMED line says
+   * which levels are unmatched — no silent no-op, no dead chrome. */
   const fitChecked = (p: CurvePoint): boolean => {
-    const idx = levelRowIndex(params, p.key)
+    const idx = levelRowIndex(params, levelTagOf(p))
     const lv = Array.isArray(params.levels) ? (params.levels as Record<string, unknown>[])[idx] : undefined
-    return isRecord(lv) ? lv.fit === true : false
+    return isRecord(lv) ? lv.fit === true : p.included
   }
+  const fitUnmatched = (p: CurvePoint): boolean => levelRowIndex(params, levelTagOf(p)) === -1
   const onFitToggle = (p: CurvePoint, next: boolean): void => {
-    setParams((prev) => toggleLevelFit(prev, p.key, next))
+    if (fitUnmatched(p)) return
+    const tag = levelTagOf(p)
+    if (tag === null) return
+    // The model's tested level-tag helper (bait #6: the source params object
+    // is never mutated — setLevelFit returns a NEW object).
+    setParams((prev) => setLevelFit(prev, 'levels', tag, next))
   }
+  const unmatchedLevels = points
+    .filter((p) => fitUnmatched(p))
+    .map((p) => levelTagOf(p))
+    .filter((t): t is string => t !== null)
 
   return (
     <div className="calibration-curve" data-testid="calibration-curve">
@@ -468,6 +486,7 @@ export function CalibrationCurveView(props: {
                   type="checkbox"
                   data-testid={`calibration-fit-${p.key}`}
                   checked={fitChecked(p)}
+                  disabled={fitUnmatched(p)}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onFitToggle(p, e.target.checked)}
                 />
@@ -476,6 +495,15 @@ export function CalibrationCurveView(props: {
           ))}
         </tbody>
       </table>
+      {unmatchedLevels.length > 0 ? (
+        // FIX1 D6: the UNMATCHED state is NAMED (no silent no-op) — these
+        // levels' rows have no matching levels[] entry in the run's frozen
+        // parameters, so their fit flag cannot be changed through this form.
+        <div className="calibration-curve__fit-unmatched" data-testid="calibration-fit-unmatched">
+          level {unmatchedLevels.map((t) => `level ${t}`).join(', ')}: no matching entry in the run's parameters levels array — the fit checkbox is disabled (the
+          row's own inclusion is shown; changing it requires a revision whose levels array names that level).
+        </div>
+      ) : null}
 
       <div className="calibration-curve__runline" data-testid="calibration-run-line">
         Calibration run {page.activeRunId} — source run:{' '}

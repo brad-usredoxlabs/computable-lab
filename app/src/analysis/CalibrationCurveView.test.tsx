@@ -489,6 +489,93 @@ describe('D2 link — FIX1 D4: the link follows the SELECTED row, defaulting to 
     expect(screen.getByTestId('calibration-source-run-unresolved').textContent).toContain('level_3')
   })
 })
+
+// --- FIX1 D6 RED — the fit checkbox is keyed on the ROW's OWN inclusion ---
+// (fit_point), applied via the model's setLevelFit LEVEL TAG — never the
+// OPTIONAL input_names (a legal run omits them: CAL_PARAMS_SCHEMA's items
+// required list has no input_names, and python only DEFAULTS it internally).
+
+const CAL_PARAMS_NO_INPUT_NAMES = {
+  model: 'linear',
+  weighting: 'none',
+  origin_constraint: false,
+  correlation_statistic: 'weighted_r_squared',
+  amount_unit: 'ng/uL',
+  istd: { role: 'none' },
+  extrapolation: 'reject',
+  fail_on_out_of_range: true,
+  allow_inline_inputs: true,
+  levels: [
+    { level: 1, compound_label: 'TEST-CMPD-A', amount: 1, rt_target_min: 1, rt_window_min: 0.25, fit: true, required: true },
+    { level: 2, compound_label: 'TEST-CMPD-B', amount: 2, rt_target_min: 2, rt_window_min: 0.25, fit: true, required: true },
+    { level: 3, compound_label: 'TEST-CMPD-C', amount: 3, rt_target_min: 3, rt_window_min: 0.25, fit: true, required: true },
+  ],
+}
+
+/** A PageContext over the default fixture artifacts with REPLACED frozen
+ * parameters (the D6 fixtures: input_names omitted / level tags unmatched). */
+function pageWithFrozenParams(parameters: Record<string, unknown>): PageContext {
+  return {
+    activeRunId: 'ANR-CAL-1',
+    revisions: PAGE_CTX.revisions,
+    sourceRun: {
+      recordId: 'ANR-CAL-1',
+      payload: {
+        id: 'ANR-CAL-1',
+        title: 'TEST calibration run',
+        status: 'succeeded',
+        revisionRef: { id: 'ANREV-CAL-1' },
+        inputs: SOURCE_INPUTS,
+        parameters,
+      },
+    },
+  }
+}
+
+describe('D6 — the fit checkbox: initial state from the row OWN inclusion; toggle via the level tag (no input_names)', () => {
+  const pageNoInputNames = pageWithFrozenParams(CAL_PARAMS_NO_INPUT_NAMES)
+
+  const renderNoInputNames = () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    return render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageNoInputNames} onRecalcDone={() => {}} />)
+  }
+
+  it('with input_names OMITTED the checkboxes reflect the rows OWN fit_point (not all-unchecked)', () => {
+    // RED (input_names-keyed): no level row matches -> every checkbox renders
+    // unchecked even for fit_point: true rows (a false visual claim).
+    renderNoInputNames()
+    expect((screen.getByTestId('calibration-fit-level_1') as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByTestId('calibration-fit-level_2') as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByTestId('calibration-fit-level_5') as HTMLInputElement).checked).toBe(false) // the row's OWN fit_point: false
+  })
+
+  it('toggling a row with input_names OMITTED still arms the diff + writes the fit flag via the LEVEL TAG (no silent no-op)', () => {
+    // RED (input_names-keyed): toggleLevelFit matched nothing -> the levels
+    // array returned unchanged and the diff line stayed "(no pending changes)".
+    renderNoInputNames()
+    fireEvent.click(screen.getByTestId('calibration-fit-level_2'))
+    expect(screen.getByTestId('calibration-recalc-diff').textContent).toContain('level 2: fit true -> false')
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const formMock = screen.getByTestId('calibration-recalc-mock')
+    const value = JSON.parse(formMock.getAttribute('data-value') ?? '{}') as { levels: Record<string, unknown>[] }
+    expect(value.levels[1].fit).toBe(false)
+    expect(value.levels[0].fit).toBe(true)
+  })
+
+  it('a row whose level tag matches NO levels[] row -> NAMED unmatched state (disabled checkbox, no silent no-op)', () => {
+    const page = pageWithFrozenParams({ model: 'linear', levels: [{ level: 1, fit: true }] })
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={page} onRecalcDone={() => {}} />)
+    // Rows 2-5 carry no matching levels[] row: the checkbox is disabled and a
+    // NAMED line says so (the row's own inclusion is still the visible state).
+    expect((screen.getByTestId('calibration-fit-level_2') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByTestId('calibration-fit-level_2') as HTMLInputElement).checked).toBe(true) // row's own fit_point
+    expect(screen.getByTestId('calibration-fit-unmatched').textContent).toContain('level 2')
+  })
+})
+
 // --- D7: the honest dref arm ---------------------------------------------------
 
 describe('D7 — a dref-backed calibration artifact renders the NAMED honest arm', () => {
