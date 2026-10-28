@@ -22,7 +22,9 @@
  *     deck_layout outcome.
  *
  * Manifest data: the REAL config/platforms YAML (loaded through
- * loadPlatformRegistry from the repo root) — no synthetic vocabulary.
+ * loadPlatformRegistry from the repo root, asserted source === 'yaml' —
+ * no synthetic vocabulary; the suite DIES if the YAML is unreadable instead
+ * of silently grading the DEFAULT_PLATFORM_MANIFESTS fallback).
  */
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
@@ -38,7 +40,17 @@ import {
   deckLayoutChoiceWall,
 } from './deckLayoutResolution.js';
 
-const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
+// L2-SUITE-A-uifix2 FIX3 (advc1 defect 2): the repo root, NOT the server/
+// directory. This file lives at server/src/ai/, so the repo root is THREE
+// levels up — '..','..' resolved to server/ and loadPlatformRegistry silently
+// fell back to DEFAULT_PLATFORM_MANIFESTS (the "data-driven from YAML" claim
+// was pinned nowhere: moving config/platforms/manual.yaml away left this
+// suite 8/8 green). The existing idiom is loadPlatformRegistry('..') from
+// server/src/platform-registry/ (defaultManifests.test.ts).
+const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
+
+let registry: PlatformRegistry;
+let registrySource: 'yaml' | 'fallback';
 
 const JARGON_PATTERNS: RegExp[] = [
   /variantId/i,
@@ -54,10 +66,14 @@ function hasJargon(text: string): boolean {
   return JARGON_PATTERNS.some((re) => re.test(text));
 }
 
-let registry: PlatformRegistry;
-
 beforeAll(async () => {
-  ({ registry } = await loadPlatformRegistry(REPO_ROOT));
+  ({ registry, source: registrySource } = await loadPlatformRegistry(REPO_ROOT));
+  // L2-SUITE-A-uifix2 FIX3 (advc1 defect 2): pin that this suite grades the
+  // REAL config/platforms YAML. If the YAML were unreadable, loadPlatformRegistry
+  // would SILENTLY fall back to DEFAULT_PLATFORM_MANIFESTS and every leg below
+  // would keep grading the duplicated TS vocabulary (moving manual.yaml away
+  // used to leave the suite 8/8 green). The test dies here instead.
+  expect(registrySource).toBe('yaml');
 });
 
 /** A fake model that answers with exactly one agent_intent tool call. */
