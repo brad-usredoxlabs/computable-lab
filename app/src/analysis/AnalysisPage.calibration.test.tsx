@@ -18,8 +18,9 @@
  * OpenTabsProvider + MemoryRouter; the apiClient mock adds getAnalysisRun).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { apiClient } from '../shared/api/client'
@@ -43,10 +44,23 @@ function wrap(ui: React.ReactNode, initialPath = '/analysis') {
   return (
     <ThemeProvider>
       <OpenTabsProvider>
-        <MemoryRouter initialEntries={[initialPath]}>{ui}</MemoryRouter>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <RunParamProbe />
+          {ui}
+        </MemoryRouter>
       </OpenTabsProvider>
     </ThemeProvider>
   )
+}
+
+/** FIX1 O1: a tiny probe that renders the ROUTER's own `run` search param
+ * (via useSearchParams inside the MemoryRouter) — the only way to assert the
+ * param strip (window.location is jsdom's default and never moves under
+ * MemoryRouter; the O1 vacuous-assertion defect). Empty textContent = the
+ * param is absent (stripped). */
+function RunParamProbe() {
+  const [sp] = useSearchParams()
+  return <span data-testid="run-param-probe">{sp.get('run') ?? ''}</span>
 }
 
 // --- the structural pair (GC-8 shipped shapes; names deliberately
@@ -144,8 +158,14 @@ describe('GC-11 D3 — the ?run= deep-link consumer (one-shot, client-side manif
     // NO execute (the PB-CH-5 contract holds on a ?run= mount — the payload
     // already carries the manifest; CompareTraces :103-104 channel).
     expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
-    // The one-shot guard stripped the param (replace: back-navigable).
-    await waitFor(() => expect(window.location.search).not.toContain('run='))
+    // The one-shot guard stripped the param (replace: back-navigable) —
+    // asserted against the ROUTER'S OWN location via the probe (FIX1 O1:
+    // MemoryRouter keeps the URL in memory; window.location is jsdom's
+    // default and is EMPTY regardless, so the shipped assertion proved
+    // nothing). The probe is empty ONLY when the router location no longer
+    // carries ?run=.
+    await waitFor(() => expect(screen.getByTestId('run-param-probe').textContent).toBe(''))
+    expect(screen.queryByTestId('run-param-probe')).not.toHaveTextContent('ANR-CAL-9')
   })
 
   it('?run= absent: the mount fires ONLY the two list calls (no run fetch — byte-identical to the no-execute contract)', async () => {
@@ -234,5 +254,134 @@ describe('GC-11 D5 — the results provenance badge (data-derived, additive chro
     expect(screen.queryByTestId('results-provenance-quantitative')).toBeNull()
     // No error arm: the results render (the metric view is present).
     expect(screen.queryByTestId('view-spec-error')).toBeNull()
+  })
+})
+
+/** A manifest that ALREADY carries a persisted `calibration-curve` view
+ * (the persisted-record door) — for the O3 duplicate-composite RED leg. */
+function landingPayloadWithPersistedCurve(artifacts: unknown[], artifactNames: string[]) {
+  const base = landingPayload(artifacts, artifactNames)
+  const firstArtifactName = artifactNames[0]
+  return {
+    ...base,
+    outputManifest: {
+      ...base.outputManifest,
+      views: [
+        { name: 'Persisted calibration curve', renderer: 'calibration-curve', artifact: firstArtifactName, bindings: { modelArtifact: artifactNames[1] } },
+      ],
+    },
+  }
+}
+
+describe('GC-11 FIX1 D3 — a run executed FROM the page synthesizes the composite (no two empty tables)', () => {
+  it('execute a run from the list -> the calibration-curve composite renders (the shipped execute set activeRunId + manifest but NEVER activeRun, so the synthesis door stayed closed and the results were two raw "No rows" tables)', async () => {
+    // The run list already holds a succeeded cal run (the Run button is
+    // enabled). Clicking it drives the REAL execute -> selectRun -> activeRun
+    // -> `rendered` synthesis path.
+    vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({
+      runs: [{ recordId: 'ANR-CAL-9', payload: { id: 'ANR-CAL-9', title: 'TEST calibration run', status: 'succeeded' } }],
+      total: 1,
+    })
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({
+      success: true,
+      recordId: 'ANR-CAL-9',
+      status: 'succeeded',
+      manifest: {
+        artifacts: [
+          { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+          { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+        ],
+        views: [],
+        metrics: [],
+      },
+      artifactRefs: { calibration_table: { artifactRecordId: 'AOUT-calibration_table' }, calibration_model: { artifactRecordId: 'AOUT-calibration_model' } },
+    } as never)
+    // The FIX1 selectRun(runId) inside execute fetches the run's OWN payload
+    // (revisionRef + frozen inputs + parameters) to set activeRun — the
+    // composite's footer needs it. (In the shipped code this fetch never
+    // fired from execute, so activeRun stayed null and the synthesis gated.)
+    vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
+      record: { recordId: 'ANR-CAL-9', payload: landingPayload(
+        [
+          { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+          { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+        ],
+        ['calibration_table', 'calibration_model'],
+      ) },
+    } as never)
+    render(wrap(<AnalysisPage />))
+    const executeBtn = await screen.findByTestId('analysis-run-execute-ANR-CAL-9')
+    fireEvent.click(executeBtn)
+    // The composite renders (the D1 synthesis door fires for a run executed
+    // from the page) — the equation verbatim, never two empty tables.
+    await waitFor(() => expect(screen.queryByTestId('calibration-curve')).not.toBeNull(), { timeout: 10000 })
+    expect(screen.getByTestId('calibration-equation').textContent).toBe('y = 2.000000x + 1.000000')
+    // execute fired once; the selectRun fetch (the FIX1 wiring) fired too.
+    expect(apiClient.executeAnalysisRun).toHaveBeenCalledTimes(1)
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledWith('ANR-CAL-9')
+  })
+})
+
+describe('GC-11 FIX1 D2 — the recalc completion is wired (onRecalcDone -> selectRun + refresh)', () => {
+  it('a completed recalc SELECTS the new run + refreshes the runs list (not just a fired callback)', async () => {
+    // Mount on a landed calibration run (the deep-link channel seeds the
+    // manifest + activeRun — the composite's footer is live).
+    vi.mocked(apiClient.getAnalysisRun).mockImplementation(async (id: string) => {
+      if (id === 'ANR-CAL-9') {
+        return { record: { recordId: 'ANR-CAL-9', payload: landingPayload(
+          [
+            { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+            { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+          ],
+          ['calibration_table', 'calibration_model'],
+        ) } } as never
+      }
+      // The recalc's own selectRun fetch (the WIRING under test).
+      return { record: { recordId: 'ANR-RECALC-1', payload: { id: 'ANR-RECALC-1', title: 'recalc of ANR-CAL-9', status: 'succeeded', revisionRef: { id: 'ANREV-CAL-1' }, inputs: {}, parameters: {} } } } as never
+    })
+    vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ recordId: 'ANR-RECALC-1' } as never)
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({
+      success: true,
+      recordId: 'ANR-RECALC-1',
+      status: 'succeeded',
+      manifest: { artifacts: [], views: [], metrics: [] },
+      artifactRefs: {},
+    } as never)
+    // The runs list gains the new run AFTER the recalc completes (the
+    // refresh() under test — the list re-fetch must return it).
+    vi.mocked(apiClient.listAnalysisRuns)
+      .mockResolvedValueOnce({ runs: [CAL_RUN], total: 1 })
+      .mockResolvedValueOnce({ runs: [CAL_RUN, { recordId: 'ANR-RECALC-1', payload: { id: 'ANR-RECALC-1', title: 'recalc of ANR-CAL-9', status: 'succeeded' } }], total: 2 })
+    render(wrap(<AnalysisPage />, '/analysis?run=ANR-CAL-9'))
+    await waitFor(() => expect(screen.queryByTestId('calibration-curve')).not.toBeNull(), { timeout: 10000 })
+    // Open the recalc region and submit (the view's D7-gated submit — the
+    // page-level fixture's CAL_PARAMS satisfy the page's own schema gate).
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
+    // The new run is SELECTED (activeRun set -> the run title renders in the
+    // results header) AND the runs list was REFRESHED (the new run is in the
+    // list — the selectRun + refresh wiring, not just an injected mock).
+    await waitFor(() => expect(screen.getByTestId('analysis-run-execute-ANR-RECALC-1')).toBeDefined(), { timeout: 10000 })
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledWith('ANR-RECALC-1')
+    expect(apiClient.listAnalysisRuns).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GC-11 FIX1 O3 — a persisted calibration-curve view is never duplicated by the synthesis', () => {
+  it('a manifest that ALREADY carries a calibration-curve view renders ONE composite (synthesize only if absent)', async () => {
+    vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
+      record: { recordId: 'ANR-CAL-9', payload: landingPayloadWithPersistedCurve(
+        [
+          { name: 'calibration_table', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_TABLE)) },
+          { name: 'calibration_model', dataKind: 'table', value: JSON.parse(JSON.stringify(CAL_MODEL)) },
+        ],
+        ['calibration_table', 'calibration_model'],
+      ) },
+    } as never)
+    render(wrap(<AnalysisPage />, '/analysis?run=ANR-CAL-9'))
+    await waitFor(() => expect(screen.queryByTestId('calibration-curve')).not.toBeNull(), { timeout: 10000 })
+    // The persisted view renders (ONE composite) — the client-synthesis
+    // door must NOT append a second (the shipped code always appended).
+    expect(screen.getAllByTestId('calibration-curve').length).toBe(1)
   })
 })

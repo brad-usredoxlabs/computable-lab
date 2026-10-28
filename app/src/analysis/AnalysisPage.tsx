@@ -402,13 +402,25 @@ export function AnalysisPage() {
       setActiveRunId(runId)
       setManifest(res.manifest)
       setArtifactRefs(res.artifactRefs ?? {})
+      // FIX1 D3: the shipped execute set activeRunId + manifest but NEVER
+      // activeRun — and the calibration synthesis door (spec D1) gates on
+      // activeRun, so a run executed from this page rendered its results as
+      // two raw "No rows" tables with no composite. selectRun(runId) is the
+      // shipped consumer (getAnalysisRun -> setActiveRun; the same channel
+      // the ?run= deep-link seam uses) — it sets activeRun from the run's
+      // OWN payload (revisionRef + frozen inputs + parameters), which the
+      // composite's footer needs (the D1/D4/D7 mechanics ride it). The
+      // manifest still comes from the execute response (the authoritative
+      // artifacts/views of THIS execution); refresh() below updates the
+      // runs list (the run's status moved).
+      void selectRun(runId)
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [refresh])
+  }, [refresh, selectRun])
 
   // Rebuild renderable artifacts + views from the last executed manifest.
   const rendered = useMemo(() => {
@@ -457,7 +469,16 @@ export function AnalysisPage() {
       ...(() => {
         const tableArtifact = artifacts.find((a) => classifyCalibrationTable(a.inlineValue).ok)
         const modelArtifact = artifacts.find((a) => a !== tableArtifact && classifyCalibrationModel(a.inlineValue).ok)
-        if (!tableArtifact || !modelArtifact || !activeRun) return []
+        // FIX1 O3: synthesize ONLY when the manifest carries no persisted
+        // calibration-curve view (the persisted-record door). The shipped
+        // code always appended the synthesized view, so a manifest that
+        // ALREADY carries one (the enum's reason to exist, spec D1 door 1)
+        // rendered TWO composites.
+        const hasPersistedCurve = (manifest.views ?? []).some((v) => {
+          const vv = v as { renderer?: string }
+          return vv.renderer === 'calibration-curve'
+        })
+        if (!tableArtifact || !modelArtifact || !activeRun || hasPersistedCurve) return []
         return [
           {
             id: 'synthesized-calibration-curve',
