@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEventEditor } from '../EventEditorContext'
 import { useOptionalWorkspace } from '../workspace/WorkspaceContext'
 import { eventEditorGraphPath } from '../eventGraphRouting'
+import { useOptionalAiPanel } from '../../shared/context/AiPanelContext'
 import { ProposedGraphModal } from './ProposedGraphModal'
 import { type TermDecision } from './acceptedOntologyBindings'
 import {
@@ -37,6 +38,12 @@ export function PreviewActionBar() {
   const [termDecisions, setTermDecisions] = useState<Record<string, TermDecision>>({})
   const acceptingRef = useRef(false)
   const preview = state.preview
+
+  // L2-SUITE-A-uifix2 FIX2 [D6]: the surface's registered universal chat
+  // (null when this surface has none — a deck without an AI chat has no
+  // staged preview to clear). Hook, so it runs before the `!preview` early
+  // return.
+  const aiPanel = useOptionalAiPanel()
 
   // Terms that need an explicit sign-off decision. Accept is hard-blocked until
   // every one is approved or replaced. Computed from the LIVE preview reference
@@ -101,6 +108,21 @@ export function PreviewActionBar() {
         commit: (previewEvents, persisted) =>
           actions.commitPreview(previewEvents, persisted.eventGraphId, persisted.commit),
         onAdopted: (persisted) => {
+          // L2-SUITE-A-uifix2 FIX2 [D6]: the deck bar just committed the
+          // staged preview (commitPreview above nulled state.preview). The
+          // universal chat's OWN staged preview (its previewEvents) is
+          // separate state — without this clear it stays staged, so the
+          // ChatPreviewCard keeps ACTIVE Apply/Discard chrome over the
+          // already-applied batch (dead chrome + a second-Apply risk) and
+          // the next send's `revising` check appends a stale
+          // "auto-rejected" line for a batch that was ACCEPTED. The one-shot
+          // clear reads the chat's staged state (still staged — the editor
+          // preview nulling doesn't re-render the bar yet) and is a no-op
+          // when nothing is staged (the chat-Apply adopter already cleared
+          // it — one adopter, one clear).
+          aiPanel?.chat?.clearStagedPreviewForExternalCommit(
+            persisted.commit?.sha,
+          )
           if (workspace) {
             // Workspace shell: stay put. commitPreview already adopted the
             // persisted graph into editor state; binding the tab makes reloads

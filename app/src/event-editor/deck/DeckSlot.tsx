@@ -56,8 +56,22 @@ export function DeckSlot({ slot }: DeckSlotProps) {
   // tile marks the actual wells the event touches (staged OR accepted),
   // not just a binary "some preview event touches this labware" flag.
   const eventWellIndex = useMemo(
-    () => buildEventWellIndex(state.events, state.preview, state.committedOfferByEvent),
-    [state.events, state.preview, state.committedOfferByEvent],
+    () =>
+      buildEventWellIndex(
+        state.events,
+        state.preview,
+        state.committedOfferByEvent,
+        // L2-SUITE-A-uifix2 FIX2 (D2): the deck's placed vessels — the
+        // attribution fallback for a well-bearing committed event that names
+        // no labware and carries no offer binding (the real committed shape
+        // of an accepted add_material onto an already-placed plate).
+        [...new Set(state.placements.map((p) => p.labwareId))],
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS
+        // marker — a batch that offered MORE THAN ONE distinct vessel
+        // forbids the placed-vessel fallback (never guess its target).
+        state.committedOfferAmbiguousByEvent,
+      ),
+    [state.events, state.preview, state.committedOfferByEvent, state.placements, state.committedOfferAmbiguousByEvent],
   )
   const affectedWells = placement
     ? eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET

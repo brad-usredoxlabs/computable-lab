@@ -30,6 +30,16 @@ import { exaVendorEnabled } from '../../lib/integrationFlags'
 // them as scattered string branches.
 import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE } from './tokens'
 
+/**
+ * The mint floor row's label, one source (L2-SUITE-A-uifix2 FIX2 [D5]): the
+ * resolver floor (below) and the ClarificationPicker's VISIBLE card row both
+ * render this — the copy is data (the creation-entry-points funnel floor),
+ * never re-spelled per surface.
+ */
+export function mintLocalTermLabel(query: string): string {
+  return `Create local term "${query}"`
+}
+
 const PAGE = 8
 const MATERIAL_PAGE = 12
 
@@ -116,7 +126,7 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   if (q) {
     initial.push({
       key: `mint:${q}`,
-      label: `Create local term "${q}"`,
+      label: mintLocalTermLabel(q),
       // L2-TERM-1 (UC-D4): the mint floor's tier words come from the
       // declarative vocabulary map (byte-identical words, one source).
       badge: VOCABULARY_BADGE.mint,

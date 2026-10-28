@@ -142,11 +142,14 @@ const FIXTURES: Array<{
   // (i) the DEFENSIVE ORDER pin (D-1 ruling's RED-SHAPE (i)): error outranks
   // the action arm — a well-formed deckLayout alongside an error is the
   // honest failure (the emit site makes the two mutually exclusive).
+  // uifix2-fix2 D1: the error text is now the plain-language choice wall
+  // (the raw validator string is retired — no implementation vocabulary in
+  // the scientist channel; the fixture quotes the NEW shape).
   {
     name: '(i) error + delivered deckLayout (H4: error outranks the action arm)',
     result: {
       success: false,
-      error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).',
+      error: 'I could not tell which Manual layout you want. The Manual deck offers: Single SBS Plate, Manual Technician Mode or Manual Bench (freeform). Name one and I will switch to it.',
       deckLayout: { platformId: 'manual', variantId: 'manual_freeform' },
     },
     expected: 'honest-failure',

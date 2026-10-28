@@ -23,6 +23,9 @@ import type {
   SlashSuggestion,
 } from '../../../shared/taptab/slashMenu/types'
 import { groundMaterialRef } from '../../lib/groundMaterialRef'
+import { apiClient } from '../../../shared/api/client'
+import { mintLocalTermLabel } from '../../../shared/taptab/slashMenu/resolvers'
+import { badgeStyles, VOCABULARY_BADGE } from '../../../shared/taptab/slashMenu/tokens'
 
 /** CURIE-shaped id (e.g. "CHEBI:17790") — an ontology ref, not a local record. */
 const CURIE_RE = /^[A-Za-z][\w.-]*:\S+$/
@@ -397,6 +400,70 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   const canMint = resolver === resolveMaterial
     && (!request.materialLayer || request.materialLayer === 'material')
 
+  // L2-SUITE-A-uifix2 FIX2 [D5]: the VISIBLE create-local (mint) row. The
+  // gate's DMSO card (rows: [], allowCreateLocal: true) promised "or create
+  // a local term" but the only mint affordance lived INSIDE the closed
+  // popover — dead chrome (the card renders only the bare search input when
+  // closed; the resolver's mint:<q> floor row is only reachable after
+  // opening + searching). The spine's tier-5 mint-local (architecture §2) is
+  // the declared affordance, so the card renders it visibly when the server
+  // said minting is allowed (`allowCreateLocal`) and the question has a name
+  // to mint (the seeded query — same precondition as the resolver floor's
+  // `if (q)` gate). It mints through the SAME apiClient.mintLocalTerm path
+  // the resolver's mint floor uses and routes the answer through onPick
+  // (ref {kind:'record', type:'material'}). It shows only while the popover is
+  // CLOSED: an OPEN popover with a query carries the resolver's own mint:<q>
+  // floor row (one mint affordance per open state — no duplicate), and a
+  // candidate row answers the question without one.
+  // L2-SUITE-A-uifix2 FIX3 (advc1 defect 4): AND ONLY WHEN THE CARD CARRIES
+  // NO CANDIDATE ROWS — the mandate's "rows empty" precondition. A card with
+  // server options has rows that answer the question, so the mint row is
+  // dead chrome on it (and the duplicate-mint temptation the criterion
+  // exists to prevent); pre-fix the check was absent (allowCreateLocal +
+  // seeded query + two options still rendered the row).
+  const showMintRow =
+    canMint
+    && request.allowCreateLocal === true
+    && query.trim().length > 0
+    && !open
+    && (request.options?.length ?? 0) === 0
+
+  // Badge colours are per-badge semantics (tokens.ts badgeStyles) — the SAME
+  // inline mechanism the popover's mint floor row uses.
+  const mintBadge = badgeStyles(VOCABULARY_BADGE.mint)
+
+  const handleMintRow = () => {
+    if (busy || !showMintRow) return
+    const q = query.trim()
+    setBusy(true)
+    void (async () => {
+      try {
+        // The resolver's mint floor (resolvers.ts `mint:<q>`) does exactly
+        // this: mint a draft material record server-side, then answer with
+        // the minted record's mention (ref {kind:'record', type:'material'}).
+        const res = await apiClient.mintLocalTerm('material', q, q)
+        const mention: SlashMention = {
+          type: 'material',
+          entityKind: 'material',
+          id: res.recordId,
+          label: res.label,
+        }
+        const answer = await groundedAnswerFromMention(request, mention)
+        if (answer) {
+          onPick(answer, request)
+          // Dismiss-on-select (same as the popover rows): a pick answers
+          // the question.
+          closePicker()
+        }
+      } catch {
+        // A mint failure (offline, server error) leaves the card honest:
+        // the row stays available, nothing is fabricated.
+      } finally {
+        setBusy(false)
+      }
+    })()
+  }
+
   return (
     <div className="message-log__clarification-picker" ref={containerRef}>
       <input
@@ -426,6 +493,27 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           if (listRef.current?.onKeyDown(e.nativeEvent)) e.preventDefault()
         }}
       />
+      {showMintRow ? (
+        <button
+          type="button"
+          className="message-log__clarification-mint"
+          data-testid="clarification-mint-row"
+          disabled={busy}
+          onClick={handleMintRow}
+        >
+          <span
+            className="message-log__clarification-mint__badge"
+            style={{
+              color: mintBadge.color,
+              background: mintBadge.background,
+              border: `1px solid ${mintBadge.border}`,
+            }}
+          >
+            {VOCABULARY_BADGE.mint}
+          </span>
+          <span className="message-log__clarification-mint__label">{mintLocalTermLabel(query.trim())}</span>
+        </button>
+      ) : null}
       {open ? (
         <div
           ref={anchorRef}
