@@ -619,20 +619,46 @@ export function CalibrationCurveView(props: {
           {points.map((p) => {
             if (p.amount === null || p.response === null) return null
             const excluded = !p.included
+            const isOutlier = outlierKeys.has(p.key)
+            const cx = sx(p.amount)
+            const cy = sy(p.response)
+            // RGF D2: the outlier's contrasting HALO ring (RUNGATE1
+            // DEFECT-2: the flagged point differed only in a 1px dashed
+            // rim with stroke == fill = the point's OWN colour — invisible
+            // at 1:1). The ring sits at the same centre with a LARGER
+            // radius and a stroke that CONTRASTS the point's fill (a red
+            // halo on the blue points; the excluded/hollow points are
+            // unfilled, so the ring reads against the background either
+            // way). Data-derived: only the flagged point(s) carry it —
+            // the flag is the artifact's own max |residual| (no threshold
+            // invented). fill=none keeps the ring from occluding the
+            // marker or the fit line.
             return (
-              <circle
-                key={p.key}
-                className="calibration-curve__point"
-                data-testid={`calibration-point-${p.key}`}
-                cx={sx(p.amount)}
-                cy={sy(p.response)}
-                r={excluded ? 3 : 5}
-                fill={excluded ? 'none' : '#3f79c4'}
-                stroke="#3f79c4"
-                onClick={() => toggle(p.key)}
-                {...sel(p.key)}
-                {...(outlierKeys.has(p.key) ? { 'data-outlier': 'true' } : {})}
-              />
+              <g key={p.key}>
+                {isOutlier ? (
+                  <circle
+                    data-outlier-halo="true"
+                    cx={cx}
+                    cy={cy}
+                    r={(excluded ? 3 : 5) + 4}
+                    fill="none"
+                    stroke="#c0392b"
+                    strokeWidth="2"
+                  />
+                ) : null}
+                <circle
+                  className="calibration-curve__point"
+                  data-testid={`calibration-point-${p.key}`}
+                  cx={cx}
+                  cy={cy}
+                  r={excluded ? 3 : 5}
+                  fill={excluded ? 'none' : '#3f79c4'}
+                  stroke="#3f79c4"
+                  onClick={() => toggle(p.key)}
+                  {...sel(p.key)}
+                  {...(isOutlier ? { 'data-outlier': 'true' } : {})}
+                />
+              </g>
             )
           })}
           {drawLine ? (

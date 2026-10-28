@@ -351,6 +351,44 @@ describe('D1 — included/excluded markers + outlier affordance (no threshold in
   })
 })
 
+// --- RGF D2 — the outlier point is VISIBLY marked in the plot ----------------
+// (RUNGATE1 DEFECT-2, major: at 1:1 the four filled markers are
+// indistinguishable — the flagged point differed only in a
+// stroke-dasharray 2,2 with stroke = fill = rgb(63,121,196) and 1px width,
+// a rim in the SAME colour as the fill, invisible. Fix: a contrasting halo
+// RING at the same centre (larger radius, a stroke that is NOT the point's
+// fill colour) — data-derived (only the flagged point carries it).)
+
+describe('RGF D2 — the outlier point renders a contrasting halo ring (visible at 1:1)', () => {
+  it('the flagged point carries a halo: same centre, LARGER radius, contrasting stroke; non-outliers carry none', () => {
+    const { container } = renderView()
+    const outlier = container.querySelector('[data-testid="calibration-point-level_3"]') as SVGElement
+    expect(outlier.getAttribute('data-outlier')).toBe('true')
+    // The halo circle: same centre as the point, a LARGER radius (a ring
+    // AROUND the marker), and a stroke colour that CONTRASTS the point's
+    // fill (the defect was stroke == fill — invisible at 1:1).
+    const halo = Array.from(container.querySelectorAll('circle')).find(
+      (c) =>
+        c.getAttribute('data-outlier-halo') === 'true' &&
+        c.getAttribute('cx') === outlier.getAttribute('cx') &&
+        c.getAttribute('cy') === outlier.getAttribute('cy'),
+    )
+    expect(halo, 'a halo circle at the outlier point centre').toBeDefined()
+    expect(Number(halo!.getAttribute('r'))).toBeGreaterThan(Number(outlier.getAttribute('r')))
+    expect(halo!.getAttribute('stroke'), 'the halo stroke contrasts the point fill').not.toBe(outlier.getAttribute('fill'))
+    // Non-outlier points carry NO halo (the marking follows the data, not
+    // decoration on every point).
+    const level1 = container.querySelector('[data-testid="calibration-point-level_1"]') as SVGElement
+    const level1Halo = Array.from(container.querySelectorAll('circle')).find(
+      (c) =>
+        c.getAttribute('data-outlier-halo') === 'true' &&
+        c.getAttribute('cx') === level1.getAttribute('cx') &&
+        c.getAttribute('cy') === level1.getAttribute('cy'),
+    )
+    expect(level1Halo).toBeUndefined()
+  })
+})
+
 // --- RGF D4 — the x-domain includes ALL plotted points (fit AND excluded) ---
 // (RUNGATE1 DEFECT-4: the gate's excluded level_5 (amount 5) was drawn at
 // cx=826.67 in a viewBox 0 0 640 320 — the x-domain was the model's
