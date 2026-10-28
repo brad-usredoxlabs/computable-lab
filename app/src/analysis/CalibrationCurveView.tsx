@@ -42,6 +42,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** RGF D5: the residual-strip label's DISPLAY precision (display-only —
+ * a stable, bounded width so the 24px-scale strip stays readable; the
+ * FULL-precision number stays in the table cell + the artifact, verbatim).
+ * Not a domain value: it formats the artifact's OWN number for the strip. */
+const RESIDUAL_DISPLAY_DECIMALS = 4
+
 /** The page surface the AnalysisPage passes (structural — this view never
  * imports the page). `sourceRun` is the active run's fetched payload
  * (inputs + parameters are the FROZEN values the recalc carries). */
@@ -643,7 +649,7 @@ export function CalibrationCurveView(props: {
             onClick={() => toggle(p.key)}
             {...sel(p.key)}
           >
-            {p.residual === null ? (p.flags.join(' ') || 'no residual') : String(p.residual)}
+            {p.residual === null ? (p.flags.join(' ') || 'no residual') : p.residual.toFixed(RESIDUAL_DISPLAY_DECIMALS)}
           </div>
         ))}
       </div>

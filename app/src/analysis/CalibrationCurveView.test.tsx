@@ -266,14 +266,19 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
     expect(Math.abs(y2 - expectedTop)).toBeLessThan(0.5)
   })
 
-  it('renders one residual bar per row with the artifact OWN relative_residual (verbatim, no recompute)', () => {
+  it('renders one residual bar per row with the artifact OWN relative_residual (the bar shows the display precision; FULL precision stays in the table cell)', () => {
     const { container } = renderView()
     const bars = container.querySelectorAll('[data-testid^="calibration-residual-"]')
     expect(bars.length).toBe(5)
-    // The outlier row's bar carries its own number; editing the artifact
-    // residual would move the bar (the UI recomputes nothing).
+    // The outlier row's bar carries its own number (display precision —
+    // RGF D5: a stable bounded display; the bar is the strip, not the
+    // precision record). Editing the artifact residual would move the bar
+    // (the UI recomputes nothing).
     const outlierBar = container.querySelector('[data-testid="calibration-residual-level_3"]')
-    expect(outlierBar?.textContent ?? '').toContain('33.333333')
+    expect(outlierBar?.textContent ?? '').toBe('33.3333')
+    // Full precision stays in the TABLE (the row cell renders the artifact
+    // number verbatim — the strip's bounded display never replaces it).
+    expect(screen.getByTestId('calibration-row-level_3').textContent).toContain('33.333333')
   })
 
   it('labels the residual basis verbatim', () => {
@@ -296,6 +301,37 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
     )
     expect(container.querySelector('[data-testid="calibration-unresolved"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="calibration-fit-line"]')).toBeNull()
+  })
+})
+
+// --- RGF D5 — residual-strip labels are STABLE AND READABLE ---------------
+// (RUNGATE1 DEFECT-5: the fixed 24px bars held the FULL-precision numbers —
+// `7.0000000000000435` rendered as `7.000`, `-16.15…` as `-16.1`, the text
+// overflowing the bar and touching its neighbours; with a zero residual the
+// bar collapsed to 2px and the label was unreadable. The rendered number
+// must be STABLE and READABLE (a fixed-decimal display, the precision const
+// is display-only); full precision stays in the table + the artifact.)
+
+describe('RGF D5 — residual-strip labels: fixed-decimal display (stable, readable)', () => {
+  it('a residual label renders as a BOUNDED fixed-decimal display (the float literal is never the label)', () => {
+    const { container } = renderView()
+    // The outlier row's own residual (33.333333) renders as a bounded
+    // fixed-decimal display — RED (full-precision String(n)): the bar's
+    // text was the float literal (8+ digits after the point), wider than
+    // any 24px bar and touching its neighbours.
+    const bar = container.querySelector('[data-testid="calibration-residual-level_3"]') as HTMLElement
+    const label = bar.textContent ?? ''
+    expect(label).not.toContain('33.333333333')
+    // Bounded: one decimal point, a limited fraction (the display-precision
+    // const) — a float's 17 significant digits never render.
+    expect(label).toMatch(/^-?\d+\.\d{1,4}$/)
+    expect(label.length).toBeLessThanOrEqual(12)
+    // The zero-residual bars still carry a READABLE label (not a 2px gap of
+    // nothing) — the fixture's level_1 residual is 0.
+    const zeroBar = container.querySelector('[data-testid="calibration-residual-level_1"]') as HTMLElement
+    expect(zeroBar.textContent ?? '').toMatch(/^-?\d+\.\d{1,4}$/)
+    // Full precision STAYS in the table (the table cell is verbatim data).
+    expect(screen.getByTestId('calibration-row-level_3').textContent).toContain('33.333333')
   })
 })
 
