@@ -349,13 +349,28 @@ describe('a material question with no words does not show another material', () 
   })
 
   it('still lets a labware question browse an empty query — that IS the answer', async () => {
+    // TEST-HYGIENE (fix1 D5): the resolver must return a SETTLED promise. The
+    // product's `.then` (ClarificationPicker.tsx:308) reads the resolved rows;
+    // an unimplemented mock returns `undefined`, so the debounced callback's
+    // `resolver(...).then` throws `Cannot read properties of undefined (reading
+    // 'then')` after the test body ends (vitest prints "Unhandled Errors ... may
+    // cause false positive tests"). Give the mock a settled value and flush the
+    // 150ms debounce + the `.then` microtask so the promise chain settles
+    // WITHIN the test while the mock is still valid. The product `.then` path
+    // is untouched (pre-existing).
+    resolveLabware.mockResolvedValue([])
     const { container } = render(
       <ClarificationPicker
         request={{ ...materialRequest, kind: 'labware', menuProvider: '/l', query: '' }}
         onPick={vi.fn()}
-      />,
+      />
     )
     openPickerFor(container)
     await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
+    // Let the debounced resolver's promise chain settle (past the 150ms debounce
+    // + the `.then` microtask) BEFORE afterEach's cleanup() unmount and
+    // mockReset() — so no `.then` fires against a reset mock / unmounted state.
+    await new Promise((r) => setTimeout(r, 250))
+    expect(resolveLabware).toHaveBeenCalled()
   })
 })
