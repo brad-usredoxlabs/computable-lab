@@ -28,6 +28,42 @@ interface RunPayload {
   revisionRef?: { id?: string }
   inputs?: Record<string, { id?: string; type?: string }>
   parameters?: Record<string, unknown>
+  /** The persisted output manifest (a SUCCEEDED run carries it on the record:
+   *  `outputManifest = { artifacts, artifactRefs (name -> {artifactRecordId,
+   *  dataReferenceId?}), views, metrics }` — the runner's own persisted shape).
+   *  Selecting such a run hydrates the rendered views from this payload, so
+   *  the interactive chromatogram is reachable for any SAVED run (not only
+   *  one just executed this session). */
+  outputManifest?: {
+    artifacts?: unknown[]
+    views?: unknown[]
+    metrics?: unknown[]
+    artifactRefs?: Record<string, { artifactRecordId?: string; dataReferenceId?: string }>
+  }
+}
+
+/** A plain object (not null, not an array). */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/** The artifactRefs name-map the page's `rendered` useMemo consumes,
+ *  hydrated from a fetched run record's persisted manifest (defect 1). */
+function artifactRefsFromRecord(
+  payload: RunPayload,
+): Record<string, { artifactRecordId: string; dataReferenceId?: string }> {
+  const raw = isRecord(payload.outputManifest) ? payload.outputManifest.artifactRefs : undefined
+  const out: Record<string, { artifactRecordId: string; dataReferenceId?: string }> = {}
+  if (!isRecord(raw)) return out
+  for (const [name, r] of Object.entries(raw)) {
+    if (isRecord(r) && typeof r.artifactRecordId === 'string' && r.artifactRecordId.length > 0) {
+      out[name] = {
+        artifactRecordId: r.artifactRecordId,
+        ...(typeof r.dataReferenceId === 'string' && r.dataReferenceId.length > 0 ? { dataReferenceId: r.dataReferenceId } : {}),
+      }
+    }
+  }
+  return out
 }
 
 interface RevPayload {
@@ -357,7 +393,27 @@ export function AnalysisPage() {
     setError(null)
     try {
       const { record } = await apiClient.getAnalysisRun(runId)
-      setActiveRun({ recordId: record.recordId, payload: record.payload as unknown as RunPayload })
+      const payload = record.payload as unknown as RunPayload
+      setActiveRun({ recordId: record.recordId, payload })
+      // Hydrate the rendered views from the SAVED run's payload (defect 1):
+      // a succeeded run's record already carries `outputManifest` + the
+      // name-keyed `artifactRefs` (the SAME shape `execute` returns), so the
+      // interactive views are reachable by SELECTING a saved run — executing
+      // is not required. Selecting ALWAYS replaces the previous run's
+      // manifest state: a succeeded run without a persisted manifest (view-
+      // less, or never succeeded) must show its OWN named empty state, never
+      // a stale sibling run's views.
+      const om = isRecord(payload.outputManifest) ? payload.outputManifest : null
+      setManifest(
+        om
+          ? {
+              artifacts: Array.isArray(om.artifacts) ? om.artifacts : [],
+              views: Array.isArray(om.views) ? om.views : [],
+              metrics: Array.isArray(om.metrics) ? om.metrics : [],
+            }
+          : { artifacts: [], views: [], metrics: [] },
+      )
+      setArtifactRefs(artifactRefsFromRecord(payload))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

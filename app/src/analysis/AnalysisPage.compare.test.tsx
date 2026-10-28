@@ -198,3 +198,58 @@ describe('AnalysisPage — manifest renderer whitelist on the real `rendered` pa
     // the real `rendered` useMemo (resolveViewRenderer at AnalysisPage.tsx:389).
   })
 })
+
+describe('AnalysisPage — FIX2R DEFECT 1: selecting a SAVED succeeded run renders its views (no execute)', () => {
+  const SAVED = { recordId: 'ANR-000900', title: 'GC10 saved run A', status: 'succeeded' }
+  const SAVED_RUNS = [
+    { recordId: 'ANR-000900', payload: { id: 'ANR-000900', title: SAVED.title, status: SAVED.status } },
+    { recordId: 'ANR-000901', payload: { id: 'ANR-000901', title: 'GC10 saved run B', status: 'succeeded' } },
+  ]
+  // The persisted manifest the runner writes on a succeeded run (the SAME
+  // shape execute returns): name-keyed artifactRefs + a chromatogram view.
+  const SAVED_MANIFEST = {
+    artifacts: [{ name: 'trace', dataKind: 'signal', value: { axis: [0, 1, 2], values: [0, 3.5, 1], axis_units: 'min', value_units: 'pA' } }],
+    views: [{ name: 'Signal', renderer: 'chromatogram', artifact: 'trace' }],
+    metrics: [],
+    artifactRefs: { trace: { artifactRecordId: 'AOUT-000900' } },
+  }
+
+  it('selecting a saved succeeded run hydrates the chromatogram from outputManifest — no execute call', async () => {
+    vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({ runs: SAVED_RUNS, total: 2 })
+    vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
+      record: { recordId: SAVED.recordId, payload: { id: SAVED.recordId, title: SAVED.title, status: SAVED.status, outputManifest: SAVED_MANIFEST } },
+    } as never)
+    render(wrap(<AnalysisPage />))
+    // Select the saved run via its run-list button (NOT the Run/execute button).
+    const select = await screen.findByRole('button', { name: SAVED.title })
+    fireEvent.click(select)
+    // The interactive chromatogram renders from the persisted manifest.
+    await waitFor(() => expect(screen.getByTestId('view-spec-chromatogram')).toBeDefined())
+    expect(screen.getByTestId('chromatogram-svg')).toBeDefined()
+    expect(screen.getByTestId('chromatogram-reset')).toBeDefined()
+    // Selecting never triggers the execute flow (and the placeholder is gone).
+    expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
+    expect(screen.queryByText('Execute a run to see its output.')).toBeNull()
+    expect(screen.queryByTestId('view-spec-error')).toBeNull()
+  })
+
+  it('selecting a saved succeeded run WITHOUT a persisted manifest clears any prior run\'s views (stale-manifest guard)', async () => {
+    vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({ runs: SAVED_RUNS, total: 2 })
+    const viewLess = { recordId: 'ANR-000901', payload: { id: 'ANR-000901', title: 'GC10 saved run B', status: 'succeeded' } }
+    vi.mocked(apiClient.getAnalysisRun).mockImplementation(async (id: string) =>
+      Promise.resolve(
+        id === SAVED.recordId
+          ? { record: { recordId: SAVED.recordId, payload: { id: SAVED.recordId, title: SAVED.title, status: SAVED.status, outputManifest: SAVED_MANIFEST } } }
+          : { record: { recordId: viewLess.recordId, payload: viewLess.payload } },
+      ) as never)
+    render(wrap(<AnalysisPage />))
+    // First select the manifest-carrying run: its chromatogram renders.
+    fireEvent.click(await screen.findByRole('button', { name: SAVED.title }))
+    await waitFor(() => expect(screen.getByTestId('view-spec-chromatogram')).toBeDefined())
+    // Then select the view-less succeeded run: it shows its OWN named empty
+    // state — the previous run's views must NOT persist (stale manifest).
+    fireEvent.click(screen.getByRole('button', { name: 'GC10 saved run B' }))
+    await waitFor(() => expect(screen.getByText('Run succeeded with no views.')).toBeDefined())
+    expect(screen.queryByTestId('view-spec-chromatogram')).toBeNull()
+  })
+})
