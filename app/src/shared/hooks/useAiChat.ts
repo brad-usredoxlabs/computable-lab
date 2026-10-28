@@ -352,6 +352,22 @@ export interface UseAiChatOptions {
    */
   onProposalDrafted?: (draft: AiProposalDraft) => void
   /**
+   * L2-SUITE-A-uifix1 D1: called when a done delivers a `deckLayout`
+   * (the server's deck_layout turn — `AgentOrchestrator` returns
+   * `{ success: true, deckLayout: { platformId, variantId } }`). The universal
+   * done arm had NO mount arm for it (the "NO universal arm" comment below),
+   * so a "navigate to the freeform deck" turn left the deck unchanged and
+   * only an honest wall showed. Deck-owning surfaces wire it to the SAME
+   * native editor actions the manual deck bar uses
+   * (`actions.setPlatform` + `actions.setVariant`) — the client guards the
+   * variant against the platform manifest (the server validates loosely).
+   * When the callback is registered the turn counts as MOUNTABLE: the false
+   * empty-success bubble is suppressed (the deck visibly changed — the turn
+   * DID propose something) and the honest wall stays (it names the delivered
+   * channel — the honest report for this turn).
+   */
+  onDeckLayout?: (deckLayout: { platformId: string; variantId: string }) => void
+  /**
    * L2-CHAT-1: called when the staged preview is discarded (Discard). Deck
    * surfaces use it to clear the ghosted preview.
    */
@@ -439,7 +455,7 @@ export interface UseAiChatOptions {
 // registered (non-deck surfaces), recomputing the count every render.
 const EMPTY_STAGED_LABWARES = Object.freeze({})
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -510,6 +526,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // callbacks above) so the done handler always calls the LATEST handler.
   const onProposalDraftedRef = useRef(onProposalDrafted)
   onProposalDraftedRef.current = onProposalDrafted
+  // L2-SUITE-A-uifix1 D1: the deck_layout seam — same stable-ref convention.
+  const onDeckLayoutRef = useRef(onDeckLayout)
+  onDeckLayoutRef.current = onDeckLayout
   const onPreviewDiscardedRef = useRef(onPreviewDiscarded)
   onPreviewDiscardedRef.current = onPreviewDiscarded
   // L2-CHAT-1 FIX3 D1+D3: the COMPLETE-adopter seam + the staged-extras
@@ -1212,6 +1231,23 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // L2-SUITE-A-uifix1 D1: a deckLayout done is a DELIVERABLE turn —
+            // mount it through the host's native editor action (the SAME
+            // actions the manual deck bar uses: setPlatform + setVariant)
+            // BEFORE the empty-success accounting, so the bubble decision sees
+            // the delivery. The host guards the variant against the platform
+            // manifest (the server validates loosely). Without a registered
+            // seam the turn falls through to the honest wall below, which
+            // NAMES the delivered channel — still honest, just unmounted.
+            const deckLayoutDelivered =
+              Boolean((result as { deckLayout?: unknown }).deckLayout) &&
+              onDeckLayoutRef.current !== undefined
+            if (deckLayoutDelivered) {
+              const layout = (result as { deckLayout?: { platformId?: unknown; variantId?: unknown } }).deckLayout
+              if (typeof layout?.platformId === 'string' && typeof layout.variantId === 'string') {
+                onDeckLayoutRef.current?.({ platformId: layout.platformId, variantId: layout.variantId })
+              }
+            }
             if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents) {
               // A turn that asked a question or surfaced an error delivered
               // something the pane shows — the wall ("asked no questions")
@@ -1256,16 +1292,23 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   } and asked no questions. Nothing was proposed and nothing was applied.`,
                 )
               }
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `sys-${Date.now()}`,
-                  role: 'system',
-                  content: 'AI completed the task but did not propose any changes.',
-                  timestamp: Date.now(),
-                  isStreaming: false,
-                },
-              ])
+              // L2-SUITE-A-uifix1 D1: the bubble claims NOTHING was proposed.
+              // It is false when the turn delivered a deck layout the deck
+              // surface mounted (the deck visibly changed — the turn DID
+              // propose something). The wall above stays (it NAMES the
+              // delivered channel — the honest report for this turn).
+              if (!deckLayoutDelivered) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `sys-${Date.now()}`,
+                    role: 'system',
+                    content: 'AI completed the task but did not propose any changes.',
+                    timestamp: Date.now(),
+                    isStreaming: false,
+                  },
+                ])
+              }
             }
             break
           }

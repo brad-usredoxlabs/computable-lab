@@ -28,7 +28,7 @@
  *  - the honest wall still names the delivered channel (its job — and with
  *    the D2 verb fix: "it delivered only a deck layout").
  */
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
@@ -204,10 +204,13 @@ describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches 
     await act(async () => {
       deck.reread()
       const input = document.querySelector('.sequence-chat textarea') as HTMLTextAreaElement
-      input.value = 'Navigate to the freeform manual deck'
-      input.dispatchEvent(new Event('change', { bubbles: true }))
+      // React's controlled textarea: a raw value-set + dispatchEvent never
+      // reaches the hook (the controlled state resets on re-render) — the
+      // repo's own pane tests (HarnessChatPane.test.tsx:219) drive it with
+      // fireEvent.change, which patches the native setter.
+      fireEvent.change(input, { target: { value: 'Navigate to the freeform manual deck' } })
       const send = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Send')
-      send?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      fireEvent.click(send!)
     })
     await awaitTurnComplete(deck)
 
@@ -243,10 +246,9 @@ describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches 
     await act(async () => {
       deck.reread()
       const input = document.querySelector('.sequence-chat textarea') as HTMLTextAreaElement
-      input.value = 'switch to a deck variant that does not exist'
-      input.dispatchEvent(new Event('change', { bubbles: true }))
+      fireEvent.change(input, { target: { value: 'switch to a deck variant that does not exist' } })
       const send = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Send')
-      send?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      fireEvent.click(send!)
     })
     await awaitTurnComplete(deck)
 
