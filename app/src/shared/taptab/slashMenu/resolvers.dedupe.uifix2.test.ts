@@ -73,7 +73,7 @@ afterEach(() => {
  *  endpoint (the same idiom the MENU-CANDIDATES-1 tests use); an unmapped
  *  route THROWS so a search can never fall through to an unmocked fetch and
  *  be silently swallowed by the resolver's `.catch(() => [])`. */
-type Row = { recordId: string; kind: string; title: string; category: string }
+type Row = { recordId: string; kind: string; title: string; category: string; subtitle?: string }
 function mockMenu(search: Map<string, Row[]>, formulations: unknown[] = []) {
   const router = vi.fn(async (input: unknown) => {
     const parsed = new URL(String(input), 'http://localhost:5174')
@@ -192,5 +192,41 @@ describe('L2-SUITE-A-uifix2 D — duplicative candidate chrome (dead-chrome rule
     expect(deduped[1]?.key).toBe('material:REC-C')
     // Idempotent: a second pass changes nothing.
     expect(dedupeSuggestionRows(deduped)).toHaveLength(2)
+  })
+
+  it('RED-4 (D4): the dedupeSuggestionRows call site in the row-render source is LOAD-BEARING — a resolveMaterial input that yields two byte-identically-rendered rows returns exactly ONE', async () => {
+    // RED-3 proves the helper in isolation; this proves the WIRING: the
+    // `return dedupeSuggestionRows(rows)` tail of materialSuggestions (the
+    // row-render source) is what actually collapses a byte-identical pair.
+    // Mutation control: replacing that call site with `return rows` keeps the
+    // helper-only test green but FAILS this one (both rows survive).
+    //
+    // How the input yields two byte-identically-rendered rows: material-
+    // instance and aliquot share the SAME badge (MATERIAL_BADGE_BY_KIND maps
+    // both to 'Instance') and the SAME layer-scoped subtitle (a specific
+    // preparation in the lab), and both are a non-composite single-token title
+    // (no ' + ' joiner). Two distinct records of those kinds with the SAME
+    // title survive the (entityKind, title) label dedup (different entityKind
+    // = different layer) but render byte-identically — same badge + label +
+    // subtitle. Only the row-render-source dedup collapses them.
+    const TITLE = 'Glycerol'
+    useMenu(
+      new Map<string, Row[]>([
+        [TITLE, [
+          { recordId: 'REC-INST', kind: 'material-instance', title: TITLE, category: 'saved-stock', subtitle: 'a specific preparation in the lab' },
+          { recordId: 'REC-ALI', kind: 'aliquot', title: TITLE, category: 'saved-stock', subtitle: 'a specific preparation in the lab' },
+        ]],
+      ]),
+    )
+    const out = await resolveMaterial(TITLE, ctx())
+    const dataRows = out.filter((s) => s.key !== `mint:${TITLE}`)
+
+    // Both rows render byte-identically (badge + label + subtitle), so the
+    // row-render source must return exactly ONE for the pair. The survivor is
+    // the FIRST in rank order (REC-INST), keeping its real recordId.
+    const visible = dataRows.map((s) => `${s.badge}\u0000${s.label}\u0000${s.subtitle}`)
+    expect(new Set(visible).size).toBe(visible.length)
+    expect(dataRows).toHaveLength(1)
+    expect(dataRows[0]?.key).toBe('material-instance:REC-INST')
   })
 })
