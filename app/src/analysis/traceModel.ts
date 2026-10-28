@@ -276,13 +276,11 @@ export async function resolveArtifactTrace(
   if (!bytes) {
     return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId} content route returned no bytes` }
   }
-  let parsedJson: unknown
-  try {
-    parsedJson = typeof bytes === 'string' ? JSON.parse(bytes) : bytes
-  } catch {
-    return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId} content is not JSON` }
-  }
-  const parsed = parseTraceValue(parsedJson)
+  // The channel already returns the client-unwrapped `content` field (the
+  // route's PARSED JSON payload — the client method does the res.json(),
+  // never a raw string), so the value goes straight to parseTraceValue —
+  // same as the sibling extractTrace (no asymmetric string branch).
+  const parsed = parseTraceValue(bytes)
   if (!parsed.ok) return { ok: false, code: 'NO_PAYLOAD', message: `artifact ${record.recordId}: ${parsed.message}` }
   return { ok: true, trace: { ...base, ...parsed.trace, label } }
 }
@@ -545,12 +543,21 @@ export function parseCompareBindings(
       if (!['artifactRef', 'label', 'conversion'].includes(k)) audit.push(`traces[${i}].${k}`)
     }
     const ref = entry.artifactRef
-    const refId = ref && typeof ref === 'object' ? (ref as { id?: unknown }).id : undefined
+    const refObj = ref && typeof ref === 'object' ? (ref as Record<string, unknown>) : null
+    const refId = refObj ? (refObj.id as unknown) : undefined
     if (typeof refId !== 'string' || refId.length === 0) {
       return { ok: false, error: { path: `bindings.traces[${i}].artifactRef.id`, message: `bindings.traces[${i}].artifactRef.id must be a non-empty string — refusing to guess` } }
     }
     const out: CompareBindingsTrace = { artifactId: refId }
-    if (typeof entry.label === 'string' && entry.label.length > 0) out.label = entry.label
+    // The identity label: the canonical write shape (buildCompareViewSpec
+    // Payload + the view-spec schema's documented traces[] shape) rides it on
+    // the REF object (ref.schema.yaml allows `label` on record refs); the
+    // entry-level `label` key is also a documented known key and still wins
+    // when present (entry-level is the more explicit location).
+    const entryLabel = typeof entry.label === 'string' && entry.label.length > 0 ? entry.label : undefined
+    const refLabel = refObj && typeof refObj.label === 'string' && refObj.label.length > 0 ? refObj.label : undefined
+    const label = entryLabel ?? refLabel
+    if (label !== undefined) out.label = label
     if (entry.conversion !== undefined) {
       const c = entry.conversion as Record<string, unknown> | undefined
       if (!c || typeof c !== 'object' || typeof c.factor !== 'number' || !Number.isFinite(c.factor)) {
