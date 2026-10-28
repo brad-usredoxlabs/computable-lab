@@ -166,13 +166,13 @@ describe('classifyCalibrationModel — structural, never name-based', () => {
   })
 
   it('rejects a payload without coefficients', () => {
-    const p = { ...MODEL_PAYLOAD }
+    const p: Record<string, unknown> = { ...MODEL_PAYLOAD }
     delete p.coefficients
     expect(classifyCalibrationModel(p).ok).toBe(false)
   })
 
   it('rejects a payload without fit_points', () => {
-    const p = { ...MODEL_PAYLOAD }
+    const p: Record<string, unknown> = { ...MODEL_PAYLOAD }
     delete p.fit_points
     expect(classifyCalibrationModel(p).ok).toBe(false)
   })
@@ -320,8 +320,9 @@ describe('setLevelFit / applyLevelOverrides — pure, no source mutation', () =>
 
   it('setLevelFit flips the matching level by its level tag', () => {
     const out = setLevelFit(CAL_PARAMS as Record<string, unknown>, 'levels', 3, false)
-    expect(out.levels[2].fit).toBe(false)
-    expect(out.levels[0].fit).toBe(true)
+    const lv = out.levels as unknown as Record<string, unknown>[]
+    expect(lv[2].fit).toBe(false)
+    expect(lv[0].fit).toBe(true)
     expect(JSON.stringify(CAL_PARAMS)).toBe(frozen) // source untouched
   })
 
@@ -332,8 +333,9 @@ describe('setLevelFit / applyLevelOverrides — pure, no source mutation', () =>
 
   it('applyLevelOverrides applies many toggles, appends when a level is new', () => {
     const out = applyLevelOverrides(CAL_PARAMS as Record<string, unknown>, 'levels', [{ level: 2, fit: false }, { level: 9, fit: true }])
-    expect(out.levels[1].fit).toBe(false)
-    expect(out.levels[3]).toEqual({ level: 9, fit: true })
+    const levels = out.levels as Record<string, unknown>[]
+    expect(levels[1].fit).toBe(false)
+    expect(levels[3]).toEqual({ level: 9, fit: true })
     expect(JSON.stringify(CAL_PARAMS)).toBe(frozen)
   })
 })

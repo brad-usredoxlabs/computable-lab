@@ -90,8 +90,8 @@ export function classifyCalibrationTable(value: unknown): Guarded<CalibrationTab
   }
   if (!Array.isArray(value.columns)) return { ok: false, error: 'columns missing' }
   const cols = (value.columns as unknown[]).filter((c): c is string => typeof c === 'string')
-  if (!cols.includes(CAL_ARTIFACT_COLUMNS.fitPoint)) return { ok: false, error: 'fit_point column missing' }
-  if (!cols.includes(CAL_ARTIFACT_COLUMNS.relativeResidual)) return { ok: false, error: 'relative_residual column missing' }
+  if (!cols.includes(CAL_ARTIFACT_COLUMNS.fitPoint)) return { ok: false, error: `the ${CAL_ARTIFACT_COLUMNS.fitPoint} column is missing` }
+  if (!cols.includes(CAL_ARTIFACT_COLUMNS.relativeResidual)) return { ok: false, error: `the ${CAL_ARTIFACT_COLUMNS.relativeResidual} column is missing` }
   const out: CalibrationTableShape = { rows: rows as Record<string, unknown>[], columns: cols }
   if (typeof value.amount_unit === 'string') out.amountUnit = value.amount_unit
   return { ok: true, value: out }
@@ -127,16 +127,18 @@ export function classifyCalibrationModel(value: unknown): Guarded<CalibrationMod
   if (typeof value[MODEL_PAYLOAD_KEYS.statisticName] !== 'string') return { ok: false, error: 'statistic_name missing' }
   const sv = value[MODEL_PAYLOAD_KEYS.statisticValue]
   if (!(sv === null || isFiniteNumber(sv))) return { ok: false, error: 'statistic_value must be a number or null' }
-  const equation = typeof value[MODEL_PAYLOAD_KEYS.equation] === 'string' ? value[MODEL_PAYLOAD_KEYS.equation] : undefined
-  const statisticName = typeof value[MODEL_PAYLOAD_KEYS.statisticName] === 'string' ? value[MODEL_PAYLOAD_KEYS.statisticName] : undefined
-  const statisticDefinition = typeof value[MODEL_PAYLOAD_KEYS.statisticDefinition] === 'string' ? value[MODEL_PAYLOAD_KEYS.statisticDefinition] : undefined
-  const residualBasis = typeof value[MODEL_PAYLOAD_KEYS.residualBasis] === 'string' ? value[MODEL_PAYLOAD_KEYS.residualBasis] : undefined
-  const responseQuantity = typeof value[MODEL_PAYLOAD_KEYS.responseQuantity] === 'string' ? value[MODEL_PAYLOAD_KEYS.responseQuantity] : undefined
-  const amountUnit = typeof value[MODEL_PAYLOAD_KEYS.amountUnit] === 'string' ? value[MODEL_PAYLOAD_KEYS.amountUnit] : undefined
-  const xMin = isFiniteNumber(value[MODEL_PAYLOAD_KEYS.xMin]) ? value[MODEL_PAYLOAD_KEYS.xMin] : undefined
-  const xMax = isFiniteNumber(value[MODEL_PAYLOAD_KEYS.xMax]) ? value[MODEL_PAYLOAD_KEYS.xMax] : undefined
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+  const equation = str(value[MODEL_PAYLOAD_KEYS.equation])
+  const statisticName = str(value[MODEL_PAYLOAD_KEYS.statisticName])
+  const statisticDefinition = str(value[MODEL_PAYLOAD_KEYS.statisticDefinition])
+  const residualBasis = str(value[MODEL_PAYLOAD_KEYS.residualBasis])
+  const responseQuantity = str(value[MODEL_PAYLOAD_KEYS.responseQuantity])
+  const amountUnit = str(value[MODEL_PAYLOAD_KEYS.amountUnit])
+  const num = (v: unknown): number | undefined => (isFiniteNumber(v) ? v : undefined)
+  const xMin = num(value[MODEL_PAYLOAD_KEYS.xMin])
+  const xMax = num(value[MODEL_PAYLOAD_KEYS.xMax])
   const out: CalibrationModelShape = {
-    model: value[MODEL_PAYLOAD_KEYS.model],
+    model: str(value[MODEL_PAYLOAD_KEYS.model]) ?? '',
     coefficients: coefs as Record<string, number>,
     statisticValue: sv as number | null,
     fitPoints: value[MODEL_PAYLOAD_KEYS.fitPoints] as Record<string, unknown>[],
@@ -197,8 +199,11 @@ export function predictAt(model: string, coefficients: Record<string, number>, x
 // --- the row <-> fit-point join ------------------------------------------------
 
 export interface CurvePoint {
-  /** Stable selection key: the parsed peak_source input name + row index,
-   * falling back to the row's own level tag (both are artifact data). */
+  /** Stable selection key: the row's INPUT NAME (the peak_source input, the
+   * level's identity in the run's frozen inputs) falling back to the row's
+   * own level tag (both are artifact data). Drives the
+   * calibration-row-/calibration-point-/calibration-residual-<key> testids
+   * (spec D2's "<level>" key). */
   key: string
   row: Record<string, unknown>
   amount: number | null
@@ -244,12 +249,12 @@ export function joinCurvePoints(
   return rows.map((row) => {
     const amount = isFiniteNumber(row[CAL_ARTIFACT_COLUMNS.amount]) ? (row[CAL_ARTIFACT_COLUMNS.amount] as number) : null
     const fp = amount !== null ? byAmount.get(amount) : undefined
-    const srcRef = isRecord(fp?.source_point_ref) ? fp.source_point_ref : undefined
-    const ps = parsePeakSource(row[CAL_ARTIFACT_COLUMNS.peakSource])
-    const key = ps ? `${ps.inputName}:row${ps.rowIndex}` : (levelTag(row) || `row-${rows.indexOf(row)}`)
     const residualRaw = row[CAL_ARTIFACT_COLUMNS.relativeResidual]
     const flagsRaw = row[CAL_ARTIFACT_COLUMNS.flags]
     const peakSourceRaw = row[CAL_ARTIFACT_COLUMNS.peakSource]
+    const srcRef = isRecord(fp?.source_point_ref) ? fp.source_point_ref : undefined
+    const inputName = typeof srcRef?.input_name === 'string' ? srcRef.input_name : (typeof fp?.source_input === 'string' ? fp.source_input : null)
+    const key = inputName ?? (levelTag(row) || `row-${rows.indexOf(row)}`)
     return {
       key,
       row,
@@ -257,7 +262,7 @@ export function joinCurvePoints(
       response: isFiniteNumber(row[responseCol]) ? (row[responseCol] as number) : null,
       included: row[CAL_ARTIFACT_COLUMNS.fitPoint] === true,
       residual: isFiniteNumber(residualRaw) ? (residualRaw as number) : null,
-      sourceInput: typeof srcRef?.input_name === 'string' ? srcRef.input_name : (typeof fp?.source_input === 'string' ? fp.source_input : null),
+      sourceInput: inputName,
       peakSource: typeof peakSourceRaw === 'string' ? peakSourceRaw : null,
       flags: Array.isArray(flagsRaw) ? (flagsRaw as unknown[]).filter((f): f is string => typeof f === 'string') : [],
     }
@@ -293,6 +298,29 @@ export function classifyResultView(inlineValue: unknown, hasCalibrationPair: boo
   if (hasCalibrationPair) return 'quantitative'
   if (isRecord(inlineValue) && typeof inlineValue[QUANT_DIGEST_KEY] === 'string') return 'quantitative'
   return 'uncalibrated'
+}
+
+// --- display shaping (property names stay in THIS module — bait #2) ---------
+
+/** The model head line: the explicit equation string the artifact declared,
+ * rendered verbatim (never parsed — the structured coefficients are the
+ * truth; this is display, not analysis). */
+export function modelHead(m: CalibrationModelShape): { testId: string; text: string } | null {
+  if (m.equation === undefined) return null
+  return { testId: `calibration-${MODEL_PAYLOAD_KEYS.equation}`, text: m.equation }
+}
+
+/** The named-statistic line, verbatim: name + value + definition. A null
+ * statistic VALUE renders honestly as the word `null` beside the verbatim
+ * definition — no reason string is invented (the reason lives in the
+ * calibration_statistic METRIC only, never in the model payload) and no
+ * 1.0/0.0 is substituted. */
+export function statisticText(m: CalibrationModelShape): string {
+  const parts: string[] = []
+  if (m.statisticName !== undefined) parts.push(m.statisticName)
+  parts.push(m.statisticValue === null ? 'null' : String(m.statisticValue))
+  if (m.statisticDefinition !== undefined) parts.push(` — ${m.statisticDefinition}`)
+  return parts.join(' ')
 }
 
 // --- recalc params (D4) ---------------------------------------------------------

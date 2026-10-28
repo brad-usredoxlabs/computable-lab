@@ -1,0 +1,130 @@
+/* GC-11 — the calibration-curve composite (D1/D6 chrome).
+ * D6 pin: NO text-overflow, NO ellipsis, NO nowrap on headers/cells — long
+ * column names WRAP (overflow-wrap: anywhere), never truncate. The header
+ * test asserts full textContent; the verif-6 grep asserts zero truncation
+ * rules in this file. */
+
+.calibration-curve {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.calibration-curve__head {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+}
+
+.calibration-curve__stat {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.calibration-curve__plot {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  display: block;
+}
+
+.calibration-curve__point {
+  cursor: pointer;
+}
+
+.calibration-curve__point[data-selected] {
+  stroke: #c0392b;
+  stroke-width: 3;
+}
+
+.calibration-curve__point[data-outlier] {
+  stroke-dasharray: 2 2;
+}
+
+.calibration-curve__residuals {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  min-height: 24px;
+}
+
+.calibration-curve__residual-bar {
+  width: 24px;
+  min-height: 2px;
+  background: #8e44ad;
+  font-size: 0.6rem;
+  line-height: 1;
+  overflow: visible;
+  cursor: pointer;
+  text-align: center;
+  color: #fff;
+}
+
+.calibration-curve__residual-bar[data-selected] {
+  outline: 2px solid #c0392b;
+  outline-offset: 1px;
+}
+
+.calibration-curve__basis {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.calibration-curve__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.calibration-curve__table th,
+.calibration-curve__table td {
+  border: 1px solid var(--border, #ccc);
+  padding: 2px 6px;
+  /* D6: wrap, never truncate */
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.calibration-curve__table tr[data-selected] {
+  background: rgba(192, 57, 43, 0.12);
+}
+
+.calibration-curve__table tr[data-outlier] {
+  font-weight: 600;
+}
+
+.calibration-curve__runline {
+  font-size: 0.85rem;
+}
+
+.calibration-curve__recalc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.calibration-curve__recalc-diff {
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+}
+
+.calibration-curve__recalc-preview {
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  background: var(--code-bg, #f4f4f4);
+  padding: 0.4rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.calibration-curve__unresolved,
+.calibration-curve__dref {
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  border: 1px dashed var(--border, #999);
+  border-radius: 4px;
+}

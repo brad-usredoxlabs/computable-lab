@@ -210,17 +210,19 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
   })
 
   it('samples the fit line from the structured coefficients over [x_min, x_max] (geometry only)', () => {
-    // y = 2x + 1 sampled at x_min=1 and x_max=5 -> 3 and 11; the y-domain of
-    // the fixture points+line is exactly [3, 11], so px = 52/26 for the max.
+    // H=320, PAD=16 (the view's plot geometry). The fixture: y = 2x + 1 over
+    // [x_min=1, x_max=5] -> y from 3 to 11; the y-domain of points + line is
+    // exactly [3, 11], so the line runs from the plot bottom (yMin -> H-PAD)
+    // to the plot top (yMax -> PAD).
     const { container } = renderView()
     const line = container.querySelector('[data-testid="calibration-fit-line"]') as SVGLineElement
     expect(line).not.toBeNull()
     const y1 = Number(line.getAttribute('y1'))
     const y2 = Number(line.getAttribute('y2'))
-    const expected1 = 240 - 8 - 0 * (312 - 16) // 3 -> yMin -> bottom of plot
-    const expected2 = 240 - 8 - ((11 - 3) / (11 - 3)) * (312 - 16) // 11 -> yMax -> top
-    expect(Math.abs(y1 - expected1)).toBeLessThan(0.5)
-    expect(Math.abs(y2 - expected2)).toBeLessThan(0.5)
+    const expectedBottom = 320 - 16 // 3  -> yMin -> bottom of plot
+    const expectedTop = 16          // 11 -> yMax -> top of plot
+    expect(Math.abs(y1 - expectedBottom)).toBeLessThan(0.5)
+    expect(Math.abs(y2 - expectedTop)).toBeLessThan(0.5)
   })
 
   it('renders one residual bar per row with the artifact OWN relative_residual (verbatim, no recompute)', () => {
@@ -235,7 +237,7 @@ describe('D1 — the composite renders the artifact numbers verbatim (no TS math
 
   it('labels the residual basis verbatim', () => {
     renderView()
-    expect(screen.getByTestId('calibration-residual-basis').textContent).toBe('relative residual on the fitted response quantity, percent')
+    expect(screen.getByTestId('calibration-basis-label').textContent).toBe('relative residual on the fitted response quantity, percent')
   })
 
   it('renders a NAMED arm when the model payload lacks the response column mapping (no invented column)', () => {
@@ -302,8 +304,8 @@ describe('D2 — row <-> point <-> residual selection is two-way', () => {
   it('headers are the artifact column keys VERBATIM incl. a 24-char name (D6: wrap, never truncate)', () => {
     const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: {
       ...JSON.parse(JSON.stringify(TABLE_PAYLOAD)),
-      columns: ['level', 'measurement_response_raw_pa_min_extended_test_name'],
-      rows: [{ level: 1, measurement_response_raw_pa_min_extended_test_name: 3 }],
+      columns: ['level', 'fit_point', 'relative_residual', 'measurement_response_raw_pa_min_extended_test_name'],
+      rows: JSON.parse(JSON.stringify(TABLE_PAYLOAD)).rows.map((r: Record<string, unknown>) => ({ ...r, measurement_response_raw_pa_min_extended_test_name: r.response_ratio })),
     } }
     const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
     const { container } = render(
@@ -453,7 +455,7 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
     fireEvent.click(screen.getByTestId('calibration-fit-level_2'))
     fireEvent.click(screen.getByTestId('calibration-recalc-open'))
     fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
-    expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
     expect(body.title).toBe('recalc of ANR-CAL-1')
     expect(body.revisionRef).toEqual({ kind: 'record', id: 'ANREV-CAL-1', type: 'analysis-revision' })
@@ -463,7 +465,7 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
     expect((body.parameters as { levels: Record<string, unknown>[] }).levels[0].fit).toBe(true)
     expect((body.parameters as { model: string }).model).toBe('linear')
     // execute fires on the NEW id ONLY — never the source run's id.
-    expect(apiClient.executeAnalysisRun).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(apiClient.executeAnalysisRun).toHaveBeenCalledTimes(1))
     expect(apiClient.executeAnalysisRun).toHaveBeenCalledWith(newRunId)
     expect(apiClient.executeAnalysisRun).not.toHaveBeenCalledWith('ANR-CAL-1')
     expect(onRecalcDone).toHaveBeenCalledWith(newRunId)
@@ -478,6 +480,7 @@ describe('D4 — changes spawn a NEW run; completed models are never mutated', (
     const preview = screen.getByTestId('calibration-recalc-preview').textContent ?? ''
     expect(preview).not.toBe('(no parameters)')
     fireEvent.click(screen.getByTestId('calibration-recalc-submit'))
+    await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0]
     expect(sortedParamsJson(body.parameters as Record<string, unknown>)).toBe(preview)
   })
