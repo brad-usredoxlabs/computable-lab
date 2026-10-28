@@ -20,7 +20,7 @@
  */
 import { useState, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { ParameterForm } from './ParameterForm'
+import { ParameterForm, collectGateIssues, pruneEmpty } from './ParameterForm'
 import type { RenderableArtifact } from './ViewRenderer'
 import {
   CAL_ARTIFACT_COLUMNS,
@@ -345,13 +345,18 @@ export function CalibrationCurveView(props: {
   const revisionMissing = sourceRevisionRef !== null && sourceRevision === undefined
   const onRecalc = (): void => {
     if (submitting || sourceRevisionRef === null || sourceRevision === undefined || !parameterSchema) return
+    // FIX1 D7: the SHIPPED gate gates the recalc submit too (spec D4) — a
+    // blocked recalc never POSTs (the button's disabled attribute is the
+    // chrome; this is the authority).
+    if (recalcBlocked) return
+    const recalcParams = buildRecalcParameters()
     setSubmitting(true)
     const body: Record<string, unknown> = {
       title: `recalc of ${page.activeRunId}`,
       revisionRef: { kind: 'record', id: sourceRevisionRef, type: 'analysis-revision' },
       inputs: frozenInputs(page),
     }
-    if (Object.keys(params).length > 0) body.parameters = params
+    if (recalcParams !== undefined) body.parameters = recalcParams
     void apiClient
       .createAnalysisRun(body as Parameters<typeof apiClient.createAnalysisRun>[0])
       .then((res) => {
@@ -365,6 +370,36 @@ export function CalibrationCurveView(props: {
   }
 
   const diffLine = levelDiff(frozenParams(page), params)
+
+  /** FIX1 D7: the recalc submit rides the SHIPPED gate (spec D4: "the shipped
+   * gate collectGateIssues applies to the recalc form too — a blocked recalc
+   * names its reason (no dead chrome)"). Same classify authority as the
+   * page's create-run gate (AnalysisPage pCollectGateIssues, :99-115); the
+   * reason wording mirrors that contract. Computed LIVE from the pending
+   * form values (a form edit re-gates on the next render). */
+  // (a mocked/absent gate function is treated as an EMPTY gate — the chrome
+  // stays live and the handler's own guard decides; the real module always
+  // returns the issues object).
+  const recalcGate = parameterSchema !== undefined ? collectGateIssues(parameterSchema, params) ?? { missing: [] as string[], invalidNumbers: [] as string[], unsupported: [] as string[] } : { missing: [] as string[], invalidNumbers: [] as string[], unsupported: [] as string[] }
+  const recalcBlocked =
+    recalcGate.missing.length > 0 || recalcGate.invalidNumbers.length > 0 || recalcGate.unsupported.length > 0
+  const recalcGateReason = recalcGate.unsupported.length > 0
+    ? `Cannot submit: unsupported construct(s) at ${recalcGate.unsupported.join(', ')}`
+    : recalcGate.missing.length > 0
+      ? `Cannot submit: missing required parameter(s): ${recalcGate.missing.join(', ')}`
+      : recalcGate.invalidNumbers.length > 0
+        ? `Cannot submit: invalid number(s): ${recalcGate.invalidNumbers.join(', ')}`
+        : ''
+
+  /** FIX1 D7: the EXACT parameters object the submit will send — the PRUNED
+   * pending values (pruneEmpty, the page's buildParameters :357 discipline):
+   * untouched optionals, emptied objects and empty array elements are all
+   * OMITTED, never undefined/null/''-valued. undefined = the body omits the
+   * `parameters` key entirely. */
+  const buildRecalcParameters = (): Record<string, unknown> | undefined => {
+    const pruned = pruneEmpty(params) ?? params
+    return Object.keys(pruned).length > 0 ? pruned : undefined
+  }
 
   /** The fit checkbox for a point (D4 point inclusion, FIX1 D6): its checked
    * state is the point's OWN levels[] row's `fit` value when a levels[] row
@@ -556,7 +591,17 @@ export function CalibrationCurveView(props: {
                 <div className="calibration-curve__recalc-preview" data-testid="calibration-recalc-preview">
                   {Object.keys(params).length > 0 ? sortedParamsJson(params) : '(no parameters)'}
                 </div>
-                <button type="button" data-testid="calibration-recalc-submit" onClick={onRecalc} disabled={submitting}>
+                {recalcBlocked ? (
+                  <div className="calibration-curve__recalc-blocked" data-testid="calibration-recalc-blocked">
+                    {recalcGateReason}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  data-testid="calibration-recalc-submit"
+                  onClick={onRecalc}
+                  disabled={submitting || recalcBlocked}
+                >
                   {submitting ? 'submitting…' : 'submit recalculation'}
                 </button>
               </>

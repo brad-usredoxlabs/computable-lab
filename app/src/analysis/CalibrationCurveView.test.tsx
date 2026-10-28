@@ -36,18 +36,31 @@ interface MockFormProps {
   onChange(next: Record<string, unknown>): void
 }
 
-vi.mock('./ParameterForm', () => ({
-  ParameterForm: (props: MockFormProps) => (
-    <div data-testid={`${props.testIdPrefix}-mock`} data-value={JSON.stringify(props.value)}>
-      <button type="button" onClick={() => {
-        const levels = Array.isArray(props.value.levels) ? (props.value.levels as Record<string, unknown>[]) : []
-        props.onChange({ ...props.value, levels: levels.map((r) => ({ ...r, fit: true })) })
-      }}>
-        flip-all-fit
-      </button>
-    </div>
-  ),
-}))
+// The './ParameterForm' mock: the form COMPONENT is a mock (value visible
+// via data-value; no real controls needed to drive the view), but the GATE
+// FUNCTIONS are RE-EXPORTED (a FIX1 D7 addition to this mock surface — the
+// recalc submit must ride the SHIPPED gate, spec D4) so the view's
+// collectGateIssues/pruneEmpty imports resolve to REAL implementations
+// (importActual, spy-able) instead of undefined.
+const pfHolder = vi.hoisted(() => ({ gate: null as null | ((schema: Record<string, unknown> | undefined, values: Record<string, unknown>) => unknown), prune: null as null | ((obj: Record<string, unknown>) => Record<string, unknown>) }))
+vi.mock('./ParameterForm', async () => {
+  const real = await vi.importActual<typeof import('./ParameterForm')>('./ParameterForm')
+  return {
+    ...real,
+    ParameterForm: (props: MockFormProps) => (
+      <div data-testid={`${props.testIdPrefix}-mock`} data-value={JSON.stringify(props.value)}>
+        <button type="button" onClick={() => {
+          const levels = Array.isArray(props.value.levels) ? (props.value.levels as Record<string, unknown>[]) : []
+          props.onChange({ ...props.value, levels: levels.map((r) => ({ ...r, fit: true })) })
+        }}>
+          flip-all-fit
+        </button>
+      </div>
+    ),
+    collectGateIssues: (schema: Record<string, unknown> | undefined, values: Record<string, unknown>) => pfHolder.gate?.(schema, values),
+    pruneEmpty: (obj: Record<string, unknown>) => pfHolder.prune?.(obj),
+  }
+})
 
 // --- fixtures (GC-8 shipped shapes, mirror calibrationModel.test.ts) ---------
 
@@ -781,5 +794,105 @@ describe('D4 recalc — FIX1 D1: the revision is the source run FROZEN revisionR
     // And nothing is ever POSTed with an empty revision id.
     fireEvent.click(screen.getByTestId('calibration-recalc-open'))
     expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+  })
+})
+
+// --- FIX1 D7 RED — the recalc submit rides the SHIPPED GATE ------------------
+// (spec D4: "the shipped gate collectGateIssues applies to the recalc form too —
+// a blocked recalc names its reason (no dead chrome)"). The shipped onRecalc
+// POSTed whatever the form held — no collectGateIssues, no pruneEmpty.
+//
+// This describe re-mocks './ParameterForm' so collectGateIssues is the REAL
+// exported gate (the component-level mock above returns a div-only form; the
+// view's GATE COMPUTATION imports the function, so the default mock would
+// replace it with undefined — the test's whole authority). The form
+// COMPONENT stays the mock (value visible via data-value; no real controls
+// needed to drive the gate).
+
+describe('D7 — FIX1: the recalc submit is gated by collectGateIssues (shipped gate, named reason)', () => {
+  beforeEach(async () => {
+    // Wire the mock module's re-exported gate functions to the REAL
+    // implementations (the view imports them — the mock surface must forward,
+    // spec D4: "the shipped gate applies to the recalc form too").
+    const real = await vi.importActual<typeof import('./ParameterForm')>('./ParameterForm')
+    pfHolder.gate = real.collectGateIssues
+    pfHolder.prune = real.pruneEmpty
+  })
+
+  const RECALC_ARTIFACTS = () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_PAYLOAD)) }
+    return { artifact, modelArtifact }
+  }
+
+  // A MINIMAL parameterSchema (one required string control) — deterministic
+  // against the REAL shipped gate (CAL_SCHEMA's multi-type `compound_ref`
+  // node classifies as an "unsupported construct", which would block EVERY
+  // recalc and make the valid-passes arm untestable). The revision id matches
+  // the source run's frozen revisionRef (the D1 binding: the form renders
+  // over the ACTIVE RUN'S REVISION's parameterSchema).
+  const MIN_SCHEMA = {
+    type: 'object',
+    required: ['model'],
+    properties: { model: { type: 'string' } },
+  }
+  const pageWithParams = (parameters: Record<string, unknown>): PageContext => ({
+    ...PAGE_CTX,
+    revisions: [{ recordId: 'ANREV-CAL-1', payload: { id: 'ANREV-CAL-1', title: 'TEST cal revision', parameterSchema: MIN_SCHEMA } }],
+    sourceRun: {
+      recordId: 'ANR-CAL-1',
+      payload: {
+        id: 'ANR-CAL-1',
+        title: 'TEST calibration run',
+        status: 'succeeded',
+        revisionRef: { id: 'ANREV-CAL-1' },
+        inputs: SOURCE_INPUTS,
+        parameters,
+      },
+    },
+  })
+
+  it('invalid recalc params (a required control missing) -> submit DISABLED + the reason NAMED, and a click POSTs nothing', async () => {
+    // The source run's frozen parameters omit the REQUIRED `model` control —
+    // a legal frozen-state shape the form pre-fills verbatim (spec D4). The
+    // shipped onRecalc POSTed it anyway (no gate); the fixed view must block.
+    const { artifact, modelArtifact } = RECALC_ARTIFACTS()
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithParams({})} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    // The form renders over the source revision's parameterSchema (the D1
+    // fix); the empty frozen values pre-fill.
+    expect(screen.getByTestId('calibration-recalc-mock')).toBeDefined()
+    const submit = screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    // The blocked reason is NAMED next to the button (no dead chrome —
+    // mirrors the page's analysis-params-blocked discipline) and names the
+    // missing required control.
+    const blocked = screen.getByTestId('calibration-recalc-blocked')
+    expect(blocked.textContent).toContain('Cannot submit')
+    expect(blocked.textContent).toContain('model')
+    // A forced click still POSTs nothing (the handler refuses, not just the
+    // disabled attribute).
+    fireEvent.click(submit)
+    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
+  })
+
+  it('valid recalc params -> submit ENABLED, the gate passes, and the POST carries the PRUNED parameters', async () => {
+    const newRunId = 'ANR-RECALC-D7'
+    vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ recordId: newRunId } as never)
+    vi.mocked(apiClient.executeAnalysisRun).mockResolvedValue({ success: true, recordId: newRunId } as never)
+    const { artifact, modelArtifact } = RECALC_ARTIFACTS()
+    const VALID = { model: 'linear' }
+    render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={pageWithParams(VALID)} onRecalcDone={() => {}} />)
+    fireEvent.click(screen.getByTestId('calibration-recalc-open'))
+    const submit = screen.getByTestId('calibration-recalc-submit') as HTMLButtonElement
+    // The required control is satisfied — the gate must NOT block a valid
+    // recalc (a gate that blocks everything is dead chrome too).
+    expect(submit.disabled).toBe(false)
+    expect(screen.queryByTestId('calibration-recalc-blocked')).toBeNull()
+    fireEvent.click(submit)
+    await vi.waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
+    const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as Record<string, unknown>
+    expect(body.parameters).toEqual(VALID)
   })
 })
