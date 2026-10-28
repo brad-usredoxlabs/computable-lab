@@ -324,6 +324,15 @@ export interface EventEditorState {
    * OPTIONAL (house state-field pattern): older reducer snapshots / test
    * state literals predate the field, so absent means "no committed event is
    * bound to an offer" — read it as `state.committedOfferByEvent ?? {}`.
+   *
+   * L2-SUITE-A-uifix2 FIX4 (advc2 cycle-2, defect 2): a map ENTRY may also be
+   * an EXPLICIT null (the legacy /pre-fix sentinel — the old capture wrote
+   * `null` for BOTH zero and multiple offers). eventWellIndex classifies an
+   * explicit null as AMBIGUOUS (the placed-vessel fallback is FORBIDDEN —
+   * never guess); only an ABSENT entry is "no offer" (the fallback allowed).
+   * The current capture never writes null — it writes the recordId for the
+   * single-offer case and NOTHING for the zero-offer case — so the binding
+   * map and the marker map cannot drift.
    */
   committedOfferByEvent?: Record<string, string | null>
   /**
@@ -629,32 +638,43 @@ function normalizePreviewPlacementLocations(
   return changed ? { ...preview, previewPlacements } : preview
 }
 
-/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch offer capture for
- *  the events of ONE preview — the TRI-STATE that `null` used to conflate:
- *    - the batch's SINGLE distinct vessel  -> binding[ev] = that recordId;
- *    - NO vessel (zero offers)             -> binding[ev] = null
- *      (absent-ish entry: the placed-vessel fallback is ALLOWED);
- *    - MORE THAN ONE distinct vessel       -> binding[ev] = null AND
+/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2, defects
+ *  1-2): the per-batch offer capture for the events of ONE preview — the
+ *  TRI-STATE, with ONE representation per fact (the binding map and the
+ *  marker map cannot drift — this capture is the ONLY producer of both):
+ *    - the batch's SINGLE distinct vessel -> binding[ev] = that recordId;
+ *    - NO vessel (zero offers)            -> NO binding entry AND no marker
+ *      (absent = no offer: the placed-vessel fallback is ALLOWED). FIX4: the
+ *      legacy `binding[ev] = null` sentinel is GONE — the old shape wrote
+ *      null for BOTH zero and multiple offers, and the index now classifies
+ *      an explicit null as AMBIGUOUS, so writing it for the zero case would
+ *      have forbidden the D2 fallback.
+ *    - MORE THAN ONE distinct vessel      -> NO binding entry AND
  *      ambiguous[ev] = true (the explicit ambiguous marker: the batch's
  *      target is genuinely ambiguous, so the placed-vessel fallback is
  *      FORBIDDEN — never guess; the batch's real target may be a vessel
- *      that is not even placed yet).
+ *      that is not even placed yet). FIX4: the legacy `binding[ev] = null`
+ *      written alongside the marker is GONE — the marker ALONE carries the
+ *      ambiguity.
  *  Both maps ride the committed events (merged into the running state maps
  *  at commit time), so a later turn cannot re-route (or erase) them. */
 function committedOfferCapturesForPreview(
   events: PlateEvent[],
   preview: { resolvedLabwares?: AiResolvedLabware[] },
-): { binding: Record<string, string | null>; ambiguous: Record<string, boolean> } {
+): { binding: Record<string, string>; ambiguous: Record<string, boolean> } {
   const ids = (preview.resolvedLabwares ?? [])
     .map((offer) => offer.recordId)
     .filter((id): id is string => typeof id === 'string' && id.length > 0)
   const distinct = new Set(ids)
-  const recordId = distinct.size === 1 ? (ids[0] as string) : null
   const isAmbiguous = distinct.size > 1
-  const binding: Record<string, string | null> = {}
+  const binding: Record<string, string> = {}
   const ambiguous: Record<string, boolean> = {}
   for (const event of events) {
-    binding[event.eventId] = recordId
+    // Single-offer case ONLY writes a binding entry (the recordId). The
+    // zero-offer case writes NOTHING (absent = no offer) and the
+    // multi-offer case writes ONLY the marker — never a null sentinel, so
+    // the two maps describe the same fact and cannot disagree.
+    if (!isAmbiguous && distinct.size === 1) binding[event.eventId] = ids[0] as string
     if (isAmbiguous) ambiguous[event.eventId] = true
   }
   return { binding, ambiguous }
@@ -1015,12 +1035,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       // them (the pre-fix single top-level field OVERWROTE the binding on every
       // commit and applied it to ALL committed events — the exact re-route the
       // pre-fix comment claimed was prevented).
-      // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the capture is TRI-STATE —
-      // a batch that offered MORE THAN ONE distinct vessel is genuinely
-      // ambiguous, so its events also carry the ambiguous marker: the deck's
-      // placed-vessel fallback must NOT guess their target (it may be a
-      // vessel that is not even placed yet). The marker rides the batch,
-      // merged like the binding.
+      // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2): the
+      // capture is TRI-STATE with ONE representation per fact — a batch that
+      // offered MORE THAN ONE distinct vessel is genuinely ambiguous, so its
+      // events carry ONLY the ambiguous marker (the deck's placed-vessel
+      // fallback must NOT guess their target — it may be a vessel that is
+      // not even placed yet); a zero-offer batch writes NO binding entry
+      // (absent = no offer: the fallback stays allowed); the marker rides
+      // the batch, merged like the binding.
       const { binding: committedBinding, ambiguous: committedAmbiguous } =
         committedOfferCapturesForPreview(committedEvents, preview)
       return {
