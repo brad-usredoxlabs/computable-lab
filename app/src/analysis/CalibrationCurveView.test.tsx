@@ -315,6 +315,54 @@ describe('D1 — included/excluded markers + outlier affordance (no threshold in
   })
 })
 
+// --- RGF D4 — the x-domain includes ALL plotted points (fit AND excluded) ---
+// (RUNGATE1 DEFECT-4: the gate's excluded level_5 (amount 5) was drawn at
+// cx=826.67 in a viewBox 0 0 640 320 — the x-domain was the model's
+// FIT-only x_min/x_max (1..4), so an excluded point beyond the fit range
+// was silently CLIPPED out of the plot: 4 markers for a 5-row table. Every
+// table row must have a visible marker. The fit LINE still spans only the
+// fit x-range — the line is the fit's geometry, the domain is the POINTS'.)
+describe('RGF D4 — an excluded point outside the fit x-range stays VISIBLE (domain covers all points)', () => {
+  /** Model: 5 levels (1..5) in the table, but the FIT spans x 1..4 only
+   * (level 5 excluded — the gate's ANR-000013 shape: x_min/x_max come from
+   * the fit points). Linear 2x+1 -> y 3..9 over the fit range. */
+  const MODEL_FIT_TO_4 = {
+    ...JSON.parse(JSON.stringify(MODEL_PAYLOAD)),
+    x_min: 1,
+    x_max: 4,
+  }
+
+  it('an excluded point BEYOND the fit x-range renders INSIDE the viewBox (not clipped)', () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_FIT_TO_4)) }
+    const { container } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />)
+    const excluded = container.querySelector('[data-testid="calibration-point-level_5"]') as SVGElement
+    const cx = Number(excluded.getAttribute('cx'))
+    const cy = Number(excluded.getAttribute('cy'))
+    // The marker exists and is INSIDE the 0 0 640 320 viewBox (a clip means
+    // cx > 640, or off-plot cy). RED (fit-only domain [1,4]): cx = 826.67.
+    expect(excluded).not.toBeNull()
+    expect(cx).toBeGreaterThan(0)
+    expect(cx).toBeLessThanOrEqual(640)
+    expect(cy).toBeGreaterThan(0)
+    expect(cy).toBeLessThanOrEqual(320)
+  })
+
+  it('the fit LINE still spans only the FIT x-range (the domain extension is for the points, not the fit)', () => {
+    const artifact: RenderableArtifact = { id: 'A1', name: 't', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(TABLE_PAYLOAD)) }
+    const modelArtifact: RenderableArtifact = { id: 'A2', name: 'm', dataKind: 'table', inlineValue: JSON.parse(JSON.stringify(MODEL_FIT_TO_4)) }
+    const { container } = render(<CalibrationCurveView artifact={artifact} modelArtifact={modelArtifact} page={PAGE_CTX} onRecalcDone={() => {}} />)
+    const line = container.querySelector('[data-testid="calibration-fit-line"]') as SVGLineElement
+    // Domain [1,5] (points incl. the excluded level 5 at x=5): the line's
+    // endpoints sit at the fit range's own x (1 and 4), NOT at the extended
+    // domain edge (5). x1 = 16 (x=1); x2 = sx(4) = 16 + (4-1)/4 * 608 = 472
+    // (PAD 16, plotW 608, domain width 4).
+    expect(line).not.toBeNull()
+    expect(Number(line.getAttribute('x1'))).toBeCloseTo(16, 1)
+    expect(Number(line.getAttribute('x2'))).toBeCloseTo(472, 1)
+  })
+})
+
 // --- D2: two-way selection ----------------------------------------------------
 
 describe('D2 — row <-> point <-> residual selection is two-way', () => {

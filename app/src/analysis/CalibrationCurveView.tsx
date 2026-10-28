@@ -275,23 +275,39 @@ export function CalibrationCurveView(props: {
   const outlierKeys = new Set(outlierIdx.map((i) => includedPoints[i]?.key).filter((k): k is string => typeof k === 'string'))
 
   // --- geometry (render-only math on artifact numbers) ---------------------
+  // RGF D4: the X-DOMAIN covers EVERY plotted point (fit AND excluded —
+  // every table row must have a visible marker), while the FIT LINE still
+  // spans only the FIT's own x-range (the artifact's x_min/x_max — data,
+  // never a recompute; the shipped _predict key rule samples it). Before,
+  // the domain WAS the fit range, so an excluded point beyond it (the
+  // gate's level_5 at cx=826 in a 640 viewBox) was silently clipped.
   const W = 640
   const H = 320
   const PAD = 16
   const plotW = W - PAD * 2
   const plotH = H - PAD * 2
-  let x0 = model.xMin
-  let x1 = model.xMax
   const amounts = points.filter((p) => p.amount !== null).map((p) => p.amount as number)
-  if (x0 === undefined && amounts.length > 0) x0 = Math.min(...amounts)
-  if (x1 === undefined && amounts.length > 0) x1 = Math.max(...amounts)
+  const fitAmounts = points.filter((p) => p.included && p.amount !== null).map((p) => p.amount as number)
+  // The fit's own range (the line's span): the model's declared x_min/x_max,
+  // falling back to the INCLUDED points' amounts when undeclared (the
+  // shipped fallback, unchanged).
+  let lineX0 = model.xMin
+  let lineX1 = model.xMax
+  if (lineX0 === undefined && fitAmounts.length > 0) lineX0 = Math.min(...fitAmounts)
+  if (lineX1 === undefined && fitAmounts.length > 0) lineX1 = Math.max(...fitAmounts)
+  // The domain: ALL plotted points, widened to contain the fit range (so
+  // the line's endpoints always sit inside the plot).
+  let x0 = amounts.length > 0 ? Math.min(...amounts) : lineX0
+  let x1 = amounts.length > 0 ? Math.max(...amounts) : lineX1
+  if (lineX0 !== undefined) x0 = x0 === undefined ? lineX0 : Math.min(x0, lineX0)
+  if (lineX1 !== undefined) x1 = x1 === undefined ? lineX1 : Math.max(x1, lineX1)
   if (x0 === undefined || x1 === undefined || !(x1 > x0)) {
     x0 = 0
     x1 = 1
   }
   const yVals = points.filter((p) => p.response !== null).map((p) => p.response as number)
-  const lineY0 = predictAt(model.model, model.coefficients, x0)
-  const lineY1 = predictAt(model.model, model.coefficients, x1)
+  const lineY0 = predictAt(model.model, model.coefficients, lineX0 ?? x0)
+  const lineY1 = predictAt(model.model, model.coefficients, lineX1 ?? x1)
   let yMin = yVals.length > 0 ? Math.min(...yVals) : 0
   let yMax = yVals.length > 0 ? Math.max(...yVals) : 1
   if (lineY0 !== null) yMin = Math.min(yMin, lineY0)
@@ -302,6 +318,11 @@ export function CalibrationCurveView(props: {
   }
   const sx = (x: number): number => PAD + ((x - x0) / (x1 - x0)) * plotW
   const sy = (y: number): number => H - PAD - ((y - yMin) / (yMax - yMin)) * plotH
+  // The line's own span: the fit range when the model declares one (or the
+  // included amounts fell back to it); the domain when the fit range is
+  // entirely undeclared (the predictAt fallback above samples the domain).
+  const lineDrawX0 = lineX0 ?? x0
+  const lineDrawX1 = lineX1 ?? x1
   const drawLine = lineY0 !== null && lineY1 !== null
 
   // --- source-run link (§D2 + FIX1 D4): the SELECTED row's OWN source input
@@ -601,9 +622,9 @@ export function CalibrationCurveView(props: {
             <line
               className="calibration-curve__fitline"
               data-testid="calibration-fit-line"
-              x1={sx(x0)}
+              x1={sx(lineDrawX0)}
               y1={sy(lineY0 as number)}
-              x2={sx(x1)}
+              x2={sx(lineDrawX1)}
               y2={sy(lineY1 as number)}
               stroke="#c0392b"
               strokeWidth="1.5"
