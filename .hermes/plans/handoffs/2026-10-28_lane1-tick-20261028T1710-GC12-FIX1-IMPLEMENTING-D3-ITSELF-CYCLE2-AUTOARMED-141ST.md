@@ -84,3 +84,24 @@
 - AS-L1T1610-1 (RunCollectionView create door boundary grant) — stands, revocable pre-merge.
 - AS-L1T1520-1, AS-L1T1445-1, AS-L1T1425-1, AS-L1T1345-1, AS-L1T1235-1/-2 stand (prior ticks).
 - No other open evidence-debt entries in the lane.
+
+## TICK-END UPDATE (~17:25) — fix1 EXITED DONE; cycle-2 gate LIVE
+
+- fix1 exited 17:16:49 with 'GC12 FIX1 DONE 3e71c20019b6c71a2366919f3086525c3d4d295c', report
+  section complete (D1 authz gate + deny tests, D2 run-scoped linkage + probe, D3 OPT-A full leg
+  incl. collectDefaults + ?gc= deletion, O1 config-error row, O2 explicitly dispositioned as
+  minor/no-action; gates: app trio 343 green, app tsc floor 12 unchanged, server suites
+  15/16/14, server tsc 0). Waiter fired at 17:16:52 (sha==tip, residue_files=0) and launched the
+  cycle-2 adversarial reviewer at tip 3e71c200 -> report
+  ~/.hermes/cl/reviews/GC12-advreview-l1t1710-c2.md (live as of checkpoint).
+- Orch spot-verified first-hand: worktree residue 0; 60e59e12..HEAD = the single FIX1 commit;
+  AnalysisPage.no-execute 0 diff lines vs 6987f286; CalibrationCurveView/App.tsx 0 diff names vs
+  6987f286.
+- Fleet: slot-0 FREE (released at fix1 exit), slot-1 held by lane 2. NEXT TICK = read the cycle-2
+  VERDICT (cases 2/3 in NEXT TICK above); nothing else in lane 1 is dispatchable until either the
+  ACCEPT (then orch verify -> merge -> browser gate) or the FIX list (then fix cycle 2, same
+  worktree, slot-0 free, stagger n/a as fix1 exited >60 min... check slot-1's lane-2 start time
+  17:00:13 — a fix-2 launch before ~18:00 must respect the fleet 60-min stagger against THAT
+  start).
+- AS-L1T1610-2 code leg: COMMITTED at 3e71c200. Debt narrows to: cycle-2 ACCEPT + amended V7(f)
+  browser-verified. Still CARRY FORWARD until cleared.
