@@ -38,6 +38,7 @@ export * from './ChemistryHandlers.js';
 export * from './IngestionHandlers.js';
 export * from './AiIngestionHandlers.js';
 export * from './RunWorkspaceHandlers.js';
+export * from './RunSheetHandlers.js';
 export * from './RunDraftHandlers.js';
 export * from './RelatedRecordsHandlers.js';
 export * from './AiRecordDraftHandlers.js';
