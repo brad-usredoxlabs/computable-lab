@@ -307,7 +307,7 @@ describe('L2-DEGEN-RETRY-1 — degenerate forced-tool-call defense', () => {
     // the notes/prose channel — proseRouted is false on an empty finalProse).
     expect(events.some((e) => e.type === 'error' && String(e.message).includes('degenerate response'))).toBe(true);
     expect(result.notes).toBeUndefined();
-    expect((result.events ?? []).toHaveLength(0));
+    expect((result.events ?? []).length).toBe(0);
     // Usage block still rides (parity with the neighboring failure arms).
     expect(result.usage).toBeDefined();
     expect(result.usage!.turns).toBeGreaterThanOrEqual(2);

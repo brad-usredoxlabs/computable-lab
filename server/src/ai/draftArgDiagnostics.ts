@@ -114,8 +114,31 @@ export function draftArgCorrectionInstruction(args: unknown): string | undefined
  * and no proposal — a silent failure wearing the costume of an empty answer.
  *
  * Two distinct causes, two distinct sentences, each with the way out.
+ *
+ * L2-DEGEN-RETRY-1 extends the family with a THIRD cause — the AI PROVIDER
+ * itself: a forced-tool draft turn that ends `finish=stop` with EMPTY content
+ * and ZERO tool calls, TWICE (the harness re-issues the identical request
+ * exactly once before surfacing — the degeneration is stochastic, not the
+ * wording). That failure is the provider's, and the sentence must say so
+ * out loud instead of blaming the biologist's request. The arm is ADDITIVE:
+ * `degenerateEmptyResponse` takes precedence when present, and every other
+ * option shape returns the EXACT branch bytes it always returned (the
+ * `toBe` byte pins — freeformLegs.test.ts:725 — hold unchanged).
+ *
+ * exactOptionalPropertyTypes: callers pass the flag ABSENT or `true` —
+ * NEVER `undefined`.
  */
-export function emptyDraftMessage(options: { truncated: boolean; hadArguments: boolean }): string {
+export function emptyDraftMessage(options: {
+  truncated: boolean;
+  hadArguments: boolean;
+  degenerateEmptyResponse?: boolean;
+}): string {
+  if (options.degenerateEmptyResponse === true) {
+    return (
+      'the AI provider returned a degenerate response (no tool call, no content) twice — ' +
+      'this is not your wording; the request was fine. Retry, or the turn may be re-routed.'
+    );
+  }
   if (options.truncated) {
     return (
       'no proposal: the model’s answer was cut off at its output limit before it finished the tool call ' +
