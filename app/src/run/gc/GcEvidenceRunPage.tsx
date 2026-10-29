@@ -45,6 +45,13 @@ export function GcEvidenceRunPage() {
   const [title, setTitle] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // GATEFIX2 (adversarial review defect 3): the kind-verified payload the
+  // kind gate already read — handed DOWN to the hand-off (initialRun) so
+  // the open-act chip read REUSES it instead of firing a second
+  // getAnalysisRun for the same id. Set only on a SUCCESSFUL read whose
+  // payload.kind IS 'analysis-run' (refusal / failed-read arms keep it
+  // undefined — and never mount the hand-off at all).
+  const [verified, setVerified] = useState<Record<string, unknown> | null>(null)
 
   useEffect(() => {
     if (!runId) return
@@ -53,6 +60,7 @@ export function GcEvidenceRunPage() {
     setTitle(null)
     setStatus(null)
     setError(null)
+    setVerified(null)
     // The run's record via the EXISTING getAnalysisRun route. payload.kind
     // verifies the record IS an analysis-run before the GC chrome renders
     // (the same kind gate RunWorkspacePage.tsx applies to the run sheet —
@@ -66,7 +74,9 @@ export function GcEvidenceRunPage() {
         setKind(k)
         if (k !== 'analysis-run') {
           // Not an analysis-run: a NAMED refusal arm (the id + the actual
-          // kind). Never the plate canvas, never invented context.
+          // kind). Never the plate canvas, never invented context, and —
+          // GATEFIX2 — no kind badge: the header asserts the kind it
+          // verified, not a literal (defect 1).
           setError(`'${runId}' is a '${k ?? 'unknown'}' record, not an analysis-run — no GC evidence context to show`)
           return
         }
@@ -74,6 +84,7 @@ export function GcEvidenceRunPage() {
         setTitle(t)
         const s = typeof payload.status === 'string' ? payload.status : null
         setStatus(s)
+        setVerified(payload)
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
@@ -89,7 +100,19 @@ export function GcEvidenceRunPage() {
         <div>
           <h1 className="gc-evidence-run__title">
             {title !== null ? title : runId}
-            <span className="gc-evidence-run__kind">analysis-run</span>
+            {/* GATEFIX2 (adversarial review defect 1): the kind chip
+                renders ONLY when the read succeeded AND payload.kind IS
+                'analysis-run' (verified above). The refusal arm (a
+                record that is NOT an analysis-run) and the failed-read
+                arm badge NO kind — the shipped literal 'analysis-run'
+                chip asserted a kind the page had just refused / never
+                established (the reviewer probe: the refusal header read
+                "RUN-NOT-ANRanalysis-runRUN-NOT-ANR"). */}
+            {kind === 'analysis-run' ? (
+              <span className="gc-evidence-run__kind" data-testid="gc-evidence-run-kind">
+                analysis-run
+              </span>
+            ) : null}
           </h1>
           <span className="gc-evidence-run__id">{runId}</span>
         </div>
@@ -116,14 +139,33 @@ export function GcEvidenceRunPage() {
               gc-evidence-claim-link* anchors back to /claims/:id (the G7
               loop closed both ways). Open at mount: the evidence context
               is the point of the deep-link landing, so the back-links are
-              present without a second click. The isenId prop is the run
-              id — the component scopes its testid with it (the GC-12 flow
-              uses the entry id there). */}
+              present without a second click.
+
+              GATEFIX2 (adversarial review defect 2): NO isenId is passed.
+              A bare analysis-run names NO instrument-sequence-entry row —
+              the sequence context is genuinely unknown from this surface.
+              The shipped copy passed the run id as isenId, and the
+              provenance walk fetched it and rendered it as an ISEN hop
+              (/record/ANR-… typed instrument-sequence-entry — the run
+              masquerading as a sequence row; spec bait #6). Without an
+              isenId the component's testid scope falls back to the run id
+              (scope only — testScope) and the ISEN lineage hops render
+              their honest named-gap arm in the Full-context view. The
+              component contract is preserved: the GC-12 call site
+              (GcRunSheetSection) still passes its real ISEN id, and its
+              D7 zero-fetch pin holds (verified:
+              GcEvidenceHandoff.test.tsx 16/16 + the GATEFIX2 back-compat
+              pin).
+
+              GATEFIX2 (adversarial review defect 3): the page's
+              already-fetched, kind-verified payload is handed down
+              (initialRun) so the hand-off's open-act chip read reuses it —
+              exactly ONE getAnalysisRun for the run on this landing. */}
           <GcEvidenceHandoff
-            isenId={runId ?? ''}
             runId={runId ?? ''}
             onBundleCreated={() => undefined}
             initialOpen
+            initialRun={verified ?? undefined}
           />
         </section>
       )}

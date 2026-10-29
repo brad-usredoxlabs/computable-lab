@@ -22,6 +22,24 @@
  *    context;
  *  - a run with no declared outputs renders the shipped hand-off's
  *    honest empty arm; a failed run read renders the loud error arm.
+ *
+ * Gate-fix2 pins (adversarial review cycle-1):
+ *  - the literal 'analysis-run' kind chip renders ONLY when the read
+ *    succeeded AND payload.kind === 'analysis-run' — the refusal arm
+ *    (a `run` record) and the failed-read arm badge NO kind (defect 1:
+ *    the shipped header badged a kind the page just refused);
+ *  - the Full-context panel does NOT render the run's own id as an
+ *    instrument-sequence-entry hop (defect 2: the run id must not
+ *    masquerade as an ISEN — the ISEN lineage hops are the honest
+ *    named-gap arm, because a bare analysis-run names no sequence row);
+ *  - the landing issues exactly ONE getAnalysisRun for the run (defect 3:
+ *    the hand-off reuses the page's already-fetched, kind-verified
+ *    record — no double read);
+ *  - the plate-canvas absence is pinned at the App-route level
+ *    (GcEvidenceRunPage.route.test.tsx — the real router proves the
+ *    landing is not RunWorkspacePage); the isolated render pins the
+ *    positive D5 claim (the GC evidence section IS the landing) instead
+ *    of vacuous text-absence pins (defect 4).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -154,14 +172,25 @@ describe('GcEvidenceRunPage — the reciprocal claim -> analysis-run landing (D5
     const page = await screen.findByTestId('gc-evidence-run-page')
     expect(page).toBeDefined()
 
-    // The header read the record (title + status from the payload).
+    // The header read the record (title + status from the payload) AND
+    // badged the VERIFIED kind — the 'analysis-run' chip renders only
+    // now (payload.kind === 'analysis-run' from the same read); the
+    // refusal and failed-read arms badge no kind (the pin: the chip
+    // text is ABSENT there — defect 1).
     expect(page.textContent).toContain('GC-13 gate witness run')
     expect(screen.getByTestId('gc-evidence-run-status').textContent).toContain('succeeded')
+    expect(screen.getByTestId('gc-evidence-run-kind').textContent).toBe('analysis-run')
 
-    // The plate-design canvas is NOT the landing for an analysis-run id:
-    // no DeckSlot labware prompt, no protocol-attachment chrome.
-    expect(screen.queryByText('Click to choose labware')).toBeNull()
-    expect(screen.queryByText(/No protocol attached/i)).toBeNull()
+    // The D5 landing claim (non-vacuous form): the GC evidence context
+    // section IS the landing surface (the shipped hand-off, open at mount).
+    // The plate-canvas absence itself is pinned at the App-route level —
+    // GcEvidenceRunPage.route.test.tsx mounts the REAL router and proves
+    // /gc-run/:runId resolves to THIS page, not the Run·Design workspace
+    // (RunNavPane / DeckViewer). The old isolated text-absence pins
+    // ('Click to choose labware' / 'No protocol attached') were vacuous:
+    // this unit cannot render that markup under ANY input, so they could
+    // never fail (adversarial review cycle-1, defect 4).
+    expect(await screen.findByTestId('gc-evidence-run-evidence')).toBeDefined()
 
     // The GC evidence context (the shipped hand-off, OPEN at mount — the
     // deep-link landing needs no second click): the run's declared
@@ -183,6 +212,21 @@ describe('GcEvidenceRunPage — the reciprocal claim -> analysis-run landing (D5
     const linked = await screen.findByTestId('gc-evidence-linked-claims')
     const claimLink = within(linked).getByTestId(`gc-evidence-claim-link-${CLM}`)
     expect(claimLink).toHaveAttribute('href', `/claims/${CLM}`)
+
+    // Defect 3 (fetch discipline) — pinned HERE, at the test's end, so the
+    // count is the TOTAL mount-time count (the page's kind gate AND the
+    // hand-off's open-act chip read have both settled; awaiting the
+    // back-links proves the open act completed): exactly ONE
+    // getAnalysisRun for the run. The hand-off REUSES the page's
+    // already-fetched, kind-verified record (initialRun) instead of
+    // reading it a second time. The reviewer-measured shipped behaviour
+    // was TWO reads on mount (page gate + open act); the double-read is
+    // not inherent to the shipped component (its GC-12 call site has no
+    // verified record to hand down), so it is deduped here rather than
+    // excused. (The AOUT chip / provenance re-reads go through getRecord
+    // — the hand-off's per-artifact reads — not a second run read.)
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledTimes(1)
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledWith(ANR)
   })
 
   it('the "Full context" affordance (shipped, on the artifact chip) opens the SHIPPED GcProvenancePanel — reused, not re-implemented', async () => {
@@ -232,6 +276,21 @@ describe('GcEvidenceRunPage — the reciprocal claim -> analysis-run landing (D5
     const runHop = await screen.findByTestId('gc-prov-hop-analysis-run')
     expect(runHop.getAttribute('href')).toBe(`/record/${ANR}`)
     expect(screen.getByTestId('gc-prov-fact-analysis-run-status').textContent).toContain('succeeded')
+
+    // Defect 2 (run != ISEN — the spec's 'two names for one entity' bait
+    // #6): the page passes NO instrument-sequence-entry id to the
+    // hand-off. A bare analysis-run names no sequence row — the sequence
+    // context is genuinely unknown from this surface — so the ISEN
+    // lineage hop renders its HONEST named-gap arm. The shipped (buggy)
+    // page passed the run id as isenId, and the walker fetched the ANR
+    // as an ISEN: the panel then linked /record/ANR-GC13-E typed
+    // instrument-sequence-entry — the run masquerading as a sequence row.
+    // The ANR MAY appear as the analysis-run hop (above, typed as such);
+    // it must NOT appear as an ISEN hop.
+    expect(screen.queryByTestId('gc-prov-hop-instrument-sequence-entry')).toBeNull()
+    expect(await screen.findByTestId('gc-prov-hop-absent-instrument-sequence-entry')).toHaveTextContent(
+      'not linked (named gap)',
+    )
   })
 
   it('a record that is NOT an analysis-run renders the named refusal arm — never the plate canvas, never invented GC context', async () => {
@@ -251,6 +310,16 @@ describe('GcEvidenceRunPage — the reciprocal claim -> analysis-run landing (D5
     // No GC chrome at all (no hand-off, no evidence context section).
     expect(screen.queryByTestId('gc-evidence-run-evidence')).toBeNull()
     expect(screen.queryByTestId(/gc-evidence-handoff-/)).toBeNull()
+    // Defect 1 (kind chip): the refusal arm must NOT badge a kind the
+    // page just refused. The record's actual kind is `run` — and the
+    // header previously rendered the literal 'analysis-run' chip next to
+    // the refused id (the reviewer probe: header text
+    // "RUN-NOT-ANRanalysis-runRUN-NOT-ANR"). Pin the absence: no
+    // 'analysis-run' chip on this page when the kind is not
+    // analysis-run (the page renders nothing misleading, not the wrong
+    // kind's badge).
+    expect(screen.queryByTestId('gc-evidence-run-kind')).toBeNull()
+    expect(screen.queryByText('analysis-run')).toBeNull()
   })
 
   it('an analysis-run with no declared outputs renders the shipped hand-off’s honest empty arm', async () => {
@@ -275,5 +344,10 @@ describe('GcEvidenceRunPage — the reciprocal claim -> analysis-run landing (D5
     vi.mocked(apiClient.getAnalysisRun).mockRejectedValue(new Error('404: not found'))
     renderPage('ANR-GONE')
     expect(await screen.findByTestId('gc-evidence-run-error')).toHaveTextContent('404: not found')
+    // Defect 1 (kind chip, failed-read arm): the record was NEVER read —
+    // the header badges no kind (the shipped literal 'analysis-run' chip
+    // asserted a kind the read could not establish).
+    expect(screen.queryByTestId('gc-evidence-run-kind')).toBeNull()
+    expect(screen.queryByText('analysis-run')).toBeNull()
   })
 })
