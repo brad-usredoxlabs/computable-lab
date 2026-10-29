@@ -117,3 +117,15 @@ schema YAML changes pending merge → RESTART at WELLSET merge.
 ## HEALTH / BUDGET
 Entered ~13:49, checkpointed ~14:55 (soft budget 45 min; last launches pre-budget). Three live
 workers left RUNNING. Trunk moves: merge dc59f0d2 + this handoff.
+
+## ADDENDUM (same tick, ~15:02): THREAD-SCOPED-1 FULLY CLOSED
+The queued browser gate RAN and exited rc=0 during handoff write: tier-1, VERDICT: accept, receipts
+/home/brad/.hermes/cl/receipts/L2-THREAD-SCOPED-1/2026-10-29_1419-tier1/ AUDITED first-hand by orch
+(trail.json 10 steps listener consoleErrors=[] pageErrors=[]; cited sessionStorage thread ids live in
+steps 2-9; md5 dupe pairs 05/06 and 07/09/10 disclosed in report + legitimate same-state captures;
+state transitions 02->03->08->09 all distinct). All 6 criteria screenshot-backed PASS. L2-THREAD-SCOPED-1
+marked DONE. Non-gating architect-candidates recorded on the task block: O1 phantom '_' mint at first
+mount (cosmetic throwaway thread), O2 thread titles visible cross-session (spec-sanctioned; intent flag),
+O3 no-endpoint branch unit-covered only. Assumptions AS-L2T1355-THREADSCOP-MERGE-PENDING-BROWSER,
+AS-L2T1015-RSURFACEBRIDGE-RATIFIED, AS-L2T0505-DECKWIRE-SCOPE-AMENDMENT CLEARED. Remaining live:
+CHATUI1-legA coder (slot-0), WELLSET fix2 worker, WELLSET D13 architect-card still owed next tick.
