@@ -97,24 +97,57 @@ export function ClaimWorkspace() {
           .filter((env): env is RecordEnvelope => env !== null && schemaKind(env.schemaId) === 'assertion')
           .map((env) => env.payload as Record<string, unknown>)
         // The claim's assertions (claim_ref names THIS claim).
-        const assertionIdsOfClaim = new Set(
-          asnPayloads
-            .filter((p) => {
-              const cr = p['claim_ref']
-              return cr !== null && typeof cr === 'object' && (cr as { id?: unknown }).id === claimId
-            })
-            .map((p) => String((p['id'] as string) ?? ''))
-            .filter((id) => id !== ''),
+        const claimAssertionIds = asnPayloads
+          .filter((p) => {
+            const cr = p['claim_ref']
+            return cr !== null && typeof cr === 'object' && (cr as { id?: unknown }).id === claimId
+          })
+          .map((p) => String((p['id'] as string) ?? ''))
+          .filter((id) => id !== '')
+        // FIX4 (defect 3): the claim scan is SINGLE-HOP — a bundle that
+        // targets one of the claim's ASSERTIONS never references the claim
+        // id, so it can never appear in the claim's related set
+        // (RelatedRecordsHandlers scans each record's OWN payload). The
+        // second hop: scan each of the claim's assertions, keep the
+        // evidence candidates, re-read them. (A failed second-hop scan is
+        // folded into relatedError — the ledger then renders its failure
+        // arm instead of a false empty arm.)
+        const secondHopIds: string[] = []
+        for (const asId of claimAssertionIds) {
+          try {
+            const res = await apiClient.getRelatedRecords(asId)
+            for (const r of res.related) {
+              if (schemaKind(r.schemaId) === 'evidence' && r.recordId !== claimId && !secondHopIds.includes(r.recordId)) {
+                secondHopIds.push(r.recordId)
+              }
+            }
+          } catch (e) {
+            setRelatedError((prev) => prev ?? (e instanceof Error ? e.message : String(e)))
+          }
+        }
+        const secondHop = await Promise.all(
+          secondHopIds.map(async (id) => {
+            try {
+              const env = await apiClient.getRecord(id)
+              return env !== null && schemaKind(env.schemaId) === 'evidence' ? env : null
+            } catch {
+              return null
+            }
+          }),
         )
+        const secondHopPayloads = secondHop
+          .filter((env): env is RecordEnvelope => env !== null)
+          .map((env) => env.payload as Record<string, unknown>)
         const rows: EvidenceRow[] = []
-        for (const env of loaded) {
-          if (env === null || schemaKind(env.schemaId) !== 'evidence') continue
-          const p = env.payload as Record<string, unknown>
-          const stance = stanceTowardClaim(p, claimId, assertionIdsOfClaim)
-          if (stance !== null) rows.push({ id: env.recordId, stance })
+        for (const p of [...evdPayloads, ...secondHopPayloads]) {
+          const stance = stanceTowardClaim(p, claimId, new Set(claimAssertionIds))
+          if (stance !== null) {
+            const id = String(p['id'] ?? '')
+            if (id !== '') rows.push({ id, stance })
+          }
         }
         setBundles(rows)
-        setRunIds(runIdsFromEvidence(evdPayloads))
+        setRunIds(runIdsFromEvidence([...evdPayloads, ...secondHopPayloads]))
         setRelatedClaimIds(
           related
             .filter((r) => schemaKind(r.schemaId) === 'claim')
@@ -177,7 +210,18 @@ export function ClaimWorkspace() {
 
           <section className="claim-workspace__section" data-testid="claim-evidence-ledger">
             <h2 className="claim-workspace__section-title">Evidence Ledger</h2>
-            {bundles.length === 0 && (
+            {/* FIX4 (defect 7): a failed related scan must NOT render the
+                false "no evidence" empty state — the scan that would have
+                found the bundles failed. Render the failure LOUD and
+                suppress the empty arms (the absence is unknown, not
+                proven). */}
+            {relatedError !== null && (
+              <p className="claim-workspace__error" data-testid="claim-evidence-ledger-error">
+                Evidence ledger unavailable: the related-record scan failed ({relatedError}).
+                No absence of evidence is asserted while that scan is down.
+              </p>
+            )}
+            {relatedError === null && bundles.length === 0 && (
               <p className="claim-workspace__empty" data-testid="claim-evidence-empty">
                 No evidence bundle targets this claim (directly or via its assertions) yet.
               </p>
@@ -185,26 +229,27 @@ export function ClaimWorkspace() {
             <div className="claim-workspace__evidence-groups">
               <div className="claim-workspace__evidence-group" data-testid="claim-evidence-group-supporting">
                 <h3>Supporting</h3>
-                {ledgerRows(supporting, 'supporting')}
+                {relatedError === null && ledgerRows(supporting, 'supporting')}
               </div>
               <div className="claim-workspace__evidence-group" data-testid="claim-evidence-group-contradictory">
                 <h3>Contradictory</h3>
-                {refuting.length === 0 && assessing.length === 0 ? (
-                  <p className="claim-workspace__empty" data-testid="claim-evidence-group-contradictory-empty">
-                    No evidence bundle contradicts or assesses this claim.
-                  </p>
-                ) : (
-                  <ul className="claim-workspace__evidence-list">
-                    {[...refuting, ...assessing].map((b) => (
-                      <li key={b.id} data-testid="claim-evidence-row" className="claim-workspace__evidence-row">
-                        <a href={`/record/${encodeURIComponent(b.id)}`} data-testid="claim-evidence-link">
-                          {b.id}
-                        </a>
-                        <span className="claim-workspace__evidence-stance">{b.stance}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {relatedError === null &&
+                  (refuting.length === 0 && assessing.length === 0 ? (
+                    <p className="claim-workspace__empty" data-testid="claim-evidence-group-contradictory-empty">
+                      No evidence bundle contradicts or assesses this claim.
+                    </p>
+                  ) : (
+                    <ul className="claim-workspace__evidence-list">
+                      {[...refuting, ...assessing].map((b) => (
+                        <li key={b.id} data-testid="claim-evidence-row" className="claim-workspace__evidence-row">
+                          <a href={`/record/${encodeURIComponent(b.id)}`} data-testid="claim-evidence-link">
+                            {b.id}
+                          </a>
+                          <span className="claim-workspace__evidence-stance">{b.stance}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ))}
               </div>
             </div>
           </section>
@@ -214,22 +259,23 @@ export function ClaimWorkspace() {
             <div className="claim-workspace__connections-grid">
               <div>
                 <h3>Runs</h3>
-                {runIds.length === 0 ? (
-                  <p className="claim-workspace__empty" data-testid="claim-connections-runs-empty">
-                    No evidence bundle points at an analysis run yet.
-                  </p>
-                ) : (
-                  <ul className="claim-workspace__connections-list">
-                    {runIds.map((rid) => (
-                      <li key={rid}>
-                        <a href={`/runs/${encodeURIComponent(rid)}`} data-testid={`claim-run-link-${rid}`}>
-                          {rid}
-                        </a>
-                        <span className="claim-workspace__connections-kind">analysis-run</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {relatedError === null &&
+                  (runIds.length === 0 ? (
+                    <p className="claim-workspace__empty" data-testid="claim-connections-runs-empty">
+                      No evidence bundle points at an analysis run yet.
+                    </p>
+                  ) : (
+                    <ul className="claim-workspace__connections-list">
+                      {runIds.map((rid) => (
+                        <li key={rid}>
+                          <a href={`/runs/${encodeURIComponent(rid)}`} data-testid={`claim-run-link-${rid}`}>
+                            {rid}
+                          </a>
+                          <span className="claim-workspace__connections-kind">analysis-run</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ))}
               </div>
               <div>
                 <h3>Related Claims</h3>

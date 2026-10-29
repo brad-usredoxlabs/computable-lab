@@ -43,8 +43,14 @@ beforeEach(() => {
 
 /** Seed a workspace where the claim has ONE assertion (ASN-1) and TWO
  *  evidence bundles: EVD-DIRECT supports the claim directly; EVD-VIA
- *  supports the assertion (claim_ref -> CLM-1). Related-record scan noise
- *  (a claim ref that is not evidence, an assertion with no claim_ref) must
+ *  supports the assertion (claim_ref -> CLM-1). The related-record scan
+ *  is modelled with the REAL handler's SINGLE-HOP semantics
+ *  (RelatedRecordsHandlers.ts: findRefFields over each record's OWN
+ *  payload): a record appears in X's related set only if its own payload
+ *  references X. EVD-VIA names ASN-1 (not CLM-1) — it is NOT in CLM-1's
+ *  related set; the workspace must find it with the SECOND hop (the scan
+ *  over the claim's assertions + re-read). Related-record scan noise (a
+ *  claim ref that is not evidence, an assertion with no claim_ref) must
  *  not crash or mislabel anything (bait #7: the scan is untyped). */
 function seedLedger() {
   vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
@@ -117,15 +123,33 @@ function seedLedger() {
         throw new Error(`404: ${id}`)
     }
   })
-  vi.mocked(apiClient.getRelatedRecords).mockResolvedValue({
-    related: [
-      { recordId: 'EVD-DIRECT', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[0]' },
-      { recordId: 'EVD-VIA', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[0]' },
-      { recordId: 'ASN-1', schemaId: ASN_SCHEMA, kind: 'assertion', title: 'assertion', refField: 'claim_ref' },
-      { recordId: 'ASN-NO-CLAIM', schemaId: ASN_SCHEMA, kind: 'assertion', title: 'orphan', refField: 'claim_ref' },
-      { recordId: 'CLM-9', schemaId: CLAIM_SCHEMA, kind: 'claim', title: 'noise', refField: 'predicate' },
-    ],
-  } as never)
+  // SINGLE-HOP semantics: CLM-1's related set holds only records whose
+  // OWN payload references CLM-1 (EVD-DIRECT's supports; ASN-1's
+  // claim_ref; ASN-NO-CLAIM's claim_ref noise; CLM-9's predicate noise).
+  // EVD-VIA references only ASN-1/CTX-1/DREF-1 — it is ABSENT from
+  // CLM-1's set (the real handler cannot emit it there). ASN-1's set
+  // holds EVD-VIA (its supports names ASN-1) — the second hop's target.
+  vi.mocked(apiClient.getRelatedRecords).mockImplementation(async (id: string) => {
+    switch (id) {
+      case 'CLM-1':
+        return {
+          related: [
+            { recordId: 'EVD-DIRECT', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[0]' },
+            { recordId: 'ASN-1', schemaId: ASN_SCHEMA, kind: 'assertion', title: 'assertion', refField: 'claim_ref' },
+            { recordId: 'ASN-NO-CLAIM', schemaId: ASN_SCHEMA, kind: 'assertion', title: 'orphan', refField: 'claim_ref' },
+            { recordId: 'CLM-9', schemaId: CLAIM_SCHEMA, kind: 'claim', title: 'noise', refField: 'predicate' },
+          ],
+        } as never
+      case 'ASN-1':
+        return {
+          related: [
+            { recordId: 'EVD-VIA', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[0]' },
+          ],
+        } as never
+      default:
+        return { related: [] } as never
+    }
+  })
 }
 
 function renderClaimRoute() {
@@ -182,16 +206,19 @@ describe('ClaimWorkspace', () => {
 
   // ---- GC-13 (leg E): the dead-chrome kill — real data, both directions ----
 
-  it('wires the Evidence Ledger from real records: Supporting groups direct + via-assertion bundles, each linking /record/:id (D4)', async () => {
+  it('wires the Evidence Ledger from real records: Supporting groups direct + via-assertion bundles, each linking /record/:id (D4). The via-assertion bundle is reachable ONLY by the second hop — the single-hop claim scan cannot see it (RelatedRecordsHandlers semantics).', async () => {
     seedLedger()
     renderClaimRoute()
     const supporting = await screen.findByTestId('claim-evidence-group-supporting')
     const rows = screen.getAllByTestId('claim-evidence-row')
     const ids = rows.map((r) => r.textContent).filter((t) => t !== undefined)
-    // EVD-DIRECT is the claim's direct support; EVD-VIA reaches the claim
-    // THROUGH its assertion (claim_ref join — the D1 join semantics reused).
+    // EVD-DIRECT is the claim's direct support (the single-hop scan sees
+    // it); EVD-VIA reaches the claim THROUGH its assertion — the second
+    // hop (the scan over ASN-1 + re-read) is the only path to it.
     expect(ids.join(' ')).toContain('EVD-DIRECT')
     expect(ids.join(' ')).toContain('EVD-VIA')
+    // the second hop fired against the assertion, not the claim
+    expect(apiClient.getRelatedRecords).toHaveBeenCalledWith('ASN-1')
     // each row links the evidence record (the reciprocal claim->evidence leg)
     const links = screen.getAllByTestId('claim-evidence-link')
     expect(links.map((l) => l.getAttribute('href')).sort()).toEqual([
@@ -234,5 +261,28 @@ describe('ClaimWorkspace', () => {
     // not rendered as a bundle. The ledger holds exactly the two bundles.
     const links = screen.getAllByTestId('claim-evidence-link')
     expect(links).toHaveLength(2)
+  })
+
+  // ---- FIX4 (defect 7): a failed related scan must NOT assert "no evidence" ----
+
+  it('a 5xx on the related scan renders an explicit ledger error arm and suppresses the false empty arms (defect 7: no "no evidence" while the scan that would find evidence failed)', async () => {
+    vi.mocked(apiClient.getRecord).mockResolvedValue(
+      claimRecord({ recordId: 'CLM-1', statement: 'lonely claim', status: 'proposed' }),
+    )
+    vi.mocked(apiClient.getRelatedRecords).mockRejectedValue(new Error('503: related-record scan failed'))
+    renderClaimRoute()
+    // the ledger says the scan FAILED — a loud arm, never a fact
+    expect(await screen.findByTestId('claim-evidence-ledger-error')).toHaveTextContent(
+      'related-record scan failed',
+    )
+    // the false empty arms are SUPPRESSED: the ledger cannot claim the
+    // absence of evidence (or of runs) when the scan that would find them
+    // failed.
+    expect(screen.queryByTestId('claim-evidence-empty')).toBeNull()
+    expect(screen.queryByTestId('claim-evidence-group-supporting-empty')).toBeNull()
+    expect(screen.queryByTestId('claim-evidence-group-contradictory-empty')).toBeNull()
+    expect(screen.queryByTestId('claim-connections-runs-empty')).toBeNull()
+    // and the Connections section carries the same failure (loud, not hidden)
+    expect(screen.getByTestId('claim-connections-error')).toHaveTextContent('503')
   })
 })
