@@ -84,7 +84,7 @@ function frozenLevels(): Record<string, unknown> {
   }
 }
 
-function mockChain(opts: { withMctx?: boolean; breakDref?: boolean; withSeq?: boolean; breakIsen?: boolean; artifactInputs?: boolean; oddInput?: boolean } = {}) {
+function mockChain(opts: { withMctx?: boolean; breakDref?: boolean; withSeq?: boolean; breakIsen?: boolean; artifactInputs?: boolean; oddInput?: boolean; breakEng?: boolean } = {}) {
   const v = vi.mocked(apiClient.getRecord)
   v.mockImplementation(async (id: string) => {
     if (id === AOUT) {
@@ -189,6 +189,10 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean; withSeq?: bo
       })
     }
     if (id === ENG) {
+      // gate2 D3 fixture arm: the engine record's fetch FAILS (NOT_FOUND)
+      // — the hop's ref is KNOWN (the run's engineProvenance names it)
+      // but the record does not load.
+      if (opts.breakEng) throw new Error(`NOT_FOUND: Record not found: ${ENG}`)
       // the ACTUAL engine record (live shape: engine_family/engine_version/
       // capabilities.declared — the engine hop reads ITS OWN payload)
       return env(ENG, {
@@ -521,6 +525,23 @@ describe('GcProvenancePanel (leg C)', () => {
     expect(screen.getByTestId('gc-prov-terminal')).toHaveTextContent(
       'contentHash terminal is unresolved',
     )
+  })
+
+  it('a hop whose record FAILED TO LOAD is TEXT, never a /record/:id anchor to a record that does not load (gate2 D3) — resolved hops keep their anchors exactly as today', async () => {
+    mockChain({ breakEng: true })
+    renderPanel()
+    // The loud arm stays: the error names the id + the failure.
+    expect(await screen.findByTestId('gc-prov-hop-error-analysis-engine')).toHaveTextContent(ENG)
+    // THE D3 PIN: the ref is NOT a navigable anchor to a record that 404s.
+    expect(screen.queryByTestId('gc-prov-hop-analysis-engine')).toBeNull()
+    expect(document.querySelector(`a[href="/record/${ENG}"]`)).toBeNull()
+    // The unresolved id is still VISIBLE as text (loud, never a silent
+    // skip) — the id + the error, not a link.
+    expect(screen.getByTestId('gc-prov-hop-unresolved-analysis-engine')).toHaveTextContent(ENG)
+    // RESOLVED hops keep their anchors exactly as today (the fix is the
+    // unresolved arm, never a restyle of what loads): entry + run.
+    expect(await screen.findByTestId('gc-prov-hop-entry')).toHaveAttribute('href', `/record/${AOUT}`)
+    expect(screen.getByTestId('gc-prov-hop-analysis-run')).toHaveAttribute('href', `/record/${ANR}`)
   })
 
   it('the revision hop shows the DECLARED engine as declared (pair, not a replacement)', async () => {

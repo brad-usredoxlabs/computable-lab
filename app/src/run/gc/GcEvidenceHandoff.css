@@ -1,0 +1,185 @@
+/* GC-13 gatefix3 (browser gate2 defect D1) — the evidence hand-off's OWN
+ * stylesheet.
+ *
+ * The gate2 defect (shots/14-03-g2-handoff-chips.png): on the GC-12
+ * results surface (/runs/RUN-…) the hand-off rendered COMPLETELY
+ * UNSTYLED — chip name / dataKind / the two actions ran together as
+ * plain text, buttons computed margin:0 padding:0 border:0, the claim
+ * back-links concatenated. Cause: every gc-ev__* rule lived in
+ * GcEvidenceRunPage.css scoped under the ancestor class .gc-evidence-run,
+ * a class ONLY /gc-run/:runId renders. The GC-12 mount (GcRunSheetSection)
+ * therefore got bare markup.
+ *
+ * Fix (the reviewer's own smallest suggestion): the component imports
+ * this sheet itself, so the rules reach BOTH mount sites. The rules are
+ * the ones the /gc-run page already renders (moved VERBATIM, only the
+ * .gc-evidence-run ancestor requirement dropped) — no restyle of what
+ * already renders right there, no new affordances. Layout + colour read
+ * the theme tokens (tokens.css) like every other workspace surface; the
+ * link affordance matches the GC-12 .gc-results a pattern. */
+
+.gc-ev {
+  display: inline-block;
+}
+
+.gc-ev button,
+.gc-ev__chip button {
+  margin: 4px 8px 4px 0;
+  padding: 4px 10px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gc-ev__body {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+}
+
+.gc-ev__claims {
+  margin-top: 8px;
+  padding: 8px;
+  border-left: 2px solid var(--cl-border-strong);
+}
+
+.gc-ev__claims-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.gc-ev__claim {
+  display: block;
+  padding: 2px 0;
+}
+
+.gc-ev a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+}
+
+.gc-ev a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.gc-ev__chip {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+}
+
+.gc-ev__chip-kind {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.gc-ev__error {
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+.gc-ev__empty {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+
+/* The D3 authoring form (the same hand-off subtree — it opened unstyled
+   on the GC-12 surface too: inputs/buttons bare). Minimum legibility,
+   same tokens as the rest of the sheet. */
+.gc-ev-form {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+}
+
+.gc-ev-form__sources {
+  margin-bottom: 8px;
+}
+
+.gc-ev-form__source {
+  display: block;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.gc-ev-form__extra {
+  display: block;
+  margin-top: 4px;
+}
+
+.gc-ev-form__extra input {
+  margin-right: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev);
+}
+
+.gc-ev-form__extra button {
+  margin: 0;
+}
+
+.gc-ev-form__stance {
+  margin-top: 8px;
+}
+
+.gc-ev-form__target {
+  margin-top: 8px;
+}
+
+.gc-ev-form__target input {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev);
+}
+
+.gc-ev-form__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.gc-ev-form label {
+  font-size: 12px;
+  color: var(--cl-text);
+  margin-right: 12px;
+}
+
+.gc-ev-form__error {
+  display: block;
+  color: var(--cl-danger);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.gc-ev-form__lint-violation {
+  display: block;
+  padding: 2px 0;
+}
+
+.gc-ev-form__created {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
