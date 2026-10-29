@@ -20,6 +20,7 @@ import { apiClient } from '../../shared/api/client'
 import { ApiError } from '../../shared/api/errors'
 import type { RecordRef } from '../../shared/ref/RefBadge'
 import { GcProvenancePanel } from './GcProvenancePanel'
+import { schemaKind } from '../../claims/claimEvidenceModel'
 import {
   EVIDENCE_SCHEMA_ID,
   EVIDENCE_SOURCE_TYPE_ENUM,
@@ -278,6 +279,11 @@ export function GcEvidenceHandoff({
   const [openError, setOpenError] = useState<string | null>(null)
   const [provenanceFor, setProvenanceFor] = useState<RecordRef | null>(null)
   const [authorFor, setAuthorFor] = useState<RecordRef | null>(null)
+  // The reciprocal run->claim links (G7): evidence bundles whose sources
+  // point at THIS run, with the claim each stance array names. Fetched
+  // only after the user opens the affordance (never at mount — D7).
+  const [linkedClaims, setLinkedClaims] = useState<Array<{ evidenceId: string; claimId: string }>>([])
+  const [claimsError, setClaimsError] = useState<string | null>(null)
 
   // Opened = the user asked: fetch the run ONCE, then its artifacts.
   // Closed = zero fetches (D7 mount pin — this component is inside the
@@ -326,6 +332,57 @@ export function GcEvidenceHandoff({
     }
   }, [open, runId])
 
+  // The reciprocal back-links (run -> claim): after the user opens, use the
+  // EXISTING related-record scan on THIS run (the back-navigation machinery,
+  // RelatedRecordsHandlers — the reciprocal of the claim workspace's
+  // getRelatedRecords(claimId)). The scan is a superset (any string field
+  // matching the runId, bait #7), so each candidate is schemaId-filtered to
+  // evidence and re-read before believing that a source points at the run.
+  // User-triggered only (never at mount — D7).
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { related } = await apiClient.getRelatedRecords(runId)
+        const evidenceIds = [
+          ...new Set(related.filter((r) => schemaKind(r.schemaId) === 'evidence').map((r) => r.recordId)),
+        ]
+        const hits: Array<{ evidenceId: string; claimId: string }> = []
+        for (const eid of evidenceIds) {
+          const env = await apiClient.getRecord(eid)
+          const p = env.payload as Record<string, unknown>
+          const sources = Array.isArray(p['sources']) ? p['sources'] : []
+          const pointsAtRun = sources.some((s) => {
+            if (s === null || typeof s !== 'object') return false
+            const r = (s as Record<string, unknown>)['ref']
+            return r !== null && typeof r === 'object' && (r as { id?: unknown }).id === runId
+          })
+          if (!pointsAtRun) continue
+          for (const stance of ['supports', 'refutes', 'assesses'] as const) {
+            const arr = Array.isArray(p[stance]) ? p[stance] : []
+            for (const t of arr) {
+              if (
+                t !== null &&
+                typeof t === 'object' &&
+                (t as { type?: unknown }).type === 'claim' &&
+                typeof (t as { id?: unknown }).id === 'string'
+              ) {
+                hits.push({ evidenceId: eid, claimId: (t as { id: string }).id })
+              }
+            }
+          }
+        }
+        if (!cancelled) setLinkedClaims(hits)
+      } catch (e) {
+        if (!cancelled) setClaimsError(e instanceof Error ? e.message : String(e))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, runId])
+
   return (
     <div data-testid={`gc-evidence-handoff-${isenId}`} className="gc-ev">
       <button
@@ -343,6 +400,24 @@ export function GcEvidenceHandoff({
             </span>
           )}
           {chips === null && openError === null && <span className="gc-ev__loading">loading run outputs…</span>}
+          {linkedClaims.length > 0 && (
+            <div data-testid="gc-evidence-linked-claims" className="gc-ev__claims">
+              <span className="gc-ev__claims-label">Backed by (claim links)</span>
+              {linkedClaims.map((lc) => (
+                <span key={`${lc.evidenceId}:${lc.claimId}`} className="gc-ev__claim">
+                  <a href={`/record/${encodeURIComponent(lc.evidenceId)}`}>{lc.evidenceId}</a> →{' '}
+                  <a href={`/claims/${encodeURIComponent(lc.claimId)}`} data-testid={`gc-evidence-claim-link-${lc.claimId}`}>
+                    {lc.claimId}
+                  </a>
+                </span>
+              ))}
+            </div>
+          )}
+          {claimsError !== null && (
+            <span data-testid="gc-evidence-linked-claims-error" className="gc-ev__error">
+              claim back-links unavailable: {claimsError}
+            </span>
+          )}
           {chips !== null && chips.length === 0 && (
             <span data-testid="gc-evidence-handoff-no-outputs" className="gc-ev__empty">
               this run declares no output artifacts — nothing to hand off

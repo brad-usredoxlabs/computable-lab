@@ -37,6 +37,7 @@ vi.mock('../../shared/api/client', () => ({
     getAnalysisRun: vi.fn(),
     getRecord: vi.fn(),
     createRecord: vi.fn(),
+    getRelatedRecords: vi.fn().mockResolvedValue({ related: [] }),
   },
 }))
 
@@ -59,11 +60,38 @@ function mockRun() {
   vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
     record: { recordId: ANR, payload: RUN_PAYLOAD },
   } as never)
-  const rec: Record<string, unknown> = { [AOUT]: AOUT_PAYLOAD }
+  const rec: Record<string, unknown> = {
+    [AOUT]: AOUT_PAYLOAD,
+    'EVD-LEGACY': {
+      kind: 'evidence',
+      id: 'EVD-LEGACY',
+      supports: [{ kind: 'record', id: 'CLM-TEST-GC13-D', type: 'claim' }],
+      sources: [
+        { type: 'result', ref: { kind: 'record', id: ANR, type: 'analysis-run' } },
+        { type: 'context', ref: { kind: 'record', id: 'CTX-1', type: 'context' } },
+      ],
+    },
+    'EVD-OTHER': {
+      kind: 'evidence',
+      id: 'EVD-OTHER',
+      supports: [{ kind: 'record', id: 'CLM-OTHER', type: 'claim' }],
+      sources: [{ type: 'result', ref: { kind: 'record', id: 'ANR-OTHER', type: 'analysis-run' } }],
+    },
+  }
   vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
     const p = rec[id]
     if (!p) throw new Error(`404: ${id}`)
     return { recordId: id, schemaId: 'x', payload: p } as never
+  })
+  const EVD_SCHEMA = 'https://computable-lab.com/schema/computable-lab/evidence.schema.yaml'
+  vi.mocked(apiClient.getRelatedRecords).mockImplementation(async (id: string) => {
+    if (id !== ANR) return { related: [] }
+    return {
+      related: [
+        { recordId: 'EVD-LEGACY', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'b', refField: 'sources[0]' },
+        { recordId: 'EVD-OTHER', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'b', refField: 'sources[0]' },
+      ],
+    }
   })
 }
 
@@ -88,6 +116,7 @@ describe('GcEvidenceHandoff (leg D)', () => {
     await waitFor(() => expect(screen.getByTestId(`gc-evidence-handoff-${ISEN}`)).toBeDefined())
     expect(apiClient.getAnalysisRun).not.toHaveBeenCalled()
     expect(apiClient.getRecord).not.toHaveBeenCalled()
+    expect(apiClient.getRelatedRecords).not.toHaveBeenCalled()
   })
 
   it('opening the affordance fetches the run ONCE and lists its output artifacts as chips (name + dataKind)', async () => {
@@ -205,6 +234,15 @@ describe('GcEvidenceHandoff (leg D)', () => {
     fireEvent.click(screen.getByTestId('gc-evidence-form-submit'))
     expect(await screen.findByTestId('gc-evidence-form-created')).toHaveTextContent('EVD-TEST-GC13-D')
     expect(onBundleCreated).toHaveBeenCalledTimes(1)
+  })
+  it('the reciprocal run->claim leg: bundles whose sources point at this run link back to /claims/:claimId (G7)', async () => {
+    renderHandoff()
+    fireEvent.click(screen.getByTestId('gc-evidence-handoff-open'))
+    const linked = await screen.findByTestId('gc-evidence-linked-claims')
+    const claimLink = within(linked).getByTestId('gc-evidence-claim-link-CLM-TEST-GC13-D')
+    expect(claimLink).toHaveAttribute('href', '/claims/CLM-TEST-GC13-D')
+    // the other bundle's claim is NOT surfaced (its source points at another run)
+    expect(within(linked).queryByTestId('gc-evidence-claim-link-CLM-OTHER')).toBeNull()
   })
 })
 
