@@ -13,7 +13,9 @@ import { apiClient } from '../api/client'
 import {
   appendThreadMessage,
   getThread,
+  listThreads,
   type ApplianceEndpoint,
+  type ThreadSummary,
 } from '../api/aiThreadClient'
 import { parsePromptMentions } from '../lib/aiPromptMentions'
 import type { PlateEvent } from '../../types/events'
@@ -396,6 +398,13 @@ export interface UseAiChatReturn {
    * semantics as `switchThread`. Absent without an `endpoint`.
    */
   newThread?: () => void
+  /**
+   * L2-THREAD-SCOPED-1: fetch the user's threads for THIS chat's
+   * (endpoint, scope) — feeds the picker. The endpoint/scope ride the
+   * closure (the pane stays a pure consumer and never re-derives thread
+   * identity). Absent without an `endpoint`.
+   */
+  listThreads?: () => Promise<ThreadSummary[]>
 }
 
 /**
@@ -834,6 +843,15 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
     resetChatState()
     setActiveThread({ scope: scope ?? '', id })
   }, [endpoint, scope, resetChatState])
+
+  // The picker's data seam: the user's threads for THIS chat's (endpoint,
+  // scope). The endpoint/scope ride the closure so the pane stays a pure
+  // consumer. (The client sends the tab's (scope, id) headers with the
+  // request; the list is scope-scoped, so the id is incidental.)
+  const listThreadsForChat = useCallback((): Promise<ThreadSummary[]> => {
+    if (!endpoint) return Promise.resolve([])
+    return listThreads(endpoint, { ...(scope ? { scope } : {}) }).then((r) => r.threads)
+  }, [endpoint, scope])
 
   // Lazy mint: resolve the tab's id for the current scope (mint-once; a
   // reload or a return to a previously-visited scope reuses the stored id).
@@ -2278,6 +2296,7 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
           ...(activeThread ? { threadId: activeThread.id } : {}),
           switchThread: switchThread,
           newThread: newThread,
+          listThreads: listThreadsForChat,
         }
       : {}),
   }
