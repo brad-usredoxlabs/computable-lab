@@ -107,11 +107,27 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   // D1 probe (ONE listRecordsByKind on mount, deduped on runId). The payload
   // is typed at the use site (findLinkedSequences) — the client returns
   // untyped envelopes; we never widen the API surface.
+  //
+  // GC-12 bfix1 (browser-gate fix): the `probed` latch is the ONLY piece of
+  // probe state that must NOT die with a cancelled pass. main.tsx:37 wraps
+  // the app in <React.StrictMode> (the labware-fixture branch at main.tsx:17
+  // is wrapped too), and the development build runs every
+  // mount effect as mount → cleanup → re-mount. Stamping probeDoneRef BEFORE
+  // the request (the pre-fix placement) made pass 1 the only pass to ever
+  // fire the fetch — its cleanup set `cancelled`, its setSequences/setProbed
+  // were discarded, and pass 2 early-returned on the already-stamped dedupe
+  // ref: probed never flipped and the whole section rendered null in a real
+  // browser. The latch is therefore stamped in `.finally` UNCONDITIONALLY —
+  // idempotent on the surviving pass (StrictMode pass 2 re-fires the
+  // idempotent GET and both passes converge to probed=true), and a re-render
+  // with the same key still sees the stamped ref and does NOT re-fire (the
+  // dedupe is preserved, not removed). setSequences stays cancelled-gated:
+  // a cancelled pass must not write sequences, but the surviving pass's
+  // fetch always lands the same payload (the probe is keyed on runId).
   useEffect(() => {
     const key = refreshTick === 0 ? runId : `${runId}@${refreshTick}`
     if (probeDoneRef.current === key) return
     let cancelled = false
-    probeDoneRef.current = key
     apiClient
       .listRecordsByKind('instrument-sequence', 500)
       .then((res) => {
@@ -123,7 +139,11 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
            refresh in-flight) */
       })
       .finally(() => {
-        if (!cancelled) setProbed(true)
+        // The latch lands on WHICHEVER pass settles first — pass 1 under
+        // StrictMode (its cancelled continuations above skip the setState,
+        // the latch still stands) or the surviving pass otherwise.
+        probeDoneRef.current = key
+        setProbed(true)
       })
     return () => {
       cancelled = true
