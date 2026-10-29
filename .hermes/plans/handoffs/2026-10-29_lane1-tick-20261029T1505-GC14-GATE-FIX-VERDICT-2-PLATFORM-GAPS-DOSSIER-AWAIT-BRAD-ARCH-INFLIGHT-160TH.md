@@ -90,3 +90,12 @@ written in the task block; watch paths = dossier + architect answer.
   disclosed in S8; clears only if a future gate screenshots a method editor with values).
   CLEARED this tick: AS-L1T1352-3 (in-window 21/21+22/22 hash receipts), AS-L1T1430-2
   (tip-pin: unchanged code tip, S7 legs stand).
+
+## Addendum (checkpoint, ~15:15)
+
+- Task-list integrity fix: GC-13's `status:` line was still `in-progress` (159th stamped
+  `completed:` but never flipped the line) — flipped to `done` under the queue lock with the
+  correction note. Verified: only in-progress task on lane 1 is now GC-14 (human blocker).
+- Architect unit run-arch-GC14gaps-l1t1505 ACTIVE at checkpoint (~10 min elapsed of ~30-45 min
+  expected; survives tick exit). Answer NOT yet on disk. No new dispatches made past budget;
+  nothing else executable this tick without external input (Brad review / architect answer).
