@@ -39,6 +39,13 @@ import { parse as parseYaml } from 'yaml';
 import { LintEngine } from './LintEngine.js';
 import { loadAllLintSpecs } from './LintSpecLoader.js';
 import type { LintSpec } from './types.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { loadAllSchemas } from '../schema/SchemaLoader.js';
+import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
+import { createValidator } from '../validation/AjvValidator.js';
+import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
+import { createRecordStore } from '../store/RecordStoreImpl.js';
 
 const SCHEMA_DIR = fileURLToPath(new URL('../../../schema', import.meta.url));
 const KNOWLEDGE = join(SCHEMA_DIR, 'knowledge');
@@ -258,5 +265,118 @@ describe('lint spec loader boundary (the file the server loads at startup)', () 
     expect(ev.spec.rules.map((r) => r.id)).toEqual(
       expect.arrayContaining(['evd-supports-target-shape', 'evd-sources-need-context-arm']),
     );
+  });
+});
+
+/**
+ * GC-13 FIX1 — the RESULT arm of the source-coverage floor (D5: a stance-
+ * bearing bundle needs >= 1 result-typed AND >= 1 context/measurement_
+ * context-typed source; the context arm was the only half shipped) and the
+ * CREATE-PATH rejection (spec bait #9: severity error AND create refused,
+ * not just lint.valid=false — the store's create runs validate-then-lint
+ * and refuses lint-invalid with the lint-invalid result shape; the HTTP
+ * handler maps that to the 422 'Lint failed' body).
+ *
+ * The store is the REAL one: LocalRepoAdapter over a tmp dir + the REAL
+ * schemas (loadAllSchemas recursive, topological Ajv registration — the
+ * RevisionStorage.test.ts house pattern) + a LintEngine carrying the REAL
+ * evidence.lint.yaml (the same file LintSpecLoader loads at startup). The
+ * context-only bundle (context source, NO result source) MUST be create-
+ * refused; the complete bundle (result + context) MUST create.
+ */
+describe('FIX1 — result-coverage floor + create-path rejection (real store, real spec file)', () => {
+  let root: string;
+  let store: ReturnType<typeof createRecordStore>;
+  let engine: LintEngine;
+
+  const contextOnlyBundle = (): Record<string, unknown> => ({
+    kind: 'evidence',
+    id: 'EVD-TEST-GC13-FIX1-CTXONLY',
+    title: 'context-only bundle (missing the result arm — test fixture)',
+    supports: [recordRef('ASN-TEST-GC13', 'assertion')],
+    sources: [
+      { type: 'context', ref: recordRef('CTX-TEST-GC13', 'context') },
+      { type: 'measurement_context', ref: recordRef('MCTX-TEST-GC13', 'measurement-context') },
+    ],
+  });
+
+  const completeBundleForCreate = (): Record<string, unknown> => ({
+    kind: 'evidence',
+    id: 'EVD-TEST-GC13-FIX1-COMPLETE',
+    title: 'complete bundle (result + context arms — test fixture)',
+    supports: [recordRef('ASN-TEST-GC13', 'assertion')],
+    sources: [
+      { type: 'result', ref: recordRef('AOUT-000020', 'analysis-output-artifact') },
+      { type: 'context', ref: recordRef('CTX-TEST-GC13', 'context') },
+    ],
+  });
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), 'gc13-fix1-evidence-create-'));
+    const loaded = await loadAllSchemas({
+      basePath: fileURLToPath(new URL('../../../schema', import.meta.url)),
+      recursive: true,
+    });
+    const registry = createSchemaRegistry();
+    registry.addSchemas(loaded.entries);
+    const validator = createValidator();
+    for (const id of registry.getTopologicalOrder()) {
+      const entry = registry.getById(id);
+      if (entry) validator.addSchema(entry.schema as never, id);
+    }
+    engine = new LintEngine();
+    engine.addSpec('evidence', loadSpecByName('evidence'));
+    store = createRecordStore(createLocalRepoAdapter({ basePath: root }), validator, engine);
+  });
+
+  afterAll(async () => {
+    if (root) await rm(root, { recursive: true, force: true });
+  });
+
+  it('a stance-bearing bundle with a context source but NO result source is lint-invalid (the result arm, named rule id)', () => {
+    const rule = engine.getRule('evd-sources-need-result-arm');
+    expect(rule, 'rule evd-sources-need-result-arm must exist in the loaded spec').toBeDefined();
+    expect(rule?.severity).toBe('error');
+    const r = engine.lint(contextOnlyBundle(), EVIDENCE);
+    expect(r.valid).toBe(false);
+    const v = r.violations.find((x) => x.ruleId === 'evd-sources-need-result-arm');
+    expect(v, 'expected the result-arm violation').toBeDefined();
+    expect(v?.severity).toBe('error');
+    expect(v?.message).toContain('EVD-TEST-GC13-FIX1-CTXONLY');
+  });
+
+  it('a bundle with a result source still needs the context arm (both arms are independent floors)', () => {
+    const r = engine.lint(contextlessBundle(), EVIDENCE);
+    expect(r.valid).toBe(false);
+    const ids = r.violations.map((x) => x.ruleId);
+    expect(ids).toContain('evd-sources-need-context-arm');
+    expect(ids).not.toContain('evd-sources-need-result-arm');
+  });
+
+  it('a stance-bearing bundle with context sources but NO result source is create-REFUSED with the lint-invalid shape and named rule id', async () => {
+    const result = await store.create({
+      envelope: { recordId: 'EVD-TEST-GC13-FIX1-CTXONLY', schemaId: EVIDENCE, payload: contextOnlyBundle() },
+    });
+    expect(result.success).toBe(false);
+    // the lint-invalid result shape (the handler maps this to the 422
+    // 'Lint failed' body): lint present, valid=false, the rule named
+    expect(result.lint, 'create must carry the lint result').toBeDefined();
+    expect(result.lint?.valid).toBe(false);
+    const v = result.lint?.violations.find((x) => x.ruleId === 'evd-sources-need-result-arm');
+    expect(v, 'the refused create must name the result-arm rule').toBeDefined();
+    expect(v?.severity).toBe('error');
+    // and the record does NOT exist (the refusal happened before any write)
+    expect(await store.get('EVD-TEST-GC13-FIX1-CTXONLY')).toBeNull();
+  });
+
+  it('a complete bundle (result + context arms) creates through the same path (the floor does not over-block)', async () => {
+    const result = await store.create({
+      envelope: { recordId: 'EVD-TEST-GC13-FIX1-COMPLETE', schemaId: EVIDENCE, payload: completeBundleForCreate() },
+    });
+    expect(result, JSON.stringify(result)).toMatchObject({ success: true });
+    expect(result.lint?.valid).toBe(true);
+    const readback = await store.get('EVD-TEST-GC13-FIX1-COMPLETE');
+    expect(readback?.recordId).toBe('EVD-TEST-GC13-FIX1-COMPLETE');
+    expect((readback?.payload as Record<string, unknown>).kind).toBe('evidence');
   });
 });
