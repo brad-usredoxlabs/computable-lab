@@ -12,7 +12,7 @@
  *    groups, each row linking /record/:evidenceId (the reciprocal
  *    claim->evidence leg).
  *  - Connections / Runs: the bundles' sources pointing at analysis-runs,
- *    linked /runs/:runId (the reciprocal run->claim back-link the results
+ *    linked to the run (the reciprocal run->claim back-link the results
  *    surface follows home).
  *  - Honest empty arms when a group has no data (absence is visible, never
  *    a silent placeholder).
@@ -276,7 +276,7 @@ export function ClaimWorkspace() {
                   ) : (
                     <ul className="claim-workspace__connections-list">
                       {runIds.map((rid) => (
-                        <li key={rid}>
+                        <li key={rid} className="claim-workspace__connections-row">
                           <a href={`/runs/${encodeURIComponent(rid)}`} data-testid={`claim-run-link-${rid}`}>
                             {rid}
                           </a>
@@ -301,7 +301,7 @@ export function ClaimWorkspace() {
                 ) : (
                   <ul className="claim-workspace__connections-list">
                     {relatedClaimIds.map((cid) => (
-                      <li key={cid}>
+                      <li key={cid} className="claim-workspace__connections-row">
                         <a href={`/claims/${encodeURIComponent(cid)}`}> {cid}</a>
                         <span className="claim-workspace__connections-kind">claim</span>
                       </li>
