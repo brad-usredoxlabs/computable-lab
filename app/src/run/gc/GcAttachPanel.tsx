@@ -151,6 +151,14 @@ export function GcAttachPanel({
       }
     } finally {
       setBusy(false)
+      // GC-12 DIRFIX-M3-1 (adv cycle-2 defect 1, probe BUSY_NOTE_AFTER_SETTLE):
+      // the busy note only describes the IN-FLIGHT window — it clears the
+      // moment the register SETTLES (success or failure), so a FAILED
+      // register renders the failure token ALONE, never beside a stale
+      // "register is already in progress" claim (a fabricated state: no
+      // register exists anymore). The note line keeps one state at a time:
+      // cleared here on settle, and on a new register start above.
+      setBusyNote(null)
     }
   }
 
