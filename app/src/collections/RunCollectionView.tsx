@@ -40,6 +40,24 @@ const RUN_STATUSES = [
 ] as const
 
 /* ------------------------------------------------------------------ */
+/* GC-12 DIRFIX-M3-3 — the failure arm's cause line                    */
+/* ------------------------------------------------------------------ */
+
+// GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3, probe B_ARM_TEXT): the failure
+// arm's cause, NAMING the failing registry per read (per-read settlement).
+// An equipment-only failure names equipment (never gc-methods), a
+// gc-methods-only failure names gc-methods, both failing names both. The
+// "<registry> read: <cause>" lines are UI copy over the per-read causes
+// stored by fetchGcRegistry (the kind literals come from the pre-existing
+// fetch call — nothing new is hardcoded).
+function registryFailureCause(f: { methods?: string; equipment?: string }): string {
+  const lines: string[] = []
+  if (f.methods !== undefined) lines.push(`gc-methods read: ${f.methods}`)
+  if (f.equipment !== undefined) lines.push(`equipment read: ${f.equipment}`)
+  return lines.join('; ')
+}
+
+/* ------------------------------------------------------------------ */
 /* Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -80,12 +98,21 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   // window to the failure window. A failure is its OWN arm: it names the
   // real cause and offers a Retry — never the not-ready claim.
   // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT): the arm is
-  // keyed on this failure STATE (null = no failure, non-null = settled
-  // failure), NEVER on the truthiness of the message text — a rejection
-  // with an EMPTY message (new Error('')) used to store '' (falsy) and fall
-  // through to the "No gc-methods are configured" lie. Empty messages store
-  // the honest generic cause line instead of ''.
-  const [gcMethodsError, setGcMethodsError] = useState<string | null>(null)
+  // keyed on this failure STATE (null = no read failed), NEVER on the
+  // truthiness of the message text — a rejection with an EMPTY message
+  // (new Error('')) used to store '' (falsy) and fall through to the
+  // "No gc-methods are configured" lie. An empty message stores the honest
+  // generic cause line instead of ''.
+  // GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3, probe B_ARM_TEXT): PER-READ
+  // settlement. The old `Promise.all` collapsed the two registry reads into
+  // ONE catch, so an equipment-only rejection was reported as "Could not
+  // load gc-methods: <equipment cause>" (a wrong-cause statement) and hid
+  // the perfectly good method list behind the failure surface. Each failed
+  // read now stores its cause under its OWN registry key (never a falsy
+  // ''), so the arm NAMES the registry that actually failed (equipment-only
+  // → equipment, gc-methods-only → gc-methods, both → both) and a
+  // gc-methods read that SUCCEEDED still drives the select.
+  const [gcRegistryFailures, setGcRegistryFailures] = useState<{ methods?: string; equipment?: string } | null>(null)
   const [gcEquipment, setGcEquipment] = useState<Array<{ recordId: string; payload: { name?: string } }>>([])
   const [gcMethodId, setGcMethodId] = useState('')
   const [gcInstrumentId, setGcInstrumentId] = useState('')
@@ -101,30 +128,46 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   // the form open AND the failure arm's Retry both run this, so there is a
   // single fetch surface (no divergent inline fetch).
   const fetchGcRegistry = useCallback(async () => {
-    try {
-      const [m, e] = await Promise.all([
-        apiClient.listRecordsByKind('gc-method', 500),
-        apiClient.listRecordsByKind('equipment', 500),
-      ])
-      setGcMethods(m.records as unknown as typeof gcMethods)
-      setGcEquipment(e.records as unknown as typeof gcEquipment)
-      setGcMethodsError(null)
-      setGcMethodsLoaded(true)
-    } catch (err) {
-      // GC-12 dirfix MINOR-FIX (defect 1): a REJECTED read is a SETTLED
-      // FAILURE — never "loaded + empty list" (that old shape rendered the
-      // empty-state lie on a failed read — the regate2 defect 2 class). The
-      // failure arm names the real cause and offers the Retry; it never
-      // renders the empty-state claim and never spins the loading arm.
-      // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT): the
-      // failure STATE is what the arm keys on — a rejection whose message is
-      // the EMPTY string must still settle the failure arm, not fall through
-      // to the "No gc-methods are configured" lie (an empty message is not a
-      // cause: the arm shows the honest generic cause line instead).
-      const raw = err instanceof Error ? err.message : String(err)
-      setGcMethodsError(raw || 'no cause was provided')
-      setGcMethodsLoaded(true)
+    // GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3, probe B_ARM_TEXT): PER-READ
+    // settlement. The old `Promise.all` collapsed the two registry reads
+    // into ONE catch: when the gc-method read SUCCEEDED and only the
+    // equipment read rejected, the arm reported "Could not load gc-methods:
+    // <equipment cause>" (a wrong-cause statement) AND hid the perfectly
+    // good method list behind the failure surface. Each read settles on its
+    // OWN: the one that succeeds still populates its list; the one that
+    // fails stores its cause under its OWN registry key, so the arm NAMES
+    // the registry that actually failed (equipment-only → equipment,
+    // gc-methods-only → gc-methods, both failing → both).
+    const [methodsRes, equipmentRes] = await Promise.allSettled([
+      apiClient.listRecordsByKind('gc-method', 500),
+      apiClient.listRecordsByKind('equipment', 500),
+    ])
+    if (methodsRes.status === 'fulfilled') {
+      setGcMethods(methodsRes.value.records as unknown as typeof gcMethods)
     }
+    if (equipmentRes.status === 'fulfilled') {
+      setGcEquipment(equipmentRes.value.records as unknown as typeof gcEquipment)
+    }
+    // The failures, attributed to the registry that actually failed.
+    // DIRFIX-M3-2: an empty message stores the honest generic cause line
+    // (never a falsy ''), so the failure arm stays keyed on the failure
+    // STATE and never falls through to the empty-state lie.
+    const failures: { methods?: string; equipment?: string } = {}
+    if (methodsRes.status === 'rejected') {
+      const raw = methodsRes.reason instanceof Error ? methodsRes.reason.message : String(methodsRes.reason)
+      failures.methods = raw || 'no cause was provided'
+    }
+    if (equipmentRes.status === 'rejected') {
+      const raw = equipmentRes.reason instanceof Error ? equipmentRes.reason.message : String(equipmentRes.reason)
+      failures.equipment = raw || 'no cause was provided'
+    }
+    // GC-12 dirfix MINOR-FIX (defect 1): a REJECTED read is a SETTLED
+    // FAILURE — never "loaded + empty list" (that old shape rendered the
+    // empty-state lie on a failed read — the regate2 defect 2 class). The
+    // failure arm names the real cause and offers the Retry; it never
+    // renders the empty-state claim and never spins the loading arm.
+    setGcRegistryFailures(failures.methods || failures.equipment ? failures : null)
+    setGcMethodsLoaded(true)
   }, [])
 
   const openGcCreate = useCallback(async () => {
@@ -134,7 +177,7 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
     // stale method pick from a prior open must not linger (the loading arm
     // reflects THIS fetch).
     setGcMethodsLoaded(false)
-    setGcMethodsError(null)
+    setGcRegistryFailures(null)
     void fetchGcRegistry()
   }, [fetchGcRegistry])
 
@@ -371,27 +414,25 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
           />
           <div data-testid="gc-run-create-method-row">
             <label htmlFor="gc-run-create-method">GC method</label>
-            {gcMethodsError ? (
-              // GC-12 dirfix MINOR-FIX (defect 1): the SETTLED FAILURE arm —
-              // the registry read was REJECTED. Distinct from BOTH the
-              // in-flight LOADING arm and the genuine empty arm: a failed
-              // read never claims "No gc-methods are configured" (the
-              // empty-state lie a failed read is not evidence for) and never
-              // spins "Loading…". The arm names the real cause and offers a
-              // Retry (a live affordance — dead-chrome ban).
-              // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT):
-              // keyed on the failure STATE (gcMethodsError is null only when
-              // no read failed), never on message truthiness — an
-              // empty-message rejection still lands here with the honest
-              // generic cause line (the empty message is stored as the named
-              // cause, never as '').
+            {/* GC-12 dirfix MINOR-FIX (defect 1) + DIRFIX-M3-3: the SETTLED
+                FAILURE arm — a REJECTED registry read. Keyed on the failure
+                STATE (gcRegistryFailures set), never on message truthiness
+                (DIRFIX-M3-2: an empty-message rejection still lands here
+                with the honest generic cause line). The cause NAMES the
+                registry that actually failed per read (DIRFIX-M3-3).
+                Distinct from BOTH the in-flight LOADING arm and the genuine
+                EMPTY arm: a failed read never claims "No gc-methods are
+                configured" (the empty-state lie a failed read is not
+                evidence for) and never spins "Loading…". The Retry is a live
+                affordance (dead-chrome ban). */}
+            {gcRegistryFailures ? (
               <span className="gc-run-create__error" data-testid="gc-run-create-method-error">
-                Could not load registry: {gcMethodsError}
+                Could not load registry: {registryFailureCause(gcRegistryFailures)}
                 <button
                   type="button"
                   data-testid="gc-run-create-method-retry"
                   onClick={() => {
-                    setGcMethodsError(null)
+                    setGcRegistryFailures(null)
                     setGcMethodsLoaded(false)
                     void fetchGcRegistry()
                   }}
@@ -399,36 +440,53 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
                   Retry
                 </button>
               </span>
-            ) : !gcMethodsLoaded ? (
-              // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): the IN-FLIGHT arm —
-              // the list is still loading; never claim "none configured"
-              // mid-fetch (that was the regate2 false-empty).
-              <span className="gc-run-create__notready" data-testid="gc-run-create-method-loading">
-                Loading gc-methods…
-              </span>
-            ) : gcMethods.length === 0 ? (
-              <span className="gc-run-create__notready" data-testid="gc-run-create-method-notready">
-                No gc-methods are configured.{' '}
-                <a href="/registry" data-testid="gc-run-create-method-author">
-                  Author a method in the registry
-                </a>{' '}
-                (the gc-method manual-entry provenance arms).
-              </span>
-            ) : (
-              <select
-                id="gc-run-create-method"
-                data-testid="gc-run-create-method"
-                value={gcMethodId}
-                onChange={(e) => setGcMethodId(e.target.value)}
-              >
-                <option value="">Select gc-method…</option>
-                {gcMethods.map((m) => (
-                  <option key={m.recordId} value={m.recordId}>
-                    {m.payload.name ?? m.payload.title ?? m.recordId}
-                  </option>
-                ))}
-              </select>
-            )}
+            ) : null}
+            {!gcRegistryFailures?.methods &&
+              (!gcMethodsLoaded ? (
+                // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): the IN-FLIGHT arm —
+                // the list is still loading; never claim "none configured"
+                // mid-fetch (that was the regate2 false-empty).
+                <span className="gc-run-create__notready" data-testid="gc-run-create-method-loading">
+                  Loading gc-methods…
+                </span>
+              ) : gcMethods.length === 0 ? (
+                // GC-12 DIRFIX-M3-3: the EMPTY arm renders ONLY when the
+                // gc-methods read SUCCEEDED and came back empty — a failed
+                // gc-methods read is the arm above (the empty-state lie is
+                // never a fallback for a failure). An equipment-only failure
+                // with a genuinely EMPTY method read also reaches this arm
+                // (the equipment failure is named in the arm above); the
+                // claim is about the gc-methods read, which succeeded and
+                // was empty.
+                <span className="gc-run-create__notready" data-testid="gc-run-create-method-notready">
+                  No gc-methods are configured.{' '}
+                  <a href="/registry" data-testid="gc-run-create-method-author">
+                    Author a method in the registry
+                  </a>{' '}
+                  (the gc-method manual-entry provenance arms).
+                </span>
+              ) : (
+                // GC-12 DIRFIX-M3-3: the SELECT renders from the gc-methods
+                // read that WORKED — an equipment-only failure never hides
+                // it behind a failure surface (no usability loss on a read
+                // that worked; the equipment failure is named in the arm
+                // above). A gc-methods failure suppresses the select (the
+                // arm replaces it — a select would render from a failed
+                // read).
+                <select
+                  id="gc-run-create-method"
+                  data-testid="gc-run-create-method"
+                  value={gcMethodId}
+                  onChange={(e) => setGcMethodId(e.target.value)}
+                >
+                  <option value="">Select gc-method…</option>
+                  {gcMethods.map((m) => (
+                    <option key={m.recordId} value={m.recordId}>
+                      {m.payload.name ?? m.payload.title ?? m.recordId}
+                    </option>
+                  ))}
+                </select>
+              ))}
           </div>
           <label htmlFor="gc-run-create-vial">Vial</label>
           <input

@@ -313,4 +313,73 @@ describe('RunCollectionView — GC-12 D2 create front door', () => {
     // pretending a message).
     expect(arm.textContent).toMatch(/no cause was provided/i)
   })
+
+  it('GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3, probe B_ARM_TEXT): an EQUIPMENT-only failure NAMES equipment (never "Could not load gc-methods") and the method select STAYS usable', async () => {
+    // Promise.all collapsed the two registry reads into ONE attribution:
+    // when the gc-method read SUCCEEDED and only the equipment read
+    // rejected, the arm said "Could not load gc-methods: equipment registry
+    // down" — a wrong-cause statement that hid the perfectly good method
+    // list behind a failure surface. Per-read settlement: the equipment
+    // failure NAMES the equipment registry and does not block the method
+    // select (which renders from the read that worked).
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') {
+        return Promise.resolve({
+          records: [{ recordId: 'GCM-DEMO-AOAC-FAME', payload: { name: 'AOAC FAME GC-FID method (demo)' } }],
+          total: 1,
+        } as never)
+      }
+      if (kind === 'equipment') return Promise.reject(new Error('equipment registry down')) as never
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    // The failure arm NAMES the failing registry (equipment)…
+    const arm = await screen.findByTestId('gc-run-create-method-error')
+    expect(arm.textContent).toContain('equipment')
+    expect(arm.textContent).toContain('equipment registry down')
+    // …and is NEVER a gc-methods misattribution (the probe B_ARM_TEXT
+    // assertion: the arm must not report the failure as "Could not load
+    // gc-methods").
+    expect(arm.textContent).not.toContain('Could not load gc-methods')
+    expect(arm.textContent).not.toContain('gc-methods read')
+    // The method read WORKED — the data-driven method select renders from
+    // it (no usability loss on a read that worked)…
+    expect((screen.getByTestId('gc-run-create-method') as HTMLSelectElement).textContent).toContain(
+      'AOAC FAME GC-FID method (demo)',
+    )
+    // …and the empty-state lie does not render.
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+  })
+
+  it('GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3): a GC-METHODS-only failure names gc-methods (per-read attribution)', async () => {
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') return Promise.reject(new Error('network down')) as never
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    const arm = await screen.findByTestId('gc-run-create-method-error')
+    expect(arm.textContent).toContain('gc-methods read')
+    expect(arm.textContent).toContain('network down')
+    expect(screen.queryByTestId('gc-run-create-method')).toBeNull()
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+  })
+
+  it('GC-12 DIRFIX-M3-3 (adv cycle-2 defect 3): BOTH registries failing names BOTH', async () => {
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') return Promise.reject(new Error('methods down')) as never
+      if (kind === 'equipment') return Promise.reject(new Error('equipment down')) as never
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    const arm = await screen.findByTestId('gc-run-create-method-error')
+    expect(arm.textContent).toContain('gc-methods read')
+    expect(arm.textContent).toContain('equipment read')
+    expect(arm.textContent).toContain('methods down')
+    expect(arm.textContent).toContain('equipment down')
+    expect(screen.queryByTestId('gc-run-create-method')).toBeNull()
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+  })
 })
