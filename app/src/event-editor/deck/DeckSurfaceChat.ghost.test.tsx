@@ -106,6 +106,11 @@ vi.mock('../../shared/api/aiThreadClient', () => ({
   getThread: vi.fn().mockRejectedValue(new Error('no thread')),
   appendThreadMessage: vi.fn().mockResolvedValue(undefined),
   promoteThread: vi.fn().mockResolvedValue(undefined),
+  // L2-THREAD-SCOPED-1 FIX2 D1: useAiChat statically imports listThreads
+  // (the picker's seam), so a wholesale mock of this module must export it —
+  // an unexported named import throws at the pane's mount. Empty list: the
+  // ghost lock never exercises the picker.
+  listThreads: vi.fn(async () => ({ threads: [] })),
 }))
 
 vi.mock('../../shared/api/client', () => ({

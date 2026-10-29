@@ -165,6 +165,11 @@ export function DeckSurfaceChat() {
   useSurfaceChat({
     aiContext,
     endpoint: 'event-editor',
+    // L2-THREAD-SCOPED-1 (SUITEA-D3 amendment A-1, review D1 wiring): the
+    // deck's INSTANCE identity is the thread scope — one thread per
+    // (tab, deck). An unsaved deck (no eventGraphId) sends no scope and
+    // lives under the server's reserved "_" segment (amendment edge (i)).
+    ...(state.eventGraphId ? { scope: state.eventGraphId } : {}),
     onAcceptEvent: actions.appendEvent,
     // L2-CHAT-1: event-bearing proposals mount deck ghosts; a chat discard
     // clears the preview (the hook's discard seam is a no-op — adoption is
