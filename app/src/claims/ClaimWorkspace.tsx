@@ -117,7 +117,16 @@ export function ClaimWorkspace() {
           try {
             const res = await apiClient.getRelatedRecords(asId)
             for (const r of res.related) {
-              if (schemaKind(r.schemaId) === 'evidence' && r.recordId !== claimId && !secondHopIds.includes(r.recordId)) {
+              // FIX2d (NEW-4): a bundle that targets BOTH the claim and one of
+              // its assertions is in the claim's related set (first hop) AND
+              // the assertion's related set (second hop) — dedupe against
+              // evidenceIds or it renders twice with the same key={b.id}.
+              if (
+                schemaKind(r.schemaId) === 'evidence' &&
+                r.recordId !== claimId &&
+                !evidenceIds.includes(r.recordId) &&
+                !secondHopIds.includes(r.recordId)
+              ) {
                 secondHopIds.push(r.recordId)
               }
             }
