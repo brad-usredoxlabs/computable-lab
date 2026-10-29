@@ -385,12 +385,19 @@ export function GcEvidenceHandoff({
   isenId,
   runId,
   onBundleCreated,
+  initialOpen = false,
 }: {
   isenId: string
   runId: string
   onBundleCreated: () => void
+  /** GC-13 gate-fix (D5): the direct-run landing surface (GcEvidenceRunPage)
+   *  opens the body at mount — the evidence context IS the point of the
+   *  deep-link landing, so the back-links / chips need no second click.
+   *  The GC-12 results flow-back (GcResultsList) keeps the default (closed
+   *  at mount — the D7 pin there is untouched). */
+  initialOpen?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initialOpen)
   const [chips, setChips] = useState<ArtifactChip[] | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [provenanceFor, setProvenanceFor] = useState<RecordRef | null>(null)

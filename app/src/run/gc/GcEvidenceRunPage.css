@@ -1,0 +1,223 @@
+/* GC-13 gate-fix (D5, gate G7) — GcEvidenceRunPage: the reciprocal
+ * claim -> analysis-run landing surface. The GC evidence context for an
+ * analysis-run id — the SHIPPED GcEvidenceHandoff (the run's output
+ * artifacts + the gc-evidence-claim-link* back-links) — NOT the Run·Design
+ * plate canvas.
+ *
+ * The page owns its own chrome (header / refusal / section); the shipped
+ * component's markup (gc-ev__* / gc-prov__* — unstyled upstream) gets its
+ * minimum legibility scoped HERE. Styling reads the theme tokens
+ * (tokens.css) like every other workspace surface; link affordance matches
+ * the GC-12 .gc-results a pattern (var(--color-primary) + underline, hover
+ * thickens). */
+
+.gc-evidence-run {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.gc-evidence-run__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.gc-evidence-run__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 4px 0;
+  flex: 1;
+}
+
+.gc-evidence-run__kind {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--cl-type-run-soft);
+  color: var(--cl-type-run);
+  vertical-align: middle;
+}
+
+.gc-evidence-run__id {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+}
+
+.gc-evidence-run__status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  background: var(--cl-success-soft);
+  color: var(--cl-success);
+  border: 1px solid var(--cl-success-border);
+}
+
+.gc-evidence-run__section {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.gc-evidence-run__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 12px 0;
+}
+
+.gc-evidence-run__empty,
+.gc-evidence-run__hint {
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.gc-evidence-run__error {
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+/* The shipped GcProvenancePanel / GcEvidenceHandoff render their own
+   markup (gc-prov__* / gc-ev__* classes — currently unstyled upstream);
+   scope their minimum legibility here (layout + colour from the theme
+   tokens; their interactive state is unchanged). */
+.gc-evidence-run .gc-ev {
+  display: inline-block;
+}
+
+.gc-evidence-run .gc-ev button,
+.gc-evidence-run .gc-ev__chip button {
+  margin: 4px 8px 4px 0;
+  padding: 4px 10px;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gc-evidence-run .gc-ev__body {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+}
+
+.gc-evidence-run .gc-ev__claims {
+  margin-top: 8px;
+  padding: 8px;
+  border-left: 2px solid var(--cl-border-strong);
+}
+
+.gc-evidence-run .gc-ev__claims-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.gc-evidence-run .gc-ev__claim {
+  display: block;
+  padding: 2px 0;
+}
+
+.gc-evidence-run .gc-ev a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+}
+
+.gc-evidence-run .gc-ev a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.gc-evidence-run .gc-ev__chip {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+}
+
+.gc-evidence-run .gc-ev__chip-kind {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.gc-evidence-run .gc-ev__error {
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+.gc-evidence-run .gc-ev__empty {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+
+.gc-evidence-run .gc-prov__hop {
+  list-style: none;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.gc-evidence-run .gc-prov__hop-name {
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.gc-evidence-run .gc-prov__hop-kind {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+  margin-left: 8px;
+}
+
+.gc-evidence-run .gc-prov__hop-link {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+  margin-left: 8px;
+}
+
+.gc-evidence-run .gc-prov__hop-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.gc-evidence-run .gc-prov__hop-absent,
+.gc-evidence-run .gc-prov__hop-error {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.gc-evidence-run .gc-prov__hop-absent {
+  color: var(--cl-text-faint);
+}
+
+.gc-evidence-run .gc-prov__hop-error {
+  color: var(--cl-danger);
+}
+
+.gc-evidence-run .gc-prov__facts {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.gc-evidence-run .gc-prov__fact-label {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+.gc-evidence-run .gc-prov__fact-value {
+  color: var(--cl-text);
+  font-size: 13px;
+}
