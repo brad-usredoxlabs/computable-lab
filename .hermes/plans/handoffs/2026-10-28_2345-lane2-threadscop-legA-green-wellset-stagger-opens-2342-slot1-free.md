@@ -87,3 +87,15 @@ reached its gate.
 Entered ~23:10, checkpointed ~23:45 (~35 min). Fleet: slot-0 THREAD-SCOPED (lane 2, live),
 slot-1 free -> WELLSET attempt-2 self-launch due ~23:42. Trunk 57620f83 clean. /tmp inodes
 fine. Engine alive.
+
+## ADDENDUM (23:47, same tick)
+
+- THREAD-SCOPED LEG A COMMITTED: 1a634069 '[L2THREADSCOPED1][A] server: thread-scoped key
+  (user, endpoint, scope, threadId)' on cl/lane2-thread-scoped-1-l2t0310. Coder 2602295 live
+  1h01m, report appended 23:43. Leg B (client mint/transport) is next per the report's legs.
+- STAGGER OPENED 23:43 as predicted — but LANE 1's GC12-dirfix queue won slot-1 first
+  (GC12DIR-2650427-2026-10-28T23:42:49, flock + hermes child 2650429 alive; lane-1's own tick
+  dispatched it at 23:20). Fleet concurrency 2 is respected; WELLSET queue logged
+  'stagger open / both slots busy' and re-probes every 120s — it will grab whichever slot
+  frees first. NOT lane 2's concern whose coder holds slot-1; tracked for stagger
+  bookkeeping only.
