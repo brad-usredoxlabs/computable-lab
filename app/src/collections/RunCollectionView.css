@@ -471,3 +471,13 @@
   font-size: 12px;
   color: var(--cl-text-error, #cf222e);
 }
+
+/* GC-12 bfix1 (minor 3): the create-form action row rendered its two
+   buttons touching ("CancelCreate GC run sheet" — no rule styled the
+   container, so the default inline buttons had zero separation). */
+.run-collection__gc-create [data-testid='gc-run-create-actions'] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
