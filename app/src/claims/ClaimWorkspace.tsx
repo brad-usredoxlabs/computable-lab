@@ -279,7 +279,13 @@ export function ClaimWorkspace() {
               </div>
               <div>
                 <h3>Related Claims</h3>
-                {relatedClaimIds.length === 0 ? (
+                {/* FIX2a (NEW-1, defect-7 class): the related-claim ids come
+                    from the SAME related-record scan as the evidence rows —
+                    while it failed, the absence of related claims is UNKNOWN,
+                    never asserted. The failure is loud (the Connections error
+                    arm below); the empty arm is suppressed like the rest. */}
+                {relatedError === null &&
+                  (relatedClaimIds.length === 0 ? (
                   <p className="claim-workspace__empty" data-testid="claim-connections-claims-empty">
                     No related claim found in the related-record scan.
                   </p>
@@ -292,7 +298,7 @@ export function ClaimWorkspace() {
                       </li>
                     ))}
                   </ul>
-                )}
+                  ))}
               </div>
               {relatedError !== null && (
                 <p className="claim-workspace__error" data-testid="claim-connections-error">

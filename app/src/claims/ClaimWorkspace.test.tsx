@@ -282,7 +282,86 @@ describe('ClaimWorkspace', () => {
     expect(screen.queryByTestId('claim-evidence-group-supporting-empty')).toBeNull()
     expect(screen.queryByTestId('claim-evidence-group-contradictory-empty')).toBeNull()
     expect(screen.queryByTestId('claim-connections-runs-empty')).toBeNull()
+    // FIX2a (NEW-1, defect-7 class): the Related Claims empty arm is the same
+    // lie while the scan is down — its absence is asserted from the SAME
+    // related-record scan that failed. Suppressed too.
+    expect(screen.queryByTestId('claim-connections-claims-empty')).toBeNull()
     // and the Connections section carries the same failure (loud, not hidden)
     expect(screen.getByTestId('claim-connections-error')).toHaveTextContent('503')
+  })
+
+  // ---- FIX2d (NEW-4): a bundle targeting BOTH the claim and one of its
+  // ---- assertions is reachable by the first hop AND the second hop — it must
+  // ---- render exactly ONCE (the old code pushed it from both lists: duplicate
+  // ---- row + duplicate React key={b.id}).
+
+  it('a bundle targeting BOTH the claim and one of its assertions renders exactly ONE ledger row (no duplicate row / duplicate key)', async () => {
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
+      switch (id) {
+        case 'CLM-1':
+          return claimRecord({ recordId: 'CLM-1', statement: 'dual-target claim', status: 'proposed' })
+        case 'ASN-1':
+          return {
+            recordId: 'ASN-1',
+            schemaId: ASN_SCHEMA,
+            payload: {
+              kind: 'assertion',
+              id: 'ASN-1',
+              scope: 'single_context',
+              claim_ref: { kind: 'record', id: 'CLM-1', type: 'claim' },
+            },
+          } as never
+        // Dual-target (schema-legal: multi-`supports`): names the claim AND
+        // one of the claim's assertions. The single-hop claim scan sees it
+        // (its own payload references CLM-1) AND the assertion second hop
+        // surfaces it (its payload references ASN-1).
+        case 'EVD-DUAL':
+          return {
+            recordId: 'EVD-DUAL',
+            schemaId: EVD_SCHEMA,
+            payload: {
+              kind: 'evidence',
+              id: 'EVD-DUAL',
+              supports: [
+                { kind: 'record', id: 'CLM-1', type: 'claim' },
+                { kind: 'record', id: 'ASN-1', type: 'assertion' },
+              ],
+              sources: [
+                { type: 'result', ref: { kind: 'record', id: 'ANR-R1', type: 'analysis-run' } },
+                { type: 'context', ref: { kind: 'record', id: 'CTX-1', type: 'context' } },
+              ],
+            },
+          } as never
+        default:
+          throw new Error(`404: ${id}`)
+      }
+    })
+    // SINGLE-HOP semantics, both hops see EVD-DUAL.
+    vi.mocked(apiClient.getRelatedRecords).mockImplementation(async (id: string) => {
+      switch (id) {
+        case 'CLM-1':
+          return {
+            related: [
+              { recordId: 'EVD-DUAL', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[0]' },
+              { recordId: 'ASN-1', schemaId: ASN_SCHEMA, kind: 'assertion', title: 'assertion', refField: 'claim_ref' },
+            ],
+          } as never
+        case 'ASN-1':
+          return {
+            related: [
+              { recordId: 'EVD-DUAL', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'bundle', refField: 'supports[1]' },
+            ],
+          } as never
+        default:
+          return { related: [] } as never
+      }
+    })
+    renderClaimRoute()
+    await screen.findByTestId('claim-evidence-group-supporting')
+    const links = screen.getAllByTestId('claim-evidence-link')
+    // EXACTLY ONE row for EVD-DUAL — the second-hop filter drops the id the
+    // claim's own related set already yielded (the duplicate key is gone).
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', '/record/EVD-DUAL')
   })
 })
