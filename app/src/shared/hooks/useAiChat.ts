@@ -190,6 +190,105 @@ const MAX_HISTORY_MESSAGES = 20
 const MAX_HISTORY_CONTENT_CHARS = 8_000
 type LinearWellTemplate = { count: number; axis: 'x' | 'y' }
 
+// ---------------------------------------------------------------------------
+// L2-THREAD-SCOPED-1 — per-(tab, scope) thread-id map (the hook's side).
+//
+// The map lives in sessionStorage under `cl.ai-thread-tab-ids` (a JSON map
+// { [scope or ""]: threadId }) and is SHARED with the client:
+// aiThreadClient.threadHeaders() reads/mints the SAME key, so the hook (this
+// module) and the client always converge on one id per (tab, scope).
+//
+// WHY the accessors live in the hook module (not imported from
+// aiThreadClient): the pre-existing hook tests (OUT of this item's file
+// scope) mock aiThreadClient with factories that export only
+// getThread/appendThreadMessage, and vitest's mock proxy THROWS on access of
+// any missing export — the hook cannot statically import the client's mint
+// helpers. These accessors implement the same contract (same key, same map
+// shape, mint-once, SSR-safe) so both sides stay consistent.
+// ---------------------------------------------------------------------------
+
+const THREAD_TAB_IDS_STORAGE_KEY = 'cl.ai-thread-tab-ids'
+let threadTabIdCounter = 0
+
+function mintTabThreadId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: () => string }).randomUUID === 'function') {
+      return (crypto as { randomUUID: () => string }).randomUUID()
+    }
+  } catch {
+    /* fall through */
+  }
+  threadTabIdCounter += 1
+  return `cl-thread-${Date.now().toString(36)}-${threadTabIdCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function readThreadTabMap(): Record<string, string> {
+  try {
+    if (typeof sessionStorage === 'undefined') return {}
+    const raw = sessionStorage.getItem(THREAD_TAB_IDS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'string' && v.length > 0) out[k] = v
+      }
+      return out
+    }
+    return {}
+  } catch {
+    return {}
+  }
+}
+
+function writeThreadTabMap(map: Record<string, string>): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return
+    sessionStorage.setItem(THREAD_TAB_IDS_STORAGE_KEY, JSON.stringify(map))
+  } catch {
+    /* non-browser / storage blocked */
+  }
+}
+
+/** The map key for a scope: "" for non-instance surfaces (the reserved case). */
+function threadTabMapKey(scope: string | undefined): string {
+  return scope && scope.length > 0 ? scope : ''
+}
+
+/**
+ * Resolve the tab's thread id for a scope (mint-once): returns the stored id
+ * when present, otherwise mints a fresh one and stores it. LAZY (reads/writes
+ * storage only when called — never at module scope) and SSR/jsdom-safe.
+ */
+function resolveTabThreadId(scope: string | undefined): string {
+  const key = threadTabMapKey(scope)
+  const map = readThreadTabMap()
+  const existing = map[key]
+  if (typeof existing === 'string' && existing.length > 0) return existing
+  const id = mintTabThreadId()
+  map[key] = id
+  writeThreadTabMap(map)
+  return id
+}
+
+/** Mint a FRESH id for the scope ("New thread"): always a new entry. */
+function mintTabThreadEntry(scope: string | undefined): string {
+  const key = threadTabMapKey(scope)
+  const map = readThreadTabMap()
+  const id = mintTabThreadId()
+  map[key] = id
+  writeThreadTabMap(map)
+  return id
+}
+
+/** Persist a chosen id for the scope (the picker's switch-to-listed-thread). */
+function writeTabThreadMapEntry(scope: string | undefined, threadId: string): void {
+  const key = threadTabMapKey(scope)
+  const map = readThreadTabMap()
+  map[key] = threadId
+  writeThreadTabMap(map)
+}
+
 function buildConversationHistory(messages: ChatMessage[]): AiConversationMessage[] {
   return messages
     .filter((message): message is ChatMessage & { role: 'user' | 'assistant' } => (
@@ -277,6 +376,26 @@ export interface UseAiChatReturn {
   recheckHealth: () => void
   thinkingMode: boolean
   setThinkingMode: (value: boolean) => void
+  /**
+   * L2-THREAD-SCOPED-1: the ACTIVE thread id of the current scope. Only
+   * present when the chat is thread-scoped (an `endpoint` is set) — absent
+   * (not undefined) on in-memory chats so exactOptional surfaces never see a
+   * dangling key. The picker reads it and `switchThread`/`newThread` drive it.
+   */
+  threadId?: string
+  /**
+   * Switch the active thread (picker selection of a LISTED thread). Resets
+   * the chat state (messages + the persist/hydration refs) so the chosen
+   * thread REHYDRATES — without the reset the `prev.length > 0` guard keeps
+   * the old thread's messages and the stale persisted ids re-post them into
+   * the new thread (reviewer bait #11). Absent without an `endpoint`.
+   */
+  switchThread?: (threadId: string) => void
+  /**
+   * Mint a FRESH thread for the current scope ("New thread"). Same reset
+   * semantics as `switchThread`. Absent without an `endpoint`.
+   */
+  newThread?: () => void
 }
 
 /**
@@ -365,6 +484,16 @@ export interface UseAiChatOptions {
    * Phase 2 → Phase 7 migration.
    */
   endpoint?: ApplianceEndpoint
+  /**
+   * L2-THREAD-SCOPED-1 (SUITEA-D3 deck-scope amendment): the surface's
+   * INSTANCE identity — for the deck surface, the loaded event-graph
+   * recordId. Threads key on (user, endpoint, scope, threadId): one thread
+   * per (tab, scope). Surfaces without an instance identity omit this (the
+   * server places them under its reserved "_" scope). A scope CHANGE re-keys
+   * the chat: a distinct per-scope tab id is used and the new scope's thread
+   * rehydrates (the first deck's messages are never carried into the second).
+   */
+  scope?: string
   /** Handler called for each accepted preview event. */
   proposalScopeKey?: string
   onSequenceProposal?: (proposal: Record<string, unknown>, userRequest?: string) => void
@@ -516,7 +645,7 @@ function legacyClarificationFromRequests(
   }
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -660,17 +789,88 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // thread on mount and append each subsequent message back. The `persisted`
   // set tracks which message ids have already been pushed so re-renders
   // don't double-post.
+  //
+  // L2-THREAD-SCOPED-1: the thread is the (endpoint, scope, threadId) thread.
+  // `threadId` is the tab's minted id for the current scope (the client's
+  // mint-once per (tab, scope); absent scope = the server's reserved "_"
+  // scope). Hydration + sync effects key on [endpoint, scope, threadId]; a
+  // threadId CHANGE (picker switch / New thread / deck navigation) resets
+  // messages + the persist/hydration refs so the new thread REHYDRATES —
+  // the stale `prev.length > 0` guard and stale persisted ids would
+  // otherwise keep the old thread's messages and re-post them into the new
+  // thread (reviewer bait #11).
   const persistedIdsRef = useRef<Set<string>>(new Set())
   const hydratedRef = useRef(false)
+  /** The last (scope, threadId) key the hydration effect ran for (reset-on-re-key). */
+  const lastThreadKeyRef = useRef<string | null>(null)
+  // L2-THREAD-SCOPED-1: the tab's thread for the current scope. The map
+  // lives in sessionStorage (`cl.ai-thread-tab-ids`) and is SHARED with the
+  // client (aiThreadClient.threadHeaders reads/mints the SAME key — one
+  // source of truth for the wire, coordinated through storage). This state
+  // is the hook's view: the hydration/sync RE-KEY token AND the picker's
+  // active selection (exposed as `threadId`). The (scope, id) PAIR is held
+  // together so a re-key never sees a stale (old scope, old id) combination.
+  const [activeThread, setActiveThread] = useState<{ scope: string; id: string } | null>(null)
+
+  const resetChatState = useCallback(() => {
+    setMessages([])
+    persistedIdsRef.current = new Set()
+    hydratedRef.current = false
+  }, [])
+
+  const switchThread = useCallback(
+    (id: string) => {
+      if (!endpoint) return
+      writeTabThreadMapEntry(scope, id)
+      resetChatState()
+      setActiveThread({ scope: scope ?? '', id })
+    },
+    [endpoint, scope, resetChatState],
+  )
+
+  const newThread = useCallback(() => {
+    if (!endpoint) return
+    const id = mintTabThreadEntry(scope)
+    resetChatState()
+    setActiveThread({ scope: scope ?? '', id })
+  }, [endpoint, scope, resetChatState])
+
+  // Lazy mint: resolve the tab's id for the current scope (mint-once; a
+  // reload or a return to a previously-visited scope reuses the stored id).
+  // Runs again when the scope CHANGES (the state still holds the previous
+  // scope's pair) — the in-effect re-key reset below then clears the chat
+  // for the new (scope, threadId) key.
+  useEffect(() => {
+    if (!endpoint) return
+    const id = resolveTabThreadId(scope)
+    setActiveThread({ scope: scope ?? '', id })
+  }, [endpoint, scope])
 
   useEffect(() => {
     if (!endpoint) {
       hydratedRef.current = true
       return
     }
+    // The tab thread resolves in the lazy-mint effect (one render later) —
+    // skip until then so the hydration GET carries the resolved (scope, id)
+    // pair (avoids a duplicate pre-mint GET; both would mint the SAME id
+    // anyway).
+    if (!activeThread) return
+    // Re-key reset (L2-THREAD-SCOPED-1 bait #11): a CHANGED (scope,
+    // threadId) key — picker switch, New thread, OR a scope change (deck
+    // navigation, where the lazy-mint effect resolves the new scope's id) —
+    // clears the chat so the new thread REHYDRATES (fresh persisted ids; no
+    // stale-message carryover; no re-post into the new thread).
+    const threadKey = `${activeThread.scope}\u0000${activeThread.id}`
+    if (lastThreadKeyRef.current !== null && lastThreadKeyRef.current !== threadKey) {
+      setMessages([])
+      persistedIdsRef.current = new Set()
+    }
+    lastThreadKeyRef.current = threadKey
     let cancelled = false
     hydratedRef.current = false
-    getThread(endpoint)
+    const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
+    getThread(endpoint, threadOpts)
       .then((thread) => {
         if (cancelled) return
         if (thread.messages.length > 0) {
@@ -713,10 +913,12 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     return () => {
       cancelled = true
     }
-  }, [endpoint])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint, activeThread?.scope, activeThread?.id])
 
   useEffect(() => {
-    if (!endpoint || !hydratedRef.current) return
+    if (!endpoint || !hydratedRef.current || !activeThread) return
+    const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
     const unsynced = messages.filter(
       (m) => !persistedIdsRef.current.has(m.id) && !m.isStreaming,
     )
@@ -748,13 +950,14 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           content: m.content,
           ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
         },
-      }).catch((err) => {
+      }, threadOpts).catch((err) => {
         console.warn(`Failed to persist message ${m.id}`, err)
         // Remove from the synced set so we retry on next change.
         persistedIdsRef.current.delete(m.id)
       })
     }
-  }, [endpoint, messages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint, activeThread?.scope, activeThread?.id, messages])
 
 
   // ------------------------------------------------------------------
@@ -2065,6 +2268,18 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     recheckHealth: checkHealth,
     thinkingMode,
     setThinkingMode,
+    // L2-THREAD-SCOPED-1: thread-scoped chat fields — present ONLY on
+    // thread-scoped chats (an `endpoint` is set). Conditionally spread: the
+    // exactOptional surface must never see a dangling key on in-memory
+    // chats. `threadId` is absent until the lazy-mint effect resolves the
+    // tab's id (one render later).
+    ...(endpoint
+      ? {
+          ...(activeThread ? { threadId: activeThread.id } : {}),
+          switchThread: switchThread,
+          newThread: newThread,
+        }
+      : {}),
   }
 }
 
