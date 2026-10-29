@@ -1,0 +1,34 @@
+# GC-14 substitution fixture — SUBSTITUTED arm (WI-5). Same record, three flips, ZERO code:
+#  (1) method values: oven ramp/setpoints + inlet setpoint differ from baseline;
+#  (2) compound term: shipped vocabulary swap methyl-octanoate-n8 -> methyl-decanoate-n10
+#      (both shipped in schema/registry/ontology-terms/fame-medium-chain.yaml :17/:19);
+#  (3) storage id: see gc14-wi5 witness — the DREF/runtime-device arm flips gc-fid-nas -> vast
+#      via config-declared device choice at register time, not via this payload.
+kind: gc-method
+id: GCM-GC14-SUB-BASE
+name: GC-14 substitution fixture (baseline)
+method_version: 1
+acquisition:
+  oven:
+    - step: 1
+      hold_time_min: 3.0
+      ramp_rate_c_per_min: null
+      target_temp_c: 70.0
+    - step: 2
+      hold_time_min: 8.0
+      ramp_rate_c_per_min: 20.0
+      target_temp_c: 260.0
+  inlet:
+    mode: splitless
+    temp_c: 260.0
+    pressure_psi: 22.0
+    carrier_gas: helium
+analysis:
+  compound_assignments:
+    - label: C10-ISTD-PROBE
+      compound_ref:
+        kind: ontology
+        namespace: FAME-LOCAL
+        id: FAME-LOCAL:methyl-decanoate-n10
+        label: "Methyl decanoate (fatty acid methyl ester, 10:0)"
+      expected_rt_min: 9.1

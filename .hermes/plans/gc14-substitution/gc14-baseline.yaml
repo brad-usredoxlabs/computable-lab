@@ -1,0 +1,31 @@
+# GC-14 substitution fixture — BASELINE arm (WI-5). Schema: schema/lab/gc-method.schema.yaml.
+# Scientist-authored TEST fixture; values are illustrative-but-valid, never vendor-derived
+# (vendor values would live only in provenance_capture, absent here by design).
+kind: gc-method
+id: GCM-GC14-SUB-BASE
+name: GC-14 substitution fixture (baseline)
+method_version: 1
+acquisition:
+  oven:
+    - step: 1
+      hold_time_min: 2.0
+      ramp_rate_c_per_min: null
+      target_temp_c: 60.0
+    - step: 2
+      hold_time_min: 10.0
+      ramp_rate_c_per_min: 15.0
+      target_temp_c: 240.0
+  inlet:
+    mode: splitless
+    temp_c: 250.0
+    pressure_psi: 20.0
+    carrier_gas: helium
+analysis:
+  compound_assignments:
+    - label: C8-ISTD-PROBE
+      compound_ref:
+        kind: ontology
+        namespace: FAME-LOCAL
+        id: FAME-LOCAL:methyl-octanoate-n8
+        label: "Methyl octanoate (fatty acid methyl ester, 8:0)"
+      expected_rt_min: 6.4
