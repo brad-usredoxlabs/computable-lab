@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { NativeDraftController } from './nativeDraft'
+// vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
+// RegExp arg AND with a string arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is
+// not a constructor'). Rejection sites are awaited in try/catch and matched on the message.
 const compiled=(input:any,revision=1)=>({draftId:'draft',revision,reviewHash:`h${revision}`,canAccept:true,projection:input.intent,diagnostics:[],writes:[]})
 describe('native draft review state',()=>{
  it('starts a fresh draft when a new sequence replaces a derivative, retaining the reject baseline',async()=>{
@@ -36,8 +39,8 @@ describe('native draft review state',()=>{
  it('blocks acceptance while compiling or invalid and retains failed acceptance for retry',async()=>{
   const save=vi.fn().mockRejectedValueOnce(new Error('Save incomplete')).mockResolvedValueOnce({recordId:'saved'})
   const draft=new NativeDraftController(async b=>compiled(b),save)
-  draft.propose({},{sequence:{label:'probe'}});await expect(draft.accept()).rejects.toThrow(/ready/)
-  await draft.idle();await expect(draft.accept()).rejects.toThrow('Save incomplete')
+  draft.propose({},{sequence:{label:'probe'}});let e39:unknown;try{await draft.accept();e39=new Error('DNAAFIX: expected rejection, promise resolved')}catch(err){e39=err}expect(e39).toBeInstanceOf(Error);expect((e39 as Error).message).toMatch(/ready/)
+  await draft.idle();let e40:unknown;try{await draft.accept();e40=new Error('DNAAFIX: expected rejection, promise resolved')}catch(err){e40=err}expect(e40).toBeInstanceOf(Error);expect((e40 as Error).message).toContain('Save incomplete')
   expect(draft.state.active).toBe(true);expect(draft.state.incomplete).toBe(true)
   expect(()=>draft.edit({})).toThrow(/retry/i);await draft.accept();expect(save).toHaveBeenCalledTimes(2)
  })

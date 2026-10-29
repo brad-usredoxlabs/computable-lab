@@ -7,6 +7,9 @@ import {
   applyProtocolEdit,
   type ProtocolEditOp,
 } from './protocolEditOps'
+// vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
+// RegExp arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is not a constructor').
+// Rejection sites are awaited in try/catch and matched on the message instead.
 
 vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
 
@@ -408,7 +411,11 @@ describe('applyProtocolEdit — one atomic write under the human lock', () => {
       { op: 'step_insert', afterStepId: 's1', label: 'Bind', kind: 'transfer', description: 'Bind DNA.' },
       { op: 'labware_add', roleId: 'reservoir', description: 'reservoir' },
     ]
-    await expect(applyProtocolEdit('PRT-1', ops, { mint })).rejects.toThrow(/op 1/)
+    const p = applyProtocolEdit('PRT-1', ops, { mint })
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/op 1/)
     // Conflict: NOTHING written, payload untouched — never a double mutation.
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
   })
@@ -430,7 +437,11 @@ describe('applyProtocolEdit — one atomic write under the human lock', () => {
 
   it('a gate rejection queues zero writes', async () => {
     vi.mocked(apiClient.getRecord).mockResolvedValue(record(basePayload()) as never)
-    await expect(applyProtocolEdit('PRT-1', [{ op: 'step_delete', stepId: 's2' }])).rejects.toThrow(/op 0.*executed/s)
+    const p = applyProtocolEdit('PRT-1', [{ op: 'step_delete', stepId: 's2' }])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/op 0.*executed/s)
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
   })
 })
