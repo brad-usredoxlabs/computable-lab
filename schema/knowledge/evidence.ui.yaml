@@ -1,9 +1,16 @@
-# UI specification for Evidence records
+# UI specification for Evidence records.
+#
+# GC-13 (OQ-4): this file previously referenced $.claimId and $.content —
+# properties the evidence schema does NOT declare (unevaluatedProperties:
+# false would reject them; there is no claimId/content on Evidence). The
+# form below binds ONLY declared properties. The stance (supports/refutes/
+# assesses) is the scientist's EXPLICIT choice — the GC-13 authoring form
+# (app/src/run/gc/) starts it empty; no AI/default pre-fills it.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/evidence.schema.yaml"
 
 display:
-  titleField: "$.title"
+  titleField: "$.id"
   icon: "evidence"
 
 form:
@@ -11,33 +18,91 @@ form:
   sections:
   - title: "Identity"
     fields:
-    - path: "$.recordId"
+    - path: "$.id"
       widget: "text"
-      label: "Record ID"
+      label: "ID"
       readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
       readonly: true
       hidden: true
-  - title: "Evidence Content"
+  - title: "Stance (the scientist's explicit choice)"
+    help: >
+      Exactly one of the three stances is required (schema anyOf). The
+      targets must be assertion or claim refs (evidence.lint.yaml
+      evd-supports-target-shape, severity error). Nothing here is
+      pre-decided: the form starts empty and submission is the
+      scientist's act.
     fields:
-    - path: "$.title"
-      widget: "text"
-      label: "Title"
-    - path: "$.claimId"
-      widget: "ref"
-      label: "Claim"
-    - path: "$.content"
-      widget: "markdown"
-      label: "Content"
+    - path: "$.supports"
+      widget: "record-ref"
+      label: "Supports (assertion/claim refs)"
+      required: false
+    - path: "$.refutes"
+      widget: "record-ref"
+      label: "Refutes (assertion/claim refs)"
+      required: false
+    - path: "$.assesses"
+      widget: "record-ref"
+      label: "Assesses (assertion/claim refs)"
+      required: false
+  - title: "Sources (the context arm)"
+    help: >
+      Sources map declared kinds to the existing type enum (OQ-1 ruling,
+      no enum widening): analysis-output-artifact -> result,
+      data-reference -> file, measurement-context -> measurement_context,
+      context -> context. A stance-bearing bundle must include at least one
+      context- or measurement_context-typed source (evd-sources-need-
+      context-arm, severity error) — the WHY over the complete biological
+      context, not just WHERE on a plate.
+    fields:
+    - path: "$.sources"
+      widget: "array"
+      label: "Sources"
+      required: true
+      properties:
+      - name: "type"
+        widget: "select"
+        label: "Type"
+        required: true
+        options:
+        - { value: "result", label: "Result (analysis artifact)" }
+        - { value: "context", label: "Context" }
+        - { value: "measurement_context", label: "Measurement context" }
+        - { value: "event", label: "Event" }
+        - { value: "publication", label: "Publication" }
+        - { value: "file", label: "File (data reference)" }
+        - { value: "event_graph", label: "Event graph" }
+      - name: "ref"
+        widget: "record-ref"
+        label: "Ref"
+        required: true
+  - title: "Assessment and lifecycle"
+    fields:
+    - path: "$.assessment"
+      widget: "select"
+      label: "Assessment"
+      options:
+      - { value: "supports", label: "Supports" }
+      - { value: "refutes", label: "Refutes" }
+      - { value: "inconclusive", label: "Inconclusive" }
+    - path: "$.quality"
+      widget: "object"
+      label: "Quality notes"
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      options:
+      - { value: "active", label: "Active" }
+      - { value: "retracted", label: "Retracted" }
 
 list:
   columns:
-  - path: "$.recordId"
+  - path: "$.id"
     label: "ID"
     width: "120px"
-  - path: "$.title"
-    label: "Title"
-  - path: "$.claimId"
-    label: "Claim"
+  - path: "$.assessment"
+    label: "Assessment"
+  - path: "$.status"
+    label: "Status"
