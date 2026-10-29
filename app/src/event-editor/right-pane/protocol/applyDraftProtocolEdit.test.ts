@@ -28,6 +28,9 @@ vi.mock('../../../shared/api/client', () => ({
 import { applyDraftProtocolEdit, CHAT_ACCEPT_COMMIT_MESSAGE } from './applyDraftProtocolEdit'
 import { STALE_PROTOCOL_WRITE_MESSAGE } from './protocolEditOps'
 import { ApiError } from '../../../shared/api/errors'
+// vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
+// RegExp arg AND with a string arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is
+// not a constructor'). Rejection sites are awaited in try/catch and matched on the message.
 
 const XDR_ID = 'XDR-semantic-w29demo0001'
 const CAN_ID = 'CAN-w29-demo'
@@ -161,9 +164,11 @@ describe('applyDraftProtocolEdit (W2-9 T3)', () => {
     const env = xdrEnvelope()
     ;(env.payload.candidates[0] as Record<string, unknown>).draft = { kind: 'intent-arm', steps: [] }
     getRecordMock.mockResolvedValue(env)
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }]),
-    ).rejects.toThrow(/inherited|source protocol/i)
+    const p = applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/inherited|source protocol/i)
     expect(updateRecordMock).not.toHaveBeenCalled()
   })
 
@@ -171,9 +176,11 @@ describe('applyDraftProtocolEdit (W2-9 T3)', () => {
     const env = xdrEnvelope()
     delete (env as { meta?: unknown }).meta
     getRecordMock.mockResolvedValue(env)
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }]),
-    ).rejects.toThrow(/no save token/i)
+    const p = applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/no save token/i)
     expect(updateRecordMock).not.toHaveBeenCalled()
   })
 
@@ -187,35 +194,43 @@ describe('applyDraftProtocolEdit (W2-9 T3)', () => {
 
   it('stale-409 -> the exact reload message verbatim, NO retry (zero further writes)', async () => {
     updateRecordMock.mockRejectedValue(staleConflict())
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'New label' }]),
-    ).rejects.toThrow(STALE_PROTOCOL_WRITE_MESSAGE)
+    const p = applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'New label' }])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toContain(STALE_PROTOCOL_WRITE_MESSAGE)
     expect(updateRecordMock).toHaveBeenCalledTimes(1)
     expect(getRecordMock).toHaveBeenCalledTimes(1)
   })
 
   it('a moved record (proposal bound to an older sha) STOPS with the reload message and zero writes (bait 6)', async () => {
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'Stale accept' }], 'sha-from-before-the-direct-save'),
-    ).rejects.toThrow(STALE_PROTOCOL_WRITE_MESSAGE)
+    const p = applyDraftProtocolEdit(XDR_ID, 0, [{ op: 'step_update', stepId: 'step-lyse', label: 'Stale accept' }], 'sha-from-before-the-direct-save')
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toContain(STALE_PROTOCOL_WRITE_MESSAGE)
     expect(updateRecordMock).not.toHaveBeenCalled()
     expect(getRecordMock).toHaveBeenCalledTimes(1)
   })
 
   it('an op-index failure names the op and issues zero writes (pure applyOps throws before any PUT)', async () => {
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 0, [
-        { op: 'step_update', stepId: 'step-lyse', label: 'ok' },
-        { op: 'step_delete', stepId: 'step-ghost' },
-      ]),
-    ).rejects.toThrow(/Edit op 1 \(step_delete\)/)
+    const p = applyDraftProtocolEdit(XDR_ID, 0, [
+      { op: 'step_update', stepId: 'step-lyse', label: 'ok' },
+      { op: 'step_delete', stepId: 'step-ghost' },
+    ])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/Edit op 1 \(step_delete\)/)
     expect(updateRecordMock).not.toHaveBeenCalled()
   })
 
   it('a candidate index with no candidate throws a named error, zero writes', async () => {
-    await expect(
-      applyDraftProtocolEdit(XDR_ID, 5, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }]),
-    ).rejects.toThrow(/no candidate at candidates\[5\]/)
+    const p = applyDraftProtocolEdit(XDR_ID, 5, [{ op: 'step_update', stepId: 'step-lyse', label: 'x' }])
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/no candidate at candidates\[5\]/)
     expect(updateRecordMock).not.toHaveBeenCalled()
   })
 })
