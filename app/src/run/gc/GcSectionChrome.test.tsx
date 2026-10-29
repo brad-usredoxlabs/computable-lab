@@ -361,15 +361,30 @@ describe('GcSectionChrome — E Analyze (verify-first, append-only, GC-11 seam)'
     await waitFor(() => expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledTimes(1))
     expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledWith('ACQP-000042')
     // The run is CREATED with the pinned (verify-first) inputs.
+    // GC-12 fix-cycle-3 (DIRFIX-1, architect ruling B-amended): the handoff
+    // pins the FILE-level data-reference ONLY — the directory-kind package
+    // manifest DREF (DREF-000102, dataKind signal-collection) is NOT a
+    // runner-consumable input and must not be pinned into inputs (it stays
+    // in the provenance hierarchy via the entry's acquisitionPackageRef →
+    // ACQP record). Package-level provenance is not collapsed: the title
+    // still names the entry (the provenance anchor on the run record).
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     expect(apiClient.createAnalysisRun).toHaveBeenCalledWith({
       title: 'GC run-sheet ISEN-C-1',
       revisionRef: { kind: 'record', id: 'ANREV-C-1', type: 'analysis-revision' },
       inputs: {
         signal: { kind: 'record', id: 'DREF-000101', type: 'data-reference' },
-        package: { kind: 'record', id: 'DREF-000102', type: 'data-reference' },
       },
     })
+    const createArg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as {
+      title: string
+      inputs: Record<string, { id: string }>
+    }
+    // The package DREF is NOT in the created run's inputs.
+    expect(createArg.inputs.package).toBeUndefined()
+    expect(Object.keys(createArg.inputs)).toEqual(['signal'])
+    // The created run's title still names the entry (provenance anchor).
+    expect(createArg.title).toContain('ISEN-C-1')
     // RERUN KEEPS HISTORY (bait #8): the entry's PRIOR ref survives and the
     // new ref is APPENDED (never replaced).
     await waitFor(() => expect(apiClient.updateRecord).toHaveBeenCalledTimes(1))

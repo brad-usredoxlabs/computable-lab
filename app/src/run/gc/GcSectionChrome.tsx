@@ -203,9 +203,18 @@ export function GcSectionChrome({
       const res = await apiClient.createAnalysisRun({
         title,
         revisionRef: { kind: 'record', id: revisionId, type: 'analysis-revision' },
+        // GC-12 fix-cycle-3 (DIRFIX-1, architect ruling B-amended): the
+        // handoff pins the FILE-level data-reference ONLY. The verify-first
+        // route returns { signal, package } — `package` is the DIRECTORY-kind
+        // manifest DREF (dataKind signal-collection), NOT a runner-consumable
+        // input (provisionInputs streams file-kind refs only; a directory pin
+        // is a named INPUT_IS_DIRECTORY refusal, the runner's A guard).
+        // Provenance is not collapsed: the entry's acquisitionPackageRef →
+        // ACQP record carries the manifest + per-member file DREFs; the run
+        // consumes only what the engine reads (the role-resolved member file).
+        // The title names the entry — the run's provenance anchor.
         inputs: {
           signal: { kind: 'record', id: inputs.signal.id, type: 'data-reference' },
-          package: { kind: 'record', id: inputs.package.id, type: 'data-reference' },
         },
         ...(Object.keys(params).length > 0 ? { parameters: params } : {}),
       })

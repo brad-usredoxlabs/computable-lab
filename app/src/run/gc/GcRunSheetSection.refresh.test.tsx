@@ -247,14 +247,25 @@ describe('GcRunSheetSection — user-triggered refresh (the C leg)', () => {
     // revision's parameterSchema defaults (collectDefaults applied — the run
     // sheet does not render a ParameterForm, so the run would otherwise
     // carry NO parameters).
+    // GC-12 fix-cycle-3 (DIRFIX-1, architect ruling B-amended): the created
+    // run pins the FILE-level data-reference ONLY (inputs = { signal }) —
+    // the directory-kind package manifest DREF is NOT a runner-consumable
+    // input (it stays in the provenance hierarchy via the entry's
+    // acquisitionPackageRef → ACQP record). The run's title still names the
+    // entry (provenance anchor).
     const createArg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as {
+      title: string
       parameters?: Record<string, unknown>
       inputs: Record<string, { id: string }>
     }
     expect(createArg.parameters).toEqual({ baseline_window_s: 20, peak_width_s: 5 })
-    // The verify-first pinned inputs are still the run's inputs (unchanged).
+    // The verify-first pinned FILE input is still the run's inputs (unchanged).
     expect(createArg.inputs.signal.id).toBe('DREF-RC-1')
-    expect(createArg.inputs.package.id).toBe('DREF-RC-2')
+    // The directory-kind package DREF is NOT in the created run's inputs.
+    expect(createArg.inputs.package).toBeUndefined()
+    expect(Object.keys(createArg.inputs)).toEqual(['signal'])
+    // The created run's title still names the entry (provenance anchor).
+    expect(createArg.title).toContain('ISEN-RC-1')
 
     // The appended ref lands in the table (BOTH refs — bait #8: history kept).
     await screen.findByTestId('gc-cell-ISEN-RC-1-analysisRunRefs')
