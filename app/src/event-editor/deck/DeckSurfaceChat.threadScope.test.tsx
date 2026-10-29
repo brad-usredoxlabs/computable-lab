@@ -19,11 +19,12 @@
  *    messages are absent, and the per-(tab, scope) map holds DISTINCT ids
  *    (the D3 scenario at the wire seam).
  */
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 const mocks = vi.hoisted(() => ({
   state: null as unknown as EventEditorState,
@@ -54,6 +55,7 @@ vi.mock('../../shared/api/aiClient', () => ({
   streamAssist: vi.fn(),
   getAiHealth: vi.fn().mockResolvedValue({ available: true }),
 }))
+import { streamAssist } from '../../shared/api/aiClient'
 
 // The record client + the proposal flow's executor tree are out of scope —
 // the deck chat's thread transport (the seam under test) never touches them.
@@ -83,6 +85,7 @@ interface CapturedCall {
   url: string
   method: string
   headers: Record<string, string>
+  body: string
 }
 const capture: CapturedCall[] = []
 
@@ -113,11 +116,28 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   const headers = Object.fromEntries(
     Object.entries(init?.headers ?? {}).map(([k, v]) => [String(k), String(v)]),
   )
-  capture.push({ url, method, headers })
+  const body = typeof init?.body === 'string' ? init.body : ''
+  capture.push({ url, method, headers, body })
   const okJson = (body: unknown) => ({ ok: true, status: 200, json: async () => body })
   if (url.includes('/api/ai/threads/')) {
     const scope = headers['x-cl-thread-scope'] ?? undefined
     const id = headers['x-cl-thread-id'] ?? ''
+    if (url.endsWith('/threads')) {
+      // The picker's LIST route: rows derived from the live fake threads for
+      // THIS scope (mirrors the server, which computes rows per scope).
+      const threads = Object.entries(serverThreads)
+        .filter(([k]) => k.startsWith(`${scope ?? '_'}\u0000`))
+        .map(([k, t]) => ({
+          threadId: k.split('\u0000')[1]!,
+          title: (t.messages[0]?.content ?? '').slice(0, 60),
+          updatedAt: t.updatedAt,
+          messageCount: t.messages.length,
+        }))
+      return okJson({ threads })
+    }
+    if (url.endsWith('/promote')) {
+      return okJson({ recordId: 'REC-promoted', promotedAt: '2026-10-29T00:00:00.000Z' })
+    }
     if (method === 'GET') {
       if (scope && autoSeedContents[scope] && !serverThreads[keyOf(scope, id)]) {
         serverThreads[keyOf(scope, id)] = {
@@ -126,6 +146,26 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
         }
       }
       return okJson(serverThreads[keyOf(scope, id)] ?? EMPTY)
+    }
+    if (method === 'POST') {
+      // Append: persist the turn under (scope, id) so a later hydration sees it.
+      const target = serverThreads[keyOf(scope, id)] ?? { ...EMPTY, messages: [] }
+      try {
+        const parsed = JSON.parse(body) as { message?: { role?: string; content?: string } }
+        if (parsed.message?.content !== undefined) {
+          target.messages = [
+            ...target.messages,
+            {
+              role: parsed.message.role ?? 'user',
+              content: parsed.message.content,
+              createdAt: '2026-10-29T00:00:01.000Z',
+            },
+          ]
+        }
+      } catch {
+        /* non-JSON body: nothing to persist */
+      }
+      serverThreads[keyOf(scope, id)] = target
     }
     return okJson({ ...EMPTY, updatedAt: new Date().toISOString() })
   }
@@ -162,6 +202,9 @@ beforeEach(() => {
   capture.length = 0
   serverThreads = {}
   autoSeedContents = {}
+  vi.mocked(streamAssist).mockImplementation(async function* () {
+    yield { type: 'done', result: { success: true, notes: [] } }
+  } as never)
 })
 
 afterEach(cleanup)
@@ -175,6 +218,7 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     const view = render(
       <AiPanelProvider>
         <DeckSurfaceChat />
+        <HarnessChatPane />
       </AiPanelProvider>,
     )
 
@@ -188,6 +232,34 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     const idA = readMap()['EVG-seam-A']
     expect(idA).toBeTruthy()
 
+    // ---- FIX2 D2: drive ONE real send through the pane's composer ----
+    // Acceptance (5)'s append leg must be exercised, not asserted vacuously
+    // (cycle-2 mutation control: deleting `threadOpts` from the hook's
+    // appendThreadMessage call must turn THIS test red). The pane is rendered
+    // beside the surface: DeckSurfaceChat registers the chat, HarnessChatPane
+    // sends through it — the same send path the deck route uses.
+    const textarea = screen.getByLabelText('Message') as HTMLTextAreaElement
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'seam append probe' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    })
+    // The persist effect POSTs the user turn as soon as it lands in the
+    // message list (before the stream resolves) — the loud arm: if no POST
+    // ever happens, THIS assertion fails instead of the empty-loop passing.
+    await waitFor(() => expect(appendCalls().length).toBeGreaterThan(0), { timeout: 4000 })
+
+    // The append leg of acceptance (5), LOUD: at least one POST happened,
+    // the deck scope rode it, and it is OUR prompt's POST (an unscoped
+    // append — the mutation shape — fails the scope assertion below; a test
+    // that produced no POST fails the count assertion above instead of
+    // passing on an empty loop).
+    const ourPosts = appendCalls().filter((c) => c.body.includes('seam append probe'))
+    expect(ourPosts.length).toBeGreaterThanOrEqual(1)
+    for (const c of appendCalls()) {
+      expect(c.headers['x-cl-thread-scope'], `POST scope=${c.headers['x-cl-thread-scope']}`).toBe('EVG-seam-A')
+    }
+    const postsBeforeNav = appendCalls().length
+
     // Navigate to deck B (the same tab's editor state changes recordId —
     // the D3 scenario). The chat RE-KEYS: deck B's own thread hydrates and
     // deck A's message never appears.
@@ -195,6 +267,7 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     view.rerender(
       <AiPanelProvider>
         <DeckSurfaceChat />
+        <HarnessChatPane />
       </AiPanelProvider>,
     )
 
@@ -221,10 +294,14 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
       const wrongId = scope === 'EVG-seam-A' ? idB : idA
       expect(c.headers['x-cl-thread-id'], `${c.method} scope=${scope}`).not.toBe(wrongId)
     }
-    // The append leg of acceptance (5): any POST under way carries the
-    // deck scope too (the transport attaches it to all four routes).
-    for (const c of appendCalls()) {
-      expect(['EVG-seam-A', 'EVG-seam-B']).toContain(c.headers['x-cl-thread-scope'])
+    // Bait #11 at the scope axis: re-keying must NOT re-post deck A's turns
+    // under deck B's header (a stale persistedIdsRef would). Assert on the
+    // POSTs created BY THE NAVIGATION (non-vacuous: the count below is the
+    // deck-A posts already made, so any NEW post is inspected).
+    const navPosts = appendCalls().slice(postsBeforeNav)
+    for (const c of navPosts) {
+      expect(c.headers['x-cl-thread-scope']).toBe('EVG-seam-B')
+      expect(c.body).not.toContain('seam append probe')
     }
   })
 

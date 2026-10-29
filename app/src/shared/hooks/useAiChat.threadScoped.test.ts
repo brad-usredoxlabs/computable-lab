@@ -278,10 +278,24 @@ describe('useAiChat — per-tab thread identity (L2-THREAD-SCOPED-1)', () => {
     expect(idA).toBeTruthy()
     expect(result.current.threadId).toBe(idA)
 
+    // FIX2 D2 (loud append arm): drive ONE real send on deck A so the POST
+    // EXISTS, then pin its scope header. Cycle-2 mutation control: deleting
+    // `threadOpts` from the hook's appendThreadMessage call turns this RED
+    // (the previous version only sliced over a provably-empty array).
+    await act(async () => {
+      result.current.sendPrompt('deck A probe')
+    })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 4000 })
+    await waitFor(() => expect(appendCalls().length).toBeGreaterThan(0), { timeout: 4000 })
+    for (const c of appendCalls()) {
+      expect(c.headers['x-cl-thread-scope'], 'append scope').toBe('EVG-a')
+    }
+
     // Navigate to deck B: the scope option changes => a DISTINCT per-scope id
     // is minted, the hydration re-keys, and deck B's thread hydrates WITHOUT
     // carrying deck A's messages.
     const appendsBefore = appendCalls().length
+    expect(appendsBefore).toBeGreaterThan(0) // the slice below is non-empty-backed
     rerender({ scope: 'EVG-b' })
     await waitFor(() =>
       expect(result.current.messages.map((m) => m.content)).toEqual(['deck B turn']),

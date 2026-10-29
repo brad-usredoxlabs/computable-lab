@@ -204,8 +204,10 @@ type LinearWellTemplate = { count: number; axis: 'x' | 'y' }
 // id and the per-request wire header id; one module closes that divergence.
 // (The old rationale — pre-existing hook tests' vi.mock factories of
 // aiThreadClient throwing on missing exports — is answered by putting the
-// mint in its OWN module rather than forking it; see the updated mock
-// factories in the old hook tests, which include the re-exports.)
+// mint in its OWN module rather than forking it: the old hook tests' mock
+// factories were NOT updated and need no re-export stubs; the static-import
+// breakage that DID materialize is in the DECK test mocks, which stub
+// aiThreadClient wholesale and gained a listThreads export (FIX2 D1).)
 // ---------------------------------------------------------------------------
 
 import {
