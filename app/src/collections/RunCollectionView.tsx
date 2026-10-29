@@ -72,6 +72,14 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   // who opened the form quickly was told the registry was empty while a
   // method existed and the fetch was mid-flight).
   const [gcMethodsLoaded, setGcMethodsLoaded] = useState(false)
+  // GC-12 dirfix MINOR-FIX (defect 1): the gc-method read's SETTLED FAILURE
+  // state (a REJECTED fetch). The old catch settled a failure as
+  // "loaded + empty list" (gcMethodsLoaded=true, gcMethods still []), so the
+  // row rendered the empty-state lie "No gc-methods are configured" on a
+  // failed read — the regate2 defect 2 class, moved from the in-flight
+  // window to the failure window. A failure is its OWN arm: it names the
+  // real cause and offers a Retry — never the not-ready claim.
+  const [gcMethodsError, setGcMethodsError] = useState<string | null>(null)
   const [gcEquipment, setGcEquipment] = useState<Array<{ recordId: string; payload: { name?: string } }>>([])
   const [gcMethodId, setGcMethodId] = useState('')
   const [gcInstrumentId, setGcInstrumentId] = useState('')
@@ -83,12 +91,10 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
 
   // Lazy: the method + instrument lists are fetched only when the form is
   // OPENED (user-triggered — the collection's mount fetches stay untouched).
-  const openGcCreate = useCallback(async () => {
-    setGcCreateOpen(true)
-    setGcNote(null)
-    // A RE-OPEN starts fresh: a stale in-flight flag / stale method pick from
-    // a prior open must not linger (the loading arm reflects THIS fetch).
-    setGcMethodsLoaded(false)
+  // GC-12 dirfix MINOR-FIX (defect 1): the registry read is ONE named path —
+  // the form open AND the failure arm's Retry both run this, so there is a
+  // single fetch surface (no divergent inline fetch).
+  const fetchGcRegistry = useCallback(async () => {
     try {
       const [m, e] = await Promise.all([
         apiClient.listRecordsByKind('gc-method', 500),
@@ -96,14 +102,28 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
       ])
       setGcMethods(m.records as unknown as typeof gcMethods)
       setGcEquipment(e.records as unknown as typeof gcEquipment)
+      setGcMethodsError(null)
       setGcMethodsLoaded(true)
-    } catch {
-      /* the not-ready arms render below */
-      // A FAILED fetch is settled too — the error note / the user retry is
-      // the surface; the row must not spin forever.
+    } catch (err) {
+      // GC-12 dirfix MINOR-FIX (defect 1): a REJECTED read is a SETTLED
+      // FAILURE — never "loaded + empty list". The failure arm below names
+      // the real cause (the read failed) and offers the Retry; it never
+      // renders the empty-state claim and never spins the loading arm.
+      setGcMethodsError(err instanceof Error ? err.message : String(err))
       setGcMethodsLoaded(true)
     }
   }, [])
+
+  const openGcCreate = useCallback(async () => {
+    setGcCreateOpen(true)
+    setGcNote(null)
+    // A RE-OPEN starts fresh: a stale in-flight flag / stale failure /
+    // stale method pick from a prior open must not linger (the loading arm
+    // reflects THIS fetch).
+    setGcMethodsLoaded(false)
+    setGcMethodsError(null)
+    void fetchGcRegistry()
+  }, [fetchGcRegistry])
 
   // The D2 mint chain (bait #12: build the chain, never assume lane seed).
   const handleGcCreate = useCallback(async () => {
@@ -338,7 +358,29 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
           />
           <div data-testid="gc-run-create-method-row">
             <label htmlFor="gc-run-create-method">GC method</label>
-            {!gcMethodsLoaded ? (
+            {gcMethodsError ? (
+              // GC-12 dirfix MINOR-FIX (defect 1): the SETTLED FAILURE arm —
+              // the registry read was REJECTED. Distinct from BOTH the
+              // in-flight LOADING arm and the genuine empty arm: a failed
+              // read never claims "No gc-methods are configured" (the
+              // empty-state lie a failed read is not evidence for) and never
+              // spins "Loading…". The arm names the real cause and offers a
+              // Retry (a live affordance — dead-chrome ban).
+              <span className="gc-run-create__error" data-testid="gc-run-create-method-error">
+                Could not load gc-methods: {gcMethodsError}
+                <button
+                  type="button"
+                  data-testid="gc-run-create-method-retry"
+                  onClick={() => {
+                    setGcMethodsError(null)
+                    setGcMethodsLoaded(false)
+                    void fetchGcRegistry()
+                  }}
+                >
+                  Retry
+                </button>
+              </span>
+            ) : !gcMethodsLoaded ? (
               // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): the IN-FLIGHT arm —
               // the list is still loading; never claim "none configured"
               // mid-fetch (that was the regate2 false-empty).

@@ -245,4 +245,43 @@ describe('RunCollectionView — GC-12 D2 create front door', () => {
     // AND no second create was started.
     expect(apiClient.createRecord).toHaveBeenCalledTimes(1)
   })
+
+  it('GC-12 dirfix MINOR-FIX (defect 1): a REJECTED gc-method fetch settles a NAMED FAILURE arm — never "No gc-methods are configured", never an endless load', async () => {
+    // The regate2 defect 2 class moved from the in-flight window to the
+    // failure window: a REJECTED /api/gc-methods read used to settle as
+    // "loaded + empty list" and render the empty-state lie. The settled
+    // FAILURE arm is its own arm: it names the real cause and offers a
+    // Retry (a live affordance — dead-chrome ban), never the not-ready lie.
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') return Promise.reject(new Error('network down')) as never
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    // The settled FAILURE arm names the real cause (the fetch was rejected)…
+    expect(await screen.findByTestId('gc-run-create-method-error')).toHaveTextContent('network down')
+    // …and the empty-state LIE never renders on a failed read…
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+    // …and the load arm does not spin after the read settled (the form is
+    // not stuck "Loading…").
+    expect(screen.queryByTestId('gc-run-create-method-loading')).toBeNull()
+    // …and the select does not render from a failed read.
+    expect(screen.queryByTestId('gc-run-create-method')).toBeNull()
+    // The failure arm is a LIVE affordance: a Retry that re-runs the
+    // registry read settles the data-driven select (and clears the arm).
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') {
+        return Promise.resolve({
+          records: [
+            { recordId: 'GCM-DEMO-AOAC-FAME', payload: { name: 'AOAC FAME GC-FID method (demo)' } },
+          ],
+          total: 1,
+        } as never)
+      }
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    fireEvent.click(screen.getByTestId('gc-run-create-method-retry'))
+    expect(await screen.findByTestId('gc-run-create-method')).toHaveTextContent('AOAC FAME GC-FID method (demo)')
+    expect(screen.queryByTestId('gc-run-create-method-error')).toBeNull()
+  })
 })
