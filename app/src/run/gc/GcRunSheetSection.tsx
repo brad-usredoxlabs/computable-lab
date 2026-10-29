@@ -31,6 +31,7 @@ import {
 } from './gcRunSheetModel'
 import { GcRunTable, type GcRunTableEntry } from './GcRunTable'
 import { GcSectionChrome, type GcChromeEntry } from './GcSectionChrome'
+import { GcEvidenceHandoff } from './GcEvidenceHandoff'
 import './gcRunSheet.css'
 
 /** A rendered row: the fetched entry + its append-only analysis-run history. */
@@ -42,9 +43,19 @@ interface LinkedRow {
 
 /** The per-entry results flow-back row (D5): the append-only analysis-run
  *  history with each run's status (read verbatim from the record enum) and a
- *  link to /analysis?run=<id> (the GC-11 seam). No new results chrome, no
- *  dead graph/ page revival (OQ-2). */
-function GcResultsList({ entry, status }: { entry: LinkedRow; status: Record<string, string> }) {
+ *  link to /analysis?run=<id> (the GC-11 seam). GC-13 (D1, orch re-anchor):
+ *  the evidence hand-off affordance mounts INSIDE this component — one
+ *  GcEvidenceHandoff per analysis-run row (closed at mount, zero fetches).
+ *  No new results chrome, no dead graph/ page revival (OQ-2). */
+function GcResultsList({
+  entry,
+  status,
+  onRefresh,
+}: {
+  entry: LinkedRow
+  status: Record<string, string>
+  onRefresh: () => void
+}) {
   if (entry.analysisRunIds.length === 0) return null
   return (
     <div data-testid={`gc-results-${entry.recordId}`} className="gc-results">
@@ -56,6 +67,11 @@ function GcResultsList({ entry, status }: { entry: LinkedRow; status: Record<str
             <span data-testid={`gc-result-status-${entry.recordId}-${id}`}>
               {status[id] ?? 'unknown'}
             </span>
+            <GcEvidenceHandoff
+              isenId={entry.recordId}
+              runId={id}
+              onBundleCreated={onRefresh}
+            />
           </li>
         ))}
       </ul>
@@ -271,7 +287,12 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
       </h2>
       <GcRunTable entries={tableEntries} />
       {rows.map((row) => (
-        <GcResultsList key={row.recordId} entry={row} status={statuses[row.recordId] ?? {}} />
+        <GcResultsList
+          key={row.recordId}
+          entry={row}
+          status={statuses[row.recordId] ?? {}}
+          onRefresh={refresh}
+        />
       ))}
       <GcSectionChrome entries={chromeEntries} runId={runId} sequenceRef={sequenceRef} onEntryUpdated={refresh} />
     </section>
