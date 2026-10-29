@@ -35,11 +35,17 @@ interface StorageDevice {
 export function GcAttachPanel({
   entryId,
   onAttached,
+  onActionStart,
 }: {
   entryId: string
   /** Called with the minted ACQP recordId after a successful register (the
    *  section refetches the entry to show the new ref in the table). */
   onAttached: (packageRecordId: string) => void
+  /** Called when a register action STARTS (GC-12 fix-cycle-3 DIRFIX-3 minor
+   *  5: one owner for the chrome note line — a new action clears the stale
+   *  note from a prior failure, so the register's own named token renders
+   *  next to nothing, never next to a different failure's note). */
+  onActionStart?: () => void
 }) {
   const [devices, setDevices] = useState<StorageDevice[]>([])
   const [deviceId, setDeviceId] = useState('')
@@ -94,6 +100,13 @@ export function GcAttachPanel({
       return
     }
     setBusy(true)
+    // GC-12 fix-cycle-3 (DIRFIX-3 minor 5): the register action STARTS —
+    // the chrome note line (the ONE owner) clears any stale note from a
+    // prior failure, so this register's own named token renders next to
+    // nothing, never next to a different failure's note (the regate2
+    // defect 5 shape: the add's validation note rendered beside the
+    // PACKAGE_DEVICE_MISSING token).
+    onActionStart?.()
     setError(null)
     try {
       const res = await apiClient.registerAcquisitionPackage({

@@ -105,8 +105,9 @@ describe('RunCollectionView — GC-12 D2 create front door', () => {
     renderView()
     fireEvent.click(screen.getByTestId('gc-run-collection-new'))
     await screen.findByTestId('gc-run-create-form')
-    // Title missing (the method select auto-falls back to the lane's first
-    // method — the NAMED reason is for the title, not a silent no-op).
+    // Title missing (the method select has NO fallback — DIRFIX-3 minor 2:
+    // an unselected method is part of the named reason, never an unasked-for
+    // pick — so this note covers both the title and the method).
     fireEvent.change(screen.getByTestId('gc-run-create-vial'), { target: { value: '101' } })
     fireEvent.change(screen.getByTestId('gc-run-create-sample'), { target: { value: 'RES35077-4' } })
     fireEvent.click(screen.getByTestId('gc-run-create-submit'))
@@ -170,5 +171,78 @@ describe('RunCollectionView — GC-12 D2 create front door', () => {
       expect(screen.getByTestId('nav-probe').textContent).toBe(`/runs/${runStep[1].recordId}`)
     })
     expect(screen.getByTestId('nav-probe').textContent!.startsWith('/runs/RUN-')).toBe(true)
+  })
+
+  it('GC-12 fix-cycle-3 (minor 2): while the gc-method fetch is IN FLIGHT the method row shows a LOADING arm — never "No gc-methods are configured"', async () => {
+    // The regate2 defect shape: the user opened the form quickly and the
+    // row claimed "No gc-methods are configured" while a method existed and
+    // the fetch was mid-flight. The in-flight state is its own arm.
+    let resolveMethods!: (v: unknown) => void
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') {
+        return new Promise((res) => {
+          resolveMethods = res
+        }) as never
+      }
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    await screen.findByTestId('gc-run-create-form')
+    // Fetch in flight: the LOADING arm — NOT the false-empty notready, NOT
+    // the select (the user cannot pick from a list that has not loaded).
+    expect(screen.getByTestId('gc-run-create-method-loading')).toHaveTextContent(/Loading gc-methods/i)
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+    expect(screen.queryByTestId('gc-run-create-method')).toBeNull()
+    // The fetch settles → the data-driven select lists the real method.
+    resolveMethods({
+      records: [
+        { recordId: 'GCM-DEMO-AOAC-FAME', payload: { name: 'AOAC FAME GC-FID method (demo)' } },
+      ],
+      total: 1,
+    })
+    await screen.findByTestId('gc-run-create-method')
+    expect(screen.queryByTestId('gc-run-create-method-loading')).toBeNull()
+    expect((screen.getByTestId('gc-run-create-method') as HTMLSelectElement).textContent).toContain(
+      'AOAC FAME GC-FID method (demo)',
+    )
+  })
+
+  it('GC-12 fix-cycle-3 (minor 2): NO silent first-method fallback — an unselected method is a NAMED reason, never an unasked-for pick', async () => {
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    await screen.findByTestId('gc-run-create-form')
+    // Title / vial / sample label all filled — the ONLY missing field is
+    // the method, which the user has NOT selected (the select lists the
+    // lane's method; its value is the empty placeholder).
+    fireEvent.change(screen.getByTestId('gc-run-create-title'), { target: { value: 'FAME batch 10/29' } })
+    fireEvent.change(screen.getByTestId('gc-run-create-vial'), { target: { value: '101' } })
+    fireEvent.change(screen.getByTestId('gc-run-create-sample'), { target: { value: 'RES35077-9' } })
+    fireEvent.click(screen.getByTestId('gc-run-create-submit'))
+    // The old `gcMethods[0]?.recordId` fallback silently minted the sheet
+    // with GCM-DEMO-AOAC-FAME — a method the user never chose. Now: a NAMED
+    // reason on the note line, and ZERO mint.
+    expect(await screen.findByTestId('gc-run-create-note')).toHaveTextContent(/select a gc-method/i)
+    expect(apiClient.createRecord).not.toHaveBeenCalled()
+  })
+
+  it('GC-12 fix-cycle-3 (minor 6): a Create click while a create is IN FLIGHT is VISIBLE (a named note), never a silent no-op', async () => {
+    // The first create never resolves (the browser-gate >12 s write shape).
+    vi.mocked(apiClient.createRecord).mockReturnValue(new Promise(() => {}) as never)
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    await screen.findByTestId('gc-run-create-form')
+    fireEvent.change(screen.getByTestId('gc-run-create-title'), { target: { value: 'FAME batch 10/29' } })
+    fireEvent.change(screen.getByTestId('gc-run-create-method'), { target: { value: 'GCM-DEMO-AOAC-FAME' } })
+    fireEvent.change(screen.getByTestId('gc-run-create-vial'), { target: { value: '101' } })
+    fireEvent.change(screen.getByTestId('gc-run-create-sample'), { target: { value: 'RES35077-9' } })
+    fireEvent.click(screen.getByTestId('gc-run-create-submit')) // first create starts (in flight)
+    await waitFor(() => expect(apiClient.createRecord).toHaveBeenCalledTimes(1))
+    // The follow-up click: the old `if (gcBusy) return` swallowed it
+    // silently. Now it renders a NAMED note on the ignored click.
+    fireEvent.click(screen.getByTestId('gc-run-create-submit'))
+    expect(await screen.findByTestId('gc-run-create-note')).toHaveTextContent(/already in progress/i)
+    // AND no second create was started.
+    expect(apiClient.createRecord).toHaveBeenCalledTimes(1)
   })
 })

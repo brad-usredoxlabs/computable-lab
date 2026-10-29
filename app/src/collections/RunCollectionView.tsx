@@ -65,6 +65,13 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   // existing behavior touched (the DNA "New Run" stays as-is).
   const [gcCreateOpen, setGcCreateOpen] = useState(false)
   const [gcMethods, setGcMethods] = useState<Array<{ recordId: string; payload: { name?: string; title?: string } }>>([])
+  // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): the gc-method fetch's IN-FLIGHT
+  // state. The form opens and the fetch is user-triggered but NOT instant —
+  // the method row must show a LOADING arm while the list is in flight,
+  // never the "No gc-methods are configured" lie (the regate2 defect: a user
+  // who opened the form quickly was told the registry was empty while a
+  // method existed and the fetch was mid-flight).
+  const [gcMethodsLoaded, setGcMethodsLoaded] = useState(false)
   const [gcEquipment, setGcEquipment] = useState<Array<{ recordId: string; payload: { name?: string } }>>([])
   const [gcMethodId, setGcMethodId] = useState('')
   const [gcInstrumentId, setGcInstrumentId] = useState('')
@@ -79,6 +86,9 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   const openGcCreate = useCallback(async () => {
     setGcCreateOpen(true)
     setGcNote(null)
+    // A RE-OPEN starts fresh: a stale in-flight flag / stale method pick from
+    // a prior open must not linger (the loading arm reflects THIS fetch).
+    setGcMethodsLoaded(false)
     try {
       const [m, e] = await Promise.all([
         apiClient.listRecordsByKind('gc-method', 500),
@@ -86,21 +96,39 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
       ])
       setGcMethods(m.records as unknown as typeof gcMethods)
       setGcEquipment(e.records as unknown as typeof gcEquipment)
+      setGcMethodsLoaded(true)
     } catch {
       /* the not-ready arms render below */
+      // A FAILED fetch is settled too — the error note / the user retry is
+      // the surface; the row must not spin forever.
+      setGcMethodsLoaded(true)
     }
   }, [])
 
   // The D2 mint chain (bait #12: build the chain, never assume lane seed).
   const handleGcCreate = useCallback(async () => {
-    if (gcBusy) return // in-flight guard (the dead-chrome clause: no disabled
-    // button standing in — the guard is the action, not the chrome)
+    if (gcBusy) {
+      // GC-12 fix-cycle-3 (DIRFIX-3 minor 6): a click during an in-flight
+      // create used to be a SILENT no-op (the browser-gate phase-3
+      // reproduction: the sample add took >12 s and the create click that
+      // followed fired no request and showed no message). Now it is
+      // VISIBLE — a named note on the ignored click, never a silent
+      // swallow (the form's note line is the owner, one note per state).
+      setGcNote('A create is already in progress — the sheet lands when it completes.')
+      return
+    }
     const title = gcTitle.trim()
     const vial = gcVial.trim()
     const label = gcSampleLabel.trim()
-    const method = gcMethodId || gcMethods[0]?.recordId || ''
+    // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): NO silent first-method fallback.
+    // The old `gcMethods[0]?.recordId` fallback created the sheet with a
+    // method the user never chose (and, while the fetch was in flight, the
+    // fallback silently picked the first of a list the user could not see).
+    // The user must SELECT a method — an unselected method is a NAMED
+    // reason below, never an unasked-for pick.
+    const method = gcMethodId
     if (!title || !vial || !label || !method) {
-      setGcNote('Enter a sheet title, a vial, a sample label, and a gc-method to create the sheet.')
+      setGcNote('Enter a sheet title, a vial, a sample label, and select a gc-method to create the sheet.')
       return
     }
     setGcBusy(true)
@@ -310,7 +338,14 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
           />
           <div data-testid="gc-run-create-method-row">
             <label htmlFor="gc-run-create-method">GC method</label>
-            {gcMethods.length === 0 ? (
+            {!gcMethodsLoaded ? (
+              // GC-12 fix-cycle-3 (DIRFIX-3 minor 2): the IN-FLIGHT arm —
+              // the list is still loading; never claim "none configured"
+              // mid-fetch (that was the regate2 false-empty).
+              <span className="gc-run-create__notready" data-testid="gc-run-create-method-loading">
+                Loading gc-methods…
+              </span>
+            ) : gcMethods.length === 0 ? (
               <span className="gc-run-create__notready" data-testid="gc-run-create-method-notready">
                 No gc-methods are configured.{' '}
                 <a href="/registry" data-testid="gc-run-create-method-author">
