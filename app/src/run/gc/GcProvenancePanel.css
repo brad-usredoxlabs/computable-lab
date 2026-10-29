@@ -1,0 +1,178 @@
+/* GC-13 gatefix3 (browser gate2 defects D1 + D2) — the provenance
+ * panel's OWN stylesheet.
+ *
+ * D1: the panel's gc-prov__* rules lived in GcEvidenceRunPage.css scoped
+ * under .gc-evidence-run (a class only /gc-run/:runId renders) — on the
+ * GC-12 results surface the panel rendered unstyled. The rules are moved
+ * here VERBATIM (only the .gc-evidence-run ancestor requirement dropped)
+ * and imported by the component itself, so both mount sites reach them.
+ *
+ * D2 (partC/shots/08-16-g4-standards-and-gap.png): the fact LABELS ran
+ * into their VALUES (`engine (actual)ENG-PYCAL01-L1T2305`,
+ * `dataKindtable`) and the standards-table columns TOUCHED (row read
+ * `1 TEST-CMPD-11 yesyes` — "TEST-CMPD-1"+"1" and "yes"+"yes" merged).
+ * The label gains real separation (inline-block + margin-right, the
+ * spacing the existing visual language uses for hop name/kind pairs) and
+ * the standards-table cells gain padding so columns and the two boolean
+ * flags read as separate cells. No new chrome, no restyle of resolved
+ * hops. */
+
+.gc-prov {
+  margin-top: 8px;
+}
+
+.gc-prov__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.gc-prov__header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0;
+}
+
+.gc-prov__header button {
+  margin: 0;
+}
+
+.gc-prov__error {
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+.gc-prov__chain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gc-prov__hop {
+  list-style: none;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.gc-prov__hop-name {
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.gc-prov__hop-kind {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+  margin-left: 8px;
+}
+
+.gc-prov__hop-link {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+  margin-left: 8px;
+}
+
+.gc-prov__hop-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.gc-prov__hop-absent,
+.gc-prov__hop-error {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.gc-prov__hop-absent {
+  color: var(--cl-text-faint);
+}
+
+.gc-prov__hop-error {
+  color: var(--cl-danger);
+}
+
+/* gatefix3 D3: a hop whose record FAILED TO LOAD is TEXT (the id + the
+ * error), never a /record/:id anchor to a record that does not load —
+ * a dead navigable link to a 404 was the defect. Same visual language
+ * as the absent arm (named, quiet) — the id is loud via the error arm. */
+.gc-prov__hop-unresolved {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--cl-text-faint);
+}
+
+.gc-prov__facts {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  list-style: none;
+}
+
+/* D2: the label and the value are separate spans — give the label REAL
+ * separation (inline-block + margin-right) so it stops running into the
+ * value (D2 measured margin-right 0px). */
+.gc-prov__fact-label {
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+.gc-prov__fact-value {
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.gc-prov__terminal {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.gc-prov__terminal code {
+  font-size: 12px;
+  color: var(--cl-text);
+}
+
+.gc-prov__standards {
+  margin-top: 12px;
+}
+
+.gc-prov__standards h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 8px 0;
+}
+
+/* D2: the cells need PADDING (D2 measured none — "TEST-CMPD-1"+"1" read
+ * as "TEST-CMPD-11", "yes"+"yes" as "yesyes"). Header cells match so the
+ * columns line up. */
+.gc-prov__standards-table {
+  border-collapse: collapse;
+}
+
+.gc-prov__standards-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.gc-prov__standards-table td {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--cl-text);
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.gc-prov__gap {
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}

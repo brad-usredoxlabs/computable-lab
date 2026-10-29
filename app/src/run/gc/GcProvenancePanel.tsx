@@ -13,6 +13,11 @@
  */
 import { useEffect, useState } from 'react'
 import { entryFacts, hopFacts, standardsFacts, walkProvenanceChain, MEASUREMENT_CONTEXT_GAP_TEXT, type ChainHop, type ProvenanceChain, type ProvenanceRef } from './gcProvenance'
+// GC-13 gatefix3 (gate2 D1): the panel's OWN stylesheet — the gc-prov__*
+// rules used to live in GcEvidenceRunPage.css scoped under
+// .gc-evidence-run (only /gc-run renders that class). Imported here (by
+// the component itself) so both mount sites reach them.
+import './GcProvenancePanel.css'
 
 function HopRow({ hop }: { hop: ChainHop }) {
   const facts = hop.payload !== null ? hopFacts(hop) : []
@@ -20,10 +25,22 @@ function HopRow({ hop }: { hop: ChainHop }) {
     <li className={`gc-prov__hop${hop.error ? ' gc-prov__hop--error' : ''}${hop.absent ? ' gc-prov__hop--absent' : ''}`}>
       <span className="gc-prov__hop-name">{hop.spec.name}</span>
       <span className="gc-prov__hop-kind">({hop.spec.kind})</span>
-      {hop.ref !== null ? (
+      {hop.ref !== null && hop.error === null ? (
         <a className="gc-prov__hop-link" href={`/record/${encodeURIComponent(hop.ref.id)}`} data-testid={`gc-prov-hop-${hop.spec.kind}`}>
           {hop.ref.label ?? hop.ref.id}
         </a>
+      ) : hop.ref !== null ? (
+        // GC-13 gatefix3 (gate2 D3): the hop's record FAILED TO LOAD
+        // (NOT_FOUND/error) — the ref is KNOWN (the walker resolved it)
+        // but the record does not load. Render it as TEXT (the id),
+        // NEVER a /record/:id anchor: a navigable link to a record that
+        // 404s was the defect (8 GC-origin console 404s + the dead
+        // /record/ENG-PYCAL01-L1T2305 anchor). The loud error arm below
+        // already names the id + the failure. Resolved hops keep their
+        // anchors exactly as before.
+        <span className="gc-prov__hop-unresolved" data-testid={`gc-prov-hop-unresolved-${hop.spec.kind}`}>
+          {hop.ref.label ?? hop.ref.id}
+        </span>
       ) : (
         <span className="gc-prov__hop-absent" data-testid={`gc-prov-hop-absent-${hop.spec.kind}`}>
           {hop.absent ? 'not linked (named gap)' : 'unresolved'}

@@ -27,6 +27,12 @@ import {
   EVIDENCE_TARGET_TYPES,
   evidenceSourceTypeFor,
 } from './gcEvidenceSources'
+// GC-13 gatefix3 (gate2 D1): the hand-off's OWN stylesheet — the gc-ev__*
+// rules used to live in GcEvidenceRunPage.css scoped under .gc-evidence-run
+// (only /gc-run renders that class), so the GC-12 results surface got bare
+// markup. Imported here (by the component itself) so every mount site
+// (the GC-12 GcRunSheetSection AND the /gc-run landing) reaches them.
+import './GcEvidenceHandoff.css'
 
 type Stance = 'supports' | 'refutes' | 'assesses'
 
