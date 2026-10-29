@@ -15,7 +15,7 @@
  * mapping in this file beyond the payload built BY the scientist form
  * handler — the mapping table lives in gcEvidenceSources.ts (data).
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { ApiError } from '../../shared/api/errors'
 import type { RecordRef } from '../../shared/ref/RefBadge'
@@ -106,6 +106,16 @@ function GcEvidenceForm({
     }
   }
 
+  // FIX5 (defect 4a): the authored bundle carries the RUN as an explicit
+  // result source (type from the OQ-1 data table — the run IS the bundle's
+  // primary anchor, and the single-hop related scan only surfaces a bundle
+  // whose OWN payload references the run). Derivation, not a stance
+  // default (D6). The run source is added ONCE, after the artifact.
+  const runSource: { type: string; ref: RecordRef } | null = (() => {
+    const runType = evidenceSourceTypeFor('analysis-run', EVIDENCE_SOURCE_TYPE_ENUM)
+    return runType !== null ? { type: runType, ref: { kind: 'record', id: runId, type: 'analysis-run' } } : null
+  })()
+
   const submit = async () => {
     setError(null)
     setLintError(null)
@@ -119,6 +129,7 @@ function GcEvidenceForm({
     }
     const sources = [
       ...(artifactSource !== null ? [artifactSource] : []),
+      ...(runSource !== null && !extraSources.some((s) => s.ref.id === runId) ? [runSource] : []),
       ...extraSources,
     ]
     if (sources.length === 0) {
@@ -338,50 +349,72 @@ export function GcEvidenceHandoff({
   // getRelatedRecords(claimId)). The scan is a superset (any string field
   // matching the runId, bait #7), so each candidate is schemaId-filtered to
   // evidence and re-read before believing that a source points at the run.
+  // FIX5 (defect 4b): a bundle's stance may target an ASSERTION (the form
+  // offers assertion as a first-class target) — the claim for the back link
+  // then rides that assertion's claim_ref (re-read; a failed re-read is a
+  // loud scan failure, never a silent skip). Re-runs after a bundle create
+  // (the just-authored bundle must appear without a page reload).
   // User-triggered only (never at mount — D7).
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const { related } = await apiClient.getRelatedRecords(runId)
-        const evidenceIds = [
-          ...new Set(related.filter((r) => schemaKind(r.schemaId) === 'evidence').map((r) => r.recordId)),
-        ]
-        const hits: Array<{ evidenceId: string; claimId: string }> = []
-        for (const eid of evidenceIds) {
-          const env = await apiClient.getRecord(eid)
-          const p = env.payload as Record<string, unknown>
-          const sources = Array.isArray(p['sources']) ? p['sources'] : []
-          const pointsAtRun = sources.some((s) => {
-            if (s === null || typeof s !== 'object') return false
-            const r = (s as Record<string, unknown>)['ref']
-            return r !== null && typeof r === 'object' && (r as { id?: unknown }).id === runId
-          })
-          if (!pointsAtRun) continue
-          for (const stance of ['supports', 'refutes', 'assesses'] as const) {
-            const arr = Array.isArray(p[stance]) ? p[stance] : []
-            for (const t of arr) {
-              if (
-                t !== null &&
-                typeof t === 'object' &&
-                (t as { type?: unknown }).type === 'claim' &&
-                typeof (t as { id?: unknown }).id === 'string'
-              ) {
-                hits.push({ evidenceId: eid, claimId: (t as { id: string }).id })
+  const refreshLinkedClaims = useCallback(async () => {
+    let scanError: string | null = null
+    try {
+      const { related } = await apiClient.getRelatedRecords(runId)
+      const evidenceIds = [
+        ...new Set(related.filter((r) => schemaKind(r.schemaId) === 'evidence').map((r) => r.recordId)),
+      ]
+      const hits: Array<{ evidenceId: string; claimId: string }> = []
+      for (const eid of evidenceIds) {
+        const env = await apiClient.getRecord(eid)
+        const p = env.payload as Record<string, unknown>
+        const sources = Array.isArray(p['sources']) ? p['sources'] : []
+        const pointsAtRun = sources.some((s) => {
+          if (s === null || typeof s !== 'object') return false
+          const r = (s as Record<string, unknown>)['ref']
+          return r !== null && typeof r === 'object' && (r as { id?: unknown }).id === runId
+        })
+        if (!pointsAtRun) continue
+        for (const stance of ['supports', 'refutes', 'assesses'] as const) {
+          const arr = Array.isArray(p[stance]) ? p[stance] : []
+          for (const t of arr) {
+            if (t === null || typeof t !== 'object') continue
+            const target = t as { id?: unknown; type?: unknown }
+            if (typeof target.id !== 'string') continue
+            if (target.type === 'claim') {
+              hits.push({ evidenceId: eid, claimId: target.id })
+              continue
+            }
+            if (target.type === 'assertion') {
+              // Second hop: the assertion's claim_ref names the claim.
+              try {
+                const asnEnv = await apiClient.getRecord(target.id)
+                const claimRef = (asnEnv.payload as Record<string, unknown>)['claim_ref']
+                if (
+                  claimRef !== null &&
+                  typeof claimRef === 'object' &&
+                  typeof (claimRef as { id?: unknown }).id === 'string'
+                ) {
+                  hits.push({ evidenceId: eid, claimId: (claimRef as { id: string }).id })
+                }
+              } catch {
+                // The assertion (or its claim_ref) is unreadable — the
+                // scan cannot resolve this bundle's claim; be loud.
+                scanError = `cannot resolve the claim behind assertion '${target.id}' for bundle '${eid}'`
               }
             }
           }
         }
-        if (!cancelled) setLinkedClaims(hits)
-      } catch (e) {
-        if (!cancelled) setClaimsError(e instanceof Error ? e.message : String(e))
       }
-    })()
-    return () => {
-      cancelled = true
+      setLinkedClaims(hits)
+      setClaimsError(scanError)
+    } catch (e) {
+      setClaimsError(e instanceof Error ? e.message : String(e))
     }
-  }, [open, runId])
+  }, [runId])
+
+  useEffect(() => {
+    if (!open) return
+    void refreshLinkedClaims()
+  }, [open, runId, refreshLinkedClaims])
 
   return (
     <div data-testid={`gc-evidence-handoff-${isenId}`} className="gc-ev">
@@ -460,7 +493,13 @@ export function GcEvidenceHandoff({
             <GcEvidenceForm
               runId={runId}
               artifact={authorFor}
-              onCreated={() => onBundleCreated()}
+              onCreated={() => {
+                // The just-authored bundle (whose sources now reference
+                // this run) must appear in the back links without a page
+                // reload — re-run the scan (user-triggered, D7).
+                void refreshLinkedClaims()
+                onBundleCreated()
+              }}
             />
           )}
         </div>

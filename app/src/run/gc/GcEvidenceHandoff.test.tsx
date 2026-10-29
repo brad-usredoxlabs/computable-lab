@@ -26,6 +26,7 @@ import {
   EVIDENCE_SOURCE_TYPE_BY_RECORD_TYPE,
   evidenceSourceTypeFor,
 } from './gcEvidenceSources'
+import { runIdsFromEvidence } from '../../claims/claimEvidenceModel'
 
 const ISEN = 'ISEN-GC13-D'
 const ANR = 'ANR-TEST-GC13-D'
@@ -184,9 +185,140 @@ describe('GcEvidenceHandoff (leg D)', () => {
     const [schemaId, payload] = vi.mocked(apiClient.createRecord).mock.calls[0] as unknown as [string, Record<string, unknown>]
     expect(schemaId).toContain('evidence.schema.yaml')
     expect(payload['supports']).toEqual([{ kind: 'record', id: ASN, type: 'assertion' }])
+    // FIX5 (defect 4a): the authored payload carries the run as an
+    // EXPLICIT result source — an artifact-only source never references
+    // the run, so the single-hop related scan (and therefore both G7
+    // legs) is blind to form-authored bundles without it.
     expect(payload['sources']).toEqual([
       { type: 'result', ref: { kind: 'record', id: AOUT, type: 'analysis-output-artifact' } },
+      { type: 'result', ref: { kind: 'record', id: ANR, type: 'analysis-run' } },
     ])
+  })
+
+  it('G7 (FIX5, defect 4): a bundle AUTHORED THROUGH THE FORM (artifact source, assertion target) lands BOTH reciprocal links. (a) the run is an explicit source in the authored payload; (b) the run->claim back link resolves the assertion target via its claim_ref (the form offers assertion as a first-class target); the just-created bundle appears without a page reload.', async () => {
+    const EVD_SCHEMA = 'https://computable-lab.com/schema/computable-lab/evidence.schema.yaml'
+    const ASN_SCHEMA = 'https://computable-lab.com/schema/computable-lab/assertion.schema.yaml'
+    const FORM_BUNDLE = 'EVD-FORM-GC13-FIX5'
+    const FIX5_CLAIM = 'CLM-TEST-FIX5'
+    const FORM_PAYLOAD = {
+      kind: 'evidence',
+      id: FORM_BUNDLE,
+      supports: [{ kind: 'record', id: ASN, type: 'assertion' }],
+      sources: [
+        { type: 'result', ref: { kind: 'record', id: AOUT, type: 'analysis-output-artifact' } },
+        { type: 'result', ref: { kind: 'record', id: ANR, type: 'analysis-run' } },
+      ],
+    }
+    const created: Array<Record<string, unknown>> = []
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
+      switch (id) {
+        case AOUT:
+          return { recordId: AOUT, schemaId: 'x', payload: AOUT_PAYLOAD } as never
+        case ASN:
+          return {
+            recordId: ASN,
+            schemaId: ASN_SCHEMA,
+            payload: {
+              kind: 'assertion',
+              id: ASN,
+              scope: 'single_context',
+              claim_ref: { kind: 'record', id: FIX5_CLAIM, type: 'claim' },
+            },
+          } as never
+        case 'EVD-LEGACY':
+          return {
+            recordId: 'EVD-LEGACY',
+            schemaId: EVD_SCHEMA,
+            payload: {
+              kind: 'evidence',
+              id: 'EVD-LEGACY',
+              supports: [{ kind: 'record', id: 'CLM-TEST-GC13-D', type: 'claim' }],
+              sources: [
+                { type: 'result', ref: { kind: 'record', id: ANR, type: 'analysis-run' } },
+                { type: 'context', ref: { kind: 'record', id: 'CTX-1', type: 'context' } },
+              ],
+            },
+          } as never
+        case 'EVD-OTHER':
+          return {
+            recordId: 'EVD-OTHER',
+            schemaId: EVD_SCHEMA,
+            payload: {
+              kind: 'evidence',
+              id: 'EVD-OTHER',
+              supports: [{ kind: 'record', id: 'CLM-OTHER', type: 'claim' }],
+              sources: [{ type: 'result', ref: { kind: 'record', id: 'ANR-OTHER', type: 'analysis-run' } }],
+            },
+          } as never
+        case FORM_BUNDLE:
+          return { recordId: FORM_BUNDLE, schemaId: EVD_SCHEMA, payload: FORM_PAYLOAD } as never
+        default:
+          throw new Error(`404: ${id}`)
+      }
+    })
+    let createCount = 0
+    vi.mocked(apiClient.getRelatedRecords).mockImplementation(async (id: string) => {
+      // SINGLE-HOP semantics (RelatedRecordsHandlers): a record appears
+      // in ANR's related set only because its OWN payload references ANR
+      // (the form-authored bundle's run source). It is absent until it
+      // exists — and the back-link scan must re-run after the create.
+      if (id === ANR) {
+        const base = [
+          { recordId: 'EVD-LEGACY', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'b', refField: 'sources[0]' },
+          { recordId: 'EVD-OTHER', schemaId: EVD_SCHEMA, kind: 'evidence', title: 'b', refField: 'sources[0]' },
+        ]
+        return {
+          related: createCount > 0
+            ? [...base, { recordId: FORM_BUNDLE, schemaId: EVD_SCHEMA, kind: 'evidence', title: 'b', refField: 'sources[1]' }]
+            : base,
+        } as never
+      }
+      return { related: [] } as never
+    })
+    vi.mocked(apiClient.createRecord).mockImplementation(async (_schemaId: string, payload: Record<string, unknown>) => {
+      created.push(payload)
+      createCount += 1
+      return { record: { recordId: FORM_BUNDLE, payload }, validation: { valid: true, errors: [] }, lint: { valid: true, violations: [] } } as never
+    })
+    renderHandoff()
+    fireEvent.click(screen.getByTestId('gc-evidence-handoff-open'))
+    fireEvent.click(await screen.findByTestId('gc-evidence-add-as-evidence'))
+    await screen.findByTestId('gc-evidence-form')
+    // The scientist's explicit acts: stance supports, target = ASN.
+    fireEvent.click(screen.getByTestId('gc-evidence-form-stance-supports'))
+    fireEvent.change(screen.getByTestId('gc-evidence-form-target-id'), { target: { value: ASN } })
+    fireEvent.click(screen.getByTestId('gc-evidence-form-target-type-assertion'))
+    fireEvent.click(screen.getByTestId('gc-evidence-form-submit'))
+    await screen.findByTestId('gc-evidence-form-created')
+    // (a) the authored payload carries the run as an explicit result
+    //     source (the artifact alone never references the run).
+    expect(created).toHaveLength(1)
+    expect(created[0]['supports']).toEqual([{ kind: 'record', id: ASN, type: 'assertion' }])
+    const authored = created[0]['sources'] as Array<{ type: string; ref: { id: string; type: string } }>
+    expect(authored).toContainEqual({ type: 'result', ref: { kind: 'record', id: AOUT, type: 'analysis-output-artifact' } })
+    expect(authored).toContainEqual({ type: 'result', ref: { kind: 'record', id: ANR, type: 'analysis-run' } })
+    // (b) the run's back link: the form-authored bundle's stance targets
+    //     the ASSERTION; the link resolves ASN -> claim_ref ->
+    //     CLM-TEST-FIX5 (a claim-target-only follower — the pre-fix code
+    //     — renders nothing here for form-authored bundles).
+    const fix5Link = await screen.findByTestId(`gc-evidence-claim-link-${FIX5_CLAIM}`)
+    expect(fix5Link).toHaveAttribute('href', `/claims/${FIX5_CLAIM}`)
+    // the pre-existing bundle's back link is unaffected
+    expect(screen.getByTestId('gc-evidence-claim-link-CLM-TEST-GC13-D')).toHaveAttribute('href', '/claims/CLM-TEST-GC13-D')
+  })
+
+  it('FIX5 (defect 4c): runIdsFromEvidence over a form-AUTHORED payload (artifact + explicit run source) yields the run; the old artifact-only shape yields none (the model never invents a run from an artifact ref)', () => {
+    const runSource = { type: 'result', ref: { kind: 'record', id: 'ANR-X', type: 'analysis-run' } }
+    const artifactSource = { type: 'result', ref: { kind: 'record', id: 'AOUT-X', type: 'analysis-output-artifact' } }
+    const p: Record<string, unknown> = {
+      kind: 'evidence',
+      id: 'EVD-F',
+      supports: [{ kind: 'record', id: 'ASN-X', type: 'assertion' }],
+      sources: [artifactSource, runSource],
+    }
+    expect(runIdsFromEvidence([p])).toEqual(['ANR-X'])
+    const artifactOnly: Record<string, unknown> = { ...p, sources: [artifactSource] }
+    expect(runIdsFromEvidence([artifactOnly])).toEqual([])
   })
 
   it('a lint-blocked create shows the lint violation VERBATIM (422 lint-invalid, never a fake success)', async () => {
