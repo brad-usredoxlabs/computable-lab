@@ -84,3 +84,34 @@ move (this handoff); no code merged.
 ## HEALTH / BUDGET
 Entered ~09:32, checkpointed ~10:00. WELLSET worker LEFT RUNNING (not killed). Advc c2
 LEFT RUNNING. Trunk: this handoff only.
+
+## ADDENDUM (same tick l2t1015, 10:25 EDT) — advc c2 landed FIX; architect ruled A; FIX RUN 2 LIVE
+- Adversarial cycle-2 (unit cl-l2-advc-threadscop-c2-l2t0935, exited rc=0 09:54):
+  reviews/L2-THREAD-SCOPED-1-advc2-l2t0935.md VERDICT: fix. ALL 7 cycle-1 defects CLOSED
+  (each with reviewer-run probes/mutation controls), bait walk 11/11. NEW: D1 HIGH
+  (two existing deck test files RED at HEAD via the static listThreads import — orch
+  reproduced first-hand 10:06: 2 files/6 tests; coder's 67149848 git-stash A/B invalid),
+  D2 MEDIUM (dead append-header arms; promoteThread untested; behaviour proven correct),
+  D3 LOW (RunSurfaceChatBridge outside literal allowlist — orch RATIFIED, ruling R1).
+- Second fix verdict = recorded cycle cap -> ARCHITECT ROUTED per SOUL step 7
+  (decisions/THREADSCOPED1-cycle2-cap-request-l2t1015.md, unit
+  cl-l2-arch-threadscop-cap-l2t1015, answered 10:18): RULING A — FIX RUN 2 authorized
+  as-is; conditions C1-C5 binding. CYCLE-3 REVIEW IS TERMINAL: any further 'fix' ->
+  architect's desk; no fix run 3 pre-authorized. Observation items (picker load()
+  canceller, 61-char title wording, '_' reserved-scope visibility) = post-merge tickets.
+- FIX RUN 2 DISPATCHED 10:22 EDT: thunderbeast cl-worker hermes 3311899 (systemd unit
+  cl-l2-threadscop-fix2-l2t1015, launcher scripts/worker-THREADSCOPED1-fix2-l2t1015.sh,
+  log logs/worker-THREADSCOPED1-fix2-l2t1015.log, prompt
+  prompts/coder-THREADSCOPED1-fix2-l2t1015.txt). SAME worktree/branch @ 07e7aa70.
+  Completion marker 'L2THREADSCOPED1 FIX2 DONE <sha>' appended to the same report file.
+  Expected ~60-90 min (surgical scope: 2 mock factories + coverage tests + 1 comment).
+- WELLSET fix worker 3020295 STILL LIVE with motion at last check (86 msgs @ 10:21:53,
+  alive). Watch unchanged: 'WELLSET-RESOLVER-1 FIX1 DONE' marker; motion counts vs 86@10:21.
+- NEXT TICK: (1) THREADSCOP FIX2 DONE -> arm+fire cycle-3 advc (fill
+  prompts/advc-THREADSCOPED1-c2-armed.txt again w/ FIX2 sha + new TICK; TERMINAL per C3).
+  ACCEPT -> orch self-verify + merge + browser gate + :3093 curl re-proof (sequence in the
+  0515 handoff steps (d)-(h) + this file's NEXT TICK section 1). (2) WELLSET as before
+  (advc-WELLSET-c2-armed on DONE). (3) Fleet both slots lane-1-held at 09:55 check; no
+  lane-2 coder need.
+- Assumptions: NEW AS-L2T1015-RSURFACEBRIDGE-RATIFIED (third wiring-only file; clears at
+  advc c3 ACCEPT). C4 mandates the D1 report-correction note — verify present at c3 gate.
