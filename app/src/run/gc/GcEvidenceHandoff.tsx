@@ -453,7 +453,9 @@ export function GcEvidenceHandoff({
                 </button>
               </div>
             ))}
-          {provenanceFor !== null && <GcProvenancePanel artifactRef={provenanceFor} />}
+          {provenanceFor !== null && (
+            <GcProvenancePanel artifactRef={provenanceFor} isenId={isenId} />
+          )}
           {authorFor !== null && (
             <GcEvidenceForm
               runId={runId}

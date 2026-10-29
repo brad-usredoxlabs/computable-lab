@@ -22,13 +22,22 @@ import { ThemeProvider } from '../../shared/shell'
 import { OpenTabsProvider } from '../../shared/shell/OpenTabsContext'
 import { apiClient } from '../../shared/api/client'
 import { GcProvenancePanel } from './GcProvenancePanel'
-import { chainContentHash, walkProvenanceChain } from './gcProvenance'
+import { chainContentHash, entryFacts, hopFacts, standardsFacts, walkProvenanceChain } from './gcProvenance'
 
 const AOUT = 'AOUT-TEST-GC13'
 const ANR = 'ANR-TEST-GC13'
 const ANREV = 'ANREV-TEST-GC13'
 const DREF = 'DREF-TEST-GC13'
 const HASH = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+// FIX3 fixture ids (the acquisition end + the engine record)
+const ISEN = 'ISEN-TEST-GC13'
+const ACQP = 'ACQP-TEST-GC13'
+const SMP = 'SMP-TEST-GC13'
+const GCM = 'GCM-TEST-GC13'
+const REVPIN = 'REV-DEADBEEF'
+const ENG = 'ENG-PYCAL01-L1T2305'
+const AOUT_EP = 'AOUT-TEST-GC13-EP'
+const AOUT_L1 = 'AOUT-TEST-GC13-L1'
 
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
@@ -40,7 +49,42 @@ function env(id: string, payload: Record<string, unknown>) {
   return { recordId: id, schemaId: `https://computable-lab.com/schema/computable-lab/${id}.schema.yaml`, payload }
 }
 
-function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
+/** The calibration-model inlineValue (shaped on the live AOUT-000020
+ *  payload, 129th-handoff gate fixture: equation string verbatim,
+ *  statistic name/value, fit_points whose relative_residual MAY be null —
+ *  the honest null arm GC-11 shipped). */
+function calibrationInlineValue(): Record<string, unknown> {
+  return {
+    model_version: 1,
+    model: 'linear',
+    equation: 'raw_area_pa_min = 2.21 * amount_ng_uL + 1.0',
+    statistic_name: 'weighted_r_squared',
+    statistic_value: 0.8878,
+    response_quantity: 'raw_area_pa_min',
+    amount_unit: 'ng/uL',
+    x_min: 1,
+    x_max: 4,
+    fit_points: [
+      { amount: '1', response: '3', weight: '1', relative_residual: null, source_input: 'level_1', source_peak_index: 0 },
+      { amount: '2', response: '5', weight: '1', relative_residual: '8.4', source_input: 'level_2', source_peak_index: 0 },
+    ],
+  }
+}
+
+/** The frozen standards (ANR.parameters.levels[], shaped on the live
+ *  ANR-000013 payload). */
+function frozenLevels(): Record<string, unknown> {
+  return {
+    model: 'linear',
+    amount_unit: 'ng/uL',
+    levels: [
+      { level: 1, compound_label: 'TEST-CMPD-1', amount: 1, fit: true, required: true, input_names: ['level_1'] },
+      { level: 2, compound_label: 'TEST-CMPD-2', amount: 2, fit: true, required: true, input_names: ['level_2'] },
+    ],
+  }
+}
+
+function mockChain(opts: { withMctx?: boolean; breakDref?: boolean; withSeq?: boolean; breakIsen?: boolean; artifactInputs?: boolean; oddInput?: boolean } = {}) {
   const v = vi.mocked(apiClient.getRecord)
   v.mockImplementation(async (id: string) => {
     if (id === AOUT) {
@@ -51,6 +95,8 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
         name: 'calibration_model',
         dataKind: 'model',
         runRef: { kind: 'record', id: ANR, type: 'analysis-run' },
+        // the calibration-model payload (D2 item 10 / gate G4)
+        inlineValue: calibrationInlineValue(),
       })
     }
     if (id === ANR) {
@@ -61,10 +107,22 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
         status: 'succeeded',
         revisionRef: { kind: 'record', id: ANREV, type: 'analysis-revision' },
         frozenRevisionRef: { kind: 'record', id: ANREV, type: 'analysis-revision' },
-        inputs: { trace: { kind: 'record', id: DREF, type: 'data-reference' } },
+        // live ANR-000013 shape: the inputs may be ARTIFACTS (level runs),
+        // not just data references — the walker must not drop them.
+        inputs: opts.artifactInputs
+          ? { level_1: { kind: 'record', id: AOUT_L1, type: 'analysis-output-artifact' } }
+          : opts.oddInput
+            ? {
+                trace: { kind: 'record', id: DREF, type: 'data-reference' },
+                ctx1: { kind: 'record', id: 'CTX-1', type: 'context' },
+              }
+            : { trace: { kind: 'record', id: DREF, type: 'data-reference' } },
+        // the effective_parameters artifact (D2 hop 5 / gate G4 link)
+        outputArtifactRefs: [{ kind: 'record', id: AOUT_EP, type: 'analysis-output-artifact' }],
+        parameters: frozenLevels(),
         engineProvenance: {
-          engineRef: { kind: 'record', id: 'ENG-PYCAL01-L1T2305', type: 'analysis-engine' },
-          engineRecordId: 'ENG-PYCAL01-L1T2305',
+          engineRef: { kind: 'record', id: ENG, type: 'analysis-engine' },
+          engineRecordId: ENG,
           engineVersion: 'reference-2026-10',
           adapter: 'python-subprocess/1',
           interpreterPath: '/usr/bin/python3',
@@ -93,7 +151,7 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
         id: ANREV,
         title: 'GC-13 calibration revision',
         sdkVersion: '0.1.0',
-        engineRef: { kind: 'record', id: 'ENG-PYCAL01-L1T2305', type: 'analysis-engine' },
+        engineRef: { kind: 'record', id: ENG, type: 'analysis-engine' },
       })
     }
     if (id === DREF) {
@@ -108,6 +166,90 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
         sizeBytes: 4096,
         readerVersion: 'gc-4-registration/1',
       })
+    }
+    if (id === AOUT_L1) {
+      // an ARTIFACT run input (the live CAL-chain shape): its DREF is the
+      // input's dataReferenceRef — the walker resolves it, never drops it.
+      return env(AOUT_L1, {
+        kind: 'analysis-output-artifact',
+        id: AOUT_L1,
+        name: 'level_1_trace',
+        dataKind: 'trace',
+        runRef: { kind: 'record', id: 'ANR-LEVEL-1', type: 'analysis-run' },
+        dataReferenceRef: { kind: 'record', id: DREF, type: 'data-reference' },
+      })
+    }
+    if (id === AOUT_EP) {
+      return env(AOUT_EP, {
+        kind: 'analysis-output-artifact',
+        id: AOUT_EP,
+        name: 'effective_parameters',
+        dataKind: 'table',
+        runRef: { kind: 'record', id: ANR, type: 'analysis-run' },
+      })
+    }
+    if (id === ENG) {
+      // the ACTUAL engine record (live shape: engine_family/engine_version/
+      // capabilities.declared — the engine hop reads ITS OWN payload)
+      return env(ENG, {
+        kind: 'analysis-engine',
+        id: ENG,
+        title: 'Lane python entry-script engine (calibration gate, OQ-5)',
+        engine_family: 'computable-lab-analysis-reference',
+        engine_version: 'reference-2026-10',
+        implementation: { adapter: 'python-entry-script', entry: 'run' },
+        capabilities: {
+          declared: [
+            { capability: 'curve_fitting', support: 'supported' },
+            { capability: 'deconvolution', support: 'approximate' },
+          ],
+        },
+      })
+    }
+    if (opts.withSeq) {
+      if (id === ISEN) {
+        if (opts.breakIsen) throw new Error('record not found: ISEN-TEST-GC13')
+        return env(ISEN, {
+          kind: 'instrument-sequence-entry',
+          id: ISEN,
+          // the lineage refs (ISEN schema, type-pinned; the gc-method ref
+          // carries the OPTIONAL revisionRef REV- pin — the ref datatype)
+          sampleRef: { kind: 'record', id: SMP, type: 'sample' },
+          gcMethodRef: {
+            kind: 'record',
+            id: GCM,
+            type: 'gc-method',
+            revisionRef: { kind: 'record', type: 'record-revision', id: REVPIN },
+          },
+          acquisitionPackageRef: { kind: 'record', id: ACQP, type: 'acquisition-package' },
+        })
+      }
+      if (id === ACQP) {
+        return env(ACQP, {
+          kind: 'acquisition-package',
+          id: ACQP,
+          sampleRef: { kind: 'record', id: SMP, type: 'sample' },
+          // per-file DREF pins (ACQP schema files[].dataReferenceRef)
+          files: [
+            { relativePath: 'trace.0', dataReferenceRef: { kind: 'record', id: DREF, type: 'data-reference' } },
+          ],
+          signalCollectionRef: { kind: 'record', id: 'SCL-TEST-GC13', type: 'signal-collection' },
+        })
+      }
+      if (id === SMP) {
+        return env(SMP, { kind: 'sample', id: SMP, title: 'GC-13 test sample' })
+      }
+      if (id === GCM) {
+        return env(GCM, { kind: 'gc-method', id: GCM, title: 'GC-13 test method' })
+      }
+      if (id === REVPIN) {
+        return env(REVPIN, {
+          kind: 'record-revision',
+          id: REVPIN,
+          revision: 1,
+          contentHash: HASH,
+        })
+      }
     }
     if (id === 'MCTX-TEST-GC13') {
       return env('MCTX-TEST-GC13', {
@@ -126,11 +268,11 @@ function mockChain(opts: { withMctx?: boolean; breakDref?: boolean } = {}) {
 
 const AOUT_REF = { kind: 'record' as const, id: AOUT, type: 'analysis-output-artifact' }
 
-function renderPanel() {
+function renderPanel(isenId?: string) {
   return render(
     <ThemeProvider>
       <OpenTabsProvider>
-        <GcProvenancePanel artifactRef={AOUT_REF} />
+        <GcProvenancePanel artifactRef={AOUT_REF} isenId={isenId} />
       </OpenTabsProvider>
     </ThemeProvider>,
   )
@@ -179,6 +321,141 @@ describe('walkProvenanceChain (leg C)', () => {
     expect(chainContentHash(chain)).toBeNull()
     const dref = chain.hops.find((h) => h.spec.kind === 'data-reference')
     expect(dref?.error).toContain('DREF-TEST-GC13')
+  })
+
+  // ---- FIX3: the acquisition end walks by REAL per-hop GETs (defect 1) ----
+
+  it('the acquisition hops (package / sequence row / sample / gc-method) RESOLVE when the sequence context is given and the refs exist — never a static null', async () => {
+    mockChain({ withSeq: true })
+    const chain = await walkProvenanceChain(AOUT_REF, ISEN)
+    const acqp = chain.hops.find((h) => h.spec.kind === 'acquisition-package')
+    expect(acqp?.ref?.id).toBe(ACQP)
+    expect(acqp?.payload?.['files']).toBeDefined()
+    expect(acqp?.error).toBeNull()
+    const isen = chain.hops.find((h) => h.spec.kind === 'instrument-sequence-entry')
+    expect(isen?.ref?.id).toBe(ISEN)
+    expect(isen?.error).toBeNull()
+    const sample = chain.hops.find((h) => h.spec.kind === 'sample')
+    expect(sample?.ref?.id).toBe(SMP)
+    expect(sample?.payload?.['title']).toBe('GC-13 test sample')
+    expect(sample?.error).toBeNull()
+    const gcm = chain.hops.find((h) => h.spec.kind === 'gc-method')
+    expect(gcm?.ref?.id).toBe(GCM)
+    expect(gcm?.error).toBeNull()
+  })
+
+  it('the gc-method revision pin (revisionRef REV-) is fetched as a real GET and named in the hop facts', async () => {
+    mockChain({ withSeq: true })
+    const chain = await walkProvenanceChain(AOUT_REF, ISEN)
+    const gcm = chain.hops.find((h) => h.spec.kind === 'gc-method')
+    const facts = hopFacts(gcm!)
+    const pin = facts.find((f) => f.label === 'revision pin')
+    expect(pin, 'the gc-method hop must name its revisionRef pin').toBeDefined()
+    expect(pin?.value).toBe(REVPIN)
+  })
+
+  it('the engine hop resolves the ACTUAL engine record (real GET of the engineProvenance ref) and renders its own payload', async () => {
+    mockChain()
+    const chain = await walkProvenanceChain(AOUT_REF)
+    const engine = chain.hops.find((h) => h.spec.kind === 'analysis-engine')
+    expect(engine?.ref?.id).toBe(ENG)
+    expect(engine?.error).toBeNull()
+    const facts = hopFacts(engine!)
+    const fam = facts.find((f) => f.label === 'engine family')
+    expect(fam?.value).toBe('computable-lab-analysis-reference')
+    const v = facts.find((f) => f.label === 'declared engine version')
+    expect(v?.value).toBe('reference-2026-10')
+    const cap = facts.find((f) => f.label === 'capability deconvolution (declared)')
+    expect(cap?.value).toBe('approximate')
+  })
+
+  it('the sequence-context row is a LOUD error arm when its fetch fails (never a silent unresolved)', async () => {
+    mockChain({ withSeq: true, breakIsen: true })
+    const chain = await walkProvenanceChain(AOUT_REF, ISEN)
+    const isen = chain.hops.find((h) => h.spec.kind === 'instrument-sequence-entry')
+    expect(isen?.ref?.id).toBe(ISEN)
+    expect(isen?.error).toContain('ISEN-TEST-GC13')
+  })
+
+  it('without sequence context the acquisition hops are HONEST absent arms (their source ref is genuinely absent), not failures and not static nulls rendered as errors', async () => {
+    mockChain()
+    const chain = await walkProvenanceChain(AOUT_REF)
+    for (const kind of ['acquisition-package', 'instrument-sequence-entry', 'sample', 'gc-method'] as const) {
+      const hop = chain.hops.find((h) => h.spec.kind === kind)
+      expect(hop?.ref).toBeNull()
+      expect(hop?.error).toBeNull()
+      expect(hop?.absent, `${kind} must be the honest absent arm`).toBe(true)
+    }
+  })
+
+  it('artifact-typed run inputs are NOT dropped: the terminal hash resolves through the artifact input dataReferenceRef (the live ANR-000013 CAL-chain shape)', async () => {
+    mockChain({ artifactInputs: true })
+    const chain = await walkProvenanceChain(AOUT_REF)
+    expect(chainContentHash(chain)).toBe(HASH)
+    expect(chain.dataRefId).toBe(DREF)
+  })
+
+  it('a run input that is neither data-reference nor artifact is still visible as a run fact (never silently dropped)', async () => {
+    mockChain({ oddInput: true })
+    const chain = await walkProvenanceChain(AOUT_REF)
+    // the odd input (context) is named in the run hop facts — the walker
+    // keeps EVERY typed input, not just data references
+    const run = chain.hops.find((h) => h.spec.kind === 'analysis-run')
+    const facts = hopFacts(run!)
+    const extra = facts.find((f) => f.label === 'input ctx1')
+    expect(extra?.value).toContain('context')
+  })
+
+  it('the effective_parameters artifact is linked from the run facts (D2 hop 5 / gate G4)', async () => {
+    mockChain()
+    const chain = await walkProvenanceChain(AOUT_REF)
+    const run = chain.hops.find((h) => h.spec.kind === 'analysis-run')
+    const facts = hopFacts(run!)
+    const ep = facts.find((f) => f.label === 'effective parameters')
+    expect(ep?.value).toBe(AOUT_EP)
+  })
+
+  // ---- FIX3: D2 item 10 — calibration model + standards (defect 2 / G4) ----
+
+  it('the entry artifact renders the calibration-model facts VERBATIM (equation, statistic, fit_points) including the HONEST NULL relative_residual arm', () => {
+    const p = {
+      kind: 'analysis-output-artifact',
+      id: AOUT,
+      name: 'calibration_model',
+      dataKind: 'model',
+      inlineValue: calibrationInlineValue(),
+    }
+    const facts = entryFacts(p)
+    const eq = facts.find((f) => f.label === 'equation')
+    expect(eq?.value).toBe('raw_area_pa_min = 2.21 * amount_ng_uL + 1.0')
+    const stat = facts.find((f) => f.label === 'statistic (weighted_r_squared)')
+    expect(stat?.value).toBe('0.8878')
+    // fit point 1: relative_residual IS null — the honest visible arm
+    const nullArm = facts.find((f) => f.label === 'fit point 0 (level_1) relative_residual')
+    expect(nullArm, 'the null relative_residual must be a visible arm').toBeDefined()
+    expect(nullArm?.value).toBe('null (not reported)')
+    // fit point 2: a real value, verbatim
+    const val = facts.find((f) => f.label === 'fit point 1 (level_2) relative_residual')
+    expect(val?.value).toBe('8.4')
+  })
+
+  it('a non-calibration entry artifact renders NO calibration facts (the facts come from the payload, never invented)', () => {
+    const facts = entryFacts({ kind: 'analysis-output-artifact', id: AOUT, name: 'effective_parameters', dataKind: 'table' })
+    expect(facts.find((f) => f.label === 'equation')).toBeUndefined()
+  })
+
+  it('the standards block is sourced from the FROZEN run parameters.levels[] (G4)', () => {
+    const standards = standardsFacts(frozenLevels() as Record<string, unknown>)
+    expect(standards.length).toBeGreaterThanOrEqual(2)
+    const first = standards[0]
+    expect(first.level).toBe(1)
+    expect(first.compoundLabel).toBe('TEST-CMPD-1')
+    expect(first.amount).toBe(1)
+    expect(standards[1].compoundLabel).toBe('TEST-CMPD-2')
+  })
+
+  it('standardsFacts is empty for a run with no frozen levels (no invented rows)', () => {
+    expect(standardsFacts({ model: 'linear' } as Record<string, unknown>)).toEqual([])
   })
 })
 
@@ -253,5 +530,80 @@ describe('GcProvenancePanel (leg C)', () => {
       'ENG-PYCAL01-L1T2305',
     )
     expect(screen.getByTestId('gc-prov-fact-analysis-revision-sdk-version')).toHaveTextContent('0.1.0')
+  })
+
+  // ---- FIX3: G4 — the context view shows the calibration model + standards ----
+
+  it('the ENTRY artifact renders its calibration-model facts (equation + statistic + fit_points incl. the honest null relative_residual arm)', async () => {
+    mockChain()
+    renderPanel()
+    expect(await screen.findByTestId('gc-prov-fact-entry-equation')).toHaveTextContent(
+      'raw_area_pa_min = 2.21 * amount_ng_uL + 1.0',
+    )
+    expect(screen.getByTestId('gc-prov-fact-entry-statistic-weighted-r-squared')).toHaveTextContent(
+      '0.8878',
+    )
+    // fit point 0 has relative_residual null — the HONEST visible arm
+    expect(screen.getByTestId('gc-prov-fact-entry-fit-point-0-level-1-relative-residual')).toHaveTextContent(
+      'null (not reported)',
+    )
+    expect(screen.getByTestId('gc-prov-fact-entry-fit-point-1-level-2-relative-residual')).toHaveTextContent(
+      '8.4',
+    )
+  })
+
+  it('the STANDARDS block renders from the frozen run parameters.levels[] (G4)', async () => {
+    mockChain()
+    renderPanel()
+    const block = await screen.findByTestId('gc-prov-standards')
+    expect(block).toHaveTextContent('TEST-CMPD-1')
+    expect(block).toHaveTextContent('TEST-CMPD-2')
+    expect(block).toHaveTextContent('frozen from the run parameters (levels)')
+  })
+
+  it('the acquisition hops render when the sequence context is given (full-chain gate: raw hash -> package -> lineage -> method)', async () => {
+    mockChain({ withSeq: true })
+    renderPanel(ISEN)
+    expect(await screen.findByTestId('gc-prov-hop-instrument-sequence-entry')).toHaveAttribute(
+      'href',
+      `/record/${ISEN}`,
+    )
+    expect(await screen.findByTestId('gc-prov-hop-acquisition-package')).toHaveAttribute(
+      'href',
+      `/record/${ACQP}`,
+    )
+    expect(await screen.findByTestId('gc-prov-hop-sample')).toHaveAttribute(
+      'href',
+      `/record/${SMP}`,
+    )
+    expect(await screen.findByTestId('gc-prov-hop-gc-method')).toHaveAttribute(
+      'href',
+      `/record/${GCM}`,
+    )
+    // the terminal hash still resolves through the acquisition end
+    expect(await screen.findByTestId('gc-prov-content-hash')).toHaveTextContent(HASH)
+  })
+
+  it('without sequence context the acquisition hops render the HONEST absent arm (named, never a fake "unresolved" while data exists elsewhere)', async () => {
+    mockChain()
+    renderPanel()
+    expect(await screen.findByTestId('gc-prov-hop-absent-instrument-sequence-entry')).toHaveTextContent(
+      'not linked (named gap)',
+    )
+    expect(screen.getByTestId('gc-prov-hop-absent-acquisition-package')).toHaveTextContent(
+      'not linked (named gap)',
+    )
+  })
+
+  it('the engine hop links the ACTUAL engine record and shows its declared facts (GC-D3: the record, not just the run provenance)', async () => {
+    mockChain()
+    renderPanel()
+    expect(await screen.findByTestId('gc-prov-hop-analysis-engine')).toHaveAttribute(
+      'href',
+      `/record/${ENG}`,
+    )
+    expect(await screen.findByTestId('gc-prov-fact-analysis-engine-engine-family')).toHaveTextContent(
+      'computable-lab-analysis-reference',
+    )
   })
 })

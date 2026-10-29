@@ -12,7 +12,7 @@
  * spec's D2 hop map as a data table). This file only renders.
  */
 import { useEffect, useState } from 'react'
-import { hopFacts, walkProvenanceChain, MEASUREMENT_CONTEXT_GAP_TEXT, type ChainHop, type ProvenanceChain, type ProvenanceRef } from './gcProvenance'
+import { entryFacts, hopFacts, standardsFacts, walkProvenanceChain, MEASUREMENT_CONTEXT_GAP_TEXT, type ChainHop, type ProvenanceChain, type ProvenanceRef } from './gcProvenance'
 
 function HopRow({ hop }: { hop: ChainHop }) {
   const facts = hop.payload !== null ? hopFacts(hop) : []
@@ -46,7 +46,7 @@ function HopRow({ hop }: { hop: ChainHop }) {
   )
 }
 
-export function GcProvenancePanel({ artifactRef, onClosed }: { artifactRef: ProvenanceRef; onClosed?: () => void }) {
+export function GcProvenancePanel({ artifactRef, isenId, onClosed }: { artifactRef: ProvenanceRef; isenId?: string; onClosed?: () => void }) {
   const [chain, setChain] = useState<ProvenanceChain | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,7 +54,7 @@ export function GcProvenancePanel({ artifactRef, onClosed }: { artifactRef: Prov
     let cancelled = false
     setChain(null)
     setError(null)
-    walkProvenanceChain(artifactRef)
+    void walkProvenanceChain(artifactRef, isenId)
       .then((c) => {
         if (!cancelled) setChain(c)
       })
@@ -64,7 +64,16 @@ export function GcProvenancePanel({ artifactRef, onClosed }: { artifactRef: Prov
     return () => {
       cancelled = true
     }
-  }, [artifactRef.id])
+  }, [artifactRef.id, isenId])
+
+  const runHop = chain?.hops.find((h) => h.spec.kind === 'analysis-run') ?? null
+  const runParameters =
+    runHop !== null && runHop.payload !== null
+      ? (runHop.payload['parameters'] as Record<string, unknown> | undefined)
+      : undefined
+  const standards =
+    runParameters !== undefined && runParameters !== null ? standardsFacts(runParameters) : []
+  const entryFactsList = chain !== null ? entryFacts(chain.artifactPayload) : []
 
   return (
     <div className="gc-prov" data-testid="gc-provenance">
@@ -100,6 +109,17 @@ export function GcProvenancePanel({ artifactRef, onClosed }: { artifactRef: Prov
                   <span className="gc-prov__fact-value">{String(chain.artifactPayload['dataKind'])}</span>
                 </li>
               ) : null}
+              {/* D2 item 10 / G4: the calibration-model facts (equation,
+                  statistic, fit_points incl. the honest null
+                  relative_residual arm) — read VERBATIM from the entry
+                  artifact's inlineValue; a non-calibration artifact
+                  renders none. */}
+              {entryFactsList.map((f) => (
+                <li key={`entry-${f.label}`} data-testid={`gc-prov-fact-entry-${f.label.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')}`}>
+                  <span className="gc-prov__fact-label">{f.label}</span>
+                  <span className="gc-prov__fact-value">{f.value}</span>
+                </li>
+              ))}
             </ul>
           </li>
           {chain.hops.map((hop) => (
@@ -124,6 +144,46 @@ export function GcProvenancePanel({ artifactRef, onClosed }: { artifactRef: Prov
             )}
           </li>
         </ol>
+      ) : null}
+      {/* G4: the standards list — the FROZEN run parameters.levels[]
+          (the level runs the calibration was built on). Read verbatim
+          from the run payload; an absent/frozen-less run renders the
+          honest named arm, never an invented list. */}
+      {chain !== null ? (
+        standards.length > 0 ? (
+          <section className="gc-prov__standards" data-testid="gc-prov-standards">
+            <h4>
+              Standards — frozen from the run parameters (levels)
+            </h4>
+            <table className="gc-prov__standards-table">
+              <thead>
+                <tr>
+                  <th>level</th>
+                  <th>compound</th>
+                  <th>amount</th>
+                  <th>fit</th>
+                  <th>required</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standards.map((s, i) => (
+                  <tr key={`${String(s.level)}-${i}`}>
+                    <td>{String(s.level ?? '')}</td>
+                    <td>{s.compoundLabel}</td>
+                    <td>{s.amount === null || s.amount === undefined ? '—' : String(s.amount)}</td>
+                    <td>{s.fit ? 'yes' : 'no'}</td>
+                    <td>{s.required ? 'yes' : 'no'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : (
+          <section className="gc-prov__standards" data-testid="gc-prov-standards-gap">
+            <h4>Standards</h4>
+            <p>no frozen levels in the run parameters — no standards list to show (named gap, not an error)</p>
+          </section>
+        )
       ) : null}
       {chain !== null && chain.hops.some((h) => h.spec.kind === 'measurement-context' && h.absent) ? (
         <p className="gc-prov__gap" data-testid="gc-prov-mctx-gap">
