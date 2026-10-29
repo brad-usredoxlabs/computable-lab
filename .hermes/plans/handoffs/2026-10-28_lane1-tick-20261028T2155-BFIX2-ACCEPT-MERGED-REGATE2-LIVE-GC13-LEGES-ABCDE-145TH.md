@@ -88,3 +88,30 @@
   AS-L1T1610-1, AS-L1T1520-1, AS-L1T1445-1, AS-L1T1425-1, AS-L1T1345-1, AS-L1T1235-1/-2 stand.
   AS-L1T1815-4 RESOLVED (root cause + remediation path recorded in GC-14's block, first-hand
   repro + config-pair proof).
+
+## CHECKPOINT addendum (same tick, 22:05) — GC-13 finished early; two gates live
+
+- GC-13 CODER ENDED: report ends `STATUS: complete` + `GC13 DONE 04ba0fd8ffb7ef77b9f406a2e319c32097299927`
+  (6 commits over a5791e6f). Coder PID 2166467 still alive (finishing session), slot-1 flock still
+  held by its launcher — next tick judges slot truth by flock + log/report completion.
+- ADVERSARIAL GC-13 CYCLE-1 DISPATCHED ~22:00 terminal-background (PID 2363928): prompt
+  prompts/advreview-GC13-l1t2215.txt, log logs/advreview-GC13-l1t2215.log, report path
+  reviews/GC13-advreview-l1t2215-c1.md. Its brief carries the OQ-1/OQ-2 enum-widening bans,
+  severity-error pin, D7 zero-fetch mount, the no-auto-decide stance pin, the suspicious
+  'legacy ClaimWorkspace tests trunk-dead' claim to verify at base, and suite/typecheck re-runs
+  (baselines app tsc 21 / server tsc 0).
+- ORCH VERIFY (mine, in progress at checkpoint): diff --name-only a5791e6f..HEAD = 18 files, all
+  mappable to legs A-F (claims trio, run/gc six, schema/knowledge four incl. the ONE allowed
+  measurementContextRef hunk, analysisSchema.test, EvidenceLintRules.test). No AnalysisPage, no
+  graph/run-workspace imports seen in the file list.
+- STACK RESTARTED ~22:02 for leg-B YAML (coder's ORCH RESTART NEEDED honored): :3092 200 + :5192
+  200 confirmed post-restart. NOTE: the restart may have interrupted the GC-12 re-gate's phase-2
+  run — its receipts dir shows phase2/ + failure shots (71/76-fail-waitFor) + 78-g02-both-refs
+  (leg g passed). NEXT TICK: if its report.md never lands or trail shows restart-induced
+  failures, RE-SHOT the re-gate against trunk 2cdbeca5 (now serving YAML-reloaded backend; tier-1
+  ladder rules apply; clean receipts dir ...-regate2b/).
+- NEXT TICK ORDER: (1) GC-12 re-gate verdict-or-reshot; (2) GC-13 adv verdict -> fix-cycle or
+  orch full verify (server vitest src/lint src/api src/run-workspace src/knowledge; app src/claims
+  src/run src/shared/ref; both tsc; lint-invalid API probe on the YAML-reloaded :3092;
+  chain-to-hash test) -> merge wt/gc-13-lane1-l1t1910 -> browser gate for GC-13 UI legs;
+  (3) GC-14 promote at claim.
