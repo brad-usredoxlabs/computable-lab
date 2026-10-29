@@ -830,6 +830,10 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
               // them left a persisted question with nothing to pick (or, before
               // ChatLog was guarded, a bordered EMPTY box).
               ...(m.metadata?.clarification ? { clarification: m.metadata.clarification as NonNullable<ChatMessage['clarification']> } : {}),
+              // L2-CHAT-UI-1 LEG A (A3): ride the shorthand back so the
+              // intent card survives a reload (key ABSENT when never
+              // persisted — never undefined).
+              ...(typeof m.metadata?.shorthand === 'string' ? { shorthand: m.metadata.shorthand } : {}),
               // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
               // mark the RESTORED message. Its answer inputs (the picker's
               // search field, the option buttons) do NOT survive a reload in
@@ -881,6 +885,9 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       if (m.labwareAdditions && m.labwareAdditions.length > 0)
         metadata.labwareAdditions = m.labwareAdditions
       if (m.clarification) metadata.clarification = m.clarification
+      // L2-CHAT-UI-1 LEG A (A3): persist the shorthand so the intent card
+      // survives a reload (the hydration ride below reads it back).
+      if (m.shorthand) metadata.shorthand = m.shorthand
       if (m.executionScalePlan) metadata.executionScalePlan = m.executionScalePlan
       if (m.instrumentApplianceJobs && m.instrumentApplianceJobs.length > 0)
         metadata.instrumentApplianceJobs = m.instrumentApplianceJobs
@@ -1438,6 +1445,13 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
                       executionScalePlan: result.executionScalePlan,
                       instrumentApplianceJobs: result.instrumentApplianceJobs,
                       usage: result.usage,
+                      // L2-CHAT-UI-1 LEG A (A3): the done payload ALREADY
+                      // carries result.shorthand (server AgentResult.shorthand,
+                      // same POST /ai/assist/stream) — ride it verbatim so the
+                      // assistant turn renders the intent card. Conditional
+                      // spread: key ABSENT when the turn carried no shorthand,
+                      // never undefined.
+                      ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
                       isStreaming: false,
                       docDiscussion:
                         (result.events?.length ?? 0) === 0 &&

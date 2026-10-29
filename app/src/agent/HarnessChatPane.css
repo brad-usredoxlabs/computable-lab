@@ -17,3 +17,8 @@
 .harness-chat-pane__threads-select:disabled { opacity:.5; cursor:default; }
 .harness-chat-pane__threads-new { color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); border:1px solid var(--cl-border, #aaa); border-radius:.3rem; padding:.3rem .5rem; font-size:.8rem; }
 .harness-chat-pane__threads-error { font-size:.75rem; color:#b3541e; }
+
+/* L2-CHAT-UI-1 LEG A (A1): the bubble rows (rendered by ChatLog inside this
+   pane) get horizontal breathing room from the pane edges — the 85% max-width
+   boxes must not sit flush against the border. */
+.harness-chat-pane .chat-log-msg { margin: 0 .5rem .4rem; }

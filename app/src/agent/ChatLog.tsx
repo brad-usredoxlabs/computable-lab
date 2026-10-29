@@ -48,6 +48,26 @@ function clarificationRequest(clarification: AiClarification): AiClarificationRe
   }
 }
 
+/**
+ * L2-CHAT-UI-1 LEG A (A4) — clarify-then-compact, as a PURE render-time
+ * derivation over the messages array (no reducer state, no surface
+ * branching). A clarification turn (carrying `clarification` and/or
+ * `clarificationRequests`) is ANSWERED iff a following user message exists:
+ * answering sends the answer as the next chat turn (HarnessChatPane ->
+ * useAiChat appends the user message), so the answer is the
+ * immediately-following user turn by construction. Generic adjacency rule —
+ * one predicate gates BOTH arms (the uifix1 F1 single-arm gate: both the
+ * legacy block and the typed requests come off the same answered state).
+ */
+function isClarificationAnswered(messages: ChatMessage[], index: number): boolean {
+  return messages.slice(index + 1).some((m) => m.role === 'user')
+}
+
+/** The question's prompt for the compact row (typed arm first — canonical). */
+function clarificationQuestion(message: ChatMessage): string | undefined {
+  return message.clarificationRequests?.[0]?.prompt ?? message.clarification?.prompt
+}
+
 export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -203,8 +223,36 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     <p className="sequence-hint">Ask for an edit, a draft or a navigation. Review proposed actions before applying them.</p>
     <div className="sequence-chat-messages" ref={scrollerRef} onScroll={onScroll} role="log" aria-label="Conversation" aria-live="polite" tabIndex={0}>
       <div className="sequence-chat-content" ref={contentRef}>
-        {messages.map((message, index) => <div key={message.id}>
+        {messages.map((message, index) => {
+          // L2-CHAT-UI-1 LEG A (A1): directional bubbles — the row wrap is a
+          // CLASS addition (the pinned DOM structure: .sequence-chat root,
+          // role=log, the composer, the 'Review action' button, the message
+          // prose — is untouched); the accessible author name stays the
+          // <strong>You/Assistant</strong> label inside the row.
+          const bubbleClass = message.role === 'user'
+            ? 'chat-log-msg chat-log-msg--user'
+            : message.role === 'system'
+              ? 'chat-log-msg chat-log-msg--system'
+              : 'chat-log-msg chat-log-msg--assistant'
+          // L2-CHAT-UI-1 LEG A (A4): the ONE answered predicate (pure
+          // render-time derivation over the messages array — see
+          // isClarificationAnswered). Answered -> both bulky arms come off
+          // the DOM and ONE compact row stands in for them. Unanswered ->
+          // the arms below render byte-unchanged.
+          const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
+          const answered = hasClarification && isClarificationAnswered(messages, index)
+          const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
+          return <div key={message.id} className={bubbleClass}>
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
+          {message.shorthand !== undefined && (
+            // L2-CHAT-UI-1 LEG A (A2): the scientist-intent shorthand —
+            // VERBATIM in a <pre>, marked off above the content, read-only
+            // (OQ-3 ruled: no edit/recompile round-trip in the universal card).
+            <div className="chat-log-intent-card" data-testid="chat-log-intent-card">
+              <div className="chat-log-intent-card__label">Scientist-intent shorthand (exactly what the compiler ran)</div>
+              <pre className="chat-log-intent-card__body" data-testid="chat-log-intent-card-body">{message.shorthand}</pre>
+            </div>
+          )}
           <p>{message.content}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
@@ -215,10 +263,23 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               request a SECOND time (the gate's blocks=2 pickers=2). It
               stays for messages carrying only the legacy field (hydrated
               history / legacy surfaces that never populate
-              clarificationRequests). */}
-          {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
-          {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request))}
-        </div>)}
+              clarificationRequests).
+              L2-CHAT-UI-1 LEG A (A4) additionally gates BOTH arms on the
+              same answered predicate: an answered clarifier renders the
+              compact row instead (the bulky picker/option list must be
+              ABSENT from the DOM, not hidden). */}
+          {answered ? (
+            <div className="chat-log-clarification-answered" data-testid="chat-log-clarification-answered">
+              Answered: {answerMessage?.content} — {clarificationQuestion(message)}
+            </div>
+          ) : (
+            <>
+              {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
+              {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request))}
+            </>
+          )}
+        </div>
+        })}
       </div>
     </div>
     {!following && <button className="sequence-chat-latest" onClick={followLatest}>Latest messages <span aria-hidden="true">↓</span></button>}
