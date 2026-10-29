@@ -134,6 +134,25 @@ properties:
               type: string
               enum: [supported, approximate, unsupported, unverified]
 
+  # GC-13 (OQ-2 ruling, adopted): the measurement context the run's inputs
+  # were ACQUIRED under — how the plate was read (equipment_ref +
+  # readout_def_refs), with calibration/authorization refs pinned ON the
+  # context record (measurement-context.schema.yaml acquisition_context).
+  # OPTIONAL, zero-backfill (GC-5 optional-engineRef precedent): runs minted
+  # before this field — and runs whose acquisition context was never
+  # recorded — leave it absent. The ref datatype already carries the
+  # optional REV- snapshot pin (revisionRef), so a pinned context freezes
+  # with the run snapshot automatically (zero new framework). Absent is a
+  # NAMED gap, rendered as an honest arm by the provenance view — never a
+  # silent skip, never an error.
+  measurementContextRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: "record" }
+        type: { const: "measurement-context" }
+
   startedAt:
     type: string
     format: date-time

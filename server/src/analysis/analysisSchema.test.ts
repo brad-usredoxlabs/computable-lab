@@ -104,6 +104,58 @@ describe('analysis-run schema', () => {
       completedAt: '2026-09-05T12:00:00Z',
     }).valid).toBe(true);
   });
+
+  // GC-13 (OQ-2): the optional measurement-context hop. OPTIONAL — a run
+  // without it stays valid (zero backfill, GC-5 engineRef precedent) — and
+  // TYPE-PINNED when present (kind record, type measurement-context).
+  it('accepts a run with an optional measurementContextRef (type-pinned)', () => {
+    expect(validateFor(IDS.run)({
+      kind: 'analysis-run',
+      id: 'ANR-000014',
+      title: 'run with acquisition context',
+      revisionRef: { kind: 'record', id: 'ANREV-000008', type: 'analysis-revision' },
+      status: 'succeeded',
+      measurementContextRef: { kind: 'record', id: 'MCTX-TEST-GC13', type: 'measurement-context' },
+    }).valid).toBe(true);
+  });
+
+  it('accepts a measurementContextRef with a REV- snapshot pin', () => {
+    expect(validateFor(IDS.run)({
+      kind: 'analysis-run',
+      id: 'ANR-000015',
+      title: 'run with pinned acquisition context',
+      revisionRef: { kind: 'record', id: 'ANREV-000008', type: 'analysis-revision' },
+      status: 'succeeded',
+      measurementContextRef: {
+        kind: 'record',
+        id: 'MCTX-TEST-GC13',
+        type: 'measurement-context',
+        revisionRef: { kind: 'record', type: 'record-revision', id: 'REV-ABC123' },
+      },
+    }).valid).toBe(true);
+  });
+
+  it('rejects a measurementContextRef pinned to a different record type', () => {
+    expect(validateFor(IDS.run)({
+      kind: 'analysis-run',
+      id: 'ANR-000016',
+      title: 'run with wrong-type context ref',
+      revisionRef: { kind: 'record', id: 'ANREV-000008', type: 'analysis-revision' },
+      status: 'succeeded',
+      measurementContextRef: { kind: 'record', id: 'ACQP-TEST-GC13', type: 'acquisition-package' },
+    }).valid).toBe(false);
+  });
+
+  it('rejects a measurementContextRef of ontology kind', () => {
+    expect(validateFor(IDS.run)({
+      kind: 'analysis-run',
+      id: 'ANR-000017',
+      title: 'run with ontology context ref',
+      revisionRef: { kind: 'record', id: 'ANREV-000008', type: 'analysis-revision' },
+      status: 'succeeded',
+      measurementContextRef: { kind: 'ontology', id: 'CL:0000182', namespace: 'CL', label: 'cell' },
+    }).valid).toBe(false);
+  });
 });
 
 describe('analysis-output-artifact schema', () => {

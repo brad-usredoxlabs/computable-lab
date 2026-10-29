@@ -1,4 +1,160 @@
-# Lint rules for Evidence records
+# Lint rules for Evidence records (GC-13 — the required-context floor).
+#
+# Context-is-everything: an evidence bundle takes a stance (supports/
+# refutes/assesses) ONLY over the complete biological context — a
+# result-typed source without a context-typed source is a WHERE-claim,
+# not a WHY-claim, and is lint-blocked from creation (severity error;
+# LintEngine.lint() sets valid=false on any error-severity violation and
+# the RecordStoreImpl create path refuses lint-invalid).
+#
+# Source-type vocabulary (OQ-1 ruling, adopted): the EXISTING enum is used
+# verbatim, no widening — analysis-output-artifact maps to `result`,
+# data-reference maps to `file`, measurement-context to
+# `measurement_context`, context to `context`. The mapping lives in the
+# authoring UI's data table (app/src/run/gc/gcEvidenceSources.ts), derived
+# from the enum declared in evidence.schema.yaml — never hardcoded in a
+# handler.
+#
+# EXPR notes (v1 DSL, no invented ops): the `in` predicate compares a
+# SCALAR selected value (an array-valued selection never matches), so
+# array-floor rules quantify with `everyItem` (universal) or the double
+# negation `not(everyItem(...))` (existential floor); an empty projected
+# array passes vacuously, which is the intended semantics here — the
+# stance arrays are optional (schema anyOf) and sources minItems:1 is the
+# schema's job.
+#
+# INTENT (not expressible in the v1 DSL — recorded, not faked; gc-method
+# INTENT-comment pattern): a bundle claiming QUANTITATION (a calibration
+# model source) should additionally require a measurement_context source
+# with pinned calibration_refs. The DSL cannot inspect a REFERENCED
+# record's payload (no cross-record operator), so the quantification pin
+# is enforced by the provenance view's honest gap arm (G4) + the reviewer
+# gate, not by a lint rule here. Do not invent a fake rule for it.
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/evidence.schema.yaml"
-rules: []
+rules:
+  # Every stance target must be an assertion or a claim. The three stance
+  # arrays are optional (anyOf >= 1 at the schema level); each rule applies
+  # to its own array and passes vacuously when the array is absent
+  # (stanceless bundles are legal at this floor — the stance is chosen by
+  # the scientist, never defaulted).
+  - id: "evd-supports-target-shape"
+    title: "Supports targets must be assertions or claims"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "nonEmpty"
+      path: "supports"
+    assert:
+      op: "everyItem"
+      collectionPath: "supports"
+      assert:
+        op: "in"
+        path: "type"
+        values: [ "assertion", "claim" ]
+    message:
+      template: "evidence '{{$.id}}' supports target is not an assertion/claim (target type must be 'assertion' or 'claim')"
+      paths: [ "$.id" ]
+  - id: "evd-refutes-target-shape"
+    title: "Refutes targets must be assertions or claims"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "nonEmpty"
+      path: "refutes"
+    assert:
+      op: "everyItem"
+      collectionPath: "refutes"
+      assert:
+        op: "in"
+        path: "type"
+        values: [ "assertion", "claim" ]
+    message:
+      template: "evidence '{{$.id}}' refutes target is not an assertion/claim (target type must be 'assertion' or 'claim')"
+      paths: [ "$.id" ]
+  - id: "evd-assesses-target-shape"
+    title: "Assesses targets must be assertions or claims"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "nonEmpty"
+      path: "assesses"
+    assert:
+      op: "everyItem"
+      collectionPath: "assesses"
+      assert:
+        op: "in"
+        path: "type"
+        values: [ "assertion", "claim" ]
+    message:
+      template: "evidence '{{$.id}}' assesses target is not an assertion/claim (target type must be 'assertion' or 'claim')"
+      paths: [ "$.id" ]
+  # The WHY arm: when the bundle takes ANY stance, sources must contain at
+  # least one context-typed or measurement_context-typed entry.
+  #
+  # EXPR: the v1 DSL quantifies universally (everyItem) or by membership
+  # (allIn/noneIn); there is no existential array op, so ">= 1 of type X"
+  # is expressed as the double negation — NOT (every source is of a
+  # non-context type). Every operator here is shipped (not/everyItem/in);
+  # nothing is invented. The empty-sources vacuity of the double negation
+  # is already ruled out by the schema (sources minItems: 1).
+  - id: "evd-sources-need-context-arm"
+    title: "A stance-bearing evidence bundle requires a context-typed source"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "any"
+      predicates:
+        - op: "nonEmpty"
+          path: "supports"
+        - op: "nonEmpty"
+          path: "refutes"
+        - op: "nonEmpty"
+          path: "assesses"
+    assert:
+      op: "not"
+      not:
+        op: "everyItem"
+        collectionPath: "sources"
+        assert:
+          op: "in"
+          path: "type"
+          values: [ "result", "file", "event", "publication", "event_graph" ]
+    message:
+      template: "evidence '{{$.id}}' takes a stance (supports/refutes/assesses) but declares no context-typed source — add a 'context' or 'measurement_context' source so the bundle explains WHY over the complete biological context, not just WHERE on a plate"
+      paths: [ "$.id" ]
+  # The WHAT arm (D5, the other half of the source-coverage floor): when the
+  # bundle takes ANY stance, sources must contain at least one result-typed
+  # entry. A bundle that explains WHY but points at no result is a context
+  # with nothing to explain — the pair of arms (this + the context arm) is
+  # what makes the bundle a stance over the complete context.
+  #
+  # EXPR: same shipped-DSL double negation as the context arm — NOT (every
+  # source is of a non-result type). Every operator is shipped
+  # (not/everyItem/in); nothing invented. The empty-sources vacuity is the
+  # schema's job (sources minItems: 1).
+  - id: "evd-sources-need-result-arm"
+    title: "A stance-bearing evidence bundle requires a result-typed source"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "any"
+      predicates:
+        - op: "nonEmpty"
+          path: "supports"
+        - op: "nonEmpty"
+          path: "refutes"
+        - op: "nonEmpty"
+          path: "assesses"
+    assert:
+      op: "not"
+      not:
+        op: "everyItem"
+        collectionPath: "sources"
+        assert:
+          op: "in"
+          path: "type"
+          values: [ "context", "measurement_context", "event", "publication", "file", "event_graph" ]
+    message:
+      template: "evidence '{{$.id}}' takes a stance (supports/refutes/assesses) but declares no result-typed source — add a 'result' source (the analysis artifact / run the stance is about) so the bundle points at WHAT it bears on, not just the context"
+      paths: [ "$.id" ]
