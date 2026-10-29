@@ -121,8 +121,16 @@ export function GcSectionChrome({
   // D3 sample add: mint party→request→sample→entry (buildGcSampleAdd) via
   // createRecord, then APPEND the entry ref to the sequence (updateRecord).
   const addSample = async () => {
-    if (busy) return // in-flight guard (the dead-chrome clause: no disabled
-    // button standing in — the guard is the action, not the chrome)
+    if (busy) {
+      // GC-12 fix-cycle-3 (DIRFIX-3 minor 6): a click during an in-flight
+      // write used to be a SILENT no-op (the browser-gate phase-3
+      // reproduction: the sample add took >12 s and the Analyze click that
+      // followed fired no request and showed no message). Now it is
+      // VISIBLE — a named note on the ignored click, never a silent
+      // swallow (the note line is the owner, one note per state).
+      setNote('An action is already in progress — try again when it completes.')
+      return
+    }
     const label = sampleLabel.trim()
     const vial = sampleVial.trim()
     const method = methodId || methods[0]?.recordId || ''
@@ -131,6 +139,13 @@ export function GcSectionChrome({
       return
     }
     setBusy(true)
+    // GC-12 fix-cycle-3 (DIRFIX-3 minor 5): ONE owner for the note line — a
+    // NEW action clears the STALE note from a prior failure. All three chrome
+    // actions clear at their start: sample add (here), analyze, and the
+    // attach-panel register (via GcAttachPanel's onActionStart — the regate2
+    // defect 5 shape: the add's validation note rendered beside the register's
+    // PACKAGE_DEVICE_MISSING token, so two different failures looked like the
+    // current action's).
     setNote(null)
     try {
       const { steps, entryRecordId } = buildGcSampleAdd({
@@ -174,7 +189,13 @@ export function GcSectionChrome({
   //     IS the results surface). No execute here — execute stays a click on
   //     /analysis (the no-execute accounting survives, bait #5).
   const analyze = async (entry: GcChromeEntry) => {
-    if (busy) return // in-flight guard (dead-chrome clause: no disabled chrome)
+    if (busy) {
+      // GC-12 fix-cycle-3 (DIRFIX-3 minor 6): a click during an in-flight
+      // write used to be a SILENT no-op — now a NAMED note on the ignored
+      // click (the note line is the owner, one note per state).
+      setNote('An action is already in progress — try again when it completes.')
+      return
+    }
     const pkgId = entry.payload.acquisitionPackageRef?.id
     if (!pkgId) return
     if (!revisionId) {
@@ -182,6 +203,9 @@ export function GcSectionChrome({
       return
     }
     setBusy(true)
+    // GC-12 fix-cycle-3 (DIRFIX-3 minor 5): ONE owner for the note line — a
+    // NEW action clears the STALE note from a prior failure (see addSample —
+    // the note line is the owner, all three chrome actions clear at start).
     setNote(null)
     try {
       // The verify-first trust boundary (bait #11).
@@ -203,9 +227,18 @@ export function GcSectionChrome({
       const res = await apiClient.createAnalysisRun({
         title,
         revisionRef: { kind: 'record', id: revisionId, type: 'analysis-revision' },
+        // GC-12 fix-cycle-3 (DIRFIX-1, architect ruling B-amended): the
+        // handoff pins the FILE-level data-reference ONLY. The verify-first
+        // route returns { signal, package } — `package` is the DIRECTORY-kind
+        // manifest DREF (dataKind signal-collection), NOT a runner-consumable
+        // input (provisionInputs streams file-kind refs only; a directory pin
+        // is a named INPUT_IS_DIRECTORY refusal, the runner's A guard).
+        // Provenance is not collapsed: the entry's acquisitionPackageRef →
+        // ACQP record carries the manifest + per-member file DREFs; the run
+        // consumes only what the engine reads (the role-resolved member file).
+        // The title names the entry — the run's provenance anchor.
         inputs: {
           signal: { kind: 'record', id: inputs.signal.id, type: 'data-reference' },
-          package: { kind: 'record', id: inputs.package.id, type: 'data-reference' },
         },
         ...(Object.keys(params).length > 0 ? { parameters: params } : {}),
       })
@@ -328,6 +361,7 @@ export function GcSectionChrome({
                     ) : attachOpen.has(e.recordId) ? (
                       <GcAttachPanel
                         entryId={e.recordId}
+                        onActionStart={() => setNote(null)}
                         onAttached={() => {
                           setAttachOpen((prev) => {
                             const next = new Set(prev)

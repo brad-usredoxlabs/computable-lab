@@ -30,23 +30,27 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { ThemeProvider } from '../../shared/shell'
 import { OpenTabsProvider } from '../../shared/shell/OpenTabsContext'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, AcquisitionPackageClientError } from '../../shared/api/client'
 import { GcSectionChrome, type GcChromeEntry } from './GcSectionChrome'
 
-vi.mock('../../shared/api/client', () => ({
-  apiClient: {
-    listRecordsByKind: vi.fn(),
-    listAnalysisRevisions: vi.fn(),
-    createRecord: vi.fn(),
-    updateRecord: vi.fn(),
-    getRecord: vi.fn(),
-    getPackageAnalysisInputs: vi.fn(),
-    createAnalysisRun: vi.fn(),
-    registerAcquisitionPackage: vi.fn(),
-    getConfig: vi.fn().mockResolvedValue({ storageDevices: [] }),
-    executeAnalysisRun: vi.fn(),
-  },
-}))
+vi.mock('../../shared/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../shared/api/client')>()
+  return {
+    ...actual,
+    apiClient: {
+      listRecordsByKind: vi.fn(),
+      listAnalysisRevisions: vi.fn(),
+      createRecord: vi.fn(),
+      updateRecord: vi.fn(),
+      getRecord: vi.fn(),
+      getPackageAnalysisInputs: vi.fn(),
+      createAnalysisRun: vi.fn(),
+      registerAcquisitionPackage: vi.fn(),
+      getConfig: vi.fn().mockResolvedValue({ storageDevices: [] }),
+      executeAnalysisRun: vi.fn(),
+    },
+  }
+})
 
 function NavProbe() {
   const loc = useLocation()
@@ -361,15 +365,30 @@ describe('GcSectionChrome — E Analyze (verify-first, append-only, GC-11 seam)'
     await waitFor(() => expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledTimes(1))
     expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledWith('ACQP-000042')
     // The run is CREATED with the pinned (verify-first) inputs.
+    // GC-12 fix-cycle-3 (DIRFIX-1, architect ruling B-amended): the handoff
+    // pins the FILE-level data-reference ONLY — the directory-kind package
+    // manifest DREF (DREF-000102, dataKind signal-collection) is NOT a
+    // runner-consumable input and must not be pinned into inputs (it stays
+    // in the provenance hierarchy via the entry's acquisitionPackageRef →
+    // ACQP record). Package-level provenance is not collapsed: the title
+    // still names the entry (the provenance anchor on the run record).
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1))
     expect(apiClient.createAnalysisRun).toHaveBeenCalledWith({
       title: 'GC run-sheet ISEN-C-1',
       revisionRef: { kind: 'record', id: 'ANREV-C-1', type: 'analysis-revision' },
       inputs: {
         signal: { kind: 'record', id: 'DREF-000101', type: 'data-reference' },
-        package: { kind: 'record', id: 'DREF-000102', type: 'data-reference' },
       },
     })
+    const createArg = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as {
+      title: string
+      inputs: Record<string, { id: string }>
+    }
+    // The package DREF is NOT in the created run's inputs.
+    expect(createArg.inputs.package).toBeUndefined()
+    expect(Object.keys(createArg.inputs)).toEqual(['signal'])
+    // The created run's title still names the entry (provenance anchor).
+    expect(createArg.title).toContain('ISEN-C-1')
     // RERUN KEEPS HISTORY (bait #8): the entry's PRIOR ref survives and the
     // new ref is APPENDED (never replaced).
     await waitFor(() => expect(apiClient.updateRecord).toHaveBeenCalledTimes(1))
@@ -440,5 +459,77 @@ describe('GcSectionChrome — E Analyze (verify-first, append-only, GC-11 seam)'
     expect(await screen.findByTestId('gc-revision-notready')).toHaveTextContent(/No analysis revisions/)
     expect(screen.getByTestId('gc-revision-author').getAttribute('href')).toBe('/analysis')
     expect(screen.queryByTestId('gc-analyze-rev')).toBeNull()
+  })
+
+  it('GC-12 fix-cycle-3 (minor 6): a click during an in-flight action is VISIBLE (a named note), never a silent no-op', async () => {
+    // The in-flight action: an analyze whose getPackageAnalysisInputs is
+    // still pending (the browser-gate phase-3 reproduction shape: a
+    // >12 s write with an ignored follow-up click).
+    vi.mocked(apiClient.getPackageAnalysisInputs).mockReturnValue(new Promise(() => {}) as never)
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[ENTRY_WITH_PKG]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    fireEvent.change(await screen.findByTestId('gc-analyze-rev'), { target: { value: 'ANREV-C-1' } })
+    fireEvent.click(screen.getByTestId('gc-analyze-btn-ISEN-C-1')) // action starts (in flight)
+    await waitFor(() => expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledTimes(1))
+    // A second Analyze click during the in-flight write: the old code
+    // returned silently (no request, no message). Now it renders a NAMED
+    // note on the ignored click.
+    fireEvent.click(screen.getByTestId('gc-analyze-btn-ISEN-C-1'))
+    expect(await screen.findByTestId('gc-chrome-note')).toHaveTextContent(/already in progress/i)
+    // And NO second action was started.
+    expect(apiClient.getPackageAnalysisInputs).toHaveBeenCalledTimes(1)
+  })
+
+  it('GC-12 fix-cycle-3 (minor 5): a register action START clears the STALE note (one owner for the note line)', async () => {
+    // The regate2 defect 5 shape, exactly: after the failed add, the note
+    // "Enter a sample label, a vial, and a method to add a row." stayed
+    // rendered next to the register's PACKAGE_DEVICE_MISSING token, so two
+    // different failures looked like the current action's. The note line has
+    // ONE owner (the chrome) and a NEW action — the attach-panel register —
+    // clears the stale note as it starts, so the register's own named token
+    // renders next to nothing.
+    // The register fails with the NAMED token (the defect 5 token:
+    // PACKAGE_DEVICE_MISSING). The panel's catch path surfaces the real
+    // token + its per-token message (bait #6).
+    vi.mocked(apiClient.registerAcquisitionPackage).mockRejectedValue(
+      new AcquisitionPackageClientError('PACKAGE_DEVICE_MISSING', 'server wording') as never,
+    )
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[ENTRY_NO_PKG]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-method-select')
+    // A prior action's failure: the sample add's validation note (missing
+    // vial + method) is the STALE note.
+    fireEvent.change(screen.getByTestId('gc-sample-label'), { target: { value: 'RES35077-9' } })
+    fireEvent.click(screen.getByTestId('gc-sample-add-btn'))
+    expect(await screen.findByTestId('gc-chrome-note')).toHaveTextContent(/sample label, a vial, and a method/)
+    // The NEW action: open the attach panel and register.
+    fireEvent.click(screen.getByTestId('gc-attach-toggle-ISEN-C-2'))
+    const sel = (await screen.findByTestId('gc-attach-device-ISEN-C-2')) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: 'vast' } })
+    fireEvent.change(screen.getByTestId('gc-attach-key-ISEN-C-2'), { target: { value: '2026-10-28/RES35077-4.D' } })
+    fireEvent.click(screen.getByTestId('gc-attach-register-ISEN-C-2'))
+    // The register's own named token renders — and the stale add note is
+    // GONE (the action's start cleared it; one owner, one note per state).
+    await screen.findByTestId('gc-attach-error-ISEN-C-2')
+    expect(screen.getByTestId('gc-attach-error-token-ISEN-C-2')).toHaveTextContent('PACKAGE_DEVICE_MISSING')
+    await waitFor(() => expect(screen.queryByTestId('gc-chrome-note')).toBeNull())
   })
 })

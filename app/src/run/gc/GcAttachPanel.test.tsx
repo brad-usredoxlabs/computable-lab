@@ -224,3 +224,65 @@ describe('GcAttachPanel — the getConfig failure arm (fix-cycle-1 O1: error row
     expect(screen.queryByTestId(`gc-attach-configerror-${ENTRY}`)).toBeNull()
   })
 })
+
+/**
+ * GC-12 dirfix MINOR-FIX (defect 2) — the THIRD chrome action's busy no-op.
+ * The chrome addSample/analyze and the collection's handleGcCreate render a
+ * NAMED note on an ignored busy click; the attach-panel register's
+ * `if (busy) return` was still a SILENT swallow (the only feedback was the
+ * button label flipping to "Registering…" — not disabled, no reason).
+ */
+describe('GcAttachPanel — GC-12 dirfix MINOR-FIX (defect 2): the register busy no-op is visible', () => {
+  it('a Register click while a register is IN FLIGHT is VISIBLE (a named note) — never a silent no-op', async () => {
+    // The first register never resolves (the browser-gate phase-3 shape:
+    // the >12 s write with the ignored follow-up click).
+    vi.mocked(apiClient.registerAcquisitionPackage).mockReturnValue(new Promise(() => {}) as never)
+    render(<GcAttachPanel entryId={ENTRY} onAttached={vi.fn()} />)
+    const sel = (await screen.findByTestId(`gc-attach-device-${ENTRY}`)) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: 'gc-fid-nas' } })
+    await typeKey('2026-10-28/RES35077-4.D')
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY}`)) // first register starts (in flight)
+    await waitFor(() => expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1))
+    // The follow-up click: the old `if (busy) return` swallowed it silently.
+    // Now it renders a NAMED note on the ignored click (consistent with the
+    // sibling addSample/analyze busy notes).
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY}`))
+    expect(await screen.findByTestId(`gc-attach-busy-${ENTRY}`)).toHaveTextContent(/already in progress/i)
+    // AND no second register was started.
+    expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1)
+  })
+
+  it('the busy note CLEARS when the register SETTLES (failure): the failure token renders alone (adv cycle-2 defect 1, probe BUSY_NOTE_AFTER_SETTLE)', async () => {
+    // The reviewer probe shape: a click DURING an in-flight register shows
+    // the busy note; when THAT register then REJECTS, the note must clear
+    // (it described a register that no longer exists) and the failure
+    // token renders alone. Pre-fix the note was only cleared when a NEW
+    // register started, so after a FAILED register the panel kept saying
+    // "A register is already in progress" beside the failure token — a
+    // fabricated state claim.
+    let rejectRegister!: (e: unknown) => void
+    vi.mocked(apiClient.registerAcquisitionPackage).mockReturnValue(
+      new Promise((_, rej) => {
+        rejectRegister = rej
+      }) as never,
+    )
+    render(<GcAttachPanel entryId={ENTRY} onAttached={vi.fn()} />)
+    const sel = (await screen.findByTestId(`gc-attach-device-${ENTRY}`)) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: 'gc-fid-nas' } })
+    await typeKey('2026-10-28/RES35077-4.D')
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY}`)) // first register starts (in flight)
+    await waitFor(() => expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1))
+    // The in-flight window: the busy note is live…
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY}`))
+    expect(await screen.findByTestId(`gc-attach-busy-${ENTRY}`)).toHaveTextContent(/already in progress/i)
+    // …and when the register SETTLES with a failure the note is GONE — the
+    // failure token (a non-ACQP rejection → the UNKNOWN token) renders
+    // alone, and the button label returns (busy === false).
+    rejectRegister(new Error('boom'))
+    const err = await screen.findByTestId(`gc-attach-error-${ENTRY}`)
+    expect(screen.queryByTestId(`gc-attach-busy-${ENTRY}`)).toBeNull()
+    expect(err.textContent).toContain('ACQUISITION_PACKAGE_UNKNOWN')
+    expect(err.textContent).toContain('boom')
+    expect(screen.getByTestId(`gc-attach-register-${ENTRY}`).textContent).toBe('Register .D')
+  })
+})

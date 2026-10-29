@@ -98,6 +98,21 @@
   font-size: 0.85rem;
 }
 
+/* GC-12 fix-cycle-3 (DIRFIX-3 minor 3): the analysis-run ids are REAL links
+ * (href /analysis?run=<id> — the GC-11 seam) but rendered as plain text
+ * (the app's link style is not inherited here). A visible link: the app's
+ * primary link colour + underline — matching the "Attach to run" link in the
+ * same viewport (blue + underlined). The run-sheet's table chrome is the
+ * only surface this scopes (the additive-mount rule). */
+.gc-results a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+}
+
+.gc-results a:hover {
+  text-decoration-thickness: 2px;
+}
+
 .gc-results ul {
   margin: 0.25rem 0 0;
   padding-left: 1.25rem;
