@@ -101,6 +101,11 @@ function GcEvidenceForm({
   const [lintError, setLintError] = useState<{ ruleId?: string; message: string }[] | null>(null)
   const [created, setCreated] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // FIX2c (NEW-3): the selected artifact is the bundle's SUBJECT. When its
+  // kind has no declared evidence source type, submit is DISABLED (the
+  // sources arm's "cannot be authored" text is the visible reason) and the
+  // submit() guard below hard-refuses — a run-only bundle is never POSTed.
+  const [submitRefused, setSubmitRefused] = useState(false)
   // FIX6 (defect 9): the source-type enum as the schema declares it at
   // runtime (getSchema — the real runtime source the spec demands; the
   // hardcoded table in gcEvidenceSources.ts is the mirror, pinned by the
@@ -190,6 +195,18 @@ function GcEvidenceForm({
   const submit = async () => {
     setError(null)
     setLintError(null)
+    // FIX2c (NEW-3): the selected artifact is the bundle's SUBJECT — if its
+    // kind has no declared source type the bundle cannot be authored from
+    // it here. Hard refusal (the button is also disabled; this guard keeps
+    // a programmatic submit from POSTing a run-only bundle).
+    if (artifactSource === null) {
+      setSubmitRefused(true)
+      setError(
+        'the selected artifact has no declared evidence source type — the bundle cannot be authored from it here (a run-only bundle would never reference the selected artifact)',
+      )
+      return
+    }
+    setSubmitRefused(false)
     if (stance === null) {
       setError('Choose the stance explicitly (supports / refutes / assesses) — the form never decides for the scientist')
       return
@@ -347,7 +364,10 @@ function GcEvidenceForm({
       <button
         type="button"
         data-testid="gc-evidence-form-submit"
-        disabled={busy || created !== null}
+        // FIX2c (NEW-3): disabled while the selected artifact's kind has no
+        // declared source type (the sources arm above is the visible reason)
+        // or after a hard refusal.
+        disabled={busy || created !== null || artifactSource === null || submitRefused}
         onClick={() => void submit()}
       >
         {created !== null ? 'Bundle created' : busy ? 'Creating…' : 'Create evidence bundle'}

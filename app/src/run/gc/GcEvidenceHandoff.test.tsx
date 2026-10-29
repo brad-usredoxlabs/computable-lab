@@ -400,6 +400,57 @@ describe('GcEvidenceHandoff (leg D)', () => {
     expect(apiClient.createRecord).not.toHaveBeenCalled()
   })
 
+  // ---- FIX2c (NEW-3): the form says the bundle "cannot be authored" from an
+  // ---- unmapped artifact kind — submit must be DISABLED (the reason visible),
+  // ---- not a run-only POST: the selected artifact is the bundle's subject.
+
+  it('an unmapped artifact kind DISABLES submit (the reason stays visible) and the POST never proceeds with a run-only source (NEW-3)', async () => {
+    // An output ref whose TYPE has no OQ-1 mapping ('sample' is the kind
+    // the data-table test pins as unmapped): the chip type is the ref's
+    // type — the form's pre-derived artifact source is null for it.
+    const AOUT_UNMAPPED = 'AOUT-UNMAPPED-GC13'
+    vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
+      record: {
+        recordId: ANR,
+        payload: {
+          kind: 'analysis-run',
+          id: ANR,
+          status: 'succeeded',
+          outputArtifactRefs: [{ kind: 'record', id: AOUT_UNMAPPED, type: 'sample' }],
+        },
+      },
+    } as never)
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
+      if (id === AOUT_UNMAPPED) {
+        return {
+          recordId: id,
+          schemaId: 'x',
+          payload: { kind: 'sample', id, title: 'unmapped_out' },
+        } as never
+      }
+      if (id === ASN) {
+        return { recordId: id, schemaId: 'x', payload: { kind: 'assertion', id, scope: 'single_context' } } as never
+      }
+      throw new Error(`404: ${id}`)
+    })
+    renderHandoff()
+    fireEvent.click(screen.getByTestId('gc-evidence-handoff-open'))
+    fireEvent.click(await screen.findByTestId('gc-evidence-add-as-evidence'))
+    const form = await screen.findByTestId('gc-evidence-form')
+    // the unmapped-kind reason is the VISIBLE one (same testid the old
+    // arm already used) — the scientist sees WHY submit is off.
+    expect(await screen.findByTestId('gc-evidence-form-source-unmapped')).toHaveTextContent(
+      'no source type declared for this artifact kind',
+    )
+    const submit = within(form).getByTestId('gc-evidence-form-submit')
+    expect(submit).toBeDisabled()
+    // belt-and-braces: even a programmatic submit (the hard refusal) must
+    // not POST a run-only bundle — the selected artifact is the subject.
+    fireEvent.click(submit)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(apiClient.createRecord).not.toHaveBeenCalled()
+  })
+
   it('a lint-blocked create shows the lint violation VERBATIM (422 lint-invalid, never a fake success)', async () => {
     const violation = {
       ruleId: 'evd-sources-need-context-arm',
