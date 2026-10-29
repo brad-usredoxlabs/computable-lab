@@ -51,6 +51,13 @@ export function GcAttachPanel({
   const [deviceId, setDeviceId] = useState('')
   const [directoryKey, setDirectoryKey] = useState('')
   const [busy, setBusy] = useState(false)
+  // GC-12 dirfix MINOR-FIX (defect 2): the register's OWN busy note. A click
+  // during an in-flight register used to be a SILENT `if (busy) return`
+  // (the only feedback: the label flipping to "Registering…"). Now the
+  // ignored click renders a NAMED note — consistent with the sibling
+  // addSample/analyze busy notes. Kept separate from the `error` surface so
+  // a busy click never fakes an ACQP failure token.
+  const [busyNote, setBusyNote] = useState<string | null>(null)
   const [error, setError] = useState<{ token: string; message: string } | null>(null)
   // GC-12 fix-cycle-1 (O1): a getConfig FAILURE (transport/4xx/5xx) is not
   // the "no devices configured" state — falling through to the empty-state
@@ -91,7 +98,14 @@ export function GcAttachPanel({
     // clickable — a missing input is a NAMED reason below, never a dead
     // disabled button standing in for the missing capability,
     // dead-chrome clause, bait #6).
-    if (busy) return
+    // GC-12 dirfix MINOR-FIX (defect 2): the guard is VISIBLE — the ignored
+    // click renders a NAMED note (consistent with the sibling addSample/
+    // analyze/handleGcCreate busy notes), never a silent swallow, and no
+    // second action starts.
+    if (busy) {
+      setBusyNote('A register is already in progress — try again when it completes.')
+      return
+    }
     if (!deviceId || !directoryKey.trim()) {
       setError({
         token: 'MISSING_INPUT',
@@ -99,7 +113,6 @@ export function GcAttachPanel({
       })
       return
     }
-    setBusy(true)
     // GC-12 fix-cycle-3 (DIRFIX-3 minor 5): the register action STARTS —
     // the chrome note line (the ONE owner) clears any stale note from a
     // prior failure, so this register's own named token renders next to
@@ -108,6 +121,11 @@ export function GcAttachPanel({
     // PACKAGE_DEVICE_MISSING token).
     onActionStart?.()
     setError(null)
+    // A new register start clears any stale busy note (the note line has one
+    // state at a time — the busy note belongs to THIS action's in-flight
+    // window, not a prior ignored click).
+    setBusyNote(null)
+    setBusy(true)
     try {
       const res = await apiClient.registerAcquisitionPackage({
         deviceId,
@@ -196,6 +214,15 @@ export function GcAttachPanel({
       >
         {busy ? 'Registering…' : 'Register .D'}
       </button>
+      {/* GC-12 dirfix MINOR-FIX (defect 2): the register's OWN busy note — a
+          click during an in-flight register is VISIBLE here (a named note),
+          never a silent swallow. Kept distinct from the `error` surface so a
+          busy click never fakes an ACQP failure token. */}
+      {busyNote && (
+        <span className="gc-attach__hint" data-testid={`gc-attach-busy-${entryId}`}>
+          {busyNote}
+        </span>
+      )}
       {(!deviceId || !directoryKey.trim()) && !error && !busy && (
         <span className="gc-attach__hint" data-testid={`gc-attach-hint-${entryId}`}>
           Pick a device and the .D directory to register.
