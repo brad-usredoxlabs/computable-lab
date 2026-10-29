@@ -153,3 +153,113 @@ describe('sequence conversation scrolling', () => {
     expect(screen.queryByRole('button', { name: '1. EcoRI' })).toBeNull()
   })
 })
+
+/**
+ * L2-CHAT-UI-1 LEG A (spec §4) — the universal chat standard:
+ * A1 directional bubbles, A2 the scientist-intent shorthand card,
+ * A4 clarify-then-compact. These are the task's verified-by cases (1)(2)(3)
+ * — written RED before the implementation (A5 discipline).
+ */
+describe('L2-CHAT-UI-1 LEG A — the universal chat standard', () => {
+  it('(1) an assistant turn carrying shorthand renders the intent card with its VERBATIM document body', () => {
+    const shorthand = 'intent: place\n  target: bead beating plate\n  slot: 3'
+    render(<ChatLog {...props} messages={[
+      message('u', 'user', 'Place a bead beating plate on the deck'),
+      { ...message('a', 'assistant', 'Drafted the placement.'), shorthand },
+    ]} />)
+    const card = screen.getByTestId('chat-log-intent-card')
+    expect(card).toHaveTextContent('Scientist-intent shorthand')
+    // The body carries the document VERBATIM (never parsed, never edited).
+    expect(screen.getByTestId('chat-log-intent-card-body').textContent).toBe(shorthand)
+    // The card sits INSIDE the assistant row, above the content paragraph.
+    expect(card.closest('.chat-log-msg--assistant')).not.toBeNull()
+  })
+
+  it('(1) a turn WITHOUT shorthand renders NO intent card (key-absent never renders an empty card)', () => {
+    render(<ChatLog {...props} messages={[
+      message('u', 'user', 'hello'),
+      message('a', 'assistant', 'hi there'),
+    ]} />)
+    expect(screen.queryByTestId('chat-log-intent-card')).toBeNull()
+    expect(screen.queryByTestId('chat-log-intent-card-body')).toBeNull()
+  })
+
+  it('(2) user and assistant rows carry DISTINCT directional bubble classes, and system rows are their own class', () => {
+    render(<ChatLog {...props} messages={[
+      message('u', 'user', 'user words'),
+      message('a', 'assistant', 'assistant words'),
+      message('s', 'system', 'system words'),
+    ]} />)
+    const userRow = document.querySelector('.chat-log-msg--user') as HTMLElement
+    const assistantRow = document.querySelector('.chat-log-msg--assistant') as HTMLElement
+    const systemRow = document.querySelector('.chat-log-msg--system') as HTMLElement
+    expect(userRow.className).toContain('chat-log-msg')
+    expect(assistantRow.className).toContain('chat-log-msg')
+    expect(systemRow.className).toContain('chat-log-msg')
+    expect(assistantRow.className).not.toEqual(userRow.className)
+    // The accessible author name of each message's author survives the wrap.
+    expect(userRow.textContent).toContain('You')
+    expect(userRow.textContent).toContain('user words')
+    expect(assistantRow.textContent).toContain('Assistant')
+    expect(assistantRow.textContent).toContain('assistant words')
+  })
+
+  it('(3) an ANSWERED legacy-block clarification (a following user turn) is compacted: BOTH bulky arms GONE from the DOM, one compact row with answer + question', () => {
+    const question = 'Which enzyme should cut this?'
+    render(<ChatLog {...props} messages={[
+      message('u0', 'user', 'Cut the plasmid'),
+      { ...message('clar', 'assistant', question), clarification: {
+        id: 'clar-1', prompt: question, entityType: 'sequence',
+        options: [{ id: 'opt-1', label: 'EcoRI' }, { id: 'opt-2', label: 'BamHI' }],
+      } },
+      message('answer', 'user', 'Use EcoRI for sequence.'),
+      message('after', 'assistant', 'Done with EcoRI.'),
+    ]} />)
+    // The bulky arm is ABSENT, not hidden — asserts GONE.
+    expect(document.querySelector('.chat-log-clarification')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+    expect(screen.queryByRole('button', { name: '1. EcoRI' })).toBeNull()
+    // …and the ONE compact row carries BOTH the answer text and the question.
+    const row = screen.getByTestId('chat-log-clarification-answered')
+    expect(row).toHaveTextContent('Use EcoRI for sequence.')
+    expect(row).toHaveTextContent(question)
+  })
+
+  it('(3) an ANSWERED typed-request clarification (the canonical both-fields done shape) is compacted the SAME way (one answered predicate gates BOTH arms)', () => {
+    const question = 'The draft names "clofibrate" — choose what it is'
+    const request = {
+      id: 'req-1', kind: 'material' as const, prompt: question, entityType: 'material' as const,
+      menuProvider: '/m' as const, options: [] as { id: string; label: string }[], allowCreateLocal: true,
+    }
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      message('u0', 'user', 'Draft the formulation'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [request],
+        clarification: { id: 'req-1', prompt: question, entityType: 'material', menuProvider: '/m', query: 'clofibrate', allowCreateLocal: true, options: [] } },
+      message('answer', 'user', 'Use clofibrate for req-1.'),
+    ]} />)
+    // The typed arm's card (its pinned testid) is gone, the picker is gone,
+    // the legacy block is gone — one compact row instead of both arms.
+    expect(screen.queryByTestId('chat-log-request-req-1')).toBeNull()
+    expect(document.querySelector('.chat-log-clarification')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+    const row = screen.getByTestId('chat-log-clarification-answered')
+    expect(row).toHaveTextContent('Use clofibrate for req-1.')
+    expect(row).toHaveTextContent(question)
+  })
+
+  it('(3) control: a clarification with NO following user turn keeps its FULL arm (picker/buttons still render)', () => {
+    const onClarificationPick = vi.fn()
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
+      message('u0', 'user', 'Which enzyme should cut this?'),
+      { ...message('clar', 'assistant', 'Which enzyme should cut this?'), clarification: {
+        id: 'clar-1', prompt: 'Which enzyme should cut this?', entityType: 'sequence',
+        options: [{ id: 'opt-1', label: 'EcoRI' }],
+      } },
+    ]} />)
+    expect(screen.queryByTestId('chat-log-clarification-answered')).toBeNull()
+    expect(document.querySelector('.chat-log-clarification')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '1. EcoRI' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '1. EcoRI' }))
+    expect(onClarificationPick).toHaveBeenCalledTimes(1)
+  })
+})
