@@ -92,102 +92,21 @@ export interface ThreadRequestOptions {
 
 // ---------------------------------------------------------------------------
 // Per-(tab, scope) thread-id mint (L2-THREAD-SCOPED-1 + amendment A-1)
+//
+// D3 fix: the map + mint lives in ONE module (`./threadTabIds`) imported by
+// BOTH sides of the seam — this client (threadHeaders, below) and the hook
+// (useAiChat). The previous shape duplicated the read/write/mint inside
+// useAiChat under the same storage key (two writers, two ephemeral-mint
+// fallbacks that could disagree with the wire header); the fork is gone.
 // ---------------------------------------------------------------------------
 
-const TAB_ID_STORAGE_KEY = 'cl.ai-thread-tab-ids'
+import { getThreadTabId } from './threadTabIds'
 
-let ephemeralCounter = 0
-
-/**
- * Mint a fresh thread id. Uses `crypto.randomUUID()` when available; falls
- * back to a UUID-shaped string otherwise (jsdom/SSR without randomUUID).
- * NEVER throws.
- */
-function mintThreadId(): string {
-  try {
-    if (typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: () => string }).randomUUID === 'function') {
-      return (crypto as { randomUUID: () => string }).randomUUID()
-    }
-  } catch {
-    /* fall through to the non-crypto mint */
-  }
-  ephemeralCounter += 1
-  return `cl-thread-${Date.now().toString(36)}-${ephemeralCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function readTabIdMap(): Record<string, string> {
-  try {
-    if (typeof sessionStorage === 'undefined') return {}
-    const raw = sessionStorage.getItem(TAB_ID_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const out: Record<string, string> = {}
-      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof v === 'string' && v.length > 0) out[k] = v
-      }
-      return out
-    }
-    return {}
-  } catch {
-    return {}
-  }
-}
-
-function writeTabIdMap(map: Record<string, string>): void {
-  try {
-    if (typeof sessionStorage === 'undefined') return
-    sessionStorage.setItem(TAB_ID_STORAGE_KEY, JSON.stringify(map))
-  } catch {
-    /* non-browser / storage blocked: the in-memory map still serves the call */
-  }
-}
-
-/** The map key for a scope: "" for non-instance surfaces (the reserved case). */
-function tabIdMapKey(scope: string | undefined): string {
-  return scope && scope.length > 0 ? scope : ''
-}
-
-/**
- * Get the tab's thread id for a scope, minting it ONCE per (tab, scope).
- * Every subsequent call in the same tab returns the stored value (mint-once
- * — bait #7). Non-browser contexts (no sessionStorage) return a per-call
- * ephemeral id and never throw. LAZY: this reads/writes storage only when
- * called — never at module scope (SSR-safe).
- */
-export function getThreadTabId(scope?: string): string {
-  const key = tabIdMapKey(scope)
-  const map = readTabIdMap()
-  const existing = map[key]
-  if (typeof existing === 'string' && existing.length > 0) return existing
-  const id = mintThreadId()
-  map[key] = id
-  writeTabIdMap(map)
-  return id
-}
-
-/**
- * Select a specific thread id for the current scope (the picker's "switch to
- * a listed thread"). Persists the selection so a reload keeps it.
- */
-export function setThreadTabId(scope: string | undefined, threadId: string): void {
-  const map = readTabIdMap()
-  map[tabIdMapKey(scope)] = threadId
-  writeTabIdMap(map)
-}
-
-/**
- * Mint a FRESH thread id for the current scope ("New thread"): drops any
- * stored entry for the scope and returns the new id.
- */
-export function newThreadTabId(scope?: string): string {
-  const key = tabIdMapKey(scope)
-  const map = readTabIdMap()
-  const id = mintThreadId()
-  map[key] = id
-  writeTabIdMap(map)
-  return id
-}
+// Re-export the single mint surface (spec §4.1: aiThreadClient's module-level
+// getThreadTabId, with set/new siblings for the picker). The IMPLEMENTATION
+// lives in ./threadTabIds — one source of truth shared with the hook; this
+// re-export keeps the documented client surface stable (D3 fix).
+export { getThreadTabId, setThreadTabId, newThreadTabId } from './threadTabIds'
 
 // ---------------------------------------------------------------------------
 // HTTP wrappers

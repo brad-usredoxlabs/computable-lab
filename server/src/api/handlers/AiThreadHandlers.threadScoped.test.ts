@@ -57,7 +57,7 @@ function fakeRecordStore(): { records: RecordStore; created: FakeRecord[] } {
 }
 
 async function withApp<T>(
-  fn: (app: FastifyInstance, store: AiThreadStore, storeRoot: string) => Promise<T>,
+  fn: (app: FastifyInstance, store: AiThreadStore, storeRoot: string, created: FakeRecord[]) => Promise<T>,
 ): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), 'ai-thread-hdlr-'))
   try {
@@ -65,7 +65,7 @@ async function withApp<T>(
     const { records, created } = fakeRecordStore()
     const app = Fastify()
     registerRoutes(app, stubRouteOptions(createAiThreadHandlers(store, records)))
-    return await fn(app, store, root)
+    return await fn(app, store, root, created)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -159,6 +159,79 @@ describe('AiThreadHandlers — thread-scoped routes (L2-THREAD-SCOPED-1)', () =>
     })
   })
 
+  it('D2: x-cl-thread-scope " .. "/"." is MALFORMED — fresh-empty 200, never the legacy flat file, list never surfaces it', async () => {
+    await withApp(async (app, _store, root) => {
+      // The reviewer's cycle-1 probe: the alphabet admitted dots, so a
+      // ".." scope escaped {endpoint}/ into {user}/ and served the LEGACY
+      // flat {user}/{endpoint}.json (200 + list entry). The dots-only
+      // refusal in the shared alphabet guard maps it to fresh-empty "_"
+      // semantics instead (NO-FALLBACK).
+      const { mkdir: mk, writeFile: wf, readFile: rd } = await import('node:fs/promises')
+      await mk(join(root, 'alice'), { recursive: true })
+      await wf(
+        join(root, 'alice', 'browser.json'),
+        JSON.stringify({
+          endpoint: 'browser',
+          userId: 'alice',
+          messages: [{ role: 'user', content: 'LEGACY CONTAMINATION', createdAt: '2026-10-28T00:00:00.000Z' }],
+          mentions: [],
+          updatedAt: '2026-10-28T00:00:00.000Z',
+        }),
+        'utf8',
+      )
+
+      // GET first for EVERY dots-only scope (fresh-empty): a POST would
+      // land under "_" which ALL malformed scopes share, so the reads must
+      // precede any writes or the second malformed scope would legitimately
+      // see the first one's traffic.
+      for (const dotsOnly of ['..', '.']) {
+        const get = await app.inject({
+          method: 'GET',
+          url: '/ai/threads/browser',
+          headers: { 'x-user-id': 'alice', 'x-cl-thread-id': 'tid-x', 'x-cl-thread-scope': dotsOnly },
+        })
+        expect(get.statusCode, `scope ${dotsOnly}`).toBe(200)
+        expect(get.json().messages, `scope ${dotsOnly}`).toEqual([])
+
+        const list = await app.inject({
+          method: 'GET',
+          url: '/ai/threads/browser/threads',
+          headers: { 'x-user-id': 'alice', 'x-cl-thread-scope': dotsOnly },
+        })
+        expect(list.statusCode, `scope ${dotsOnly}`).toBe(200)
+        // The legacy flat file is NEVER surfaced as a thread.
+        expect(list.json().threads, `scope ${dotsOnly}`).toEqual([])
+      }
+
+      // A POST with the malformed scope lands on the FRESH "_" thread.
+      const post = await app.inject({
+        method: 'POST',
+        url: '/ai/threads/browser',
+        headers: { 'x-user-id': 'alice', 'x-cl-thread-id': 'tid-x', 'x-cl-thread-scope': '..' },
+        payload: { message: { role: 'user', content: 'must land under _' } },
+      })
+      expect(post.statusCode).toBe(200)
+
+      const listAfter = await app.inject({
+        method: 'GET',
+        url: '/ai/threads/browser/threads',
+        headers: { 'x-user-id': 'alice', 'x-cl-thread-scope': '..' },
+      })
+      // The malformed scope resolved to "_": the list shows the POSTED
+      // thread under "_" — and NEVER the legacy flat file.
+      expect(listAfter.json().threads.map((t: { threadId: string }) => t.threadId)).toEqual(['tid-x'])
+
+      // The POST that carried scope ".." landed under the reserved "_"
+      // segment, NOT over the legacy file — which is still byte-intact.
+      const legacyRaw = await rd(join(root, 'alice', 'browser.json'), 'utf8')
+      expect((JSON.parse(legacyRaw) as { messages: Array<{ content: string }> }).messages).toHaveLength(1)
+      expect(JSON.parse(legacyRaw).messages[0].content).toBe('LEGACY CONTAMINATION')
+      const { readdir } = await import('node:fs/promises')
+      expect(await readdir(join(root, 'alice', 'browser', '_'))).toEqual(['tid-x.json'])
+      await app.close()
+    })
+  })
+
   it('scope isolates at the HTTP boundary: same (user, endpoint, threadId), different x-cl-thread-scope', async () => {
     await withApp(async (app) => {
       const postA = await app.inject({
@@ -248,7 +321,7 @@ describe('AiThreadHandlers — thread-scoped routes (L2-THREAD-SCOPED-1)', () =>
   })
 
   it('(3) promotion moves EXACTLY the chosen thread: one record, payload byte-identical, only that thread cleared', async () => {
-    await withApp(async (app, store, root) => {
+    await withApp(async (app, store, root, created) => {
       const hdr = (threadId: string, scope?: string) => ({
         'x-user-id': 'alice',
         'x-cl-thread-id': threadId,
@@ -264,9 +337,24 @@ describe('AiThreadHandlers — thread-scoped routes (L2-THREAD-SCOPED-1)', () =>
       await app.inject({
         method: 'POST',
         url: '/ai/threads/literature',
+        headers: hdr('promote-1'),
+        payload: {
+          message: { role: 'assistant', content: 'a promoted reply' },
+          mentions: [{ kind: 'material', ref: { recordId: 'mat-9' }, label: 'Tris buffer' }],
+        },
+      })
+      await app.inject({
+        method: 'POST',
+        url: '/ai/threads/literature',
         headers: hdr('sibling-1'),
         payload: { message: { role: 'user', content: 'keep me' } },
       })
+
+      // The thread's FULL content as the store holds it BEFORE promotion —
+      // the baseline the promoted payload must be identical to (D5: the
+      // "byte-identical" claim must actually read the recorded payload).
+      const beforeThread = await store.getThread('alice', 'literature', undefined, 'promote-1')
+      expect(beforeThread.messages.map((m) => m.content)).toEqual(['promote me', 'a promoted reply'])
 
       const promoted = await app.inject({
         method: 'POST',
@@ -276,6 +364,23 @@ describe('AiThreadHandlers — thread-scoped routes (L2-THREAD-SCOPED-1)', () =>
       })
       expect(promoted.statusCode).toBe(200)
       expect(promoted.json()).toMatchObject({ recordId: 'CONV-9001' })
+
+      // D5: assert the RECORDED conversation payload's schema-visible fields
+      // against the thread's content — one record, messages/mentions carried
+      // byte-for-byte, identity + provenance fields honest.
+      expect(created).toHaveLength(1)
+      const payload = created[0]!.payload
+      expect(created[0]!.recordId).toBe('CONV-9001')
+      expect(payload.kind).toBe('conversation')
+      expect(payload.title).toBe('The promoted chat')
+      expect(payload.endpoint).toBe('literature')
+      expect(payload.userId).toBe('alice')
+      expect(payload.messages).toEqual(beforeThread.messages)
+      expect(payload.mentions).toEqual(beforeThread.mentions)
+      expect(payload.linkedArtifacts).toEqual([])
+      expect(typeof payload.promotedAt).toBe('string')
+      expect(payload.promotedBy).toBe('alice')
+      expect(payload.provenance).toEqual({ mode: 'manual' })
 
       // The store cleared EXACTLY the promoted (scope, threadId): the
       // promoted file is empty; the sibling thread is byte-intact.

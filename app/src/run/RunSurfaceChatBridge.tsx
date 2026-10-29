@@ -66,6 +66,11 @@ export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
   useSurfaceChat({
     aiContext,
     endpoint: 'event-editor',
+    // L2-THREAD-SCOPED-1 (SUITEA-D3 amendment A-1, review D1 wiring): same
+    // deck-scope treatment as DeckSurfaceChat — this bridge owns a deck
+    // chat on the run workspace, so it forwards the loaded eventGraphId as
+    // the thread scope (unsaved => no scope => the server's "_").
+    ...(state.eventGraphId ? { scope: state.eventGraphId } : {}),
     onAcceptEvent: actions.appendEvent,
     onProposalDrafted,
     onPreviewDiscarded,

@@ -36,12 +36,15 @@ describe('AiThreadStore stable conversation identity', () => {
     await store.append(userId, epA, {
       message: { role: 'user', content: 'seed two T25 flasks' },
       conversationId: convId,
-    });
+    // D6: threadId is REQUIRED on the signature; it is IGNORED on the
+    // conversationId escape-hatch path (the append lands on the stable
+    // conversation file).
+    }, undefined, 'conv-path-threadid-ignored');
     // A different surface (route change) targets the SAME conversation.
     await store.append(userId, epB, {
       message: { role: 'assistant', content: 'resolved--T25' },
       conversationId: convId,
-    });
+    }, undefined, 'conv-path-threadid-ignored');
 
     const thread = await store.getConversation(convId);
     expect(thread.messages.map((m) => m.content)).toEqual([

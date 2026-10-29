@@ -12,7 +12,7 @@
  * (user, endpoint): not the legacy flat {user}/{endpoint}.json, not a sibling
  * threadId, not "most recently updated". Absent/malformed scope => "_".
  */
-import { mkdtemp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -205,5 +205,63 @@ describe('AiThreadStore — thread-scoped key (L2-THREAD-SCOPED-1)', () => {
       const underscore = await store.getThread('alice', 'browser', '_', 'tid-1');
       expect(underscore.messages).toEqual([]);
     });
+  });
+
+  it('D2: dots-ONLY segments ("." / "..") are refused — scope can never escape to the legacy flat file', async () => {
+    await withTempStore(async (store, root) => {
+      // Plant a LEGACY flat file the escape would otherwise contaminate/read.
+      await mkdir(join(root, 'alice'), { recursive: true });
+      await writeFile(
+        join(root, 'alice', 'browser.json'),
+        JSON.stringify({
+          endpoint: 'browser',
+          userId: 'alice',
+          messages: [{ role: 'user', content: 'LEGACY CONTAMINATION', createdAt: '2026-10-28T00:00:00.000Z' }],
+          mentions: [],
+          updatedAt: '2026-10-28T00:00:00.000Z',
+        }),
+        'utf8',
+      );
+
+      // The old traversal test only covered "../etc" (rejected on "/"). The
+      // alphabet admits dots, so "." / ".." need their OWN refusal — the ONE
+      // alphabet guard rejects dots-only segments.
+      for (const dotsOnly of ['.', '..', '...']) {
+        await expect(store.getThread('alice', 'browser', dotsOnly, 'tid-1')).rejects.toThrow();
+        await expect(
+          store.append('alice', 'browser', { message: { role: 'user', content: 'x' } }, dotsOnly, 'tid-1'),
+        ).rejects.toThrow();
+        await expect(store.listThreads('alice', 'browser', dotsOnly)).rejects.toThrow();
+        await expect(store.getThread('alice', 'browser', 'EVG-a', dotsOnly)).rejects.toThrow();
+      }
+
+      // The legacy flat file was never read and never written: it is still
+      // byte-intact, and no ".."-scope path ever resolved through it.
+      const legacyRaw = await readFile(join(root, 'alice', 'browser.json'), 'utf8');
+      expect((JSON.parse(legacyRaw) as { messages: Array<{ content: string }> }).messages[0]?.content)
+        .toBe('LEGACY CONTAMINATION');
+    });
+  });
+
+  it('D7: a live thread named "foo.snapshot" LISTS — the snapshot filter matches only the store-generated stamp naming', async () => {
+    await withTempStore(
+      async (store) => {
+        await store.append('alice', 'browser', { message: { role: 'user', content: 'snapshot-named thread' } }, 'EVG-a', 'foo.snapshot');
+        await store.append('alice', 'browser', { message: { role: 'user', content: 'normal thread' } }, 'EVG-a', 'tid-normal');
+
+        const listed = await store.listThreads('alice', 'browser', 'EVG-a');
+        expect(listed.map((t) => t.threadId).sort()).toEqual(['foo.snapshot', 'tid-normal']);
+
+        // A real rotated snapshot (store-generated `{tid}.{stamp}.snapshot.json`)
+        // stays invisible even though foo.snapshot shares the `.snapshot`
+        // prefix — the filter is stamp-pattern-based, not suffix-based.
+        for (let i = 0; i < 4; i++) {
+          await store.append('alice', 'browser', { message: { role: 'user', content: `grow-${i}` } }, 'EVG-a', 'tid-normal');
+        }
+        const afterRotate = await store.listThreads('alice', 'browser', 'EVG-a');
+        expect(afterRotate.map((t) => t.threadId).sort()).toEqual(['foo.snapshot', 'tid-normal']);
+      },
+      { snapshotThresholdMessages: 3, snapshotKeepTail: 2 },
+    );
   });
 });

@@ -56,6 +56,15 @@ export const DEFAULT_THREAD_SCOPE = '_';
 const THREAD_LIST_TITLE_MAX = 60;
 const THREAD_LIST_TITLE_ELLIPSIS = '…';
 
+/**
+ * The EXACT snapshot-file naming the store generates in `rotateSnapshot`:
+ * `{threadId}.{<ISO stamp, ':' and '.' replaced with '-'>}.snapshot.json`.
+ * listThreads filters on THIS (not a bare `.snapshot.json` suffix) so the
+ * snapshot namespace belongs to the store alone — a client-minted thread id
+ * like `foo.snapshot` can never be hidden from the list (reviewer defect 7).
+ */
+const SNAPSHOT_FILE_PATTERN = /\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.snapshot\.json$/;
+
 export interface AiThreadStoreOptions {
   rootDir: string;
   snapshotThresholdMessages?: number;
@@ -167,13 +176,19 @@ export class AiThreadStore {
     }
   }
 
-  /** Append a single message and (optionally) any new mentions. */
+  /** Append a single message and (optionally) any new mentions.
+   *
+   * `threadId` is REQUIRED for thread addressing (D6): omitting it is a
+   * type error, not a runtime `?? ''` that can only throw deeper down. It is
+   * ignored on the conversationId escape-hatch path (the append lands on the
+   * stable conversation file).
+   */
   async append(
     userId: string,
     endpoint: ApplianceEndpoint,
     input: AppendMessageInput,
-    scope?: string,
-    threadId?: string,
+    scope: string | undefined,
+    threadId: string,
   ): Promise<AiThread> {
     // Stable-conversation addressing: when a conversationId is supplied, the
     // append lands on THAT conversation regardless of the current endpoint
@@ -189,7 +204,7 @@ export class AiThreadStore {
           mentions: [],
           updatedAt: new Date(0).toISOString(),
         }
-      : await this.getThread(userId, endpoint, scope, threadId ?? '');
+      : await this.getThread(userId, endpoint, scope, threadId);
     const message: ThreadMessage = {
       ...input.message,
       createdAt: input.message.createdAt ?? new Date().toISOString(),
@@ -201,14 +216,14 @@ export class AiThreadStore {
     thread.updatedAt = message.createdAt;
 
     if (thread.messages.length > this.snapshotThresholdMessages) {
-      await this.rotateSnapshot(userId, endpoint, thread, scope, threadId ?? '');
+      await this.rotateSnapshot(userId, endpoint, thread, scope, threadId);
       thread.messages = thread.messages.slice(-this.snapshotKeepTail);
     }
 
     if (conversationId) {
       await this.writeConversationAtomic(conversationId, thread);
     } else {
-      await this.writeAtomic(userId, endpoint, scope, threadId ?? '', thread);
+      await this.writeAtomic(userId, endpoint, scope, threadId, thread);
     }
     return thread;
   }
@@ -249,10 +264,13 @@ export class AiThreadStore {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw err;
     }
-    // LIVE thread files only: `{threadId}.json`. Snapshots carry a
-    // `.snapshot.json` suffix and are filtered out — the directory layout
-    // plus this filter is what immunizes the list from the snapshot-glob trap.
-    const live = entries.filter((e) => e.isFile() && e.name.endsWith('.json') && !e.name.endsWith('.snapshot.json'));
+    // LIVE thread files only: `{threadId}.json`. Snapshot files are matched
+    // by the EXACT naming the store itself generates —
+    // `{threadId}.{<ISO stamp>}.snapshot.json` (see `rotateSnapshot`) — NOT
+    // by the bare `.snapshot.json` suffix: a client-minted thread id is
+    // arbitrary safe-alphabet text, so a thread legitimately named
+    // `foo.snapshot` must stay visible forever (reviewer defect 7).
+    const live = entries.filter((e) => e.isFile() && e.name.endsWith('.json') && !SNAPSHOT_FILE_PATTERN.test(e.name));
     const summaries: ThreadSummary[] = [];
     for (const entry of live) {
       const threadId = entry.name.slice(0, -'.json'.length);
@@ -364,21 +382,39 @@ function dedupeMentions(mentions: ThreadMention[]): ThreadMention[] {
 const THREAD_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 /**
+ * Dots-only segments ("." and ".." — any run of dots and nothing else) are
+ * REFUSED even though the alphabet technically admits dots: "." is a no-op
+ * path hop and ".." ESCAPES the {endpoint} directory into {user}/, which is
+ * exactly the legacy-flat-file fallback the NO-FALLBACK RULE forbids
+ * (adversarial review L2-THREAD-SCOPED-1 defect 2). Checked inside the ONE
+ * alphabet guard so both the handler (isValidThreadSegment) and the store
+ * (sanitizeSegment) refuse it — a malformed scope maps to FRESH-EMPTY "_"
+ * semantics at the handler, never to another scope's (or the legacy) file.
+ */
+const DOTS_ONLY_SEGMENT_PATTERN = /^\.+$/;
+
+/**
  * True when the value is a SAFE single path segment (the store's id
- * alphabet): non-empty, no traversal, only [A-Za-z0-9._-]. Exported so the
- * HTTP handler can map an absent/malformed header to FRESH-EMPTY semantics
- * (never 4xx, never a fallback read) with the SAME alphabet the store
- * sanitizes with — one source of truth, no second validator.
+ * alphabet): non-empty, no traversal, only [A-Za-z0-9._-], and NOT a
+ * dots-only segment ("." / ".."). Exported so the HTTP handler can map an
+ * absent/malformed header to FRESH-EMPTY semantics (never 4xx, never a
+ * fallback read) with the SAME alphabet the store sanitizes with — one
+ * source of truth, no second validator.
  */
 export function isValidThreadSegment(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && THREAD_SEGMENT_PATTERN.test(value);
+  return (
+    typeof value === 'string'
+    && value.length > 0
+    && THREAD_SEGMENT_PATTERN.test(value)
+    && !DOTS_ONLY_SEGMENT_PATTERN.test(value)
+  );
 }
 
 function sanitizeSegment(value: string, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${field} must be a non-empty string`);
   }
-  if (!THREAD_SEGMENT_PATTERN.test(value)) {
+  if (!isValidThreadSegment(value)) {
     throw new Error(`${field} contains unsupported characters: ${value}`);
   }
   return value;

@@ -193,103 +193,26 @@ const MAX_HISTORY_CONTENT_CHARS = 8_000
 type LinearWellTemplate = { count: number; axis: 'x' | 'y' }
 
 // ---------------------------------------------------------------------------
-// L2-THREAD-SCOPED-1 — per-(tab, scope) thread-id map (the hook's side).
+// L2-THREAD-SCOPED-1 — per-(tab, scope) thread-id mint.
 //
-// The map lives in sessionStorage under `cl.ai-thread-tab-ids` (a JSON map
-// { [scope or ""]: threadId }) and is SHARED with the client:
-// aiThreadClient.threadHeaders() reads/mints the SAME key, so the hook (this
-// module) and the client always converge on one id per (tab, scope).
-//
-// WHY the accessors live in the hook module (not imported from
-// aiThreadClient): the pre-existing hook tests (OUT of this item's file
-// scope) mock aiThreadClient with factories that export only
-// getThread/appendThreadMessage, and vitest's mock proxy THROWS on access of
-// any missing export — the hook cannot statically import the client's mint
-// helpers. These accessors implement the same contract (same key, same map
-// shape, mint-once, SSR-safe) so both sides stay consistent.
+// D3 fix: the map + mint is ONE module (`../api/threadTabIds`, spec §4.1/§4.7
+// single getThreadTabId), imported by BOTH the hook (here: resolve/mint/
+// switch) and the transport (aiThreadClient.threadHeaders). The hook's old
+// local re-implementation of the same sessionStorage map
+// (`cl.ai-thread-tab-ids`) is GONE — with two writers and two ephemeral-mint
+// fallbacks, a no-sessionStorage context could disagree between the hydrated
+// id and the per-request wire header id; one module closes that divergence.
+// (The old rationale — pre-existing hook tests' vi.mock factories of
+// aiThreadClient throwing on missing exports — is answered by putting the
+// mint in its OWN module rather than forking it; see the updated mock
+// factories in the old hook tests, which include the re-exports.)
 // ---------------------------------------------------------------------------
 
-const THREAD_TAB_IDS_STORAGE_KEY = 'cl.ai-thread-tab-ids'
-let threadTabIdCounter = 0
-
-function mintTabThreadId(): string {
-  try {
-    if (typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: () => string }).randomUUID === 'function') {
-      return (crypto as { randomUUID: () => string }).randomUUID()
-    }
-  } catch {
-    /* fall through */
-  }
-  threadTabIdCounter += 1
-  return `cl-thread-${Date.now().toString(36)}-${threadTabIdCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function readThreadTabMap(): Record<string, string> {
-  try {
-    if (typeof sessionStorage === 'undefined') return {}
-    const raw = sessionStorage.getItem(THREAD_TAB_IDS_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const out: Record<string, string> = {}
-      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof v === 'string' && v.length > 0) out[k] = v
-      }
-      return out
-    }
-    return {}
-  } catch {
-    return {}
-  }
-}
-
-function writeThreadTabMap(map: Record<string, string>): void {
-  try {
-    if (typeof sessionStorage === 'undefined') return
-    sessionStorage.setItem(THREAD_TAB_IDS_STORAGE_KEY, JSON.stringify(map))
-  } catch {
-    /* non-browser / storage blocked */
-  }
-}
-
-/** The map key for a scope: "" for non-instance surfaces (the reserved case). */
-function threadTabMapKey(scope: string | undefined): string {
-  return scope && scope.length > 0 ? scope : ''
-}
-
-/**
- * Resolve the tab's thread id for a scope (mint-once): returns the stored id
- * when present, otherwise mints a fresh one and stores it. LAZY (reads/writes
- * storage only when called — never at module scope) and SSR/jsdom-safe.
- */
-function resolveTabThreadId(scope: string | undefined): string {
-  const key = threadTabMapKey(scope)
-  const map = readThreadTabMap()
-  const existing = map[key]
-  if (typeof existing === 'string' && existing.length > 0) return existing
-  const id = mintTabThreadId()
-  map[key] = id
-  writeThreadTabMap(map)
-  return id
-}
-
-/** Mint a FRESH id for the scope ("New thread"): always a new entry. */
-function mintTabThreadEntry(scope: string | undefined): string {
-  const key = threadTabMapKey(scope)
-  const map = readThreadTabMap()
-  const id = mintTabThreadId()
-  map[key] = id
-  writeThreadTabMap(map)
-  return id
-}
-
-/** Persist a chosen id for the scope (the picker's switch-to-listed-thread). */
-function writeTabThreadMapEntry(scope: string | undefined, threadId: string): void {
-  const key = threadTabMapKey(scope)
-  const map = readThreadTabMap()
-  map[key] = threadId
-  writeThreadTabMap(map)
-}
+import {
+  getThreadTabId as resolveTabThreadId,
+  newThreadTabId as mintTabThreadEntry,
+  setThreadTabId as writeTabThreadMapEntry,
+} from '../api/threadTabIds'
 
 function buildConversationHistory(messages: ChatMessage[]): AiConversationMessage[] {
   return messages

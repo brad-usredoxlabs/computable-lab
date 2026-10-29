@@ -237,6 +237,30 @@ describe('useAiChat — per-tab thread identity (L2-THREAD-SCOPED-1)', () => {
     expect(result.current.threadId).toBe(newId)
   })
 
+  it('D3 (no-sessionStorage divergence): hydration id and wire header id AGREE without sessionStorage', async () => {
+    // The cycle-1 fork minted per-CALL ephemeral ids in a no-storage
+    // context: the hook's resolved id and the transport's header id never
+    // agreed. With the single mint module (an in-memory fallback map), the
+    // SAME id rides every call even with storage unavailable.
+    const savedStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
+    // @ts-expect-error deliberate: simulate a non-browser context
+    delete globalThis.sessionStorage
+    try {
+      const { result } = renderHook(() => useAiChat({ aiContext, endpoint: 'browser' }))
+      await waitFor(() => expect(getThreadCalls()).toHaveLength(1))
+      await act(async () => {
+        result.current.sendPrompt('no-storage turn')
+      })
+      await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 4000 })
+      await waitFor(() => expect(appendCalls().length).toBeGreaterThanOrEqual(1))
+      const ids = new Set(threadCalls().map((c) => c.headers['x-cl-thread-id']))
+      expect(ids.size).toBe(1) // hydrated GET + every append: ONE id
+      expect([...ids][0]).toBeTruthy()
+    } finally {
+      if (savedStorage) Object.defineProperty(globalThis, 'sessionStorage', savedStorage)
+    }
+  })
+
   it('deck scope (acceptance 5): per-(tab, scope) ids, scope header on thread traffic, scope change re-keys without carrying the first deck messages', async () => {
     // The minted id is a random UUID, so the fake server seeds each deck's
     // thread on FIRST SIGHT of (scope, mintedId).
