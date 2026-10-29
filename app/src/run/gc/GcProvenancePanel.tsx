@@ -34,6 +34,21 @@ function HopRow({ hop }: { hop: ChainHop }) {
           {hop.error}
         </span>
       ) : null}
+      {/* FIX2b (NEW-2 / gate G4): the effective_parameters artifact is a
+          LINK — the walker resolved it by name over the run's output
+          artifacts (a real GET each); the fact row (below) keeps the id
+          verbatim, and the ref renders as a /record/:id anchor so the
+          already-fetched artifact is reachable. No anchor when the run
+          declares no effective_parameters output (no invented link). */}
+      {hop.spec.kind === 'analysis-run' && hop.effectiveParamsRef !== undefined ? (
+        <a
+          className="gc-prov__hop-link gc-prov__run-effective-params-link"
+          href={`/record/${encodeURIComponent(hop.effectiveParamsRef.id)}`}
+          data-testid="gc-prov-run-effective-params-link"
+        >
+          effective_parameters ({hop.effectiveParamsRef.id})
+        </a>
+      ) : null}
       <ul className="gc-prov__facts">
         {facts.map((f, i) => (
           <li key={`${f.label}-${i}`} data-testid={`gc-prov-fact-${hop.spec.kind}-${f.label.replace(/[^a-z0-9]+/gi, '-')}`}>

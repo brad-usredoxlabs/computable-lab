@@ -606,4 +606,36 @@ describe('GcProvenancePanel (leg C)', () => {
       'computable-lab-analysis-reference',
     )
   })
+
+  // ---- FIX2b (NEW-2 / gate G4): the effective_parameters artifact is a LINK,
+  // ---- not just a text fact. hopFacts keeps the fact row (the id, verbatim);
+  // ---- the run hop additionally renders the ref as a /record/:id anchor so
+  // ---- the artifact (already fetched by the walker) is reachable.
+
+  it('the effective-parameters ref renders as a /record/:id ANCHOR on the run hop, alongside the fact row (G4: a link, not text)', async () => {
+    mockChain()
+    renderPanel()
+    const anchor = await screen.findByTestId('gc-prov-run-effective-params-link')
+    expect(anchor).toHaveAttribute('href', `/record/${AOUT_EP}`)
+    // the fact row is kept (the value reads verbatim from the hop ref)
+    expect(await screen.findByTestId('gc-prov-fact-analysis-run-effective-parameters')).toHaveTextContent(AOUT_EP)
+  })
+
+  it('no effective-parameters anchor when the run declares no effective_parameters output artifact (no invented link)', async () => {
+    const v = vi.mocked(apiClient.getRecord)
+    const base = v.getMockImplementation()!
+    v.mockImplementation(async (id: string) => {
+      if (id === ANR) {
+        const env = await base(id)
+        const p = { ...(env as { payload: Record<string, unknown> }).payload }
+        delete p['outputArtifactRefs']
+        return { ...(env as object), payload: p } as never
+      }
+      return base(id)
+    })
+    renderPanel()
+    expect(await screen.findByTestId('gc-prov-hop-entry')).toBeDefined()
+    expect(screen.queryByTestId('gc-prov-run-effective-params-link')).toBeNull()
+    expect(screen.queryByTestId('gc-prov-fact-analysis-run-effective-parameters')).toBeNull()
+  })
 })
