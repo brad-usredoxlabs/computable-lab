@@ -2016,6 +2016,15 @@ export function createAgentOrchestrator(
       // SH-QC-1S R1: renamed from `sequenceRepairAttempts` — the counter now
       // serves every DATA-listed forced-tool surface, not one surface.
       let forcedToolComplianceAttempts = 0;
+      // L2-DEGEN-RETRY-1 — the per-run ONE-retry budget for the mechanical
+      // degenerate signature (loop guard, NOT domain policy — the OQ3
+      // ruling: a code constant, exactly like `turn + 1 < effectiveMaxTurns`;
+      // moving it to YAML would make silent-off surfaces unconfigurable and
+      // invite a loop). Separate budget, separate class: the degenerate
+      // retry does NOT increment forcedToolComplianceAttempts (the nudge arm
+      // targets non-empty prose non-compliance — a different class).
+      let degenerateRetryConsumed = false;
+      let degenerateRecoveryLogged = false;
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -2268,6 +2277,149 @@ export function createAgentOrchestrator(
         }
 
         const assistantMsg = choice.message;
+
+        // L2-DEGEN-RETRY-1 — the mechanical degenerate signature, checked at
+        // the pre-coercion face: a forced-tool draft turn that ends
+        // finish=stop (the NORMALIZED value — a stream that ended with no
+        // finish_reason chunk reassembled to 'stop' above IS the degenerate
+        // shape) with EMPTY content and ZERO tool calls. Inline coercion of
+        // empty content is null by construction, so the four-part signature
+        // (stop + empty + no tool_calls + null coercion) already holds here.
+        // Keyed on ALL four quantities — NOT on finish=stop alone (the
+        // protocolEditRecovery stub is a stop turn with NON-EMPTY content and
+        // must not fire the signature) and NOT on contentLen>0 prose (the
+        // compliance nudge arm targets non-empty non-compliance — a different
+        // class; this signature PREEMPTS it on empty content, OQ1).
+        //
+        // Upstream degeneration is stochastic (the x6 regate-4 trail: the
+        // identical prompt returned a valid tool call seconds later), so the
+        // harness re-issues the SAME request exactly once. The dead attempt
+        // is NEVER pushed to `messages` (an empty assistant turn riding back
+        // is the pattern-completion fuel the echo guards fight) — the retry
+        // re-enters the loop top and rebuilds completionReq byte-identical
+        // from the same unmutated inputs. Temperature is deliberately
+        // unchanged (the task's own evidence: the identical prompt worked
+        // seconds later; forcing temp 0 would fight that).
+        //
+        // No provider/surface/model literal near this hook: the signature is
+        // mechanical, and provider identity resolves OFFLINE from the
+        // orproxy calls.log via the tid that already rides every
+        // `[agent ${tid}]` line (the task's correlation ruling — no new
+        // plumbing).
+        if (
+          !assistantMsg.tool_calls?.length
+          && forceDraftTool
+          && !isDocDiscussionTurn
+          && choice.finish_reason === 'stop'
+          && !(typeof assistantMsg.content === 'string' && assistantMsg.content.trim().length > 0)
+        ) {
+          if (degenerateRetryConsumed) {
+            // Second degeneracy: the one-retry budget is spent. Return the
+            // honest class text DIRECTLY and skip the slow coercion call
+            // entirely (leg 2 pins total call count 2 — a coercion `complete`
+            // would make it 3 and buys nothing on a double-degenerate). The
+            // class is the provider's, not the wording's — the text says so.
+            const degenerateError = emptyDraftMessage({
+              truncated: false,
+              hadArguments: false,
+              degenerateEmptyResponse: true,
+            });
+            console.warn(`[agent ${tid}] degenerate forced-tool response TWICE (stop + empty content + no tool calls) — the one-retry budget is spent; surfacing the honest class text and skipping the slow coercion call`);
+            onEvent?.({ type: 'error', message: degenerateError });
+            const elapsed = Date.now() - t0;
+            // Dead-attempt observability: the second (this) attempt's stats
+            // ride turnStats — the `turns` count reflects both attempts,
+            // log-traceable honesty (leg assertions are on client spy
+            // counts, not turn counts).
+            turnStats.push({
+              turn: turn + 1,
+              durationMs: Date.now() - turnStart,
+              finishReason: choice.finish_reason,
+              promptTokens: response.usage?.prompt_tokens ?? 0,
+              completionTokens: response.usage?.completion_tokens ?? 0,
+              tools: turnToolStats,
+            });
+            const summary: AgentSummary = {
+              traceId: tid,
+              surface: surfaceName,
+              model,
+              success: false,
+              elapsedMs: elapsed,
+              turns: turnStats,
+              totals: {
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+                promptTokens: totalUsage.promptTokens,
+                completionTokens: totalUsage.completionTokens,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+              },
+              resolvedMentions: resolvedMentionsCount,
+              bypass: null,
+              error: degenerateError,
+            };
+            logAgentSummary(tid, summary);
+            return {
+              success: false,
+              error: degenerateError,
+              usage: {
+                ...totalUsage,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+              },
+            };
+          }
+          if (turn + 1 < effectiveMaxTurns) {
+            // First degeneracy WITH a turn to spare: consume the budget,
+            // log, and re-issue the SAME request by continuing the loop
+            // WITHOUT pushing the dead assistant message. (Streamed events
+            // for the dead attempt — the transient status lines only, since
+            // forced-tool mode suppresses text_delta — are NOT retracted;
+            // the retry's own "AI request sent" status is self-explanatory
+            // in the pipe. Spec ruling: no new event kind.)
+            degenerateRetryConsumed = true;
+            turnStats.push({
+              turn: turn + 1,
+              durationMs: Date.now() - turnStart,
+              finishReason: choice.finish_reason,
+              promptTokens: response.usage?.prompt_tokens ?? 0,
+              completionTokens: response.usage?.completion_tokens ?? 0,
+              tools: turnToolStats,
+            });
+            console.log(`[agent ${tid}] degenerate forced-tool turn (stop + empty content + no tool calls) — re-issuing the request once`);
+            continue;
+          }
+          // Turn budget exhausted at the first signature (no retry possible
+          // — the loop would end on this turn anyway): fall through to the
+          // CURRENT path unchanged. Do NOT consume or block anything.
+        }
+
+        // L2-DEGEN-RETRY-1 recovery log (fix1): the signature fired earlier
+        // this run (the one-retry budget was consumed) AND this attempt is
+        // actually recoverable — it produced tool_calls OR non-blank content
+        // (the same quantities the four-part signature negates). The gate is
+        // on recoverability at this point, NOT on "did not reproduce the
+        // stop-empty signature": an empty non-stop attempt (finish=length +
+        // empty content + zero tool calls) is still a dead turn — it falls
+        // through to the slow coercion and the hard error below, and a
+        // FAILED run must not claim a recovery (DEFECT 2, fix1; OBS-4: the
+        // signature itself is NOT widened — this gates the log line only).
+        // The normal flow owns the outcome; this line names the recovery
+        // for the trace. The tid rides the prefix — provider identity
+        // resolves OFFLINE from the orproxy calls.log, never a provider
+        // literal in code.
+        if (
+          degenerateRetryConsumed
+          && !degenerateRecoveryLogged
+          && (
+            assistantMsg.tool_calls?.length
+            || (typeof assistantMsg.content === 'string' && assistantMsg.content.trim().length > 0)
+          )
+        ) {
+          degenerateRecoveryLogged = true;
+          console.log(`[agent ${tid}] degenerate-response recovered on retry`);
+        }
+
         messages.push(assistantMsg);
 
         const contentLen = typeof assistantMsg.content === 'string' ? assistantMsg.content.length : 0;

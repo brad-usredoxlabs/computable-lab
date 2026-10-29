@@ -168,12 +168,21 @@ describe('createAgentOrchestrator', () => {
       outcome: 'error',
     });
 
+    // L2-DEGEN-RETRY-1: the stub answer is NON-EMPTY prose (the model ignored
+    // tool_choice and answered in text) — NOT the empty-content shape. The
+    // empty-content stop turn is the mechanical degenerate signature that
+    // AgentOrchestrator.degenerateRetry.test.ts now pins (retry once, then the
+    // honest class text, `complete` skipped). This leg keeps covering the
+    // path its name names: the model ignored tool_choice, and the SLOW
+    // coercion (`complete`) recovers the compiler-draft JSON. Non-empty
+    // prose keeps the degenerate signature from firing (it keys on
+    // trim-empty content) so the slow path is byte-identical to before.
     const completeStream = vi.fn(async function* () {
       yield {
         id: 'resp-no-tool',
         choices: [{
           index: 0,
-          delta: { role: 'assistant', content: '' },
+          delta: { role: 'assistant', content: 'I will place the 96-well plate in slot B2 now.' },
           finish_reason: 'stop',
         }],
       };
