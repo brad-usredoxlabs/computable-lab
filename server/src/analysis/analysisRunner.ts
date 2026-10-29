@@ -206,6 +206,24 @@ export class AnalysisRunner {
         if (!payload.storageDeviceId || !payload.path) {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference has no device/path`, 400);
         }
+        // GC-12 fix-cycle-3 (DIRFIX-2, architect ruling A-named-error): a
+        // DIRECTORY-kind data-reference (the ACQP signal-collection manifest
+        // DREF) is NOT a runner-consumable input. The runner streams EVERY
+        // data-reference via provider.read(path) into <inputDir>/<name>.bin,
+        // i.e. it can only handle files; reading a directory would throw EISDIR
+        // (relabeled INTERNAL_ERROR). Refuse EARLY — after loading the DREF
+        // payload and BEFORE provider.read — with a NAMED 400-class token.
+        // The guard keys off the RECORD'S DECLARED dataKind (not a filename),
+        // so it survives "remove every hardcoded value". No directory
+        // expansion (deferred by ruling — no engine consumes collections
+        // today).
+        if (payload.dataKind === 'signal-collection') {
+          throw new AnalysisServiceError(
+            'INPUT_IS_DIRECTORY',
+            `input ${name} (data-reference ${ref.id}) declares dataKind 'signal-collection' — a directory, not a file. The analysis runner provisions file-kind data-references only; it cannot stream a directory into a run input. Point the run's input at one of the package's member file DREFs (acquisition-package.files), not the signal-collection manifest.`,
+            400,
+          );
+        }
         deviceId = payload.storageDeviceId;
         path = payload.path;
         dataKind = dataKind ?? payload.dataKind;
