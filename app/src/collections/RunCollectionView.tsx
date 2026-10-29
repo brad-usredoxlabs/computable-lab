@@ -72,13 +72,19 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   // who opened the form quickly was told the registry was empty while a
   // method existed and the fetch was mid-flight).
   const [gcMethodsLoaded, setGcMethodsLoaded] = useState(false)
-  // GC-12 dirfix MINOR-FIX (defect 1): the gc-method read's SETTLED FAILURE
+  // GC-12 dirfix MINOR-FIX (defect 1): the registry read's SETTLED FAILURE
   // state (a REJECTED fetch). The old catch settled a failure as
   // "loaded + empty list" (gcMethodsLoaded=true, gcMethods still []), so the
   // row rendered the empty-state lie "No gc-methods are configured" on a
   // failed read — the regate2 defect 2 class, moved from the in-flight
   // window to the failure window. A failure is its OWN arm: it names the
   // real cause and offers a Retry — never the not-ready claim.
+  // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT): the arm is
+  // keyed on this failure STATE (null = no failure, non-null = settled
+  // failure), NEVER on the truthiness of the message text — a rejection
+  // with an EMPTY message (new Error('')) used to store '' (falsy) and fall
+  // through to the "No gc-methods are configured" lie. Empty messages store
+  // the honest generic cause line instead of ''.
   const [gcMethodsError, setGcMethodsError] = useState<string | null>(null)
   const [gcEquipment, setGcEquipment] = useState<Array<{ recordId: string; payload: { name?: string } }>>([])
   const [gcMethodId, setGcMethodId] = useState('')
@@ -106,10 +112,17 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
       setGcMethodsLoaded(true)
     } catch (err) {
       // GC-12 dirfix MINOR-FIX (defect 1): a REJECTED read is a SETTLED
-      // FAILURE — never "loaded + empty list". The failure arm below names
-      // the real cause (the read failed) and offers the Retry; it never
+      // FAILURE — never "loaded + empty list" (that old shape rendered the
+      // empty-state lie on a failed read — the regate2 defect 2 class). The
+      // failure arm names the real cause and offers the Retry; it never
       // renders the empty-state claim and never spins the loading arm.
-      setGcMethodsError(err instanceof Error ? err.message : String(err))
+      // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT): the
+      // failure STATE is what the arm keys on — a rejection whose message is
+      // the EMPTY string must still settle the failure arm, not fall through
+      // to the "No gc-methods are configured" lie (an empty message is not a
+      // cause: the arm shows the honest generic cause line instead).
+      const raw = err instanceof Error ? err.message : String(err)
+      setGcMethodsError(raw || 'no cause was provided')
       setGcMethodsLoaded(true)
     }
   }, [])
@@ -366,8 +379,14 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
               // empty-state lie a failed read is not evidence for) and never
               // spins "Loading…". The arm names the real cause and offers a
               // Retry (a live affordance — dead-chrome ban).
+              // GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT):
+              // keyed on the failure STATE (gcMethodsError is null only when
+              // no read failed), never on message truthiness — an
+              // empty-message rejection still lands here with the honest
+              // generic cause line (the empty message is stored as the named
+              // cause, never as '').
               <span className="gc-run-create__error" data-testid="gc-run-create-method-error">
-                Could not load gc-methods: {gcMethodsError}
+                Could not load registry: {gcMethodsError}
                 <button
                   type="button"
                   data-testid="gc-run-create-method-retry"

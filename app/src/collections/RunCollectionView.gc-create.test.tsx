@@ -284,4 +284,33 @@ describe('RunCollectionView — GC-12 D2 create front door', () => {
     expect(await screen.findByTestId('gc-run-create-method')).toHaveTextContent('AOAC FAME GC-FID method (demo)')
     expect(screen.queryByTestId('gc-run-create-method-error')).toBeNull()
   })
+
+  it('GC-12 DIRFIX-M3-2 (adv cycle-2 defect 2, probe A_ROW_TEXT): an EMPTY-MESSAGE rejection still settles the FAILURE arm — never the "No gc-methods are configured" lie', async () => {
+    // The arm was keyed on the TRUTHINESS of the message string: a rejection
+    // whose message is the empty string stored '' (falsy) and the render
+    // fell through to the EMPTY arm — "No gc-methods are configured" — on a
+    // FAILED read. The failure arm must be keyed on the failure STATE, so
+    // ANY rejection (empty message included) renders the failure arm with
+    // an honest generic cause.
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation((kind: string) => {
+      if (kind === 'gc-method') return Promise.reject(new Error('')) as never
+      return Promise.resolve({ records: [], total: 0 } as never)
+    })
+    renderView()
+    fireEvent.click(screen.getByTestId('gc-run-collection-new'))
+    // The settled FAILURE arm renders (keyed on the failure STATE, not the
+    // message text)…
+    const arm = await screen.findByTestId('gc-run-create-method-error')
+    // …the empty-state LIE never renders on a failed read…
+    expect(screen.queryByTestId('gc-run-create-method-notready')).toBeNull()
+    expect(screen.queryByText(/No gc-methods are configured/)).toBeNull()
+    // …the load arm does not spin after the read settled…
+    expect(screen.queryByTestId('gc-run-create-method-loading')).toBeNull()
+    // …the select does not render from a failed read…
+    expect(screen.queryByTestId('gc-run-create-method')).toBeNull()
+    // …and the arm carries an HONEST generic cause line (the empty message
+    // is not a cause — the generic wording names the failure without
+    // pretending a message).
+    expect(arm.textContent).toMatch(/no cause was provided/i)
+  })
 })
