@@ -228,11 +228,18 @@ describe('ClaimWorkspace', () => {
     expect(supporting).toBeDefined()
   })
 
-  it('wires the Connections/Runs group from the bundles sources: analysis-run links /runs/:runId (the reciprocal run->claim back-link)', async () => {
+  it('wires the Connections/Runs group from the bundles sources: the reciprocal run link targets the GC evidence surface /gc-run/:runId — NOT the Run·Design canvas /runs/:runId (GATEFIX-D5, gate G7)', async () => {
     seedLedger()
     renderClaimRoute()
     const link = await screen.findByTestId('claim-run-link-ANR-R1')
-    expect(link).toHaveAttribute('href', '/runs/ANR-R1')
+    // ANR-R1 is an ANALYSIS-RUN record (the bundle's source type pins it).
+    // /runs/:runId serves the Run·Design workspace — the plate-design
+    // canvas for a `run` record — so an analysis-run id landing there is
+    // a kind-mismatched dead end (gate D5: "Click to choose labware",
+    // "No protocol attached", no GC evidence context). The reciprocal
+    // link must land on the surface that renders the run's GC evidence
+    // context (its evidence/claim back-links).
+    expect(link).toHaveAttribute('href', '/gc-run/ANR-R1')
     expect(screen.getByTestId('claim-connections')).toBeDefined()
   })
 

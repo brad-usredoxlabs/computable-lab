@@ -506,6 +506,29 @@ describe('GcEvidenceHandoff (leg D)', () => {
     // the other bundle's claim is NOT surfaced (its source points at another run)
     expect(within(linked).queryByTestId('gc-evidence-claim-link-CLM-OTHER')).toBeNull()
   })
+
+  it('back-compat (GATEFIX2): with isenId but NO initialRun the GC-12 contract holds — closed at mount, ZERO fetches, testid scoped by the isen id, and the open-act fetches the run itself (the dedupe seam is opt-in via initialRun)', async () => {
+    // GcEvidenceRunPage.tsx passes NO isenId at all (defect 2 — the run
+    // id must not feed the ISEN provenance hop), but this file's own
+    // render helper keeps the GC-12 shape (isenId = a real ISEN id, runId
+    // = a different ANR id) untouched. The component must keep working
+    // when isenId is the ONLY id it gets: the testid scope is the isen id
+    // (the GC-12 rows are gc-results-<isenId>), and the run read happens
+    // on the open act (D7), not at mount.
+    renderHandoff()
+    await waitFor(() => expect(screen.getByTestId(`gc-evidence-handoff-${ISEN}`)).toBeDefined())
+    expect(apiClient.getAnalysisRun).not.toHaveBeenCalled()
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
+    // the run id is NOT used as the testid scope (the isen id is)
+    expect(screen.queryByTestId(`gc-evidence-handoff-${ANR}`)).toBeNull()
+    fireEvent.click(screen.getByTestId('gc-evidence-handoff-open'))
+    const chip = await screen.findByTestId('gc-evidence-artifact-chip')
+    expect(chip).toHaveTextContent('calibration_model')
+    // without initialRun the open act reads the run ITSELF (the GC-12
+    // call site has no verified record to hand down — the seam is opt-in)
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledTimes(1)
+    expect(apiClient.getAnalysisRun).toHaveBeenCalledWith(ANR)
+  })
 })
 
 describe('gcEvidenceSources (leg D data table)', () => {

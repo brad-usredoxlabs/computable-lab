@@ -12,8 +12,10 @@
  *    groups, each row linking /record/:evidenceId (the reciprocal
  *    claim->evidence leg).
  *  - Connections / Runs: the bundles' sources pointing at analysis-runs,
- *    linked /runs/:runId (the reciprocal run->claim back-link the results
- *    surface follows home).
+ *    linked /gc-run/:runId (GATEFIX-D5, gate G7: the reciprocal run->claim
+ *    back-link must land on the GC evidence surface — the run's evidence /
+ *    claims back-links — NOT the /runs/:runId Run·Design plate canvas,
+ *    which serves `run` records).
  *  - Honest empty arms when a group has no data (absence is visible, never
  *    a silent placeholder).
  *
@@ -276,8 +278,18 @@ export function ClaimWorkspace() {
                   ) : (
                     <ul className="claim-workspace__connections-list">
                       {runIds.map((rid) => (
-                        <li key={rid}>
-                          <a href={`/runs/${encodeURIComponent(rid)}`} data-testid={`claim-run-link-${rid}`}>
+                        <li key={rid} className="claim-workspace__connections-row">
+                          {/* GATEFIX-D5 (gate G7): the bundle's source is an
+                              analysis-run (runIdsFromEvidence filters on the
+                              declared source type). /runs/:runId serves the
+                              Run·Design workspace — the plate canvas for
+                              `run` records — so the analysis-run id must land
+                              on the GC evidence surface (GcEvidenceRunPage)
+                              that renders this run's evidence context (its
+                              evidence/claim back-links), never the plate
+                              canvas (shot 14-b3-g7: "Click to choose
+                              labware", "No protocol attached"). */}
+                          <a href={`/gc-run/${encodeURIComponent(rid)}`} data-testid={`claim-run-link-${rid}`}>
                             {rid}
                           </a>
                           <span className="claim-workspace__connections-kind">analysis-run</span>
@@ -301,7 +313,7 @@ export function ClaimWorkspace() {
                 ) : (
                   <ul className="claim-workspace__connections-list">
                     {relatedClaimIds.map((cid) => (
-                      <li key={cid}>
+                      <li key={cid} className="claim-workspace__connections-row">
                         <a href={`/claims/${encodeURIComponent(cid)}`}> {cid}</a>
                         <span className="claim-workspace__connections-kind">claim</span>
                       </li>

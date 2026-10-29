@@ -385,12 +385,46 @@ export function GcEvidenceHandoff({
   isenId,
   runId,
   onBundleCreated,
+  initialOpen = false,
+  initialRun,
 }: {
-  isenId: string
+  /** The SEQUENCE-CONTEXT id the hand-off is mounted in (the
+   *  instrument-sequence-entry row id). Serves the testid scope
+   *  (`gc-evidence-handoff-${isenId}`) AND the provenance walk's ISEN
+   *  lineage hops — and ONLY a real ISEN id may be passed: a run id or
+   *  any other record id here would be fetched and RENDERED as an
+   *  instrument-sequence-entry hop (the run masquerading as a sequence
+   *  row — adversarial review defect 2). A caller that has no sequence
+   *  context (the /gc-run direct-run landing — a bare analysis-run names
+   *  no sequence row) passes NO isenId: the testid falls back to the
+   *  run id (testid scope only) and the ISEN lineage hops render their
+   *  honest named-gap arm. */
+  isenId?: string
   runId: string
   onBundleCreated: () => void
+  /** GC-13 gate-fix (D5): the direct-run landing surface (GcEvidenceRunPage)
+   *  opens the body at mount — the evidence context IS the point of the
+   *  deep-link landing, so the back-links / chips need no second click.
+   *  The GC-12 results flow-back (GcResultsList) keeps the default (closed
+   *  at mount — the D7 pin there is untouched). */
+  initialOpen?: boolean
+  /** GATEFIX2 (adversarial review defect 3): the caller's ALREADY-FETCHED,
+   *  kind-verified analysis-run payload (GcEvidenceRunPage reads the run
+   *  for its own kind gate before this component mounts). When present,
+   *  the open-act chip read REUSES it instead of firing a second
+   *  getAnalysisRun — the landing issues exactly ONE run read. Absent
+   *  (the GC-12 GcRunSheetSection flow — that call site has no verified
+   *  record to hand down), the open act fetches the run itself, exactly
+   *  as before: the GC-12 D7 zero-fetch pin and the open-once-read
+   *  contract are byte-identical.
+   *
+   *  Deliberately a PAYLOAD (Record<string, unknown>), not a recordId:
+   *  the provenance walk re-reads the run by its REF (the artifact's
+   *  runRef — refs, never cached copies), so the hand-off's only run read
+   *  is the chip-list open act — the one this seam dedupes. */
+  initialRun?: Record<string, unknown>
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initialOpen)
   const [chips, setChips] = useState<ArtifactChip[] | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [provenanceFor, setProvenanceFor] = useState<RecordRef | null>(null)
@@ -404,13 +438,30 @@ export function GcEvidenceHandoff({
   // Opened = the user asked: fetch the run ONCE, then its artifacts.
   // Closed = zero fetches (D7 mount pin — this component is inside the
   // gc-results rows, which mount with the section).
+  //
+  // GATEFIX2 (adversarial review defect 3): when the caller hands down an
+  // ALREADY-FETCHED, kind-verified payload (initialRun — the
+  // GcEvidenceRunPage kind gate reads the run before this mounts), REUSE
+  // it — no second getAnalysisRun. The landing then issues exactly ONE
+  // run read. Absent (the GC-12 GcRunSheetSection flow — that call site
+  // has no verified record to hand down) the open act fetches the run
+  // itself, exactly as before. (The provenance walk re-reads the run by
+  // its REF on demand — the panel's own read, deduped internally by
+  // byRef — and is unaffected by this seam.)
   useEffect(() => {
     if (!open) return
     let cancelled = false
     void (async () => {
       try {
-        const { record } = await apiClient.getAnalysisRun(runId)
-        const payload = record.payload as Record<string, unknown>
+        let payload: Record<string, unknown>
+        if (initialRun !== undefined) {
+          // the caller's verified payload — the run was already read
+          // (the page's kind gate); reuse, never re-read.
+          payload = initialRun
+        } else {
+          const { record } = await apiClient.getAnalysisRun(runId)
+          payload = record.payload as Record<string, unknown>
+        }
         const refs = Array.isArray(payload.outputArtifactRefs)
           ? payload.outputArtifactRefs.map(asRecordRef).filter((r): r is RecordRef => r !== null)
           : []
@@ -521,8 +572,18 @@ export function GcEvidenceHandoff({
     void refreshLinkedClaims()
   }, [open, runId, refreshLinkedClaims])
 
+  // GATEFIX2 (adversarial review defect 2): the testid scope and the
+  // provenance ISEN hop are SEPARATE concerns. The scope needs SOME
+  // stable id (the GC-12 rows carry the ISEN id; the /gc-run direct-run
+  // landing has no sequence context and falls back to the run id —
+  // scope only, never provenance). The provenance hop keys off a REAL
+  // instrument-sequence-entry id ONLY: when no isenId is passed, the
+  // panel walks without it and the ISEN lineage hops render their
+  // honest named-gap arm (a bare analysis-run names no sequence row).
+  const testScope = isenId !== undefined ? isenId : runId
+
   return (
-    <div data-testid={`gc-evidence-handoff-${isenId}`} className="gc-ev">
+    <div data-testid={`gc-evidence-handoff-${testScope}`} className="gc-ev">
       <button
         type="button"
         data-testid="gc-evidence-handoff-open"
