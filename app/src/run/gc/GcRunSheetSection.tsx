@@ -109,8 +109,9 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   // untyped envelopes; we never widen the API surface.
   //
   // GC-12 bfix1 (browser-gate fix): the `probed` latch is the ONLY piece of
-  // probe state that must NOT die with a cancelled pass. main.tsx:17 wraps
-  // the app in <React.StrictMode>, and the development build runs every
+  // probe state that must NOT die with a cancelled pass. main.tsx:37 wraps
+  // the app in <React.StrictMode> (the labware-fixture branch at main.tsx:17
+  // is wrapped too), and the development build runs every
   // mount effect as mount → cleanup → re-mount. Stamping probeDoneRef BEFORE
   // the request (the pre-fix placement) made pass 1 the only pass to ever
   // fire the fetch — its cleanup set `cancelled`, its setSequences/setProbed

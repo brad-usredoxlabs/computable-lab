@@ -2,8 +2,9 @@
  * GC-12 browser-gate fix — GcRunSheetSection under <React.StrictMode>.
  *
  * Defect of record (browser receipt 20261028T185555, blocker #1): on a REAL
- * browser the section never rendered on /runs/:runId. main.tsx:17 wraps the
- * app in <React.StrictMode>, and the development build runs every mount
+ * browser the section never rendered on /runs/:runId. main.tsx:37 wraps the
+ * app in <React.StrictMode> (the labware-fixture branch at main.tsx:17 is
+ * wrapped too), and the development build runs every mount
  * effect as mount → cleanup → re-mount. The mount probe stamped its dedupe
  * ref SYNCHRONOUSLY before the request while its setSequences/setProbed
  * callbacks were gated on the `cancelled` flag the cleanup sets — so pass 1
@@ -12,11 +13,19 @@
  * stayed [], and the component rendered null — the entire GC surface dead.
  *
  * This suite renders the section INSIDE <React.StrictMode> (the harness's
- * development react build double-invokes effects, matching the browser) and
- * pins: the GC sheet RENDERS (the surviving pass settles the probe), the
- * probe does not re-fire in a storm after settle (the framework's two
- * passes only, then stable), the DNA case still renders NOTHING, and mount
- * never touches the write/execute surface.
+ * development react build double-invokes effects, matching the browser).
+ * Contract pinned HERE — the OBSERVABLE contract, not the framework's
+ * double-invoke count (GC12 bfix2, orch ruling on advreview F1):
+ *   - production dedupe = at most one probe per runId, pinned in the
+ *     UNTOUCHED D7 accounting fence GcRunSheetSection.no-fetch-accounting.test.tsx
+ *     (the toBe(1) legs);
+ *   - under StrictMode the framework's mount → cleanup → re-mount
+ *     double-invoke MAY re-fire the idempotent probe (pass 1 + surviving
+ *     pass) — that count is framework-internal, not the contract;
+ *   - the contract pinned HERE is: the sheet RENDERS, the probe fires >=1,
+ *     and NO re-fire after settle (no storm).
+ * The DNA case still renders NOTHING, and mount never touches the
+ * write/execute surface.
  *
  * RED (pre-fix): the sheet-present assertions fail — under StrictMode the
  * sheet is ABSENT because the dedupe ref was stamped before the (discarded)
@@ -105,7 +114,8 @@ function wrap(runId: string) {
     <ThemeProvider>
       <OpenTabsProvider>
         <MemoryRouter>
-          {/* main.tsx:17 wraps the app in <StrictMode> — the development
+          {/* main.tsx:37 wraps the app in <StrictMode> (the labware-fixture
+              branch at main.tsx:17 is wrapped too) — the development
               build's mount → cleanup → re-mount effect double-invoke is
               exactly what dead-locked the mount probe in the browser. */}
           <StrictMode>
@@ -164,15 +174,22 @@ describe('GcRunSheetSection — <React.StrictMode> (the browser-gate dead-lock)'
     expect(screen.getByTestId('gc-row-ISEN-SM-2')).toBeDefined()
   })
 
-  it('no re-fire storm: the probe settles on exactly the two StrictMode passes and stays stable', async () => {
-    render(wrap(RUN_GC))
+  it('no re-fire storm: the probe fires >=1 and does NOT grow after settle (no storm)', async () => {
+    const { rerender } = render(wrap(RUN_GC))
     await screen.findByTestId('gc-run-sheet', undefined, { timeout: 4000 })
+    // Sheet up (the sheet-renders leg). The probe has fired at least once —
+    // the framework's StrictMode double-invoke MAY have re-fired the
+    // idempotent probe (pass 1 + surviving pass), so the exact count is
+    // framework-internal, NOT the contract: production single-fire is pinned
+    // separately in GcRunSheetSection.no-fetch-accounting.test.tsx (toBe(1)).
+    expect(probeCalls()).toBeGreaterThanOrEqual(1)
+    // Contract: after settle the count STOPS GROWING. Another settle + a
+    // re-render must NOT re-fire the probe (dedupe on the stamped key).
     await settle()
-    // Exactly the framework's double-invoke (pass 1 cancelled + the
-    // surviving pass) — and a re-render must NOT re-fire the probe.
-    expect(probeCalls()).toBe(2)
+    const after = probeCalls()
     await settle()
-    expect(probeCalls()).toBe(2)
+    rerender(wrap(RUN_GC))
+    expect(probeCalls()).toBe(after)
   })
 
   it('the DNA case still renders NOTHING under StrictMode (byte-identical surface)', async () => {
