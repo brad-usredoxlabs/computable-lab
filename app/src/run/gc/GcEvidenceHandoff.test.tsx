@@ -39,8 +39,18 @@ vi.mock('../../shared/api/client', () => ({
     getRecord: vi.fn(),
     createRecord: vi.fn(),
     getRelatedRecords: vi.fn().mockResolvedValue({ related: [] }),
+    // FIX6 (defect 9): the form reads the source-type enum from the REAL
+    // schema at runtime — mocked with the real enum (the drift test in
+    // gcEvidenceSources.test.ts pins the table against the real YAML).
+    getSchema: vi.fn(),
   },
 }))
+
+const EVD_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/evidence.schema.yaml'
+const ASN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/assertion.schema.yaml'
+const AOUT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/analysis-output-artifact.schema.yaml'
+const CTX_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/context.schema.yaml'
+const REAL_ENUM = ['result', 'context', 'measurement_context', 'event', 'publication', 'file', 'event_graph']
 
 const AOUT_PAYLOAD = {
   kind: 'analysis-output-artifact',
@@ -61,8 +71,38 @@ function mockRun() {
   vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
     record: { recordId: ANR, payload: RUN_PAYLOAD },
   } as never)
+  // FIX6 (defect 9): the form resolves the enum from the real schema at
+  // runtime (getSchema); the shape mirrors the client's SchemaInfo.
+  vi.mocked(apiClient.getSchema).mockImplementation(async (id: string) => {
+    switch (id) {
+      case EVD_SCHEMA_ID:
+        return {
+          id: EVD_SCHEMA_ID,
+          path: 'evidence.schema.yaml',
+          title: 'Evidence',
+          schema: {
+            $defs: {
+              EvidenceSource: {
+                properties: { type: { type: 'string', enum: REAL_ENUM } },
+              },
+            },
+          },
+        } as never
+      case ASN_SCHEMA_ID:
+        return { id: ASN_SCHEMA_ID, path: 'assertion.schema.yaml', title: 'Assertion' } as never
+      case AOUT_SCHEMA_ID:
+        return { id: AOUT_SCHEMA_ID, path: 'analysis-output-artifact.schema.yaml', title: 'AOUT' } as never
+      case CTX_SCHEMA_ID:
+        return { id: CTX_SCHEMA_ID, path: 'context.schema.yaml', title: 'Context' } as never
+      default:
+        throw new Error(`404: schema ${id}`)
+    }
+  })
   const rec: Record<string, unknown> = {
     [AOUT]: AOUT_PAYLOAD,
+    // The form's authoring target (assertion) — the pre-submit kind
+    // resolution (FIX6 defect 10) GETs it; it must resolve cleanly.
+    [ASN]: { kind: 'assertion', id: ASN, scope: 'single_context' },
     'EVD-LEGACY': {
       kind: 'evidence',
       id: 'EVD-LEGACY',
@@ -319,6 +359,45 @@ describe('GcEvidenceHandoff (leg D)', () => {
     expect(runIdsFromEvidence([p])).toEqual(['ANR-X'])
     const artifactOnly: Record<string, unknown> = { ...p, sources: [artifactSource] }
     expect(runIdsFromEvidence([artifactOnly])).toEqual([])
+  })
+
+  it('FIX6 (defect 10): the typed target id is RESOLVED before submit and its record kind must match the chosen target type — a kind mismatch is refused LOUD, never POSTed (the free-text hole: a typo or a wrong-kind id used to produce a lint-passing bundle whose target does not exist as that kind)', async () => {
+    const CTX = 'CTX-WRONG-KIND'
+    // The form must resolve the typed id with a real GET and compare the
+    // record's kind to the chosen target type (assertion|claim).
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
+      switch (id) {
+        case AOUT:
+          return { recordId: AOUT, schemaId: AOUT_SCHEMA_ID, payload: AOUT_PAYLOAD } as never
+        case ASN:
+          return { recordId: ASN, schemaId: ASN_SCHEMA_ID, payload: { kind: 'assertion', id: ASN } } as never
+        case CTX:
+          return { recordId: CTX, schemaId: CTX_SCHEMA_ID, payload: { kind: 'context', id: CTX } } as never
+        default:
+          throw new Error(`404: ${id}`)
+      }
+    })
+    renderHandoff()
+    fireEvent.click(screen.getByTestId('gc-evidence-handoff-open'))
+    fireEvent.click(await screen.findByTestId('gc-evidence-add-as-evidence'))
+    await screen.findByTestId('gc-evidence-form')
+    // A context record is NOT an assertion or a claim — refuse.
+    fireEvent.change(screen.getByTestId('gc-evidence-form-target-id'), { target: { value: CTX } })
+    fireEvent.click(screen.getByTestId('gc-evidence-form-target-type-assertion'))
+    fireEvent.click(screen.getByTestId('gc-evidence-form-stance-supports'))
+    fireEvent.click(screen.getByTestId('gc-evidence-form-submit'))
+    expect(await screen.findByTestId('gc-evidence-form-error')).toHaveTextContent(CTX)
+    expect(apiClient.createRecord).not.toHaveBeenCalled()
+    // The loud arm names the mismatch: the record's actual kind vs the
+    // chosen target type.
+    const err = screen.getByTestId('gc-evidence-form-error')
+    expect(err).toHaveTextContent('context')
+    expect(err).toHaveTextContent('assertion')
+    // A typo (nonexistent id) is refused the same way.
+    fireEvent.change(screen.getByTestId('gc-evidence-form-target-id'), { target: { value: 'ASN-TYPO-404' } })
+    fireEvent.click(screen.getByTestId('gc-evidence-form-submit'))
+    expect(await screen.findByTestId('gc-evidence-form-error')).toHaveTextContent('ASN-TYPO-404')
+    expect(apiClient.createRecord).not.toHaveBeenCalled()
   })
 
   it('a lint-blocked create shows the lint violation VERBATIM (422 lint-invalid, never a fake success)', async () => {

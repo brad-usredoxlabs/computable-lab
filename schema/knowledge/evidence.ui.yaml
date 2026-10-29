@@ -61,23 +61,32 @@ form:
       widget: "array"
       label: "Sources"
       required: true
-      properties:
-      - name: "type"
-        widget: "select"
-        label: "Type"
-        required: true
-        options:
-        - { value: "result", label: "Result (analysis artifact)" }
-        - { value: "context", label: "Context" }
-        - { value: "measurement_context", label: "Measurement context" }
-        - { value: "event", label: "Event" }
-        - { value: "publication", label: "Publication" }
-        - { value: "file", label: "File (data reference)" }
-        - { value: "event_graph", label: "Event graph" }
-      - name: "ref"
-        widget: "record-ref"
-        label: "Ref"
-        required: true
+      # Item hints ride the loader-honored `items:` key (UISpecLoader
+      # validates field.items for widget: array; the ui-v1 field
+      # definition has no `properties` member — that shape was inert).
+      # House item-hint shape: an object widget over the item's
+      # sub-fields (inferFieldHint convention: path $.item).
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Source entry"
+        fields:
+        - path: "type"
+          widget: "select"
+          label: "Type"
+          required: true
+          options:
+          - { value: "result", label: "Result (analysis artifact)" }
+          - { value: "context", label: "Context" }
+          - { value: "measurement_context", label: "Measurement context" }
+          - { value: "event", label: "Event" }
+          - { value: "publication", label: "Publication" }
+          - { value: "file", label: "File (data reference)" }
+          - { value: "event_graph", label: "Event graph" }
+        - path: "ref"
+          widget: "record-ref"
+          label: "Ref"
+          required: true
   - title: "Assessment and lifecycle"
     fields:
     - path: "$.assessment"

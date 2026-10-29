@@ -46,6 +46,25 @@ function asRecordRef(v: unknown): RecordRef | null {
   return { kind: 'record', id: r.id, type: r.type, ...(label !== undefined ? { label } : {}) }
 }
 
+/** FIX6 (defect 9): the EvidenceSource.type enum as the REAL schema
+ *  declares it (getSchema — the runtime source, not a mirror). The
+ *  drift test (gcEvidenceSources.test.ts) pins the mirror table against
+ *  the same file. */
+async function realEvidenceSourceEnum(): Promise<string[] | null> {
+  try {
+    const info = await apiClient.getSchema(EVIDENCE_SCHEMA_ID)
+    const defs = (info.schema as { $defs?: Record<string, unknown> } | undefined)?.$defs
+    const src = defs?.['EvidenceSource'] as
+      | { properties?: { type?: { enum?: unknown } } }
+      | undefined
+    const enumList = src?.properties?.['type']?.enum
+    if (!Array.isArray(enumList)) return null
+    return enumList.filter((v): v is string => typeof v === 'string')
+  } catch {
+    return null
+  }
+}
+
 /** Pull the server lint result off a create rejection (ApiError carries
  *  .lint; a plain rejection may carry details.lint — the 422 body). */
 function lintFromError(e: unknown): { valid: boolean; violations: Array<{ ruleId?: string; message: string }> } | null {
@@ -82,8 +101,36 @@ function GcEvidenceForm({
   const [lintError, setLintError] = useState<{ ruleId?: string; message: string }[] | null>(null)
   const [created, setCreated] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // FIX6 (defect 9): the source-type enum as the schema declares it at
+  // runtime (getSchema — the real runtime source the spec demands; the
+  // hardcoded table in gcEvidenceSources.ts is the mirror, pinned by the
+  // drift test). Loaded when the form mounts (user-triggered — the form
+  // itself only opens on the scientist's "Add as evidence…" act).
+  const [sourceEnum, setSourceEnum] = useState<readonly string[] | null>(null)
+  const [enumError, setEnumError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const real = await realEvidenceSourceEnum()
+      if (cancelled) return
+      if (real !== null && real.length > 0) {
+        setSourceEnum(real)
+      } else {
+        setEnumError(
+          'cannot load the evidence schema (the source-type vocabulary) — source types are never invented',
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  const artifactType = evidenceSourceTypeFor(artifact.type, EVIDENCE_SOURCE_TYPE_ENUM)
+  // The enum in force: the REAL schema enum when it loaded; the mirrored
+  // table as the declared twin until then (the drift test keeps them equal).
+  const enumValues = sourceEnum ?? EVIDENCE_SOURCE_TYPE_ENUM
+
+  const artifactType = evidenceSourceTypeFor(artifact.type, enumValues)
   const artifactSource: { type: string; ref: RecordRef } | null =
     artifactType !== null ? { type: artifactType, ref: artifact } : null
 
@@ -94,7 +141,7 @@ function GcEvidenceForm({
     try {
       const env = await apiClient.getRecord(id)
       const kind = (env.payload as Record<string, unknown>).kind
-      const type = typeof kind === 'string' ? evidenceSourceTypeFor(kind, EVIDENCE_SOURCE_TYPE_ENUM) : null
+      const type = typeof kind === 'string' ? evidenceSourceTypeFor(kind, enumValues) : null
       if (type === null) {
         setExtraError(`record '${id}' has no declared evidence source type (kind '${String(kind)}') — the type is never invented`)
         return
@@ -104,6 +151,30 @@ function GcEvidenceForm({
     } catch (e) {
       setExtraError(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  /** FIX6 (defect 10, the spec's OR-clause): the typed target id is
+   *  RESOLVED before submit (a real GET) and its record kind must match
+   *  the chosen target type — a mismatch or a missing record is refused
+   *  LOUD (the free-text hole: a typo used to POST a bundle whose target
+   *  does not exist as the chosen kind). Returns an error string, or null
+   *  when the target resolves cleanly. */
+  async function resolveTargetKind(
+    id: string,
+    expectedType: string,
+  ): Promise<string | null> {
+    let env: { payload: Record<string, unknown> }
+    try {
+      env = await apiClient.getRecord(id)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return `target '${id}' does not resolve (${msg}) — the id is never POSTed unresolved`
+    }
+    const kind = (env.payload as Record<string, unknown>).kind
+    if (typeof kind !== 'string' || kind !== expectedType) {
+      return `target '${id}' is a '${String(kind)}' record, not a '${expectedType}' — the record kind must match the chosen target type`
+    }
+    return null
   }
 
   // FIX5 (defect 4a): the authored bundle carries the RUN as an explicit
@@ -134,6 +205,15 @@ function GcEvidenceForm({
     ]
     if (sources.length === 0) {
       setError('The bundle declares no source')
+      return
+    }
+    // FIX6 (defect 10): the typed target id is RESOLVED before submit and
+    // its record kind must match the chosen target type — a mismatch is
+    // refused LOUD (a typo used to POST a bundle whose target does not
+    // exist as that kind).
+    const targetErr = await resolveTargetKind(targetId.trim(), targetType)
+    if (targetErr !== null) {
+      setError(targetErr)
       return
     }
     const id = `EVD-GC13-${runId.replace(/[^A-Z0-9]/gi, '')}-${Date.now().toString(36)}`
@@ -238,6 +318,11 @@ function GcEvidenceForm({
           </label>
         ))}
       </div>
+      {enumError !== null && (
+        <span data-testid="gc-evidence-form-enum-error" className="gc-ev-form__error">
+          {enumError}
+        </span>
+      )}
       <input
         data-testid="gc-evidence-form-notes"
         value={notes}
