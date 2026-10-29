@@ -565,6 +565,17 @@ export interface AiAgentResult {
     turns?: number
     toolCalls?: number
   }
+  /**
+   * SHORTHAND-CHAT (intent: event_shorthand): the scientist-intent shorthand
+   * document the model emitted, carried VERBATIM — byte-identical to what the
+   * deterministic compiler parsed. The universal chat pane renders it
+   * verbatim in the assistant turn's intent card (L2-CHAT-UI-1 LEG A).
+   * Mirror of server/src/ai/types.ts AgentResult.shorthand (the same POST
+   * /ai/assist/stream done payload). exactOptionalPropertyTypes: every
+   * emission/ride site uses the conditional-spread idiom — key ABSENT when
+   * the turn carried no shorthand, never `undefined`.
+   */
+  shorthand?: string
 }
 
 export interface AiAssuranceFinding {
@@ -660,6 +671,16 @@ export interface ChatMessage {
    * without this field is an incomplete (prompt, step, graph) training pair.
    */
   consumedContext?: Record<string, unknown>
+  /**
+   * L2-CHAT-UI-1 LEG A (A2/A3): the scientist-intent shorthand document the
+   * done payload carried for this assistant turn (server AgentResult.shorthand,
+   * the same POST /ai/assist/stream), ridden verbatim — key ABSENT when the
+   * turn carried no shorthand, never `undefined` (the conditional-spread
+   * idiom the server uses at every emission site). The universal chat pane
+   * renders it in the intent card; the thread persist/hydrate pair forwards
+   * it through `metadata.shorthand` so the card survives a reload.
+   */
+  shorthand?: string
 }
 
 export interface AiConversationMessage {
