@@ -11,12 +11,16 @@
  * text (names the class, never blames the wording) and skips the slow
  * coercion call entirely (call count pinned at 2).
  *
- * Contract under test (the 4 legs, spec §Mechanical floor):
+ * Contract under test (spec §Mechanical floor legs 1-4 + the fix1 leg 5):
  *   1. recovered-on-retry: stream 1 degenerate, stream 2 a valid
  *      agent_intent tool call -> the turn completes with a proposal; the
- *      second request re-issues the SAME messages UNMUTATED (deep-compare);
- *      the recovery log line `degenerate-response recovered on retry`
- *      appears.
+ *      second request re-issues the SAME messages UNMUTATED — proven by
+ *      deep-comparing SNAPSHOTS taken at call time (fix1: `captured` stores
+ *      the SAME `messages` array reference every turn — completionReq
+ *      carries the live array — so comparing captured[i] against
+ *      captured[j] is a tautology that cannot detect a push between the
+ *      calls); the recovery log line `degenerate-response recovered on
+ *      retry` appears.
  *   2. double-degenerate: both streams degenerate -> completeStream called
  *      EXACTLY twice (one retry budget), `complete` called ZERO times (the
  *      skip-coercion ruling), success:false, the error names the degenerate
@@ -28,6 +32,12 @@
  *   4. non-degenerate zero extra calls: a normal native tool-call turn makes
  *      exactly ONE completeStream call and ZERO complete calls (the
  *      signature check is side-effect-free until it matches).
+ *   5. fix1 (DEFECT 2): a retry that ends finish=length with EMPTY content
+ *      and ZERO tool calls is a STILL-DEAD attempt (not the four-part
+ *      signature — it keeps the old slow coercion + hard error), and the
+ *      run FAILS — so it must NOT log `degenerate-response recovered on
+ *      retry` (the recovery line is gated on the retry actually producing
+ *      tool_calls or non-blank content).
  *
  * OQ1 disposition (verified first-hand at trunk 56829cf5): NO existing
  * compliance pin asserts a nudge on an EMPTY-content turn — the
@@ -106,14 +116,31 @@ function orchestratorDeps() {
  * Scripted stub (the repeatEcho harness shape): one queued assistant turn per
  * completeStream call, clamped to the last spec. A spec WITHOUT a `content`
  * key and WITHOUT `toolCalls` is the DEGENERATE shape (empty content + no
- * tool_calls + finish=stop). `complete` (the coercion slow path) is a plain
- * spy whose body is set per leg (legs 1/2 expect ZERO calls).
+ * tool_calls + finish=stop); a spec with `finishReason: 'length'` is the
+ * still-dead EMPTY length turn (fix1 leg 5). `complete` (the coercion slow
+ * path) is a plain spy whose body is set per leg (legs 1/2 expect ZERO
+ * calls).
+ *
+ * FIX1 (DEFECT 1): `messageSnapshots` stores a DEEP SNAPSHOT of
+ * `request.messages` taken AT CALL TIME (structuredClone, falling back to a
+ * JSON round-trip for exotic fields). `captured` alone cannot serve this:
+ * completionReq carries the SAME live `messages` array reference every turn
+ * (AgentOrchestrator.ts `let messages: ChatMessage[]` → `messages,` in
+ * completionReq), so a push between the two calls is visible to both sides
+ * of a captured[i]-vs-captured[j] comparison — that assertion was a
+ * tautology. Snapshot-vs-snapshot is what makes a between-call push RED.
  */
 function stubModel(responses: Array<Record<string, unknown>>) {
   let call = 0;
   const captured: CompletionRequest[] = [];
+  const messageSnapshots: unknown[] = [];
   const completeStream = vi.fn(async function* (request: CompletionRequest) {
     captured.push(request);
+    messageSnapshots.push(
+      typeof structuredClone === 'function'
+        ? structuredClone(request.messages)
+        : JSON.parse(JSON.stringify(request.messages)),
+    );
     const spec = responses[Math.min(call, responses.length - 1)]!;
     call += 1;
     const delta: Record<string, unknown> = { role: 'assistant' };
@@ -131,7 +158,9 @@ function stubModel(responses: Array<Record<string, unknown>>) {
       choices: [{
         index: 0,
         delta,
-        finish_reason: Array.isArray(spec.toolCalls) ? 'tool_calls' : 'stop',
+        finish_reason: typeof spec.finishReason === 'string'
+          ? spec.finishReason
+          : (Array.isArray(spec.toolCalls) ? 'tool_calls' : 'stop'),
       }],
     } as unknown as import('./types.js').CompletionResponse;
   });
@@ -141,6 +170,8 @@ function stubModel(responses: Array<Record<string, unknown>>) {
   return {
     client: { complete, completeStream } as InferenceClient,
     captured,
+    messageSnapshots,
+    complete,
     callCount: () => completeStream.mock.calls.length,
     completeCalls: () => complete.mock.calls.length,
   };
@@ -267,10 +298,19 @@ describe('L2-DEGEN-RETRY-1 — degenerate forced-tool-call defense', () => {
     expect(model.callCount()).toBe(2);
     expect(model.completeCalls()).toBe(0);
 
-    // History UNMUTATED: the second request's messages are the same array
-    // contents as the first — the dead assistant turn never rode back.
+    // History UNMUTATED (fix1, DEFECT 1): compare the DEEP SNAPSHOTS taken
+    // at call time, NOT the captured requests — completionReq carries the
+    // same live `messages` array reference every turn, so a captured[i] vs
+    // captured[j] compare is a tautology: a push between the two calls
+    // mutates both sides at once. Snapshot 2 must equal snapshot 1: the
+    // dead assistant turn never rode back into the retry prompt.
     expect(model.captured).toHaveLength(2);
-    expect(JSON.stringify(model.captured[1]!.messages)).toBe(JSON.stringify(model.captured[0]!.messages));
+    expect(model.messageSnapshots).toHaveLength(2);
+    expect(JSON.stringify(model.messageSnapshots[1])).toBe(JSON.stringify(model.messageSnapshots[0]));
+    // Reference-identity evidence (the reviewer's probe, now load-bearing):
+    // the two requests DO share the live array — which is exactly why the
+    // snapshot taken at call time is the only guard that can fail.
+    expect(model.captured[1]!.messages).toBe(model.captured[0]!.messages);
 
     // The turn completed with a proposal (never the empty-draft error).
     expect(result.success).toBe(true);
@@ -395,5 +435,56 @@ describe('L2-DEGEN-RETRY-1 — degenerate forced-tool-call defense', () => {
     expect(model.completeCalls()).toBe(0);
     expect(result.success).toBe(true);
     expect((result.events ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('leg 5 (fix1, DEFECT 2): a retry that is an EMPTY length turn and whose run FAILS does NOT log recovery', async () => {
+    // Stream 1: the four-part degenerate signature (stop + empty + no
+    // tool_calls) — the one-retry budget is consumed. Stream 2 (the retry):
+    // finish_reason:'length' + EMPTY content + zero tool calls — a
+    // STILL-DEAD attempt. It is NOT the four-part signature (the finish
+    // part differs — OBS-4: the signature is not widened), so the retry
+    // falls through to the old slow coercion (`complete` once) and the
+    // hard `AI stopped without calling …` error — the run FAILS. A failed
+    // run must NOT claim `degenerate-response recovered on retry` (the
+    // recovery line is gated on the retry actually producing tool_calls or
+    // non-blank content — spec §Design 2: "when the retry attempt
+    // SUCCEEDS after the signature fired, log once").
+    const model = stubModel([
+      {}, // degenerate signature: finish=stop, empty content, no tool_calls
+      { finishReason: 'length' }, // retry: empty length turn — still dead
+    ]);
+    // The slow coercion path IS reachable here (the retry is a non-stop
+    // empty turn, so the four-part signature does not fire on it) — and it
+    // produces nothing usable, so the run ends on the hard error.
+    model.complete.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: ' ' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    } as never);
+
+    const { result, events, logLines } = await runDegenerateTurn(model);
+
+    // Two streams: the dead turn + the retry. The retry fell through to the
+    // old slow coercion (one `complete` call) and the run ended on the
+    // hard error — success:false.
+    expect(model.callCount()).toBe(2);
+    expect(model.completeCalls()).toBe(1);
+    expect(result.success).toBe(false);
+    const error = String(result.error ?? '');
+    expect(error).toContain('AI stopped without calling');
+    // THE guard: an empty non-stop retry on a FAILED run must emit ZERO
+    // recovery lines (RED before the fix: the guard was
+    // `degenerateRetryConsumed && !degenerateRecoveryLogged`, which fired
+    // on ANY post-signature attempt that did not reproduce the stop-empty
+    // signature — including a still-dead empty length turn).
+    expect(logLines.filter((l) => l.includes(RECOVERY_LOG_LINE))).toHaveLength(0);
+    // The dead-attempt observability line (the consumed-budget notice) is
+    // still the ONE line this run emits about the degenerate turn — the
+    // failure is traceable, it just does not claim a recovery.
+    expect(logLines.some((l) => l.includes('re-issuing the request once'))).toBe(true);
+    // The failure still rides the error channel (empty content is never
+    // routed to notes — proseRouted is false on an empty finalProse).
+    expect(events.some((e) => e.type === 'error')).toBe(true);
+    expect(result.notes).toBeUndefined();
+    expect((result.events ?? []).length).toBe(0);
   });
 });

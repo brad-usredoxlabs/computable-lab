@@ -2394,14 +2394,28 @@ export function createAgentOrchestrator(
           // CURRENT path unchanged. Do NOT consume or block anything.
         }
 
-        // L2-DEGEN-RETRY-1 recovery log: the signature fired earlier this
-        // run (the one-retry budget was consumed) and this attempt did NOT
-        // reproduce it — the retry produced tool_calls or usable (non-empty)
-        // content. The normal flow owns the outcome; this line names the
-        // recovery for the trace. The tid rides the prefix — provider
-        // identity resolves OFFLINE from the orproxy calls.log, never a
-        // provider literal in code.
-        if (degenerateRetryConsumed && !degenerateRecoveryLogged) {
+        // L2-DEGEN-RETRY-1 recovery log (fix1): the signature fired earlier
+        // this run (the one-retry budget was consumed) AND this attempt is
+        // actually recoverable — it produced tool_calls OR non-blank content
+        // (the same quantities the four-part signature negates). The gate is
+        // on recoverability at this point, NOT on "did not reproduce the
+        // stop-empty signature": an empty non-stop attempt (finish=length +
+        // empty content + zero tool calls) is still a dead turn — it falls
+        // through to the slow coercion and the hard error below, and a
+        // FAILED run must not claim a recovery (DEFECT 2, fix1; OBS-4: the
+        // signature itself is NOT widened — this gates the log line only).
+        // The normal flow owns the outcome; this line names the recovery
+        // for the trace. The tid rides the prefix — provider identity
+        // resolves OFFLINE from the orproxy calls.log, never a provider
+        // literal in code.
+        if (
+          degenerateRetryConsumed
+          && !degenerateRecoveryLogged
+          && (
+            assistantMsg.tool_calls?.length
+            || (typeof assistantMsg.content === 'string' && assistantMsg.content.trim().length > 0)
+          )
+        ) {
           degenerateRecoveryLogged = true;
           console.log(`[agent ${tid}] degenerate-response recovered on retry`);
         }
