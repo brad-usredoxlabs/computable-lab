@@ -568,7 +568,7 @@ describe('GC-16 FIX RUN 3 D11 — ref-shaped item hints are schema-faithful (dat
       ).toEqual(['record'])
       expect(
         kindField!.readonly,
-        'D18: a readonly single-option select with no seed makes kind:record unauthorable (the D11 rescope already ruled a seed inexpressible on the ui-v1 surface) — drop readonly so the author picks the option',
+        'D18: a readonly single-option select with no seed makes kind:record unauthorable (the D11 rescope already ruled a seed inexpressible on the ui-v1 surface) — readonly is a contradictory declaration; dropping it removes that contradiction only, it does not make the value authorable until R1 renders item sub-slots',
       ).toBeFalsy()
     },
   )
