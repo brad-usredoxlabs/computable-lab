@@ -811,16 +811,31 @@ function toCandidateEvent(
   //     by the expander's ONE parser (expandWellTokens, simpleVerbs Task 15);
   //     anything that is not a well address has no consumer and would ship a
   //     fabricated well — bar it instead.
+  //     WELLSET-RESOLVER-1 exemption: a value carried on a declared
+  //     `kind: wellset` argument that is a member of the vocabulary's
+  //     wellsetValueTokens DATA list HAS a consumer — the resolve_wellsets
+  //     pass realizes it into a concrete well set downstream (the same
+  //     "realize only where a consumer exists" rule the bar enforces, applied
+  //     the other way). Membership is vocabulary DATA — no token literal, no
+  //     verb-name branch here.
   if (wellsLabelArgs.size === 0) {
     const wellsClaim = firstKeyed(action, ['targetWells', 'wells']);
     if (wellsClaim && typeof wellsClaim.value === 'string' && wellsClaim.value.trim()) {
-      const tokens = expandWellTokens([wellsClaim.value.trim()]);
-      if (!tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token))) {
-        unrealized.push({
-          label: wellsClaim.value.trim(),
-          reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
-          actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: wellsClaim.key },
-        });
+      const claimValue = wellsClaim.value.trim();
+      const declaredWellsetCarrier = vocabulary
+        .argContracts(verb)
+        .some((contract) => contract.kind === 'wellset' && contract.name === wellsClaim.key);
+      const declaredToken =
+        declaredWellsetCarrier && vocabulary.wellsetValueTokens().includes(claimValue);
+      if (!declaredToken) {
+        const tokens = expandWellTokens([claimValue]);
+        if (!tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token))) {
+          unrealized.push({
+            label: claimValue,
+            reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
+            actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: wellsClaim.key },
+          });
+        }
       }
     }
   }

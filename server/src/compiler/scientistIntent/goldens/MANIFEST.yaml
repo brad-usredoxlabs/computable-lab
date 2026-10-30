@@ -22,7 +22,22 @@ treeState:
   # canonical `referentLevels` list the vocabulary lint/meta-schema check
   # against. No verb, no arg, no strategyOrder, no policy value changed.
   # Before/after diff recorded in MATRES-ELIG-report.l2t1445-coder1.md.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 32c5b5b17fc8f38bb8e108db61b8336887a7270bafb079cdde221bebb7af3ba5}
+  # WELLSET-RESOLVER-1 REBLESS (this item, l2t0310, blessed ONCE in the same
+  # commit): the mix verb gained the DECLARED `wells` kind:wellset carrier +
+  # the top-level wellsetValueTokens DATA list (token: all-wells-containing-
+  # materials). No other verb, arg, referentLevel, or policy value changed;
+  # no golden fixture/record moved (the resolve_wellsets pass is byte-identical
+  # passthrough when no token is present). BEFORE: vocab 32c5b5b1.. (plus a
+  # pre-existing trunk drift from the claim-tip 54342f5e..), AFTER: 65bff52145
+  # b2bb1f173c0d6a6006e8b7967bd2d9a7e93b23a460ed8ba6742398.
+  # WELLSET-RESOLVER-1 FIX RUN 1 REBLESS (advc cycle-1 D8, blessed ONCE in the
+  # fix commit): the vocabulary gained the top-level materialBearingEventTypes
+  # DATA list (add_material / multi_dispense / dispense — the contents-bearing
+  # event taxonomy the resolver pass now reads INSTEAD of a hardcoded TS
+  # array). No verb, arg, token, referentLevel, or policy value changed; the
+  # only other delta is comments. BEFORE: 65bff521.., AFTER: 0ce55142e6f7714b
+  # 99689ba528123f789bc93452e4e63784c2cee3ca80847927.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 0ce55142e6f7714b99689ba528123f789bc93452e4e63784c2cee3ca80847927}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
@@ -41,8 +56,25 @@ treeState:
   # 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4 (one
   # deliberate re-hash, same commit; before/after captured by
   # server/scripts/cellrate-bless.mts).
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4}
-  - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
+  # WELLSET-RESOLVER-1 REBLESS (same bless): the wire schema gained the
+  # ADDITIVE action-level `wells` oneOf (array|string) — the wellset token
+  # carrier (Ajv declares only that the KEY exists; the vocabulary-driven pass
+  # decides token membership). additionalProperties posture UNCHANGED.
+  # BEFORE: 647f524d.. (plus pre-existing trunk drift from the claim-tip
+  # 85eee51a..), AFTER: 78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6.
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6}
+  # WELLSET-RESOLVER-1 REBLESS (same bless): the pipeline gained the DECLARED
+  # resolve_wellsets pass (family expand, depends_on mirroring resolve_roles).
+  # BEFORE: b47eee0c.., AFTER: 6b1943773e9e6a110c8ad128118346a2ea89d1e14702682da14a1fbecd73aaca.
+  # WELLSET-RESOLVER-1 FIX RUN 1 REBLESS (advc cycle-1 D3, blessed ONCE in the
+  # fix commit): the declared EDGES now COVER the pass's reads and its
+  # republished-slot consumers — resolve_wellsets depends_on [resolve_roles,
+  # resolve_nouns, resolve_labware] and compute_volumes / lab_state /
+  # emit_instrument_run_files gained the resolve_wellsets edge. No pass was
+  # added or removed (the pass-list length is unchanged); correctness no longer
+  # rests on Kahn's FIFO tie-break / YAML textual order. BEFORE: 6b194377..,
+  # AFTER: b91ef3b4e5e30e619e5fa7b44daa5d2be1f45c8b7bfaad0a4c169f2ad1bd8536.
+  - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b91ef3b4e5e30e619e5fa7b44daa5d2be1f45c8b7bfaad0a4c169f2ad1bd8536}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
   - {name: golden.intent-to-graph.labware-hint-regression, path: fixtures/labware-hint-regression.yaml, sha256: 17774b3aacbfda6cb385316a8474fa17123c38c90fa6e27145025aa759c100e3}

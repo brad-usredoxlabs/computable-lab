@@ -55,6 +55,7 @@ import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.j
 import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js';
 import { emptyLabState } from '../state/LabState.js';
 import { normalizeScientistIntent } from '../scientistIntent/normalizeScientistIntent.js';
+import { createResolveWellsetsPass } from '../scientistIntent/resolveWellsetsPass.js';
 import { parseScientistIntent } from '../scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../scientistIntent/compileScientistIntent.js';
 import { loadScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
@@ -80,6 +81,10 @@ const DOWNSTREAM_STAGES = [
   'resolve_labware',
   'resolve_references',
   'resolve_roles',
+  // WELLSET-RESOLVER-1: the declared resolver pass is downstream of the bar
+  // (its depends_on mirrors resolve_roles, which includes resolve_nouns) — it
+  // must stay un-invoked on a bar too.
+  'resolve_wellsets',
   'compute_volumes',
   'compute_resources',
   'plan_deck_layout',
@@ -184,6 +189,15 @@ function buildSpiedRegistry(
       ontologyTermRegistry: getOntologyTermRegistry(),
     }),
     createResolveRolesPass(),
+    // WELLSET-RESOLVER-1: the registry MIRRORS compileScientistIntent's
+    // buildRegistry — the declared resolve_wellsets pass (registered un-spied
+    // in production; spied here like its neighbours) must exist or the runner
+    // cannot execute the YAML's declared pass-list. It IS added to
+    // DOWNSTREAM_STAGES (it runs after resolve_nouns, so a bar must skip it
+    // too); every fixture doc here carries NO declared wellset token, so it
+    // is a byte-identical passthrough — the skip proof holds either way, and
+    // the count advance (17->18) is this item's declared delta.
+    createResolveWellsetsPass({ vocabulary: opts.vocabulary ?? shippedVocab() }),
     createComputeVolumesPass(),
     createComputeResourcesPass(),
     createPlanDeckLayoutPass(),
@@ -218,7 +232,9 @@ function pipelineInput() {
 describe('scientist-intent-pipeline.resolution-pass-order', () => {
   it('the declared pipeline carries resolve_nouns as the 17th pass, family disambiguate', () => {
     const spec = loadPipeline(PIPELINE_PATH);
-    expect(spec.passes.length).toBe(17);
+    // WELLSET-RESOLVER-1: the declared pass-list grew to 18 — resolve_wellsets
+    // (family expand, after resolve_roles) is this item's DELIBERATE addition.
+    expect(spec.passes.length).toBe(18);
 
     const resolveNouns = spec.passes.find((p) => p.id === 'resolve_nouns');
     expect(resolveNouns).toBeDefined();
@@ -246,6 +262,35 @@ describe('scientist-intent-pipeline.resolution-pass-order', () => {
     expect(nounsIndex).toBeGreaterThan(-1);
     for (const consumer of NOUN_CONSUMERS) {
       expect(order.indexOf(consumer), `${consumer} runs before resolve_nouns`).toBeGreaterThan(nounsIndex);
+    }
+  });
+
+  // WELLSET-RESOLVER-1 FIX RUN 1 (advc D3): the resolver pass declares the
+  // slots it READS, and the consumers of its REPUBLISHED resolve_roles slot
+  // declare the resolve_wellsets edge — correctness must never rest on Kahn's
+  // FIFO tie-break or the YAML's textual order.
+  it('resolve_wellsets declares its read slots and the republished-slot consumers declare IT (no tie-break dependence)', () => {
+    const spec = loadPipeline(PIPELINE_PATH);
+    const wellsets = spec.passes.find((p) => p.id === 'resolve_wellsets');
+    expect(wellsets, 'resolve_wellsets missing from the declared pass-list').toBeDefined();
+    // The pass reads the resolve_roles slot, the resolve_nouns bindings and
+    // the resolve_labware records — all three must be DECLARED deps.
+    for (const dep of ['resolve_roles', 'resolve_nouns', 'resolve_labware']) {
+      expect(wellsets!.depends_on ?? [], `resolve_wellsets lacks the ${dep} edge`).toContain(dep);
+    }
+    // The consumers that read the republished resolve_roles event list.
+    for (const consumer of ['compute_volumes', 'lab_state', 'emit_instrument_run_files']) {
+      const pass = spec.passes.find((p) => p.id === consumer);
+      expect(pass, `consumer ${consumer} missing`).toBeDefined();
+      expect(pass!.depends_on ?? [], `${consumer} lacks the resolve_wellsets edge`).toContain('resolve_wellsets');
+    }
+    // The Kahn order reflects the EDGES, not the YAML order: the resolver is
+    // topologically after resolve_roles and before each republished-slot
+    // consumer for ANY replay of the same edge set.
+    const order = topologicalOrder(spec);
+    expect(order.indexOf('resolve_wellsets')).toBeGreaterThan(order.indexOf('resolve_roles'));
+    for (const consumer of ['compute_volumes', 'lab_state', 'emit_instrument_run_files']) {
+      expect(order.indexOf(consumer), `${consumer} runs before resolve_wellsets`).toBeGreaterThan(order.indexOf('resolve_wellsets'));
     }
   });
 

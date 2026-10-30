@@ -63,6 +63,7 @@ import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { stripRedundantMixtureLabels } from './mixtureLabelRedundancy.js';
 import { capResolvedLabwares } from './deckReviewFold.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+import { createResolveWellsetsPass } from './resolveWellsetsPass.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
   createResolveNounsPass,
@@ -196,7 +197,13 @@ function buildRegistry(
   registry.register(createValidateProtocolIntentPass());
   registry.register(createLowerProtocolIntentPass());
   registry.register(createExpandProtocolIntentPatternsPass());
-  registry.register(createExpandBiologyVerbsPass());
+  // WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): this chain opts INTO declared
+  // candidate provenance (details.sourceActionIndex) — the identity the
+  // resolve_wellsets candidate->event join correlates on. resolve_wellsets
+  // STRIPS the stamp before republishing the resolve_roles slot, so no
+  // downstream artifact carries it. The chatbot pipeline registers the pass
+  // WITHOUT the opt and stays byte-identical.
+  registry.register(createExpandBiologyVerbsPass({ stampCandidateProvenance: true }));
   registry.register(createApplyDirectivesPass());
   registry.register(createLabwareResolvePass({
     searchLabwareByHint: deps.searchLabwareByHint ?? (async () => []),
@@ -209,6 +216,19 @@ function buildRegistry(
     ontologyTermRegistry: getOntologyTermRegistry(),
   }));
   registry.register(createResolveRolesPass());
+  // WELLSET-RESOLVER-1: the server-side contents-derived wellset resolver.
+  // Declared in scientist-intent-compile.yaml (family expand, after
+  // resolve_roles) — resolves a declared kind:wellset token to a concrete well
+  // set from the run's contents ledger (priorLabState + the current document's
+  // own events) and writes it onto the post-expansion events, republishing the
+  // list to the resolve_roles slot. Vocabulary-driven (no verb branch); the
+  // vocabulary is the SAME instance the resolve_nouns registration threads
+  // (deps.vocabulary ?? the shipped singleton) — never the default singleton
+  // behind an injected vocab.
+  const wellsetVocabulary = deps.vocabulary ?? defaultScientistIntentVocabulary();
+  registry.register(createResolveWellsetsPass({
+    vocabulary: wellsetVocabulary,
+  }));
   registry.register(createComputeVolumesPass());
   registry.register(createComputeResourcesPass());
   registry.register(createPlanDeckLayoutPass());
@@ -297,6 +317,12 @@ export async function compileScientistIntent(
     mentions: [],
     editorLabwares: [],
     labState: deps.priorLabState ?? emptyLabState(),
+    // WELLSET-RESOLVER-1 FIX RUN 1 (advc D2): the scientist's answers ALSO
+    // ride the PIPELINE INPUT so the resolve_wellsets pass consumes them —
+    // the answered ambiguity fact's reading id (a resolved record identity)
+    // re-pins the ledger and the recompile converges instead of re-firing.
+    // Conditional spread: the key is ABSENT, never undefined.
+    ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
   };
 
   const result = await runPipeline(spec, registry, input, undefined, deps.onPassEvent);

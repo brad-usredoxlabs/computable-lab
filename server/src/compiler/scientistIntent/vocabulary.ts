@@ -41,7 +41,7 @@ export function defaultVocabularyDataPath(): string {
 }
 
 export type ScientistIntentVerbClass = 'simple' | 'compound' | 'pattern';
-export type ScientistIntentArgKind = 'resolvable' | 'scalar' | 'wells' | 'quantity';
+export type ScientistIntentArgKind = 'resolvable' | 'scalar' | 'wells' | 'quantity' | 'wellset';
 
 /** One per-argument contract declaration (exactOptionalPropertyTypes: optional
  *  members are ABSENT-or-value, built by conditional spread only). */
@@ -113,6 +113,25 @@ export interface ScientistIntentVocabulary {
    *  drift (the PB-CH-4b precedent: the model's menu must BE the compiler's
    *  membership check). */
   contractBlock(): string;
+  /**
+   * WELLSET-RESOLVER-1: the DECLARED contents-derived wellset token VALUES
+   * (the vocabulary's wellsetValueTokens DATA list, declaration order). The
+   * server-side resolve_wellsets pass reads THIS list to decide which
+   * kind:wellset argument values are declared tokens — the token membership is
+   * DATA (the B3 boundary: no token string-literal in the pass). Empty when the
+   * vocabulary declares no wellsetValueTokens section (the optional slot).
+   */
+  wellsetValueTokens(): readonly string[];
+  /**
+   * WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the DECLARED material-bearing
+   * EVENT TYPES (the vocabulary's materialBearingEventTypes DATA list) — the
+   * primitive event types that add material to a well. The resolve_wellsets
+   * pass reads THIS list to build the pending-draft layer of the contents
+   * ledger — no hardcoded taxonomy in TS. Empty when the vocabulary declares
+   * no materialBearingEventTypes section (the optional slot): the pending
+   * layer then contributes nothing (fail-closed to the committed layer).
+   */
+  materialBearingEventTypes(): readonly string[];
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -189,7 +208,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   // --- Read the validated document into the frozen consumption API --------
   interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
-  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies }
+  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[] }
 
   const raw = doc as RawDoc;
   const verbs: string[] = [];
@@ -235,6 +254,19 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const verbsFrozen: readonly string[] = Object.freeze(verbs);
   const patternsFrozen: ReadonlySet<string> = patterns;
   const policies: ScientistIntentVocabularyPolicies = raw.policies;
+  // WELLSET-RESOLVER-1: the DECLARED contents-derived wellset token VALUES
+  // (DATA — the meta-schema validates the shape; generic read, no per-value
+  // branch, frozen). Absent section ⇒ empty list (the optional slot).
+  const wellsetValueTokensFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.wellsetValueTokens) ? raw.wellsetValueTokens.filter((t) => typeof t === 'string') : [],
+  )
+  // WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the material-bearing event-type
+  // taxonomy is DATA (the vocabulary's materialBearingEventTypes list) — read
+  // per load, same discipline as the token list; absent section => [] (the
+  // pending-draft layer contributes nothing, fail-closed).
+  const materialBearingEventTypesFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.materialBearingEventTypes) ? raw.materialBearingEventTypes.filter((t) => typeof t === 'string') : [],
+  );
 
   // Deterministic wrap for the prompt block (width-bounded, declaration order;
   // reproduces the historical hand-wrapped block byte-for-byte at width 74).
@@ -280,6 +312,8 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     promptVerbBlock,
     toolActionEnum: () => [...verbsFrozen],
     contractBlock,
+    wellsetValueTokens: () => wellsetValueTokensFrozen,
+    materialBearingEventTypes: () => materialBearingEventTypesFrozen,
   };
 }
 

@@ -111,6 +111,17 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
         const value = a[contract.name];
         if (Array.isArray(value) && value.length > 0) clean[contract.name] = value;
       }
+      // WELLSET-RESOLVER-1: a string on a declared `kind: wellset` argument
+      // (vocabulary DATA — membership from argContracts, no key literal, no
+      // verb branch) rides through VERBATIM so the resolve_wellsets pass sees
+      // the symbolic token. TOKEN VALIDITY is NOT decided here (Ajv + the
+      // normalize wellset bar own that); carrying a non-token string keeps
+      // the never-silent-drop doctrine — the producer bar sees it downstream.
+      for (const contract of vocabulary.argContracts(actionName)) {
+        if (contract.kind !== 'wellset') continue;
+        const value = a[contract.name];
+        if (typeof value === 'string' && value.trim()) clean[contract.name] = value.trim();
+      }
       return [clean as unknown as ScientistIntentActionValue];
     }),
     unresolved: unresolvedBase.flatMap((u) => {

@@ -45,6 +45,7 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { foldSameNounCards } from '../compiler/resolution/clarificationDedupe.js';
 import {
@@ -137,6 +138,16 @@ export interface ShorthandCompileDeps {
    * byte-identically. No deck context wired ⇒ zero behavior change.
    */
   deckLabwares?: readonly DeckLabwareSummary[];
+  /**
+   * WELLSET-RESOLVER-1: the conversation's PRIOR lab state (the committed
+   * contents layer) — read from the LabStateCache keyed by the conversation
+   * and threaded VERBATIM into compileScientistIntent (whose resolve_wellsets
+   * pass folds it into the contents ledger beside the current document's own
+   * events). Absent: every other caller is byte-unchanged (the compile's own
+   * `deps.priorLabState ?? emptyLabState()` arm). exactOptionalPropertyTypes:
+   * the key is ABSENT, never undefined — the caller spreads conditionally.
+   */
+  priorLabState?: LabStateSnapshot;
 }
 
 /**
@@ -492,6 +503,10 @@ export async function compileShorthandDeterministically(
     ...(deps.answeredClarificationLabels
       ? { answeredClarificationLabels: deps.answeredClarificationLabels }
       : {}),
+    // WELLSET-RESOLVER-1: the committed contents layer rides the compile as
+    // the resolve_wellsets pass's priorLabState (conditional spread — the key
+    // is ABSENT, never undefined, per exactOptionalPropertyTypes).
+    ...(deps.priorLabState ? { priorLabState: deps.priorLabState } : {}),
   });
 }
 

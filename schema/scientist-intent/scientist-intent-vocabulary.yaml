@@ -100,6 +100,26 @@ verbs:
       - name: temperatureC
         kind: quantity
         required: false
+      # WELLSET-RESOLVER-1 (architect ruling SUITEA-P7-mix-wellset-scope-l2t0635
+      # Q2): the declared CONTENTS-DERIVED wellset carrier. A symbolic token
+      # (never a well list) that the server-side resolve_wellsets pass resolves
+      # to a concrete well set from the run's contents ledger. kind: wellset is
+      # its OWN argument kind (not a referent level, not a resolvable noun) —
+      # the membership + token set are DATA (the pass reads them from this
+      # vocabulary object, never a string literal). required: false so a mix
+      # with no wellset rides byte-identically.
+      #
+      # domain: labware is a DECLARATION SLOT (not a resolvable noun, not a
+      # strategyOrder noun, not a referent level): it names the ENTITY the
+      # wellset's AMBIGUITY clarification is about — the labware the contents
+      # sit on. The answerable-card builder (clarificationsFromUnresolvedFacts)
+      # maps domain:labware -> kind:'labware' (the OQ-3 ruling's kind:'labware'
+      # candidate-card shape); the never-guess arm raises ONE labware card on
+      # an ambiguous (two-plate) contents set.
+      - name: wells
+        kind: wellset
+        required: false
+        domain: labware
   - name: resuspend
     class: simple
     policyRef: hint-authority
@@ -849,6 +869,31 @@ verbs:
 # level nouns without a vocabulary amendment). The eligibility policy data
 # declares the same five in its own referentLevels slot; the eligibility data
 # test pins the two lists as a SET DIFF (never two local terms for one entity).
+# WELLSET-RESOLVER-1 (architect ruling SUITEA-P7-mix-wellset-scope-l2t0635 Q2):
+# the declared CONTENTS-DERIVED wellset token class — the DATA list of symbolic
+# token VALUES a `kind: wellset` argument may carry. The server-side
+# resolve_wellsets pass reads THIS list (vocabulary DATA) to decide which
+# argument values are declared tokens; it never string-literal-compares a token
+# in TS (no hardcoded well list, no token literal in the pass — the token
+# membership is DATA, the B3 boundary). `all-wells-containing-materials` means
+# "every well on the run's contents-bearing plate(s) that contains materials" —
+# the union of the run's contents ledger (Brad's approval-card worked example).
+# Optional so existing fixture copies (which declare no wellset tokens) stay
+# structurally valid.
+wellsetValueTokens:
+  - all-wells-containing-materials
+# WELLSET-RESOLVER-1 FIX RUN 1 (advc cycle-1 D8): the MATERIAL-BEARING EVENT
+# TYPES — the DATA list of primitive event types that ADD material to a well
+# and therefore contribute to the run's contents ledger. The resolve_wellsets
+# pass reads THIS list (vocabulary DATA) to build the pending-draft layer; the
+# TS never hardcodes the taxonomy (the same domain membership the harness gate
+# and forceMaterialClarifications declare — one DATA home here). Optional:
+# a vocabulary copy that declares no list contributes NO pending-draft wells
+# (the ledger stays the committed layer — fail-closed, never a guessed set).
+materialBearingEventTypes:
+  - add_material
+  - multi_dispense
+  - dispense
 referentLevels: [concept, formulation, vendor-product, instance, aliquot]
 policies:
   strategyOrder:

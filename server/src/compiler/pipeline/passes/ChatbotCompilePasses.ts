@@ -1072,7 +1072,17 @@ export function createResolvePriorLabwareReferencesPass(): Pass {
  *   resolve_prior_labware_references output and passing the resolved
  *   instanceId as labware_id to the expander
  */
-export function createExpandBiologyVerbsPass(): Pass {
+export function createExpandBiologyVerbsPass(opts: {
+  /** WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): stamp DECLARED PROVENANCE —
+   *  `details.sourceActionIndex` = the ai_precompile index of the candidate
+   *  that expanded to each emitted event — onto every expanded event. The
+   *  scientist-intent registry opts IN (its resolve_wellsets pass joins
+   *  wellset tokens on this identity and STRIPS it before republishing the
+   *  resolve_roles slot, so no artifact ever carries it). Default FALSE:
+   *  the chatbot chain stays byte-identical (SPINE-7 pins + goldens). */
+  stampCandidateProvenance?: boolean;
+} = {}): Pass {
+  const stampProvenance = opts.stampCandidateProvenance === true;
   return {
     id: 'expand_biology_verbs',
     family: 'expand' as const,
@@ -1087,7 +1097,8 @@ export function createExpandBiologyVerbsPass(): Pass {
         { resolvedLabwareRefs?: Array<{ hint: string; matched: { instanceId: string; labwareType: string } }> } | undefined;
       const resolvedPriorRefs = priorLabwareOutput?.resolvedLabwareRefs ?? [];
 
-      for (const cand of candidateEvents) {
+      for (let candIndex = 0; candIndex < candidateEvents.length; candIndex++) {
+        const cand = candidateEvents[candIndex]!;
         const { verb, ...params } = cand;
 
         // Pass through 'run_protocol' events unchanged — expand_protocol will handle them
@@ -1129,6 +1140,23 @@ export function createExpandBiologyVerbsPass(): Pass {
           continue;
         }
         const expanded = expander.expand({ verb, params });
+        // WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): DECLARED PROVENANCE (opt-in
+        // only — the scientist-intent registry; the chatbot chain stays
+        // byte-identical): stamp the emitting candidate's ai_precompile index
+        // onto every event this candidate expanded to. Verb-name + per-verb
+        // ordinal is NOT an identity (resuspend/dilute/shake/bead_beat EMIT
+        // event_type:'mix', so per-verb counts can disagree and a same-event-
+        // type neighbour silently steals a wellset-token join). The index is
+        // candidate DATA (the loop position), not a verb branch. The
+        // resolve_wellsets pass STRIPS the key before republishing, so no
+        // shipped artifact ever carries it.
+        if (stampProvenance) {
+          for (const e of expanded) {
+            const d = (e.details ?? {}) as Record<string, unknown>;
+            d.sourceActionIndex = candIndex;
+            e.details = d;
+          }
+        }
         for (const e of expanded) events.push(e);
       }
 

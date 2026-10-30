@@ -1427,6 +1427,16 @@ export function createAgentOrchestrator(
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // WELLSET-RESOLVER-1 (report 3a/4d): the conversation's committed
+              // contents layer rides the recompile as priorLabState (the same
+              // cache the FIRST compile read — a recompile of the held intent
+              // must see the SAME ledger the original turn saw, plus this
+              // turn's document via the pending-draft layer). Conditional
+              // spread: the key is ABSENT, never undefined.
+              ...(() => {
+                const cached = getDefaultLabStateCache().get(conversationKey);
+                return cached ? { priorLabState: cached } : {};
+              })(),
               // READING-CARD-ANSWER-1: the reading answers ride the §14.2
               // RECORD leg as DATA (the IntentCompileFromPromptHandlers.ts
               // precedent — conditional spread, absent when the batch carries
@@ -1440,6 +1450,14 @@ export function createAgentOrchestrator(
               })(),
             });
             if (compiledFold) {
+              // WELLSET-RESOLVER-1 (the writer leg, fold arm): persist the
+              // recompile's snapshotAfter back to the cache (the same
+              // conversationKey the read above used) so a later turn sees the
+              // advanced contents ledger.
+              const foldSnapshotAfter = compiledFold.terminalArtifacts.labStateDelta?.snapshotAfter;
+              if (foldSnapshotAfter) {
+                getDefaultLabStateCache().put(conversationKey, foldSnapshotAfter);
+              }
               // advc-c1 D2 (log honesty): the folded line fires ONLY when a
               // real splice ran through `foldAnswersIntoShorthand`; the
               // reading-only batch took the deterministic RECOMPILE path
@@ -1715,6 +1733,11 @@ export function createAgentOrchestrator(
       const compileResult = await awaitWithHeartbeat(
         runChatbotCompile({
           prompt: effectivePrompt,
+          // WELLSET-RESOLVER-1 / OQ-2 fold: bind the cache read/write to THIS
+          // conversation (the same deriveContextCacheKey derivation the held
+          // shorthand uses — one derivation, threaded verbatim). Without it
+          // the LabStateCache never fires on this surface.
+          conversationId: conversationKey,
           ...(attachments ? { attachments } : {}),
           ...(ctxMentions ? { mentions: ctxMentions } : {}),
           ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
@@ -2941,7 +2964,30 @@ export function createAgentOrchestrator(
                 // ai/ seam, BEFORE resolution — bait 5: the chosen ref binds,
                 // nothing is minted for an already-bound label).
                 ...(shorthandReuseBindings.length > 0 ? { reuseBindings: shorthandReuseBindings } : {}),
+                // WELLSET-RESOLVER-1 (report 3a/4d): on the LIVE shorthand path
+                // the LabStateCache is otherwise dead in BOTH directions
+                // (runChatbotCompile — its only reader/writer — never runs in
+                // forced-tool mode). Read the conversation's committed contents
+                // layer with the SAME conversationKey the cache is keyed by
+                // (OQ-2 identity: one deriveContextCacheKey derivation, threaded
+                // verbatim) and hand it to the compile as priorLabState — the
+                // resolve_wellsets pass's committed ledger. Conditional spread:
+                // the key is ABSENT, never undefined.
+                ...(() => {
+                  const cached = getDefaultLabStateCache().get(conversationKey);
+                  return cached ? { priorLabState: cached } : {};
+                })(),
               });
+              // WELLSET-RESOLVER-1 (the writer leg): persist the compile's
+              // snapshotAfter back to the cache so the NEXT turn sees this
+              // turn's committed contents (the runChatbotCompile.ts:596-599
+              // writer equivalent, on the path that actually fires). Absent
+              // labStateDelta ⇒ nothing written (byte-unchanged for compiles
+              // that never fold lab state).
+              const shSnapshotAfter = compiledSh?.terminalArtifacts.labStateDelta?.snapshotAfter;
+              if (shSnapshotAfter) {
+                getDefaultLabStateCache().put(conversationKey, shSnapshotAfter);
+              }
               if (!compiledSh) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 const unwired = 'event_shorthand cannot compile: this orchestrator has no record store wired for the deterministic compiler spine.';
@@ -4333,6 +4379,10 @@ export function createAgentOrchestrator(
             const compiledDraft = await awaitWithHeartbeat(
               runChatbotCompile({
                 prompt: compilerPrompt,
+                // WELLSET-RESOLVER-1 / OQ-2 fold: same conversation-key
+                // identity as the preflight site (the cache fires on this
+                // surface too).
+                conversationId: conversationKey,
                 ...(ctxMentions ? { mentions: ctxMentions } : {}),
                 ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
                 ...(context.activeDeckScope ? { activeDeckScope: context.activeDeckScope } : {}),
