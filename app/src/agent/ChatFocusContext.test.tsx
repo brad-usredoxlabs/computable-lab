@@ -3,13 +3,19 @@
  *
  * The focus label is DERIVED from resolved surface state published by the host
  * page. Zero model calls, zero AI prose. Without a provider the header renders
- * nothing (the run page's ChatContextHeader fallback must stay untouched).
+ * nothing.
+ *
+ * LEG D: the 'ChatContextHeader delegation' describes (previously here) are
+ * transplanted onto SurfaceFocusHeader coverage — ChatContextHeader.tsx died
+ * with AiTabPanel in this leg (its only mount was the RightPane fallback arm,
+ * now always-harness). SurfaceFocusHeader is the surviving working-focus
+ * header (HarnessChatPane mounts it); its testid (surface-focus-header) is
+ * what the run page's three-pane-harness.spec.ts re-pin names.
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ChatFocusProvider, useChatFocus } from './ChatFocusContext'
 import { SurfaceFocusHeader } from './SurfaceFocusHeader'
-import { ChatContextHeader } from '../event-editor/right-pane/ai/ChatContextHeader'
 
 afterEach(cleanup)
 
@@ -70,24 +76,29 @@ describe('SurfaceFocusHeader', () => {
   })
 })
 
-describe('ChatContextHeader delegation (B1: fall-through-identical without a ChatFocusContext)', () => {
-  it('keeps the existing protocol-selection path byte-for-byte when no ChatFocusContext exists', () => {
-    render(<ChatContextHeader />)
-    // No ChatFocusProvider in the tree (the run page never publishes one): the
-    // header must render its existing no-step-focused strings and testid.
-    const header = screen.getByTestId('chat-context-header')
-    expect(header).toHaveTextContent('Working focus')
-    expect(header).toHaveTextContent('No step focused — ask the AI to navigate')
+describe('working-focus delegation (B1: fall-through-identical without a ChatFocusContext)', () => {
+  // LEG D transplant of the 'ChatContextHeader delegation' describes: the
+  // surviving header is SurfaceFocusHeader (the chat-context-header testid and
+  // its strings died with ChatContextHeader). The semantics carry over —
+  // WITHOUT a published focus the header renders nothing (the run page
+  // publishes no ChatFocusContext, so its pane shows no header element); WITH
+  // a non-null focus it renders the published label with the pane's own
+  // testid. Never AI prose, never a fallback string.
+  it('renders nothing when no ChatFocusContext exists (the run page never publishes one)', () => {
+    render(<SurfaceFocusHeader />)
+    // No ChatFocusProvider in the tree: the header must render NOTHING —
+    // no element, no placeholder string (the legacy "No step focused"
+    // fallback died with ChatContextHeader).
     expect(screen.queryByTestId('surface-focus-header')).toBeNull()
   })
 
   it('delegates to a non-null ChatFocusContext when one is present', () => {
     render(
       <ChatFocusProvider focus={{ surface: 'sequences', label: 'Sequences — Import' }}>
-        <ChatContextHeader />
+        <SurfaceFocusHeader />
       </ChatFocusProvider>,
     )
-    const header = screen.getByTestId('chat-context-header')
+    const header = screen.getByTestId('surface-focus-header')
     expect(header).toHaveTextContent('Working focus')
     expect(header).toHaveTextContent('Sequences — Import')
   })

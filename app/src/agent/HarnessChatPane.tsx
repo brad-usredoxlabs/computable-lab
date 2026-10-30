@@ -22,7 +22,7 @@
  * picker. No rename affordance.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { useAiPanel } from '../shared/context/AiPanelContext'
+import { useOptionalAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
@@ -130,7 +130,18 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
   // `proposalFlow` is registered by the SAME surface that owns the chat: the
   // pane renders the one pending compile card and drives accept/reject through
   // it. Absent flow (a surface that only chats) = no card, no dead controls.
-  const { chat, proposalFlow } = useAiPanel()
+  // LEG D: consume the OPTIONAL seam — RightPane's AI arm is now ALWAYS this
+  // pane (the legacy AiTabPanel fallback died), so the pane can render
+  // provider-free in tests (host-page suites render the real RightPane without
+  // an AiPanelProvider). The routed app always has one (main.tsx wraps it), so
+  // with a provider this is byte-for-byte the same value; without one the
+  // pane treats it as no-registered-chat → the honest empty state, NEVER a
+  // crash (browser-gate criterion, spec §8). useOptionalAiPanel subscribes to
+  // the same registration store (no-op without a provider), so the D3 direct
+  // subscription is preserved.
+  const panel = useOptionalAiPanel()
+  const chat = panel?.chat ?? null
+  const proposalFlow = panel?.proposalFlow ?? null
   const [prompt, setPrompt] = useState('')
 
   if (!chat) {
