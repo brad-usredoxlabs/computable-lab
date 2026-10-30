@@ -197,8 +197,11 @@ function normalizeToken(value: string): string {
 
 /** Trim + casefold + collapse non-alnum runs (the R3 unique-declared-type
  *  normalization — a hyphenated and a spaced spelling of the SAME type key
- *  normalize to one key, e.g. '96' + 'well' + 'plate' under any separators). */
-function normalizeTypeKey(value: string): string {
+ *  normalize to one key, e.g. '96' + 'well' + 'plate' under any separators).
+ *  Exported so the pass seam's emit step (the create's resolved-design-identity
+ *  carrier) uses the SAME normalization the rung evaluators use — one declared
+ *  normalization, never a second. */
+export function normalizeTypeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 /** Rung evaluators — GENERIC field-identity evaluators over the field the
@@ -458,6 +461,7 @@ function deductSourceWell(
 function applyCreateContainer(
   snapshot: LabStateSnapshot,
   event: PlateEventPrimitive,
+  rules: LabIdentityRules | undefined,
 ): LabStateSnapshot {
   const details = event.details as Record<string, unknown> | undefined;
   if (!details || typeof details !== 'object') {
@@ -473,6 +477,42 @@ function applyCreateContainer(
 
   // Use explicit instanceId from event details if provided, otherwise auto-generate
   const explicitInstanceId = details.instanceId as string | undefined;
+
+  // L2-LABSTATE-CONTENTS-1 fix3 (b): IDEMPOTENT CREATE (rung-mechanics, not a
+  // new vocabulary). The shorthand binder re-emits the placement create every
+  // turn the plate is referenced; a re-mint of an already-placed plate creates
+  // a second same-identity instance and the symbolic hint then TIES (rung R2
+  // once both carry the same design token, rung R3 on a type-only hint) => the
+  // never-guess no-op that left the live multi-turn drive folding ZERO wells.
+  // Reuse rule (the SMALLEST generic rule, DATA-declared): when the create
+  // declares an identity carrier (details.labwareId ?? event.labwareId ??
+  // details.title ?? details.label — the SAME declared carrier list the §6
+  // mint reads) and that carrier resolves to a UNIQUE EXISTING instance via
+  // the SAME DATA-declared identity ladder the fold's add/transfer resolve
+  // through (resolveLabware — the rung rungs + the tie-is-terminal rule, all
+  // driven by the vocabulary's `order`/`tokenFields`, never a TS branch), the
+  // create REUSES that instance (a NO-OP) instead of re-minting. The ladder
+  // resolves an exact-identity carrier (R1 instanceId / R2 declared
+  // identityTokens — the design's resolved record id, unique per design) and,
+  // on a type-only carrier, the UNIQUE declared-type instance (R3); a tie at
+  // any rung is terminal (resolveLabware returns undefined => a tie never
+  // reuses, never a pick). `rules` absent (the 2-arg fold) OR no carrier =>
+  // the base mint path (byte-stable, pre-CL).
+  const carrier: string | undefined =
+    [details.labwareId, event.labwareId, details.title, details.label].map(
+      (c) => (typeof c === 'string' && c.trim() ? c : undefined),
+    ).find((c) => c !== undefined);
+  const reuseId = !explicitInstanceId && carrier && rules !== undefined
+    ? resolveLabware(snapshot, carrier, rules)
+    : undefined;
+  if (reuseId !== undefined && snapshot.labware[reuseId] !== undefined) {
+    // Idempotent reuse: the instance is already placed with its contents +
+    // identityTokens — the re-emitted create is a NO-OP (the snapshot is
+    // returned unchanged, immutability preserved; the instance's deck slot is
+    // already set by the prior create, so no deck change is needed).
+    return snapshot;
+  }
+
   const instanceId = explicitInstanceId ?? `LWI-${snapshot.mintCounter + 1}`;
 
   const newSnapshot = cloneSnapshot(snapshot);
@@ -488,6 +528,12 @@ function applyCreateContainer(
   // order: details.labwareId ?? event.labwareId ?? details.title ??
   // details.label. A create with NO label carrier => the key is ABSENT (rung R2
   // inert; R3 still applies — the OQ-3 ratified live single-plate winner).
+  // L2-LABSTATE-CONTENTS-1 fix3 (a): the lab_state pass carries the compiler's
+  // resolved DESIGN identity (the resolve_labware pass's recordId — the
+  // resolvedLabwares slot) onto details.labwareId BEFORE the fold, so the
+  // minted instance's identityTokens carry the design record id and the R2
+  // rung can match a design-ref hint EXACTLY (zero hardcoded vocab strings —
+  // the identity rides the pass's resolved output, never a literal).
   const carriers: unknown[] = [details.labwareId, event.labwareId, details.title, details.label];
   const identityTokens: string[] = [];
   const seenTokens = new Set<string>();
@@ -704,8 +750,8 @@ export function applyEventToLabState(
   switch (event.event_type) {
     case 'create_container':
       return rules === undefined
-        ? applyCreateContainer(snapshot, event)
-        : { snapshot: applyCreateContainer(snapshot, event), outcome: { changed: true } };
+        ? applyCreateContainer(snapshot, event, rules)
+        : { snapshot: applyCreateContainer(snapshot, event, rules), outcome: { changed: true } };
     case 'add_material':
       result = applyAddMaterial(snapshot, event, rules);
       break;
