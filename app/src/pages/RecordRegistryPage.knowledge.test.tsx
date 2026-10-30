@@ -232,10 +232,14 @@ describe('GC-16 W2 — registry Knowledge tab row for the assertion/claim/eviden
     })
     // The actionable, named refusal — the governed seed path's own error
     // (no declared anchor -> no fabricable id). It names the kind.
+    // GC-16 FIX RUN 2 (defect 7, provisional R-1): the refusal NAMES THE
+    // WORKING DOOR (/record/new/<kind>) — the actionable next step, since the
+    // registry door does not mint ids.
     await waitFor(() => {
       const err = screen.getByTestId('registry-create-error')
       expect(err.textContent).toContain('No id pattern declared')
       expect(err.textContent).toContain('assertion')
+      expect(err.textContent).toContain('/record/new/assertion')
     })
     // No fabricated-prefix draft was opened: no editor, no draft projection,
     // no create. (Dead-chrome ban: a served kind with an unseedable id is

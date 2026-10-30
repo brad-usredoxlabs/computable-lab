@@ -446,8 +446,14 @@ export default function RecordRegistryPage() {
       return;
     }
     if (!seed) {
+      // GC-16 FIX RUN 2 (adversarial defect 7; provisional default R-1,
+      // pending the id-mint ruling): the refusal must NAME THE WORKING DOOR.
+      // The registry door does not mint ids (OQ-3: an unparseable pattern is
+      // an actionable error, not a fabricated prefix), so the actionable
+      // next step is the working knowledge door /record/new/<kind> (the
+      // global + Create menu's working door — spec acceptance 2). One string.
       setCreateError(
-        `No id pattern declared for this schema (${kind}) — a schema-compliant id cannot be derived.`,
+        `No id pattern declared for this schema (${kind}) — the registry door does not mint ids; author this record via the working door at /record/new/${kind}.`,
       );
       return;
     }

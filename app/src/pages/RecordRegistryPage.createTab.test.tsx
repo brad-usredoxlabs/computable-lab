@@ -495,6 +495,11 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
           expect(screen.getByTestId('registry-create-error')).toBeTruthy()
         })
         expect(screen.getByTestId('registry-create-error').textContent).toMatch(/id pattern/i)
+        // GC-16 FIX RUN 2 (defect 7, provisional R-1): the refusal names the
+        // working door /record/new/<kind> (the actionable next step).
+        expect(screen.getByTestId('registry-create-error').textContent).toContain(
+          `/record/new/${kind}`,
+        )
         expect(screen.queryByTestId('projection-taptab-editor')).toBeNull()
         // No new draft was opened for this kind: the last draft-projection
         // call (if any) is NOT the knowledge schema. (editorDataProp is
