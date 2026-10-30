@@ -894,6 +894,41 @@ materialBearingEventTypes:
   - add_material
   - multi_dispense
   - dispense
+# L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+# RESOLUTION ladder the lab_state fold walks when a content-bearing event
+# carries a SYMBOLIC labwareId (the shipped expander's top-level labwareId /
+# details.source_labware|destination_labware — a HINT, never a pin) instead of
+# a resolved instance id. The fold is a GENERIC field-identity evaluator over
+# these declared rungs; it never branches on a rung id or a field name (the
+# PROTO-AI-3 doctrine, the B3 boundary). Order is FIRST-HIT-WINS with
+# never-guess: the first rung that yields EXACTLY ONE instance wins, zero
+# advances, a TIE at any rung is terminal => the fold no-ops + a pass
+# diagnostic (no pick, no substring/overlap — the findLabwareByHints anti-
+# pattern is the reviewer bait). Rung semantics (exact identity under a declared
+# normalization, the foldPendingKey / mint_materials labwareType-match twin):
+#   instanceIdentity         the hint IS a resolved instanceId (the raw path —
+#                            rung R1, always present even when this section is
+#                            absent)
+#   declaredIdentityTokens   the hint trim+casefold == one of the instance's
+#                            declared identityTokens (the create event's
+#                            details.labwareId/title/label, spec §6)
+#   uniqueLabwareType        the hint trim+casefold (non-alnum collapsed) ==
+#                            EXACTLY ONE instance's labwareType (the OQ-3 live
+#                            single-plate winner — the mint_materials
+#                            `labwareType === placementLabwareHint` twin).
+# tokenFields is index-aligned with `order`: the instance field each rung reads.
+# Optional so existing fixture copies stay valid: an ABSENT section fails
+# CLOSED to rung R1 ONLY (the raw labwareInstanceId path keeps working; every
+# symbolic resolution is a never-guess no-op).
+labwareIdentityResolution:
+  order:
+    - instanceIdentity
+    - declaredIdentityTokens
+    - uniqueLabwareType
+  tokenFields:
+    - instanceId
+    - identityTokens
+    - labwareType
 referentLevels: [concept, formulation, vendor-product, instance, aliquot]
 policies:
   strategyOrder:
