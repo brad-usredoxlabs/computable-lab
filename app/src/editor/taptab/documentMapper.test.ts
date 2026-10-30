@@ -8,6 +8,7 @@ import YAML from 'yaml';
 import { describe, it, expect } from 'vitest';
 import { buildDocument, buildProjectionDocument } from './documentMapper';
 import type { UISpec } from '../../types/uiSpec';
+import type { ArrayItemHintField, ObjectFieldConfig } from './types';
 
 interface JSONContent {
   type?: string;
@@ -357,11 +358,11 @@ function projectionFieldRowAttrs(
 describe('buildProjectionDocument nested item-hint fields (WIDGET-R1 fix-run 3, ARCHD3L1T1440 OPT-A)', () => {
   it('forwards the REAL assertion.ui.yaml $.roles item-hint nested `fields` through TWO levels (DROPPED=false); flat entries stay byte-identical (no `fields` key appears)', () => {
     const roles = realRolesSlotFromAssertionUiYaml()
-    const rolesItems = roles.items as {
+    const rolesItems = roles.items as Record<string, unknown> & {
       path: string
       widget: string
       label: string
-      fields: Array<Record<string, unknown>>
+      fields: ArrayItemHintField[]
     }
     // Sanity — the REAL data IS nested (the gap the probe measured):
     // role_ref + context_ref each declare their own `fields`.
@@ -390,9 +391,10 @@ describe('buildProjectionDocument nested item-hint fields (WIDGET-R1 fix-run 3, 
     expect(itemHint.fields?.map((f) => f.path)).toEqual(['role_ref', 'context_ref'])
 
     for (const nested of ['role_ref', 'context_ref']) {
-      const input = rolesItems.fields.find((f) => f.path === nested) as { fields: Array<Record<string, unknown>> }
+      const input = rolesItems.fields.find((f) => f.path === nested) as unknown as { fields: ArrayItemHintField[] }
       const entry = itemHint.fields!.find((f) => f.path === nested) as Record<string, unknown>
-      const nestedFields = entry.fields as Array<Record<string, unknown>> | undefined
+      const nestedFields = (entry.fields as Array<Record<string, unknown>> | undefined)!
+      expect(nestedFields, `${nested} must carry its nested fields through the itemHint map`).toBeTruthy()
       // THE DROPPED=false SHAPE (RED at base): the nested `fields` are
       // carried through the itemHint map — level 1 (present, all three
       // sub-fields) and level 2 (every sub-field member forwarded
@@ -414,7 +416,7 @@ describe('buildProjectionDocument nested item-hint fields (WIDGET-R1 fix-run 3, 
   })
 
   it('forwards nested `fields` through the objectConfig sibling map (top-level `object` slot); flat entries stay byte-identical', () => {
-    const slot = {
+    const slot: { id: string; path: string; label: string; widget: 'object'; properties: ObjectFieldConfig[] } = {
       id: 'outcome-slot',
       path: '$.outcome',
       label: 'Outcome',
