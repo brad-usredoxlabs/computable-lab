@@ -47,6 +47,16 @@
  *   the stable identifier; the server's required-check speaks. The spine
  *   keeps its pre-existing client-side recordId mint (the documented
  *   fallback, spine behavior unchanged).
+ *
+ * GC-16 FIX RUN 3 (adversarial defect 12 — the spine race): that schema
+ * document decision is GATED — while the document is unresolved the submit
+ * path refuses (a named message) instead of treating "unknown" as
+ * "not declared": the spine's identity fields (shortSlug) are
+ * client-decided from the document, and the spine schemas REQUIRE
+ * shortSlug, so an early submit would post a payload the server Ajv
+ * rejects. Knowledge kinds (schema-driven, no client identity decisions)
+ * are gated on the same flag — the form is not authoring-useful until its
+ * projection + document have settled, and the gate is a one-fetch wait.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -260,19 +270,33 @@ export function RecordCreatePanel({
   // schema doc is unavailable the client gates are skipped and the server
   // speaks.
   const [schemaDoc, setSchemaDoc] = useState<JsonSchema | null>(null)
+  // GC-16 FIX RUN 3 (adversarial defect 12 — the spine race): the schemaId
+  // this document belongs to ONCE SETTLED (resolved OR failed — a failed
+  // fetch settles as "unavailable", the server's required-check speaks).
+  // While it does not equal the resolved schemaId the document is IN
+  // FLIGHT for that schemaId: the submit path must refuse, not treat
+  // "unknown" as "not declared".
+  const [schemaDocFor, setSchemaDocFor] = useState<string | null>(null)
   useEffect(() => {
-    if (!schemaId) return
+    if (!schemaId) {
+      setSchemaDoc(null)
+      setSchemaDocFor(null)
+      return
+    }
     let cancelled = false
     setSchemaDoc(null)
+    setSchemaDocFor(null)
     apiClient
       .getSchema(schemaId)
       .then((info) => {
         if (cancelled) return
         setSchemaDoc(info.schema ?? null)
+        setSchemaDocFor(schemaId)
       })
       .catch(() => {
         if (cancelled) return
         setSchemaDoc(null)
+        setSchemaDocFor(schemaId)
       })
     return () => {
       cancelled = true
@@ -326,7 +350,12 @@ export function RecordCreatePanel({
     // contain `shortSlug` (spine schemas declare + require it; the knowledge
     // triplet is unevaluatedProperties:false and declares none, so a
     // knowledge payload carries no shortSlug). Until the schema doc arrives
-    // there is no seed (the submit path re-stamps if declared).
+    // there is no seed (the submit path stamps it once the doc has
+    // resolved — the submit is GATED on that resolution, FIX RUN 3 defect
+    // 12: the flag intentionally does NOT re-seed this effect — when the
+    // doc resolves late, re-seeding would discard what the author typed in
+    // the window (the review's second root cause); the submit re-stamp +
+    // gate carry the behavior instead).
     if (draftTitle) {
       initial.title = draftTitle
       if (schemaDeclaresShortSlug) initial.shortSlug = slugify(draftTitle, 30)
@@ -344,7 +373,11 @@ export function RecordCreatePanel({
         )
       })
       .finally(() => setLoadingSpec(false))
-  }, [schemaId, nodeType, studyId, experimentId, draftTitle, idField, isSpine, schemaDeclaresShortSlug])
+    // FIX RUN 3 (defect 12): schemaDeclaresShortSlug is deliberately NOT a
+    // dependency — it flips when the async doc fetch settles, and re-seeding
+    // formData at that moment would discard the author's in-flight edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schemaId, nodeType, studyId, experimentId, draftTitle, idField, isSpine])
 
   // Parent-id slots render read-only: the hierarchy comes from the click
   // site, not the form. Projection paths are JSONPath-style ("$.studyId").
@@ -407,6 +440,22 @@ export function RecordCreatePanel({
       if (!schemaId) {
         setError(
           `No registered schema for kind "${nodeType}" — this record kind is not served by the schema registry.`,
+        )
+        return
+      }
+      // GC-16 FIX RUN 3 (adversarial defect 12 — the spine race): the
+      // shortSlug / title-required decisions are made from the served schema
+      // DOCUMENT (GET /schemas/:id). While it has not settled for the
+      // resolved schemaId, "unknown" must NOT be treated as "not declared"
+      // — for the spine the schema REQUIRES shortSlug and an early submit
+      // would post a payload the server Ajv rejects; the knowledge
+      // projection is fetched in the same window, so its form is not
+      // settled either. REFUSE until the document has resolved (a failed
+      // fetch settles as "unavailable" — the server's required-check
+      // speaks, per the D9 contract).
+      if (schemaDocFor !== schemaId) {
+        setError(
+          `Loading the schema document for "${nodeType}" — the identity fields are decided from it (shortSlug is schema-required for spine records). Submit once the form has settled.`,
         )
         return
       }
@@ -491,6 +540,7 @@ export function RecordCreatePanel({
       isSpine,
       schemaDeclaresShortSlug,
       schemaRequiresTitle,
+      schemaDocFor,
     ],
   )
 

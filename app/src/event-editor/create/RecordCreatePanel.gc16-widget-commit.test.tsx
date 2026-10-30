@@ -591,6 +591,12 @@ describe('GC-16 FIX RUN 3 D12 — spine submit waits for the schema document (sh
     // The form renders (the projection does not depend on the schema doc)
     // while GET /schemas/:id is still in flight.
     await waitFor(() => findRow('Title'), { timeout: 8000 })
+    // Author the title THROUGH the real input (the review's RACE
+    // reproduction types it; the doc node then carries it so the
+    // serializer preserves it). draftTitle seeds formData but the doc
+    // node starts empty — an untouched field is deleted on serialize.
+    const titleRow = findRow('Title')
+    commitTextSlot(titleRow, 'my experiment')
     submitCreate()
     await new Promise((r) => setTimeout(r, 100))
     expect(

@@ -226,9 +226,18 @@ describe('GC-16 W3 — RecordCreatePanel resolves kind→schemaId via the served
     // the panel stamped shortSlug + an ASN- id on every knowledge payload and
     // this Ajv leg REDs on unevaluatedProperties:shortSlug (and the /id
     // shape); with the schema-driven fix the same assertion is GREEN.
-    // The author supplies the schema-required id + scope through the editor's
-    // onUpdate (serializeDocument) path — the form exposes the `id` field to
-    // the author (no client-minted id), so a VALID draft carries them.
+    //
+    // D13 DISCLOSURE (review cycle 2): the id + scope below are INJECTED
+    // through the mocked editor's onUpdate (mocked.authorUpdate — the
+    // serializeDocument path), NOT driven through the real taptab inputs.
+    // The REAL-FORM acceptance leg — the $.id slot editable for
+    // assertion+claim (the D10 data fix), the id authored through the real
+    // input, and a real-form assertion payload valid against the REAL
+    // assertion.schema.yaml — lives in
+    // RecordCreatePanel.gc16-widget-commit.test.tsx
+    // ("GC-16 FIX RUN 3 D10 + D13"), over the real projection + real
+    // serializer. This mocked leg pins the PANEL's own identity behavior
+    // (no client stamp, no mint) against that real-form witness.
     mocked.authorUpdate = { id: 'ASN-0001', scope: 'global' }
     render(
       <RecordCreatePanel nodeType="assertion" draftTitle="ctx assertion" onCreated={onCreated} />,
