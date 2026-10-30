@@ -1853,6 +1853,29 @@ export function createLabStatePass(
         snapshot = result.snapshot;
         collectDiagnostic(event, result.outcome);
       }
+      // L2-LABSTATE-CONTENTS-1 (spec §11): env-gated arm-log for the live
+      // no-seed multi-turn drive. The wire done frame (the AgentResult the
+      // /api/ai/draft-events/stream path returns) does NOT carry labStateDelta,
+      // so the per-turn committed ledger is captured from the backend log.
+      // INERT unless LABSTATE_ARM_LOG=1 (never in production traffic). Emits
+      // the PRIOR committed ledger (the persistence proof — a later turn's
+      // prior must already contain an earlier turn's contents) and the
+      // POST-FOLD snapshot (the contents this turn wrote), both as compact
+      // labware -> well -> material records.
+      if (process.env.LABSTATE_ARM_LOG === '1') {
+        const summarize = (s: LabStateSnapshot): Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> => {
+          const out: Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> = {};
+          for (const [iid, inst] of Object.entries(s.labware)) {
+            const wells: Record<string, Array<{ materialId: string; kind?: string }>> = {};
+            for (const [wid, mats] of Object.entries(inst.wells)) {
+              if (mats.length > 0) wells[wid] = mats.map((m) => ({ materialId: m.materialId, ...(m.kind !== undefined ? { kind: m.kind } : {}) }));
+            }
+            out[iid] = wells;
+          }
+          return out;
+        };
+        console.log(`[lab_state ARM-LOG] turn=${snapshot.turnIndex} prior_labware=${JSON.stringify(summarize(prior))} after_labware=${JSON.stringify(summarize(snapshot))}`);
+      }
       return {
         ok: true,
         output: { events, snapshotAfter: snapshot },
