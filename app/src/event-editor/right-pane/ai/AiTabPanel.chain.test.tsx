@@ -4,7 +4,8 @@
  * the ROUTED run surface relays chain_proposal and mounts the review wall.
  *
  * RED AT BASE: the mounted panel on the routed page (AiTabPanel, mounted via
- * agent/AgentChatPane.tsx on /runs/:runId) never passes onChainProposal to its
+ * the run-surface agent-pane wrapper on /runs/:runId — since retired, L2-CHAT-UI-1
+ * LEG B) never passes onChainProposal to its
  * chat hook, so the frame is swallowed (callback undefined), no compile request
  * is issued, and ChainProposalCard never renders. The only mount that passed
  * the callback lived on a page no route serves (graph/RunWorkspacePage.tsx).

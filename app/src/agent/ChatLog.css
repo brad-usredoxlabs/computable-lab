@@ -20,6 +20,11 @@
  * label push the option list past the pane edge, which made the whole log
  * scroll sideways and the box look mangled. */
 .chat-log-clarification {
+  /* BGATE-FIX D4 (folded into leg B): the card is a flex item of the bubble;
+   * as a shrink-to-fit item it lost its width donor and collapsed the
+   * picker-only clarification card to 173px in a wide pane (gate receipts
+   * 20261029T2255 run2/12-02, run5/11-01). width:100% restores the donor. */
+  width: 100%;
   margin: .5rem 0;
   padding: .6rem .65rem;
   border: 1px solid var(--cl-border, #aaa);
