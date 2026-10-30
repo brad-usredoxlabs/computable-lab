@@ -38,6 +38,17 @@ export const REGISTRY_TABS = [
   // derive from this kinds DATA — the row IS the feature, no kind-specific
   // code (the gc-method schema resolves like any other via GET /schemas).
   { id: 'methods', label: 'Methods', kinds: ['gc-method'] },
+  // GC-16 (W2, architect GAP-1): the knowledge triplet (assertion / claim /
+  // evidence) gets a registry tab. The tab label "Knowledge" is a GROUPING
+  // label mirroring the schema/knowledge/ directory — NOT a record kind and
+  // NOT a new entity term (one term per entity: the kinds are the schema kind
+  // names themselves). The tab strip, the listing filter (listRecordsByKind
+  // per kind), and the QMS7-5 multi-kind Create picker all derive from this
+  // kinds DATA — the row IS the feature, no kind-specific code (the
+  // gc-method precedent). A multi-kind tab opens the existing QMS7-5 kinds
+  // picker; the kind -> schema $id resolution is the served registry (GET
+  // /schemas + deriveSchemaNode), never a client-side map.
+  { id: 'knowledge', label: 'Knowledge', kinds: ['assertion', 'claim', 'evidence'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
@@ -435,8 +446,14 @@ export default function RecordRegistryPage() {
       return;
     }
     if (!seed) {
+      // GC-16 FIX RUN 2 (adversarial defect 7; provisional default R-1,
+      // pending the id-mint ruling): the refusal must NAME THE WORKING DOOR.
+      // The registry door does not mint ids (OQ-3: an unparseable pattern is
+      // an actionable error, not a fabricated prefix), so the actionable
+      // next step is the working knowledge door /record/new/<kind> (the
+      // global + Create menu's working door — spec acceptance 2). One string.
       setCreateError(
-        `No id pattern declared for this schema (${kind}) — a schema-compliant id cannot be derived.`,
+        `No id pattern declared for this schema (${kind}) — the registry door does not mint ids; author this record via the working door at /record/new/${kind}.`,
       );
       return;
     }
