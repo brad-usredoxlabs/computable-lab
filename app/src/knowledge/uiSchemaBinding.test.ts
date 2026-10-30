@@ -534,10 +534,14 @@ describe('GC-16 FIX RUN 3 D11 — ref-shaped item hints are schema-faithful (dat
   // honoured nothing is selectable; with no default/seed — correctly ruled
   // inexpressible by the D11 rescope — nothing populates it). The remedy
   // (reviewer's first option, data-only): DROP readonly from the kind
-  // hints so the author CAN pick the single option; a committed item then
-  // genuinely carries kind:record even before R1 ships seeding. These
+  // hints — the kind select is no longer marked readonly, and it becomes
+  // authorable only once R1 renders item sub-slots; at HEAD no author
+  // action yet produces kind:record (the repo's own green D2/D3 leg
+  // proves the array widget commits [{}] with no item sub-slots rendered)
+  // — dropping readonly removes a contradictory declaration only. These
   // legs pin that pinning: the kind sub-field must be declared AND its
-  // select must NOT be readonly (RED at 82044fa4: readonly: true).
+  // select must NOT be readonly (RED at 82044fa4: readonly: true with no
+  // seed).
   // =====================================================================
   const KIND_HINT_FIELDS: Array<{ kind: 'assertion' | 'evidence'; path: string; itemSeeds: string[] }> = [
     { kind: 'assertion', path: '$.context_refs', itemSeeds: [] },
@@ -547,7 +551,7 @@ describe('GC-16 FIX RUN 3 D11 — ref-shaped item hints are schema-faithful (dat
   ]
 
   it.each(KIND_HINT_FIELDS.map((f) => `${f.kind} ${f.path}`))(
-    'D18: %s — the item hint\'s kind sub-field is a single-option select that is NOT readonly (the author can pick "record"; RED at 82044fa4: readonly: true with no seed → no author action can ever produce kind:record)',
+    'D18: %s — the item hint\'s kind sub-field is a single-option select that is NOT readonly (no longer marked readonly; authorable only once R1 renders item sub-slots — at HEAD no author action yet produces kind:record; RED at 82044fa4: readonly: true with no seed)',
     async (name) => {
       const entry = KIND_HINT_FIELDS.find((f) => `${f.kind} ${f.path}` === name)!
       const ui = await loadUi(entry.kind)
