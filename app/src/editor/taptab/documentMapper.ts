@@ -162,6 +162,25 @@ export function buildProjectionDocument(
     refKind?: string;
     props?: Record<string, unknown>;
     properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>;
+    /**
+     * WIDGET-R1: the item-hint for `widget: array` slots (the projection's
+     * `items` member, server `FieldHint`). Carries the item's field set so
+     * the client can seed items from the hint and render each item through
+     * the existing ObjectWidget. Absent for hint-less arrays.
+     */
+    items?: {
+      path?: string;
+      widget?: string;
+      label?: string;
+      fields?: Array<{
+        path: string;
+        widget: string;
+        label?: string;
+        help?: string;
+        required?: boolean;
+        options?: Array<{ value: string | number | boolean; label: string }>;
+      }>;
+    };
   }>,
   data: Record<string, unknown>,
 ): { type: 'doc'; content: JSONContent[] } {
@@ -231,6 +250,32 @@ export function buildProjectionDocument(
           properties: Object.fromEntries(
             slot.properties.map((p) => [p.name, { type: 'string', title: p.label }])
           ),
+        };
+      }
+
+      // WIDGET-R1: surface the item-hint (the projection's `items` member)
+      // for `widget: array` slots so the ArrayWidget can seed items from the
+      // hint's field set and render each item through the existing
+      // ObjectWidget. The client previously DROPPED this member (the server
+      // payload already carried it — EditorProjectionService forwards
+      // `slot.items` in both the editor-mode and form-fallback projections).
+      if (slot.widget === 'array' && slot.items) {
+        attrs.itemHint = {
+          ...(slot.items.path !== undefined && { path: slot.items.path }),
+          ...(slot.items.widget !== undefined && { widget: slot.items.widget }),
+          ...(slot.items.label !== undefined && { label: slot.items.label }),
+          ...(slot.items.fields !== undefined && {
+            fields: slot.items.fields.map((f) => ({
+              path: f.path,
+              widget: f.widget,
+              ...(f.label !== undefined && { label: f.label }),
+              ...(f.help !== undefined && { help: f.help }),
+              required: f.required ?? false,
+              ...(f.options !== undefined && {
+                options: f.options.map((o) => ({ value: o.value, label: o.label })),
+              }),
+            })),
+          }),
         };
       }
 
