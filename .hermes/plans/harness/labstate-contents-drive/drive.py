@@ -202,32 +202,127 @@ def arm_log_since(offset):
     return [ln for ln in data.splitlines() if "lab_state ARM-LOG" in ln]
 
 
-def parse_arm(log_line):
-    """Parse one ARM-LOG line into (turn, prior, after, unresolved_codes) —
-    tolerant of the compact JSON payloads. D3 (advc fix-run 1): the line
-    carries the turn's §7 lab_state diagnostic CODES (unresolved_codes) —
-    the captured channel the never-guess control leg asserts on (the wire
-    done frame does not carry diagnostics)."""
-    out = {}
-    for token in ("turn=", "prior_labware=", "after_labware=", "unresolved_codes="):
-        i = log_line.rfind(token)
-        if i < 0:
+_ARM_TOKENS = ("turn=", "prior_labware=", "after_labware=", "unresolved_codes=")
+
+
+def _depth0_markers(line):
+    """FIX RUN 2 (l2t0915, N1 BLOCKER): the (position, token) pairs of the
+    emitter's field separators that sit OUTSIDE any JSON payload — i.e. at
+    brace/bracket depth 0. A token occurrence INSIDE a payload's JSON
+    string (e.g. a materialId that happens to contain 'turn=9') is a
+    payload content, not a separator: the pre-fix rfind/rest split had no
+    such notion and handed the whole rest of the line to json.loads (only
+    the last token could ever parse). A marker counts only at depth 0 and
+    only when preceded by start-of-line or whitespace (the emitter's line
+    shape: '<token><json> <token><json> ...')."""
+    markers = []
+    depth = 0
+    in_str = False
+    esc = False
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
             continue
-        rest = log_line[i + len(token):]
+        if ch == '"':
+            in_str = True
+            i += 1
+            continue
+        if ch in "{[":
+            depth += 1
+            i += 1
+            continue
+        if ch in "}]":
+            depth -= 1
+            i += 1
+            continue
+        if depth == 0 and (i == 0 or line[i - 1] in " \t"):
+            for token in _ARM_TOKENS:
+                if line.startswith(token, i):
+                    markers.append((i, token))
+                    break
+        i += 1
+    return markers
+
+
+def _bounded_payload(line, start):
+    """FIX RUN 2 (l2t0915, N1 BLOCKER): the JSON payload starting at
+    `start` (a '{' or '['), closed by its OWN balanced braces/brackets —
+    not the rest of the line. The pre-fix `rest` hand-off to json.loads
+    only ever worked for the LAST token: once 60db0a3a appended
+    unresolved_codes= AFTER after_labware=, after_labware's tail carried
+    ' unresolved_codes=[...]' and json.loads raised 'Extra data', degrading
+    the field to a raw string (LEG1/LEG2/LEG3/LEG4 False forever). JSON
+    string contents are respected (double quotes + backslash escapes) so a
+    brace inside a JSON string cannot terminate the slice early."""
+    if start >= len(line) or line[start] not in "{[":
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for k in range(start, len(line)):
+        ch = line[k]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth == 0:
+                return line[start:k + 1]
+    return None
+
+
+def parse_arm(log_line):
+    """Parse one ARM-LOG line into {turn, prior_labware, after_labware,
+    unresolved_codes} — tolerant of the compact JSON payloads. D3 (advc
+    fix-run 1): the line carries the turn's §7 lab_state diagnostic CODES
+    (unresolved_codes) — the captured channel the never-guess control leg
+    asserts on (the wire done frame does not carry diagnostics).
+    FIX RUN 2 (l2t0915, N1 BLOCKER): each payload is parsed from its OWN
+    bounded slice (depth-0 marker scan + brace-balanced), so BOTH the
+    pre-60db0a3a 3-token and the current 4-token emitter forms parse into
+    dicts/lists, in either token order, and a line with no well-formed
+    ARM-LOG fields yields all-None (no exception). test_parse_arm.py is
+    the committed fixture that pins the round-trip against the emitter's
+    exact line format (ChatbotCompilePasses.ts:1895)."""
+    out = {"turn": None, "prior_labware": None, "after_labware": None,
+           "unresolved_codes": None}
+    markers = _depth0_markers(log_line)
+    if not markers:
+        return out
+    for idx, (pos, token) in enumerate(markers):
+        j = pos + len(token)
         if token == "turn=":
-            out["turn"] = rest.strip()
+            # The turn tag is the bounded run up to the NEXT depth-0
+            # marker (pre-fix `rest.strip()` captured the WHOLE rest of
+            # the line — turn= garbage).
+            end = markers[idx + 1][0] if idx + 1 < len(markers) else len(log_line)
+            tag = log_line[j:end].strip()
+            out["turn"] = tag if tag else None
         else:
-            try:
-                out[token.rstrip("=")] = json.loads(rest)
-            except Exception:
-                out[token.rstrip("=")] = raw_payload(rest)
+            payload = _bounded_payload(log_line, j)
+            if payload is not None:
+                try:
+                    out[token.rstrip("=")] = json.loads(payload)
+                except Exception:
+                    out[token.rstrip("=")] = None
     return out
-
-
-def raw_payload(rest):
-    """The payload after the last brace-balance point (defensive — the line
-    is a single console.log so the whole tail IS the JSON)."""
-    return rest
 
 
 def wellset_of(ev):

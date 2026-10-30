@@ -71,6 +71,38 @@ drive-captured payload" evidence form.
     channels are counted). A turn where the fold never executed CANNOT pass
     this leg (the pre-fix `None == None => ok True` vacuous path is gone).
 
+## parse_arm contract (FIX RUN 2, l2t0915 — advc2 N1 BLOCKER closed)
+
+`parse_arm` and the emitter it parses (`createLabStatePass`,
+`ChatbotCompilePasses.ts:1895`) are pinned to each other by the committed
+fixture `test_parse_arm.py` (plain `python3 test_parse_arm.py`, no deps —
+run it before any re-drive):
+
+- the EMITTER's exact line shape is the 4-token form
+  `turn=<n> prior_labware=<json> after_labware=<json>
+  unresolved_codes=<json>` (compact JSON, `turn=` a raw number); the
+  PRE-FIX 3-token form (no `unresolved_codes=`, the 20261030T063626Z
+  receipts' format) is still tolerated — `unresolved_codes` degrades to
+  `None` on that form.
+- each payload is parsed from its OWN bounded slice (depth-0 marker scan +
+  brace-balanced, JSON-string-aware): tokens embedded in a payload's
+  string content are NOT separators, and a malformed payload degrades that
+  field to `None` (no exception; well-formed neighbors still parse).
+- `turn=` parses to the tag only (bounded by the next depth-0 marker).
+- a line with no well-formed ARM-LOG fields yields all-`None`.
+
+The pre-fix parser handed the whole REST OF THE LINE to `json.loads` per
+token (only the last token could ever parse): once `60db0a3a` appended
+`unresolved_codes=` after `after_labware=`, `after_labware` degraded to a
+raw string and all four acceptance legs were unreachable. The fixture's
+leg-predicate probes (run on REAL `parse_arm` output, not hand-built
+dicts) pin the N1/D3 closure: a no-op control line with an unresolved
+code makes `control_never_guess` satisfiable; wrote-turns, code-less
+no-ops, the pre-fix 3-token form, garbage, and an empty arm_log all make
+it False. The fixture is FORM-AGNOSTIC — it pins the parse of
+emitter-shaped lines, never the drive's `TURNS` strings (orch owns the
+`TURNS` edit with the re-drive, ruling Q4).
+
 ## Run
 
 ```
