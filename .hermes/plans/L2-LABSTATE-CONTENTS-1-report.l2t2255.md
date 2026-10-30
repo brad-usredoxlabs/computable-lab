@@ -1191,7 +1191,7 @@ of this item's owned list — not modified).
 
 RAW:
   $ git log --oneline -3
-  <report-commit-sha> [LABSTATE][FIX2-REPORT] FIX RUN 2 (l2t0915) appended to the item report: N1/D3 raw OLD-vs-NEW parse evidence, 42-check fixture, no-hunks + clean-tree proof; code fix head a69e4076
+  96860418 [LABSTATE][FIX2-REPORT] FIX RUN 2 (l2t0915) appended to the item report: N1/D3 raw OLD-vs-NEW parse evidence, 42-check fixture, no-hunks + clean-tree proof; code fix head a69e4076
   a69e4076 [LABSTATE][FIX2] N1 BLOCKER: parse_arm parses each ARM-LOG payload by its own bounded slice ...
   694f5e78 [LABSTATE][FIX1-REPORT] FIX RUN 1 (l2t0405) ...
   $ git status --porcelain
