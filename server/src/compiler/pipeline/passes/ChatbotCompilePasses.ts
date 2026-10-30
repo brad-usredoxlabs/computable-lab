@@ -23,7 +23,17 @@ import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
 import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
 import { getOperationRegistry } from '../../../registry/OperationRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
-import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
+import {
+  applyEventToLabState,
+  emptyLabState,
+  isContentBearing,
+  type FoldOutcome,
+  type LabIdentityRules,
+} from '../../../compiler/state/LabState.js';
+import {
+  defaultScientistIntentVocabulary,
+  type ScientistIntentVocabulary,
+} from '../../../compiler/scientistIntent/vocabulary.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 import { normalizeProtocolIntent, type ProtocolIntent } from '../../../compiler/protocolIntent/ProtocolIntent.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
@@ -1753,18 +1763,93 @@ export interface LabStatePassOutput {
  * - Folds directives FIRST, then events, via applyDirectiveToLabState / applyEventToLabState
  * - Increments turnIndex by 1
  * - Returns { events, snapshotAfter }
+ *
+ * L2-LABSTATE-CONTENTS-1 (spec §5.2/§7): the pass threads the DATA-declared
+ * labware identity resolution rules into the fold (the vocabulary's
+ * `labwareIdentityResolution` section — the rules are DATA, never a TS branch)
+ * so a content-bearing event carrying a SYMBOLIC labwareId (the shipped
+ * expander's top-level labwareId / transfer source_labware|destination_labware
+ * hint) resolves to a snapshot instance via the never-guess ladder (rung R1 raw
+ * instanceId + the declared rungs). A no-op fold of a content-bearing event
+ * surfaces as a `lab_state_unresolved_labware_reference` (or the material
+ * sibling) DIAGNOSTIC — the fold is pure, so the never-guess surface is
+ * no-op + this pass's diagnostic (lab_state is family emit, AFTER validate —
+ * no clarification channel exists here; the contents-wellset clarification
+ * stays the WELLSET resolver's jurisdiction). The WELLSET resolver's merged
+ * read-half stays untouched — this is the write-side fold, not a second event
+ * vocabulary (the canonical-shape test proves one shape feeds the ledger).
  */
-export function createLabStatePass(): Pass {
+export function createLabStatePass(
+  opts: { vocabulary?: ScientistIntentVocabulary } = {},
+): Pass {
+  const vocabulary = opts.vocabulary ?? defaultScientistIntentVocabulary();
+  // The DATA-declared identity rules (frozen per-load; absent section => the
+  // empty order/tokenFields => the fold falls back to rung R1 ONLY, the raw
+  // path — the D5 fail-closed semantics: an EMPTY `order` resolves rung R1
+  // ONLY, exactly as the 2-arg fold call; the raw path keeps working).
+  // Threaded at THIS seam, never imported into the pure fold module (LabState.ts
+  // keeps no vocabulary import).
+  const rules: LabIdentityRules = {
+    order: [...vocabulary.labwareIdentityResolution().order],
+    tokenFields: [...vocabulary.labwareIdentityResolution().tokenFields],
+  };
+  // D6 (advc fix-run 1): the content-bearing event-type classification for the
+  // fold's §7 never-guess surface is DATA (the vocabulary's
+  // `labStateContentBearingEventTypes` list — the fold-side twin of the read
+  // half's `materialBearingEventTypes`), threaded at THIS seam, never a TS
+  // literal list in the fold module (one DATA declaration of the concept,
+  // consumed by both halves — no double vocabulary).
+  const contentBearingEventTypes = vocabulary.labStateContentBearingEventTypes();
+
+  // The §7 no-op reason -> diagnostic code mapping (the code strings live in
+  // the PASS, not the fold — the pure module carries no reporting policy).
+  const REASON_CODE: Record<FoldOutcome['reason'] & string, string> = {
+    labware_unresolved: 'lab_state_unresolved_labware_reference',
+    material_unresolved: 'lab_state_unresolved_material_reference',
+    wells_unpairable: 'lab_state_unresolvable_wells',
+    event_incomplete: 'lab_state_incomplete_event',
+  };
+
   return {
     id: 'lab_state',
     family: 'emit' as const,
-    run({ state }: PassRunArgs): PassResult {
+    run({ pass_id, state }: PassRunArgs): PassResult {
       const prior = (state.input as { labState?: LabStateSnapshot }).labState
         ?? emptyLabState();
       // resolve_roles aggregates all expanded events (mint, patterns, verbs, protocol)
       const resolvedRolesOutput = state.outputs.get('resolve_roles') as
         { events?: PlateEventPrimitive[] } | undefined;
       const events = resolvedRolesOutput?.events ?? [];
+
+      const diagnostics: PassDiagnostic[] = [];
+      const collectDiagnostic = (
+        event: PlateEventPrimitive,
+        outcome: FoldOutcome,
+      ): void => {
+        if (outcome.changed) return;
+        if (!outcome.reason) return;
+        if (!isContentBearing(event, contentBearingEventTypes)) return; // a non-content-bearing no-op is expected (not a never-guess surface)
+        const code = REASON_CODE[outcome.reason];
+        if (!code) return;
+        const details = event.details as Record<string, unknown> | undefined;
+        const hint =
+          (typeof details?.labwareId === 'string' ? details.labwareId : undefined)
+          ?? (typeof details?.source_labware === 'string' ? details.source_labware : undefined)
+          ?? (typeof event.labwareId === 'string' ? event.labwareId : undefined)
+          ?? '';
+        diagnostics.push({
+          severity: 'warning',
+          code,
+          message: `lab_state fold no-op (${outcome.reason}): content-bearing event '${event.event_type}' did not resolve a labware instance / material identity (never-guess — no contents written).`,
+          pass_id,
+          details: {
+            hint,
+            event_type: event.event_type,
+            eventId: event.eventId,
+            reason: outcome.reason,
+          },
+        });
+      };
 
       // Fold directives FIRST, then events (events depend on post-directive state)
       let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
@@ -1773,9 +1858,47 @@ export function createLabStatePass(): Pass {
         snapshot = applyDirectiveToLabState(snapshot, d);
       }
       for (const event of events) {
-        snapshot = applyEventToLabState(snapshot, event);
+        const result = applyEventToLabState(snapshot, event, rules);
+        snapshot = result.snapshot;
+        collectDiagnostic(event, result.outcome);
       }
-      return { ok: true, output: { events, snapshotAfter: snapshot } };
+      // L2-LABSTATE-CONTENTS-1 (spec §11): env-gated arm-log for the live
+      // no-seed multi-turn drive. The wire done frame (the AgentResult the
+      // /api/ai/draft-events/stream path returns) does NOT carry labStateDelta,
+      // so the per-turn committed ledger is captured from the backend log.
+      // INERT unless LABSTATE_ARM_LOG=1 (never in production traffic). Emits
+      // the PRIOR committed ledger (the persistence proof — a later turn's
+      // prior must already contain an earlier turn's contents) and the
+      // POST-FOLD snapshot (the contents this turn wrote), both as compact
+      // labware -> well -> material records.
+      if (process.env.LABSTATE_ARM_LOG === '1') {
+        const summarize = (s: LabStateSnapshot): Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> => {
+          const out: Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> = {};
+          for (const [iid, inst] of Object.entries(s.labware)) {
+            const wells: Record<string, Array<{ materialId: string; kind?: string }>> = {};
+            for (const [wid, mats] of Object.entries(inst.wells)) {
+              if (mats.length > 0) wells[wid] = mats.map((m) => ({ materialId: m.materialId, ...(m.kind !== undefined ? { kind: m.kind } : {}) }));
+            }
+            out[iid] = wells;
+          }
+          return out;
+        };
+        // D3 (advc fix-run 1): the drive's never-guess control leg needs the
+        // §7 DIAGNOSTIC codes in a captured channel — the wire done frame does
+        // not carry them (the AgentResult has no diagnostics field), so they
+        // ride this env-gated log line (the drive captures the backend-log
+        // window per turn). `unresolved_codes` is the sorted-unique list of
+        // the lab_state diagnostic codes this turn produced (empty list when
+        // the fold wrote everything / nothing content-bearing no-op'd).
+        const unresolvedCodes: string[] = [];
+        for (const d of diagnostics) unresolvedCodes.push(d.code);
+        console.log(`[lab_state ARM-LOG] turn=${snapshot.turnIndex} prior_labware=${JSON.stringify(summarize(prior))} after_labware=${JSON.stringify(summarize(snapshot))} unresolved_codes=${JSON.stringify([...new Set(unresolvedCodes)].sort())}`);
+      }
+      return {
+        ok: true,
+        output: { events, snapshotAfter: snapshot },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      };
     },
   };
 }

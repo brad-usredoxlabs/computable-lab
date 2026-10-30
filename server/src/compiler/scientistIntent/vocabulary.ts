@@ -132,6 +132,36 @@ export interface ScientistIntentVocabulary {
    * layer then contributes nothing (fail-closed to the committed layer).
    */
   materialBearingEventTypes(): readonly string[];
+  /**
+   * L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+   * RESOLUTION ladder (rung `order` + the instance `tokenFields` each rung
+   * reads, index-aligned). The lab_state pass reads THIS to thread the
+   * never-guess resolution rules into the fold (a symbolic labwareId resolves
+   * to a snapshot instance via the declared rungs — the rung ids + fields are
+   * DATA, never a TS branch). Absent section => the empty lists (fail-closed:
+   * the fold resolves rung R1 ONLY, the raw instanceId path — the pre-existing
+   * behavior, so every pre-existing test stays byte-unchanged). D5 (advc
+   * fix-run 1): the fold treats an EMPTY `order` the same as absent rules —
+   * rung R1 ONLY — so an absent section and a 2-arg fold call are identical;
+   * the code, this doc, and the pass comment agree.
+   */
+  labwareIdentityResolution(): {
+    order: readonly string[];
+    tokenFields: readonly string[];
+  };
+  /**
+   * L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the CONTENT-BEARING EVENT
+   * TYPES on the WRITE side — the DATA list of primitive event types whose
+   * no-op fold is a never-guess surface the lab_state pass surfaces as a
+   * diagnostic (§7). The fold-side twin of `materialBearingEventTypes` (the
+   * READ half's ledger taxonomy): one DATA declaration of the
+   * content-bearing concept, consumed by both halves — the TS carries no
+   * second literal list of event types (the B3 boundary / no-double-
+   * vocabulary discipline). Empty when the vocabulary declares no section
+   * (the optional slot): fail-closed, no event is content-bearing, so the
+   * pass surfaces no diagnostics (over-conservative, never-guess-safe).
+   */
+  labStateContentBearingEventTypes(): readonly string[];
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -208,7 +238,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   // --- Read the validated document into the frozen consumption API --------
   interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
-  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[] }
+  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labStateContentBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
   const raw = doc as RawDoc;
   const verbs: string[] = [];
@@ -267,6 +297,34 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const materialBearingEventTypesFrozen: readonly string[] = Object.freeze(
     Array.isArray(raw.materialBearingEventTypes) ? raw.materialBearingEventTypes.filter((t) => typeof t === 'string') : [],
   );
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the content-bearing event-type
+  // taxonomy on the WRITE side is DATA (the vocabulary's
+  // labStateContentBearingEventTypes list) — read per load, same discipline as
+  // the token lists above; absent section => [] (fail-closed: the lab_state
+  // pass surfaces no diagnostics, over-conservative never-guess). The lab_state
+  // pass threads this into isContentBearing at the pass seam — the fold module
+  // stays pure and carries no second literal list of event types.
+  const labStateContentBearingEventTypesFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labStateContentBearingEventTypes) ? raw.labStateContentBearingEventTypes.filter((t) => typeof t === 'string') : [],
+  );
+  // L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware identity
+  // resolution ladder (same fix2 idiom as the two lists above — generic read,
+  // meta-schema validates the shape, frozen, fail-closed to the empty lists
+  // when the section is absent => the fold resolves rung R1 ONLY, the raw
+  // instanceId path — D5, advc fix-run 1: the fold treats an empty `order`
+  // exactly as absent rules, so absent-section and 2-arg calls agree). The
+  // rung ids + instance fields are DATA — this module
+  // carries no rung-id or field-name policy branch.
+  const labwareIdentityResolutionOrderFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.order)
+      ? raw.labwareIdentityResolution.order.filter((t) => typeof t === 'string')
+      : [],
+  );
+  const labwareIdentityResolutionTokenFieldsFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.tokenFields)
+      ? raw.labwareIdentityResolution.tokenFields.filter((t) => typeof t === 'string')
+      : [],
+  );
 
   // Deterministic wrap for the prompt block (width-bounded, declaration order;
   // reproduces the historical hand-wrapped block byte-for-byte at width 74).
@@ -314,6 +372,11 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     contractBlock,
     wellsetValueTokens: () => wellsetValueTokensFrozen,
     materialBearingEventTypes: () => materialBearingEventTypesFrozen,
+    labStateContentBearingEventTypes: () => labStateContentBearingEventTypesFrozen,
+    labwareIdentityResolution: () => ({
+      order: labwareIdentityResolutionOrderFrozen,
+      tokenFields: labwareIdentityResolutionTokenFieldsFrozen,
+    }),
   };
 }
 

@@ -894,6 +894,64 @@ materialBearingEventTypes:
   - add_material
   - multi_dispense
   - dispense
+# L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the CONTENT-BEARING EVENT TYPES
+# on the WRITE side — the DATA list of primitive event types whose no-op fold
+# is a never-guess surface the lab_state pass surfaces as a
+# `lab_state_unresolved_*` diagnostic (spec §7: the fold is pure, reporting
+# rides the pass). The fold-side twin of materialBearingEventTypes above (the
+# READ half's contents-ledger taxonomy): one DATA declaration of the
+# content-bearing concept, consumed by BOTH halves — the TypeScript carries no
+# second literal list of event types (the B3 boundary / no-double-vocabulary
+# discipline; the fold module stays pure and reads this list threaded at the
+# pass seam). transfer is declared: a transfer that carries a labware carrier
+# but cannot resolve a side is a never-guess failure the pass must surface
+# (a destination-only transfer with an unresolvable SOURCE side — the expander
+# sets the top-level labwareId to the TARGET — is exactly this class).
+# Optional: a vocabulary copy that declares no list contributes NO content-
+# bearing events to the fold (the pass surfaces no diagnostics — fail-closed,
+# over-conservative, never-guess-safe).
+labStateContentBearingEventTypes:
+  - add_material
+  - transfer
+# L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+# RESOLUTION ladder the lab_state fold walks when a content-bearing event
+# carries a SYMBOLIC labwareId (the shipped expander's top-level labwareId /
+# details.source_labware|destination_labware — a HINT, never a pin) instead of
+# a resolved instance id. The fold is a GENERIC field-identity evaluator over
+# these declared rungs; it never branches on a rung id or a field name (the
+# PROTO-AI-3 doctrine, the B3 boundary). Order is FIRST-HIT-WINS with
+# never-guess: the first rung that yields EXACTLY ONE instance wins, zero
+# advances, a TIE at any rung is terminal => the fold no-ops + a pass
+# diagnostic (no pick, no substring/overlap — the findLabwareByHints anti-
+# pattern is the reviewer bait). Rung semantics (exact identity under a declared
+# normalization, the foldPendingKey / mint_materials labwareType-match twin):
+#   instanceIdentity         the hint IS a resolved instanceId (the raw path —
+#                            rung R1, always present even when this section is
+#                            absent)
+#   declaredIdentityTokens   the hint trim+casefold == one of the instance's
+#                            declared identityTokens (the create event's
+#                            details.labwareId/title/label, spec §6)
+#   uniqueLabwareType        the hint trim+casefold (non-alnum collapsed) ==
+#                            EXACTLY ONE instance's labwareType (the OQ-3 live
+#                            single-plate winner — the mint_materials
+#                            `labwareType === placementLabwareHint` twin).
+# tokenFields is index-aligned with `order`: the instance field each rung reads.
+# Optional so existing fixture copies stay valid: an ABSENT section fails
+# CLOSED to rung R1 ONLY (the raw labwareInstanceId path keeps working; every
+# symbolic resolution is a never-guess no-op). D5 (advc fix-run 1): the fold
+# treats an EMPTY `order` exactly as ABSENT rules — rung R1 ONLY — so the
+# fail-closed read and the 2-arg fold call are identical (code, this comment,
+# and the pass comment agree; the pre-fix code ran ZERO rungs for an empty
+# order, contradicting the R1-only claim).
+labwareIdentityResolution:
+  order:
+    - instanceIdentity
+    - declaredIdentityTokens
+    - uniqueLabwareType
+  tokenFields:
+    - instanceId
+    - identityTokens
+    - labwareType
 referentLevels: [concept, formulation, vendor-product, instance, aliquot]
 policies:
   strategyOrder:
