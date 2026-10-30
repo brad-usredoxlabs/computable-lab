@@ -159,6 +159,13 @@ const mocked = vi.hoisted(() => ({
   // and client-decided from the document, so a missing document must not
   // justify deleting it (or an author-typed value) before an invalid POST.
   schemaDocFail: false as boolean,
+  // GC-16 FIX RUN 5 (D20): when true the GET /schemas/:id mock RESOLVES a
+  // 200 whose `schema` field is ABSENT (the client contract
+  // SchemaInfo.schema is optional — app/src/types/kernel.ts). A
+  // document-less 200 must settle as FAILED, not as "resolved, declares
+  // nothing": otherwise the spine's schema-required shortSlug is silently
+  // deleted and a shortSlug-less spine POST goes out (the review's PROBE4C).
+  schemaDocMissing: false as boolean,
 }))
 
 vi.mock('../../shared/api/client', () => ({
@@ -191,6 +198,14 @@ vi.mock('../../shared/api/client', () => ({
     // see the real shapes. Respects mocked.schemaDocDelay (D12 race legs
     // hold the document unresolved while the form is already rendered).
     getSchema: vi.fn((schemaId: string) => {
+      // GC-16 FIX RUN 5 (D20): the document-less 200 arm — RESOLVE a
+      // SchemaInfo whose `schema` field is absent (the client contract
+      // SchemaInfo.schema is optional; the review's PROBE4C shape).
+      if (mocked.schemaDocMissing) {
+        const base = String(schemaId).split('/').pop() ?? ''
+        const kind = base.replace(/\.schema\.yaml$/, '')
+        return Promise.resolve({ id: schemaId, path: `${kind}.schema.yaml`, title: kind })
+      }
       // GC-16 FIX RUN 4 (D16): the FAILED-fetch arm — reject the document
       // fetch (the review's PROBE3 shape) instead of resolving it.
       if (mocked.schemaDocFail) {
@@ -222,10 +237,19 @@ vi.mock('../../shared/api/client', () => ({
             schemaId: sid(kind),
             recordId: '__draft__',
             title: 'New record',
-            blocks: [{ id: 'b1', kind: 'section', label: 'Body', slotIds: ['slot-recordId', 'slot-title'] }],
+            blocks: [{ id: 'b1', kind: 'section', label: 'Body', slotIds: ['slot-recordId', 'slot-title', 'slot-shortSlug'] }],
             slots: [
               { id: 'slot-recordId', path: '$.recordId', label: 'Record ID', widget: 'text', readOnly: true },
               { id: 'slot-title', path: '$.title', label: 'Title', widget: 'text' },
+              // GC-16 FIX RUN 5 (D21, test fidelity): the REAL server
+              // experiment projection exposes an EDITABLE shortSlug slot
+              // (schema/studies/experiment.ui.yaml $.shortSlug widget=text,
+              // no readonly → readOnly=false; the review's exp-projection.json
+              // cites `$.shortSlug: widget=text readOnly=false`). The D16
+              // PROBE3B leg is titled for an author-typed shortSlug, so the
+              // mock spine projection must expose the same slot — otherwise
+              // the leg cannot author the value it claims to pin.
+              { id: 'slot-shortSlug', path: '$.shortSlug', label: 'Short Slug', widget: 'text' },
             ],
             diagnostics: [],
           }
@@ -244,6 +268,7 @@ vi.mock('../../shared/api/client', () => ({
 beforeEach(() => {
   mocked.schemaDocDelay = 0
   mocked.schemaDocFail = false
+  mocked.schemaDocMissing = false
 })
 
 afterEach(() => {
@@ -654,10 +679,24 @@ describe('GC-16 FIX RUN 3 D12 — spine submit waits for the schema document (sh
 // value stripped (review probes PROBE3/PROBE3B).
 //
 // Decision routing: the architect ruling file
-// 2026-10-30_lane1-gc16-d16-failed-fetch-shortSlug-decision.md was
-// ABSENT at work time (ls → No such file or directory); the decision
-// REQUEST packet's provisional fallback applies — Option A (tri-state;
-// refuse on failed for spine kinds; no guessed data).
+// 2026-10-30_lane1-gc16-d16-failed-fetch-shortSlug-decision.md RATIFIED
+// Option A (VERDICT: Option A; the A+B hybrid and Option B rejected —
+// the ruling's "Why not B" closes the title-required gate B would leave
+// open). The provisional Option A shipped at 9bc37179 matches the
+// ratified surface (ruling items 1–3: two-flag state, gate order,
+// refusal text — verify, do not rework). The ruling's bounded deltas are
+// folded into this closing run: delta 4 rewords the refusal
+// parenthetical (it overclaimed for `run` — run.schema.yaml requires
+// [kind, recordId, status], shortSlug is declared but NOT required —
+// while keeping the pinned regexes /schema document
+// (could not be loaded|unavailable)/i and /identity fields/i); delta 5
+// pins the knowledge-on-failed half (below — the refusal is SPINE-ONLY,
+// knowledge payloads stay clean on failure); delta 6 cites this ruling
+// instead of "PROVISIONAL / ruling file ABSENT".
+// GC-16 FIX RUN 5 (D20): the tri-state's residual hole — a 200 whose
+// `schema` field is ABSENT (SchemaInfo.schema is optional) also settles
+// as FAILED (document-less success ≠ "resolved, declares nothing"), so
+// the document-less-200 leg pins the same named refusal + zero creates.
 //
 // This leg mirrors the review's independent probe (getSchema rejects;
 // spine experiment; title authored THROUGH the real input): submit
@@ -666,7 +705,7 @@ describe('GC-16 FIX RUN 3 D12 — spine submit waits for the schema document (sh
 // decided (retry affordance named).
 // =====================================================================
 
-describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine submits (Option A provisional)', () => {
+describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine submits (Option A ratified)', () => {
   it('spine (experiment): getSchema REJECTS → submit produces ZERO creates + a named refusal (no silent invalid POST, no stripped author value)', async () => {
     mocked.schemaDocFail = true
     render(
@@ -719,6 +758,13 @@ describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine s
     // shortSlug was deleted before POST at 82044fa4. With the Option A
     // refusal there is no POST at all — the author's value survives in
     // the form and the named refusal names the retry.
+    //
+    // GC-16 FIX RUN 5 (D21, cycle-4 test fidelity): the leg is NAMED for an
+    // author-typed shortSlug, so it must AUTHOR one — through the REAL
+    // editable "Short Slug" slot the experiment projection exposes
+    // ($.shortSlug widget=text readOnly=false), not just the title. At
+    // HEAD (f3555f8b) the leg passed while typing only the TITLE, so it
+    // would have passed even if the panel discarded an author-typed slug.
     mocked.schemaDocFail = true
     render(
       <RecordCreatePanel
@@ -730,18 +776,142 @@ describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine s
     )
     await waitFor(() => findRow('Title'), { timeout: 8000 })
     commitTextSlot(findRow('Title'), 'my experiment')
+    // Author the shortSlug THROUGH the real editable slot (the review's
+    // PROBE3B acceptance shape — the hand-typed value the 82044fa4 defect
+    // deleted before the silent POST).
+    commitTextSlot(findRow('Short Slug'), 'my-experiment')
     await act(async () => {
       await new Promise((r) => setTimeout(r, 100))
     })
     submitCreate()
     await new Promise((r) => setTimeout(r, 200))
     expect(mocked.createCalls, 'no create on a failed document fetch (spine)').toEqual([])
-    // The form is still usable: the author's typed value is not destroyed
-    // (the title slot still carries what was authored — the refusal does
-    // not discard author edits).
+    const panelText = screen.getByTestId('record-create-panel').textContent
+    expect(
+      panelText,
+      'the refusal must be NAMED (the PROBE3B remedy is the loud refusal itself)',
+    ).toMatch(/could not be loaded/i)
+    expect(panelText).toMatch(/identity fields/i)
+    // The form is still usable: the author's typed values are not
+    // destroyed — the title slot still carries what was authored AND the
+    // hand-typed shortSlug survives the refusal (no discard of in-flight
+    // author edits; no strip of the slug either).
     expect(
       findRow('Title').textContent,
       'the author-typed value must survive the refusal (no discard of in-flight author edits)',
     ).toContain('my experiment')
+    expect(
+      findRow('Short Slug').textContent,
+      'the author-typed shortSlug must survive in the form after the refused submit (the PROBE3B value is the author\'s remedy — stripping it would leave the refusal unrecoverable)',
+    ).toContain('my-experiment')
+  }, 20000)
+
+  it('spine (experiment): a 200 whose `schema` field is ABSENT (document-less success) settles as FAILED → ZERO creates + named refusal, not a silent shortSlug-less POST (D20 — the review\'s PROBE4C shape)', async () => {
+    // GC-16 FIX RUN 5 (D20, cycle-4 MINOR): the tri-state hole. At HEAD
+    // (f3555f8b) the fetch .then arm runs `setSchemaDoc(info.schema ??
+    // null); setSchemaDocFor(schemaId)` WITHOUT setSchemaDocFailed(true) —
+    // SchemaInfo.schema is OPTIONAL (app/src/types/kernel.ts), so a 200
+    // whose `schema` field is absent settles as "resolved, declares
+    // nothing": schemaDeclaresShortSlug goes false, the gate passes, and
+    // the submit path DELETES the spine's schema-required shortSlug — a
+    // shortSlug-less spine POST with no client error (the review's
+    // PROBE4C: createCalls = [{kind,recordId,state,studyId,title}], no
+    // error shown). "Resolved" must always mean "a document arrived".
+    mocked.schemaDocMissing = true
+    render(
+      <RecordCreatePanel
+        nodeType="experiment"
+        studyId="STU-1"
+        draftTitle="my experiment"
+        onCreated={() => {}}
+      />,
+    )
+    await waitFor(() => findRow('Title'), { timeout: 8000 })
+    commitTextSlot(findRow('Title'), 'my experiment')
+    // Let the document-less 200 settle (the .then path), then submit.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    submitCreate()
+    await new Promise((r) => setTimeout(r, 200))
+    // THE DEFECT at f3555f8b: the document-less 200 settled as
+    // "resolved, declares nothing", schemaDeclaresShortSlug went false,
+    // and the submit executed `delete payload.shortSlug` — posting
+    // {"kind","recordId","state","studyId","title"} with NO shortSlug and
+    // no client error (the review's PROBE4C payload).
+    expect(
+      mocked.createCalls,
+      'a document-less 200 must NOT post a spine payload — "resolved" means a document arrived; with no document the identity fields cannot be decided (unknown is not "not declared")',
+    ).toEqual([])
+    const panelText = screen.getByTestId('record-create-panel').textContent
+    console.log('D20 RAW (panel text after document-less-200 submit):', panelText)
+    expect(
+      panelText,
+      'the refusal must be NAMED — the schema document could not be loaded (no document arrived), so the identity fields cannot be decided',
+    ).toMatch(/schema document for "[a-z]+" could not be loaded/i)
+    expect(panelText).toMatch(/identity fields cannot be decided/i)
+    // The D12 in-flight refusal (a DIFFERENT named message) must NOT be
+    // what fired — the document DID settle (the 200 arrived); it settled
+    // as failed because it carried no schema document.
+    expect(panelText).not.toMatch(/Loading the schema document/i)
+  }, 20000)
+
+  it('knowledge (assertion): a FAILED schema-document fetch does NOT refuse — submit PROCEEDS (one create), NO "could not be loaded" refusal, and the payload carries NO shortSlug (ruling delta 5 — the refusal is SPINE-ONLY; the delete arm is the D9 outcome; the server\'s required-check speaks)', async () => {
+    // RULING DELTA 5 (architect ruling
+    // 2026-10-30_lane1-gc16-d16-failed-fetch-shortSlug-decision.md, item 5):
+    // every schemaDocFail leg was spine-only — no leg rendered a KNOWLEDGE
+    // kind with schemaDocFail: true. The ruling demands the other half be
+    // pinned: on a failed fetch a knowledge submit must PROCEED (the D16
+    // refusal is SPINE-ONLY, not a global door-shut), show NO "could not
+    // be loaded" refusal, and the payload must carry NO shortSlug (the
+    // delete arm — the assertion schema is unevaluatedProperties: false and
+    // declares no shortSlug, so the delete is the D9-correct outcome; the
+    // server's required-check is the visible authority via
+    // describeApiError). This leg PASSES at HEAD (f3555f8b) — the D16 gate
+    // already keys on isSpine, so the behavior it pins was already correct;
+    // it was simply UNPINNED. It is a pin of a ruled surface (the
+    // constraint space the ruling names), not a defect reproduction — the
+    // RED-first proof in this run is the D20 leg above (which reproduces
+    // the review's PROBE4C defect at HEAD and turns green on the D20
+    // guard).
+    mocked.schemaDocFail = true
+    render(
+      <RecordCreatePanel nodeType="assertion" draftTitle="fix5 knowledge" onCreated={() => {}} />,
+    )
+    // The REAL assertion form renders even though the document fetch
+    // failed (the projection does not depend on the document) — the author
+    // supplies the schema-required id + scope through the real inputs.
+    const idRow = await waitFor(() => findRow('ID'), { timeout: 8000 })
+    commitTextSlot(idRow, 'ASN-FIX5-KF')
+    const scopeRow = findRow('Scope (canonical assertion shape)')
+    commitSelectSlot(scopeRow, 'Global')
+    // Let the failed fetch settle (the .catch path), then submit.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    submitCreate()
+    await waitFor(() => expect(mocked.createCalls).toHaveLength(1), { timeout: 8000 })
+    const [, payload] = mocked.createCalls[0]
+    // The knowledge submit PROCEEDED (one create) — the D16 refusal is
+    // SPINE-ONLY; a failed document is not a global door-shut.
+    expect(
+      payload.id,
+      'the knowledge payload carries the AUTHOR-supplied id (no client mint)',
+    ).toBe('ASN-FIX5-KF')
+    const panelText = screen.getByTestId('record-create-panel').textContent
+    console.log(
+      'D16 DELTA5 RAW (knowledge-on-failed payload + panel text):',
+      JSON.stringify(payload),
+      '|||',
+      panelText,
+    )
+    expect(
+      panelText,
+      'a knowledge kind on a failed fetch must NOT see the spine refusal (the refusal is SPINE-ONLY)',
+    ).not.toMatch(/could not be loaded/i)
+    expect(
+      'shortSlug' in payload,
+      'the knowledge payload must carry NO shortSlug (unevaluatedProperties:false — the delete arm is the D9-correct outcome; the server\'s required-check speaks)',
+    ).toBe(false)
   }, 20000)
 })

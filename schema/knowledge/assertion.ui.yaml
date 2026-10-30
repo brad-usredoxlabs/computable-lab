@@ -101,9 +101,13 @@ form:
         # author need not touch is NOT expressible on the ui-v1 surface.
         # But a readonly single-option select with no seed makes kind:record
         # UNAUTHORABLE (no author action can produce it — the review's
-        # D18), so readonly is DROPPED: the author picks the single option
-        # explicitly and a committed item then genuinely carries
-        # kind:record even before R1 ships item-hint seeding. Seeding it
+        # D18), so readonly is DROPPED: the discriminator is no longer
+        # marked readonly and becomes authorable only once R1 renders item
+        # sub-slots. At HEAD the array widget commits [{}] with no item
+        # sub-slots rendered (the repo's own green D2/D3 leg proves no
+        # author action yet produces kind:record), so dropping readonly
+        # removes a contradictory declaration only — it does not make the
+        # value authorable until R1. Seeding it
         # WITHOUT the author touching the field is the R1 widget task's
         # item-hint consumption (architect ruling item 4: the data-leg
         # seeding stays in GC-16 scope as a DATA edit; the ui-v1 keyword
