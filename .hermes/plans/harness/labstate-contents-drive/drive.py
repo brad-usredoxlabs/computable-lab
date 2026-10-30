@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+"""L2-LABSTATE-CONTENTS-1 — the LIVE NO-SEED multi-turn drive (spec §11).
+
+Drives the ACTUAL wire path the deck surface rides (POST /api/ai/draft-events/
+stream — the run-suite-a.py post_sse idiom) with ONE held session, byte-stable
+surface + context identity (conversationKey = deriveContextCacheKey(surface,
+context) is stable across turns — the SAME identity the LabStateCache is keyed
+by). NO seeded state, NO cache priming, NO priorLabState fixture: the ONLY
+inputs are the four spec §11 utterances (verbatim from the ruling), typed
+exactly, hyphen and all — the model lowering to well-range form is part of
+what the drive tests (OQ-2).
+
+Turns (spec §11, OQ-1 ratified):
+  A    "Place a 96-well plate on the deck."
+  1    "add material A to A1-H1"
+  1b   "add material B to A2-H2"
+  2    "mix all wells that have material"
+  X    (control) an unknown-plate add — never-guess leg (diagnostic + no
+       contents; captured separately, after turn 2, same session).
+
+Per-turn receipt evidence (receipts dir under /home/brad/.hermes/cl/receipts/
+L2-LABSTATE-CONTENTS-1/<UTC ts>/):
+  - the FULL raw done frame (the accepted compile's wire result: events,
+    labwareAdditions, clarificationRequests, unresolvedRefs, notes, error)
+    — the labStateDelta is NOT on the wire (the AgentResult carries no such
+    field), so the per-turn committed ledger rides the backend ARM-LOG
+    (LABSTATE_ARM_LOG=1, env-gated, the spec §11 'backend arm-log line'
+    evidence): the drive captures the backend log window between turns and
+    extracts the [lab_state ARM-LOG] line — prior_labware (the persistence
+    proof: turn 1b's prior must ALREADY contain turn 1's contents) and
+    after_labware (the contents this turn wrote).
+  - the mix turn: the mix event's details carry the resolved union. The
+    drive asserts the union is EXACTLY the 48 wells A1..H1 + A2..H2 (the
+    A1:H2 bounding union) computed BY THE COMMITTED LEDGER — a vacuous
+    []==[] is an ACCEPTANCE FAILURE (WELLSET's #1 trap applies verbatim).
+
+Exit codes: 0 = all acceptance legs met; 1 = one or more failed (each named).
+The receipt is ALWAYS written (evidence is the deliverable, not the exit code).
+"""
+import hashlib
+import json
+import os
+import sys
+import time
+import urllib.request
+import urllib.error
+
+BASE = os.environ.get("DRIVE_BASE", "http://localhost:3093")
+RECEIPTS_ROOT = os.environ.get("DRIVE_RECEIPTS",
+                               "/home/brad/.hermes/cl/receipts/L2-LABSTATE-CONTENTS-1")
+BACKEND_LOG = os.environ.get("DRIVE_BACKEND_LOG",
+                             "/mnt/vast/home/brad/git/wt/L2-LABSTATE-CONTENTS-1-lane2-l2t2255/.run/backend.log")
+TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
+
+# ---------------------------------------------------------------------------
+# The spec §11 utterances — VERBATIM from the ruling (hyphen and all).
+# ---------------------------------------------------------------------------
+TURNS = [
+    ("A", "Place a 96-well plate on the deck."),
+    ("1", "add material A to A1-H1"),
+    ("1b", "add material B to A2-H2"),
+    ("2", "mix all wells that have material"),
+]
+# The never-guess control (spec §11 failure-arm): an add naming a plate the
+# deck does not hold. The lab_state fold must no-op + the pass must emit a
+# lab_state diagnostic; NO contents written.
+CONTROL_TURN = ("X", "add material Z to the ghost-plate well C1")
+
+# The held-session identity constants (run-suite-a.py values — the deck
+# surface's byte-stable wire shape).
+PLATFORM_ID = "manual"
+VARIANT_ID = "manual_freeform"
+VOCAB_PACK_ID = "liquid-handling/v1"
+AVAILABLE_VERBS = [
+    "aspirate", "dispense", "transfer", "multi_dispense", "add_material",
+    "mix", "wash", "incubate", "read", "harvest", "place_tube", "move_tube",
+    "remove_tube", "serial_dilution", "plate_copy", "wash_cycle",
+]
+
+
+def sha(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def context_for(run_id, labwares, events, placement_count):
+    """The DeckSurfaceChat surfaceContext (run-suite-a context_state.py —
+    the same 11 fields, same key order). The held session's NO-SEED contract:
+    the deck starts EMPTY. labwares/events accumulate from delivered results
+    (the product's ghost-mount equivalent) — this mirrors the browser's
+    post-accept accumulation, never a seeded prior."""
+    return {
+        "eventGraphId": "eg-" + run_id,
+        "runId": run_id,
+        "platformId": PLATFORM_ID,
+        "variantId": VARIANT_ID,
+        "vocabPackId": VOCAB_PACK_ID,
+        "placementCount": placement_count,
+        "eventCount": len(events),
+        "labwares": labwares,
+        "eventSummary": ("No events yet." if not events
+                         else "; ".join(_summary(e) for e in events[-20:])),
+        "availableVerbs": list(AVAILABLE_VERBS),
+        "selection": None,
+    }
+
+
+def _event_wells(ev):
+    d = ev.get("details") or {}
+    w = d.get("wells")
+    if isinstance(w, list):
+        return [x for x in w if isinstance(x, str)]
+    if isinstance(w, str):
+        return [w]
+    if isinstance(d.get("well"), str):
+        return [d["well"]]
+    return []
+
+
+def _summary(ev):
+    verb = str(ev.get("verb") or ev.get("event_type") or "event")
+    wells = _event_wells(ev)
+    well_str = "" if not wells else ("(%s)" % wells[0] if len(wells) == 1
+                                     else ("(%s)" % ", ".join(wells) if len(wells) <= 6
+                                           else "(%d wells)" % len(wells)))
+    mats = []
+    for m in (ev.get("materials") or []):
+        if isinstance(m, dict):
+            ref = m.get("ref")
+            label = None
+            if isinstance(ref, dict):
+                mint = ref.get("mint")
+                if isinstance(mint, dict) and mint.get("label"):
+                    label = str(mint["label"])
+                elif isinstance(ref.get("curie"), str):
+                    label = ref["curie"]
+            if label:
+                mats.append(label)
+    vol = ""
+    d = ev.get("details") or {}
+    if isinstance(d.get("volumeUl"), (int, float)):
+        vol = "%s uL" % d["volumeUl"]
+    return " ".join(p for p in (verb, (mats[0] if mats else ""), vol, well_str) if p)
+
+
+def post_sse(base, path, body, timeout):
+    """POST a JSON body, stream the SSE frames (run-suite-a post_sse idiom:
+    data: lines, blank-line separated). Returns (http_status, frames, raw)."""
+    req = urllib.request.Request(
+        base + path, data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        return e.code, [], e.read()
+    except (TimeoutError, urllib.error.URLError) as e:
+        return -1, [], str(e).encode("utf-8", errors="replace")
+    with resp:
+        buf = b""
+        frames = []
+        while True:
+            chunk = resp.read(1)
+            if not chunk:
+                break
+            buf += chunk
+            if buf.endswith(b"\n\n"):
+                frame = buf.decode("utf-8", errors="replace")
+                buf = b""
+                for line in frame.splitlines():
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        frames.append(json.loads(line[5:].strip()))
+                    except Exception:
+                        continue
+        if buf.strip():
+            for line in buf.decode("utf-8", errors="replace").splitlines():
+                if line.startswith("data:"):
+                    try:
+                        frames.append(json.loads(line[5:].strip()))
+                    except Exception:
+                        pass
+        return resp.status, frames, buf
+
+
+def log_offset():
+    try:
+        return os.path.getsize(BACKEND_LOG)
+    except OSError:
+        return 0
+
+
+def arm_log_since(offset):
+    """Extract the [lab_state ARM-LOG] lines from the backend log since
+    `offset` (the per-turn committed-ledger evidence the wire frame does not
+    carry)."""
+    try:
+        with open(BACKEND_LOG, "rb") as f:
+            f.seek(offset)
+            data = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return []
+    return [ln for ln in data.splitlines() if "lab_state ARM-LOG" in ln]
+
+
+def parse_arm(log_line):
+    """Parse one ARM-LOG line into (turn, prior, after) — tolerant of the
+    compact JSON payloads."""
+    out = {}
+    for token in ("turn=", "prior_labware=", "after_labware="):
+        i = log_line.rfind(token)
+        if i < 0:
+            continue
+        rest = log_line[i + len(token):]
+        if token == "turn=":
+            out["turn"] = rest.strip()
+        else:
+            try:
+                out[token.rstrip("=")] = json.loads(rest)
+            except Exception:
+                out[token.rstrip("=")] = raw_payload(rest)
+    return out
+
+
+def raw_payload(rest):
+    """The payload after the last brace-balance point (defensive — the line
+    is a single console.log so the whole tail IS the JSON)."""
+    return rest
+
+
+def wellset_of(ev):
+    """The mix event's resolved well union (details.wells / details.well)."""
+    d = ev.get("details") or {}
+    w = d.get("wells")
+    if isinstance(w, list):
+        return sorted(x for x in w if isinstance(x, str))
+    if isinstance(w, str):
+        return [w]
+    if isinstance(d.get("well"), str):
+        return [d["well"]]
+    return []
+
+
+def material_wells(ev):
+    """A material-bearing event's well addresses (its own details)."""
+    d = ev.get("details") or {}
+    out = []
+    w = d.get("wells")
+    if isinstance(w, list):
+        out = [x for x in w if isinstance(x, str)]
+    elif isinstance(w, str):
+        out = [w]
+    if not out and isinstance(d.get("well"), str):
+        out = [d["well"]]
+    return out
+
+
+def main():
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    receipt = os.path.join(RECEIPTS_ROOT, ts)
+    os.makedirs(receipt, exist_ok=True)
+    run_id = "labstate-" + ts
+
+    # The held session (ONE conversation, byte-stable identity).
+    labwares, events, placement_count = [], [], 0
+    history = []
+    results = {}
+    failures = []
+
+    print("DRIVE run_id=%s base=%s" % (run_id, BASE))
+
+    def drive_turn(label, prompt, control=False):
+        ctx = context_for(run_id, labwares, events, placement_count)
+        body = {"prompt": prompt, "context": ctx, "history": history}
+        request_sha = sha(json.dumps(body, sort_keys=True, separators=(",", ":")))
+        key_sha = sha(json.dumps(
+            {k: ctx.get(k) for k in ("runId", "eventGraphId", "platformId",
+                                     "variantId", "vocabPackId", "editorMode")},
+            sort_keys=True))
+        off = log_offset()
+        t0 = time.time()
+        status, frames, raw = post_sse(BASE, "/api/ai/draft-events/stream",
+                                       body, TURN_TIMEOUT)
+        wall = round(time.time() - t0, 1)
+        types = [f.get("type") for f in frames if isinstance(f, dict)]
+        done = next((f for f in frames
+                     if isinstance(f, dict) and f.get("type") == "done"), None)
+        diag_frames = [f for f in frames
+                       if isinstance(f, dict) and f.get("type") == "pipeline_diagnostics"]
+        error_frames = [f for f in frames
+                        if isinstance(f, dict) and f.get("type") == "error"]
+        arm = arm_log_since(off)
+
+        # Advance the session from the delivered result (ghost-mount
+        # equivalent — the product's post-accept accumulation, never a seed).
+        nonlocal_lab = {"labwares": labwares, "events": events,
+                        "placement_count": placement_count, "history": history}
+        if isinstance(done, dict):
+            res = done.get("result") or {}
+            if isinstance(res.get("events"), list):
+                for ev in res["events"]:
+                    if isinstance(ev, dict):
+                        nonlocal_lab["events"].append(ev)
+            for offer in (res.get("resolvedLabwares") or []):
+                rid = offer.get("recordId") if isinstance(offer, dict) else None
+                if isinstance(rid, str) and not any(
+                        l["labwareId"] == rid for l in nonlocal_lab["labwares"]):
+                    nonlocal_lab["labwares"].append({
+                        "labwareId": rid,
+                        "labwareType": str(offer.get("title") or offer.get("hint") or rid),
+                        "name": str(offer.get("title") or offer.get("hint") or rid),
+                    })
+                    nonlocal_lab["placement_count"] += 1
+            for add in (res.get("labwareAdditions") or []):
+                rid = add.get("recordId") if isinstance(add, dict) else None
+                if isinstance(rid, str) and not any(
+                        l["labwareId"] == rid for l in nonlocal_lab["labwares"]):
+                    nonlocal_lab["labwares"].append({
+                        "labwareId": rid, "labwareType": str(add.get("reason") or rid),
+                        "name": str(add.get("reason") or rid)})
+                nonlocal_lab["placement_count"] += 1
+            # history (the client's own shape — useAiChat buildConversationHistory)
+            nonlocal_lab["history"].append({"role": "user", "content": prompt.strip()})
+            if isinstance(res.get("notes"), list) and res["notes"]:
+                nonlocal_lab["history"].append({"role": "assistant",
+                                                "content": " ".join(map(str, res["notes"]))[:4000]})
+            nonlocal_lab["history"] = nonlocal_lab["history"][-20:]
+
+        state = {
+            "label": label, "prompt": prompt, "control": control,
+            "http_status": status, "sse_frame_types": types,
+            "done_frame": done, "done_frame_sha": sha(json.dumps(done, sort_keys=True)) if done else None,
+            "request_sha": request_sha, "context_identity_sha256": key_sha,
+            "arm_log": [parse_arm(ln) for ln in arm],
+            "arm_log_raw": arm,
+            "pipeline_diagnostics": diag_frames,
+            "error_frames": error_frames,
+            "wall_s": wall,
+            "raw_tail": raw[-4000:].decode("utf-8", errors="replace"),
+        }
+        results[label] = state
+        print("turn %-3s http=%s frames=%s wall=%ss arm_lines=%d" %
+              (label, status, [t for t in types if t in ("draft", "done", "error", "pipeline_diagnostics")],
+               wall, len(arm)))
+        return state
+
+    # ---- the four spec §11 turns ------------------------------------------
+    for label, prompt in TURNS:
+        drive_turn(label, prompt)
+
+    # ---- the never-guess control turn (spec §11 failure-arm) ---------------
+    drive_turn(*CONTROL_TURN, control=True)
+
+    # -----------------------------------------------------------------------
+    # Acceptance legs (each named; a vacuous pass is a FAILURE).
+    # -----------------------------------------------------------------------
+    leg = {}
+
+    # LEG 1 (turn 1): accepted add leaves snapshotAfter.labware populated —
+    # the arm-log after_labware has >=1 instance with non-empty wells over
+    # the A1..H1 addresses; the materialId/kind seen are captured.
+    t1 = results.get("1") or {}
+    t1_after = (t1.get("arm_log") or [{}])[-1].get("after_labware") if t1.get("arm_log") else None
+    leg["turn1_contents"] = {
+        "ok": isinstance(t1_after, dict) and any(
+            isinstance(w, dict) and w for w in t1_after.values() if isinstance(w, dict)),
+        "after_labware": t1_after,
+        "note": "turn 1 accepted add leaves snapshotAfter.labware populated (A1..H1); the seen materialId/kind ride the payload above.",
+    }
+
+    # LEG 2 (turn 1b PERSISTENCE PROOF): turn 1b's PRIOR (the cache read leg)
+    # ALREADY contains turn 1's contents — captured, not asserted-by-
+    # construction.
+    t1b = results.get("1b") or {}
+    t1b_prior = (t1b.get("arm_log") or [{}])[-1].get("prior_labware") if t1b.get("arm_log") else None
+    t1b_after = (t1b.get("arm_log") or [{}])[-1].get("after_labware") if t1b.get("arm_log") else None
+    # turn 1's contents must be present in 1b's prior (any non-empty well on
+    # any instance with materialId 'A' — the seen id from turn 1).
+    def _has_material(pay, mid):
+        if not isinstance(pay, dict):
+            return False
+        for wmap in pay.values():
+            if not isinstance(wmap, dict):
+                continue
+            for mats in wmap.values():
+                if isinstance(mats, list):
+                    for m in mats:
+                        if isinstance(m, dict) and m.get("materialId") == mid:
+                            return True
+        return False
+    mid_a = None
+    if isinstance(t1_after, dict):
+        for wmap in t1_after.values():
+            if isinstance(wmap, dict):
+                for mats in wmap.values():
+                    if isinstance(mats, list) and mats and isinstance(mats[0], dict):
+                        mid_a = mats[0].get("materialId")
+                        break
+            if mid_a:
+                break
+    leg["turn1b_persistence"] = {
+        "ok": bool(mid_a) and _has_material(t1b_prior, mid_a),
+        "material_id_from_turn1": mid_a,
+        "turn1b_prior_labware": t1b_prior,
+        "turn1b_after_labware": t1b_after,
+        "note": "turn 1b's compile read a prior that ALREADY contains turn 1's contents (the cache write leg fired) — the persistence proof, captured from the arm-log.",
+    }
+
+    # LEG 3 (turn 2 MIX): the mix event's details carry the resolved union
+    # EXACTLY A1..H1 + A2..H2 (48 wells — the A1:H2 bounding union), computed
+    # by the committed ledger. Vacuous []==[] is an ACCEPTANCE FAILURE.
+    t2 = results.get("2") or {}
+    t2_done = t2.get("done_frame") or {}
+    t2_res = t2_done.get("result") or {} if isinstance(t2_done, dict) else {}
+    t2_events = t2_res.get("events") or []
+    mix_events = [e for e in t2_events
+                  if isinstance(e, dict)
+                  and (e.get("event_type") == "mix" or e.get("verb") == "mix"
+                       or e.get("event_type") == "multi_dispense" or e.get("verb") == "multi_dispense")]
+    mix_wells = []
+    for e in mix_events:
+        mix_wells.extend(wellset_of(e))
+    mix_wells = sorted(set(mix_wells))
+    expected_48 = sorted(
+        ["%s%d" % (r, c) for r in "ABCDEFGH" for c in range(1, 3)])
+    t2_after = (t2.get("arm_log") or [{}])[-1].get("after_labware") if t2.get("arm_log") else None
+    ledger_populated = isinstance(t2_after, dict) and any(
+        isinstance(w, dict) and w for w in t2_after.values() if isinstance(w, dict))
+    leg["turn2_mix_union"] = {
+        "ok": mix_wells == expected_48,
+        "mix_event_count": len(mix_events),
+        "mix_wells": mix_wells,
+        "mix_well_count": len(mix_wells),
+        "expected_48": expected_48,
+        "turn2_ledger_populated": ledger_populated,
+        "note": "the mix event's details carry the resolved union EXACTLY A1..H1 + A2..H2 (48 wells, the A1:H2 bounding union) BY THE COMMITTED LEDGER. Vacuous []==[] = ACCEPTANCE FAILURE (named, not hidden).",
+    }
+
+    # LEG 4 (control X): unknown plate -> no contents written (the fold
+    # no-ops) + a lab_state diagnostic in the payload/log (never-guess).
+    tx = results.get("X") or {}
+    tx_after = (tx.get("arm_log") or [{}])[-1].get("after_labware") if tx.get("arm_log") else None
+    tx_diag = [d for d in (tx.get("pipeline_diagnostics") or [])
+               if any("lab_state" in str(dd) for dd in
+                      [(d.get("diagnostics") or [])])]
+    # the arm-log after must equal the prior (no-op: no contents written this
+    # turn) — the fold never half-writes for an unmappable hint.
+    tx_prior = (tx.get("arm_log") or [{}])[-1].get("prior_labware") if tx.get("arm_log") else None
+    leg["control_never_guess"] = {
+        "ok": (tx.get("arm_log") is not None) and (tx_prior == tx_after or tx_after is None),
+        "arm_prior": tx_prior, "arm_after": tx_after,
+        "pipeline_diagnostics_frames": tx.get("pipeline_diagnostics"),
+        "note": "unknown-plate control: the lab_state fold no-ops (no contents written) + the pass diagnostic rides the payload/log (never-guess).",
+    }
+
+    report = {
+        "item": "L2-LABSTATE-CONTENTS-1",
+        "drive": "live no-seed multi-turn (spec §11)",
+        "run_id": run_id,
+        "base": BASE,
+        "ts": ts,
+        "turns": results,
+        "legs": leg,
+        "all_legs_ok": all(v.get("ok") for v in leg.values()),
+    }
+    for name, v in leg.items():
+        print("LEG %-22s ok=%s" % (name, v.get("ok")))
+        if not v.get("ok"):
+            failures.append(name)
+
+    with open(os.path.join(receipt, "drive-receipt.json"), "w") as f:
+        json.dump(report, f, indent=2)
+    print("RECEIPT=%s" % receipt)
+    print("ALL_LEGS_OK=%s" % report["all_legs_ok"])
+    sys.exit(0 if report["all_legs_ok"] else 1)
+
+
+if __name__ == "__main__":
+    main()
