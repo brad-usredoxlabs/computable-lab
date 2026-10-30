@@ -164,6 +164,68 @@ describe('ArrayWidget item-hint authoring (WIDGET-R1)', () => {
     expect(onCommit.mock.calls[0][0]).toEqual([{}])
   })
 
+  /**
+   * WIDGET-R1 fix-run 1 (D3, A7b browser-gate defect): FieldRow's TipTap
+   * extension declares `itemHint: { default: null }` — so a hint-less array
+   * slot reaches ArrayWidget with `itemHint === null`, NOT `undefined`.
+   * The pre-fix guard `itemHint !== undefined` let the null through and
+   * `itemHint.fields` threw `TypeError: Cannot read properties of null
+   * (reading 'fields')`, blowing up the ENTIRE editor via the error
+   * boundary (gate receipts: /record/ILOG-000001, /record/MSR-000001).
+   *
+   * This leg renders the EXACT shape FieldRow passes (`itemHint={null}`)
+   * and pins the contract: null and undefined are IDENTICAL — the hint-less
+   * inert path renders, nothing throws, and "+ Add item" still commits {}
+   * (the loud fallback stays unchanged; the projection's
+   * UNSUPPORTED_WIDGET diagnostic is the defect marker).
+   *
+   * RED at base (a7fbb8da): rendering with `itemHint={null}` throws the
+   * TypeError above. GREEN after the widget-boundary null-safety fix.
+   */
+  it('itemHint={null} (the EXACT shape FieldRow\'s `default: null` attr passes for hint-less arrays) does NOT throw and renders the hint-less inert path (D3)', () => {
+    const onCommit = vi.fn()
+    // RED before the fix: render itself throws
+    // "Cannot read properties of null (reading 'fields')" — the whole-editor
+    // crash the A7b gate reproduced on /record/ILOG-000001 and /record/MSR-000001.
+    const view = render(
+      <ArrayWidget value={[]} widget="array" readOnly={false} onCommit={onCommit} itemHint={null} />,
+    )
+    // The value span renders (no error boundary, no crash).
+    const value = view.container.querySelector('.taptab-array-value')
+    expect(value, 'itemHint=null must render the inert value span, not throw').toBeTruthy()
+
+    // Editing mode opens and the hint-less inert path renders (no
+    // ObjectWidget sub-fields — the array is inert, NOT authorable).
+    openEditor(view.container)
+    expect(
+      view.container.querySelector('.taptab-object-value'),
+      'a null hint must NOT activate the hinted ObjectWidget path',
+    ).toBeNull()
+
+    // The loud fallback is unchanged: "+ Add item" commits {}.
+    addArrayItem(view.container)
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit.mock.calls[0][0]).toEqual([{}])
+  })
+
+  it('itemHint={fields: []} (a hint that names a widget but lists NO fields) is treated as hint-less — inert path, no throw, {} fallback', () => {
+    const onCommit = vi.fn()
+    const view = render(
+      <ArrayWidget
+        value={[]}
+        widget="array"
+        readOnly={false}
+        onCommit={onCommit}
+        itemHint={{ path: '$.item', widget: 'object', label: 'No fields' }}
+      />,
+    )
+    expect(view.container.querySelector('.taptab-array-value')).toBeTruthy()
+    openEditor(view.container)
+    addArrayItem(view.container)
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit.mock.calls[0][0]).toEqual([{}])
+  })
+
   it('array-commit buttons are type="button" — clicking "+ Add item" inside a <form> does NOT submit the form (one submit per authored payload)', () => {
     const onCommit = vi.fn()
     const onFormSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())

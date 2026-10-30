@@ -68,8 +68,16 @@ export interface ArrayWidgetProps {
    * items from the hint's field set and renders each item through the
    * existing ObjectWidget. When absent the widget keeps today's bare-`{}`
    * behavior.
+   *
+   * WIDGET-R1 fix-run 1 (D3): declared `| null` because that is the ACTUAL
+   * runtime contract — FieldRow's TipTap attr spec is `itemHint: { default:
+   * null }` (the attr default stays null for JSON round-trip parity with the
+   * other composite attrs), so a hint-less array slot reaches this widget
+   * with `null`, not `undefined`. The widget treats null and undefined
+   * IDENTICALLY (the `!= null` guard); the prop type now says so instead of
+   * lying `undefined`-only.
    */
-  itemHint?: ArrayItemHint;
+  itemHint?: ArrayItemHint | null;
 }
 
 /**
@@ -120,8 +128,21 @@ export function ArrayWidget({ value, widget, readOnly, onCommit, itemHint }: Arr
   // WIDGET-R1: an item-hint is only AUTHORABLE-driving when it declares a
   // non-empty sub-field set. A hint that merely names a widget but lists no
   // fields is treated as hint-less (the loud-fallback path stays honest).
+  //
+  // WIDGET-R1 fix-run 1 (D3, A7b browser-gate defect): FieldRow's TipTap
+  // extension declares `itemHint: { default: null }`, so a hint-less array
+  // slot reaches this widget with `itemHint === null`, NOT undefined — the
+  // guard must be `!= null` (null and undefined are IDENTICAL at this
+  // boundary) or `itemHint.fields` throws `TypeError: Cannot read properties
+  // of null (reading 'fields')` and blows up the ENTIRE editor via the error
+  // boundary (reproduced live on /record/ILOG-000001 $.entries and
+  // /record/MSR-000001 $.channels). The two `itemHint!` non-null assertions
+  // below (addItem + the per-item ObjectWidget render) sit strictly behind
+  // this guard, so the narrowing here is what keeps them sound: once
+  // `hintActive` is true, `itemHint` is a non-null object with a non-empty
+  // `fields` array, and no other code path reads it.
   const hintActive =
-    itemHint !== undefined && Array.isArray(itemHint.fields) && itemHint.fields.length > 0;
+    itemHint != null && Array.isArray(itemHint.fields) && itemHint.fields.length > 0;
 
   const removeItem = (index: number) => {
     const updated = items.filter((_, i) => i !== index);
