@@ -115,7 +115,7 @@ function stubChat(): UseAiChatReturn {
     sendPrompt: vi.fn(),
     cancelStream: vi.fn(),
     aiAvailable: true,
-  } as UseAiChatReturn
+  } as unknown as UseAiChatReturn
 }
 
 const AI_CONTEXT: AiContext = { surface: 'analysis', summary: 'st', surfaceContext: {} }

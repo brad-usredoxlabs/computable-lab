@@ -39,6 +39,12 @@ export function useSurfaceChat(options: UseAiChatOptions): SurfaceChat {
     onWorkstateProposal: (intent) => void flow.proposeWorkstate('workstate', intent),
     onAnalysisProposal: (intent) => void flow.proposeWorkstate('analysis', intent),
     onRecordDraftProposal: (intent) => void flow.proposeWorkstate('record-drafting', intent),
+    // MATRES-CHAIN (OQ-3(a) ratified): the execute-chain INTENT rides the SAME
+    // flow on the universal seam — one adapter constant ('chain', declared
+    // data at config/drafting/adapters.yaml), the record-drafting line shape
+    // copied verbatim; the flow body is shared machinery, not a fork.
+    // Precedent: AiTabPanel's routed-surface wiring (AiTabPanel.tsx:931-933).
+    onChainProposal: (intent) => void flow.proposeWorkstate('chain', intent),
     // PB-CH-8: an agent_action frame is tier-1 — narrow + execute, never guess.
     onAgentAction: (action) => flow.handleAgentAction(action),
   })

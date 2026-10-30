@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
+import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
 import { ChatPreviewCard } from './ChatPreviewCard'
 import { SurfaceFocusHeader } from './SurfaceFocusHeader'
 import type { UseAiChatReturn } from '../shared/hooks/useAiChat'
@@ -169,11 +170,35 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
       <ChatPreviewCard chat={chat} />
       {proposalFlow?.card ? (
         <div className="harness-chat-pane__proposal" data-testid="harness-chat-proposal">
-          <WorkstateProposalCard
-            {...proposalFlow.card}
-            onAccept={() => void proposalFlow.acceptWorkstate()}
-            onReject={() => proposalFlow.rejectWorkstate()}
-          />
+          {/* L2-CHAT-UI-1 LEG D0 (ruling CHATUI1-legD-OQ2 §3): branch on the
+              card's ADAPTER — the flow's card state carries it (the universal
+              seam's replacement for AiTabPanel's private flowCardAdapterRef):
+              'chain' mounts the execute-chain wall (ChainProposalCard — its
+              strings are the server-built card document the flow carried
+              verbatim), every other adapter mounts the composition card
+              (the existing render, untouched). ONE switch on the adapter
+              constant — no surface-name branching (the pane and the flow
+              stay surface-agnostic). Same conditional-spread key-absent
+              discipline as the AiTabPanel chain arm (exactOptionalProperty
+              types): an absent optional key is ABSENT, never undefined. */}
+          {proposalFlow.card.adapter === 'chain' ? (
+            <ChainProposalCard
+              phase={proposalFlow.card.phase}
+              {...(proposalFlow.card.chainCard ? { card: proposalFlow.card.chainCard } : {})}
+              {...(proposalFlow.card.summary !== undefined ? { summary: proposalFlow.card.summary } : {})}
+              {...(proposalFlow.card.diagnostics ? { diagnostics: proposalFlow.card.diagnostics } : {})}
+              {...(proposalFlow.card.draftId !== undefined ? { draftId: proposalFlow.card.draftId } : {})}
+              {...(proposalFlow.card.revision !== undefined ? { revision: proposalFlow.card.revision } : {})}
+              onAccept={() => void proposalFlow.acceptWorkstate()}
+              onReject={proposalFlow.rejectWorkstate}
+            />
+          ) : (
+            <WorkstateProposalCard
+              {...proposalFlow.card}
+              onAccept={() => void proposalFlow.acceptWorkstate()}
+              onReject={() => proposalFlow.rejectWorkstate()}
+            />
+          )}
         </div>
       ) : null}
       <ChatLog
