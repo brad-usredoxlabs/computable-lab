@@ -1,16 +1,75 @@
 /**
  * ArrayWidget — renders repeatable item groups / repeaters.
  * Each item is a structured object, not collapsed to JSON text.
+ *
+ * WIDGET-R1 (D11/D18 + A3 data legs): when a typed item-hint is provided
+ * (itemHint prop, forwarded from the projection slot), the widget becomes
+ * AUTHORABLE — "+ Add item" seeds an item from the hint's field set (never
+ * bare `{}`), and each item renders authorable sub-fields by REUSING the
+ * existing ObjectWidget path (the item IS an ObjectWidget; editing a
+ * sub-field commits the whole item back at its index).
+ *
+ * The seed is HINT-DRIVEN and GENERIC (no kind table, no field-name branch,
+ * WIDGET-R1 A3): a `select`/`radio` sub-field whose hint declares EXACTLY
+ * ONE option seeds that option's `value`; every other sub-field seeds `''`.
+ * The merged knowledge ui.yaml item-hints declare the datatypes/ref `kind`
+ * discriminator as a single-option select (value "record"), so a seeded ref
+ * item GENUINELY carries `kind: "record"` before the author touches it — the
+ * value is read FROM THE HINT (delete the option and the seed degrades; the
+ * widget never hardcodes "record").
+ *
+ * Hint-LESS arrays keep today's behavior: "+ Add item" commits `{}` and the
+ * projection keeps its loud UNSUPPORTED_WIDGET diagnostic (a hint-less array
+ * is a spec defect marker — never silenced).
+ *
+ * All array-commit buttons (remove / add / done) carry an explicit
+ * `type="button"`: inside the create `<form>` a button with no `type`
+ * defaults to `type="submit"` and would submit the form on every array-item
+ * commit (the fix-run-2 duplicate-POST defect). One submit per authored
+ * payload.
  */
 
 import { useState } from 'react';
 import type { WidgetType } from '../types';
+import { ObjectWidget } from './ObjectWidget';
+
+/**
+ * A declarative item-hint for an array widget — the projection's `items`
+ * member (server `FieldHint`, app `FieldHint`). Mirrors the object-widget
+ * shape (path + widget + fields) so the existing ObjectWidget can be
+ * reused directly for each item.
+ */
+export interface ArrayItemHint {
+  /** Item JSONPath (e.g. `$.item`) — declarative, not addressable per-item. */
+  path?: string;
+  /** Item widget type (`object` in the merged knowledge ui.yaml). */
+  widget?: string;
+  /** Item label (display-only). */
+  label?: string;
+  /** Nested field hints (the item's sub-fields). */
+  fields?: Array<{
+    path: string;
+    widget: string;
+    label?: string;
+    help?: string;
+    required?: boolean;
+    options?: Array<{ value: string | number | boolean; label: string }>;
+  }>;
+}
 
 export interface ArrayWidgetProps {
   value: unknown;
   widget: WidgetType;
   readOnly: boolean;
   onCommit: (newValue: unknown) => void;
+  /**
+   * WIDGET-R1: the item-hint forwarded from the projection slot's `items`
+   * member. When present (with a non-empty `fields` list) the widget seeds
+   * items from the hint's field set and renders each item through the
+   * existing ObjectWidget. When absent the widget keeps today's bare-`{}`
+   * behavior.
+   */
+  itemHint?: ArrayItemHint;
 }
 
 /**
@@ -33,14 +92,49 @@ function formatItem(item: unknown): string {
   return String(item);
 }
 
-export function ArrayWidget({ value, widget, readOnly, onCommit }: ArrayWidgetProps) {
+/**
+ * WIDGET-R1 A3 (generic, hint-driven, no kind table / no field-name branch):
+ * seed one item from the hint's field set. A `select`/`radio` sub-field whose
+ * hint declares EXACTLY ONE option seeds that option's `value` (the
+ * datatypes/ref `kind` discriminator is declared that way in the merged
+ * knowledge ui.yaml — the value is read FROM THE HINT); every other
+ * sub-field seeds `''`.
+ */
+function seedItemFromHint(hint: ArrayItemHint): Record<string, unknown> {
+  const seed: Record<string, unknown> = {};
+  for (const field of hint.fields ?? []) {
+    if (!field || typeof field.path !== 'string' || field.path.length === 0) continue;
+    const isSingleOptionSelect =
+      (field.widget === 'select' || field.widget === 'radio') &&
+      Array.isArray(field.options) &&
+      field.options.length === 1;
+    seed[field.path] = isSingleOptionSelect ? (field.options![0]?.value ?? '') : '';
+  }
+  return seed;
+}
+
+export function ArrayWidget({ value, widget, readOnly, onCommit, itemHint }: ArrayWidgetProps) {
   const [editing, setEditing] = useState(false);
 
   const items = Array.isArray(value) ? value : value ? [value] : [];
+  // WIDGET-R1: an item-hint is only AUTHORABLE-driving when it declares a
+  // non-empty sub-field set. A hint that merely names a widget but lists no
+  // fields is treated as hint-less (the loud-fallback path stays honest).
+  const hintActive =
+    itemHint !== undefined && Array.isArray(itemHint.fields) && itemHint.fields.length > 0;
 
   const removeItem = (index: number) => {
     const updated = items.filter((_, i) => i !== index);
     onCommit(updated);
+  };
+
+  const addItem = () => {
+    if (hintActive) {
+      onCommit([...items, seedItemFromHint(itemHint!)]);
+    } else {
+      // Hint-LESS fallback (loud, unchanged): bare {} commit.
+      onCommit([...items, {}]);
+    }
   };
 
   if (readOnly) {
@@ -68,10 +162,38 @@ export function ArrayWidget({ value, widget, readOnly, onCommit }: ArrayWidgetPr
       <div className="taptab-array-editor" data-widget={widget}>
         {items.map((item, i) => (
           <div key={i} className="taptab-array-entry">
-            <pre className="taptab-array-entry-content" style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {formatItem(item)}
-            </pre>
+            {hintActive ? (
+              // WIDGET-R1: each item renders authorable sub-fields by REUSING
+              // the existing ObjectWidget path. Editing a sub-field commits
+              // the WHOLE item object; the array splices it back at `i`.
+              <ObjectWidget
+                value={item}
+                widget="object"
+                properties={(itemHint!.fields ?? []).map((f) => ({
+                  name: f.path,
+                  widget: f.widget as WidgetType,
+                  label: f.label ?? f.path,
+                  help: f.help,
+                  required: f.required ?? false,
+                  options: f.options?.map((o) => ({
+                    value: String(o.value),
+                    label: o.label,
+                  })),
+                }))}
+                readOnly={false}
+                onCommit={(newValue) => {
+                  const updated = [...items];
+                  updated[i] = newValue;
+                  onCommit(updated);
+                }}
+              />
+            ) : (
+              <pre className="taptab-array-entry-content" style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {formatItem(item)}
+              </pre>
+            )}
             <button
+              type="button"
               className="taptab-array-remove"
               onClick={(e) => {
                 e.stopPropagation();
@@ -83,15 +205,17 @@ export function ArrayWidget({ value, widget, readOnly, onCommit }: ArrayWidgetPr
           </div>
         ))}
         <button
+          type="button"
           className="taptab-array-add"
           onClick={(e) => {
             e.stopPropagation();
-            onCommit([...items, {}]);
+            addItem();
           }}
         >
           + Add item
         </button>
         <button
+          type="button"
           className="taptab-array-done"
           onClick={(e) => {
             e.stopPropagation();

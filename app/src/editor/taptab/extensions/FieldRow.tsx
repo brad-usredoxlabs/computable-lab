@@ -154,6 +154,7 @@ function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
         onRefSelect={handleRefSelect}
         onCancel={() => {}}
         objectProperties={attrs.objectConfig?.properties}
+        arrayItemHint={attrs.itemHint}
         multiselectOptions={attrs.multiselectConfig?.options}
         recordId={attrs.recordId}
         onRecordPatch={handleRecordPatch}
@@ -181,6 +182,10 @@ export const FieldRow = Node.create({
       help: { default: null },
       recordId: { default: null },
       arraySchema: { default: null },
+      // WIDGET-R1: the item-hint for array widgets (the projection's
+      // `items` member). JSON-serializable (plain defaults) so it round-trips
+      // through parseHTML/JSON like the other composite configs.
+      itemHint: { default: null },
       objectConfig: { default: null },
       reflistConfig: { default: null },
       multiselectConfig: { default: null },

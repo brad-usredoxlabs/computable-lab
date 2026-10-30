@@ -84,6 +84,26 @@ export interface FieldRowAttrs {
   recordId?: string;
   /** Array item schema for array widgets */
   arraySchema?: Record<string, unknown>;
+  /**
+   * WIDGET-R1: the item-hint for array widgets (the projection's `items`
+   * member). Carries the item's field set so the ArrayWidget can seed items
+   * from the hint (never bare `{}`) and render each item through the
+   * existing ObjectWidget. Absent for hint-less arrays (the widget keeps its
+   * bare-`{}` behavior; the projection keeps its loud diagnostic).
+   */
+  itemHint?: {
+    path?: string;
+    widget?: string;
+    label?: string;
+    fields?: Array<{
+      path: string;
+      widget: string;
+      label?: string;
+      help?: string;
+      required?: boolean;
+      options?: Array<{ value: string | number | boolean; label: string }>;
+    }>;
+  };
   /** Object widget config for object widgets */
   objectConfig?: ObjectWidgetConfig;
   /** Reflist config for reflist widgets */
