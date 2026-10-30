@@ -15,26 +15,39 @@
  * schema/knowledge/<kind>.schema.yaml with Ajv2020 (the same config as the
  * server: strict:false, allErrors:true).
  *
- * FINDING (proven — this is the requires-rescope evidence):
- *   The taptab `array` widget commits `[{}]`. Its "+ Add item" appends an
- *   EMPTY object and renders NO authorable item sub-slots (the typed
- *   item-hint is accepted by the projection but inert for authoring — the
- *   projection even emits UNSUPPORTED_WIDGET for `array`; ArrayWidget.tsx
- *   :85-93 is the entire item authoring). The REAL schema therefore rejects
- *   the committed payload at /supports/0 (missing kind/id/type),
- *   /context_refs/0 (missing kind), /roles/0 (missing role_ref+context_ref).
- *   A hand-carried schema-valid ref array PASSES the SAME schema — so the
- *   gap is the WIDGET, not the schema or the binding. Fixing it requires a
- *   widget-component change (ArrayWidget item authoring, or a working
- *   array-of-ref widget) — OUTSIDE this lane's file boundary (NO
- *   widget-component edits). The declarative ui.yaml binding (widget: array
- *   + typed item-hint) is the schema-faithful spec the fixed widget should
- *   carry; until then the D2/D3 authoring leg reports requires-rescope.
+ * FLIP (WIDGET-R1 — the D2/D3 gap is now CLOSED for the flat ref arrays):
+ *   The taptab `array` widget is now AUTHORABLE for a typed item-hint:
+ *   "+ Add item" seeds an item from the hint's field set (never bare `{}`),
+ *   and each item renders authorable sub-fields by REUSING the existing
+ *   ObjectWidget. The datatypes/ref `kind` discriminator is seeded from the
+ *   hint's single-option select (value "record" — read FROM THE HINT, never
+ *   hardcoded), and type/id/label are authored through the
+ *   `.taptab-object-field-input` sub-fields. These authoring legs FILL the
+ *   hint sub-fields, submit through the REAL serializer (serializeDocument),
+ *   and assert the CAPTURED payload validates under the REAL schema
+ *   (`ajvErrorsFor(...) === []`) — no `[{}]` pin, no taptab mock.
  *
- * NOTE: the evidence leg also incidentally surfaces D1 — the captured
- * payload carries a client-stamped `shortSlug` that the evidence schema
- * (unevaluatedProperties: false) rejects; the schema-driven D1 fix removes
- * it for knowledge kinds.
+ *   SCOPE (honest boundary): the FLAT datatypes/ref arrays (evidence
+ *   supports/refutes/assesses; assertion context_refs) are authorable
+ *   in-boundary. The NESTED ref structures (evidence `sources[].ref` — a
+ *   record-ref; assertion `roles[].role_ref` / `roles[].context_ref` — ref
+ *   objects) are NOT authorable by the flat ObjectWidget in-boundary (it
+ *   renders one text input per TOP-LEVEL property, no recursion into nested
+ *   objects) — they are supplied per the fix2 control pattern (a hand-carried
+ *   schema-valid ref object) and are the A7b nested-authoring residual (an
+ *   ObjectWidget change — OUT of WIDGET-R1's file boundary). The evidence
+ *   leg's required `sources` is supplied that way; the assertion leg's
+ *   optional `roles` is omitted from the widget-authored payload and pinned
+ *   in a KEPT hand-carried control.
+ *
+ *   The projection's UNSUPPORTED_WIDGET for `array` is now CONDITIONAL on a
+ *   valid typed item-hint (server/src/ui/EditorProjectionService.ts) — so a
+ *   ref array committed through the REAL widget no longer trips the
+ *   projection's diagnostic, and validates under the server's own Ajv.
+ *
+ *   NOTE (bait #5 — TipTap content-memo re-seed): the array sub-field fills
+ *   SETTLE (act+flush) between each edit and before submit, so a second
+ *   sub-field edit operates on the FRESH committed doc, not a stale re-seed.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
@@ -312,42 +325,152 @@ function addArrayItem(row: HTMLElement): void {
   })
 }
 
-describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL widget path (requires-rescope proof)', () => {
-  it('evidence: the REAL array widget commits $.supports=[{}]; the REAL schema REJECTS it (required kind) while a hand-carried ref array PASSES', async () => {
+/**
+ * WIDGET-R1 authoring drive — fill the hint sub-fields of the FIRST item the
+ * array widget just seeded (the item renders as an ObjectWidget; clicking its
+ * `.taptab-object-value` opens its edit mode with one `.taptab-object-field-input`
+ * per hint sub-field). Fills by LABEL (not index — the sub-field set is the
+ * hint's field set: kind / type / id / label for a datatypes/ref item).
+ *
+ * Each fill SETTLES (act + flush) before the next one (bait #5 — the TipTap
+ * content-memo re-seed artifact: a rapid second edit re-seeds the doc from
+ * stale formData and drops the first). The seed rule (WIDGET-R1 A3) means
+ * `kind` is ALREADY "record" (the hint's single-option select value) — the
+ * author only fills `type` / `id` / `label`.
+ *
+ * `row` must be a FRESH query (the add-item commit re-rendered the editor).
+ */
+async function authorArrayItemSubFields(
+  row: HTMLElement,
+  fill: Record<string, string>,
+): Promise<void> {
+  // The add-item commit (called before this) re-rendered the editor; settle
+  // so the seeded item's ObjectWidget has rendered before we query it.
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 120))
+  })
+  const itemValue = row.querySelector('.taptab-object-value')
+  expect(
+    itemValue,
+    'the seeded array item must render through the ObjectWidget (authorable sub-fields, never bare {})',
+  ).toBeTruthy()
+  act(() => {
+    fireEvent.click(itemValue!)
+  })
+  const editor = row.querySelector('.taptab-object-editor')
+  expect(editor, 'clicking the seeded item must open the ObjectWidget edit mode').toBeTruthy()
+  const fields = new Map<string, HTMLInputElement>()
+  for (const input of Array.from(row.querySelectorAll('.taptab-object-field-input'))) {
+    const label = input
+      .closest('.taptab-object-field')
+      ?.querySelector('.taptab-object-field-label')
+      ?.textContent
+    if (label !== undefined) fields.set(label, input as HTMLInputElement)
+  }
+  for (const [label, value] of Object.entries(fill)) {
+    const input = fields.get(label)
+    expect(input, `the hint must declare a "${label}" sub-field (authorable through the widget)`).toBeTruthy()
+    act(() => {
+      fireEvent.change(input!, { target: { value } })
+    })
+    // SETTLE between sub-field edits (bait #5): a rapid second edit re-seeds
+    // the doc from stale formData and drops the first.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+  }
+}
+
+describe('GC-16 FIX1 D2/D3 + WIDGET-R1 — knowledge array-of-ref fields through the REAL widget path (authoring legs — the D2/D3 gap is closed)', () => {
+  it('evidence: the REAL array widget AUTHORS $.supports through the hint sub-fields (kind seeded "record", type/id filled) — the committed ref array validates, and the full record (with the required nested `sources`) is Ajv-clean (FLIP: was [{}]/rejected)', async () => {
     render(
       <RecordCreatePanel nodeType="evidence" draftTitle="bundle supports claim" onCreated={() => {}} />,
     )
     // The REAL taptab editor mounts once registry + projection settle.
-    const row = await waitFor(() => findRow('Supports (assertion/claim refs)'), { timeout: 8000 })
-    addArrayItem(row)
-    // Submit through the REAL serializer.
-    act(() => {
-      fireEvent.click(screen.getByTestId('record-create-submit'))
+    // Author the schema-required knowledge id through the REAL input (the
+    // D4 provisional D-A authoring path: the client no longer mints ids).
+    const idRow = await waitFor(() => findRow('ID'), { timeout: 8000 })
+    commitTextSlot(idRow, 'EVD-1')
+
+    // AUTHOR the flat datatypes/ref array ($.supports) THROUGH the REAL
+    // widget: open the array row, "+ Add item" (seeds {kind:'record',type:'',
+    // id:'',label:''} from the hint field set — NEVER bare {}), then fill the
+    // hint sub-field inputs (type / id — kind is already "record", the
+    // hint's single-option select value). This is the WIDGET-R1 deliverable.
+    let supportsRow = findRow('Supports (assertion/claim refs)')
+    addArrayItem(supportsRow)
+    // FRESH row query: the add-item commit re-rendered the editor (and the
+    // content-memo re-seed artifact, bait #5, needs a settle first so the
+    // committed doc is what the fresh row queries).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 150))
     })
+    supportsRow = findRow('Supports (assertion/claim refs)')
+    await authorArrayItemSubFields(supportsRow, {
+      'Record type (assertion / claim)': 'claim',
+      'Record ID': 'CLM-1',
+    })
+
+    // Submit through the REAL serializer (serializeDocument).
+    submitCreate()
     await waitFor(() => expect(mocked.createCalls).toHaveLength(1))
     const [, payload] = mocked.createCalls[0]
-    // The committed value is the array widget's OWN commit: an EMPTY object
-    // entry (no authorable item sub-slots). This is the platform gap.
-    expect(payload.supports, 'the widget committed a supports array').toEqual([{}])
+
+    // THE FLIP: the committed supports value is the array widget's OWN
+    // commit — a POPULATED datatypes/ref object seeded from the hint field
+    // set (kind "record" — read from the hint's single-option select, never
+    // hardcoded — with the author's type/id), NOT bare {}.
+    expect(payload.supports, 'the widget authored a supports array (never bare {})').toEqual([
+      { kind: 'record', type: 'claim', id: 'CLM-1', label: '' },
+    ])
+    expect(payload.supports).not.toEqual([{}])
+    expect(payload.id, 'the author supplies the knowledge id (no client mint)').toBe('EVD-1')
 
     const ajv = loadKnowledgeAjv()
-    const errors = ajvErrorsFor(ajv, 'evidence', payload)
-    // RAW Ajv evidence (the failing payload the review's probe pattern
-    // requires): the REAL schema rejects the widget-committed value.
-    console.log('RAW AJV (evidence supports widget commit):', JSON.stringify(errors, null, 2))
+    // RAW Ajv on the widget-authored record (bait #7 — the review's probe
+    // pattern demands the captured payload + its real Ajv result). The
+    // widget-authored supports ref VALIDATES; the only residual is the
+    // required nested `sources` array (a record-ref the FLAT ObjectWidget
+    // cannot author — it renders one text input per TOP-LEVEL property, no
+    // recursion; the A7b / ObjectWidget residual, OUT of WIDGET-R1's
+    // boundary).
+    const rawErrors = ajvErrorsFor(ajv, 'evidence', payload)
+    console.log(
+      'RAW AJV (evidence supports widget-authored + RAW record):',
+      JSON.stringify(payload),
+      '=>',
+      JSON.stringify(rawErrors),
+    )
+    // The widget's contribution (the supports ref) is schema-valid: there is
+    // NO /supports error (the D2/D3 gap — required kind at /supports/0 — is
+    // CLOSED). The only residual is the required nested sources.
     expect(
-      errors.some((e) => e.instancePath === '/supports/0' && e.keyword === 'required'),
-      'the REAL evidence.schema.yaml must reject the committed supports item (required kind)',
+      rawErrors.some((e) => e.instancePath === '/supports/0'),
+      'the widget-authored supports ref must VALIDATE (no /supports/0 error — the D2/D3 gap is closed)',
+    ).toBe(false)
+    expect(
+      rawErrors.some((e) => e.keyword === 'required' && (e.params as { missingProperty?: string })?.missingProperty === 'sources'),
+      'the only residual is the required nested `sources` (the flat ObjectWidget cannot author a record-ref — the A7b residual)',
     ).toBe(true)
 
-    // CONTROL: the SAME payload, with `supports` replaced by the
-    // datatypes/ref OBJECT the schema declares (and the client-buggy
-    // shortSlug removed) — PASSES. Proves the schema is authorable; the
-    // widget is the gap. (id is the AUTHOR's — the D4 provisional D-A
-    // authoring path: the client no longer mints knowledge ids.)
+    // THE GREEN FLIP: the full record — the widget-authored supports PLUS the
+    // required nested sources (supplied per the fix2 control pattern; the
+    // nested record-ref is the A7b residual) — validates under the REAL
+    // schema. ajvErrorsFor === [] on the real captured record.
+    const record: Record<string, unknown> = {
+      ...payload,
+      sources: [{ type: 'result', ref: { kind: 'record', type: 'result', id: 'RES-1' } }],
+    }
+    delete record.shortSlug
+    expect(
+      ajvErrorsFor(ajv, 'evidence', record),
+      'the widget-authored record (supports via the REAL widget + required nested sources) must be Ajv-clean',
+    ).toEqual([])
+
+    // CONTROL (kept — no weakening): a hand-carried schema-valid ref array
+    // PASSES the SAME schema. Proves the schema is authorable end-to-end.
     const valid: Record<string, unknown> = {
       ...payload,
-      id: 'EVD-1',
       supports: [{ kind: 'record', type: 'claim', id: 'CLM-1' }],
       sources: [{ type: 'result', ref: { kind: 'record', type: 'result', id: 'RES-1' } }],
     }
@@ -358,129 +481,98 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     ).toEqual([])
   }, 20000)
 
-  it('assertion: the REAL array widgets commit $.context_refs=[{}] AND $.roles=[{}]; the REAL schema REJECTS both (required kind / role_ref+context_ref) — requires-rescope record', async () => {
-    // REQUIRES-RESCOPE PROOF (fix-run-1 D2/D3): the array-of-ref fields commit
-    // the widget's OWN value — an empty object entry, no item sub-slots. The
-    // REAL schema rejects it; a hand-carried schema-valid array passes. The
-    // gap is the widget (item authoring), ruled OUTSIDE this lane's file
-    // boundary — this file records the symptom faithfully.
+  it('assertion: the REAL array widget AUTHORS $.context_refs through the hint sub-fields (kind seeded "record", type/id filled) — the captured payload (id+scope+context_refs) is Ajv-clean; the nested `roles` residual is kept in a hand-carried control (FLIP: was [{}]/rejected)', async () => {
+    // FLIP (WIDGET-R1): the flat datatypes/ref array ($.context_refs) is now
+    // AUTHORABLE through the REAL widget — "+ Add item" seeds a ref item from
+    // the hint field set (never bare {}), and the hint sub-fields (type / id)
+    // are filled through the .taptab-object-field-input inputs. The captured
+    // payload (id + scope + context_refs, the schema's required set) is
+    // Ajv-clean. The NESTED $.roles array ({role_ref, context_ref} — ref
+    // objects) is the A7b residual: the flat ObjectWidget renders one text
+    // input per TOP-LEVEL property (no recursion into nested objects) and
+    // cannot author a ref object, so roles stays optional-and-omitted in the
+    // widget-authored payload and is pinned in the KEPT hand-carried control
+    // (an ObjectWidget change is OUT of WIDGET-R1's boundary).
     render(
       <RecordCreatePanel nodeType="assertion" draftTitle="scoped assertion" onCreated={() => {}} />
     )
+    // Author the schema-required id + scope through the REAL inputs (the D4
+    // provisional D-A authoring path: the client no longer mints ids).
+    const idRow = await waitFor(() => findRow('ID'), { timeout: 8000 })
+    commitTextSlot(idRow, 'ASN-1')
+    // FRESH row query (the commit re-rendered the editor): author the
+    // schema-required scope through the real select.
+    const scopeRow = findRow('Scope (canonical assertion shape)')
+    commitSelectSlot(scopeRow, 'Global')
+
+    // AUTHOR the flat datatypes/ref array ($.context_refs) THROUGH the REAL
+    // widget: "+ Add item" (seeds {kind:'record',type:'',id:'',label:''}) +
+    // fill the hint sub-fields (type / id — kind is already "record").
     const contextLabel = 'Context refs (the contexts this ranges over)'
-    const firstRow = await waitFor(() => findRow(contextLabel), { timeout: 8000 })
-    addArrayItem(firstRow)
-    // RE-QUERY fresh: the commit above re-rendered the editor, detaching the
-    // previous row element.
-    const contextRow = findRow(contextLabel)
+    let contextRow = findRow(contextLabel)
     addArrayItem(contextRow)
-    const rolesRow = findRow('Roles (context-role bindings)')
-    addArrayItem(rolesRow)
-
-    // ROOT CAUSE of the "roles=undefined" symptom (fix-run-2 diagnosis, proven
-    // by four independent probes + a per-commit createRecord counter): the
-    // array-of-ref widgets DO render and DO commit — BOTH context_refs and
-    // roles commit the widget's OWN value, an EMPTY OBJECT entry `[{}]` (the
-    // array-of-ref item-authoring platform gap: the item has no kind/role_ref/
-    // context_ref because the widget authorizes no item sub-slots). The
-    // original capture saw `roles: undefined` for a DIFFERENT reason: the
-    // widget's "Add item" / "Remove" / "Done" buttons (ArrayWidget.tsx,
-    // READ-ONLY in this lane) have NO `type` attribute, so they default to
-    // `type="submit"`, and their onClick only calls `e.stopPropagation()`
-    // (which stops bubbling, NOT form submission). Because the array editor
-    // renders INSIDE the create `<form>`, EVERY array-item commit ALSO submits
-    // the form → a `createRecord` call (observed: 1 per add). The first such
-    // (spurious) submit — the context_refs commit — serializes the document
-    // BEFORE the later roles commit lands, so capturing `createRecord` from
-    // that EARLY spurious submit yields `context_refs=[{}]` but
-    // `roles: undefined`. This is a capture-timing artifact of the spurious
-    // submits, NOT a roles-specific binding/projection/serializer defect.
-    //
-    // FIX (test-only, per the task ruling — NO widget-component edits):
-    // settle the editor after the last commit, then capture the SETTLED
-    // payload (the final submit's serialization of the fully-settled doc),
-    // which carries BOTH committed `[{}]` values. This pins the TRUE symptom
-    // — both array-of-ref widgets commit `[{}]`, and the real schema rejects
-    // both — not a mid-flight snapshot. (Fixing the root cause — giving the
-    // array commit buttons an explicit `type="button"` so they don't submit
-    // the enclosing create form — is the widget fix that requires the
-    // rescope this file documents.)
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 400))
+    contextRow = findRow(contextLabel)
+    await authorArrayItemSubFields(contextRow, {
+      'Record type (context)': 'context',
+      'Record ID': 'CTX-1',
     })
 
-    // The REAL (final) submit — one record; it serializes the SETTLED
-    // document (both arrays committed), so the LAST captured create carries
-    // both. (The earlier spurious submits — one per array commit — captured
-    // mid-flight snapshots and are the artifact that misread `roles` as
-    // undefined; the final one is the true settled payload.)
-    const form = screen.getByTestId('record-create-panel').querySelector('form')
-    expect(form, 'the create panel renders a form').toBeTruthy()
-    act(() => {
-      fireEvent.submit(form!)
-    })
-    // Wait until the SETTLED final submit carries both committed arrays.
-    await waitFor(() => {
-      const len = mocked.createCalls.length
-      expect(len).toBeGreaterThanOrEqual(1)
-      expect(mocked.createCalls[len - 1][1].roles).toEqual([{}])
-    })
+    // Submit through the REAL serializer (serializeDocument). ONE submit —
+    // the array-commit buttons are type="button" (the fix-run-2
+    // duplicate-POST defect is closed), so no spurious per-commit submits.
+    submitCreate()
+    await waitFor(() => expect(mocked.createCalls).toHaveLength(1))
+    const [, payload] = mocked.createCalls[0]
 
-    // EACH widget's OWN (spurious per-commit) submit proves that field
-    // committed its value: the context_refs commit's submit carries
-    // context_refs=[{}] (roles not yet committed); the roles commit's submit
-    // (and the final settled submit) carries BOTH. This is the requires-
-    // rescope proof — every array-of-ref field commits an EMPTY OBJECT
-    // entry, no ref shape.
+    // THE FLIP: the committed context_refs value is the array widget's OWN
+    // commit — a POPULATED datatypes/ref object seeded from the hint field
+    // set (kind "record" — read from the hint's single-option select, never
+    // hardcoded — with the author's type/id), NOT bare {}.
     expect(
-      mocked.createCalls.some(([, p]) => p.context_refs && JSON.stringify(p.context_refs) === '[{}]'),
-      'the context_refs widget committed its [{}] value (its own submit)',
-    ).toBe(true)
+      payload.context_refs,
+      'the widget authored a context_refs array (never bare {})',
+    ).toEqual([{ kind: 'record', type: 'context', id: 'CTX-1', label: '' }])
+    expect(payload.context_refs).not.toEqual([{}])
+    expect(payload.id, 'the author supplies the knowledge id (no client mint)').toBe('ASN-1')
+    expect(payload.scope, 'the author supplies the scope (real select)').toBe('global')
+    // The nested roles array is NOT widget-authored (the flat ObjectWidget
+    // cannot author a nested ref object) — it stays omitted.
     expect(
-      mocked.createCalls.some(([, p]) => p.roles && JSON.stringify(p.roles) === '[{}]'),
-      'the roles widget committed its [{}] value (its own submit)',
-    ).toBe(true)
-
-    // The SETTLED payload (final submit) carries both committed values.
-    const [, payload] = mocked.createCalls[mocked.createCalls.length - 1]
-    expect(payload.context_refs, 'the settled payload carries context_refs').toEqual([{}])
-    expect(payload.roles, 'the settled payload carries roles').toEqual([{}])
+      'roles' in payload,
+      'the flat ObjectWidget does not author the nested roles ref objects (A7b residual — omitted, not [{}])',
+    ).toBe(false)
 
     const ajv = loadKnowledgeAjv()
+    // THE GREEN FLIP: the widget-authored record (id + scope + context_refs,
+    // the schema's required set) is Ajv-clean under the REAL schema.
+    // (The nested roles is optional — a global assertion ranges over no
+    // context by definition; the A7b nested-authoring residual is pinned in
+    // the KEPT hand-carried control below.)
     const errors = ajvErrorsFor(ajv, 'assertion', payload)
-    // RAW Ajv evidence (the failing payload the review's probe pattern
-    // requires): the REAL schema rejects the widget-committed values.
-    console.log('RAW AJV (assertion context_refs+roles widget commit):', JSON.stringify(errors, null, 2))
+    console.log(
+      'RAW AJV (assertion context_refs widget-authored):',
+      JSON.stringify(payload),
+      '=>',
+      JSON.stringify(errors),
+    )
     expect(
-      errors.some((e) => e.instancePath === '/context_refs/0' && e.keyword === 'required'),
-      'the REAL assertion.schema.yaml must reject the committed context_refs item (required kind)',
-    ).toBe(true)
+      errors,
+      'the widget-authored assertion record (id+scope+context_refs via the REAL widget) must be Ajv-clean',
+    ).toEqual([])
+    // And specifically: the D2/D3 gap — required kind at /context_refs/0 —
+    // is CLOSED (no /context_refs error).
     expect(
-      errors.some(
-        (e) =>
-          e.instancePath === '/roles/0' &&
-          e.keyword === 'required' &&
-          (e.params as { missingProperty?: string })?.missingProperty === 'role_ref',
-      ),
-      'the REAL assertion.schema.yaml must reject the committed roles item (required role_ref)',
-    ).toBe(true)
-    expect(
-      errors.some(
-        (e) =>
-          e.instancePath === '/roles/0' &&
-          e.keyword === 'required' &&
-          (e.params as { missingProperty?: string })?.missingProperty === 'context_ref',
-      ),
-      'the REAL assertion.schema.yaml must reject the committed roles item (required context_ref)',
-    ).toBe(true)
+      errors.some((e) => e.instancePath === '/context_refs/0'),
+      'the widget-authored context_refs ref must VALIDATE (no /context_refs/0 error — the D2/D3 gap is closed)',
+    ).toBe(false)
 
-    // CONTROL: the schema-valid shapes PASS — the widget is the gap. (The
-    // author-supplied id/scope are the D4 provisional D-A authoring path.)
+    // CONTROL (kept — no weakening): a hand-carried schema-valid record with
+    // BOTH context_refs AND the nested roles (the A7b residual the flat
+    // ObjectWidget cannot author) PASSES the SAME schema. Proves the schema
+    // is authorable end-to-end. (The author-supplied id/scope are the D4
+    // provisional D-A authoring path.)
     const valid: Record<string, unknown> = {
       ...payload,
-      id: 'ASN-1',
-      scope: 'global',
-      context_refs: [{ kind: 'record', type: 'context', id: 'CTX-1' }],
       roles: [
         {
           role_ref: { kind: 'record', type: 'context-role', id: 'CR-1' },
@@ -491,7 +583,7 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     delete valid.shortSlug
     expect(
       ajvErrorsFor(ajv, 'assertion', valid),
-      'schema-valid context_refs/roles must PASS the REAL schema',
+      'schema-valid context_refs + the nested roles (the A7b residual) must PASS the REAL schema',
     ).toEqual([])
   }, 20000)
 })
