@@ -53,18 +53,23 @@ BACKEND_LOG = os.environ.get("DRIVE_BACKEND_LOG",
 TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
 
 # ---------------------------------------------------------------------------
-# The spec §11 utterances — VERBATIM from the ruling (hyphen and all).
+# The architect-ratified utterances — VERBATIM from
+# .hermes/plans/decisions/LABSTATE-MATERIALNOUN-gate-l2t0310-ruling.md §Q2
+# (resolvable nouns; ':' well-range form per the OQ-2 ratification). Edited
+# by orch as the ruling-Q4 evidence-collection step before the acceptance
+# re-drive; bare single-letter nouns ("material A"/"material B") are barred
+# by the INTENDED material-noun gate (ruling §Q1) and never reached the fold.
 # ---------------------------------------------------------------------------
 TURNS = [
     ("A", "Place a 96-well plate on the deck."),
-    ("1", "add material A to A1-H1"),
-    ("1b", "add material B to A2-H2"),
+    ("1", "add acetonitrile to A1:H1"),
+    ("1b", "add clofibrate 1mM to A2:H2"),
     ("2", "mix all wells that have material"),
 ]
 # The never-guess control (spec §11 failure-arm): an add naming a plate the
 # deck does not hold. The lab_state fold must no-op + the pass must emit a
 # lab_state diagnostic; NO contents written.
-CONTROL_TURN = ("X", "add material Z to the ghost-plate well C1")
+CONTROL_TURN = ("X", "add acetonitrile to the ghost-plate well C1")
 
 # The held-session identity constants (run-suite-a.py values — the deck
 # surface's byte-stable wire shape).
