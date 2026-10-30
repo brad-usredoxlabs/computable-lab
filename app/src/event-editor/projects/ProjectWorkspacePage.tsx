@@ -22,7 +22,7 @@
  *   - 'document'        → <DocumentEditor /> + DocumentStateProvider
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from '../../shared/shell'
 import {
@@ -42,6 +42,8 @@ import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
+import type { AiContext } from '../../types/aiContext'
 import { ProjectCollectionView } from '../../collections/ProjectCollectionView'
 import { RunCollectionView } from '../../collections/RunCollectionView'
 import { LabCollectionView } from '../../collections/LabCollectionView'
@@ -75,12 +77,46 @@ export function ProjectWorkspacePage() {
 
   return (
     <WorkspaceProvider studyId={studyId}>
+      {/* L2-CHAT-UI-1 LEG C4: universal chat registrar (renders nothing). */}
+      <ProjectSurfaceChat studyId={studyId} />
       <WorkspaceShellHost
         studyId={studyId}
         autoOpenEventGraphId={eventGraphId ?? null}
       />
     </WorkspaceProvider>
   )
+}
+
+/**
+ * L2-CHAT-UI-1 LEG C4: the project workspace's universal chat. Reads the
+ * active workspace tab through the SAME WorkspaceContext the shell uses so
+ * the context names what the user is looking at (homepage / deck / pdf /
+ * record editor …) without new wiring. Thread-scoped on the studyId — one
+ * conversation per study. Renders nothing; RightPane's panelSlot?.chat arm
+ * shows HarnessChatPane. Deck tabs inside the project keep the same chat —
+ * the deck-specific ghost bridge (DeckSurfaceChat) lives on the /deck route
+ * and is untouched by this leg.
+ */
+function ProjectSurfaceChat({ studyId }: { studyId: string }) {
+  const ws = useWorkspace()
+  const activeTab = ws.state.activeTabId
+    ? ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
+    : null
+  const aiContext = useMemo<AiContext>(() => ({
+    surface: 'analysis',
+    summary: `Project workspace — study ${studyId}${activeTab ? `, active tab: ${activeTab.kind}` : ' (no tab open)'}`,
+    surfaceContext: {
+      studyId,
+      activeTabKind: activeTab?.kind ?? null,
+      ...(activeTab?.kind === 'pdf' || activeTab?.kind === 'document'
+        ? { activeArtifactId: activeTab.artifactId }
+        : {}),
+      ...(activeTab?.kind === 'deck' && activeTab.eventGraphId
+        ? { activeEventGraphId: activeTab.eventGraphId }
+        : {}),
+    },
+  }), [studyId, activeTab])
+  return <SurfaceChatBridge aiContext={aiContext} scope={studyId} />
 }
 
 interface WorkspaceShellHostProps {
