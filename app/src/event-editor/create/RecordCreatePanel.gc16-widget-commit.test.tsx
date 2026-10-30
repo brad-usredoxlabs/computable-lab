@@ -153,6 +153,12 @@ const mocked = vi.hoisted(() => ({
   // the spine race legs hold the schema document unresolved while the form is
   // already rendered and submit is clicked.
   schemaDocDelay: 0 as number,
+  // GC-16 FIX RUN 4 (D16): when true the GET /schemas/:id mock REJECTS — the
+  // FAILED-fetch arm of the D12 race. A failed fetch must NOT settle as
+  // "unavailable → not declared" for the spine: shortSlug is schema-required
+  // and client-decided from the document, so a missing document must not
+  // justify deleting it (or an author-typed value) before an invalid POST.
+  schemaDocFail: false as boolean,
 }))
 
 vi.mock('../../shared/api/client', () => ({
@@ -185,6 +191,11 @@ vi.mock('../../shared/api/client', () => ({
     // see the real shapes. Respects mocked.schemaDocDelay (D12 race legs
     // hold the document unresolved while the form is already rendered).
     getSchema: vi.fn((schemaId: string) => {
+      // GC-16 FIX RUN 4 (D16): the FAILED-fetch arm — reject the document
+      // fetch (the review's PROBE3 shape) instead of resolving it.
+      if (mocked.schemaDocFail) {
+        return Promise.reject(new Error('schema document fetch failed (D16 leg)'))
+      }
       const base = String(schemaId).split('/').pop() ?? ''
       const kind = base.replace(/\.schema\.yaml$/, '')
       const dir = kind === 'study' || kind === 'experiment' || kind === 'run' ? 'studies' : 'knowledge'
@@ -232,6 +243,7 @@ vi.mock('../../shared/api/client', () => ({
 
 beforeEach(() => {
   mocked.schemaDocDelay = 0
+  mocked.schemaDocFail = false
 })
 
 afterEach(() => {
@@ -627,5 +639,105 @@ describe('GC-16 FIX RUN 3 D12 — spine submit waits for the schema document (sh
       errors,
       'the captured spine payload must be VALID against the REAL experiment.schema.yaml',
     ).toEqual([])
+  }, 20000)
+})
+
+// =====================================================================
+// GC-16 FIX RUN 4 D16 — the FAILED-fetch arm of the D12 race (MAJOR,
+// review cycle 3): a REJECTED GET /schemas/:id must not settle as
+// "unavailable → not declared" for the spine. At 82044fa4 the .catch
+// sets schemaDocFor = schemaId (failure == settled), the
+// schemaDeclaresShortSlug flag goes false, the gate passes, and the
+// submit path DELETES shortSlug — posting a payload the REAL
+// experiment.schema.yaml rejects (required: shortSlug,
+// unevaluatedProperties: false), silently, with the author's typed
+// value stripped (review probes PROBE3/PROBE3B).
+//
+// Decision routing: the architect ruling file
+// 2026-10-30_lane1-gc16-d16-failed-fetch-shortSlug-decision.md was
+// ABSENT at work time (ls → No such file or directory); the decision
+// REQUEST packet's provisional fallback applies — Option A (tri-state;
+// refuse on failed for spine kinds; no guessed data).
+//
+// This leg mirrors the review's independent probe (getSchema rejects;
+// spine experiment; title authored THROUGH the real input): submit
+// must produce ZERO create calls and a NAMED refusal — the schema
+// document could not be loaded, so the identity fields cannot be
+// decided (retry affordance named).
+// =====================================================================
+
+describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine submits (Option A provisional)', () => {
+  it('spine (experiment): getSchema REJECTS → submit produces ZERO creates + a named refusal (no silent invalid POST, no stripped author value)', async () => {
+    mocked.schemaDocFail = true
+    render(
+      <RecordCreatePanel
+        nodeType="experiment"
+        studyId="STU-1"
+        draftTitle="my experiment"
+        onCreated={() => {}}
+      />,
+    )
+    // The form renders even though the document fetch is failing (the
+    // projection does not depend on the document) — the review's probe
+    // rendered the real form before submitting.
+    await waitFor(() => findRow('Title'), { timeout: 8000 })
+    // Author the title THROUGH the real input (the review's probe
+    // typed it; the doc node then carries it so the serializer
+    // preserves it — exactly the PROBE3 reproduction).
+    const titleRow = findRow('Title')
+    commitTextSlot(titleRow, 'my experiment')
+    // Let the failed fetch settle (the .catch path), then submit.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    submitCreate()
+    await new Promise((r) => setTimeout(r, 200))
+    // THE DEFECT at 82044fa4: the failed fetch settled as "unavailable",
+    // schemaDeclaresShortSlug went false, and the submit executed
+    // `delete payload.shortSlug` — posting
+    // {"kind","recordId","state","studyId","title"} with NO
+    // shortSlug (the review's PROBE3 payload) and no client error.
+    expect(
+      mocked.createCalls,
+      'a FAILED schema-document fetch must NOT post a spine payload — shortSlug is schema-required (experiment.schema.yaml) and client-decided from the document; "unknown" is not "not declared"',
+    ).toEqual([])
+    const panelText = screen.getByTestId('record-create-panel').textContent
+    console.log('D16 RAW (panel text after failed-fetch submit):', panelText)
+    expect(
+      panelText,
+      'the refusal must be NAMED — the schema document could not be loaded, so the identity fields cannot be decided (retry affordance)',
+    ).toMatch(/schema document (could not be loaded|unavailable)/i)
+    expect(panelText).toMatch(/identity fields/i)
+  }, 20000)
+
+  it('spine (experiment): an author-typed shortSlug is NOT stripped before a refused submit (the PROBE3B shape — the author has a remedy only if the refusal is loud)', async () => {
+    // The D16 defect's sharpest form (review PROBE3B): even a HAND-TYPED
+    // shortSlug was deleted before POST at 82044fa4. With the Option A
+    // refusal there is no POST at all — the author's value survives in
+    // the form and the named refusal names the retry.
+    mocked.schemaDocFail = true
+    render(
+      <RecordCreatePanel
+        nodeType="experiment"
+        studyId="STU-1"
+        draftTitle="my experiment"
+        onCreated={() => {}}
+      />,
+    )
+    await waitFor(() => findRow('Title'), { timeout: 8000 })
+    commitTextSlot(findRow('Title'), 'my experiment')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    submitCreate()
+    await new Promise((r) => setTimeout(r, 200))
+    expect(mocked.createCalls, 'no create on a failed document fetch (spine)').toEqual([])
+    // The form is still usable: the author's typed value is not destroyed
+    // (the title slot still carries what was authored — the refusal does
+    // not discard author edits).
+    expect(
+      findRow('Title').textContent,
+      'the author-typed value must survive the refusal (no discard of in-flight author edits)',
+    ).toContain('my experiment')
   }, 20000)
 })

@@ -403,6 +403,8 @@ describe('GC-16 FIX1 D8 — knowledge ui.yaml widget shape matches the schema it
 interface HintDef {
   path?: string
   widget?: string
+  readonly?: boolean
+  options?: Array<{ value: unknown; label?: string }>
   fields?: HintDef[]
 }
 
@@ -522,6 +524,70 @@ describe('GC-16 FIX RUN 3 D11 — ref-shaped item hints are schema-faithful (dat
       expect(hintDeclares(subHint, 'kind'), `${sub} (a ref object) must declare kind`).toBe(true)
       expect(hintDeclares(subHint, 'type'), `${sub} (a ref object) must declare type`).toBe(true)
       expect(hintDeclares(subHint, 'id'), `${sub} (a ref object) must declare id`).toBe(true)
+    }
+  })
+
+  // =====================================================================
+  // GC-16 FIX RUN 4 D18 (review cycle 3, MINOR): the D11 kind hints were
+  // single-option selects marked `readonly: true` with NO seed — so no
+  // author action could ever produce `kind: record` (with readonly
+  // honoured nothing is selectable; with no default/seed — correctly ruled
+  // inexpressible by the D11 rescope — nothing populates it). The remedy
+  // (reviewer's first option, data-only): DROP readonly from the kind
+  // hints so the author CAN pick the single option; a committed item then
+  // genuinely carries kind:record even before R1 ships seeding. These
+  // legs pin that pinning: the kind sub-field must be declared AND its
+  // select must NOT be readonly (RED at 82044fa4: readonly: true).
+  // =====================================================================
+  const KIND_HINT_FIELDS: Array<{ kind: 'assertion' | 'evidence'; path: string; itemSeeds: string[] }> = [
+    { kind: 'assertion', path: '$.context_refs', itemSeeds: [] },
+    { kind: 'evidence', path: '$.supports', itemSeeds: [] },
+    { kind: 'evidence', path: '$.refutes', itemSeeds: [] },
+    { kind: 'evidence', path: '$.assesses', itemSeeds: [] },
+  ]
+
+  it.each(KIND_HINT_FIELDS.map((f) => `${f.kind} ${f.path}`))(
+    'D18: %s — the item hint\'s kind sub-field is a single-option select that is NOT readonly (the author can pick "record"; RED at 82044fa4: readonly: true with no seed → no author action can ever produce kind:record)',
+    async (name) => {
+      const entry = KIND_HINT_FIELDS.find((f) => `${f.kind} ${f.path}` === name)!
+      const ui = await loadUi(entry.kind)
+      const fieldDef = formFieldsAll(ui).find((f) => f.path === entry.path)
+      expect(fieldDef, `${entry.kind}.ui.yaml must bind ${entry.path}`).toBeDefined()
+      const hint = itemHintOf(fieldDef!)
+      const kindField = (hint!.fields ?? []).find((f) => f.path === 'kind')
+      expect(kindField, `the ${entry.path} item hint must declare the kind sub-field`).toBeTruthy()
+      expect(kindField!.widget, 'the kind discriminator is a select over the schema enum').toBe('select')
+      const options = kindField!.options as Array<{ value: unknown }> | undefined
+      expect(
+        (options ?? []).map((o) => o.value),
+        'the single option is the schema enum value "record"',
+      ).toEqual(['record'])
+      expect(
+        kindField!.readonly,
+        'D18: a readonly single-option select with no seed makes kind:record unauthorable (the D11 rescope already ruled a seed inexpressible on the ui-v1 surface) — drop readonly so the author picks the option',
+      ).toBeFalsy()
+    },
+  )
+
+  it('D18: assertion $.roles — the role_ref AND context_ref kind sub-fields are single-option selects that are NOT readonly (RED at 82044fa4: readonly: true)', async () => {
+    const ui = await loadUi('assertion')
+    const fieldDef = formFieldsAll(ui).find((f) => f.path === '$.roles')
+    expect(fieldDef, 'assertion.ui.yaml must bind $.roles').toBeDefined()
+    const hint = itemHintOf(fieldDef!)
+    for (const sub of ['role_ref', 'context_ref']) {
+      const subHint = (hint!.fields ?? []).find((f) => f.path === sub)
+      expect(subHint, `the roles item hint must declare the ${sub} sub-field`).toBeTruthy()
+      const kindField = (subHint!.fields ?? []).find((f) => f.path === 'kind')
+      expect(kindField, `${sub} must declare the kind sub-field`).toBeTruthy()
+      expect(kindField!.widget, `${sub}.kind is a select over the schema enum`).toBe('select')
+      expect(
+        ((kindField!.options as Array<{ value: unknown }> | undefined) ?? []).map((o) => o.value),
+        `${sub}.kind single option is "record"`,
+      ).toEqual(['record'])
+      expect(
+        kindField!.readonly,
+        `D18: ${sub}.kind must NOT be readonly (readonly + no seed → unauthorable)`,
+      ).toBeFalsy()
     }
   })
 })
