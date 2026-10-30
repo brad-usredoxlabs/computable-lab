@@ -71,10 +71,10 @@
 
 ## assumptions:
 
-- AS-L1T0105-1: GC-16 resume run's W1a commit (eb6e65c9) adopted as starting material exactly as
+- AS-L1TICK174-1: GC-16 resume run's W1a commit (eb6e65c9) adopted as starting material exactly as
   planned in AS-L1T173-2 — full gate ladder (adv cycle 1 + self-verify + browser gate) still runs
   on the FINAL head; no acceptance softened by the survival marker. evidence_debt=false.
-- AS-L1T0105-2: the adversarial reviewer is allowed to judge without a restarted stack because the
+- AS-L1TICK174-2: the adversarial reviewer is allowed to judge without a restarted stack because the
   spec's coder-side acceptance is deterministic (vitest/tsc/diff-reading); browser acceptance is a
   SEPARATE orch-owned gate post-merge+restart. evidence_debt=false.
 - CARRIED OPEN: AS-L1T1430-1 (WI-5 value proof — clears if a gate screenshots a method editor
