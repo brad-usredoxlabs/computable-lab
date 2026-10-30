@@ -390,20 +390,25 @@ describe('buildProjectionDocument nested item-hint fields (WIDGET-R1 fix-run 3, 
     expect(itemHint.fields?.map((f) => f.path)).toEqual(['role_ref', 'context_ref'])
 
     for (const nested of ['role_ref', 'context_ref']) {
+      const input = rolesItems.fields.find((f) => f.path === nested) as { fields: Array<Record<string, unknown>> }
       const entry = itemHint.fields!.find((f) => f.path === nested) as Record<string, unknown>
       const nestedFields = entry.fields as Array<Record<string, unknown>> | undefined
-      // THE DROPPED=false SHAPE (RED at base): nested `fields` carried through level 1.
+      // THE DROPPED=false SHAPE (RED at base): the nested `fields` are
+      // carried through the itemHint map — level 1 (present, all three
+      // sub-fields) and level 2 (every sub-field member forwarded
+      // verbatim, `required` normalized to false exactly like the
+      // top-level entries). toEqual is key-presence-sensitive: the input
+      // entries carry no `fields` key, so this ALSO pins that no
+      // `fields` key is invented on the flat nested entries.
       expect(nestedFields, `${nested} must carry its nested fields through the itemHint map`).toEqual(
-        (rolesItems.fields.find((f) => f.path === nested) as { fields: unknown[] }).fields,
+        input.fields.map((f) => ({ ...f, required: f.required ?? false })),
       )
-      // Level 2: the nested entries' OWN flat fields are byte-identical
-      // (no `fields` key is ADDED on a field without nested fields).
       expect(nestedFields.map((f) => f.path)).toEqual(['kind', 'type', 'id'])
       for (const inner of nestedFields) {
         expect('fields' in inner, `${nested}.${inner.path} is flat — no fields key may appear`).toBe(false)
+        expect(inner.required).toBe(false) // normalized like the top-level entries
         expect('options' in inner).toBe(inner.path === 'kind') // flat-parity pin: options forwarded on kind, absent elsewhere
         expect(inner.widget).toBe(inner.path === 'kind' ? 'select' : 'text')
-        expect(inner.required).toBe(false)
       }
     }
   })
