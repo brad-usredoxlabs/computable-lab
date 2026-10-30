@@ -67,10 +67,20 @@ TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
 # T145457Z), 'clofibrate 1mM' compiles normalized to 'clofibrate 1 mM' ->
 # unknown-noun. The swap labels below each probe EXACTLY ONE tier-1 candidate
 # and 'bench bead beater' is live-accepted (events=1) in the probe receipts.
+# UTTERANCE SWAP 2026-10-30T17:10 EDT (orch, ruling Q4 swap authority;
+# AS-L2T1415-EQUIP-RECLASS-UTTERANCE): 'bench bead beater' is reclassified as
+# BENCH EQUIPMENT by the shorthand sampler (receipts 20261030T193551Z +
+# 20261030T203317Z: note 'never assigned a deck slot', add_material never
+# emitted) and 'lysis-reagent' (hyphenated) holds an unknown-noun card.
+# Swap nouns are MATERIAL-class and compile-proven resolvable: 'beads' ->
+# EXACTLY ONE tier-1 (MagBinding Beads) via /api/resolve at 17:05 EDT
+# (post-223a7910); 'lysis reagent' (unhyphenated, as the prior model lowering
+# emitted) has a tier-1 'lysis-reagent' design. The well ranges, turn
+# structure, and never-guess shape are UNCHANGED.
 TURNS = [
     ("A", "Place a 96-well plate on the deck."),
-    ("1", "add bench bead beater to A1:H1"),
-    ("1b", "add lysis-reagent to A2:H2"),
+    ("1", "add beads to A1:H1"),
+    ("1b", "add ethanol to A2:H2"),
     ("2", "mix all wells that have material"),
 ]
 # The never-guess control (spec §11 failure-arm): an add naming a plate the
@@ -78,7 +88,7 @@ TURNS = [
 # lab_state diagnostic; NO contents written. Control reuses the VERIFIED
 # resolvable material so the ghost-plate leg (not the material gate) is the
 # live bar, per ruling §Q2.
-CONTROL_TURN = ("X", "add bench bead beater to the ghost-plate well C1")
+CONTROL_TURN = ("X", "add beads to the ghost-plate well C1")
 
 # The held-session identity constants (run-suite-a.py values — the deck
 # surface's byte-stable wire shape).
