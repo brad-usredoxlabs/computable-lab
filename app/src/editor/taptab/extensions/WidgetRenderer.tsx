@@ -102,6 +102,25 @@ export interface WidgetRendererProps {
   ) => void;
   /** Object widget properties (for 'object' widget type) */
   objectProperties?: Array<{ name: string; widget: WidgetType; label: string; help?: string; required?: boolean; options?: Array<{ value: string; label: string }> }>;
+  /**
+   * WIDGET-R1: the item-hint for `array` widget type (the projection's
+   * `items` member). Forwarded into ArrayWidget so it can seed items from
+   * the hint's field set and render each item through the existing
+   * ObjectWidget. Absent for hint-less arrays.
+   */
+  arrayItemHint?: {
+    path?: string;
+    widget?: string;
+    label?: string;
+    fields?: Array<{
+      path: string;
+      widget: string;
+      label?: string;
+      help?: string;
+      required?: boolean;
+      options?: Array<{ value: string | number | boolean; label: string }>;
+    }>;
+  };
   /** Multiselect options (for 'multiselect' widget type) */
   multiselectOptions?: Array<{ value: string; label: string }>;
   /** Canonical record ID for record-scoped custom widgets. */
@@ -123,6 +142,7 @@ export function WidgetRenderer({
   onCancel,
   onRefSelect,
   objectProperties,
+  arrayItemHint,
   multiselectOptions,
   recordId,
   onRecordPatch,
@@ -272,7 +292,15 @@ export function WidgetRenderer({
   }
 
   if (widget === 'array') {
-    return <ArrayWidget value={value} widget={widget} readOnly={readOnly} onCommit={onCommit} />;
+    return (
+      <ArrayWidget
+        value={value}
+        widget={widget}
+        readOnly={readOnly}
+        onCommit={onCommit}
+        itemHint={arrayItemHint}
+      />
+    );
   }
 
   if (widget === 'object') {
