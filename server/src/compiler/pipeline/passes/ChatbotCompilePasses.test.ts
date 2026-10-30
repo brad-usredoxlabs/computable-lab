@@ -2160,6 +2160,133 @@ describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at 
     expect(out.diagnostics ?? []).toHaveLength(0);
   });
 
+  it('fix3 turn-1 shape: 8 wire-shaped design-ref add_material events (A1..H1, top-level+details labwareId = the recordId) all resolve R2 (ONE match) and write the SAME instance — A1..H1 (the drive invariant)', () => {
+    const pass = createLabStatePass();
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      labware: { [instanceId]: { ...base.labware[instanceId]!, identityTokens: ['lbw-design-record'] } },
+    };
+    // The SHIPPED wire shape (receipt turn 1): 8 add_material events, one per
+    // well A1..H1, each top-level + details labwareId = the design recordId.
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const addEvents: PlateEventPrimitive[] = cols.map((c) => ({
+      eventId: `evt-add-${c}1`,
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-design-record',
+      details: { well: `${c}1`, material: 'bead', labwareId: 'lbw-design-record', wells: [`${c}1`] },
+    }));
+    // The re-emitted create (no carrier) rides the same turn (the live drive
+    // re-emits the placement every turn the plate is referenced).
+    const createEv: PlateEventPrimitive = { eventId: 'evt-create-t1', event_type: 'create_container' as const, details: { slot: 'target', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv, ...addEvents] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'Generic 96 (test)' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // Idempotent create (b): the re-emitted create reuses the SAME instance
+    // (no re-mint) — ONE instance, and it is the prior's.
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    // All 8 add_material events resolve via R2 (the instance's identityTokens
+    // carry the recordId — ONE match, no tie) and write A1..H1 to the SAME
+    // instance (the drive invariant: no tie, contents on the placed instance).
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells).sort()).toEqual(
+      cols.map((c) => `${c}1`).sort(),
+    );
+    for (const c of cols) {
+      expect(out.output.snapshotAfter.labware[instanceId]!.wells[`${c}1`]![0]!.materialId).toBe('bead');
+    }
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('fix3 CONTROL (never-guess at the pass seam): a ghost-plate design-ref add (no matching instance/tokens, non-unique type) => no-op + lab_state_unresolved_labware_reference diagnostic; contents NEVER written to the seed plate (the §7 arm-lines>=1 equivalent)', () => {
+    const pass = createLabStatePass();
+    // A prior with the SEED plate (token lbw-design-record) + a second same-TYPE
+    // instance carrying a DIFFERENT token (the ghost plate's own design) — the
+    // ghost design-ref hint matches the ghost instance EXACTLY (R2, one match),
+    // so it must NOT leak to the seed plate; and a hint matching NO token with a
+    // non-unique type no-ops (never-guess). This is the fold's never-guess
+    // surface at the pass seam (the live drive's turn X could not reach the
+    // fold — see the report's control-leg diagnosis — so the unit leg is the
+    // proof the fold never writes the seed plate on an unresolved design-ref).
+    const base = singlePlateSnapshot();
+    const seedId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      mintCounter: 2,
+      deck: [...base.deck, { slot: 'A2', labwareInstanceId: 'GHOST' }],
+      labware: {
+        [seedId]: { ...base.labware[seedId]!, identityTokens: ['lbw-design-record'] },
+        'GHOST': { instanceId: 'GHOST', labwareType: '96-well-plate', slot: 'A2', orientation: 'landscape', wells: {}, identityTokens: ['lbw-ghost-plate'] },
+      },
+    };
+    // The ghost-plate design-ref add (hint = the ghost record id).
+    const ghostAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-ghost-pass',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-ghost-plate',
+      details: { well: 'C1', material: 'x', labwareId: 'lbw-ghost-plate', wells: ['C1'] },
+    };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [ghostAdd] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'seed' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // The ghost hint EXACTLY matches the GHOST instance (R2, one match) — it
+    // writes the ghost plate and NEVER the seed plate.
+    expect(Object.keys(out.output.snapshotAfter.labware['GHOST'].wells)).toEqual(['C1']);
+    expect(Object.keys(out.output.snapshotAfter.labware[seedId].wells)).toHaveLength(0); // seed plate NEVER written
+    expect(out.diagnostics ?? []).toHaveLength(0); // the ghost add resolved (R2 one-match) — no diagnostic
+    // The never-guess no-op arm: a design-ref hint matching NO instance token
+    // with a non-unique type (two same-type instances) => the fold no-ops and
+    // the §7 diagnostic fires (lab_state_unresolved_labware_reference) — the
+    // arm-lines>=1 channel the drive's control leg needs. NOTHING is written.
+    const mysteryAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-mystery-pass',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-never-seen',
+      details: { well: 'C1', material: 'y', labwareId: 'lbw-never-seen', wells: ['C1'] },
+    };
+    const mysteryState: PipelineState = {
+      ...state,
+      outputs: new Map([
+        ['resolve_roles', { events: [mysteryAdd] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'seed' }] }],
+      ]),
+    };
+    const outMystery = pass.run({ pass_id: 'lab_state', state: mysteryState }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(outMystery.ok).toBe(true);
+    const diags = outMystery.diagnostics ?? [];
+    expect(diags).toHaveLength(1);
+    expect(diags[0]!.code).toBe('lab_state_unresolved_labware_reference');
+    expect(diags[0]!.severity).toBe('warning');
+    expect((diags[0]!.details as { hint: string }).hint).toBe('lbw-never-seen');
+    // NOTHING written: no third instance, both plates' wells untouched.
+    expect(Object.keys(outMystery.output.snapshotAfter.labware)).toEqual([seedId, 'GHOST']);
+    expect(Object.keys(outMystery.output.snapshotAfter.labware[seedId].wells)).toHaveLength(0);
+  });
+
   it('fix3 (a) emit-site is INERT without a resolved recordId: an absent/empty resolve_labware slot leaves the create carrierless (byte-stable, pre-CL)', () => {
     const pass = createLabStatePass();
     const base = singlePlateSnapshot();
