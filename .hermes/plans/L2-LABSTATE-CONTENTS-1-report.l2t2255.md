@@ -713,3 +713,280 @@ item's acceptance line 1 (the live multi-turn drive) is BLOCKED, not
 passed. The committed code sha is 0ee16eb99f653e6b0e256435eead46b04e21544d
 for the orchestrator to cite once the material-noun question is resolved and
 the live drive is re-run (post-merge, D13-C).)
+
+
+========================================================================
+## FIX RUN 1 (l2t0405)
+========================================================================
+
+ADVERSARIAL GATE: VERDICT: fix (3 MAJOR D1/D2/D3 + 4 MINOR D4-D7).
+FIX HEAD: 523ec78892429d55dd3e47e8fb750bd02ecaa34c
+WORKTREE: /mnt/vast/home/brad/git/wt/L2-LABSTATE-CONTENTS-1-lane2-l2t2255
+BRANCH: cl/lane2-labstate-contents-1-l2t2255 (SAME item, SAME worktree)
+DATE: 2026-10-30T08:52Z (EDT)
+All commands `git -c core.fileMode=false`. Fix commits on top of the report
+commit 3b282bb9 (fix1-RED d5e897b8 -> fix1 60db0a3a -> D6-final 523ec788).
+
+SCOPE: server/schema-only (zero app/), exactly the item's owned files
+(LabState.ts, LabStateCanonicalShape.test.ts, ChatbotCompilePasses.ts/.test.ts,
+vocabulary.ts/.test.ts, both YAMLs, drive.py + README). No resolve_nouns /
+material-noun-bar change (architect's), no simpleVerbs.ts change, RANGE_RE
+untouched. Constraint re-verified post-fix: tsc -p . --noEmit = 0 lines
+(exactOptionalPropertyTypes on); hardcode sweeps clean (below).
+
+------------------------------------------------------------------------
+D1 MAJOR — destination-only transfer no longer self-transfers (GREEN)
+------------------------------------------------------------------------
+FIX (LabState.ts, applyTransfer srcHint): dropped the `event.labwareId` arm
+from the SOURCE hint chain. Source identity now comes from source_labware /
+from.labwareId ONLY; the destination chain keeps the top-level labwareId (the
+expander's TARGET, simpleVerbs.ts:715) as its fallback. A transfer naming only
+the destination has NO source identity => `labware_unresolved` no-op + the §7
+diagnostic (spec §4.2: "both sides must resolve uniquely or the fold no-ops").
+
+RED -> GREEN (the Mutant-4 class, REAL transferExpander output):
+  RED  (commit d5e897b8, pre-fix fold):
+    FAIL LabStateCanonicalShape > transfer: the REAL transferExpander
+         DESTINATION-ONLY shape (no source_labware) => NO write +
+         labware_unresolved (never a self-transfer)
+      AssertionError: expected { changed: true } to deeply equal
+         { changed: false, …(1) }            <- the fold SELF-TRANSFERRED
+    FAIL ChatbotCompilePasses.test > transfer destination-only (real expander,
+         no source_labware): no-op + … diagnostic, NO write (D1)
+      AssertionError: expected [ { materialId: 'mat-seed', …(2) } ] to deeply
+         equal [ { materialId: 'mat-seed', …(2) } ]   <- A1 was DEDUCTED
+  GREEN (post-fix): both legs pass — outcome { changed:false, reason:
+    'labware_unresolved' }, A1 keeps 100, B1 absent, no second labware,
+    AND the pass surfaces exactly one
+    `lab_state_unresolved_labware_reference` (severity warning,
+    reason labware_unresolved) diagnostic (the pre-fix fold wrote silently AND
+    was invisible to isContentBearing — D6 makes it visible).
+  Mutation-kill (scratch /tmp/fix1-mut, M2): reintroducing the
+  `event.labwareId` srcHint arm => that leg REDs (1 failed | 13 passed);
+  revert => 14/14 GREEN.
+
+------------------------------------------------------------------------
+D2 MAJOR — raw from/to byte-stability restored (GREEN)
+------------------------------------------------------------------------
+FIX (LabState.ts, applyTransfer): restored the base (9d020514) write
+semantics EXACTLY:
+  (a) EMPTY source well => the fold returns the clone UNTOUCHED (no
+      destination materialization, outcome changed:false, NO reason — both
+      sides resolved, an empty source is a normal no-move, no §7 diagnostic;
+      the base reported nothing here either). The pre-fix backwards comment
+      ("the existing raw path wrote the (unchanged) destination well") is
+      gone — base returned at `if (srcMaterials.length === 0) return
+      newSnapshot;` BEFORE touching the destination.
+  (b) non-empty source + zero volume moved (volumeUl 0 / absent): the
+      destination well is MATERIALIZED UNCONDITIONALLY (empty dest well),
+      source stack intact, changed:false — base's unconditional
+      `dstLabware.wells = { …, [toWell]: dstMaterials }` restored.
+  (c) multi-well arm: the same per-pair shape (empty pair writes nothing;
+      zero-move pair materializes the empty dest).
+  The `wrote`/`changed` reporting and the top-of-stack deduction are
+  otherwise untouched.
+
+SNAPSHOT-EQUALITY goldens (base-shape vs head-shape, NOT within-build
+withRules/withoutRules — added to LabStateCanonicalShape.test.ts):
+  - transfer RAW: empty source well => UNTOUCHED clone (wells == {A2:[…70]},
+    no A1 key, no B1 key) — base shape (a)
+  - transfer RAW: volumeUl 0 => {A1:[…100], E1:[]} — base shape (b)
+  - transfer RAW: ABSENT volumeUl => {A1:[…100], F1:[]} — base shape (b)
+  - transfer RAW: deducted-to-zero => {A1:[], G1:[…100]} — the happy golden
+  - transfer multi-well arm: {A1:[…30], B1:[…20]}, D1 UNDEFINED — shape (c)
+Mutation-kill (M3): reintroducing BOTH pre-fix drifts (empty pair creates
+`dst:[]`; zero-move omits the dest) => all FOUR drifted goldens RED (4 failed
+| 10 passed); revert => 14/14 GREEN. The pre-existing value-level legs
+(LabState.test.ts 9/9, the economics transfer legs) stay green untouched.
+
+------------------------------------------------------------------------
+D3 MAJOR — drive control leg is non-vacuous (GREEN)
+------------------------------------------------------------------------
+FIX (.hermes/plans/harness/labstate-contents-drive/drive.py, LEG 4): the
+pre-fix `ok = (arm_log is not None) and (tx_prior == tx_after or tx_after is
+None)` was asserted-by-construction (arm_log empty => None==None => True;
+`tx_diag` computed then unused). The leg now requires ALL of:
+  (1) a NON-EMPTY arm_log for the control turn (the fold provably RAN —
+      backend lab_state pass fired),
+  (2) after_labware == prior_labware with BOTH non-None (no-op wrote nothing),
+  (3) >=1 lab_state UNRESOLVED diagnostic in the captured payload/log —
+      counted from BOTH captured channels: the wire `pipeline_diagnostics`
+      frame (pass_id==lab_state, code startswith lab_state_unresolved) AND the
+      env-gated ARM-LOG line's NEW `unresolved_codes` field.
+EVIDENCE CHANNEL: the wire done frame (AgentResult) carries NO diagnostics
+(verified: types.ts AgentResult has no diagnostics field), so the pass's §7
+codes are extended onto the env-gated ARM-LOG line (ChatbotCompilePasses.ts,
+LABSTATE_ARM_LOG=1 — inert in production): `… after_labware=…
+unresolved_codes=["lab_state_unresolved_labware_reference"]`. drive.py
+parse_arm() reads the new token. README leg description updated.
+Mutation-kill (d3_mutation_kill.py, run on the REAL 063626Z receipt):
+  - REAL turn X (fold never ran, arm_log=[]): PRE-FIX ok=TRUE (the vacuous
+    pass — reproduced), POST-FIX ok=FALSE.
+  - GENUINE control (fold ran + no-op + unresolved code in ARM-LOG):
+    POST-FIX ok=TRUE.
+  - GENUINE control (diagnostic rides the WIRE frame): POST-FIX ok=TRUE.
+  - turn that WROTE (after != prior): POST-FIX ok=FALSE.
+NOTE (honest): re-driving the live control requires the lane stack restarted
+on the fixed build (YAML-reload trap) + a turn that reaches the fold; the
+current live receipt still has the upstream material-noun block (architect
+item) so turn X's fold does not run live. The leg is now CAPABLE of failing
+and CAPABLE of passing only on captured evidence — the asserted-by-construction
+class is gone (mutation-proven). Post-merge orch re-drive (D13-C) re-runs this
+drive.
+
+------------------------------------------------------------------------
+D4 MINOR — tie leg is a real tie (GREEN + mutation-proven)
+------------------------------------------------------------------------
+FIX (LabStateCanonicalShape.test.ts): the two-same-type-plates leg's hint
+'plate' (a TOTAL MISS at R3 — normalizeTypeKey('plate')='plate' !=
+'96-well-plate') is now '96 well plate' (normalizeTypeKey('96 well plate') ==
+normalizeTypeKey('96-well-plate') — R1/R2 miss, R3 sees TWO matches: a TIE).
+Mutation-kill (M1, reviewer's exact Mutant 1 `matches[0]` tie-picks-first):
+this file now REDs (1 failed | 13 passed) — pre-fix it stayed 7/7 green;
+revert => 14/14 GREEN. (runChatbotCompileLabState.test.ts:316-323's tie leg
+also still guards the pass path — 5/5.)
+
+------------------------------------------------------------------------
+D5 MINOR — empty `order` => R1 default; code/comments/tests agree (GREEN)
+------------------------------------------------------------------------
+CHOICE: fall back to the R1 default (as rules===undefined does) — the
+§5.2-letter option ("absent section => the fold resolves rung R1 ONLY, the
+raw path keeps working"), NOT an explicit fail-closed-zero-rung rewrite.
+FIX (LabState.ts resolveLabware): `rules && rules.order.length > 0 ? rules
+: the R1 defaults` — an empty order is identical to absent rules.
+DOC AGREEMENT (all five sites): LabState.ts module header +
+LabIdentityRules.order doc + resolveLabware doc; ChatbotCompilePasses.ts
+createLabStatePass rules comment; vocabulary.ts interface doc + loader
+comment; the YAML section comment + the meta-schema section description.
+NEW PASS-SEAM LEG (ChatbotCompilePasses.test.ts): absent DATA section — a
+symbolic hint that EQUALS an instanceId resolves via rung R1 (write, no
+diagnostic) — the exact pre-fix gap (EMPTY-RULES no-op vs 2-arg write) is
+closed and pinned. The pre-existing absent-section leg (symbolic no-op +
+diagnostic; raw still writes) stays green.
+Mutation-kill (M5): reintroducing `rules?.order ?? ['instanceIdentity']`
+(zero rungs for empty order) => the new R1-default leg REDs (1 failed | 1
+passed | 47 skipped); revert => 2 passed.
+
+------------------------------------------------------------------------
+D6 MINOR — content-bearing classification is DATA (GREEN + probe)
+------------------------------------------------------------------------
+FIX: new vocabulary DATA section `labStateContentBearingEventTypes:
+[add_material, transfer]` (scientist-intent-vocabulary.yaml, the fold-side
+twin of the read half's materialBearingEventTypes) + meta-schema declaration
+(array, minItems 1, uniqueItems, pattern — same shape as the read half) +
+vocabulary.ts frozen per-load read (RawDoc + interface + loader; absent =>
+[] fail-closed). The lab_state pass (createLabStatePass) threads the list
+into `isContentBearing(event, declaredEventTypes)` at the PASS seam — the
+fold module never imports the vocabulary and now carries ZERO event-type
+literals: the function is DATA membership (`declaredEventTypes.includes(
+event.event_type)`) + a GENERIC carrier probe (does the event declare a
+labware-identity carrier: details.labwareId / details.labwareInstanceId /
+top-level labwareId / source_labware / destination_labware /
+from.labwareId / from.labwareInstanceId — the same generic-read posture as
+the rung evaluators over declared tokenFields). A carrier-less event => not
+content-bearing => no diagnostic (nothing to surface). This also closes the
+D1 invisibility: the destination-only transfer (top-level labwareId = the
+destination) IS content-bearing, so its no-op surfaces the §7 diagnostic.
+ABSENT-list semantics: no event is content-bearing => no diagnostics
+(over-conservative, never-guess-safe) — stated in the YAML, meta-schema,
+vocabulary.ts, and the fold doc.
+NEW PINS (vocabulary.test.ts): shipped list == [add_material, transfer],
+frozen per-load, same array across reads; ABSENT section (vocab-minus-pellet)
+=> []. D6 source-scan probe (LabStateCanonicalShape.test.ts): the
+isContentBearing body of the shipped fold module contains NO
+`event.event_type ===|!== '…'` literal and DOES carry the declaredEventTypes
+membership. Mutation-kill (M4, surgical: reintroduce a dead-code literal
+comparison in the body): the probe REDs (1 failed | 13 passed) while fold
+behavior legs stay green; revert => 14/14. (The full pre-fix function
+reintroduction REDs the whole file — the probe plus the D1 pass-seam leg
+together kill it.)
+COMMENT SITES (the false "add_material|transfer in TS" claims are gone):
+LabState.ts (fold doc), ChatbotCompilePasses.ts (pass doc), vocabulary.ts
+(D6 doc) all describe the DATA-declared fold-side list.
+
+------------------------------------------------------------------------
+D7 MINOR — order/tokenFields consistency pinned (GREEN)
+------------------------------------------------------------------------
+CHOICE (stated per the reviewer's "state the choice"): a TEST-PIN
+(declaration-integrity), NOT a meta-schema length-equality constraint and
+NOT reading the rung-id values. Rationale: the reviewer ruled this NOT a
+letter violation (§5.2 permits field-name branches inside the generic rung
+evaluators), so the minimum fix is a consistency pin; the lint DSL
+(exists/nonEmpty/equals/allIn/everyItem/all/any/not + numeric `compare`) and
+the Ajv shape the loader validates against cannot express a cross-key length
+EQUALITY between `order` and `tokenFields` (no such predicate; verified
+against PredicateEvaluator.ts op set). The pin (vocabulary.test.ts):
+`order.length === tokenFields.length` (and >= 1) on the SHIPPED vocabulary —
+a DATA edit that misaligns the two lists fails the per-load pin suite; the
+pre-existing per-load pin already pins the shipped values (3==3). The
+fail-closed `continue` on a misaligned index (tail rungs inert) is unchanged
+and is the declared safe behavior; the pin keeps the shipped declaration
+consistent.
+
+------------------------------------------------------------------------
+VERIFICATION (fix head 523ec788, coder-captured)
+------------------------------------------------------------------------
+TARGETED 8-FILE SPEC-§10 SET (single run):
+  ✓ src/compiler/state/LabState.test.ts  (9 tests)
+  ✓ src/compiler/state/LabStateCanonicalShape.test.ts  (14 tests)
+  ✓ src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts  (49 tests)
+  ✓ src/ai/runChatbotCompileLabState.test.ts  (5 tests)
+  ✓ src/compiler/state/LabStateCache.test.ts  (5 tests)
+  ✓ src/ai/shorthandChat.wellsetFold.test.ts  (3 tests)
+  ✓ src/compiler/scientistIntent/vocabulary.test.ts  (22 tests)
+  ✓ src/compiler/scientistIntent/wellsetResolver.test.ts  (33 tests)
+  Test Files  8 passed (8) / Tests  140 passed (140)
+  (pre-fix baseline 123/123 on the 7-file set at 3b282bb9; +17 new legs:
+  D1 canonical+pass 2, D2 goldens 5, D5 pass-seam 1, D6 vocab 2 + probe 1,
+  D7 1, + LabStateCache 5 already in the 8-file set => arithmetic: 123+17=140
+  on the 7-file set is 140-5=135, +5 LabStateCache = 140 total — zero NEW
+  failing files, every file passes.)
+TYPECHECK: npx tsc -p . --noEmit -> TSC_EXIT=0, 0 error lines
+(exactOptionalPropertyTypes=true; the isContentBearing 2nd param is a
+`readonly string[] = []` default — never `| undefined`; the new optionals in
+the pass output remain conditionally spread).
+CONSUMERS (beyond the 8-file set): Prompt04Debug4/6/8, Prompt03Green,
+spine4Registration (19) all GREEN (23/23). Prompt02Green + Prompt04DeepDebug
+fail identically AT BASE (stash-proven) with PipelineLoadError ENOENT
+`/mnt/vast/home/brad/git/wt/schema/…` — a pre-existing fixture path-resolution
+environment issue (those tests resolve `schema/` two levels above server/),
+NOT a regression of this fix-run.
+HARDCODE SWEEPS (spec §10, on 9d020514...HEAD):
+  1. well-address literals in TS/YAML diff (excl tests/md): EMPTY (exit 1) PASS
+  2. plate1|96-well|trypsin|DMEM in the LabState.ts diff: EMPTY (exit 1) PASS
+  3. `verb ===` in LabState.ts: EMPTY (exit 1) PASS
+  4. findLabwareByHints|includes(|indexOf(|startsWith( in LabState.ts: exactly
+     ONE hit — `declaredEventTypes.includes(event.event_type)` (the D6 DATA
+     membership; a declared exception, NOT fuzzy matching — no
+     findLabwareByHints/indexOf/startsWith).
+MUTATION-KILL SUMMARY (scratch /tmp/fix1-mut, worktree untouched; each probe
+REDs then reverts GREEN 14/14):
+  M1 tie-picks-first           -> D4 tie leg RED (1f/13p)   [D4]
+  M2 srcHint event.labwareId   -> D1 destination-only leg RED (1f/13p) [D1]
+  M3 base-semantics drift      -> 4 D2 goldens RED (4f/10p) [D2]
+  M4 hardcoded event-type list -> D6 source-scan probe RED (1f/13p) [D6]
+  M5 zero-rung empty order     -> D5 R1-default pass leg RED (1f/1p/47s) [D5]
+  D3: pre-fix formula on the REAL 063626Z receipt turn X = TRUE (vacuous);
+      post-fix = FALSE; genuine control = TRUE; wrote-turn = FALSE. [D3]
+  (M1/M2/M3 mirror the reviewer's Mutant 1/4/3 classes exactly.)
+
+DEVIATIONS / HONEST LIMITATIONS (fix-run):
+  - D3: the live control leg could not be RE-DRIVEN green in this run (the
+    lane stack restart + a fold-reaching control turn requires the upstream
+    material-noun question resolved — architect item, unchanged). The leg is
+    mutation-proven non-vacuous and the evidence channel (ARM-LOG
+    unresolved_codes) is implemented; the post-merge orch re-drive is the
+    clearance path.
+  - D7: pin (test) rather than meta-schema constraint — choice + rationale
+    stated above (the reviewer's minimum-fix direction; NOT a letter
+    violation).
+  - The turn2 `expected_48` arithmetic (16 distinct wells, not 48 — reviewer
+    axis note O1) is a SPEC label, not a defect of this item; the drive
+    inherits the label. NOT changed (acceptance-bar text is orch/architect's;
+    flagged here so the post-merge read compares against 16).
+  - The live no-seed drive (acceptance line 1) remains BLOCKED by the
+    upstream material-noun gate exactly as in the prior report §8 (unchanged
+    by this fix-run; no resolve_nouns file touched).
+
+L2LABSTATECONTENTS1 FIX1 DONE 523ec78892429d55dd3e47e8fb750bd02ecaa34c
+STATUS: fixrun-complete
