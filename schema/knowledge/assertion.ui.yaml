@@ -1,4 +1,24 @@
-# UI specification for Assertion records
+# UI specification for Assertion records.
+#
+# GC-16 (architect GAP-1 ruling): this file previously bound `$.claimId` and
+# `$.content` — properties assertion.schema.yaml does NOT declare (its
+# unevaluatedProperties:false schema declares claim_ref / statement / scope /
+# context_refs / roles / outcome / confidence). A draft built from that spec
+# could never pass the server Ajv. The form below binds ONLY the declared
+# fields, following the repo's ui-v1 binding idiom (the GC-13 evidence.ui.yaml
+# precedent: ref widget for record refs, reflist for ref lists, select for
+# enums, number for integers, object for objects).
+#
+# The identity field is `$.id`: the assertion schema declares `id` (not
+# `recordId`). recordId is the envelope's canonical identity (RecordEnvelope:
+# "CRITICAL: recordId is the canonical identity, NOT payload fields"); the
+# spine study/experiment/run schemas are the only ones that declare a
+# `recordId` payload field.
+#
+# One term per entity (architect ruling): the field vocabulary is the schema's
+# own (claim_ref / statement / scope / context_refs / roles / outcome /
+# confidence); "Knowledge" is only the /registry grouping label, never a
+# record term.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/assertion.schema.yaml"
 
@@ -11,33 +31,81 @@ form:
   sections:
   - title: "Identity"
     fields:
-    - path: "$.recordId"
+    - path: "$.id"
       widget: "text"
-      label: "Record ID"
+      label: "ID"
       readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
       readonly: true
       hidden: true
-  - title: "Assertion Content"
+  - title: "Claim in context"
     fields:
     - path: "$.title"
       widget: "text"
       label: "Title"
-    - path: "$.claimId"
-      widget: "ref"
-      label: "Claim"
-    - path: "$.content"
-      widget: "markdown"
-      label: "Content"
+    - path: "$.claim_ref"
+      widget: "record-ref"
+      refKind: "claim"
+      label: "Claim (the global atomic triple being asserted)"
+      help: >
+        Record reference to the claim. The record-ref picker commits the
+        structured ref { kind: record, type: claim, id } the schema declares;
+        the serializer omits it when unset.
+    - path: "$.statement"
+      widget: "text"
+      label: "Statement (the contextual claim)"
+    - path: "$.scope"
+      widget: "select"
+      label: "Scope (canonical assertion shape)"
+      options:
+      - { value: "single_context", label: "Single context" }
+      - { value: "comparison", label: "Comparison" }
+      - { value: "series", label: "Series" }
+      - { value: "global", label: "Global" }
+    - path: "$.context_refs"
+      widget: "reflist"
+      label: "Context refs (the contexts this ranges over)"
+      help: >
+        Refs to the contexts in scope. A scoped assertion (single_context /
+        comparison / series) needs at least one; lint rule
+        asn-scoped-assertion-needs-context refuses a scoped assertion with no
+        context_refs (the A7-named refusal, visible on first attempt). Global
+        scope ranges over no context by definition — leave empty.
+    - path: "$.roles"
+      widget: "reflist"
+      label: "Roles (context-role bindings)"
+      help: >
+        Role bindings for each context: each entry binds a context-role record
+        (role_ref) to a context in context_refs (context_ref).
+    - path: "$.evidence_refs"
+      widget: "reflist"
+      label: "Evidence refs (established when evidence bundles are created)"
+      readonly: true
+      help: >
+        Read-only display of the evidence bundles that reference this
+        assertion. Evidence records are authored via the evidence kind; they
+        carry the forward link (evidence.supports -> this assertion).
+  - title: "Outcome and confidence"
+    fields:
+    - path: "$.outcome"
+      widget: "object"
+      label: "Outcome (structured summary)"
+      help: >
+        Optional structured outcome summary (measure / target / detection /
+        direction / effect_size / layer / significance).
+    - path: "$.confidence"
+      widget: "number"
+      label: "Confidence (1-5)"
+      help: "How strongly the evidence supports this assertion (1-5)."
 
 list:
   columns:
-  - path: "$.recordId"
+  - path: "$.id"
     label: "ID"
-    width: "120px"
+    width: "140px"
   - path: "$.title"
     label: "Title"
-  - path: "$.claimId"
+  - path: "$.claim_ref"
     label: "Claim"
