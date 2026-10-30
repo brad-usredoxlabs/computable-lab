@@ -27,8 +27,9 @@ import {
 import type { PipelineState, PassDiagnostic } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
 import { PROTOCOL_INTENT_KIND, PROTOCOL_INTENT_VERSION } from '../../protocolIntent/ProtocolIntent.js';
-import { addMaterialExpander } from '../../biology/verbs/simpleVerbs.js';
+import { addMaterialExpander, transferExpander } from '../../biology/verbs/simpleVerbs.js';
 import type { PlateEventPrimitive } from '../../biology/BiologyVerbExpander.js';
+import { applyEventToLabState } from '../../state/LabState.js';
 import type { LabStateSnapshot } from '../../state/LabState.js';
 
 describe('createExtractEntitiesPass', () => {
@@ -1952,6 +1953,54 @@ describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at 
       expect((d.details as { hint: string }).hint).toBe('a-plate-that-was-never-placed');
       expect((d.details as { event_type: string }).event_type).toBe('add_material');
     }
+  });
+
+  // D1 (advc fix-run 1, Mutant 4 class) at the PASS seam: the REAL
+  // transferExpander destination-only output (no source_labware; top-level
+  // labwareId = the TARGET) must fold to a labware_unresolved no-op + the
+  // §7 diagnostic — and must NOT self-transfer inside the destination
+  // plate. The pass's content-bearing test (DATA list + declared source
+  // carrier) surfaces this shape as a diagnostic, so the wrong write is
+  // visible (pre-fix the fold wrote silently AND the classifier returned
+  // false, so no diagnostic existed at all).
+  it('transfer destination-only (real expander, no source_labware): no-op + lab_state_unresolved_labware_reference diagnostic, NO write (D1)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    // Seed the destination plate's A1 so a self-transfer would be visible.
+    const seeded = applyEventToLabState(prior, {
+      eventId: 'evt-seed-d1-pass',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'A1',
+        material: { materialId: 'mat-seed', kind: 'seed', volumeUl: 100 },
+      },
+    });
+    const events = transferExpander.expand({
+      verb: 'transfer',
+      params: { labware: '96-well-plate', source_well: 'A1', well: 'B1', volume_uL: 40 },
+    });
+    expect(events).toHaveLength(1);
+    const d = events[0]!.details as Record<string, unknown>;
+    expect(d.source_labware).toBeUndefined();
+    expect(d.destination_labware).toBe('96-well-plate');
+    expect(events[0]!.labwareId).toBe('96-well-plate');
+
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(seeded, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // NO write: A1 unchanged (100), B1 absent (no self-transfer A1->B1).
+    const wells = out.output.snapshotAfter.labware[instanceId]!.wells;
+    expect(wells['A1']).toEqual([{ materialId: 'mat-seed', kind: 'seed', volumeUl: 100 }]);
+    expect(wells['B1']).toBeUndefined();
+    // The §7 never-guess diagnostic (content-bearing transfer with an
+    // unresolvable SOURCE side).
+    const diags = out.diagnostics ?? [];
+    expect(diags).toHaveLength(1);
+    expect(diags[0]!.code).toBe('lab_state_unresolved_labware_reference');
+    expect(diags[0]!.severity).toBe('warning');
+    expect((diags[0]!.details as { reason: string }).reason).toBe('labware_unresolved');
   });
 
   it('absent DATA section (injected vocabulary) fails CLOSED to rung R1 ONLY: symbolic no-op + diagnostic, raw labwareInstanceId still writes', () => {

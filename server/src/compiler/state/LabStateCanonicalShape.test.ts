@@ -214,15 +214,22 @@ describe('L2-LABSTATE-CONTENTS-1 — canonical shape (real expander output)', ()
     });
     expect(Object.keys(both.labware)).toHaveLength(2);
 
+    // D4 (advc fix-run 1): the hint normalizes to the plates' SHARED declared
+    // TYPE — normalizeTypeKey('96 well plate') === normalizeTypeKey('96-well-plate') —
+    // so R1/R2 miss and R3 sees TWO matches: a TIE (the terminal never-guess
+    // rule). (The previous hint 'plate' was a TOTAL MISS, not a tie — it
+    // duplicated the unknown-hint leg below and asserted nothing about ties:
+    // a tie-picks-first mutant stayed 7/7 green with it.)
     const events = addMaterialExpander.expand({
       verb: 'add_material',
-      params: { labware: 'plate', well: 'A1', material: 'A', volume_uL: 100 },
+      params: { labware: '96 well plate', well: 'A1', material: 'A', volume_uL: 100 },
     });
     let folded = both;
     for (const ev of events) folded = fold(folded, ev);
 
-    // NO contents written anywhere (the hint is ambiguous at R3: two same-type
-    // instances => tie => unresolved => no-op), and NO second labware minted.
+    // NO contents written anywhere (the hint ties at R3: two same-type
+    // instances => tie => terminal unresolved => no-op), and NO second
+    // labware minted.
     expect(Object.keys(folded.labware)).toHaveLength(2);
     for (const id of Object.keys(folded.labware)) {
       const instance = folded.labware[id]!;
@@ -319,5 +326,66 @@ describe('L2-LABSTATE-CONTENTS-1 — canonical shape (real expander output)', ()
     expect(folded.labware[id]!.wells['A1']![0]!.volumeUl).toBe(80);
     expect(folded.labware[id]!.wells['A3']![0]!.materialId).toBe('mat-raw');
     expect(folded.labware[id]!.wells['A3']![0]!.volumeUl).toBe(20);
+  });
+
+  // -----------------------------------------------------------------------
+  // D1 (advc fix-run 1, Mutant 4 class): a transfer the REAL expander emits
+  // when the source labware is NOT named. The expander sets the TOP-LEVEL
+  // labwareId to the TARGET (simpleVerbs.ts `targetLabware` fallback); the
+  // source side must come from source_labware / from.labwareId ONLY. "Source
+  // unknown" => labware_unresolved no-op + a pass diagnostic — NEVER a
+  // self-transfer inside the destination plate (the pre-fix fold folded
+  // A1->B1 INSIDE the destination because the srcHint fallback chain ended
+  // in event.labwareId).
+  // -----------------------------------------------------------------------
+  it('transfer: the REAL transferExpander DESTINATION-ONLY shape (no source_labware) => NO write + labware_unresolved (never a self-transfer)', () => {
+    // Populate the destination plate's A1 (the would-be "source" well) so the
+    // pre-fix self-transfer would be observable (A1 100->60, B1 +40).
+    let snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    snapshot = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d1',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A1',
+        material: { materialId: 'mat-src', kind: 'src', volumeUl: 100 },
+      },
+    });
+
+    // The REAL expander output with NO source_labware param (a reachable
+    // output whenever params.source_labware is absent — the binder does not
+    // always carry it). labware = the destination (the expander's target).
+    const events = transferExpander.expand({
+      verb: 'transfer',
+      params: {
+        labware: '96-well-plate',
+        source_well: 'A1',
+        well: 'B1',
+        volume_uL: 40,
+      },
+    });
+    const ev = firstEvent(events);
+    const d = ev.details as Record<string, unknown>;
+    // Pin the REAL emitted shape: destination_labware present, source_labware
+    // ABSENT, top-level labwareId = the TARGET (simpleVerbs.ts:715).
+    expect(d.destination_labware).toBe('96-well-plate');
+    expect(d.source_labware).toBeUndefined();
+    expect(ev.labwareId).toBe('96-well-plate');
+
+    // The fold: source identity has NO declared carrier => labware_unresolved
+    // no-op. NO write — the destination A1 keeps 100, B1 gets nothing, no
+    // second labware is minted.
+    const result = applyEventToLabState(snapshot, ev, RULES) as FoldResult;
+    expect(result.outcome).toEqual({ changed: false, reason: 'labware_unresolved' });
+    expect(result.snapshot.labware[id]!.wells['A1']).toEqual([
+      { materialId: 'mat-src', kind: 'src', volumeUl: 100 },
+    ]);
+    expect(result.snapshot.labware[id]!.wells['B1']).toBeUndefined();
+    expect(Object.keys(result.snapshot.labware)).toEqual([id]);
+    // The input snapshot is untouched (immutability).
+    expect(snapshot.labware[id]!.wells['A1']).toEqual([
+      { materialId: 'mat-src', kind: 'src', volumeUl: 100 },
+    ]);
   });
 });
