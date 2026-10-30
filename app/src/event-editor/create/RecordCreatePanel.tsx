@@ -57,6 +57,20 @@
  * rejects. Knowledge kinds (schema-driven, no client identity decisions)
  * are gated on the same flag — the form is not authoring-useful until its
  * projection + document have settled, and the gate is a one-fetch wait.
+ *
+ * GC-16 FIX RUN 4 (adversarial defect 16 — the failed-fetch arm; Option A
+ * PROVISIONAL, the ruling file
+ * 2026-10-30_lane1-gc16-d16-failed-fetch-shortSlug-decision.md was ABSENT
+ * at work time — the decision-request packet's Option A fallback applies):
+ * the document's settled state is TRI-STATE (unresolved / resolved /
+ * failed), not "settled = available". A FAILED fetch no longer settles as
+ * "unavailable → not declared" for the spine: shortSlug is schema-required
+ * AND client-decided (the server cannot supply a value the client owns),
+ * so on failed the spine submits are REFUSED with a named message — no
+ * silent invalid POST, no stripping of an author-typed value. Knowledge
+ * kinds keep today's behavior on failed (nothing declared → the
+ * shortSlug-deletion branch is the correct 'not declared' outcome, and the
+ * server's required-check speaks, per the D9 contract).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -271,21 +285,33 @@ export function RecordCreatePanel({
   // speaks.
   const [schemaDoc, setSchemaDoc] = useState<JsonSchema | null>(null)
   // GC-16 FIX RUN 3 (adversarial defect 12 — the spine race): the schemaId
-  // this document belongs to ONCE SETTLED (resolved OR failed — a failed
-  // fetch settles as "unavailable", the server's required-check speaks).
-  // While it does not equal the resolved schemaId the document is IN
-  // FLIGHT for that schemaId: the submit path must refuse, not treat
-  // "unknown" as "not declared".
+  // this document belongs to ONCE SETTLED. While it does not equal the
+  // resolved schemaId the document is IN FLIGHT for that schemaId: the
+  // submit path must refuse, not treat "unknown" as "not declared".
   const [schemaDocFor, setSchemaDocFor] = useState<string | null>(null)
+  // GC-16 FIX RUN 4 (adversarial defect 16 — the failed-fetch arm; Option A
+  // PROVISIONAL): TRI-STATE settlement. FIX RUN 3's `schemaDocFor` alone
+  // counted a FAILED fetch as settled (`:296-300`), which drove
+  // `schemaDeclaresShortSlug` to false and let the submit path DELETE the
+  // spine's schema-required shortSlug — a silent invalid POST with no
+  // client remedy (even an author-typed value stripped). `schemaDocFailed`
+  // is true ONLY for the schemaId the fetch failed for: on failed the
+  // spine (whose identity fields the client mints) must REFUSE, not
+  // guess; the knowledge kinds keep the D9 "server speaks" behavior
+  // (nothing declared → the shortSlug-deletion branch is correct there,
+  // and their required fields come from the author, not a client stamp).
+  const [schemaDocFailed, setSchemaDocFailed] = useState(false)
   useEffect(() => {
     if (!schemaId) {
       setSchemaDoc(null)
       setSchemaDocFor(null)
+      setSchemaDocFailed(false)
       return
     }
     let cancelled = false
     setSchemaDoc(null)
     setSchemaDocFor(null)
+    setSchemaDocFailed(false)
     apiClient
       .getSchema(schemaId)
       .then((info) => {
@@ -297,14 +323,23 @@ export function RecordCreatePanel({
         if (cancelled) return
         setSchemaDoc(null)
         setSchemaDocFor(schemaId)
+        // FIX RUN 4 (D16): the failure SETTLES the document's state as
+        // FAILED for this schemaId — not as "unavailable → not declared".
+        // The submit gate distinguishes the two (refusal vs the D9
+        // not-declared branch).
+        setSchemaDocFailed(true)
       })
     return () => {
       cancelled = true
     }
   }, [schemaId])
-  // Schema-declared flags (false when the schema doc is unavailable — the
-  // server's required-check / Ajv then speaks; the legacy shortSlug behavior
-  // is preserved only where the schema itself declares the property).
+  // Schema-declared flags (false when the schema doc is unavailable).
+  // FIX RUN 4 (D16): for the SPINE, "unavailable" is no longer a decision
+  // input — a failed document fetch is refused in the submit gate (the
+  // named refusal in handleSubmit) BEFORE this branch can act, so the
+  // false here can only act on a RESOLVED document that declares no
+  // shortSlug (the knowledge triplet — the D9 not-declared outcome the
+  // server's required-check then speaks for).
   const schemaDeclaresShortSlug = Boolean(
     schemaDoc?.properties && 'shortSlug' in (schemaDoc.properties as Record<string, unknown>),
   )
@@ -450,12 +485,31 @@ export function RecordCreatePanel({
       // — for the spine the schema REQUIRES shortSlug and an early submit
       // would post a payload the server Ajv rejects; the knowledge
       // projection is fetched in the same window, so its form is not
-      // settled either. REFUSE until the document has resolved (a failed
-      // fetch settles as "unavailable" — the server's required-check
-      // speaks, per the D9 contract).
+      // settled either. REFUSE until the document has settled.
       if (schemaDocFor !== schemaId) {
         setError(
           `Loading the schema document for "${nodeType}" — the identity fields are decided from it (shortSlug is schema-required for spine records). Submit once the form has settled.`,
+        )
+        return
+      }
+      // GC-16 FIX RUN 4 (adversarial defect 16 — the failed-fetch arm;
+      // Option A PROVISIONAL): a FAILED fetch is a settled state too — but
+      // it is NOT "not declared" for the spine. The spine's identity fields
+      // are CLIENT-DECIDED from the document (recordId mint + shortSlug
+      // stamp) and the spine schemas REQUIRE shortSlug — the server cannot
+      // supply a value the client owns, so on failed the spine submits are
+      // REFUSED with a named message (retry affordance: the schemas
+      // endpoint is local; the form + author edits are preserved, so a
+      // retry re-decides cleanly). A failed fetch must never reach the
+      // `delete payload.shortSlug` branch for a spine kind — that branch
+      // (FIX RUN 2 defect 1) exists only for a RESOLVED document that
+      // declares no shortSlug (the knowledge triplet). Knowledge kinds
+      // keep today's behavior on failed: nothing is declared, so the
+      // not-declared branch is the D9-correct outcome (the server's
+      // required-check speaks; their id is the author's).
+      if (schemaDocFailed && isSpine) {
+        setError(
+          `The schema document for "${nodeType}" could not be loaded — the identity fields cannot be decided (shortSlug is schema-required for spine records and is decided from the document; the client will not guess it). Retry, or try again later.`,
         )
         return
       }
@@ -541,6 +595,7 @@ export function RecordCreatePanel({
       schemaDeclaresShortSlug,
       schemaRequiresTitle,
       schemaDocFor,
+      schemaDocFailed,
     ],
   )
 

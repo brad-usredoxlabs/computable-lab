@@ -706,8 +706,12 @@ describe('GC-16 FIX RUN 4 D16 — a FAILED schema-document fetch refuses spine s
     expect(
       panelText,
       'the refusal must be NAMED — the schema document could not be loaded, so the identity fields cannot be decided (retry affordance)',
-    ).toMatch(/schema document (could not be loaded|unavailable)/i)
-    expect(panelText).toMatch(/identity fields/i)
+    ).toMatch(/schema document for "[a-z]+" could not be loaded/i)
+    expect(panelText).toMatch(/identity fields cannot be decided/i)
+    expect(panelText, 'the refusal must name the retry affordance').toMatch(/retry/i)
+    // The D12 in-flight refusal (a DIFFERENT named message) must NOT be
+    // what fired — the failed arm has its own.
+    expect(panelText).not.toMatch(/Loading the schema document/i)
   }, 20000)
 
   it('spine (experiment): an author-typed shortSlug is NOT stripped before a refused submit (the PROBE3B shape — the author has a remedy only if the refusal is loud)', async () => {
