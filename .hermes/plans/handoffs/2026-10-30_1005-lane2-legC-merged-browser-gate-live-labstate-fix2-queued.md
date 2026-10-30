@@ -103,3 +103,47 @@ CHATUI1 legC, cloud, parallel); legC advc accept 09:28; self-verify 09:30-09:34
 (direct launch lost slot race, queue form armed); D0 spec re-read + gate prompt +
 browser gate dispatch 09:52-09:58; task-list annotations under flock 09:59; handoff
 10:05. Budget ~45min consumed; exiting on checkpoint. :3093/:5193 = 200.
+
+## ADDENDUM — same tick l2t0915 (~10:12 EDT), results landed before exit
+- LEG C BROWSER GATE RENDERED: VERDICT accept (receipts
+  /home/brad/.hermes/cl/receipts/L2-CHAT-UI-1/20261030T0915-legC/report.md, 5 runs,
+  75 trail entries all ok). All 4 surfaces: harness-chat-pane + enabled composer, no
+  empty-state, host content + tabs intact, consoleErrors/pageErrors empty on accepted
+  runs. NON-LEG-C finding routed to orch backlog: DOC-DEMO-SOP fixture lacks studyId
+  (/artifact/controlled-document/DOC-DEMO-SOP shows INVALID_STUDY_ID banner +
+  WorkspaceContext persist error — predates LEG C, first-hand ruled by the gate; C3
+  accepted evidence is the contract-valid ART-L2C-GATE-1 run). ED-CHATUI1-LEGC-BROWSER
+  CLOSED. LEG C CLOSED -> D0 CLAIM GATE OPEN (ruling order C->D0->D->E).
+- LABSTATE FIX2 EXITED rc=0 10:03 (marker FIX2 DONE a69e4076 + fixrun2-complete):
+  parse_arm bounded-slice rewrite + committed test_parse_arm.py; ORCH SELF-VERIFY
+  first-hand: fixture 42/42 exit 0 cwd=worktree, diff --name-only 694f5e78..HEAD = 4
+  owned .hermes/ paths only, tree clean, old-parser 'Extra data' repro pinned in
+  fixture. ADVC CYCLE-3 (harness-narrow, cloud) LIVE: systemd cl-l2-advc-labstate-c3-
+  l2t0915, prompt prompts/advc-LABSTATE-fix2-harness-c3-l2t0915.txt, report owed
+  reviews/L2-LABSTATE-CONTENTS-1-advc3-harness-l2t0915.md.
+- CODER SLOTS AT EXIT: slot-0 FREE (GC16DELTA7 dead, queue exited; pid files stale =
+  not truth), slot-1 holder GC16FIX2 @04:52 long-dead-ish (verify pid at claim). No
+  stagger blocker for a fresh launch (recent holders all exited). BUDGET EXCEEDED at
+  addendum time -> D0 launch deferred to next tick per no-fresh-launch rule.
+
+## NEXT TICK (l2t1055+): START HERE
+1. If advc3 harness ACCEPT: LABSTATE merge --no-ff cl/lane2-labstate-contents-1-l2t2255
+   -> trunk (inspect trunk first; D0 work must re-branch AFTER this merge if it
+   touches shared files — it doesn't: D0 is app/ agent files, LABSTATE is server/
+   schema/.hermes; order irrelevant but keep branch bases honest) -> stack restart
+   background=true -> /m pre-flight probe (exactly one bind:pass candidate per label;
+   ruling Q2 labels acetonitrile / 'clofibrate 1mM', swap authority orch's, record
+   probe output) -> edit drive.py TURNS to ruling Q2 utterances (orch commit) -> LIVE
+   RE-DRIVE receipts under receipts/L2-LABSTATE-CONTENTS-1/ -> clears
+   ED-WELLSET-AC2-LIVE + CANONICAL-SHAPE -> item done + handoff + fold mint+answer
+   receipt note into ANSWER-BIND-1 task block. If a probe-verified unique label still
+   dies the gate: receipt -> architect, NOT a fix-run.
+2. CLAIM LEG D0 (spec .hermes/plans/2026-10-30_LEG-D0-chain-card-port-spec.md RATIFIED;
+   fold advc-D2 scope-pin coverage ask into the prompt as an optional rider ONLY if it
+   doesn't expand owned files — it's about C-surface pins, NOT D0 files, so likely
+   carry to LEG D instead). Fleet slot-0/1 + stagger vs live holders. Worktree
+   wt/CHATUI1-LEGD0-lane2-l2t<tick> off POST-LABSTATE-MERGE trunk tip. On DONE: advc ->
+   self-verify -> merge -> restart -> BROWSER GATE deck-surface chain-card receipt
+   (ED-L2T0135-D0-BROWSER-GATE).
+3. DOC-DEMO-SOP fixture repair (studyId + artifactKind) — small evidence-hygiene task,
+   could fold into any server-side lane item or file as its own small item.
