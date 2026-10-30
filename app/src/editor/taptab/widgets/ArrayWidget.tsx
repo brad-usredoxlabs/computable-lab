@@ -30,7 +30,7 @@
  */
 
 import { useState } from 'react';
-import type { WidgetType } from '../types';
+import type { WidgetType, ArrayItemHintField, ObjectFieldConfig } from '../types';
 import { ObjectWidget } from './ObjectWidget';
 
 /**
@@ -38,6 +38,14 @@ import { ObjectWidget } from './ObjectWidget';
  * member (server `FieldHint`, app `FieldHint`). Mirrors the object-widget
  * shape (path + widget + fields) so the existing ObjectWidget can be
  * reused directly for each item.
+ *
+ * WIDGET-R1 fix-run 2 (D2 / ruling ARCHD2L1T1335 OPT-A): the field entries
+ * are SELF-RECURSIVE (`ArrayItemHintField.fields?`, types.ts) — a field
+ * whose hint declares its own `fields` is a nested object. The widget
+ * forwards the nested `fields` through (recursive mapping, `mapHintFields
+ * ToObjectFields` below) and the ObjectWidget renders that property
+ * through another ObjectWidget. Recursion depth is data-driven. OPTIONAL —
+ * a flat hint is byte-identical to the pre-change shape.
  */
 export interface ArrayItemHint {
   /** Item JSONPath (e.g. `$.item`) — declarative, not addressable per-item. */
@@ -46,15 +54,8 @@ export interface ArrayItemHint {
   widget?: string;
   /** Item label (display-only). */
   label?: string;
-  /** Nested field hints (the item's sub-fields). */
-  fields?: Array<{
-    path: string;
-    widget: string;
-    label?: string;
-    help?: string;
-    required?: boolean;
-    options?: Array<{ value: string | number | boolean; label: string }>;
-  }>;
+  /** Nested field hints (the item's sub-fields) — self-recursive. */
+  fields?: ArrayItemHintField[];
 }
 
 export interface ArrayWidgetProps {
@@ -119,6 +120,37 @@ function seedItemFromHint(hint: ArrayItemHint): Record<string, unknown> {
     seed[field.path] = isSingleOptionSelect ? (field.options![0]?.value ?? '') : '';
   }
   return seed;
+}
+
+/**
+ * WIDGET-R1 fix-run 2 (D2 / ruling ARCHD2L1T1335 OPT-A): map hint field
+ * entries to ObjectWidget property configs — RECURSIVE (same pattern as
+ * the existing options map). A hint field that declares its own `fields`
+ * is a nested object: its nested `fields` are mapped the same way and
+ * forwarded as `fields` on the ObjectFieldConfig, so the ObjectWidget
+ * renders that property through another ObjectWidget. Fields WITHOUT
+ * `fields` map to the pre-change entry shape EXACTLY (no `fields` member
+ * is added — the flat path renders byte-identically). No widget-name or
+ * field-name branch anywhere: the branch is purely on the presence of a
+ * non-empty `fields` member in the hint data.
+ */
+function mapHintFieldsToObjectFields(
+  fields: ArrayItemHintField[],
+): ObjectFieldConfig[] {
+  return fields.map((f) => ({
+    name: f.path,
+    widget: f.widget as WidgetType,
+    label: f.label ?? f.path,
+    help: f.help,
+    required: f.required ?? false,
+    options: f.options?.map((o) => ({
+      value: String(o.value),
+      label: o.label,
+    })),
+    ...(Array.isArray(f.fields) && f.fields.length > 0
+      ? { fields: mapHintFieldsToObjectFields(f.fields) }
+      : {}),
+  }));
 }
 
 export function ArrayWidget({ value, widget, readOnly, onCommit, itemHint }: ArrayWidgetProps) {
@@ -187,20 +219,18 @@ export function ArrayWidget({ value, widget, readOnly, onCommit, itemHint }: Arr
               // WIDGET-R1: each item renders authorable sub-fields by REUSING
               // the existing ObjectWidget path. Editing a sub-field commits
               // the WHOLE item object; the array splices it back at `i`.
+              //
+              // WIDGET-R1 fix-run 2 (D2 / ruling ARCHD2L1335 OPT-A): the
+              // mapping is RECURSIVE — a hint field that declares its own
+              // `fields` is a nested object and its `fields` are forwarded
+              // through (same pattern as the options map), so the
+              // ObjectWidget renders that property through another
+              // ObjectWidget. Branch purely on non-empty `fields` in the
+              // hint data — no widget-name / field-name branch.
               <ObjectWidget
                 value={item}
                 widget="object"
-                properties={(itemHint!.fields ?? []).map((f) => ({
-                  name: f.path,
-                  widget: f.widget as WidgetType,
-                  label: f.label ?? f.path,
-                  help: f.help,
-                  required: f.required ?? false,
-                  options: f.options?.map((o) => ({
-                    value: String(o.value),
-                    label: o.label,
-                  })),
-                }))}
+                properties={mapHintFieldsToObjectFields(itemHint!.fields ?? [])}
                 readOnly={false}
                 onCommit={(newValue) => {
                   const updated = [...items];
