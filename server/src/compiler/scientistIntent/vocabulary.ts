@@ -132,6 +132,20 @@ export interface ScientistIntentVocabulary {
    * layer then contributes nothing (fail-closed to the committed layer).
    */
   materialBearingEventTypes(): readonly string[];
+  /**
+   * L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+   * RESOLUTION ladder (rung `order` + the instance `tokenFields` each rung
+   * reads, index-aligned). The lab_state pass reads THIS to thread the
+   * never-guess resolution rules into the fold (a symbolic labwareId resolves
+   * to a snapshot instance via the declared rungs — the rung ids + fields are
+   * DATA, never a TS branch). Absent section => the empty lists (fail-closed:
+   * the fold resolves rung R1 ONLY, the raw instanceId path — the pre-existing
+   * behavior, so every pre-existing test stays byte-unchanged).
+   */
+  labwareIdentityResolution(): {
+    order: readonly string[];
+    tokenFields: readonly string[];
+  };
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -208,7 +222,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   // --- Read the validated document into the frozen consumption API --------
   interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
-  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[] }
+  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
   const raw = doc as RawDoc;
   const verbs: string[] = [];
@@ -267,6 +281,22 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const materialBearingEventTypesFrozen: readonly string[] = Object.freeze(
     Array.isArray(raw.materialBearingEventTypes) ? raw.materialBearingEventTypes.filter((t) => typeof t === 'string') : [],
   );
+  // L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware identity
+  // resolution ladder (same fix2 idiom as the two lists above — generic read,
+  // meta-schema validates the shape, frozen, fail-closed to the empty lists
+  // when the section is absent => the fold resolves rung R1 ONLY, the raw
+  // instanceId path). The rung ids + instance fields are DATA — this module
+  // carries no rung-id or field-name policy branch.
+  const labwareIdentityResolutionOrderFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.order)
+      ? raw.labwareIdentityResolution.order.filter((t) => typeof t === 'string')
+      : [],
+  );
+  const labwareIdentityResolutionTokenFieldsFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.tokenFields)
+      ? raw.labwareIdentityResolution.tokenFields.filter((t) => typeof t === 'string')
+      : [],
+  );
 
   // Deterministic wrap for the prompt block (width-bounded, declaration order;
   // reproduces the historical hand-wrapped block byte-for-byte at width 74).
@@ -314,6 +344,10 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     contractBlock,
     wellsetValueTokens: () => wellsetValueTokensFrozen,
     materialBearingEventTypes: () => materialBearingEventTypesFrozen,
+    labwareIdentityResolution: () => ({
+      order: labwareIdentityResolutionOrderFrozen,
+      tokenFields: labwareIdentityResolutionTokenFieldsFrozen,
+    }),
   };
 }
 

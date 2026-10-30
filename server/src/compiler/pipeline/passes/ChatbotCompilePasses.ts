@@ -23,7 +23,17 @@ import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
 import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
 import { getOperationRegistry } from '../../../registry/OperationRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
-import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
+import {
+  applyEventToLabState,
+  emptyLabState,
+  isContentBearing,
+  type FoldOutcome,
+  type LabIdentityRules,
+} from '../../../compiler/state/LabState.js';
+import {
+  defaultScientistIntentVocabulary,
+  type ScientistIntentVocabulary,
+} from '../../../compiler/scientistIntent/vocabulary.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 import { normalizeProtocolIntent, type ProtocolIntent } from '../../../compiler/protocolIntent/ProtocolIntent.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
@@ -1753,18 +1763,84 @@ export interface LabStatePassOutput {
  * - Folds directives FIRST, then events, via applyDirectiveToLabState / applyEventToLabState
  * - Increments turnIndex by 1
  * - Returns { events, snapshotAfter }
+ *
+ * L2-LABSTATE-CONTENTS-1 (spec §5.2/§7): the pass threads the DATA-declared
+ * labware identity resolution rules into the fold (the vocabulary's
+ * `labwareIdentityResolution` section — the rules are DATA, never a TS branch)
+ * so a content-bearing event carrying a SYMBOLIC labwareId (the shipped
+ * expander's top-level labwareId / transfer source_labware|destination_labware
+ * hint) resolves to a snapshot instance via the never-guess ladder (rung R1 raw
+ * instanceId + the declared rungs). A no-op fold of a content-bearing event
+ * surfaces as a `lab_state_unresolved_labware_reference` (or the material
+ * sibling) DIAGNOSTIC — the fold is pure, so the never-guess surface is
+ * no-op + this pass's diagnostic (lab_state is family emit, AFTER validate —
+ * no clarification channel exists here; the contents-wellset clarification
+ * stays the WELLSET resolver's jurisdiction). The WELLSET resolver's merged
+ * read-half stays untouched — this is the write-side fold, not a second event
+ * vocabulary (the canonical-shape test proves one shape feeds the ledger).
  */
-export function createLabStatePass(): Pass {
+export function createLabStatePass(
+  opts: { vocabulary?: ScientistIntentVocabulary } = {},
+): Pass {
+  const vocabulary = opts.vocabulary ?? defaultScientistIntentVocabulary();
+  // The DATA-declared identity rules (frozen per-load; absent section => the
+  // empty order/tokenFields => the fold resolves rung R1 ONLY, the raw path —
+  // fail-closed never-guess). Threaded at THIS seam, never imported into the
+  // pure fold module (LabState.ts keeps no vocabulary import).
+  const rules: LabIdentityRules = {
+    order: [...vocabulary.labwareIdentityResolution().order],
+    tokenFields: [...vocabulary.labwareIdentityResolution().tokenFields],
+  };
+
+  // The §7 no-op reason -> diagnostic code mapping (the code strings live in
+  // the PASS, not the fold — the pure module carries no reporting policy).
+  const REASON_CODE: Record<FoldOutcome['reason'] & string, string> = {
+    labware_unresolved: 'lab_state_unresolved_labware_reference',
+    material_unresolved: 'lab_state_unresolved_material_reference',
+    wells_unpairable: 'lab_state_unresolvable_wells',
+    event_incomplete: 'lab_state_incomplete_event',
+  };
+
   return {
     id: 'lab_state',
     family: 'emit' as const,
-    run({ state }: PassRunArgs): PassResult {
+    run({ pass_id, state }: PassRunArgs): PassResult {
       const prior = (state.input as { labState?: LabStateSnapshot }).labState
         ?? emptyLabState();
       // resolve_roles aggregates all expanded events (mint, patterns, verbs, protocol)
       const resolvedRolesOutput = state.outputs.get('resolve_roles') as
         { events?: PlateEventPrimitive[] } | undefined;
       const events = resolvedRolesOutput?.events ?? [];
+
+      const diagnostics: PassDiagnostic[] = [];
+      const collectDiagnostic = (
+        event: PlateEventPrimitive,
+        outcome: FoldOutcome,
+      ): void => {
+        if (outcome.changed) return;
+        if (!outcome.reason) return;
+        if (!isContentBearing(event)) return; // a non-content-bearing no-op is expected (not a never-guess surface)
+        const code = REASON_CODE[outcome.reason];
+        if (!code) return;
+        const details = event.details as Record<string, unknown> | undefined;
+        const hint =
+          (typeof details?.labwareId === 'string' ? details.labwareId : undefined)
+          ?? (typeof details?.source_labware === 'string' ? details.source_labware : undefined)
+          ?? (typeof event.labwareId === 'string' ? event.labwareId : undefined)
+          ?? '';
+        diagnostics.push({
+          severity: 'warning',
+          code,
+          message: `lab_state fold no-op (${outcome.reason}): content-bearing event '${event.event_type}' did not resolve a labware instance / material identity (never-guess — no contents written).`,
+          pass_id,
+          details: {
+            hint,
+            event_type: event.event_type,
+            eventId: event.eventId,
+            reason: outcome.reason,
+          },
+        });
+      };
 
       // Fold directives FIRST, then events (events depend on post-directive state)
       let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
@@ -1773,9 +1849,15 @@ export function createLabStatePass(): Pass {
         snapshot = applyDirectiveToLabState(snapshot, d);
       }
       for (const event of events) {
-        snapshot = applyEventToLabState(snapshot, event);
+        const result = applyEventToLabState(snapshot, event, rules);
+        snapshot = result.snapshot;
+        collectDiagnostic(event, result.outcome);
       }
-      return { ok: true, output: { events, snapshotAfter: snapshot } };
+      return {
+        ok: true,
+        output: { events, snapshotAfter: snapshot },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      };
     },
   };
 }

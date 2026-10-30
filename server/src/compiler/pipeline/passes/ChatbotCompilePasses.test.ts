@@ -24,9 +24,12 @@ import {
   createFallbackSideEvidenceEventsPass,
   createLabStatePass,
 } from './ChatbotCompilePasses.js';
-import type { PipelineState } from '../types.js';
+import type { PipelineState, PassDiagnostic } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
 import { PROTOCOL_INTENT_KIND, PROTOCOL_INTENT_VERSION } from '../../protocolIntent/ProtocolIntent.js';
+import { addMaterialExpander } from '../../biology/verbs/simpleVerbs.js';
+import type { PlateEventPrimitive } from '../../biology/BiologyVerbExpander.js';
+import type { LabStateSnapshot } from '../../state/LabState.js';
 
 describe('createExtractEntitiesPass', () => {
   it('prompt-only input produces entities from single ExtractionRunnerService call', async () => {
@@ -1848,5 +1851,145 @@ describe('createLabStatePass — fold order', () => {
     const syncResult = result as { ok: boolean; output: { snapshotAfter: { turnIndex: number } } };
     expect(syncResult.ok).toBe(true);
     expect(syncResult.output.snapshotAfter.turnIndex).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lab_state pass — L2-LABSTATE-CONTENTS-1 legs (spec §5.2/§7)
+// ---------------------------------------------------------------------------
+
+/** Build the pass's mockState for the lab_state pass: the prior snapshot + the
+ *  resolve_roles events the pass folds (the REAL expander output — the
+ *  canonical-shape proof at the pass seam, never a hand-crafted shape). */
+function labStatePassState(
+  prior: LabStateSnapshot,
+  events: PlateEventPrimitive[],
+): PipelineState {
+  return {
+    input: { labState: prior },
+    context: {},
+    meta: {},
+    outputs: new Map([
+      ['resolve_roles', { events }],
+      ['apply_directives', { directives: [] }],
+    ]),
+    diagnostics: [],
+  };
+}
+
+/** A prior snapshot holding ONE 96-well plate (hand-built — the expander does
+ *  not mint instanceIds; the fold's create handler does). The labwareId the
+ *  symbolic add-material events carry is the plate TYPE token — the rung R3
+ *  (unique declared labwareType) resolution the OQ-3 ratified live winner. */
+function singlePlateSnapshot(): LabStateSnapshot {
+  return {
+    deck: [{ slot: 'A1', labwareInstanceId: 'PLATE-A' }],
+    mountedPipettes: [],
+    labware: {
+      'PLATE-A': {
+        instanceId: 'PLATE-A',
+        labwareType: '96-well-plate',
+        slot: 'A1',
+        orientation: 'landscape',
+        wells: {},
+      },
+    },
+    reservoirs: {},
+    mintCounter: 1,
+    turnIndex: 0,
+  };
+}
+
+describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at the pass seam)', () => {
+  it('threads the DATA rules: a REAL addMaterialExpander symbolic event writes contents (unique declared type, the OQ-3 live winner)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    const events = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: '96-well-plate', wells: 'A1..H1', material: 'A', volume_uL: 100 },
+    });
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // The 8 per-well events (the expander pre-expands the range string) all
+    // folded onto the single instance via the DATA-declared rung — contents
+    // are in the ledger (the dead-write the ruling names is gone).
+    const wells = out.output.snapshotAfter.labware[instanceId]!.wells;
+    const addWells = Object.keys(wells);
+    expect(addWells).toHaveLength(8);
+    for (const w of addWells) {
+      expect(wells[w]![0]!.materialId).toBe('A'); // the verbatim string material (no invented id)
+      expect(wells[w]![0]!.kind).toBe('A');
+    }
+    // A successful write => NO diagnostic (the never-guess surface only fires
+    // on a no-op).
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('unknown plate (the control turn): no-op fold + a lab_state_unresolved_labware_reference diagnostic, NO contents (never-guess)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    const events = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: 'a-plate-that-was-never-placed', wells: 'A1..H1', material: 'X', volume_uL: 100 },
+    });
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // No contents written (the snapshot's labware is unchanged in its wells).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells)).toHaveLength(0);
+    // The 8 no-op events each surface the §7 never-guess diagnostic (the fold
+    // is pure — the reporting rides the pass).
+    const diags = out.diagnostics ?? [];
+    expect(diags).toHaveLength(8);
+    for (const d of diags) {
+      expect(d.code).toBe('lab_state_unresolved_labware_reference');
+      expect(d.severity).toBe('warning');
+      expect(d.details).toMatchObject({ reason: 'labware_unresolved' });
+      expect((d.details as { hint: string }).hint).toBe('a-plate-that-was-never-placed');
+      expect((d.details as { event_type: string }).event_type).toBe('add_material');
+    }
+  });
+
+  it('absent DATA section (injected vocabulary) fails CLOSED to rung R1 ONLY: symbolic no-op + diagnostic, raw labwareInstanceId still writes', () => {
+    // The fail-closed arm: a vocabulary whose labwareIdentityResolution section
+    // is ABSENT => the fold resolves rung R1 ONLY (the raw instanceId path) —
+    // every symbolic resolution is a never-guess no-op.
+    const emptyResolution = () => ({ order: [] as readonly string[], tokenFields: [] as readonly string[] });
+    const stubVocab = { labwareIdentityResolution: emptyResolution } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
+    const pass = createLabStatePass({ vocabulary: stubVocab });
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+
+    // (a) the symbolic (shipped) shape: no-op + the §7 diagnostic.
+    const symbolic = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: '96-well-plate', well: 'A1', material: 'A', volume_uL: 100 },
+    });
+    const r1 = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, symbolic) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(Object.keys(r1.output.snapshotAfter.labware[instanceId]!.wells)).toHaveLength(0);
+    expect(r1.diagnostics ?? []).toHaveLength(1);
+    expect(r1.diagnostics![0]!.code).toBe('lab_state_unresolved_labware_reference');
+
+    // (b) the RAW path (details.labwareInstanceId) still writes — the R1 rung
+    // is always present, so the raw byte-stable contract is intact.
+    const rawEvent: PlateEventPrimitive = {
+      eventId: 'raw-1',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'A1',
+        material: 'RAW',
+        volumeUl: 50,
+      },
+    };
+    const r2 = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, [rawEvent]) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(r2.output.snapshotAfter.labware[instanceId]!.wells['A1']![0]!.materialId).toBe('RAW');
+    expect(r2.diagnostics ?? []).toHaveLength(0);
   });
 });

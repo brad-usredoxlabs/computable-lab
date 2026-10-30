@@ -8,7 +8,8 @@
  * REAL parseScientistIntent singleton.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
@@ -16,6 +17,8 @@ import {
   defaultScientistIntentVocabulary,
   SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID,
   VOCABULARY_DATA_FILE,
+  VOCABULARY_SCHEMA_FILE,
+  VOCABULARY_LINT_FILE,
 } from './vocabulary.js';
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { loadAllLintSpecs } from '../../lint/LintSpecLoader.js';
@@ -205,6 +208,73 @@ describe('current-verb-parity', () => {
     const vocab = defaultScientistIntentVocabulary();
     for (const [alias, target] of Object.entries(ACTION_SYNONYMS)) {
       expect(vocab.has(target), `synonym ${alias} -> ${target}`).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-LABSTATE-CONTENTS-1 — the labwareIdentityResolution DATA section (§5.2):
+// the per-load frozen read + the fail-closed absent arm. The rung ids and
+// instance fields are DATA (the meta-schema validates the shape; this test
+// pins the per-load read so the data change cannot silently drift).
+// ---------------------------------------------------------------------------
+
+describe('L2-LABSTATE-CONTENTS-1 — labwareIdentityResolution DATA (per-load read)', () => {
+  it('the shipped vocabulary declares the never-guess ladder (order + tokenFields, declaration order pinned)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const lir = vocab.labwareIdentityResolution();
+    // Declaration order pinned (first-hit-wins: R1 raw instanceId, R2 declared
+    // identity tokens, R3 unique declared type — the OQ-3 live winner).
+    expect([...lir.order]).toEqual([
+      'instanceIdentity',
+      'declaredIdentityTokens',
+      'uniqueLabwareType',
+    ]);
+    // Index-aligned with `order` (R1->instanceId, R2->identityTokens,
+    // R3->labwareType) — the fold's generic field-identity evaluator reads
+    // these declared fields; the alignment is data, not a TS branch.
+    expect([...lir.tokenFields]).toEqual(['instanceId', 'identityTokens', 'labwareType']);
+    // Frozen per load (the fix2 idiom — the wellsetValueTokens /
+    // materialBearingEventTypes discipline): the same arrays across two reads.
+    const again = vocab.labwareIdentityResolution();
+    expect(again.order).toBe(lir.order);
+    expect(again.tokenFields).toBe(lir.tokenFields);
+    expect(Object.isFrozen(lir.order)).toBe(true);
+    expect(Object.isFrozen(lir.tokenFields)).toBe(true);
+  });
+
+  it('an ABSENT section fails CLOSED to the empty lists (rung R1 ONLY — the raw path keeps working)', () => {
+    // The fixture triplet carries no labwareIdentityResolution section (it
+    // predates this item) — the loader must NOT throw (the section is optional
+    // in the meta-schema) and must return the empty lists: the fold resolves
+    // rung R1 ONLY, every symbolic resolution is a never-guess no-op.
+    const vocab = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
+    });
+    const lir = vocab.labwareIdentityResolution();
+    expect([...lir.order]).toEqual([]);
+    expect([...lir.tokenFields]).toEqual([]);
+  });
+
+  it('the PRE-CHANGE meta-schema REJECTS a data file carrying the section (the §5.2 RED pin — the meta-schema change is load-bearing)', () => {
+    // The vocab-minus-pellet schema is the pre-change meta-schema (it carries
+    // no labwareIdentityResolution declaration, and its root is
+    // additionalProperties:false + unevaluatedProperties:false). A data file
+    // that DOES carry the section must be REJECTED by it — proving the
+    // meta-schema change (not just the data) is what admits the section.
+    const dir = mkdtempSync(join(tmpdir(), 'vocab-lir-red-'));
+    try {
+      for (const f of [VOCABULARY_SCHEMA_FILE, VOCABULARY_LINT_FILE]) {
+        copyFileSync(join(FIXTURES, 'vocab-minus-pellet', f), join(dir, f));
+      }
+      // The shipped DATA (carries the labwareIdentityResolution section) under
+      // the PRE-CHANGE schema: the root additionalProperties:false rejects it.
+      copyFileSync(join(VOCAB_DIR, VOCABULARY_DATA_FILE), join(dir, VOCABULARY_DATA_FILE));
+      expect(() =>
+        loadScientistIntentVocabulary({ path: join(dir, VOCABULARY_DATA_FILE) }),
+      ).toThrow(/failed schema validation/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

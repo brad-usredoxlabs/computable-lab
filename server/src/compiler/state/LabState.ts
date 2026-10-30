@@ -113,6 +113,13 @@ export interface FoldOutcome {
    *  false on a no-op attempt (unresolved identity, no material identity, or an
    *  unpairable multi-well shape). */
   changed: boolean;
+  /** The no-op reason (L2-LABSTATE-CONTENTS-1 §7 — the pass maps this to the
+   *  diagnostic code + details; a `changed: true` outcome never sets it):
+   *  'labware_unresolved' (symbolic identity: no instance / a TIE at a rung —
+   *  never-guess), 'material_unresolved' (no material identity at all — never
+   *  fabricated), 'wells_unpairable' (a well the fold cannot address),
+   *  'event_incomplete' (a details the fold needs is absent). */
+  reason?: 'labware_unresolved' | 'material_unresolved' | 'wells_unpairable' | 'event_incomplete';
 }
 
 /** The fold outcome + snapshot record returned when the rules argument is
@@ -185,13 +192,15 @@ function normalizeToken(value: string): string {
 }
 
 /** Trim + casefold + collapse non-alnum runs (the R3 unique-declared-type
- *  normalization — '96-well-plate' and '96 well plate' are the SAME type). */
+ *  normalization — a hyphenated and a spaced spelling of the SAME type key
+ *  normalize to one key, e.g. '96' + 'well' + 'plate' under any separators). */
 function normalizeTypeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 /** Rung evaluators — GENERIC field-identity evaluators over the field the
- *  DATA's `tokenFields` names. NO substring/token-overlap (findLabwareByHints is
- *  the anti-pattern), NO second labware, NO pick among ties. Returns the
+ *  DATA's `tokenFields` names. NO substring/token-overlap matching (the legacy
+ *  hint-search helper in ChatbotCompilePasses.ts is the anti-pattern — it is
+ *  NOT called here), NO second labware, NO pick among ties. Returns the
  *  matching instanceIds (the caller decides zero/unique/tie). */
 function rungMatches(
   snapshot: LabStateSnapshot,
@@ -439,8 +448,12 @@ function applyCreateContainer(
   // inert; R3 still applies — the OQ-3 ratified live single-plate winner).
   const carriers: unknown[] = [details.labwareId, event.labwareId, details.title, details.label];
   const identityTokens: string[] = [];
+  const seenTokens = new Set<string>();
   for (const c of carriers) {
-    if (typeof c === 'string' && c.trim() && !identityTokens.includes(c)) identityTokens.push(c);
+    if (typeof c === 'string' && c.trim() && !seenTokens.has(c)) {
+      seenTokens.add(c);
+      identityTokens.push(c);
+    }
   }
 
   // Add labware instance (exactOptionalPropertyTypes: identityTokens spread
@@ -476,7 +489,7 @@ function applyAddMaterial(
 ): FoldResult {
   const details = event.details as Record<string, unknown> | undefined;
   if (!details || typeof details !== 'object') {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: 'event_incomplete' } };
   }
 
   // TARGET LABWARE (spec §4.1): rung R1 (details.labwareInstanceId, the raw
@@ -487,21 +500,21 @@ function applyAddMaterial(
   const instanceId = rawInstanceId
     ?? resolveLabware(snapshot, typeof details.labwareId === 'string' ? details.labwareId : event.labwareId, rules);
   if (!instanceId || !snapshot.labware[instanceId]) {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: rawInstanceId === undefined ? 'labware_unresolved' : 'event_incomplete' } };
   }
 
   // WELL(s): details.well (single) OR details.wells (string[]). Each address
   // folds its own append (the per-well expand fan-out semantics).
   const wells = foldWells(details);
   if (wells.length === 0) {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: 'wells_unpairable' } };
   }
 
   // MATERIAL: object (raw path, byte-stable) OR string/spread (the shipped
   // expander shape) — normalized without inventing ids.
   const record = normalizeMaterial(details);
   if (!record) {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: 'material_unresolved' } };
   }
 
   const newSnapshot = cloneSnapshot(snapshot);
@@ -519,7 +532,7 @@ function applyTransfer(
 ): FoldResult {
   const details = event.details as Record<string, unknown> | undefined;
   if (!details || typeof details !== 'object') {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: 'event_incomplete' } };
   }
 
   const volumeUl = asFiniteNumber(details.volumeUl);
@@ -546,7 +559,8 @@ function applyTransfer(
 
   // Both sides must resolve uniquely, else no-op (never-guess; never a pick).
   if (!fromId || !toId || !snapshot.labware[fromId] || !snapshot.labware[toId]) {
-    return { snapshot, outcome: { changed: false } };
+    // Either side unresolved (no instance, or a TIE at a rung — never-guess).
+    return { snapshot, outcome: { changed: false, reason: 'labware_unresolved' } };
   }
 
   // Well pairing: single source_well/well (raw + shipped) OR pairwise-by-address
@@ -571,7 +585,7 @@ function applyTransfer(
     if (srcWell && dstWell) pairs = [[srcWell, dstWell]];
   }
   if (pairs.length === 0) {
-    return { snapshot, outcome: { changed: false } };
+    return { snapshot, outcome: { changed: false, reason: 'wells_unpairable' } };
   }
 
   const newSnapshot = cloneSnapshot(snapshot);
