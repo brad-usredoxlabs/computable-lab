@@ -93,3 +93,16 @@ death found 02:02 + preservation commit 564c6fcb + resume #2 02:07; arch OQ-2 di
 01:54; task-list updated under lock 01:57; skill patched (setsid/systemd lesson) 02:00;
 handoff 02:12. LIVE AT EXIT: LEG C 799748 (bg slot-0), LABSTATE resume #2 hermes 915242
 (slot-0), architect run-p886359, lane-1 GC16 (not mine). No new launches after budget.
+
+## AMENDMENT (same tick, 02:20): OQ-2 RULING LANDED + FOLDED
+Architect finished fast: decisions/CHATUI1-legD-OQ2-chain-port-ruling-l2t0135.md END-RULING
+@~02:15. RULING (a): NEW LEG D0 (chain-card port: useSurfaceChat onChainProposal +
+card-state adapter + HarnessChatPane adapter branch + RED tests; owned files disjoint from
+C/D; zero YAML) must merge green + browser-gated (deck chain-card receipt) BEFORE leg D
+claims. Protocol-edit review needs NO port (routed ReviewAiPanel home, cites orch-verified
+first-hand at trunk). CLAIM ORDER: C -> D0 -> D (re-branch post-D0, carrying the ruling §4
+verbatim deletion note in report+commit) -> E. Ruling committed 1303881a; task block updated
+under lock; AS-L2T0135-OQ2-RULING-ADOPTED + ED-L2T0135-D0-BROWSER-GATE in assumptions.md.
+NEXT TICK item 3 is SUPERSEDED: at leg-C merge, spec LEG D0 (from ruling §3, which already
+carries scope/anchors/verify) and queue it on the next free fleet slot — no architect
+re-ask needed.
