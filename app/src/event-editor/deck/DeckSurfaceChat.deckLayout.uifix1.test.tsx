@@ -103,11 +103,6 @@ vi.mock('../../shared/ai/useWorkstateProposalFlow', () => ({
   }),
 }))
 
-vi.mock('../right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt: (answer: { optionId?: string }, request: { prompt: string }) =>
-    `${request.prompt} — ${answer.optionId ?? 'answer'}`,
-}))
-
 vi.mock('../right-pane/ai/WorkstateProposalCard', () => ({
   WorkstateProposalCard: (props: { summary?: string }) => (
     <div data-testid="workstate-card">{props.summary}</div>

@@ -15,7 +15,7 @@
  */
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
-import { clarificationAnswerPrompt } from '../event-editor/right-pane/ai/AiTabPanel'
+import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
 import './ChatLog.css'
 

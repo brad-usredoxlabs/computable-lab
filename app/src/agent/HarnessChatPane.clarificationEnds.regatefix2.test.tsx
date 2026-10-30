@@ -45,13 +45,6 @@ vi.mock('../shared/api/client', () => ({
   },
 }))
 
-// ChatLog reuses clarificationAnswerPrompt from AiTabPanel, whose import
-// graph reaches pdfjs (proven pattern: DeckSurfaceChat.ghost.test.tsx).
-vi.mock('../event-editor/right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt: (answer: { optionId?: string }, request: { prompt: string }) =>
-    `${request.prompt} — ${answer.optionId ?? 'answer'}`,
-}))
-
 // The workstate flow pulls OpenTabsProvider + navigation into the render
 // (proven pattern: the ghost test) — out of scope for this lock.
 vi.mock('../shared/ai/useWorkstateProposalFlow', () => ({

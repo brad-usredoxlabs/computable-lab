@@ -133,14 +133,6 @@ vi.mock('../../shared/ai/useWorkstateProposalFlow', () => ({
   }),
 }))
 
-// ChatLog imports the lane-2 answer helper from AiTabPanel, whose real import
-// graph reaches pdfjs; stub the helper (the pane under test never needs the
-// full legacy pane).
-vi.mock('../right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt: (answer: { optionId?: string }, request: { prompt: string }) =>
-    `${request.prompt} — ${answer.optionId ?? 'answer'}`,
-}))
-
 vi.mock('../right-pane/ai/WorkstateProposalCard', () => ({
   WorkstateProposalCard: (props: { summary?: string }) => (
     <div data-testid="workstate-card">{props.summary}</div>

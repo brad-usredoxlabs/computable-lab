@@ -70,14 +70,6 @@ const mintLocalTerm = vi.fn()
 vi.mock('../shared/api/client', () => ({
   apiClient: { mintLocalTerm: (a: string, b: string, c?: string) => mintLocalTerm(a, b, c) },
 }))
-// Keep the mount cheap: ChatLog only reads clarificationAnswerPrompt from
-// AiTabPanel (on answer), which the restored/historical arm never triggers.
-const clarificationAnswerPrompt = vi.hoisted(() =>
-  vi.fn((answer: { label?: string }, request: { id: string; prompt: string }) => `Use ${answer.label} for ${request.id}.`),
-)
-vi.mock('../event-editor/right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt,
-}))
 
 afterEach(() => {
   cleanup()
