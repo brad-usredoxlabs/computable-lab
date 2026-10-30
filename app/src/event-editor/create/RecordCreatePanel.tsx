@@ -18,13 +18,35 @@
  * the panel no longer hardcodes a `SCHEMA_IDS` literal as its ONLY source.
  * A kind's schema $id is resolved from the SERVED schema registry
  * (GET /schemas + deriveSchemaNode, the same single resolver /browser and
- * /registry use); the three spine kinds keep a fallback literal so spine
- * creation is unaffected if the registry is unavailable. A kind the registry
- * does not serve gets a LOUD NAMED refusal — never a dead "Create undefined"
- * form (dead-chrome ban). The identity field is the schema-declared one
- * (`recordId` for the spine — the only recordId users; `id` for FAIRCommon
- * records such as the knowledge triplet), so a draft built here posts the
- * field the schema actually requires.
+ * /registry use). GC-16 FIX RUN 2 (adversarial defect 5): the registry is
+ * the PRIMARY resolution path for EVERY kind — the spine included. The
+ * `SPINE_SCHEMA_IDS` literal is a documented FALLBACK used ONLY when the
+ * registry call fails (a registry outage never regresses spine creation).
+ * A kind the loaded registry does not serve gets a LOUD NAMED refusal —
+ * never a dead "Create undefined" form (dead-chrome ban).
+ *
+ * GC-16 FIX RUN 2 (adversarial defects 1/4/9; the id-mint ruling is
+ * PROVISIONAL default D-A — the decision-override file was absent at work
+ * time, re-check before relying on this): identity fields are SCHEMA-DRIVEN,
+ * never client-stamped:
+ * - `shortSlug` is attached ONLY when the served schema's declared
+ *   `properties` contain `shortSlug` (GET /schemas/:id — the same single
+ *   schema source the registry door uses). The knowledge triplet's schemas
+ *   are `unevaluatedProperties: false` and declare no `shortSlug`, so a
+ *   knowledge payload carries none (adversarial defect 1 was an unconditional
+ *   client stamp that 422'd every knowledge create).
+ * - the client-side "Title is required" gate applies ONLY when the served
+ *   schema's top-level `required` names `title` (adversarial defect 9):
+ *   Ajv is the single validation authority — a client rule the schema does
+ *   not declare both blocks legitimate records and masks the server's real
+ *   error. When the schema doc is unavailable the client gate is SKIPPED
+ *   and the server's required-check speaks.
+ * - the knowledge kinds get NO client-minted id (adversarial defect 4;
+ *   provisional-pending-ruling D-A): the form exposes the schema-declared
+ *   `id` field (the ui.yaml `$.id` slot, editable) and the AUTHOR supplies
+ *   the stable identifier; the server's required-check speaks. The spine
+ *   keeps its pre-existing client-side recordId mint (the documented
+ *   fallback, spine behavior unchanged).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -39,6 +61,7 @@ import {
   type TapTabEditorHandle,
 } from '../../editor/taptab'
 import type { EditorProjectionResponse } from '../../types/uiSpec'
+import type { JsonSchema } from '../../types/kernel'
 import { deriveSchemaNode, type SchemaNode } from '../../browser/SchemaTree'
 import './RecordCreatePanel.css'
 
@@ -54,12 +77,13 @@ export type SpineKind = 'study' | 'experiment' | 'run'
 export type CreateNodeType = SpineKind
 
 /**
- * Spine fallback: the three spine schema $ids. The registry (GET /schemas) is
- * the PRIMARY source for every kind; this literal is a safety net so spine
- * creation is byte-identical to pre-GC-16 behavior even if the registry call
- * is unavailable (the spine is the panel's original, core authoring surface).
- * A non-spine kind has NO fallback — it is either served (registry) or
- * loudly refused.
+ * Spine FALLBACK only (GC-16 FIX RUN 2, adversarial defect 5): the served
+ * schema registry (GET /schemas) is the PRIMARY kind→schema $id resolver for
+ * EVERY kind — the spine included. This literal is consulted ONLY when the
+ * registry call fails, so a registry outage leaves spine creation
+ * byte-identical to pre-GC-16 behavior. It is a safety net, never the
+ * resolver (a non-spine kind has NO fallback — it is either served or loudly
+ * refused).
  */
 const SPINE_SCHEMA_IDS: Record<SpineKind, string> = {
   study: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
@@ -76,24 +100,22 @@ const SPINE_LABELS: Record<SpineKind, string> = {
 }
 
 /**
- * Identity-field prefix convention, derived from each schema's own documented
- * id convention (study "e.g. STU-000003", claim "e.g. CLM-0001", assertion
- * "e.g. ASN-0001", evidence "e.g. EVD-0001"). This is the panel's EXISTING
- * id-minting mechanism (the spine already mints STU/EXP/RUN client-side; the
- * spine's `recordId` declares no pattern either) extended to the knowledge
- * triplet. It is an id-format convention, NOT a kind→schema table — the
- * kind→schema $id resolution is the served registry (SPINE_SCHEMA_IDS is a
- * spine-only safety net, not the resolver). A kind with no documented prefix
- * is left without a fabricated id (honest note) rather than minted with a
- * guessed prefix.
+ * Spine recordId prefix convention — the panel's EXISTING id-minting
+ * mechanism, SPINE-ONLY (GC-16 FIX RUN 2, adversarial defect 4; provisional
+ * default D-A, pending the id-mint ruling): the knowledge kinds get NO
+ * client-minted id. The previous FIX RUN 1 extended this table to
+ * claim/assertion/evidence — a new TypeScript copy of domain vocabulary keyed
+ * by schema kind, which the repo's own OQ-3 ruling (RecordRegistryPage.tsx
+ * "The Hard Boundary") names the anti-pattern. Knowledge ids are now the
+ * AUTHOR's: the form exposes the schema-declared `id` field and the server's
+ * required-check (Ajv) speaks. The spine keeps its pre-existing client-side
+ * recordId mint (the spine is the panel's original authoring surface and its
+ * behavior is unchanged by this fix).
  */
-const ID_PREFIXES: Record<string, string> = {
+const SPINE_ID_PREFIXES: Record<SpineKind, string> = {
   study: 'STU',
   experiment: 'EXP',
   run: 'RUN',
-  claim: 'CLM',
-  assertion: 'ASN',
-  evidence: 'EVD',
 }
 
 /** Slug a title for use inside a recordId / shortSlug. */
@@ -107,14 +129,15 @@ function slugify(title: string, max: number): string {
 }
 
 /**
- * recordId / id = PREFIX-slug-rand (e.g. EXP-dose-response-k3f2, CLM-…-…),
- * following the records tree's STU-/CLM- style. The random suffix is fixed
- * per panel mount so typing the title doesn't churn the id. Returns null when
- * the kind has no documented prefix convention (no fabricated id).
+ * recordId = PREFIX-slug-rand (e.g. EXP-dose-response-k3f2) — the spine's
+ * EXISTING client-side recordId mint, following the records tree's STU-/EXP-
+ * style. The random suffix is fixed per panel mount so typing the title
+ * doesn't churn the id. SPINE-ONLY (GC-16 FIX RUN 2, defect 4, provisional
+ * D-A): returns null for a non-spine kind — knowledge records get no
+ * client-fabricated id; the author supplies the schema-declared `id`.
  */
-function generateId(nodeType: string, title: string, rand: string): string | null {
-  const prefix = ID_PREFIXES[nodeType]
-  if (!prefix) return null
+function generateSpineRecordId(nodeType: SpineKind, title: string, rand: string): string {
+  const prefix = SPINE_ID_PREFIXES[nodeType]
   const slug = slugify(title, 24) || 'untitled'
   return `${prefix}-${slug}-${rand}`
 }
@@ -160,23 +183,26 @@ export function RecordCreatePanel({
   const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // GC-16: honest note when a served kind declares no client-side id
-  // convention (the id field is left for the user rather than fabricated).
-  const [idNote, setIdNote] = useState<string | null>(null)
+  // GC-16 FIX RUN 2 (adversarial defect 4; provisional D-A): honest note for
+  // a SERVED non-spine kind — the client mints no id; the form exposes the
+  // schema-declared `id` field for the author to fill (the server's
+  // required-check speaks). Spine kinds carry no note (the client mints
+  // recordId as before).
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
   // Fixed per mount so the derived id is stable while typing.
   const randRef = useRef(Math.random().toString(36).slice(2, 6))
 
-  // GC-16: the served schema registry — the kind→schema $id resolver for
-  // non-spine kinds (the same single resolver /browser and /registry use:
-  // GET /schemas + deriveSchemaNode). Spine kinds do NOT depend on it (they
-  // use SPINE_SCHEMA_IDS), so a registry failure never regresses the spine
-  // and the pre-existing suite (which does not mock getSchemas) stays valid.
+  // GC-16 FIX RUN 2 (adversarial defect 5): the served schema registry
+  // (GET /schemas + deriveSchemaNode — the same single resolver /browser and
+  // /registry use) is the PRIMARY kind→schema $id resolver for EVERY kind,
+  // the spine included. The SPINE_SCHEMA_IDS literal is consulted only as a
+  // documented FALLBACK when the registry call fails (a registry outage
+  // never regresses spine creation). A kind the LOADED registry does not
+  // serve (other than a spine-on-failure) gets a loud named refusal.
   const [registryNodes, setRegistryNodes] = useState<SchemaNode[] | null>(null)
   const [registryError, setRegistryError] = useState<string | null>(null)
   useEffect(() => {
-    if (isSpine) return
     let cancelled = false
     setRegistryNodes(null)
     setRegistryError(null)
@@ -197,23 +223,68 @@ export function RecordCreatePanel({
     return () => {
       cancelled = true
     }
-  }, [isSpine, nodeType])
+  }, [nodeType])
 
-  const resolvedNode = isSpine
-    ? null
-    : (registryNodes?.find((n) => n.kind === nodeType) ?? null)
-  // The schema $id: the registry for non-spine kinds (primary), the fallback
-  // literal for the spine (safety net — byte-identical to pre-GC-16).
-  const schemaId = isSpine
-    ? SPINE_SCHEMA_IDS[nodeType as SpineKind]
-    : (resolvedNode?.schemaId ?? null)
-  // A non-spine kind the LOADED registry does not serve → loud named refusal.
-  const unserved = !isSpine && registryNodes !== null && resolvedNode === null
-  const registryUnavailable = !isSpine && registryError !== null
+  const resolvedNode = registryNodes?.find((n) => n.kind === nodeType) ?? null
+  // The schema $id: the served registry for every kind (PRIMARY). When the
+  // registry call FAILED, a spine kind falls back to the documented
+  // SPINE_SCHEMA_IDS literal (safety net — byte-identical to pre-GC-16); a
+  // non-spine kind has no fallback (loud named refusal). While the registry
+  // is still loading (or before the fallback settles) there is no $id, so
+  // the form renders its loading state — never a dead "Create undefined".
+  const schemaId = resolvedNode?.schemaId ?? (registryError !== null && isSpine ? SPINE_SCHEMA_IDS[nodeType as SpineKind] : null)
+  // A kind the LOADED registry does not serve → loud named refusal. A spine
+  // kind on a registry failure is NOT unserved (its fallback resolves it).
+  const unserved = registryNodes !== null && resolvedNode === null && !(registryError !== null && isSpine)
+  const registryUnavailable = registryError !== null && resolvedNode === null
 
-  const label = isSpine
-    ? SPINE_LABELS[nodeType as SpineKind]
-    : (resolvedNode?.title ?? nodeType)
+  // GC-16 FIX RUN 2 (adversarial defect 4; provisional D-A): honest note for
+  // a SERVED non-spine kind — the client mints no id; the form exposes the
+  // schema-declared `id` field for the author to fill (the server's
+  // required-check speaks). Spine kinds carry no note (the client mints
+  // recordId as before).
+  const idNote =
+    isSpine || registryNodes === null || resolvedNode === null
+      ? null
+      : `Supply a stable id before saving — the client does not mint knowledge ids; the schema requires one (server validation is the authority).`
+
+  const label =
+    resolvedNode?.title ?? (isSpine ? SPINE_LABELS[nodeType as SpineKind] : nodeType)
+
+  // GC-16 FIX RUN 2 (adversarial defects 1/4/9; provisional D-A): the served
+  // schema document (GET /schemas/:id — the same single schema source the
+  // registry door uses) drives the client's identity handling: `shortSlug`
+  // is stamped only when the schema's `properties` declare it, and the
+  // client-side title gate applies only when the schema's `required` names
+  // `title`. Ajv (the server) is the single validation authority; when the
+  // schema doc is unavailable the client gates are skipped and the server
+  // speaks.
+  const [schemaDoc, setSchemaDoc] = useState<JsonSchema | null>(null)
+  useEffect(() => {
+    if (!schemaId) return
+    let cancelled = false
+    setSchemaDoc(null)
+    apiClient
+      .getSchema(schemaId)
+      .then((info) => {
+        if (cancelled) return
+        setSchemaDoc(info.schema ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSchemaDoc(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schemaId])
+  // Schema-declared flags (false when the schema doc is unavailable — the
+  // server's required-check / Ajv then speaks; the legacy shortSlug behavior
+  // is preserved only where the schema itself declares the property).
+  const schemaDeclaresShortSlug = Boolean(
+    schemaDoc?.properties && 'shortSlug' in (schemaDoc.properties as Record<string, unknown>),
+  )
+  const schemaRequiresTitle = Boolean(schemaDoc?.required?.includes('title'))
 
   const parentPaths = useMemo(() => {
     const paths: string[] = []
@@ -228,24 +299,18 @@ export function RecordCreatePanel({
     setProjection(null)
     setProjectionError(null)
 
-    const seededId = generateId(nodeType, draftTitle ?? '', randRef.current)
+    // GC-16 FIX RUN 2 (adversarial defect 4; provisional D-A): the client
+    // mints an id ONLY for the spine (its pre-existing recordId mint). The
+    // knowledge kinds expose the schema-declared `id` field to the AUTHOR —
+    // no client-fabricated id, the server's required-check speaks.
     const initial: Record<string, unknown> = {
       kind: nodeType,
     }
-    if (seededId) initial[idField] = seededId
-    setIdNote(
-      seededId
-        ? null
-        : `The schema for "${nodeType}" declares no client-side id convention — supply the stable ${idField} before saving.`,
-    )
-    if (draftTitle) {
-      initial.title = draftTitle
-      initial.shortSlug = slugify(draftTitle, 30)
-    }
-    // Parent/hierarchy + spine lifecycle fields are spine-only: a knowledge
-    // draft must NOT carry studyId/experimentId/state/status (the knowledge
-    // schemas are unevaluatedProperties:false and declare none of them).
     if (isSpine) {
+      initial[idField] = generateSpineRecordId(nodeType as SpineKind, draftTitle ?? '', randRef.current)
+      // Parent/hierarchy + spine lifecycle fields are spine-only: a knowledge
+      // draft must NOT carry studyId/experimentId/state/status (the knowledge
+      // schemas are unevaluatedProperties:false and declare none of them).
       if (nodeType === 'study' || nodeType === 'experiment') {
         initial.state = 'draft'
       }
@@ -255,6 +320,16 @@ export function RecordCreatePanel({
         if (studyId) initial.studyId = studyId
         initial.status = 'planned'
       }
+    }
+    // GC-16 FIX RUN 2 (adversarial defect 1): shortSlug is a SCHEMA-DRIVEN
+    // field — attached only when the served schema's declared `properties`
+    // contain `shortSlug` (spine schemas declare + require it; the knowledge
+    // triplet is unevaluatedProperties:false and declares none, so a
+    // knowledge payload carries no shortSlug). Until the schema doc arrives
+    // there is no seed (the submit path re-stamps if declared).
+    if (draftTitle) {
+      initial.title = draftTitle
+      if (schemaDeclaresShortSlug) initial.shortSlug = slugify(draftTitle, 30)
     }
     setFormData(initial)
 
@@ -269,7 +344,7 @@ export function RecordCreatePanel({
         )
       })
       .finally(() => setLoadingSpec(false))
-  }, [schemaId, nodeType, studyId, experimentId, draftTitle, idField, isSpine])
+  }, [schemaId, nodeType, studyId, experimentId, draftTitle, idField, isSpine, schemaDeclaresShortSlug])
 
   // Parent-id slots render read-only: the hierarchy comes from the click
   // site, not the form. Projection paths are JSONPath-style ("$.studyId").
@@ -289,13 +364,20 @@ export function RecordCreatePanel({
         typeof next.title === 'string' &&
         next.title !== formData.title
       ) {
-        const regenerated = generateId(nodeType, next.title, randRef.current)
-        if (regenerated) next[idField] = regenerated
-        next.shortSlug = slugify(next.title, 30)
+        // GC-16 FIX RUN 2 (defect 4; provisional D-A): the client re-mints the
+        // id ONLY for the spine (pre-existing recordId mint). Knowledge kinds
+        // keep the author-supplied id untouched.
+        if (isSpine) {
+          next[idField] = generateSpineRecordId(nodeType as SpineKind, next.title, randRef.current)
+        }
+        // GC-16 FIX RUN 2 (defect 1): shortSlug is a schema-driven field —
+        // stamped only when the served schema declares it (spine schemas do;
+        // the knowledge triplet's unevaluatedProperties:false schemas do not).
+        if (schemaDeclaresShortSlug) next.shortSlug = slugify(next.title, 30)
       }
       setFormData(next)
     },
-    [formData.title, nodeType, idField],
+    [formData.title, nodeType, idField, isSpine, schemaDeclaresShortSlug],
   )
 
   const handleEditorUpdate = useCallback(
@@ -309,7 +391,16 @@ export function RecordCreatePanel({
     async (e?: React.FormEvent) => {
       e?.preventDefault()
 
-      if (!formData.title || !(formData.title as string).trim()) {
+      // GC-16 FIX RUN 2 (adversarial defect 9): the client-side title gate
+      // applies ONLY when the served schema's `required` names `title`
+      // (spine: study/experiment require it; run and the knowledge triplet do
+      // not). Ajv (the server) is the single validation authority — a client
+      // rule the schema does not declare blocks legitimate records and masks
+      // the server's real error. Schema doc unavailable → the client gate is
+      // skipped and the server speaks.
+      const titleOk =
+        typeof formData.title === 'string' && formData.title.trim() !== ''
+      if (schemaRequiresTitle && !titleOk) {
         setError('Title is required')
         return
       }
@@ -342,16 +433,34 @@ export function RecordCreatePanel({
             delete payload[key]
           }
         }
-        // Re-stamp the derived id + kind so an editor serialization pass can
-        // never drop them (the document's id/shortSlug rows hold stale
-        // empties — the derived values live in React state only).
-        const restamped = generateId(nodeType, (payload.title as string) ?? '', randRef.current)
-        if (restamped) payload[idField] = restamped
+        // Re-stamp the derived recordId + kind so an editor serialization
+        // pass can never drop them (the document's recordId/shortSlug rows
+        // hold stale empties — the derived values live in React state only).
+        // GC-16 FIX RUN 2 (defect 4; provisional D-A): the id re-stamp is
+        // SPINE-ONLY — knowledge kinds carry the AUTHOR's id (never
+        // client-fabricated), so it is left untouched here.
+        if (isSpine) {
+          payload[idField] = generateSpineRecordId(
+            nodeType as SpineKind,
+            (payload.title as string) ?? '',
+            randRef.current,
+          )
+        }
         payload.kind = nodeType
         // System provenance is server-owned — never submit it from the client.
         stripSystemProvenance(payload)
-        if (!payload.shortSlug && typeof payload.title === 'string') {
-          payload.shortSlug = slugify(payload.title, 30)
+        // GC-16 FIX RUN 2 (defect 1): shortSlug is a schema-driven field —
+        // re-stamped ONLY when the served schema declares it (spine schemas
+        // do; the knowledge triplet's unevaluatedProperties:false schemas do
+        // not). A stale shortSlug the editor serialization resurrected on a
+        // schema that does not declare it is REMOVED (unevaluatedProperties
+        // would 422 it).
+        if (schemaDeclaresShortSlug) {
+          if (!payload.shortSlug && typeof payload.title === 'string') {
+            payload.shortSlug = slugify(payload.title, 30)
+          }
+        } else {
+          delete payload.shortSlug
         }
         // Hierarchy stamping is spine-only (knowledge drafts must not carry
         // studyId/experimentId — the knowledge schemas declare neither).
@@ -371,7 +480,18 @@ export function RecordCreatePanel({
         setIsSubmitting(false)
       }
     },
-    [formData, nodeType, studyId, experimentId, onCreated, schemaId, idField, isSpine],
+    [
+      formData,
+      nodeType,
+      studyId,
+      experimentId,
+      onCreated,
+      schemaId,
+      idField,
+      isSpine,
+      schemaDeclaresShortSlug,
+      schemaRequiresTitle,
+    ],
   )
 
   // GC-16: loud named refusal / registry-unavailable states — never a dead
