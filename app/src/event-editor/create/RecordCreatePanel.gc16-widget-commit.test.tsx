@@ -46,6 +46,13 @@ import { RecordCreatePanel } from './RecordCreatePanel'
 
 const Ajv2020 = (Ajv2020Module as unknown as { default: typeof Ajv2020Module }).default
 
+// jsdom has no scrollIntoView — EnumCombobox (the REAL select widget the
+// D13 leg drives) calls it in a mount effect. Same test-side stub the
+// VendorPdfReviewPage test suites use.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn()
+}
+
 const SCHEMA_ROOT = resolve(process.cwd(), '..', 'schema')
 
 /** Walk schema/** for .schema.yaml and register every $id (mirrors the

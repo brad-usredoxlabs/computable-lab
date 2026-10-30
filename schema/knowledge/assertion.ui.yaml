@@ -34,7 +34,6 @@ form:
     - path: "$.id"
       widget: "text"
       label: "ID"
-      readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
