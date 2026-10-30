@@ -2083,4 +2083,162 @@ describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at 
     ]);
     expect(r.diagnostics ?? []).toHaveLength(0);
   });
+
+  // ==========================================================================
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 3 — the REAL emit site (the pass's (a)
+  // carrier) + the RED→GREEN repeat-create leg (the (b) idempotent reuse) at
+  // the PASS seam. The legs are byte-shaped on the receipt wire shapes: a
+  // create WITHOUT a carrier + a design-ref add_material (hint = the design's
+  // resolved record id), with the resolve_labware slot carrying the resolved
+  // design identity (recordId). The assertion is on the PASS OUTPUT for a
+  // fixture whose resolvedLabwares carry a recordId — NEVER on a string literal
+  // of the seed id (the recordId is derived from the pass's resolved output).
+  // ==========================================================================
+  it('fix3 (a) emit-site: a create whose resolvedLabwares carry a recordId ships details.labwareId = that recordId (the mint identityTokens carrier), and the R2 rung then EXACTLY matches a design-ref hint (ONE match)', () => {
+    const pass = createLabStatePass();
+    // The prior as the live drive commits it AFTER turn A: ONE 96-well plate
+    // whose identityTokens carry the design's resolved recordId (turn A's
+    // create carried the (a) emit-carrier, so the mint left the token). This
+    // is the post-turn-A committed state the drive's turn 1 reads.
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      labware: {
+        [instanceId]: { ...base.labware[instanceId]!, identityTokens: ['lbw-design-record'] },
+      },
+    };
+    // The REAL expander output: a create (NO carrier — the shipped shape) + a
+    // design-ref add_material (the hint is the design's resolved RECORD ID, not
+    // the type token — what the live binder puts on the add).
+    const createEv = {
+      eventId: 'evt-create-fix3',
+      event_type: 'create_container' as const,
+      details: { slot: 'target', labwareType: '96-well-plate' },
+    };
+    const addEv = {
+      eventId: 'evt-add-fix3',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-design-record',
+      details: { well: 'A1', material: 'bead', labwareId: 'lbw-design-record', wells: ['A1'] },
+    };
+    // The resolve_labware slot carries the resolved DESIGN identity (the
+    // recordId the compiler resolved — NOT a seed literal). The pass's (a)
+    // carries it onto the create's details.labwareId (the mint's identityTokens
+    // carrier), so the instance carries the token and the design-ref add
+    // resolves via R2 (EXACTLY one match).
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv, addEv] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'Generic 96 (test)' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { events: PlateEventPrimitive[]; snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // (a) THE EMIT SITE: the create the pass folded carries the resolved
+    // recordId on details.labwareId (derived from the pass's resolvedLabwares
+    // output, never a literal). The wire done-frame events (resolve_roles slot)
+    // are untouched; this is the labStateDelta.events artifact.
+    const foldedCreate = out.output.events.find((e) => e.event_type === 'create_container')!;
+    const d = foldedCreate.details as Record<string, unknown>;
+    expect(d.labwareId).toBe('lbw-design-record'); // the resolved recordId, NOT the seed literal
+    // (b) IDEMPOTENT CREATE: the re-emitted create (carrier = the recordId)
+    // resolves to the EXISTING prior instance (R2 exact — the instance's
+    // identityTokens carry the token) => REUSE, no re-mint.
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    expect(out.output.snapshotAfter.labware[instanceId]!.identityTokens).toEqual(['lbw-design-record']);
+    // The design-ref add resolves via R2 (the instance's identityTokens carry
+    // the token) to the SAME instance and writes A1 (ONE match — no tie).
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells)).toEqual(['A1']);
+    expect(out.output.snapshotAfter.labware[instanceId]!.wells['A1']![0]!.materialId).toBe('bead');
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('fix3 (a) emit-site is INERT without a resolved recordId: an absent/empty resolve_labware slot leaves the create carrierless (byte-stable, pre-CL)', () => {
+    const pass = createLabStatePass();
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const createEv = { eventId: 'evt-create-inert', event_type: 'create_container' as const, details: { slot: 'target', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: base },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv] }],
+        ['apply_directives', { directives: [] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { output: { events: PlateEventPrimitive[]; snapshotAfter: LabStateSnapshot } };
+    const foldedCreate = out.output.events.find((e) => e.event_type === 'create_container')!;
+    expect((foldedCreate.details as Record<string, unknown>).labwareId).toBeUndefined(); // no carrier (inert)
+    // Inert (no resolve_labware slot => no (a) carrier) => the create carries
+    // NO identity carrier => the (b) reuse is inert => the base MINT path
+    // re-mints (byte-stable pre-CL: every carrierless create re-mints).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toHaveLength(2);
+    expect(Object.keys(out.output.snapshotAfter.labware)[0]!).toBe(instanceId);
+  });
+
+  it('fix3 (b) control (never-guess, no over-reuse): a create whose carrier matches NO existing instance (zero rung) re-mints; two distinct designs on one type stay DISTINCT (R2 exact, not R3 type)', () => {
+    const pass = createLabStatePass();
+    // A prior with TWO 96-well plates, EACH carrying a DIFFERENT design token
+    // (two distinct designs placed on the same type). A create for design A
+    // must reuse instance A (R2 exact) and NEVER collapse onto instance B (R3
+    // type would tie; R2 exact picks A only).
+    const base = singlePlateSnapshot();
+    const aId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      mintCounter: 2,
+      deck: [...base.deck, { slot: 'A2', labwareInstanceId: 'PLATE-B' }],
+      labware: {
+        [aId]: { ...base.labware[aId]!, identityTokens: ['lbw-design-A'] },
+        'PLATE-B': { instanceId: 'PLATE-B', labwareType: '96-well-plate', slot: 'A2', orientation: 'landscape', wells: {}, identityTokens: ['lbw-design-B'] },
+      },
+    };
+    // A create for design A (the pass's (a) carrier = the resolved recordId).
+    const createEv = { eventId: 'evt-create-ctrl', event_type: 'create_container' as const, details: { slot: 'A1', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-A', title: 'design A' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { output: { snapshotAfter: LabStateSnapshot } };
+    // Design A reuses instance A (R2 exact) — NO third instance, and instance
+    // B is untouched (the R2 rung is identity-specific, never a type pick).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([aId, 'PLATE-B']);
+    expect(out.output.snapshotAfter.labware[aId]!.identityTokens).toEqual(['lbw-design-A']);
+    expect(out.output.snapshotAfter.labware['PLATE-B']!.identityTokens).toEqual(['lbw-design-B']);
+    // The ZERO arm: a create for a design NO instance carries (a fresh record
+    // id) yields ZERO at every rung => the base mint re-mints (never-guess —
+    // no pick among the two same-type instances).
+    const stateFresh = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [{ eventId: 'evt-create-fresh', event_type: 'create_container' as const, details: { slot: 'A3', labwareType: '96-well-plate' } }] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-C', title: 'design C' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const outFresh = pass.run({ pass_id: 'lab_state', state: stateFresh }) as
+      { output: { snapshotAfter: LabStateSnapshot } };
+    expect(Object.keys(outFresh.output.snapshotAfter.labware)).toHaveLength(3); // the fresh design re-mints (zero rung => base mint)
+  });
 });

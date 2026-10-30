@@ -598,3 +598,194 @@ describe('L2-LABSTATE-CONTENTS-1 — canonical shape (real expander output)', ()
     expect(body).toMatch(/declaredEventTypes\.includes\(event\.event_type\)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// L2-LABSTATE-CONTENTS-1 FIX RUN 3 — the repeat-create hazard (the live
+// multi-turn drive's zero-well defect). The shorthand binder re-emits the
+// placement create every turn the plate is referenced; a re-mint of an
+// already-placed plate creates a second same-identity instance and the
+// design-ref hint then TIES (rung R2 once both carry the same design token)
+// => the never-guess no-op. These legs are byte-shaped on the SHIPPED receipt
+// wire shapes (create WITHOUT a carrier + add_material with a design-ref
+// hint) and prove the idempotent-create rung-mechanics fix.
+// ---------------------------------------------------------------------------
+describe('L2-LABSTATE-CONTENTS-1 fix3 — idempotent create (the repeat-create hazard)', () => {
+  // The prior instance as the live drive commits it after turn A: a 96-well
+  // plate whose identityTokens carry the DESIGN's resolved record id (the
+  // pass's fix3 (a) emit-carrier — the create's details.labwareId). The
+  // design-ref hint the add_material carries is that SAME record id.
+  function priorWithDesignToken(): LabStateSnapshot {
+    return {
+      ...emptyLabState(),
+      turnIndex: 1,
+      mintCounter: 1,
+      deck: [{ slot: 'target', labwareInstanceId: 'LWI-1' }],
+      labware: {
+        'LWI-1': {
+          instanceId: 'LWI-1',
+          labwareType: '96-well-plate',
+          slot: 'target',
+          orientation: 'landscape',
+          wells: {},
+          identityTokens: ['lbw-seed-plate-96-flat'],
+        },
+      },
+    };
+  }
+
+  // The SHIPPED create shape (createContainerExpander) carries NO design
+  // carrier (details = {slot, labwareType}); the pass's fix3 (a) emit-carrier
+  // writes the resolved record id onto details.labwareId. Model the CARRIED
+  // create (what the pass hands the fold) with that carrier.
+  function carriedCreate(): PlateEventPrimitive {
+    return {
+      eventId: 'evt-create-carried',
+      event_type: 'create_container',
+      details: { slot: 'target', labwareType: '96-well-plate', labwareId: 'lbw-seed-plate-96-flat' },
+    };
+  }
+  function designRefAdd(): PlateEventPrimitive {
+    return {
+      eventId: 'evt-add-designref',
+      event_type: 'add_material',
+      labwareId: 'lbw-seed-plate-96-flat',
+      details: { well: 'A1', material: 'bench bead beater', labwareId: 'lbw-seed-plate-96-flat', wells: ['A1'] },
+    };
+  }
+
+  // RED leg (the byte-exact live drive shape, turn=2): a PRIOR instance with
+  // NO identityTokens (the pre-fix committed state — the create shipped no
+  // carrier, so the mint left identityTokens ABSENT) + the SHIPPED no-carrier
+  // create re-mints a SECOND instance + a design-ref add_material (hint = the
+  // design's resolved record id). Every ladder rung misses (R1: record id ≠
+  // LWI-1/LWI-2; R2: NO instance carries the token; R3: normalizeTypeKey(record
+  // id) ≠ normalizeTypeKey('96-well-plate')) => never-guess UNRESOLVED => ZERO
+  // wells written to ANY instance. The receipt's turn=2 arm-log:
+  // prior {LWI-1:{}} after {LWI-1:{},LWI-2:{}} unresolved=[lab_state_
+  // unresolved_labware_reference]. This leg documents the defect (zero wells)
+  // on the shipped wire shapes.
+  it('RED (live shape: no-token prior + no-carrier create + design-ref add) => ladder all-zero => unresolved, ZERO wells written', () => {
+    // The pre-fix committed state: LWI-1 with NO identityTokens (the shipped
+    // create carried no design carrier).
+    const priorNoToken: LabStateSnapshot = {
+      ...emptyLabState(),
+      turnIndex: 1,
+      mintCounter: 1,
+      deck: [{ slot: 'target', labwareInstanceId: 'LWI-1' }],
+      labware: {
+        'LWI-1': { instanceId: 'LWI-1', labwareType: '96-well-plate', slot: 'target', orientation: 'landscape', wells: {} },
+      },
+    };
+    // The SHIPPED create (no carrier) re-mints a SECOND instance.
+    const createNoCarrier: PlateEventPrimitive = {
+      eventId: 'evt-create-nocarrier',
+      event_type: 'create_container',
+      details: { slot: 'target', labwareType: '96-well-plate' },
+    };
+    const afterCreate = fold(priorNoToken, createNoCarrier);
+    const keys = Object.keys(afterCreate.labware);
+    expect(keys).toHaveLength(2); // the hazard: LWI-1 + LWI-2 (the receipt's after shape)
+    // The design-ref add_material (record-id hint) resolves via NO rung (R1/R2/
+    // R3 all zero) => unresolved => ZERO wells written to ANY instance.
+    const result = applyEventToLabState(afterCreate, designRefAdd(), RULES) as FoldResult;
+    expect(result.outcome.changed).toBe(false);
+    expect(result.outcome.reason).toBe('labware_unresolved');
+    for (const k of keys) {
+      expect(Object.keys(result.snapshot.labware[k]!.wells)).toHaveLength(0);
+    }
+  });
+
+  // GREEN (the fix): the CARRIED create (details.labwareId = the resolved
+  // record id) resolves the SAME instance via the DATA-declared ladder (rung
+  // R2 declaredIdentityTokens) and REUSES it — the re-emitted create is a
+  // NO-OP (no re-mint), and the design-ref add_material lands on the SAME
+  // instance. This is the rung-mechanics fix (fix3 (b)).
+  it('GREEN (carried create + design-ref add): the create reuses the prior instance via R2 (no re-mint) and the add lands on the same instance', () => {
+    const prior = priorWithDesignToken();
+    const afterCreate = fold(prior, carriedCreate());
+    // Idempotent reuse: NO second instance — the snapshot is byte-unchanged
+    // (same instanceId set, same contents, same identityTokens).
+    expect(Object.keys(afterCreate.labware)).toEqual(['LWI-1']);
+    expect(afterCreate.labware['LWI-1']!.identityTokens).toEqual(['lbw-seed-plate-96-flat']);
+    expect(Object.keys(afterCreate.labware['LWI-1']!.wells)).toHaveLength(0);
+    // The design-ref add_material resolves via R2 (exact token match) to the
+    // SAME instance and writes A1 (ONE match — no tie).
+    const afterAdd = fold(afterCreate, designRefAdd());
+    expect(Object.keys(afterAdd.labware)).toEqual(['LWI-1']);
+    expect(Object.keys(afterAdd.labware['LWI-1']!.wells)).toEqual(['A1']);
+    expect(afterAdd.labware['LWI-1']!.wells['A1']![0]!.materialId).toBe('bench bead beater');
+  });
+
+  // The idempotent reuse is RUNG-mechanics over the SAME declared ladder the
+  // fold's add/transfer resolve through (resolveLabware) — not a second
+  // hardcoded R1/R2 probe. The create's carrier resolves via rung R2
+  // (declared identityTokens); the R1 (instanceId) and R3 (unique type) rungs
+  // are the ladder's own, so a carrier that is the instanceId (R1) or a
+  // unique type (R3) also reuses — generic over the declared order.
+  it('reuse is rung-mechanics: a carrier matching the instanceId (R1) or a unique type (R3) also reuses (generic over the declared order)', () => {
+    // R1 arm: the create's carrier = the prior instance's instanceId.
+    const prior = priorWithDesignToken();
+    const createR1: PlateEventPrimitive = {
+      eventId: 'evt-create-r1',
+      event_type: 'create_container',
+      details: { slot: 'target', labwareType: '96-well-plate', labwareId: 'LWI-1' },
+    };
+    const afterR1 = fold(prior, createR1);
+    expect(Object.keys(afterR1.labware)).toEqual(['LWI-1']); // reused (R1), no re-mint
+    // R3 arm: the create carries a TYPE-only carrier (no design token, no
+    // instanceId) and the prior is the UNIQUE instance of that type => the
+    // ladder's R3 rung reuses it.
+    const priorUntokened: LabStateSnapshot = { ...emptyLabState(), turnIndex: 1, mintCounter: 1, deck: [{ slot: 'target', labwareInstanceId: 'LWI-1' }], labware: { 'LWI-1': { instanceId: 'LWI-1', labwareType: '96-well-plate', slot: 'target', orientation: 'landscape', wells: {} } } };
+    const createR3: PlateEventPrimitive = {
+      eventId: 'evt-create-r3',
+      event_type: 'create_container',
+      details: { slot: 'target', labwareType: '96-well-plate', labwareId: '96-well plate' },
+    };
+    const afterR3 = fold(priorUntokened, createR3);
+    expect(Object.keys(afterR3.labware)).toEqual(['LWI-1']); // reused (R3 unique-type), no re-mint
+  });
+
+  // never-guess control: a design-ref hint that matches NO instance
+  // (identityTokens absent + non-unique type) => the add no-ops, NOTHING is
+  // written to the seed plate instance, and the ladder's tie/zero is terminal
+  // (no pick). The ghost-plate design must NOT resolve to the seed plate.
+  it('never-guess control: a design-ref hint with no matching instance/tokens (non-unique type) => no-op, NO write to the seed plate', () => {
+    const prior = priorWithDesignToken();
+    // A second same-TYPE instance with a DIFFERENT token (the ghost plate was
+    // placed) — so the ghost design-ref hint (a token neither instance carries)
+    // and the type (two instances) both yield ZERO or a TIE => terminal.
+    const ghostPrior: LabStateSnapshot = {
+      ...prior,
+      mintCounter: 2,
+      deck: [...prior.deck, { slot: 'target2', labwareInstanceId: 'LWI-2' }],
+      labware: {
+        ...prior.labware,
+        'LWI-2': { instanceId: 'LWI-2', labwareType: '96-well-plate', slot: 'target2', orientation: 'landscape', wells: {}, identityTokens: ['lbw-ghost-plate'] },
+      },
+    };
+    const ghostAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-ghost',
+      event_type: 'add_material',
+      labwareId: 'lbw-ghost-plate',
+      details: { well: 'C1', material: 'bench bead beater', labwareId: 'lbw-ghost-plate', wells: ['C1'] },
+    };
+    // The ghost hint EXACTLY matches LWI-2's token (R2, ONE match) — it must
+    // NOT leak to the seed plate LWI-1. (The control's point: never-guess is
+    // the exact match, and a hint matching NO token + non-unique type no-ops.)
+    const after = fold(ghostPrior, ghostAdd);
+    expect(Object.keys(after.labware['LWI-1']!.wells)).toHaveLength(0); // seed plate NEVER written
+    expect(Object.keys(after.labware['LWI-2']!.wells)).toEqual(['C1']); // the ghost plate (exact R2) is the only one written
+    // And the terminal no-op arm: a hint matching NO token and a non-unique
+    // type (two same-type instances) => ZERO wells, NO new instance.
+    const mysteryAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-mystery',
+      event_type: 'add_material',
+      labwareId: 'lbw-never-seen',
+      details: { well: 'C1', material: 'x', labwareId: 'lbw-never-seen', wells: ['C1'] },
+    };
+    const afterMystery = fold(ghostPrior, mysteryAdd);
+    expect(Object.keys(afterMystery.labware)).toEqual(['LWI-1', 'LWI-2']); // no third instance
+    expect(Object.keys(afterMystery.labware['LWI-1']!.wells)).toHaveLength(0); // seed plate NEVER written
+    expect(Object.keys(afterMystery.labware['LWI-2']!.wells)).toHaveLength(0); // fresh fold: the mystery no-op wrote nothing
+  });
+});
