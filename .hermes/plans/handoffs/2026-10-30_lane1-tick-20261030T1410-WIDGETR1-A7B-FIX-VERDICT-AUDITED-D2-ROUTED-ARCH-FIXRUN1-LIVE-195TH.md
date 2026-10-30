@@ -140,3 +140,15 @@ Fix-cycle budget now: run 1 + run 2 = cycles 1-2 of 2; if the final gate still s
 fix after this, route to architect (hard rule 7), no cycle 3.
 NEXT TICK after both runs + adv accept: orch self-verify -> merge -> full C1-C6
 browser re-gate at new receipts ts (OPT-A means C2-roles stays IN).
+
+## CHECKPOINT ERRATA 14:24 (launcher-pattern compliance)
+
+Adv waiter v1 KILLED pre-fire: it lacked `export PATH=...` (skill pitfall: systemd-run
+units get minimal PATH; bare `hermes` would have rc=127'd at fire time). Re-armed v2
+(unit wait-widgetr1fix1-adv-l1t1355-v2, watching PID 2308431) with PATH + prompt-file
+guard; adv prompt at prompts/advreview-widgetr1fix1-l1t1355.txt (pins review to the
+fix-run-1 DONE sha state — fix-run-2 commits, which will stack on the same branch
+after, are NOT this review's subject). Chain script re-launched with PATH export
+(unit chain-widgetr1fix2-l1t1420, re-armed 14:22, sleeping to 15:00:30). Both units
+active, coder prompt verified carried. TICK ENDS (budget). Next tick: reconcile
+fixrun1 exit -> adv v2 output; chain fires fixrun2 ~15:00.
