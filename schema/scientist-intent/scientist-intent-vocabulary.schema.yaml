@@ -196,9 +196,9 @@ properties:
     description: >-
       WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the DATA list of primitive
       event types that ADD material to a well (contents-bearing). The
-      resolve_wellsets pass reads this list from the vocabulary object to build
-      the pending-draft layer of the contents ledger — the TS carries no
-      hardcoded taxonomy. Optional: absent => the pending-draft layer
+      resolve_wellsets pass reads this list from the vocabulary object to
+      build the pending-draft layer of the contents ledger — the TS carries
+      no hardcoded taxonomy. Optional: absent => the pending-draft layer
       contributes nothing (fail-closed to the committed layer).
   labwareIdentityResolution:
     type: object
