@@ -152,6 +152,16 @@ vi.mock('../../shared/api/client', () => ({
         })),
       ),
     ),
+    // GC-16 FIX RUN 2 (defect 1/4/9): the served schema DOCUMENT (GET
+    // /schemas/:id) — the REAL schema/knowledge/<kind>.schema.yaml, so the
+    // panel's schema-driven gates (shortSlug? title-required?) see the real
+    // shapes. Absent from the mock at 1f7a92fe (the panel did not fetch it).
+    getSchema: vi.fn((schemaId: string) => {
+      const base = String(schemaId).split('/').pop() ?? ''
+      const kind = base.replace(/\.schema\.yaml$/, '')
+      const doc = yaml.parse(readFileSync(join(SCHEMA_ROOT, 'knowledge', `${kind}.schema.yaml`), 'utf-8'))
+      return Promise.resolve({ id: schemaId, path: `knowledge/${kind}.schema.yaml`, title: kind, schema: doc })
+    }),
     // The REAL editor-draft shape, built from the REAL ui.yaml — the
     // projection the REAL editor renders IS the real binding.
     // The panel calls getEditorDraftProjection(SCHEMA_IDS[kind]) — the FULL
@@ -242,9 +252,11 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     // CONTROL: the SAME payload, with `supports` replaced by the
     // datatypes/ref OBJECT the schema declares (and the client-buggy
     // shortSlug removed) — PASSES. Proves the schema is authorable; the
-    // widget is the gap.
+    // widget is the gap. (id is the AUTHOR's — the D4 provisional D-A
+    // authoring path: the client no longer mints knowledge ids.)
     const valid: Record<string, unknown> = {
       ...payload,
+      id: 'EVD-1',
       supports: [{ kind: 'record', type: 'claim', id: 'CLM-1' }],
       sources: [{ type: 'result', ref: { kind: 'record', type: 'result', id: 'RES-1' } }],
     }
@@ -255,16 +267,18 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     ).toEqual([])
   }, 20000)
 
-  it('assertion: the REAL array widgets commit $.context_refs=[{}] and $.roles=[{}]; the REAL schema REJECTS both (required kind / role_ref+context_ref)', async () => {
+  it('assertion: the REAL array widgets commit $.context_refs=[{}] AND $.roles=[{}]; the REAL schema REJECTS both (required kind / role_ref+context_ref) — requires-rescope record', async () => {
+    // REQUIRES-RESCOPE PROOF (fix-run-1 D2/D3): the array-of-ref fields commit
+    // the widget's OWN value — an empty object entry, no item sub-slots. The
+    // REAL schema rejects it; a hand-carried schema-valid array passes. The
+    // gap is the widget (item authoring), ruled OUTSIDE this lane's file
+    // boundary — this file records the symptom faithfully.
     render(
-      <RecordCreatePanel nodeType="assertion" draftTitle="scoped assertion" onCreated={() => {}} />,
+      <RecordCreatePanel nodeType="assertion" draftTitle="scoped assertion" onCreated={() => {}} />
     )
     const contextLabel = 'Context refs (the contexts this ranges over)'
     const firstRow = await waitFor(() => findRow(contextLabel), { timeout: 8000 })
     addArrayItem(firstRow)
-    // DEBUG: what does the row DOM look like after the first commit?
-    const debugRow = screen.getByText(contextLabel).closest('.taptab-field-row') as HTMLElement
-    console.log('DEBUG ROW HTML after first commit:', debugRow.innerHTML.slice(0, 3000))
     // RE-QUERY fresh: the commit above re-rendered the editor, detaching the
     // previous row element.
     const contextRow = findRow(contextLabel)
@@ -272,17 +286,79 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     const rolesRow = findRow('Roles (context-role bindings)')
     addArrayItem(rolesRow)
 
-    act(() => {
-      fireEvent.click(screen.getByTestId('record-create-submit'))
+    // ROOT CAUSE of the "roles=undefined" symptom (fix-run-2 diagnosis, proven
+    // by four independent probes + a per-commit createRecord counter): the
+    // array-of-ref widgets DO render and DO commit — BOTH context_refs and
+    // roles commit the widget's OWN value, an EMPTY OBJECT entry `[{}]` (the
+    // array-of-ref item-authoring platform gap: the item has no kind/role_ref/
+    // context_ref because the widget authorizes no item sub-slots). The
+    // original capture saw `roles: undefined` for a DIFFERENT reason: the
+    // widget's "Add item" / "Remove" / "Done" buttons (ArrayWidget.tsx,
+    // READ-ONLY in this lane) have NO `type` attribute, so they default to
+    // `type="submit"`, and their onClick only calls `e.stopPropagation()`
+    // (which stops bubbling, NOT form submission). Because the array editor
+    // renders INSIDE the create `<form>`, EVERY array-item commit ALSO submits
+    // the form → a `createRecord` call (observed: 1 per add). The first such
+    // (spurious) submit — the context_refs commit — serializes the document
+    // BEFORE the later roles commit lands, so capturing `createRecord` from
+    // that EARLY spurious submit yields `context_refs=[{}]` but
+    // `roles: undefined`. This is a capture-timing artifact of the spurious
+    // submits, NOT a roles-specific binding/projection/serializer defect.
+    //
+    // FIX (test-only, per the task ruling — NO widget-component edits):
+    // settle the editor after the last commit, then capture the SETTLED
+    // payload (the final submit's serialization of the fully-settled doc),
+    // which carries BOTH committed `[{}]` values. This pins the TRUE symptom
+    // — both array-of-ref widgets commit `[{}]`, and the real schema rejects
+    // both — not a mid-flight snapshot. (Fixing the root cause — giving the
+    // array commit buttons an explicit `type="button"` so they don't submit
+    // the enclosing create form — is the widget fix that requires the
+    // rescope this file documents.)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400))
     })
-    await waitFor(() => expect(mocked.createCalls).toHaveLength(1))
-    const [, payload] = mocked.createCalls[0]
-    // Both widgets committed their OWN value: an EMPTY object entry.
-    expect(payload.context_refs, 'the widget committed a context_refs array').toEqual([{}])
-    expect(payload.roles, 'the widget committed a roles array').toEqual([{}])
+
+    // The REAL (final) submit — one record; it serializes the SETTLED
+    // document (both arrays committed), so the LAST captured create carries
+    // both. (The earlier spurious submits — one per array commit — captured
+    // mid-flight snapshots and are the artifact that misread `roles` as
+    // undefined; the final one is the true settled payload.)
+    const form = screen.getByTestId('record-create-panel').querySelector('form')
+    expect(form, 'the create panel renders a form').toBeTruthy()
+    act(() => {
+      fireEvent.submit(form!)
+    })
+    // Wait until the SETTLED final submit carries both committed arrays.
+    await waitFor(() => {
+      const len = mocked.createCalls.length
+      expect(len).toBeGreaterThanOrEqual(1)
+      expect(mocked.createCalls[len - 1][1].roles).toEqual([{}])
+    })
+
+    // EACH widget's OWN (spurious per-commit) submit proves that field
+    // committed its value: the context_refs commit's submit carries
+    // context_refs=[{}] (roles not yet committed); the roles commit's submit
+    // (and the final settled submit) carries BOTH. This is the requires-
+    // rescope proof — every array-of-ref field commits an EMPTY OBJECT
+    // entry, no ref shape.
+    expect(
+      mocked.createCalls.some(([, p]) => p.context_refs && JSON.stringify(p.context_refs) === '[{}]'),
+      'the context_refs widget committed its [{}] value (its own submit)',
+    ).toBe(true)
+    expect(
+      mocked.createCalls.some(([, p]) => p.roles && JSON.stringify(p.roles) === '[{}]'),
+      'the roles widget committed its [{}] value (its own submit)',
+    ).toBe(true)
+
+    // The SETTLED payload (final submit) carries both committed values.
+    const [, payload] = mocked.createCalls[mocked.createCalls.length - 1]
+    expect(payload.context_refs, 'the settled payload carries context_refs').toEqual([{}])
+    expect(payload.roles, 'the settled payload carries roles').toEqual([{}])
 
     const ajv = loadKnowledgeAjv()
     const errors = ajvErrorsFor(ajv, 'assertion', payload)
+    // RAW Ajv evidence (the failing payload the review's probe pattern
+    // requires): the REAL schema rejects the widget-committed values.
     console.log('RAW AJV (assertion context_refs+roles widget commit):', JSON.stringify(errors, null, 2))
     expect(
       errors.some((e) => e.instancePath === '/context_refs/0' && e.keyword === 'required'),
@@ -307,9 +383,11 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
       'the REAL assertion.schema.yaml must reject the committed roles item (required context_ref)',
     ).toBe(true)
 
-    // CONTROL: the schema-valid shapes PASS — the widget is the gap.
+    // CONTROL: the schema-valid shapes PASS — the widget is the gap. (The
+    // author-supplied id/scope are the D4 provisional D-A authoring path.)
     const valid: Record<string, unknown> = {
       ...payload,
+      id: 'ASN-1',
       scope: 'global',
       context_refs: [{ kind: 'record', type: 'context', id: 'CTX-1' }],
       roles: [
