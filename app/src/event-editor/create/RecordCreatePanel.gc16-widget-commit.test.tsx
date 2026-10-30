@@ -36,7 +36,7 @@
  * (unevaluatedProperties: false) rejects; the schema-driven D1 fix removes
  * it for knowledge kinds.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -91,8 +91,12 @@ function ajvErrorsFor(
  * Build the editor-draft projection the server would serve for a knowledge
  * kind, from the REAL *.ui.yaml (mirrors
  * EditorProjectionService.projectSlotsFromFormSections — the form.sections
- * fallback the knowledge ui.yaml takes; verified against the live :3092
- * response shape: slot ids slot_<name>, items hints preserved).
+ * fallback the knowledge ui.yaml takes). WITNESS: the real projection builder
+ * `projectRecord` (server/src/ui/EditorProjectionService.ts) — it emits slot
+ * ids `slot-<path>` and forwards the `items` hints it carries (:96). The
+ * live :3092 stack was NOT a witness for this lane's YAML: it serves the
+ * TRUNK yaml (tsx --watch does not reload YAML), so no lane ui.yaml was ever
+ * loaded by a running stack (review cycle 2, D14).
  */
 function projectionForUi(kind: string): Record<string, unknown> {
   const ui = yaml.parse(
@@ -138,38 +142,77 @@ function projectionForUi(kind: string): Record<string, unknown> {
 
 const mocked = vi.hoisted(() => ({
   createCalls: [] as Array<[string | undefined, Record<string, unknown>]>,
+  // GC-16 FIX RUN 3 (D12): optional delay (ms) for the GET /schemas/:id mock —
+  // the spine race legs hold the schema document unresolved while the form is
+  // already rendered and submit is clicked.
+  schemaDocDelay: 0 as number,
 }))
 
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
-    // The served registry metadata (GET /schemas) — the knowledge triplet.
+    // The served registry metadata (GET /schemas) — the knowledge triplet
+    // PLUS the spine kinds (GC-16 FIX RUN 3, D12: the race leg resolves
+    // experiment through the served registry — the D5 primary path).
     getSchemas: vi.fn(() =>
       Promise.resolve(
-        ['assertion', 'claim', 'evidence'].map((kind) => ({
+        (
+          [
+            ['assertion', 'knowledge'],
+            ['claim', 'knowledge'],
+            ['evidence', 'knowledge'],
+            ['study', 'studies'],
+            ['experiment', 'studies'],
+            ['run', 'studies'],
+          ] as Array<[string, string]>
+        ).map(([kind, dir]) => ({
           id: sid(kind),
-          path: `knowledge/${kind}.schema.yaml`,
+          path: `${dir}/${kind}.schema.yaml`,
           title: kind,
         })),
       ),
     ),
     // GC-16 FIX RUN 2 (defect 1/4/9): the served schema DOCUMENT (GET
-    // /schemas/:id) — the REAL schema/knowledge/<kind>.schema.yaml, so the
-    // panel's schema-driven gates (shortSlug? title-required?) see the real
-    // shapes. Absent from the mock at 1f7a92fe (the panel did not fetch it).
+    // /schemas/:id) — the REAL schema/<dir>/<kind>.schema.yaml (knowledge
+    // triplet from schema/knowledge/, spine from schema/studies/ — the D12
+    // leg), so the panel's schema-driven gates (shortSlug? title-required?)
+    // see the real shapes. Respects mocked.schemaDocDelay (D12 race legs
+    // hold the document unresolved while the form is already rendered).
     getSchema: vi.fn((schemaId: string) => {
       const base = String(schemaId).split('/').pop() ?? ''
       const kind = base.replace(/\.schema\.yaml$/, '')
-      const doc = yaml.parse(readFileSync(join(SCHEMA_ROOT, 'knowledge', `${kind}.schema.yaml`), 'utf-8'))
-      return Promise.resolve({ id: schemaId, path: `knowledge/${kind}.schema.yaml`, title: kind, schema: doc })
+      const dir = kind === 'study' || kind === 'experiment' || kind === 'run' ? 'studies' : 'knowledge'
+      const doc = yaml.parse(readFileSync(join(SCHEMA_ROOT, dir, `${kind}.schema.yaml`), 'utf-8'))
+      const result = { id: schemaId, path: `${dir}/${kind}.schema.yaml`, title: kind, schema: doc }
+      return mocked.schemaDocDelay > 0
+        ? new Promise((res) => setTimeout(() => res(result), mocked.schemaDocDelay))
+        : Promise.resolve(result)
     }),
     // The REAL editor-draft shape, built from the REAL ui.yaml — the
     // projection the REAL editor renders IS the real binding.
     // The panel calls getEditorDraftProjection(SCHEMA_IDS[kind]) — the FULL
-    // registry id — so derive the kind from the basename.
+    // registry id — so derive the kind from the basename. Spine kinds get a
+    // MINIMAL projection (GC-16 FIX RUN 3, D12): the race under test is the
+    // panel's schemaDoc-driven shortSlug decision — not the spine's slot
+    // authoring (the real spine ui.yaml's chips/ref slots need suggestion
+    // services the create panel does not use in this leg).
     getEditorDraftProjection: vi.fn((schemaId: string) => {
       const base = String(schemaId).split('/').pop() ?? ''
       const kind = base.replace(/\.schema\.yaml$/, '')
-      return Promise.resolve(projectionForUi(kind))
+      const spine = kind === 'study' || kind === 'experiment' || kind === 'run'
+      const projection = spine
+        ? {
+            schemaId: sid(kind),
+            recordId: '__draft__',
+            title: 'New record',
+            blocks: [{ id: 'b1', kind: 'section', label: 'Body', slotIds: ['slot-recordId', 'slot-title'] }],
+            slots: [
+              { id: 'slot-recordId', path: '$.recordId', label: 'Record ID', widget: 'text', readOnly: true },
+              { id: 'slot-title', path: '$.title', label: 'Title', widget: 'text' },
+            ],
+            diagnostics: [],
+          }
+        : projectionForUi(kind)
+      return Promise.resolve(projection)
     }),
     createRecord: vi.fn((schemaId: string, payload: Record<string, unknown>) => {
       mocked.createCalls.push([schemaId, payload])
@@ -179,6 +222,10 @@ vi.mock('../../shared/api/client', () => ({
   // The real client barrel also exports describeApiError (used by the panel).
   describeApiError: (e: unknown) => String(e),
 }))
+
+beforeEach(() => {
+  mocked.schemaDocDelay = 0
+})
 
 afterEach(() => {
   mocked.createCalls = []
@@ -401,6 +448,171 @@ describe('GC-16 FIX1 D2/D3 — knowledge array-of-ref fields through the REAL wi
     expect(
       ajvErrorsFor(ajv, 'assertion', valid),
       'schema-valid context_refs/roles must PASS the REAL schema',
+    ).toEqual([])
+  }, 20000)
+})
+
+// =====================================================================
+// GC-16 FIX RUN 3 D10 + D13 — the $.id slot is authorable through the
+// REAL form (RED at c924b93a: assertion.ui.yaml / claim.ui.yaml declare
+// `readonly: true` on $.id, so the real form renders the row
+// data-read-only=true, NO input can open, and the captured payload
+// carries no id — while the client no longer mints knowledge ids (D4
+// provisional D-A). That is exactly the dead door the review's
+// real-render probe proved.
+//
+// D13: the D6 leg in RecordCreatePanel.gc16.test.tsx injects the
+// author's id through a MOCKED editor (mocked.authorUpdate) — that leg
+// now states the injection explicitly, and THIS real-form leg pins the
+// same acceptance criterion ("the form exposes the schema-declared id
+// field to the author") on the REAL projection path (real taptab
+// editor, real ui.yaml projection, real serializer).
+// =====================================================================
+
+/** Drive the REAL text slot's click-to-edit → commit (the FieldRow
+ *  contract: clicking the value span opens the inline input; Enter
+ *  commits. A readonly slot renders NO input — that is the RED). */
+function commitTextSlot(row: HTMLElement, value: string): void {
+  const valueEl = row.querySelector('.taptab-widget-value')
+  expect(valueEl, 'the slot must render the taptab value span').toBeTruthy()
+  act(() => {
+    fireEvent.click(valueEl!)
+  })
+  const input = row.querySelector('input.taptab-inline-input')
+  expect(
+    input,
+    'clicking an EDITABLE slot must open the inline input (a readonly slot renders none — the D10 RED)',
+  ).toBeTruthy()
+  act(() => {
+    fireEvent.change(input!, { target: { value } })
+    fireEvent.keyDown(input!, { key: 'Enter' })
+  })
+}
+
+/** Drive the REAL select slot's click → option commit (EnumCombobox:
+ *  click the value span, click the option row). */
+function commitSelectSlot(row: HTMLElement, optionLabel: string): void {
+  const valueEl = row.querySelector('.taptab-widget-value')
+  expect(valueEl, 'the slot must render the taptab value span').toBeTruthy()
+  act(() => {
+    fireEvent.click(valueEl!)
+  })
+  const option = screen.getByText(optionLabel)
+  act(() => {
+    fireEvent.click(option)
+  })
+}
+
+/** The create form's submit (no array-widget commits in these legs, so
+ *  the captured create IS the submit — no settle-and-requery needed). */
+function submitCreate(): void {
+  const form = screen.getByTestId('record-create-panel').querySelector('form')
+  expect(form, 'the create panel renders a form').toBeTruthy()
+  act(() => {
+    fireEvent.submit(form!)
+  })
+}
+
+describe('GC-16 FIX RUN 3 D10 + D13 — the $.id slot is authorable through the REAL form', () => {
+  it.each(['assertion', 'claim'] as const)(
+    '%s: the $.id slot projects EDITABLE (data-read-only=false), the author commits the id through the real input, and the captured payload carries it (RED at c924b93a: readonly: true → no input, no id in the payload)',
+    async (kind) => {
+      render(<RecordCreatePanel nodeType={kind} draftTitle="fix3 leg" onCreated={() => {}} />)
+      const row = await waitFor(() => findRow('ID'), { timeout: 8000 })
+      expect(
+        row.getAttribute('data-read-only'),
+        `${kind}.ui.yaml must NOT declare readonly on $.id — the schema requires the author to supply it and the client no longer mints knowledge ids (D4 provisional D-A)`,
+      ).toBe('false')
+      // Drive the REAL input: the author commits the stable identifier.
+      commitTextSlot(row, kind === 'assertion' ? 'ASN-FIX3' : 'CLM-FIX3')
+      submitCreate()
+      await waitFor(() => expect(mocked.createCalls).toHaveLength(1))
+      const [, payload] = mocked.createCalls[0]
+      expect(
+        payload.id,
+        'the captured payload must carry the AUTHOR-committed id (no client mint)',
+      ).toBe(kind === 'assertion' ? 'ASN-FIX3' : 'CLM-FIX3')
+    },
+    20000,
+  )
+
+  it('D13: the REAL-form assertion payload (id + scope authored through the real inputs, real serializer) is VALID against the REAL assertion.schema.yaml — the acceptance criterion on the real projection path, not the mocked editor', async () => {
+    render(
+      <RecordCreatePanel nodeType="assertion" draftTitle="real form assertion" onCreated={() => {}} />,
+    )
+    const idRow = await waitFor(() => findRow('ID'), { timeout: 8000 })
+    commitTextSlot(idRow, 'ASN-FIX3-1')
+    // Fresh row query (the commit re-rendered the editor): author the
+    // schema-required scope through the real select.
+    const scopeRow = findRow('Scope (canonical assertion shape)')
+    commitSelectSlot(scopeRow, 'Global')
+    // Author nothing else — a minimal global assertion is exactly
+    // { kind, id, scope } (+ the title seed); the serializer writes the
+    // rest as empties and the panel strips them.
+    submitCreate()
+    await waitFor(() => expect(mocked.createCalls).toHaveLength(1))
+    const [, payload] = mocked.createCalls[0]
+    const ajv = loadKnowledgeAjv()
+    const errors = ajvErrorsFor(ajv, 'assertion', payload)
+    console.log(
+      'D13 RAW AJV (real-form assertion payload):',
+      JSON.stringify(payload),
+      JSON.stringify(errors),
+    )
+    expect(
+      errors,
+      'the REAL-form assertion payload (author-supplied id + scope via the real inputs) must be VALID against the REAL assertion.schema.yaml',
+    ).toEqual([])
+  }, 20000)
+})
+
+// =====================================================================
+// GC-16 FIX RUN 3 D12 — the spine submit is gated on the schema document
+// (the shortSlug race, RED at c924b93a): the D1 schema-driven shortSlug
+// decision is gated on the ASYNC GET /schemas/:id, but submit was not
+// gated on it — submitting while the document is in flight posts a spine
+// payload WITHOUT the schema-required shortSlug (the review's RACE
+// PAYLOAD, rejected by the REAL experiment.schema.yaml).
+// =====================================================================
+
+describe('GC-16 FIX RUN 3 D12 — spine submit waits for the schema document (shortSlug race)', () => {
+  it('spine (experiment): an early submit (schema doc still in flight) is REFUSED — no create; after the doc resolves the retry posts a shortSlug-carrying payload VALID against the REAL experiment.schema.yaml (RED at c924b93a: the early submit posts the payload WITHOUT the required shortSlug)', async () => {
+    mocked.schemaDocDelay = 300
+    render(
+      <RecordCreatePanel nodeType="experiment" studyId="STU-1" draftTitle="my experiment" onCreated={() => {}} />,
+    )
+    // The form renders (the projection does not depend on the schema doc)
+    // while GET /schemas/:id is still in flight.
+    await waitFor(() => findRow('Title'), { timeout: 8000 })
+    submitCreate()
+    await new Promise((r) => setTimeout(r, 100))
+    expect(
+      mocked.createCalls,
+      'a submit while the schema document is unresolved must NOT post — the spine identity field shortSlug is client-decided from the doc, and "unknown" must not be treated as "not declared" (the schema requires it)',
+    ).toEqual([])
+    expect(
+      screen.getByTestId('record-create-panel').textContent,
+      'the refusal must name the in-flight schema document',
+    ).toMatch(/schema document/i)
+    // The document resolves (300ms delay) — retry and capture the payload.
+    await new Promise((r) => setTimeout(r, 900))
+    submitCreate()
+    await waitFor(() => expect(mocked.createCalls).toHaveLength(1), { timeout: 8000 })
+    const [, payload] = mocked.createCalls[0]
+    expect(
+      typeof payload.shortSlug,
+      'the schema-required shortSlug must be stamped once the doc has resolved',
+    ).toBe('string')
+    const ajv = loadKnowledgeAjv()
+    const errors = ajvErrorsFor(ajv, 'experiment', payload)
+    console.log(
+      'D12 RAW AJV (spine payload after doc resolve):',
+      JSON.stringify(payload),
+      JSON.stringify(errors),
+    )
+    expect(
+      errors,
+      'the captured spine payload must be VALID against the REAL experiment.schema.yaml',
     ).toEqual([])
   }, 20000)
 })

@@ -379,3 +379,149 @@ describe('GC-16 FIX1 D8 — knowledge ui.yaml widget shape matches the schema it
     },
   )
 })
+
+// =====================================================================
+// GC-16 FIX RUN 3 D11 — item-hint schema faithfulness (RED at c924b93a).
+//
+// Review cycle 2 (D11): the D8 block pins the TOP-LEVEL widget + the schema
+// item shape, but is blind to the item-HINT's declared fields. The schemas
+// require more than the hints declared:
+//   - schema/core/datatypes/ref.schema.yaml: required: [kind]; kind:record
+//     then requires id + type. Every ref-shaped item hint (assertion
+//     context_refs; evidence supports/refutes/assesses) declared only
+//     type/id/label — the binding could never yield a schema-valid item.
+//   - assertion.roles items are {role_ref, context_ref} where EACH is a
+//     datatypes/ref OBJECT (assertion.schema.yaml) — but the hint bound
+//     them to `widget: text` (a string is not a ref object).
+//
+// These legs pin the DATA: every ref-shaped item hint must declare the
+// `kind` sub-field (the discriminator the schema requires), and
+// role_ref/context_ref must bind a ref-shaped OBJECT item hint
+// (kind/type/id sub-fields) — not `text`.
+// =====================================================================
+
+interface HintDef {
+  path?: string
+  widget?: string
+  fields?: HintDef[]
+}
+
+/** Every form field across all sections (hidden excluded — same set the
+ *  editor renders; items/nested fields are walked from the field). */
+function formFieldsAll(ui: UiDoc): FieldDef[] {
+  return (ui.form?.sections ?? []).flatMap((s) => s.fields ?? []).filter(
+    (f) => f && typeof f.path === 'string' && f.hidden !== true,
+  )
+}
+
+/** The item-hint of an array field: field.items (the loader-honored key). */
+function itemHintOf(fieldDef: FieldDef): HintDef | undefined {
+  return fieldDef.items as HintDef | undefined
+}
+
+/** Walk to the schema node at a dotted path, descending through array
+ *  item shapes (a.b where a is an array lives at a.items.properties.b). */
+function schemaNodeAt(schema: SchemaDoc, segs: string[]): PropDef | undefined {
+  let node: PropDef | undefined = (schema.properties ?? {})[segs[0]]
+  for (let i = 1; i < segs.length; i++) {
+    if (!node) return undefined
+    const itemNode: PropDef | undefined = node.type === 'array' ? node.items : node
+    node = itemNode?.properties?.[segs[i]]
+  }
+  return node
+}
+
+/** Does the schema property at the path (or its array item) $ref
+ *  datatypes/ref? */
+function schemaDeclaresRef(schema: SchemaDoc, segs: string[]): boolean {
+  const node = schemaNodeAt(schema, segs)
+  if (!node) return false
+  const refNode = node.type === 'array' ? node.items : node
+  return Boolean(refNode?.$ref && /ref\.schema\.yaml/.test(refNode.$ref))
+}
+
+/** The required list of the ITEM sub-schema at a dotted path. */
+function schemaItemRequired(schema: SchemaDoc, segs: string[]): string[] {
+  let node: PropDef | undefined = (schema.properties ?? {})[segs[0]]
+  for (let i = 1; i < segs.length && node; i++) node = node.properties?.[segs[i]]
+  return ((node as { items?: { required?: string[] } })?.items?.required ?? []) as string[]
+}
+
+/** Does a hint (or its sub-fields) declare the given sub-field? */
+function hintDeclares(hint: HintDef | undefined, name: string): boolean {
+  if (!hint) return false
+  return (hint.fields ?? []).some((f) => f.path === name)
+}
+
+describe('GC-16 FIX RUN 3 D11 — ref-shaped item hints are schema-faithful (data)', () => {
+  const REF_ITEM_FIELDS: Array<{ kind: 'assertion' | 'evidence'; path: string }> = [
+    { kind: 'assertion', path: '$.context_refs' },
+    { kind: 'evidence', path: '$.supports' },
+    { kind: 'evidence', path: '$.refutes' },
+    { kind: 'evidence', path: '$.assesses' },
+  ]
+
+  it.each(REF_ITEM_FIELDS.map((f) => `${f.kind} ${f.path}`))(
+    '%s: schema requires ref items (kind required) — the item hint declares kind alongside type/id (RED at c924b93a: no kind)',
+    async (name) => {
+      const { kind, path } = REF_ITEM_FIELDS.find((f) => `${f.kind} ${f.path}` === name)!
+      const [ui, schema] = await Promise.all([loadUi(kind), loadSchema(kind)])
+      const segs = path.replace(/^\$./, '').split('.')
+      expect(
+        schemaDeclaresRef(schema, segs),
+        `${kind}.schema.yaml declares ${path} items as the datatypes/ref object`,
+      ).toBe(true)
+      expect((schema.properties ?? {})[segs[0]]!.items, `${kind}.schema.yaml declares ${path} items`).toBeTruthy()
+      const ref = yaml.parse(
+        await readFile(resolve(process.cwd(), '..', 'schema', 'core', 'datatypes', 'ref.schema.yaml'), 'utf-8'),
+      ) as { required?: string[] }
+      expect(ref.required, 'datatypes/ref requires the kind discriminator').toContain('kind')
+      const fieldDef = formFieldsAll(ui).find((f) => f.path === path)
+      expect(fieldDef, `${kind}.ui.yaml must bind ${path}`).toBeDefined()
+      expect(fieldDef!.widget, `${path} must keep the array widget`).toBe('array')
+      const hint = itemHintOf(fieldDef!)
+      expect(hint, `${path} must carry an item hint`).toBeTruthy()
+      expect(hint!.widget, 'the item hint must be an object over the item sub-fields').toBe('object')
+      // D11: the schema-required discriminator must be declared by the hint.
+      expect(
+        hintDeclares(hint, 'kind'),
+        `${path} items require 'kind' (datatypes/ref required) — the item hint must declare a kind sub-field (declares: ${JSON.stringify(
+          (hint!.fields ?? []).map((f) => f.path),
+        )})`,
+      ).toBe(true)
+      // kind:record then-requires id + type: both stay declared.
+      expect(hintDeclares(hint, 'id'), `${path} record refs require id`).toBe(true)
+      expect(hintDeclares(hint, 'type'), `${path} record refs require type (kind:record then-requires it)`).toBe(true)
+    },
+  )
+
+  it('assertion $.roles: role_ref AND context_ref are datatypes/ref OBJECTS — each binds a ref-shaped object item hint (kind/type/id), not text (RED at c924b93a: bound to text)', async () => {
+    const [ui, schema] = await Promise.all([loadUi('assertion'), loadSchema('assertion')])
+    // The schema speaks: both sub-fields $ref datatypes/ref; the item
+    // requires both.
+    expect(schemaDeclaresRef(schema, ['roles', 'role_ref']), 'assertion.schema.yaml roles.role_ref is a ref object').toBe(true)
+    expect(schemaDeclaresRef(schema, ['roles', 'context_ref']), 'assertion.schema.yaml roles.context_ref is a ref object').toBe(true)
+    expect(schemaItemRequired(schema, ['roles']), 'assertion.schema.yaml roles items require both refs').toEqual(
+      expect.arrayContaining(['role_ref', 'context_ref']),
+    )
+    const fieldDef = formFieldsAll(ui).find((f) => f.path === '$.roles')
+    expect(fieldDef, 'assertion.ui.yaml must bind $.roles').toBeDefined()
+    expect(fieldDef!.widget, '$.roles must keep the array widget').toBe('array')
+    const hint = itemHintOf(fieldDef!)
+    expect(hint, '$.roles must carry an item hint').toBeTruthy()
+    expect(hint!.widget, 'the roles item hint must be an object').toBe('object')
+    for (const sub of ['role_ref', 'context_ref']) {
+      const subHint = (hint!.fields ?? []).find((f) => f.path === sub)
+      expect(subHint, `the roles item hint must declare the ${sub} sub-field`).toBeTruthy()
+      expect(
+        subHint!.widget,
+        `${sub} is a datatypes/ref OBJECT (schema) — a text widget commits a string (widget=${subHint!.widget})`,
+      ).toBe('object')
+      // The ref shape: the object hint spans the discriminator + the
+      // record-ref identity the schema then-requires.
+      expect(hintDeclares(subHint, 'kind'), `${sub} (a ref object) must declare kind`).toBe(true)
+      expect(hintDeclares(subHint, 'type'), `${sub} (a ref object) must declare type`).toBe(true)
+      expect(hintDeclares(subHint, 'id'), `${sub} (a ref object) must declare id`).toBe(true)
+    }
+  })
+})
