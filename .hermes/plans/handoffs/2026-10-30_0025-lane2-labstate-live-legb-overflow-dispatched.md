@@ -76,3 +76,19 @@ worktree-add timeout trap), ledger+handoff 00:20-00:25. LIVE LEFT RUNNING: LABST
 (fleet slot-0, launched 23:55 by its queue), LEG B worker 687679 (bg slot-0, launched 00:17),
 lane-1 GC16 509080 (not mine), LABSTATE queue 599469 (holds slot-0 flock for the coder's life).
 Exit at budget.
+
+## AMENDMENT 00:35 (budget expiry checkpoint)
+LEG B worker EXITED rc=0 at 00:26 (marker DONE bc6f476a). Close-checks by orch FIRST-HAND:
+one commit, tree clean, 6 files +14/-54 exactly claimed scope, chain-test diff COMMENT-only,
+grep AgentChatPane zero-hits post-deletion, D4 rule with receipts cite in comment.
+ADVC CYCLE-1 LIVE at budget expiry: systemd run-p718772-i63597291 (cloud OpenRouter, no slot
+contention), prompt prompts/advc-CHATUI1-legB-l2t2350.txt, report owed
+reviews/L2-CHATUI1-legB-advc-l2t2350.md, log logs/advc-CHATUI1-legB-l2t2350.log.
+NEXT TICK: read advc verdict. On ACCEPT -> orch self-verify (cd wt/L2-CHAT-UI-1-legB-lane2-l2t2350/app:
+npx vitest run src/agent src/event-editor/right-pane/ai/AiTabPanel.chain.test.tsx; tsc <=12) ->
+merge --no-ff bc6f476a into cl/integration-2 -> restart stack background=true (CSS landed) ->
+LEG C claimable (worktree off NEW tip; thunderbeast bg slot-0 NOW FREE after worker exit, slot-1 free).
+On FIX -> fix run SAME worktree with defect list verbatim. Browser gate N/A (unrouted component).
+LIVE AT EXIT: LABSTATE coder 645493 (fleet slot-0; [LABSTATE][RED] commit 150359aa ALREADY LANDED —
+RED-first discipline satisfied, report file not yet written at exit), advc LEG B (cloud), lane-1 GC16
+509080 (not mine). Queue flock 599469 still holds slot-0 for LABSTATE's life.
