@@ -49,7 +49,7 @@ BASE = os.environ.get("DRIVE_BASE", "http://localhost:3093")
 RECEIPTS_ROOT = os.environ.get("DRIVE_RECEIPTS",
                                "/home/brad/.hermes/cl/receipts/L2-LABSTATE-CONTENTS-1")
 BACKEND_LOG = os.environ.get("DRIVE_BACKEND_LOG",
-                             "/mnt/vast/home/brad/git/wt/L2-LABSTATE-CONTENTS-1-lane2-l2t2255/.run/backend.log")
+                             "/mnt/vast/home/brad/git/cl-integration-2/.run/backend.log")
 TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
 
 # ---------------------------------------------------------------------------
@@ -60,16 +60,25 @@ TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
 # re-drive; bare single-letter nouns ("material A"/"material B") are barred
 # by the INTENDED material-noun gate (ruling §Q1) and never reached the fold.
 # ---------------------------------------------------------------------------
+# Swap applied per ruling §Q2 pre-flight (orch authority, 2026-10-30): the
+# ruling's suggested labels FAILED the live single-candidate probe —
+# 'acetonitrile' returns 13 tier-1 bind:pass candidates (aliquot/spec noise;
+# /api/resolve + live compile card, receipts /tmp/probe-receipts/2026-10-30
+# T145457Z), 'clofibrate 1mM' compiles normalized to 'clofibrate 1 mM' ->
+# unknown-noun. The swap labels below each probe EXACTLY ONE tier-1 candidate
+# and 'bench bead beater' is live-accepted (events=1) in the probe receipts.
 TURNS = [
     ("A", "Place a 96-well plate on the deck."),
-    ("1", "add acetonitrile to A1:H1"),
-    ("1b", "add clofibrate 1mM to A2:H2"),
+    ("1", "add bench bead beater to A1:H1"),
+    ("1b", "add lysis-reagent to A2:H2"),
     ("2", "mix all wells that have material"),
 ]
 # The never-guess control (spec §11 failure-arm): an add naming a plate the
 # deck does not hold. The lab_state fold must no-op + the pass must emit a
-# lab_state diagnostic; NO contents written.
-CONTROL_TURN = ("X", "add acetonitrile to the ghost-plate well C1")
+# lab_state diagnostic; NO contents written. Control reuses the VERIFIED
+# resolvable material so the ghost-plate leg (not the material gate) is the
+# live bar, per ruling §Q2.
+CONTROL_TURN = ("X", "add bench bead beater to the ghost-plate well C1")
 
 # The held-session identity constants (run-suite-a.py values — the deck
 # surface's byte-stable wire shape).
