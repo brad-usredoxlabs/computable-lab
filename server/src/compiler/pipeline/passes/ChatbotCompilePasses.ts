@@ -1784,13 +1784,22 @@ export function createLabStatePass(
 ): Pass {
   const vocabulary = opts.vocabulary ?? defaultScientistIntentVocabulary();
   // The DATA-declared identity rules (frozen per-load; absent section => the
-  // empty order/tokenFields => the fold resolves rung R1 ONLY, the raw path —
-  // fail-closed never-guess). Threaded at THIS seam, never imported into the
-  // pure fold module (LabState.ts keeps no vocabulary import).
+  // empty order/tokenFields => the fold falls back to rung R1 ONLY, the raw
+  // path — the D5 fail-closed semantics: an EMPTY `order` resolves rung R1
+  // ONLY, exactly as the 2-arg fold call; the raw path keeps working).
+  // Threaded at THIS seam, never imported into the pure fold module (LabState.ts
+  // keeps no vocabulary import).
   const rules: LabIdentityRules = {
     order: [...vocabulary.labwareIdentityResolution().order],
     tokenFields: [...vocabulary.labwareIdentityResolution().tokenFields],
   };
+  // D6 (advc fix-run 1): the content-bearing event-type classification for the
+  // fold's §7 never-guess surface is DATA (the vocabulary's
+  // `labStateContentBearingEventTypes` list — the fold-side twin of the read
+  // half's `materialBearingEventTypes`), threaded at THIS seam, never a TS
+  // literal list in the fold module (one DATA declaration of the concept,
+  // consumed by both halves — no double vocabulary).
+  const contentBearingEventTypes = vocabulary.labStateContentBearingEventTypes();
 
   // The §7 no-op reason -> diagnostic code mapping (the code strings live in
   // the PASS, not the fold — the pure module carries no reporting policy).
@@ -1819,7 +1828,7 @@ export function createLabStatePass(
       ): void => {
         if (outcome.changed) return;
         if (!outcome.reason) return;
-        if (!isContentBearing(event)) return; // a non-content-bearing no-op is expected (not a never-guess surface)
+        if (!isContentBearing(event, contentBearingEventTypes)) return; // a non-content-bearing no-op is expected (not a never-guess surface)
         const code = REASON_CODE[outcome.reason];
         if (!code) return;
         const details = event.details as Record<string, unknown> | undefined;
@@ -1874,7 +1883,16 @@ export function createLabStatePass(
           }
           return out;
         };
-        console.log(`[lab_state ARM-LOG] turn=${snapshot.turnIndex} prior_labware=${JSON.stringify(summarize(prior))} after_labware=${JSON.stringify(summarize(snapshot))}`);
+        // D3 (advc fix-run 1): the drive's never-guess control leg needs the
+        // §7 DIAGNOSTIC codes in a captured channel — the wire done frame does
+        // not carry them (the AgentResult has no diagnostics field), so they
+        // ride this env-gated log line (the drive captures the backend-log
+        // window per turn). `unresolved_codes` is the sorted-unique list of
+        // the lab_state diagnostic codes this turn produced (empty list when
+        // the fold wrote everything / nothing content-bearing no-op'd).
+        const unresolvedCodes: string[] = [];
+        for (const d of diagnostics) unresolvedCodes.push(d.code);
+        console.log(`[lab_state ARM-LOG] turn=${snapshot.turnIndex} prior_labware=${JSON.stringify(summarize(prior))} after_labware=${JSON.stringify(summarize(snapshot))} unresolved_codes=${JSON.stringify([...new Set(unresolvedCodes)].sort())}`);
       }
       return {
         ok: true,

@@ -203,10 +203,13 @@ def arm_log_since(offset):
 
 
 def parse_arm(log_line):
-    """Parse one ARM-LOG line into (turn, prior, after) — tolerant of the
-    compact JSON payloads."""
+    """Parse one ARM-LOG line into (turn, prior, after, unresolved_codes) —
+    tolerant of the compact JSON payloads. D3 (advc fix-run 1): the line
+    carries the turn's §7 lab_state diagnostic CODES (unresolved_codes) —
+    the captured channel the never-guess control leg asserts on (the wire
+    done frame does not carry diagnostics)."""
     out = {}
-    for token in ("turn=", "prior_labware=", "after_labware="):
+    for token in ("turn=", "prior_labware=", "after_labware=", "unresolved_codes="):
         i = log_line.rfind(token)
         if i < 0:
             continue
@@ -436,20 +439,51 @@ def main():
     }
 
     # LEG 4 (control X): unknown plate -> no contents written (the fold
-    # no-ops) + a lab_state diagnostic in the payload/log (never-guess).
+    # no-ops) + a lab_state diagnostic in the captured payload/log (never-
+    # guess). D3 (advc fix-run 1): the leg is NON-VACUOUS — the pre-fix
+    # `ok = arm_log is not None and (tx_prior == tx_after or tx_after is None)`
+    # was asserted-by-construction when the fold never ran (arm_log empty,
+    # tx_prior == tx_after == None => None == None => ok True) and the
+    # computed `tx_diag` was never used. The leg now requires:
+    #   (1) a NON-EMPTY arm_log for the control turn (the fold PROVABLY ran —
+    #       the backend lab_state pass fired this turn),
+    #   (2) after_labware == prior_labware with BOTH non-None (the no-op wrote
+    #       nothing — the fold never half-writes for an unmappable hint), and
+    #   (3) >=1 lab_state UNRESOLVED diagnostic in the captured payload/log
+    #       (the §7 never-guess surface: the pass diagnostic frame OR the
+    #       env-gated ARM-LOG unresolved_codes — the wire done frame does not
+    #       carry diagnostics, so both captured channels are counted).
     tx = results.get("X") or {}
-    tx_after = (tx.get("arm_log") or [{}])[-1].get("after_labware") if tx.get("arm_log") else None
-    tx_diag = [d for d in (tx.get("pipeline_diagnostics") or [])
-               if any("lab_state" in str(dd) for dd in
-                      [(d.get("diagnostics") or [])])]
-    # the arm-log after must equal the prior (no-op: no contents written this
-    # turn) — the fold never half-writes for an unmappable hint.
-    tx_prior = (tx.get("arm_log") or [{}])[-1].get("prior_labware") if tx.get("arm_log") else None
+    tx_arm = tx.get("arm_log") or []
+    tx_after = tx_arm[-1].get("after_labware") if tx_arm else None
+    tx_prior = tx_arm[-1].get("prior_labware") if tx_arm else None
+    # (3) the captured diagnostic channels: (a) the wire pipeline_diagnostics
+    # frames (the §7 codes ride there when the compile outcome surfaces them)
+    # and (b) the ARM-LOG unresolved_codes (the env-gated log line the drive
+    # captures per turn — always present for a control turn on a restarted
+    # stack with LABSTATE_ARM_LOG=1).
+    tx_diag_wire = [
+        d for fr in (tx.get("pipeline_diagnostics") or [])
+        if isinstance(fr, dict)
+        for d in (fr.get("diagnostics") or [])
+        if isinstance(d, dict)
+        and str(d.get("pass_id") or "") == "lab_state"
+        and str(d.get("code") or "").startswith("lab_state_unresolved")
+    ]
+    tx_diag_arm_codes = [
+        c for c in (tx_arm[-1].get("unresolved_codes") or []) if isinstance(c, str)
+        and c.startswith("lab_state_unresolved")
+    ] if tx_arm else []
+    tx_diag_count = len(tx_diag_wire) + len(tx_diag_arm_codes)
     leg["control_never_guess"] = {
-        "ok": (tx.get("arm_log") is not None) and (tx_prior == tx_after or tx_after is None),
+        "ok": bool(tx_arm) and tx_prior is not None and tx_after is not None
+              and tx_after == tx_prior and tx_diag_count >= 1,
+        "arm_log_lines": len(tx_arm),
         "arm_prior": tx_prior, "arm_after": tx_after,
+        "unresolved_diag_wire": tx_diag_wire,
+        "unresolved_diag_arm_codes": tx_diag_arm_codes,
         "pipeline_diagnostics_frames": tx.get("pipeline_diagnostics"),
-        "note": "unknown-plate control: the lab_state fold no-ops (no contents written) + the pass diagnostic rides the payload/log (never-guess).",
+        "note": "unknown-plate control (NON-VACUOUS, D3): the lab_state fold provably ran (non-empty arm_log), no-op'd (after == prior, both captured) and surfaced a lab_state unresolved diagnostic in the captured payload/log (never-guess). A turn where the fold never executed cannot pass this leg.",
     }
 
     report = {

@@ -2005,15 +2005,22 @@ describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at 
 
   it('absent DATA section (injected vocabulary) fails CLOSED to rung R1 ONLY: symbolic no-op + diagnostic, raw labwareInstanceId still writes', () => {
     // The fail-closed arm: a vocabulary whose labwareIdentityResolution section
-    // is ABSENT => the fold resolves rung R1 ONLY (the raw instanceId path) —
-    // every symbolic resolution is a never-guess no-op.
+    // is ABSENT => the loader returns the empty lists => the fold resolves rung
+    // R1 ONLY (the raw instanceId path) — D5: an EMPTY `order` is treated
+    // exactly as absent rules, so an absent section and a 2-arg fold call are
+    // identical (the pre-fix fold ran ZERO rungs for an empty order — not even
+    // R1 — contradicting the R1-only doc claim).
     const emptyResolution = () => ({ order: [] as readonly string[], tokenFields: [] as readonly string[] });
-    const stubVocab = { labwareIdentityResolution: emptyResolution } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
+    const stubVocab = {
+      labwareIdentityResolution: emptyResolution,
+      labStateContentBearingEventTypes: () => ['add_material', 'transfer'] as readonly string[],
+    } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
     const pass = createLabStatePass({ vocabulary: stubVocab });
     const prior = singlePlateSnapshot();
     const instanceId = Object.keys(prior.labware)[0]!;
 
-    // (a) the symbolic (shipped) shape: no-op + the §7 diagnostic.
+    // (a) the symbolic (shipped) shape: R1 misses ('96-well-plate' is not an
+    // instanceId) => no-op + the §7 diagnostic.
     const symbolic = addMaterialExpander.expand({
       verb: 'add_material',
       params: { labware: '96-well-plate', well: 'A1', material: 'A', volume_uL: 100 },
@@ -2040,5 +2047,40 @@ describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at 
       { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
     expect(r2.output.snapshotAfter.labware[instanceId]!.wells['A1']![0]!.materialId).toBe('RAW');
     expect(r2.diagnostics ?? []).toHaveLength(0);
+  });
+
+  // D5 (advc fix-run 1): the R1-DEFAULT semantics for an empty `order`,
+  // proven at the PASS seam — a symbolic hint that EQUALS an instanceId
+  // resolves through rung R1 (a write, no diagnostic) even when the
+  // vocabulary's section is absent (empty lists). The pre-fix pass path ran
+  // ZERO rungs for an empty order, so this shape no-op'd while the 2-arg
+  // fold call resolved it — code and docs now agree on R1-ONLY.
+  it('absent DATA section: a symbolic hint that EQUALS an instanceId still resolves via rung R1 (the R1 default — the pre-fix gap is gone)', () => {
+    const emptyResolution = () => ({ order: [] as readonly string[], tokenFields: [] as readonly string[] });
+    const stubVocab = {
+      labwareIdentityResolution: emptyResolution,
+      labStateContentBearingEventTypes: () => ['add_material', 'transfer'] as readonly string[],
+    } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
+    const pass = createLabStatePass({ vocabulary: stubVocab });
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    // The shipped shape with a hint that IS the instanceId (R1 rung).
+    const ev: PlateEventPrimitive = {
+      eventId: 'evt-r1-hint',
+      event_type: 'add_material',
+      labwareId: instanceId,
+      details: {
+        well: 'C1',
+        material: 'A',
+        volumeUl: 10,
+      },
+    };
+    const r = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, [ev]) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    // R1 resolves the hint to the instance: contents land, no diagnostic.
+    expect(r.output.snapshotAfter.labware[instanceId]!.wells['C1']).toEqual([
+      { materialId: 'A', kind: 'A', volumeUl: 10 },
+    ]);
+    expect(r.diagnostics ?? []).toHaveLength(0);
   });
 });

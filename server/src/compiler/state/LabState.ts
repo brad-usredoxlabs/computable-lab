@@ -84,8 +84,10 @@ export interface ReservoirContents {
 // `tokenFields` names the instance fields a rung reads. The fold is a GENERIC
 // field-identity evaluator over those declared fields — it never branches on a
 // rung id or a field name (the PROTO-AI-3 generic-evaluator doctrine; the B3
-// boundary). Absent rules (a 2-arg fold call) => rung R1 ONLY (the raw
-// labwareInstanceId path), so every pre-existing byte-stable test is unchanged.
+// boundary). Absent rules (a 2-arg fold call) OR a rule set with an EMPTY
+// `order` (an absent vocabulary section fails closed to the empty lists —
+// D5, advc fix-run 1) => rung R1 ONLY (the raw labwareInstanceId path), so
+// every pre-existing byte-stable test is unchanged.
 // The rules are threaded at the PASS seam (createLabStatePass loads the
 // vocabulary), never imported into this pure module.
 // ---------------------------------------------------------------------------
@@ -94,7 +96,9 @@ export interface LabIdentityRules {
   /** Rung ids in declaration order (the DATA `order` list). The ladder walks
    *  them first-hit-wins: the FIRST rung that yields exactly one instance wins;
    *  zero matches advances to the next rung; a TIE (two or more) at any rung is
-   *  terminal => unresolved (never-guess: no pick, no fall-through). */
+   *  terminal => unresolved (never-guess: no pick, no fall-through). An EMPTY
+   *  `order` (the absent-section fail-closed read) falls back to rung R1 ONLY
+   *  (the raw instanceId path) — exactly as the rules-absent fold (D5). */
   order: readonly string[];
   /** The instance field each rung reads (the DATA `tokenFields` list,
    *  index-aligned with `order`). instanceIdentity -> `instanceId`,
@@ -225,17 +229,23 @@ function rungMatches(
 
 /** Resolve a symbolic labwareId hint to a UNIQUE snapshot instance via the
  *  DATA-declared ladder (never-guess: first rung with exactly one match wins;
- *  zero advances; a tie is terminal). `rules` absent => rung R1 ONLY (the raw
- *  instanceId path) — the pre-existing behavior, so a 2-arg fold call is
- *  byte-unchanged. Returns the instanceId or undefined (unresolved). */
+ *  zero advances; a tie is terminal). `rules` absent OR a rule set with an
+ *  EMPTY `order` (an absent vocabulary section fails closed to the empty
+ *  lists — the D5 semantics, advc fix-run 1) => rung R1 ONLY (the raw
+ *  instanceId path), EXACTLY as the 2-arg fold call: one rung, the raw path,
+ *  so a symbolic hint that equals an instanceId still resolves and every
+ *  pre-existing byte-stable test is unchanged. (The pre-fix fold ran ZERO
+ *  rungs for an empty order — not even R1 — while its doc comments claimed
+ *  R1-only; D5 makes code and comments agree.) Returns the instanceId or
+ *  undefined (unresolved). */
 function resolveLabware(
   snapshot: LabStateSnapshot,
   hint: string | undefined,
   rules: LabIdentityRules | undefined,
 ): string | undefined {
   if (typeof hint !== 'string' || !hint.trim()) return undefined;
-  const order = rules?.order ?? ['instanceIdentity'];
-  const tokenFields = rules?.tokenFields ?? ['instanceId'];
+  const order = rules && rules.order.length > 0 ? rules.order : ['instanceIdentity'];
+  const tokenFields = rules && rules.order.length > 0 ? rules.tokenFields : ['instanceId'];
   for (let i = 0; i < order.length; i++) {
     const field = tokenFields[i];
     if (field === undefined) continue; // misaligned DATA => that rung inert (fail-closed)
@@ -246,21 +256,46 @@ function resolveLabware(
   return undefined;
 }
 
-/** The material-bearing event types the ledger consumes. Content-bearing for
- *  the fold: add_material always; transfer when it carries a source labware.
- *  Used by the lab_state PASS (createLabStatePass) to decide which fold no-ops
- *  are meaningful enough to surface as a `lab_state_unresolved_labware_reference`
- *  diagnostic (§7 — the fold is pure; reporting rides the pass). Exported so
- *  the pass reads it as the one declared consumer; the fold itself needs it not. */
-export function isContentBearing(event: PlateEventPrimitive): boolean {
-  if (event.event_type !== 'add_material' && event.event_type !== 'transfer') return false;
+// ---------------------------------------------------------------------------
+// L2-LABSTATE-CONTENTS-1 — the content-bearing classification (the fold's
+// never-guess surface, §7). D6 (advc fix-run 1): the EVENT-TYPE half of this
+// concept is DATA (the vocabulary's `labStateContentBearingEventTypes` list —
+// the fold-side twin of the read half's `materialBearingEventTypes`), passed
+// in as `declaredEventTypes` — no TS literal list of event types (the B3
+// boundary / no-double-vocabulary discipline: one DATA declaration of the
+// concept, consumed by both halves). The CARRIER half (which declared
+// identity slots an event carries — `labwareId` / `source_labware` / the raw
+// `from.labwareInstanceId`) stays a shape probe in TS: it reads the event's
+// OWN declared slots, it names no event type (the same generic-read posture
+// as the rung evaluators over the declared tokenFields). `declaredEventTypes`
+// empty (absent vocabulary section) => fail-closed: NO event is
+// content-bearing, so the pass surfaces no diagnostics (over-conservative,
+// never-guess-safe). The pure fold module never imports the vocabulary.
+// ---------------------------------------------------------------------------
+export function isContentBearing(
+  event: PlateEventPrimitive,
+  declaredEventTypes: readonly string[] = [],
+): boolean {
+  if (!declaredEventTypes || !declaredEventTypes.includes(event.event_type)) return false;
   if (event.event_type === 'add_material') return true;
+  // A transfer is content-bearing when it declares a SOURCE labware carrier
+  // (the pre-fix check) OR — D1 (advc fix-run 1) — when it declares a
+  // DESTINATION labware carrier without a resolvable source (the expander's
+  // destination-only shape, where the top-level labwareId IS the destination):
+  // an unresolvable source side is a never-guess failure the pass must
+  // surface. A transfer with NO labware carriers at all is not content-bearing
+  // (nothing to resolve, nothing to surface).
   const details = event.details as Record<string, unknown> | undefined;
   const from = details?.from as Record<string, unknown> | undefined;
-  return Boolean(
+  const hasSourceCarrier =
     (typeof details?.source_labware === 'string' && details.source_labware)
-    || (from && typeof from.labwareInstanceId === 'string'),
-  );
+    || (from && typeof from.labwareId === 'string' && from.labwareId)
+    || (from && typeof from.labwareInstanceId === 'string' && from.labwareInstanceId);
+  const hasDestinationCarrier =
+    (typeof details?.destination_labware === 'string' && details.destination_labware)
+    || (event.labwareId !== undefined)
+    || (from && typeof from.labwareInstanceId === 'string' && from.labwareInstanceId);
+  return Boolean(hasSourceCarrier || hasDestinationCarrier);
 }
 
 // ---------------------------------------------------------------------------
@@ -547,9 +582,15 @@ function applyTransfer(
   // (b) the SHIPPED transferExpander shape: symbolic source_labware /
   //     destination_labware hints (each side through the SAME §5.1 ladder) +
   //     source_well / well (or the multi-well carriers source_wells / wells).
+  //     D1 (advc fix-run 1): the SOURCE hint comes from source_labware /
+  //     from.labwareId ONLY — the top-level labwareId is the expander's
+  //     TARGET (simpleVerbs.ts sets it from targetLabware), so it must never
+  //     fall into the source side. A transfer naming only the destination
+  //     therefore has NO source identity => labware_unresolved no-op +
+  //     diagnostic (spec §4.2: "both sides must resolve uniquely or the fold
+  //     no-ops") — never a self-transfer inside the destination plate.
   const srcHint = typeof details.source_labware === 'string' ? details.source_labware
-    : typeof fromObj?.labwareId === 'string' ? fromObj.labwareId
-    : typeof event.labwareId === 'string' ? event.labwareId : undefined;
+    : typeof fromObj?.labwareId === 'string' ? fromObj.labwareId : undefined;
   const dstHint = typeof details.destination_labware === 'string' ? details.destination_labware
     : typeof toObj?.labwareId === 'string' ? toObj.labwareId
     : typeof event.labwareId === 'string' ? event.labwareId : undefined;
@@ -594,10 +635,21 @@ function applyTransfer(
   let wrote = false;
   for (const [srcWell, dstWell] of pairs) {
     const srcWellMaterials = srcLabware.wells[srcWell];
+    // D2 (advc fix-run 1, spec §4.2(a) / §12 bait 5 — RAW-PATH BYTE-STABILITY):
+    // restore the base write semantics EXACTLY (base applyTransfer at
+    // 9d020514): an EMPTY source well returns the clone UNTOUCHED — the base
+    // early-returned at `if (srcMaterials.length === 0) return newSnapshot;`
+    // BEFORE it ever touched the destination well, so the pre-fix comment
+    // claiming the base "wrote the (unchanged) destination well" was
+    // backwards. (The pre-fix fold created `dst: []` here — a snapshot-shape
+    // drift vs base.) Per-pair generalization for the multi-well arm: an
+    // empty pair writes nothing (no destination materialization) and the
+    // fold continues; with a single pair (the raw path) this IS the base
+    // untouched-clone return, byte-for-byte.
+    // Outcome: no-op with NO reason — both sides resolved (identity is fine);
+    // an empty source well is a normal no-move, not a never-guess failure, so
+    // no §7 diagnostic (the base reported nothing here either).
     if (!srcWellMaterials || srcWellMaterials.length === 0) {
-      // A source well with no records: the existing raw path wrote the
-      // (unchanged) destination well and returned the clone.
-      dstLabware.wells = { ...dstLabware.wells, [dstWell]: dstLabware.wells[dstWell] ? structuredClone(dstLabware.wells[dstWell]) : [] };
       continue;
     }
     // Existing top-of-stack deduction semantics (untouched — only identity
@@ -608,12 +660,17 @@ function applyTransfer(
       volumeUl ?? 0,
     );
     srcLabware.wells = { ...srcLabware.wells, [srcWell]: stack };
+    // Base semantics: the destination well is MATERIALIZED UNCONDITIONALLY —
+    // a deduction that moves ZERO volume (volumeUl 0 / absent, or a source
+    // stack with no usable volume) still writes the (possibly empty)
+    // destination well exactly as the base did; only when actual volume moved
+    // does the destination gain a record.
     const dstStack = dstLabware.wells[dstWell] ? structuredClone(dstLabware.wells[dstWell]) : [];
     if (transferred > 0 && materialId !== undefined) {
       dstStack.push(buildMaterialRecord(materialId, kind, transferred, properties, economics));
-      dstLabware.wells = { ...dstLabware.wells, [dstWell]: dstStack };
       wrote = true;
     }
+    dstLabware.wells = { ...dstLabware.wells, [dstWell]: dstStack };
   }
   return { snapshot: newSnapshot, outcome: { changed: wrote } };
 }

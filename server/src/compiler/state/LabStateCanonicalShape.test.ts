@@ -388,4 +388,180 @@ describe('L2-LABSTATE-CONTENTS-1 — canonical shape (real expander output)', ()
       { materialId: 'mat-src', kind: 'src', volumeUl: 100 },
     ]);
   });
+
+  // -----------------------------------------------------------------------
+  // D2 (advc fix-run 1, spec §4.2(a) / §12 bait 5): RAW-PATH BYTE-STABILITY —
+  // SNAPSHOT-EQUALITY goldens (base shape vs head shape), not within-build
+  // rule comparisons. The expected shapes are the BASE applyTransfer (at
+  // 9d020514) shapes: the raw from/to path must fold EXACTLY as before in the
+  // three edge cases the pre-fix refactor drifted:
+  //   (a) EMPTY source well: the base early-returned the UNTOUCHED clone —
+  //       NO destination well materialization (the pre-fix fold created
+  //       `dst: []`).
+  //   (b) non-empty source, ZERO volume moved (volumeUl 0 or ABSENT): the
+  //       base MATERIALIZED the (empty) destination well UNCONDITIONALLY and
+  //       left the source stack intact — the pre-fix fold omitted the dest
+  //       well.
+  //   (c) the multi-well arm: the same per-pair shape (an empty pair writes
+  //       nothing; a zero-move pair materializes the empty dest well).
+  // -----------------------------------------------------------------------
+  it('transfer RAW: empty source well => UNTOUCHED clone, NO destination materialization (base shape (a))', () => {
+    const snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    // Seed A2 only — A1 (the source) is EMPTY.
+    const seeded = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d2a',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A2',
+        material: { materialId: 'mat-seed', kind: 'seed', volumeUl: 70 },
+      },
+    });
+    const rawEv: PlateEventPrimitive = {
+      eventId: 'evt-xfer-d2a',
+      event_type: 'transfer',
+      details: {
+        from: { labwareInstanceId: id, well: 'A1' },
+        to: { labwareInstanceId: id, well: 'B1' },
+        volumeUl: 25,
+      },
+    };
+    const result = applyEventToLabState(seeded, rawEv, RULES) as FoldResult;
+    // Outcome: no-op with NO reason (both sides resolved; an empty source
+    // well is a normal no-move, not a never-guess failure — no §7 diagnostic).
+    expect(result.outcome).toEqual({ changed: false });
+    // BASE shape: the clone is UNTOUCHED — A2 intact, NO A1 key, NO B1 key
+    // (the base returned before touching the destination well).
+    expect(result.snapshot.labware[id]!.wells).toEqual({
+      A2: [{ materialId: 'mat-seed', kind: 'seed', volumeUl: 70 }],
+    });
+    // Input snapshot untouched (immutability).
+    expect(seeded.labware[id]!.wells['A1']).toBeUndefined();
+  });
+
+  it('transfer RAW: non-empty source + volumeUl 0 => source intact + EMPTY destination well MATERIALIZED (base shape (b))', () => {
+    const snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    const seeded = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d2b',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A1',
+        material: { materialId: 'mat-raw', kind: 'raw', volumeUl: 100 },
+      },
+    });
+    const rawEv: PlateEventPrimitive = {
+      eventId: 'evt-xfer-d2b',
+      event_type: 'transfer',
+      details: {
+        from: { labwareInstanceId: id, well: 'A1' },
+        to: { labwareInstanceId: id, well: 'E1' },
+        volumeUl: 0,
+      },
+    };
+    const result = applyEventToLabState(seeded, rawEv, RULES) as FoldResult;
+    // No volume moved => changed:false, but the BASE semantics materialize
+    // the (empty) destination well UNCONDITIONALLY.
+    expect(result.outcome).toEqual({ changed: false });
+    expect(result.snapshot.labware[id]!.wells).toEqual({
+      A1: [{ materialId: 'mat-raw', kind: 'raw', volumeUl: 100 }],
+      E1: [],
+    });
+  });
+
+  it('transfer RAW: non-empty source + ABSENT volumeUl => source intact + EMPTY destination well MATERIALIZED (base shape (b), volume absent)', () => {
+    const snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    const seeded = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d2c',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A1',
+        material: { materialId: 'mat-raw', kind: 'raw', volumeUl: 100 },
+      },
+    });
+    const rawEv: PlateEventPrimitive = {
+      eventId: 'evt-xfer-d2c',
+      event_type: 'transfer',
+      details: {
+        from: { labwareInstanceId: id, well: 'A1' },
+        to: { labwareInstanceId: id, well: 'F1' },
+      },
+    };
+    const result = applyEventToLabState(seeded, rawEv, RULES) as FoldResult;
+    expect(result.outcome).toEqual({ changed: false });
+    expect(result.snapshot.labware[id]!.wells).toEqual({
+      A1: [{ materialId: 'mat-raw', kind: 'raw', volumeUl: 100 }],
+      F1: [],
+    });
+  });
+
+  it('transfer RAW: deducted-to-zero => source well emptied + destination carries the full move (base shape, the happy golden)', () => {
+    const snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    const seeded = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d2d',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A1',
+        material: { materialId: 'mat-raw', kind: 'raw', volumeUl: 100 },
+      },
+    });
+    const rawEv: PlateEventPrimitive = {
+      eventId: 'evt-xfer-d2d',
+      event_type: 'transfer',
+      details: {
+        from: { labwareInstanceId: id, well: 'A1' },
+        to: { labwareInstanceId: id, well: 'G1' },
+        volumeUl: 100,
+      },
+    };
+    const result = applyEventToLabState(seeded, rawEv, RULES) as FoldResult;
+    expect(result.outcome).toEqual({ changed: true });
+    expect(result.snapshot.labware[id]!.wells).toEqual({
+      A1: [],
+      G1: [{ materialId: 'mat-raw', kind: 'raw', volumeUl: 100 }],
+    });
+  });
+
+  it('transfer multi-well arm: per-pair base shapes (a zero-move pair materializes the empty dest; an empty pair writes nothing) (base shape (c))', () => {
+    const snapshot = labeledSnapshot('PlateOne', 'target');
+    const id = Object.keys(snapshot.labware)[0]!;
+    const seeded = applyEventToLabState(snapshot, {
+      eventId: 'evt-add-seed-d2e',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: id,
+        well: 'A1',
+        material: { materialId: 'mat-raw', kind: 'raw', volumeUl: 50 },
+      },
+    });
+    // The shipped multi-well carrier shape (source_wells / wells, equal
+    // length): A1 (50) -> B1 moves 20; C1 (EMPTY) -> D1 writes nothing.
+    const ev: PlateEventPrimitive = {
+      eventId: 'evt-xfer-d2e',
+      event_type: 'transfer',
+      labwareId: 'PlateOne',
+      details: {
+        source_labware: 'PlateOne',
+        destination_labware: 'PlateOne',
+        source_wells: ['A1', 'C1'],
+        wells: ['B1', 'D1'],
+        volumeUl: 20,
+      },
+    };
+    const result = applyEventToLabState(seeded, ev, RULES) as FoldResult;
+    expect(result.outcome).toEqual({ changed: true });
+    expect(result.snapshot.labware[id]!.wells).toEqual({
+      A1: [{ materialId: 'mat-raw', kind: 'raw', volumeUl: 30 }],
+      B1: [{ materialId: 'mat-raw', kind: 'raw', volumeUl: 20 }],
+    });
+    // The empty C1 pair wrote NOTHING (no D1 materialization — the pre-fix
+    // fold created `D1: []` here).
+    expect(result.snapshot.labware[id]!.wells['D1']).toBeUndefined();
+  });
 });

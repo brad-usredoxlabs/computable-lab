@@ -246,14 +246,60 @@ describe('L2-LABSTATE-CONTENTS-1 — labwareIdentityResolution DATA (per-load re
   it('an ABSENT section fails CLOSED to the empty lists (rung R1 ONLY — the raw path keeps working)', () => {
     // The fixture triplet carries no labwareIdentityResolution section (it
     // predates this item) — the loader must NOT throw (the section is optional
-    // in the meta-schema) and must return the empty lists: the fold resolves
-    // rung R1 ONLY, every symbolic resolution is a never-guess no-op.
+    // in the meta-schema) and must return the empty lists. D5 (advc fix-run
+    // 1): the fold treats an empty `order` EXACTLY as absent rules — rung R1
+    // ONLY (the raw instanceId path), so an absent section and a 2-arg fold
+    // call are identical (the pass-seam test pins the R1-default behavior).
     const vocab = loadScientistIntentVocabulary({
       path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
     });
     const lir = vocab.labwareIdentityResolution();
     expect([...lir.order]).toEqual([]);
     expect([...lir.tokenFields]).toEqual([]);
+  });
+
+  // D6 (advc fix-run 1): the CONTENT-BEARING event types on the WRITE side
+  // are DATA (the labStateContentBearingEventTypes list) — the fold-side
+  // twin of materialBearingEventTypes (the read half's taxonomy). Per-load
+  // frozen read + fail-closed absent arm (the same discipline as the two
+  // lists above): the lab_state pass threads THIS list into the fold's
+  // content-bearing test at the pass seam — the TS carries no second
+  // literal list of event types (the B3 boundary / no-double-vocabulary).
+  it('the shipped vocabulary declares the content-bearing event types (D6 — the fold-side DATA list, per-load frozen)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const cb = [...vocab.labStateContentBearingEventTypes()];
+    // The fold's §7 never-guess surface: add_material always; transfer when
+    // it carries a labware carrier (the carrier check stays a shape probe —
+    // the event-type taxonomy is DATA here).
+    expect(cb).toEqual(['add_material', 'transfer']);
+    // Frozen per load (the fix2 idiom): the SAME array across two reads.
+    expect(vocab.labStateContentBearingEventTypes()).toBe(vocab.labStateContentBearingEventTypes());
+    expect(Object.isFrozen(vocab.labStateContentBearingEventTypes())).toBe(true);
+  });
+
+  it('an ABSENT content-bearing section fails CLOSED to the empty list (D6 — no event is content-bearing, the pass surfaces no diagnostics)', () => {
+    // The fixture triplet predates this section — the loader must NOT throw
+    // and must return the empty list (fail-closed: over-conservative,
+    // never-guess-safe).
+    const vocab = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
+    });
+    expect([...vocab.labStateContentBearingEventTypes()]).toEqual([]);
+  });
+
+  // D7 (advc fix-run 1): DECLARATION-INTEGRITY pin — `order` and
+  // `tokenFields` must be INDEX-ALIGNED (equal length): the fold reads
+  // tokenFields[i] for the i-th rung of order, so a length mismatch
+  // silently disables the tail rungs (fail-closed, but a declaration
+  // integrity hole). The meta-schema cannot express a cross-key length
+  // EQUALITY (no such constraint in the DSL/Ajv shape the loader uses), so
+  // the consistency is pinned HERE (test authority) — and by the
+  // per-load read above, which pins the shipped lengths as equal.
+  it('order/tokenFields are index-aligned (equal length) — a length mismatch would silently disable tail rungs (D7)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const lir = vocab.labwareIdentityResolution();
+    expect(lir.order.length).toBe(lir.tokenFields.length);
+    expect(lir.order.length).toBeGreaterThanOrEqual(1);
   });
 
   it('the PRE-CHANGE meta-schema REJECTS a data file carrying the section (the §5.2 RED pin — the meta-schema change is load-bearing)', () => {

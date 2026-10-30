@@ -61,7 +61,15 @@ drive-captured payload" evidence form.
     COMMITTED LEDGER. Vacuous `[]==[]` is an ACCEPTANCE FAILURE (WELLSET's
     #1 trap applies verbatim).
   - `control_never_guess` — the unknown-plate control no-ops (no contents
-    written) + the lab_state diagnostic rides the payload/log.
+    written) + the lab_state diagnostic rides the payload/log. NON-VACUOUS
+    (D3, advc fix-run 1): the leg requires (1) a non-empty ARM-LOG for the
+    control turn (the fold PROVABLY ran), (2) after_labware == prior_labware
+    with BOTH captured non-None (the no-op wrote nothing), and (3) >=1
+    `lab_state_unresolved*` diagnostic in the captured payload/log (the wire
+    `pipeline_diagnostics` frame OR the env-gated ARM-LOG `unresolved_codes`
+    — the wire done frame does not carry diagnostics, so both captured
+    channels are counted). A turn where the fold never executed CANNOT pass
+    this leg (the pre-fix `None == None => ok True` vacuous path is gone).
 
 ## Run
 
