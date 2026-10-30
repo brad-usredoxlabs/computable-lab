@@ -988,5 +988,236 @@ DEVIATIONS / HONEST LIMITATIONS (fix-run):
     upstream material-noun gate exactly as in the prior report §8 (unchanged
     by this fix-run; no resolve_nouns file touched).
 
-L2LABSTATECONTENTS1 FIX1 DONE 523ec78892429d55dd3e47e8fb750bd02ecaa34c
-STATUS: fixrun-complete
+
+## FIX RUN 2 (l2t0915)
+
+ITEM: L2-LABSTATE-CONTENTS-1 (lane 2) — harness-only fix run (cycle-2 N1 BLOCKER + D3 MAJOR).
+CODE HEAD: a69e4076 (worktree commit; pre-fix head was 694f5e78). Product code untouched
+(the cycle-2 reviewer ACCEPTED the product diff; any product hunk = automatic reject).
+WORKTREE: /mnt/vast/home/brad/git/wt/L2-LABSTATE-CONTENTS-1-lane2-l2t2255
+OWNED FILES TOUCHED (exactly):
+  - .hermes/plans/harness/labstate-contents-drive/drive.py      (parse_arm + helpers)
+  - .hermes/plans/harness/labstate-contents-drive/README.md     (parse_arm contract section)
+  - .hermes/plans/harness/labstate-contents-drive/test_parse_arm.py (NEW — committed fixture)
+  - this report (append)
+
+### DEFECTS CLOSED
+
+N1 BLOCKER (drive.py:205-225 + its dependency on the emitter format at
+ChatbotCompilePasses.ts:1895): parse_arm split each token at rfind and handed the
+WHOLE REST OF THE LINE to json.loads — only the last token could ever parse.
+60db0a3a appended unresolved_codes= AFTER after_labware=, so after_labware's tail
+carried ' unresolved_codes=[...]', json.loads raised 'Extra data', and the field
+degraded to a raw string (LEG1/LEG2/LEG3/LEG4 False forever). The turn= tag was
+also the whole tail (pre-existing, named in the review).
+
+FIX: each payload is now parsed from its OWN bounded slice:
+  - _depth0_markers(): finds the emitter's field separators only at
+    brace/bracket depth 0, preceded by start-of-line/whitespace — a token
+    occurrence INSIDE a payload's JSON string (e.g. a materialId containing
+    'turn=9') is payload content, not a separator.
+  - _bounded_payload(): closes each payload at its own balanced
+    braces/brackets, respecting JSON double-quoted strings + backslash escapes
+    (a brace inside a string cannot terminate the slice early).
+  - tolerant of BOTH the pre-60db0a3a 3-token form (the 20261030T063626Z
+    receipts' format — unresolved_codes -> None) and the current 4-token form,
+    in either token order.
+  - turn= parses to the tag only (bounded by the next depth-0 marker).
+  - malformed line -> all-None, no exception; a malformed single payload
+    degrades that field to None while well-formed neighbors still parse.
+  - raw_payload() (the whole-tail semantics — the defect itself) is removed.
+
+D3 MAJOR (closes with N1): the control leg's non-vacuous assertions
+(non-empty arm_log, after==prior both non-None, >=1 lab_state unresolved
+diagnostic) were kept UNCHANGED in drive.py (lines ~479-480); the parser fix
+makes them satisfiable. Proof is now a mutation-style probe on REAL receipt
+lines driven through the REAL parse_arm (not hand-built dicts — the exact data
+path the legs consume): the fixture's leg predicates are copied VERBATIM from
+drive.py and run on parse_arm output. Raw results below (section V2/D3-raw):
+  - no-op control line (emitter-shaped, 4-token, after==prior) +
+    unresolved_codes=['lab_state_unresolved_labware_reference'] -> LEG4 True
+    (the pre-fix parser could NEVER yield this — after_labware was a str);
+  - same no-op WITHOUT a code -> False (condition 3 unsatisfied);
+  - WROTE turn (after != prior) -> False (the no-op equality has teeth);
+  - PRE-FIX 3-token no-op line -> False (condition 3 unsatisfiable — the codes
+    channel does not exist on that form);
+  - the REAL receipts line (wrote turn, 3-token) -> False;
+  - garbage line -> False, no exception;
+  - empty arm_log -> False (the original D3 vacuous None==None path stays dead).
+The reviewer's invalid-evidence class (bypassing parse_arm with hand-built
+dicts) is structurally impossible in the fixture: every probe's input is
+drive.parse_arm(<emitter-shaped line>).
+
+### V1 — fixture test (plain python3, exit 0)
+
+Command: python3 .hermes/plans/harness/labstate-contents-drive/test_parse_arm.py
+(pins the EMITTER's exact line format — python port of the ChatbotCompilePasses.ts:1895
+template, compact JSON, turn= raw number — round-tripping through parse_arm;
+FORM-AGNOSTIC: no TURNS strings, per the ruling Q4 note.)
+
+RAW OUTPUT (full):
+  ok   rt4.turn tag only
+  ok   rt4.prior dict
+  ok   rt4.after dict
+  ok   rt4.codes list
+  ok   rt4.prior round-trips
+  ok   rt4.after round-trips
+  ok   rt4.codes sorted-unique
+  ok   rt4.empty prior {} stays dict
+  ok   rt4.empty after dict
+  ok   rt4.empty codes [] stays list
+  ok   pre.turn tag only
+  ok   pre.prior dict
+  ok   pre.after dict (NOT a string)
+  ok   pre.codes absent->None
+  ok   pre.nontrivial after dict
+  ok   pre.nontrivial codes None
+  ok   pre.nontrivial turn
+  ok   turn.tag is the bare number
+  ok   turn.no token bleed into tag
+  ok   inpay.turn is the REAL tag
+  ok   inpay.after dict intact
+  ok   inpay.codes intact
+  ok   inpay.escaped-quote payload
+  ok   garbage all-None 'totally not an arm log line'
+  ok   garbage all-None ''
+  ok   garbage all-None '[lab_state ARM-LOG]'
+  ok   garbage.no exception (unbalanced)
+  ok   garbage.partial salvage turn
+  ok   garbage.not-json degrades to None
+  ok   garbage.well-formed neighbor survives
+  ok   garbage.turn salvage
+  ok   d3.noop control LEG4 TRUE (mutation probe: real parse_arm)
+  ok   d3.noop without code LEG4 False
+  ok   d3.wrote turn LEG4 False
+  ok   d3.pre-fix form LEG4 False (no codes channel)
+  ok   d3.real receipts line LEG4 False (wrote turn)
+  ok   d3.garbage LEG4 False (no exception)
+  ok   d3.empty arm_log LEG4 False (vacuity gone)
+  ok   n1.LEG1 satisfiable (after is a dict, populated)
+  ok   n1.LEG2 satisfiable (prior carries turn-1 materialId)
+  ok   n1.LEG3 satisfiable (ledger populated)
+  ok   n1.old-parser repro (rest-of-line json.loads raises)
+  PARSE_ARM FIXTURE: 42 checks passed (exit 0)
+EXIT=0
+
+Acceptance mapping (task VERIFY step 1):
+  - pre-60db0a3a 3-token line -> after_labware dict, unresolved_codes absent/None:
+    pre.after dict (NOT a string) + pre.codes absent->None (and the REAL receipts
+    line itself, below).
+  - 4-token line -> after_labware dict + unresolved_codes list:
+    rt4.after dict + rt4.codes list (and the raw N1 probe below).
+  - turn= parses to the turn tag only: turn.tag is the bare number.
+  - garbage line -> all-None, no exception: garbage all-None (3 lines) +
+    garbage.no exception (unbalanced).
+
+### V2 — REAL receipt lines through OLD (694f5e78) vs FIXED parse_arm
+
+Receipts: /home/brad/.hermes/cl/receipts/L2-LABSTATE-CONTENTS-1/20261030T063626Z
+(the review's named receipts) and 20261030T064740Z (same 3-token form).
+OLD parser loaded read-only via `git show 694f5e78:...drive.py` (no source edit);
+NEW parser = the committed fix. Raw before/after types:
+
+  receipt 20261030T063626Z turn A line 0
+  RAW LINE : [lab_state ARM-LOG] turn=1 prior_labware={} after_labware={"LWI-1":{}}
+    turn             OLD type=str       NEW type=str
+    prior_labware    OLD type=str       NEW type=dict      <-- CHANGED (was a string)
+    after_labware    OLD type=dict      NEW type=dict      (dict in both: last-token
+                                                            rest-parsing — why only the
+                                                            LAST token ever worked)
+    unresolved_codes OLD type=NoneType  NEW type=NoneType
+  receipt 20261030T064740Z turn A line 0: IDENTICAL shape (same 3-token form).
+
+LEG1 predicate (drive.py:367-368 verbatim) on turn A's REAL line:
+  turn A after_labware OLD type: dict | NEW type: dict
+  LEG1 isinstance-dict gate: TRUE in both (the receipts line is the 3-token form
+  where after_labware was the last token); the population gate (any non-empty
+  well) is correctly False for this WROTE-but-empty-wells plate-placement turn —
+  unchanged by the parser fix (content, not parsing).
+
+THE N1 PROBE — the 4-token (current emitter) line, OLD vs NEW (raw):
+
+  RAW 4-token line (current emitter form, ChatbotCompilePasses.ts:1895):
+  [lab_state ARM-LOG] turn=1 prior_labware={} after_labware={"LWI-1":{"A1":[{"materialId":"mat-A","kind":"raw"}]}} unresolved_codes=[]
+
+  OLD parser @ 694f5e78 (pre fix-run 2):
+    turn             type=str      value='1 prior_labware={} after_labware={"LWI-1":{"A1":[{"materialId":"mat-A","kind":"raw"}]}} unresolv...'
+    prior_labware    type=str      value='{} after_labware={"LWI-1":{"A1":[{"materialId":"mat-A","kind":"raw"}]}} unresolved_codes=[]'
+    after_labware    type=str      value='{"LWI-1":{"A1":[{"materialId":"mat-A","kind":"raw"}]}} unresolved_codes=[]'
+    unresolved_codes type=list     value=[]
+  NEW parser @ a69e4076 (fix run 2):
+    turn             type=str      value='1'
+    prior_labware    type=dict     value={}
+    after_labware    type=dict     value={'LWI-1': {'A1': [{'materialId': 'mat-A', 'kind': 'raw'}]}}
+    unresolved_codes type=list     value=[]
+
+  isinstance(after_labware, dict): OLD=False NEW=True   <- N1: LEG1/LEG3 isinstance-dict gate
+  old rest-of-line json.loads(after tail): RAISES JSONDecodeError('Extra data: line 1 column 56 (char 55)')
+    <- raw_payload degraded it to a str (exactly the reviewer's raw probe, reproduced
+       on this worktree's committed pre-fix code)
+
+D3-raw (mutation probes on REAL parse_arm output, from the V1 fixture run — the
+leg predicates are drive.py's verbatim; the inputs are parse_arm of
+emitter-shaped lines, never hand-built dicts):
+  d3.noop control LEG4 TRUE (mutation probe: real parse_arm)      [after==prior dicts + 1 unresolved code]
+  d3.noop without code LEG4 False
+  d3.wrote turn LEG4 False
+  d3.pre-fix form LEG4 False (no codes channel)
+  d3.real receipts line LEG4 False (wrote turn)
+  d3.garbage LEG4 False (no exception)
+  d3.empty arm_log LEG4 False (vacuity gone)
+  4-token no-op control line (emitter shape, post-60db0a3a) via the real parser:
+    after_labware type=dict prior_labware type=dict unresolved_codes=['lab_state_unresolved_labware_reference']
+    LEG4 core (non-empty, after==prior both non-None, >=1 unresolved code): True
+
+### V3 — no product-file hunks
+
+RAW (worktree, after the fix commit):
+  $ git diff --name-only 694f5e78..a69e4076
+  .hermes/plans/harness/labstate-contents-drive/README.md
+  .hermes/plans/harness/labstate-contents-drive/drive.py
+  .hermes/plans/harness/labstate-contents-drive/test_parse_arm.py
+  $ git diff --stat 694f5e78..a69e4076
+   .../harness/labstate-contents-drive/README.md      |  32 ++
+   .hermes/plans/harness/labstate-contents-drive/drive.py | 139 ++++++--
+   .../labstate-contents-drive/test_parse_arm.py      | 384 +++++++++++++++++++++
+   3 files changed, 533 insertions(+), 22 deletions(-)
+=> ONLY owned harness files. Zero hunks in server/**, schema/**, or any
+product file. drive-mint.py / labstate-worktree-stack.sh (other harness files)
+untouched (grep: their own separate parse_arm in drive-mint.py:65 is NOT part
+of this item's owned list — not modified).
+
+### V4 — tree clean at exit; all work committed on the branch
+
+RAW:
+  $ git log --oneline -3
+  <report-commit-sha> [LABSTATE][FIX2-REPORT] FIX RUN 2 (l2t0915) appended to the item report: N1/D3 raw OLD-vs-NEW parse evidence, 42-check fixture, no-hunks + clean-tree proof; code fix head a69e4076
+  a69e4076 [LABSTATE][FIX2] N1 BLOCKER: parse_arm parses each ARM-LOG payload by its own bounded slice ...
+  694f5e78 [LABSTATE][FIX1-REPORT] FIX RUN 1 (l2t0405) ...
+  $ git status --porcelain
+  (empty — clean)
+
+### DEVIATIONS / HONEST LIMITATIONS (fix-run 2)
+
+- The live re-drive (orch-owned, ruling Q4) was NOT run: no TURNS strings were
+  edited (orch owns that with the re-drive), no stack was booted or restarted,
+  no port was hit. The parser is proven on (a) the REAL captured receipt lines
+  and (b) emitter-shaped 3- and 4-token lines; the re-drive's turns will
+  exercise the same parser path (drive.py:arm_log capture -> parse_arm).
+- The 20261030T063626Z receipts only carry the 3-token form (they predate
+  60db0a3a) and only turn A has an ARM-LOG line in them (turns 1/1b/2/X were
+  pre-fold — no arm line). The 4-token form is pinned by the committed emitter
+  port in the fixture + the N1 probe above, not by a captured 4-token receipt
+  (none exists yet — the re-drive will produce the first).
+- Cross-language JSON byte-identity between the TS emitter (JSON.stringify)
+  and the python fixture (json.dumps compact) is NOT claimed: both emit compact
+  JSON of the same shape; the fixture pins shape (token order, compactness,
+  bounded payloads), which is all parse_arm depends on.
+- N2/N3/N4/N5 (cycle-2 MINORs, product/doc scope) were NOT touched: outside
+  this fix run's owned file boundary (the cycle-2 review's BLOCKING scope was
+  N1 + D3 only).
+- The turn2 `expected_48` label (16 distinct wells; reviewer axis note O1)
+  remains a spec label carried by the drive — unchanged (flagged in FIX RUN 1).
+
+L2LABSTATECONTENTS1 FIX2 DONE a69e4076f90e0216c4ebbc71b9cdae594aa3aa9e
+STATUS: fixrun2-complete
