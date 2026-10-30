@@ -118,3 +118,25 @@
 - AS-L1T194-2 — evidence-leg hybrid: clears at A7b ACCEPT receipts (fix verdict did
   not clear it). Carried.
 - AS-L1T195-2 — D2 disposition pending architect. NEW, carried until resolved.
+
+
+## SAME-TICK AMENDMENT (14:20): ARCHITECT ANSWER LANDED — OPT-A EXECUTED AS CHAINED FIX RUN 2
+
+The D2 answer landed at 14:00 (`WIDGETR1-D2-nested-object-widget-answer-l1t1335.md`,
+`DECISION: OPT-A`, architect facts self-verified against mine). AS-L195-2 DISPOSITION
+CHOSEN: boundary amendment (ObjectWidget.tsx joins the file set for ONE D2+D4 run).
+**FIX RUN 2 CHAINED** — unit `chain-widgetr1fix2-l1t1420` (PID sleeping until stagger):
+stagger-walled to 15:00:30 (fix-run 1 start 14:00:16 + 60 min), then flocks slot-0 and
+dispatches the OPT-A run (types.ts recursive `fields?` + ArrayWidget forwards fields +
+ObjectWidget conditional nested render on non-empty `fields` ONLY + D4 type=button +
+RED-first nested/flat-parity/depth-2/Ajv-clean test legs). Prompt
+`prompts/coder-WIDGETR1-fix2-l1t1420.txt` (opens by asserting fix-run-1 commits are on
+the branch; requires-rescope if absent), log `logs/coder-WIDGETR1-fix2-l1t1420.log`,
+report `deliverables/widget-r1-report-l1t1420-fix2.md` token
+WIDGETR1FIX2L1T1420. NOTE: the adv review of fix-run 1 fires between the two runs
+(waiter) but fix-run 2 does NOT wait on its verdict — it stacks on the same branch;
+the FINAL adv review (after fix-run 2) gates the merge on the whole branch state.
+Fix-cycle budget now: run 1 + run 2 = cycles 1-2 of 2; if the final gate still says
+fix after this, route to architect (hard rule 7), no cycle 3.
+NEXT TICK after both runs + adv accept: orch self-verify -> merge -> full C1-C6
+browser re-gate at new receipts ts (OPT-A means C2-roles stays IN).
