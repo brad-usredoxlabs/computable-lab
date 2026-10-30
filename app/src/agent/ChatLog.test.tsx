@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatMessage } from '../types/ai'
@@ -119,8 +121,12 @@ describe('sequence conversation scrolling', () => {
           options: [{ id: 'o1', label: 'Clofibrate 1 mM' }, { id: 'o2', label: 'DMSO' }],
         }] },
     ]} />)
+    // BGATE-FIX D3: this message's bubble content IS the prompt, so the
+    // question renders ONCE (the bubble paragraph) instead of also inside
+    // the card — the whole point of the dedupe. Assert it once on the log.
+    expect(screen.getByRole('log', { name: 'Conversation' })).toHaveTextContent('Which material?')
     const box = screen.getByTestId('chat-log-request-req-1')
-    expect(box).toHaveTextContent('Which material?')
+    expect(box.querySelector('p')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '1. Clofibrate 1 mM' }))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
   })
@@ -261,5 +267,72 @@ describe('L2-CHAT-UI-1 LEG A — the universal chat standard', () => {
     expect(screen.getByRole('button', { name: '1. EcoRI' })).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '1. EcoRI' }))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * L2-CHAT-UI-1 LEG A — browser-gate fix run (BGATE D1/D2/D3).
+ *
+ * D1/D2 are pure CSS regressions: jsdom cannot lay out, so the discipline is
+ * the repo's proven styling-lock pattern (ChangesPanel.styling.test.tsx —
+ * read the CSS from disk and pin the rule contents). The ACTUAL geometry is
+ * proven at the browser gate (the orchestrator re-gates after merge); these
+ * locks pin that the rules that produce it cannot silently vanish.
+ * D3 is render-side and fully assertable in jsdom.
+ */
+describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () => {
+  const cssSource = readFileSync(resolve(process.cwd(), 'src/agent/ChatLog.css'), 'utf8')
+  const ruleOf = (selector: string): string => {
+    const at = cssSource.indexOf(selector)
+    expect(at, `ChatLog.css must define ${selector}`).toBeGreaterThan(-1)
+    return cssSource.slice(at, cssSource.indexOf('}', at))
+  }
+
+  it('D1: the compact answered row is min-width:0 + max-width:100% inside the flex bubble (the ellipsis can engage; the row cannot grow past the bubble)', () => {
+    const rule = ruleOf('.chat-log-clarification-answered {')
+    expect(rule).toContain('min-width: 0')
+    expect(rule).toContain('max-width: 100%')
+    // The A4 ellipsis trio stays declared (pinned by the accepted work).
+    expect(rule).toContain('white-space: nowrap')
+    expect(rule).toContain('text-overflow: ellipsis')
+  })
+
+  it('D2: inside the ChatLog transcript the popover NEVER opens above its field (the above-flip is neutralised — upward overflow of the scrollport is not scroll-recoverable and clipped the first suggestion)', () => {
+    const rule = ruleOf('.chat-log-clarification .message-log__clarification-popover--above {')
+    expect(rule).toContain('top: calc(100% + 4px)')
+    expect(rule).toContain('bottom: auto')
+  })
+
+  it('D3: on the done-payload shape (bubble content === request prompt) the prompt prints ONCE — the typed card adds no duplicate paragraph', () => {
+    const question = 'The draft names "plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.'
+    const request = {
+      id: 'req-d3', kind: 'labware' as const, prompt: question, entityType: 'labware' as const,
+      menuProvider: '/l' as const, query: 'plate', options: [] as { id: string; label: string }[],
+    }
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      message('u0', 'user', 'Add 50uL of Trypsin to each well.'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [request],
+        clarification: { id: 'req-d3', prompt: question, entityType: 'labware', menuProvider: '/l', query: 'plate', options: [] } },
+    ]} />)
+    const bubble = document.querySelector('.chat-log-msg--assistant') as HTMLElement
+    // The question is on screen exactly once (the bubble paragraph).
+    const paragraphs = [...bubble.querySelectorAll('p')]
+    expect(paragraphs.filter((p) => p.textContent === question).length).toBe(1)
+    // The answer controls are NOT gated: the card and its picker still render.
+    const card = screen.getByTestId('chat-log-request-req-d3')
+    expect(card.querySelector('.message-log__clarification-picker')).not.toBeNull()
+  })
+
+  it('D3 control: a prompt the bubble does NOT carry still prints on the card (no over-suppression)', () => {
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      { ...message('clar', 'assistant', 'Drafting…'), clarificationRequests: [{
+        id: 'req-keep', kind: 'general' as const, prompt: 'Which material?', entityType: 'material' as const,
+        menuProvider: 'choice' as const,
+        options: [{ id: 'o1', label: 'Clofibrate 1 mM' }],
+      }] },
+    ]} />)
+    const card = screen.getByTestId('chat-log-request-req-keep')
+    expect(card).toHaveTextContent('Which material?')
+    expect(screen.getByRole('button', { name: '1. Clofibrate 1 mM' })).not.toBeNull()
   })
 })

@@ -135,4 +135,28 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* BGATE-FIX D1: the row is a child of the flex-column bubble, where the
+   * initial min-width:auto resolves to the nowrap min-content width — the
+   * box GREW (measured 1011px inside the 574px pane) instead of truncating,
+   * so the ellipsis never engaged and the row crossed the pane border.
+   * min-width:0 lets it shrink; max-width:100% clamps it to the bubble. */
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* BGATE-FIX D2 — inside the transcript the picker popover must NEVER open
+ * above its field. ClarificationPicker's flip logic keys on window.innerHeight
+ * and placed the popover at y=198 against a scrollport top of 255: upward
+ * overflow of an absolutely-positioned descendant is NOT scroll-recoverable
+ * (the CSS scrollable-overflow region extends only to the bottom/right edges),
+ * so the first suggestion row was clipped permanently. Below-placement IS
+ * scroll-recoverable — the transcript is overflow-y:auto — and the top match
+ * renders immediately under the field. Scoped to ChatLog's clarification
+ * block only: ai.css and the AiTabPanel surface's own placement are
+ * untouched. Higher specificity (two classes) wins over ai.css regardless of
+ * import order. */
+.chat-log-clarification .message-log__clarification-popover--above {
+  top: calc(100% + 4px);
+  bottom: auto;
 }

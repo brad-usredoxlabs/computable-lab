@@ -186,13 +186,29 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
    * Typed (menu-backed) clarifications: the question carries its own options or
    * a picker. Ignoring them left the pane showing a question with no way to
    * answer it — the old pane rendered them through QuestionsPanel.
+   *
+   * BGATE-FIX D3 (render-side dedupe, owned-file only): the done arm sets
+   * message.content to the clarification prompt (useAiChat.ts:1419), so an
+   * UNCONDITIONAL <p>{request.prompt}</p> printed the same sentence again under
+   * the bubble paragraph — the gate measured the question twice/thrice per
+   * turn. Mirror the block arm's existing promptDiffers rule (:151, the
+   * restored-chrome lock depends on it) and extend it across SIBLING request
+   * cards sharing one prompt string: a card shows the prompt paragraph only
+   * when neither the bubble nor an earlier card has already shown that exact
+   * sentence. The answer controls are never gated.
    */
-  function renderTypedClarification(messageId: string, request: AiClarificationRequest) {
+  function renderTypedClarification(
+    messageId: string,
+    request: AiClarificationRequest,
+    shownPrompts: Set<string>,
+  ) {
     const options = request.options ?? []
     const hasPicker = requestHasPicker(request)
     if (options.length === 0 && !hasPicker) return null
+    const promptAlreadyShown = shownPrompts.has(request.prompt)
+    if (!promptAlreadyShown) shownPrompts.add(request.prompt)
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
-      <p>{request.prompt}</p>
+      {!promptAlreadyShown && <p>{request.prompt}</p>}
       {options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
           {options.map((option, optionIndex) => <li key={option.id}>
@@ -242,6 +258,11 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
           const answered = hasClarification && isClarificationAnswered(messages, index)
           const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
+          // BGATE-FIX D3: the bubble's <p> has already shown message.content;
+          // seed the per-message prompt set with it so the typed cards print
+          // a prompt only when it is NOT already on screen (render-side
+          // dedupe — see renderTypedClarification).
+          const shownPrompts = new Set<string>([message.content])
           return <div key={message.id} className={bubbleClass}>
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           {message.shorthand !== undefined && (
@@ -275,7 +296,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           ) : (
             <>
               {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
-              {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request))}
+              {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request, shownPrompts))}
             </>
           )}
         </div>
