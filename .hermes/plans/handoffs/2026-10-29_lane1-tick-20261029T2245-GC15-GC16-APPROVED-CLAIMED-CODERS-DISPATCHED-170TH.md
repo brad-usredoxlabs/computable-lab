@@ -77,3 +77,26 @@
   screenshots a method editor with values — the GC-14 close-out re-gate is the clearing
   candidate).
 - AS-L1T1505-1, AS-L1T1505-2 remain recorded (evidence_debt=false).
+
+## ADDENDUM (same tick, ~23:10) — GC-15 coder COMPLETED + orch self-verify PASSED + adv gate live; GC-16 coder live
+
+- GC-15 coder exited 22:42 rc=0: 'GC15 DREADER DONE 202ef2428eec588dbdad059f40fba5d63ad81877'.
+  Server assigned id ANREV-000009 (CreateRevisionInput has no id field; numeric nextId — spec
+  pre-authorized; GC-14 A6 gate MUST target ANREV-000009, report states it).
+- ORCH SELF-VERIFY (first-hand): GET :3092/analysis-revisions/ANREV-000009 200, file matches;
+  data-repo chain 202ef242 (rev, 3,607 B) -> 64aa06d8 DREF-000118 -> 1578246c AOUT-000031 ->
+  c65a1353 ANR-000025: run SUCCEEDED, engineProvenance.adapter=python-entry-script; AOUT
+  dataKind signal -> DREF 2,693,458 B at /mnt/vast/computable-lab-data/analysis-artifacts/
+  ANR-000025/signal_trace (orch opened: 72,801 axis+values, reader computable_lab_d_reader
+  1.0.0, format agilent-chemstation-ch-v181, channel FID1A). Hygiene: git records tiny; runner
+  >=50 kB dref path (coder cite analysisRunner.ts:391-486). n_points 72,801 vs ruling ~17k
+  expectation — reader-reported wins (honest, disclosed).
+- ADV GATE LIVE (unit run-advGC15l1t2255, OpenRouter deepseek-v4.1-flash, prompt
+  prompts/advreview-GC15-l1t2255.txt incl. C4 ctx.publish units-kwarg signature check, report
+  ~/.hermes/cl/reviews/GC15-adv-l1t2255.md).
+- GC-16 coder LIVE slot-1 since 22:42:46 (stagger legal: GC-15 coder pid gone). pidfile
+  GC16-509076-2026-10-29T22:42:46.
+- NEXT TICK: read GC15 adv report -> accept: mark GC-15 done (data repo is its trunk, no code
+  merge; record A6 gate target ANREV-000009 in GC-14's block) / fix: fix run same data repo.
+  Watch GC-16 coder (expect ~40-90 min; 2x escalation ~00:4x). Both items done -> GC-14
+  close-out re-gate legs (A6 via ANREV-000009, A7, lint-refusal demo, console delta).
