@@ -94,19 +94,25 @@ form:
         # `kind` (enum record|ontology) and kind:record then-requires id+type.
         # The hint declares the discriminator as a single-option select
         # (value "record" — the schema's own enum vocabulary, never a
-        # client-side kind table). KNOWN SURFACE GAP (named, not hidden):
-        # ui-v1's field definition has no const/seed/default keyword, so
-        # the declarative surface CANNOT express a seeded kind:record
-        # value the author need not touch — the author confirms the single
-        # option. Seeding the constant is the R1 widget task's item-hint
-        # consumption (architect ruling item 4: the data-leg seeding stays
-        # in GC-16 scope as a DATA edit; the ui-v1 keyword that would make
-        # it data-only does not exist), NOT a widget hardcode.
+        # client-side kind table).
+        # GC-16 FIX RUN 4 (D18, data leg): that select is NOT readonly — the
+        # D11 surface-gap ruling (ui-v1's field definition has no
+        # const/seed/default keyword) stands: a seeded kind:record value the
+        # author need not touch is NOT expressible on the ui-v1 surface.
+        # But a readonly single-option select with no seed makes kind:record
+        # UNAUTHORABLE (no author action can produce it — the review's
+        # D18), so readonly is DROPPED: the author picks the single option
+        # explicitly and a committed item then genuinely carries
+        # kind:record even before R1 ships item-hint seeding. Seeding it
+        # WITHOUT the author touching the field is the R1 widget task's
+        # item-hint consumption (architect ruling item 4: the data-leg
+        # seeding stays in GC-16 scope as a DATA edit; the ui-v1 keyword
+        # that would make it data-only does not exist), NOT a widget
+        # hardcode.
         fields:
         - path: "kind"
           widget: "select"
           label: "Kind (ref discriminator — schema-required)"
-          readonly: true
           options:
           - { value: "record", label: "Record (computable-lab record ref)" }
         - path: "type"
@@ -134,9 +140,10 @@ form:
         # each a datatypes/ref OBJECT (assertion.schema.yaml) — never a
         # string. Rebound from `widget: text` to a ref-shaped object hint
         # over the schema's ref fields: kind (discriminator, schema-
-        # required; single-option select, value "record" — the ui-v1
-        # surface has no const/seed keyword, so the seeded-value gap is
-        # named above in the context_refs hint and applies here identically)
+        # required; single-option select, value "record" — NOT readonly,
+        # the D18 data-leg fix: a readonly single-option select with no
+        # seed is unauthorable — the surface-gap comment above the
+        # context_refs hint applies here identically)
         # + type + id (kind:record then-requires both).
         fields:
         - path: "role_ref"
@@ -146,7 +153,6 @@ form:
           - path: "kind"
             widget: "select"
             label: "Kind (ref discriminator — schema-required)"
-            readonly: true
             options:
             - { value: "record", label: "Record (computable-lab record ref)" }
           - path: "type"
@@ -162,7 +168,6 @@ form:
           - path: "kind"
             widget: "select"
             label: "Kind (ref discriminator — schema-required)"
-            readonly: true
             options:
             - { value: "record", label: "Record (computable-lab record ref)" }
           - path: "type"
