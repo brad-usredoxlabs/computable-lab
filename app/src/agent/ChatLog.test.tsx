@@ -303,6 +303,13 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     expect(rule).toContain('bottom: auto')
   })
 
+  it('D4 (leg-B fold): the clarification card takes the full bubble width — a shrink-to-fit flex item with no width donor collapsed the picker-only card to 173px in a wide pane (gate re-run receipts 20261029T2255 run2/12-02, run5/11-01)', () => {
+    const rule = ruleOf('.chat-log-clarification {')
+    expect(rule).toContain('width: 100%')
+    // The D1-era min-width:0 stays declared (the card must still shrink-wrap text, not overflow).
+    expect(rule).toContain('min-width: 0')
+  })
+
   it('D3: on the done-payload shape (bubble content === request prompt) the prompt prints ONCE — the typed card adds no duplicate paragraph', () => {
     const question = 'The draft names "plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.'
     const request = {
