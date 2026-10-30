@@ -23,10 +23,23 @@
  * same choice MaterialsPage made pre-routing, MaterialsPage.tsx:46). Scope
  * is the surface's INSTANCE identity when it is thread-segment safe: the
  * server keys threads on (user, endpoint, scope, threadId) and every path
- * segment must match THREAD_SEGMENT_PATTERN /^[A-Za-z0-9._-]+$/
- * (server/src/ai-threads/AiThreadStore.ts:382) — a non-matching scope would
- * 400 the thread fetch and fail every turn, so an unsafe scope is omitted
- * (the server's reserved "_" scope then holds the thread).
+ * segment must be SAFE — the client guard below mirrors the server's ONE
+ * rule (AiThreadStore.ts isValidThreadSegment: non-empty,
+ * THREAD_SEGMENT_PATTERN /^[A-Za-z0-9._-]+$/, and NOT dots-only —
+ * DOTS_ONLY_SEGMENT_PATTERN /^\.+$/, because '.' is a no-op path hop and
+ * '..' escapes the {endpoint} directory). A scope the client refuses is
+ * OMITTED (the server's reserved "_" scope then holds the thread); a
+ * malformed scope header maps to fresh-empty "_" semantics at the handler
+ * (AiThreadHandlers.ts:71) — never a 4xx, never a fallback read.
+ *
+ * LEG D rider D1 (AS-L2T0915-LEGC-MINORS-DEFERRED, DEFECT D1): the old
+ * client mirror omitted the server's dots-only refusal (so '.' / '..'
+ * passed the guard) and its header claimed a malformed scope "would 400 the
+ * thread fetch and fail every turn" — no longer true since the handler maps
+ * malformed scope to undefined (fresh "_"). Aligned with isValidThreadSegment
+ * (ONE guard, no per-surface branch) and the header re-worded to the never-4xx
+ * truth. Pin: the '.' / '..' refusal is unit-asserted in
+ * RegistryHostPage.surfaceChat.test.tsx (the bridge's home surface).
  *
  * Surface kind: 'analysis' — the server's declared no-params AI-context
  * surface (server/src/ai/systemPrompt.ts:299-303): generic prompt with an
@@ -36,8 +49,24 @@ import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import { useOptionalAiPanel } from '../context/AiPanelContext'
 import type { AiContext } from '../../types/aiContext'
 
-/** Mirror of the server's thread-scope segment rule (see header cite). */
-const THREAD_SEGMENT = /^[A-Za-z0-9._-]+$/
+/**
+ * Mirror of the server's thread-scope segment rule (see header cite).
+ * LEG D rider D1: aligned with the server's ONE guard (isValidThreadSegment) —
+ * the alphabet guard PLUS the dots-only refusal ('.' / '..' are refused even
+ * though the alphabet technically admits dots). Exported so the refusal is
+ * unit-pinnable; ONE guard for all surfaces — no per-surface branching.
+ */
+const THREAD_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/
+const DOTS_ONLY_SEGMENT_PATTERN = /^\.+$/
+
+export function isThreadSegmentSafe(value: unknown): value is string {
+  return (
+    typeof value === 'string'
+    && value.length > 0
+    && THREAD_SEGMENT_PATTERN.test(value)
+    && !DOTS_ONLY_SEGMENT_PATTERN.test(value)
+  )
+}
 
 export interface SurfaceChatBridgeProps {
   /** The surface's context, memoized by the host page (DeckSurfaceChat pattern). */
@@ -61,7 +90,7 @@ function SurfaceChatRegistrar({ aiContext, scope }: SurfaceChatBridgeProps) {
   useSurfaceChat({
     aiContext,
     endpoint: 'browser',
-    ...(scope && THREAD_SEGMENT.test(scope) ? { scope } : {}),
+    ...(isThreadSegmentSafe(scope) ? { scope } : {}),
   })
   return null
 }

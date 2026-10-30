@@ -72,6 +72,24 @@ vi.mock('../../shared/ai/useWorkstateProposalFlow', () => ({
   }),
 }))
 
+// LEG D rider D2: assert the registrar's scope/endpoint (a silently dropped
+// scope = cross-record thread bleed would otherwise stay green). Wrap the REAL
+// useSurfaceChat (keep its registration side-effect) and capture the
+// (endpoint, scope) it forwards.
+const surfaceChatCalls = vi.hoisted(
+  () => [] as Array<{ endpoint?: string; scope?: string }>,
+)
+vi.mock('../../agent/useSurfaceChat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../agent/useSurfaceChat')>()
+  return {
+    ...actual,
+    useSurfaceChat: (opts: Parameters<typeof actual.useSurfaceChat>[0]) => {
+      surfaceChatCalls.push(opts as { endpoint?: string; scope?: string })
+      return actual.useSurfaceChat(opts)
+    },
+  }
+})
+
 import { ProjectWorkspacePage } from './ProjectWorkspacePage'
 
 function renderHost() {
@@ -91,7 +109,10 @@ function renderHost() {
 }
 
 describe('ProjectWorkspacePage — universal chat bridge (L2-CHAT-UI-1 LEG C4)', () => {
-  beforeEach(() => window.localStorage.clear())
+  beforeEach(() => {
+    window.localStorage.clear()
+    surfaceChatCalls.length = 0
+  })
   afterEach(() => {
     cleanup()
     window.localStorage.clear()
@@ -108,5 +129,11 @@ describe('ProjectWorkspacePage — universal chat bridge (L2-CHAT-UI-1 LEG C4)',
     const send = Array.from(pane.querySelectorAll('button')).find((b) => b.textContent === 'Send')
     expect(send).toBeTruthy()
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false))
+    // LEG D rider D2: the registrar's scope/endpoint ARE asserted — the
+    // project page forwards the studyId as the thread scope
+    // (ProjectWorkspacePage.tsx:119 scope={studyId}). endpoint 'browser'.
+    expect(surfaceChatCalls.length).toBeGreaterThan(0)
+    expect(surfaceChatCalls[0]!.endpoint).toBe('browser')
+    expect(surfaceChatCalls[0]!.scope).toBe('STU-1')
   })
 })

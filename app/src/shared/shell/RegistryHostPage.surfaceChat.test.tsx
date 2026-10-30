@@ -107,7 +107,27 @@ vi.mock('../../shared/ai/useWorkstateProposalFlow', () => ({
   }),
 }))
 
+// LEG D rider D2 (AS-L2T0915-LEGC-MINORS-DEFERRED, DEFECT D2): the pin must
+// assert the registrar's scope/endpoint — a regression that silently drops
+// scoping (cross-record thread bleed) would otherwise stay green (the composer
+// still enables). Wrap the REAL useSurfaceChat (keep its registration
+// side-effect) and capture the (endpoint, scope) it forwards.
+const surfaceChatCalls = vi.hoisted(
+  () => [] as Array<{ endpoint?: string; scope?: string }>,
+)
+vi.mock('../../agent/useSurfaceChat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../agent/useSurfaceChat')>()
+  return {
+    ...actual,
+    useSurfaceChat: (opts: Parameters<typeof actual.useSurfaceChat>[0]) => {
+      surfaceChatCalls.push(opts as { endpoint?: string; scope?: string })
+      return actual.useSurfaceChat(opts)
+    },
+  }
+})
+
 import { RegistryHostPage } from './RegistryHostPage'
+import { isThreadSegmentSafe } from './SurfaceChatBridge'
 
 function renderHost() {
   return render(
@@ -124,7 +144,10 @@ function renderHost() {
 }
 
 describe('RegistryHostPage — universal chat bridge (L2-CHAT-UI-1 LEG C1)', () => {
-  beforeEach(() => window.localStorage.clear())
+  beforeEach(() => {
+    window.localStorage.clear()
+    surfaceChatCalls.length = 0
+  })
   afterEach(() => {
     cleanup()
     window.localStorage.clear()
@@ -144,5 +167,29 @@ describe('RegistryHostPage — universal chat bridge (L2-CHAT-UI-1 LEG C1)', () 
     const send = Array.from(pane.querySelectorAll('button')).find((b) => b.textContent === 'Send')
     expect(send).toBeTruthy()
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false))
+    // LEG D rider D2: the registrar's scope/endpoint ARE asserted — the
+    // registry is a registry-scoped thread (endpoint 'browser', NO instance
+    // scope — the bridge is called with no scope prop, so no scope is
+    // forwarded; the server's "_" scope holds it). A regression that silently
+    // DROPS scoping would change this capture.
+    expect(surfaceChatCalls.length).toBeGreaterThan(0)
+    expect(surfaceChatCalls[0]!.endpoint).toBe('browser')
+    expect('scope' in (surfaceChatCalls[0]! as object)).toBe(false)
+  })
+
+  // LEG D rider D1 (AS-L2T0915-LEGC-MINORS-DEFERRED, DEFECT D1): the client
+  // guard mirrors the server's isValidThreadSegment, so '.' / '..' are refused
+  // CLIENT-SIDE too (a dots-only scope would escape the {endpoint} thread dir).
+  // Pinned here (the bridge's home surface) so the mirror can't drift back to
+  // the alphabet-only guard.
+  it('refuses dots-only thread scopes client-side (server mirror: never 4xx, never a fallback read)', () => {
+    expect(isThreadSegmentSafe('.')).toBe(false)
+    expect(isThreadSegmentSafe('..')).toBe(false)
+    expect(isThreadSegmentSafe('...')).toBe(false)
+    // The safe alphabet still passes (the refusal is dots-ONLY, not anti-dot).
+    expect(isThreadSegmentSafe('STU-0001')).toBe(true)
+    expect(isThreadSegmentSafe('rec.1')).toBe(true)
+    expect(isThreadSegmentSafe('')).toBe(false)
+    expect(isThreadSegmentSafe(null)).toBe(false)
   })
 })
