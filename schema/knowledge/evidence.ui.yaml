@@ -32,10 +32,18 @@ form:
   sections:
   - title: "Identity"
     fields:
+    # GC-16 FIX1 D4 (provisional-pending-ruling, default D-A — the decision
+    # override file was absent at work time): the knowledge kinds get NO
+    # client-minted id. The form EXPOSES the schema-declared `id` field as an
+    # editable input so the scientist supplies the stable identifier; the
+    # server's required-check (Ajv) is the single authority and refuses a
+    # missing/invalid one (the schema speaks). Anti-pattern ref: the registry
+    # OQ-3 comment (RecordRegistryPage.tsx:68-70) names a client-side
+    # kind->prefix table the anti-pattern; RecordCreatePanel's ID_PREFIXES is
+    # no longer seeded for the knowledge triplet.
     - path: "$.id"
       widget: "text"
       label: "ID"
-      readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
@@ -49,36 +57,69 @@ form:
       pre-decided: the form starts empty and submission is the
       scientist's act.
     fields:
-    # GC-16 (W1b): the three stance fields are `type: array, items: $ref ref`
-    # in evidence.schema.yaml — an ARRAY of record refs, not a single ref.
-    # A `record-ref` binding (one object) would 422 with "Expected type:
-    # array" under the schema's minItems: 1. Rebound to the repo's
-    # array-of-refs idiom — `reflist` (precedent: conversation.linkedArtifacts,
-    # instrument-sequence-entry.analysisRunRefs, the W1a context_refs/roles
-    # bindings). Each entry's type must be assertion or claim; that target
-    # shape is the LINT's job (evd-supports/refutes/assesses-target-shape),
-    # never a client-side kind table, and the array is optional at the field
-    # level (the schema's anyOf requires ONE of the three stances to be
-    # present, not all three).
+    # GC-16 FIX1 D2 (data leg; the authoring leg is requires-rescope — see
+    # the D2/D3 authoring-proof test). The stance fields are `type: array,
+    # items: $ref datatypes/ref` in evidence.schema.yaml. Rebound from
+    # `reflist` (whose Add button is a stub and whose entries are
+    # {value,source} — not datatypes/ref objects, so a hand-carried value
+    # 422s on required:kind) to the repo's `array` + typed item-hint idiom
+    # (the $.sources precedent: an `object` item hint over the item's
+    # sub-fields). The taptap `array` widget accepts this declarative shape
+    # (loader-honored `items:`) but CANNOT commit a populated datatypes/ref
+    # OBJECT — its "+ Add item" commits `{}` and renders no authorable item
+    # sub-slots. That authoring gap is a widget-component platform gap (out
+    # of this lane's boundary); the declarative spec is the schema-faithful
+    # binding it should carry. Each entry's target type (assertion/claim) is
+    # the LINT's job (evd-supports/refutes/assesses-target-shape), never a
+    # client-side kind table.
     - path: "$.supports"
-      widget: "reflist"
+      widget: "array"
       label: "Supports (assertion/claim refs)"
       required: false
       help: >
         The assertion(s)/claim(s) this bundle supports — an array of record
-        refs (schema type: array, items: ref). Leave empty unless the
-        bundle supports a target; at least one stance field (supports /
-        refutes / assesses) must be non-empty for a stance-bearing bundle.
+        refs (schema type: array, items: ref). Leave empty unless the bundle
+        supports a target; at least one stance field (supports / refutes /
+        assesses) must be non-empty for a stance-bearing bundle. Each entry
+        is a datatypes/ref object { kind: record, type, id, label? }.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        fields:
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
     - path: "$.refutes"
-      widget: "reflist"
+      widget: "array"
       label: "Refutes (assertion/claim refs)"
       required: false
       help: >
         The assertion(s)/claim(s) this bundle refutes — an array of record
         refs. Lint evd-refutes-target-shape requires each entry's type to be
         assertion or claim.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        fields:
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
     - path: "$.assesses"
-      widget: "reflist"
+      widget: "array"
       label: "Assesses (assertion/claim refs)"
       required: false
       help: >
@@ -86,6 +127,20 @@ form:
         invalid result) — an array of record refs. Lint
         evd-assesses-target-shape requires each entry's type to be assertion
         or claim.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        fields:
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
   - title: "Sources (the context arm)"
     help: >
       Sources map declared kinds to the existing type enum (OQ-1 ruling,
