@@ -55,6 +55,14 @@
   LABSTATE start 23:55:09 -> fires ~00:55 or on its exit; takes slot-1 flock then. Log
   logs/coder-GC16resume-l1t0045.log.
 
+## Pre-exit observation (00:42): RESUME IS LIVE, not merely armed
+
+- Lane-2's LABSTATE coder EXITED before its 60-min wall -> stagger gate opened at 00:34:51:
+  GC-16 resume coder RUNNING, PID 732162 (launcher inner), slot-1 LOCK-ACQUIRED
+  00:34:51, pid file GC16RESUME-732162-2026-10-30T00:34:51. Do NOT re-dispatch next tick
+  unless the log shows CODER_EXITED. Next-tick 2x watch ~01:5x (expected 40-80 min),
+  survival marker = first '[GC16][W1a]' commit in the worktree.
+
 ## Queue-lock transactions (bak files: .bak-l1t0012-pre, .bak-l1t0045-pre)
 
 - task-list.md: handoff_latest stamped (x2); GC-15 -> status done + completed block; GC-16 +
