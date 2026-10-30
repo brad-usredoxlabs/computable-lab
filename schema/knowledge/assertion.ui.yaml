@@ -89,7 +89,26 @@ form:
         path: "$.item"
         widget: "object"
         label: "Context ref"
+        # GC-16 FIX RUN 3 (D11, data leg): the datatypes/ref OBJECT the
+        # schema declares (schema/core/datatypes/ref.schema.yaml) REQUIRES
+        # `kind` (enum record|ontology) and kind:record then-requires id+type.
+        # The hint declares the discriminator as a single-option select
+        # (value "record" — the schema's own enum vocabulary, never a
+        # client-side kind table). KNOWN SURFACE GAP (named, not hidden):
+        # ui-v1's field definition has no const/seed/default keyword, so
+        # the declarative surface CANNOT express a seeded kind:record
+        # value the author need not touch — the author confirms the single
+        # option. Seeding the constant is the R1 widget task's item-hint
+        # consumption (architect ruling item 4: the data-leg seeding stays
+        # in GC-16 scope as a DATA edit; the ui-v1 keyword that would make
+        # it data-only does not exist), NOT a widget hardcode.
         fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          readonly: true
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
         - path: "type"
           widget: "text"
           label: "Record type (context)"
@@ -111,13 +130,47 @@ form:
         path: "$.item"
         widget: "object"
         label: "Role binding"
+        # GC-16 FIX RUN 3 (D11, data leg): role_ref and context_ref are
+        # each a datatypes/ref OBJECT (assertion.schema.yaml) — never a
+        # string. Rebound from `widget: text` to a ref-shaped object hint
+        # over the schema's ref fields: kind (discriminator, schema-
+        # required; single-option select, value "record" — the ui-v1
+        # surface has no const/seed keyword, so the seeded-value gap is
+        # named above in the context_refs hint and applies here identically)
+        # + type + id (kind:record then-requires both).
         fields:
         - path: "role_ref"
-          widget: "text"
-          label: "Role ref (context-role ID)"
+          widget: "object"
+          label: "Role ref (context-role record)"
+          fields:
+          - path: "kind"
+            widget: "select"
+            label: "Kind (ref discriminator — schema-required)"
+            readonly: true
+            options:
+            - { value: "record", label: "Record (computable-lab record ref)" }
+          - path: "type"
+            widget: "text"
+            label: "Record type (context-role)"
+          - path: "id"
+            widget: "text"
+            label: "Record ID"
         - path: "context_ref"
-          widget: "text"
+          widget: "object"
           label: "Context ref (ID in context_refs)"
+          fields:
+          - path: "kind"
+            widget: "select"
+            label: "Kind (ref discriminator — schema-required)"
+            readonly: true
+            options:
+            - { value: "record", label: "Record (computable-lab record ref)" }
+          - path: "type"
+            widget: "text"
+            label: "Record type (context)"
+          - path: "id"
+            widget: "text"
+            label: "Record ID"
     - path: "$.evidence_refs"
       widget: "reflist"
       label: "Evidence refs (established when evidence bundles are created)"

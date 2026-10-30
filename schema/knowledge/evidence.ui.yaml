@@ -86,7 +86,27 @@ form:
         path: "$.item"
         widget: "object"
         label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table). KNOWN SURFACE GAP (named, not hidden): ui-v1's field
+        # definition has no const/seed/default keyword, so the declarative
+        # surface CANNOT express a seeded kind:record value the author need
+        # not touch — the author confirms the single option. Seeding the
+        # constant is the R1 widget task's item-hint consumption (architect
+        # ruling item 4: the data-leg seeding stays in GC-16's ui.yaml scope
+        # as a DATA edit; the ui-v1 keyword that would make it data-only
+        # does not exist), NOT a widget hardcode.
         fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          readonly: true
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
         - path: "type"
           widget: "text"
           label: "Record type (assertion / claim)"
@@ -108,7 +128,27 @@ form:
         path: "$.item"
         widget: "object"
         label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table). KNOWN SURFACE GAP (named, not hidden): ui-v1's field
+        # definition has no const/seed/default keyword, so the declarative
+        # surface CANNOT express a seeded kind:record value the author need
+        # not touch — the author confirms the single option. Seeding the
+        # constant is the R1 widget task's item-hint consumption (architect
+        # ruling item 4: the data-leg seeding stays in GC-16's ui.yaml scope
+        # as a DATA edit; the ui-v1 keyword that would make it data-only
+        # does not exist), NOT a widget hardcode.
         fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          readonly: true
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
         - path: "type"
           widget: "text"
           label: "Record type (assertion / claim)"
@@ -131,7 +171,27 @@ form:
         path: "$.item"
         widget: "object"
         label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table). KNOWN SURFACE GAP (named, not hidden): ui-v1's field
+        # definition has no const/seed/default keyword, so the declarative
+        # surface CANNOT express a seeded kind:record value the author need
+        # not touch — the author confirms the single option. Seeding the
+        # constant is the R1 widget task's item-hint consumption (architect
+        # ruling item 4: the data-leg seeding stays in GC-16's ui.yaml scope
+        # as a DATA edit; the ui-v1 keyword that would make it data-only
+        # does not exist), NOT a widget hardcode.
         fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          readonly: true
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
         - path: "type"
           widget: "text"
           label: "Record type (assertion / claim)"
