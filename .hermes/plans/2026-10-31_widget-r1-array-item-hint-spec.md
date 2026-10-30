@@ -197,3 +197,53 @@ A7 as a whole stays NOT evidenced until A7b passes (ruling R3).
    WIDGET-R1 branch point: the merged ui.yaml hints already carry kind. If D11 lands as
    requires-rescope instead, the coder files requires-rescope per the stop boundary — do not
    widen the widget boundary.
+
+## ORCHESTRATOR AMENDMENT l1t0850 (assigned defects folded in before dispatch — 186th handoff
+## NEXT TICK item 3; every claim below re-verified first-hand on trunk/worktree at 08:5x EDT)
+
+### A1. ArrayWidget button `type` attribute (assigned defect — hard requirement, add to file
+### boundary item 3 + a test pin)
+`app/src/editor/taptab/widgets/ArrayWidget.tsx` declares ZERO `type=` attributes (verified:
+`grep -c "type=" ArrayWidget.tsx` = 0 at trunk). The taptab-array-remove (:74), taptab-array-add
+(:85) and taptab-array-done (:94) buttons sit inside the create <form> and therefore default to
+type=submit: EVERY array-item commit also submits the enclosing form (duplicate POST — fix-run-2's
+report RAW block reproduced it). REQUIREMENT: all three buttons get `type="button"`, and the new
+ArrayWidget unit test (or the proof test) PINS one submit per authored payload (e.g. spy the form
+submit / capture callback — assert "+ Add item" click does not fire form submit). This is RED-first
+too: write the pin before the attribute.
+
+### A2. O4 — ui-v1 `options` object-vs-array drift (assigned; boundary WIDENED:
+### schema/ui/ui-v1.schema.yaml field-hint `options` keyword ONLY)
+Verified first-hand at trunk: ui-v1.schema.yaml:236 declares `options: type: "object"` (with
+choices/refSchema/itemWidget properties — refSchema and itemWidget have ZERO consumers in
+server/src and app/src, verified by grep; `choices` is declared nowhere in any schema/*.ui.yaml).
+The CONSUMER truth is the array form: UISpecLoader.ts:282 (`field.options && !Array.isArray` is a
+validation ERROR), UISpecLoader.ts:695 (builds an array), types.ts:82/:446
+(`options?: FieldOption[]`), EditorSuggestionService.ts:200 (iterates), and every shipped ui.yaml
+(calibration-record.ui.yaml:41+, controlled-document.ui.yaml:52/:115, competency-authorization.ui.yaml:33+)
+uses `- value/label` arrays. The ui-v1 `options` object declaration is INERT (the loader does not
+Ajv-validate specs against ui-v1; UiReadonlySpellingProjection.test.ts only reads the `readonly`
+keyword) but it is exactly the EDITOR-1-carried drift ("two local terms for one entity" energy:
+two vocabularies for one field). FIX: re-declare the field-hint `options` in ui-v1.schema.yaml as
+`type: array, items: {value, label}` matching the consumer; drop the dead refSchema/itemWidget/
+choices sub-shape from the field-hint `options` object. Boundary: ONLY the field-hint `options`
+keyword — nothing else in ui-v1.schema.yaml, no loader changes, no ui.yaml content edits.
+If any ui-v1 schema test exists that pins the object shape, update it (no such pin found; audit
+server/src for ui-v1 schema-shape tests before concluding).
+
+### A3. Seed rule correction — hint-driven per-field seeding, kind-carrying items (assigned
+### D11-seed-const data-leg expectation; refines item 3 of the spec body)
+The merged item-hint (GC-16 worktree evidence.ui.yaml :86+; verify on the MERGED trunk at claim)
+declares `kind` as a SINGLE-OPTION non-readonly select (options: [{value: "record", ...}]). The
+body's "`{field: ''}`-shaped entries" seed rule would seed `kind: ''` — an INVALID datatypes/ref
+(ref.schema.yaml: kind:record then-requires id+type; empty string is not the enum value). Generic,
+schema-faithful seed rule (NO kind table, NO field-name branches): for each hint-declared
+sub-field, seed text/number fields to `''`; seed a `select` field whose hint declares EXACTLY ONE
+option to that option's `value`; anything else seeds `''`. The seed reads the option value FROM
+THE HINT — delete the option from the ui.yaml and the seed degrades, loud-diagnostic rules
+unchanged. EXPECTATION this makes true: a committed item from "+ Add item" on a knowledge ref
+array GENUINELY carries `kind: "record"` before the author touches it (the GC-16 ui.yaml comments
+defer exactly this to R1; the flipped proof test's Ajv-clean assertion depends on it —
+without A3 the ref-array payload cannot validate since kind is required and '' fails the enum).
+Update the RED-first unit-test expectation accordingly (seed object includes the single-option
+select's value, not '').
