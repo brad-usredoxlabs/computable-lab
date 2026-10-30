@@ -120,3 +120,70 @@ GC-15/GC-16 done. No spec-composer dispatch — no next-ready approved item.
 - CLEARED THIS TICK: AS-L1T197-2 (fix-run-3 verification re-runs — orch ran them
   first-hand: taptab 174/180 base-parity, ee 13|1106 identical, tsc 12-baseline zero in
   touched files, probe-flip witness confirmed).
+
+## ADDENDUM ~18:30 — A7b GATE RETURNED: VERDICT: accept — WIDGET-R1 MARKED DONE
+
+The gate completed inside this tick. ORCH RECEIPT AUDIT PASSED (skill
+browser-gate-receipt-audit):
+- trail.json: 98 steps, 0 failures; consoleErrors/pageErrors/network arrays listener-
+  attached BEFORE first navigation; 205 network entries; EXACTLY ONE POST /api/records
+  returning 201 in the final session (n=91; the 422 at n=65 is the C1 refusal leg).
+- 19 shots, md5 sweep ZERO duplicates.
+- C3 live cite-check: GET :3092/api/records/ASN-R1-A7B-NESTEDC-20261030 -> 200 with
+  context_refs (2 record-objects) AND roles = two nested OBJECTS
+  {role_ref:{kind,type,id}, context_ref:{kind,type,id}} — exactly the nested authoring
+  this campaign existed to enable. Schema-valid (created via the server's own Ajv path).
+- C2 nested-render shot 46 orch-vision-verified: role item open with Kind/Record type/
+  Record ID nested sub-field inputs rendered inside the roles item (not a bare item).
+- C1 refusal shows verbatim [asn-scoped-assertion-needs-context] (fix-run-1 D1 fix works
+  end-to-end) + live-404 negative re-verify. C5/C6 pass with shots; console = expected
+  422 + reviewer-caused 404 only.
+- Reviewer disclosed harness-iteration leftovers (ASN-R1-A7B-DRY*/NESTED test records,
+  USR-BRAD test data — fine per Brad's all-records-are-test-data ruling).
+
+WIDGET-R1 marked DONE in the lane list (status: done + completed + outcome block).
+NOTE: the mark-done script hit a python list-slice-assignment pitfall (string into list
+slice = char-per-line); repaired the same tick, file verified clean (10185 lines, block
+reads correctly). Lesson saved to the computable-lab skill references.
+
+AS-L1T198-2 CLEARED (A7b accept receipts). AS-L1T194-2 CLEARED (same receipts).
+AS-L1T196-2 CLEARED. Remaining open evidence debt: AS-L1T1430-1 (WI-5 value proof,
+clears at GC-14 close-out A6 leg) + AS-L1T176-1 (id-mint provisional).
+
+NON-BLOCKING FOLLOW-UPS RECORDED (not new scope this campaign): (1) nested widget:select
+renders as free-text and is not seeded (friction; gate report obs 2); (2) nested-object
+input CSS debt = tracked D5/D6; (3) objectConfig sibling leg dormant (adv O2);
+(4) dangling ref CTX-TEST-GC13-214258 in the C6 fixture (pre-existing data debt).
+
+## NEXT TICK (199th) — in order
+
+1. DISPATCH THE GC-14 CLOSE-OUT RE-GATE (prompt prepared:
+   prompts/browser-GC14-closeout-l1t1900.txt; receipts dir stamp
+   GC-14/<new-ts>/). Legs per the architect's gaps-answer §close-out protocol: A6 (target
+   ANREV-000009 — a6_gate_target, live-200; ANREV-DREADER-1 was superseded by GC-15),
+   A7a (open an API-minted triplet with schema-valid ref arrays read-only — cite RUN1),
+   lint-refusal demo, console delta. A7b leg is SATISFIED by the WIDGET-R1/20261030T175200
+   receipts — reference them, do not re-run. On accept: GC-14 closes ONLY with Brad's
+   dossier review recorded; dossier witness unchanged (sha 7700549335a2).
+2. Id-mint decision watch + dossier unchanged-check.
+3. No coder dispatch without a claimable item (zero todo rows; GC-14 closure is human-
+   blocked on Brad's dossier verdict — NOT re-asked, witness unchanged).
+
+## CHECKPOINT 18:42 — soft budget expired: close-out gate PRE-PREPARED, dispatch rides tick 199
+
+Gate prompt fully staged this tick (so tick 199 dispatches with one command, no compose
+time): prompts/browser-GC14-closeout-l1t1900.txt with receipts stamp
+~/.hermes/cl/receipts/GC-14/20261030T184028/ (dir created). Covers A6 (target ANREV-000009,
+live-200 confirmed; ANREV-DREADER-1 = 404 — superseded by GC-15, recorded in the prompt),
+A7a read-only ref render (cite ASN-R1-A7B-NESTEDC-20261030), lint-refusal demo, console
+delta; A7b explicitly cited-not-re-run. Vision slot FREE at handoff (no scout/browser
+reviewer live). Launch (tick 199): systemd-run --user --collect
+--unit=cl-l1-browser-gc14-closeout --working-directory=/home/brad /bin/bash -c
+'hermes -p cl-browser-reviewer -z "$(cat .../browser-GC14-closeout-l1t1900.txt)" >
+.../logs/browser-GC14-closeout-l1t1900.log 2>&1' (launcher pattern as used for A7b).
+Budget: tick started 17:41; the A7b gate + audit + done-marking consumed the soft budget —
+launching a second browser run after expiry violates the budget rule, so dispatch deferred
+one tick with everything else staged. Fleet at checkpoint: coder slots FREE (no claimable
+item), tb-bg both lane-2, vision free. GC-14 stays in-progress (human-blocked on Brad's
+dossier verdict regardless of this re-gate; dossier witness sha 7700549335a2 unchanged,
+NOT re-asked).
