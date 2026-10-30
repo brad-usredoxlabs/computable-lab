@@ -77,10 +77,18 @@ TURN_TIMEOUT = int(os.environ.get("DRIVE_TURN_TIMEOUT", "300"))
 # (post-223a7910); 'lysis reagent' (unhyphenated, as the prior model lowering
 # emitted) has a tier-1 'lysis-reagent' design. The well ranges, turn
 # structure, and never-guess shape are UNCHANGED.
+# UTTERANCE VARIANT 2026-10-30T19:00 EDT (orch l2t1830, ruling Q4 swap
+# authority; AS-L2T1651-DRIVE-SAMPLER-ATTRIB-VARIANCE): the 5-receipt matrix
+# shows the shorthand sampler nondeterministically emits add/mix WITHOUT the
+# labwareId binding when the utterance names no deck carrier. This variant
+# PINS the carrier explicitly ("the plate") in the add turns so the sampler
+# has a resolvable deck noun every turn; well ranges/structure/never-guess
+# shape UNCHANGED. If legs still don't co-occur green -> architect packet
+# (drive-vs-sampler determinism contract).
 TURNS = [
     ("A", "Place a 96-well plate on the deck."),
-    ("1", "add beads to A1:H1"),
-    ("1b", "add ethanol to A2:H2"),
+    ("1", "add beads to the plate A1:H1"),
+    ("1b", "add ethanol to the plate A2:H2"),
     ("2", "mix all wells that have material"),
 ]
 # The never-guess control (spec §11 failure-arm): an add naming a plate the
