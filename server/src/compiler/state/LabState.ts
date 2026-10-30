@@ -52,6 +52,32 @@ export interface ReservoirContents {
   wellContents: Record<string, MaterialRecord[]>;
 }
 
+// ---------------------------------------------------------------------------
+// L2-LABSTATE-CONTENTS-1 — the DATA-declared labware identity resolution rules.
+//
+// The rung ladder is DATA (the vocabulary's `labwareIdentityResolution`
+// section), never a TS policy: `order` names the rungs in declared order and
+// `tokenFields` names the instance fields a rung reads. The fold is a GENERIC
+// field-identity evaluator over those declared fields — it never branches on a
+// rung id or a field name (the PROTO-AI-3 generic-evaluator doctrine; the B3
+// boundary). Absent rules (a 2-arg fold call) => rung R1 ONLY (the raw
+// labwareInstanceId path), so every pre-existing byte-stable test is unchanged.
+// The rules are threaded at the PASS seam (createLabStatePass loads the
+// vocabulary), never imported into this pure module.
+// ---------------------------------------------------------------------------
+
+export interface LabIdentityRules {
+  /** Rung ids in declared order (the DATA `order` list). The fold walks them
+   *  first-hit-wins; a rung yielding zero or a tie at its position => the
+   *  ladder reports unresolved (never-guess). */
+  order: readonly string[];
+  /** The instance field each rung reads (the DATA `tokenFields` list, index-
+   *  aligned with `order`). instanceIdentity -> `instanceId`,
+   *  declaredIdentityTokens -> `identityTokens`, uniqueLabwareType ->
+   *  `labwareType`. */
+  tokenFields: readonly string[];
+}
+
 export interface LabStateSnapshot {
   deck: DeckSlot[];
   mountedPipettes: MountedPipette[];
