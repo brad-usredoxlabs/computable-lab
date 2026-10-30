@@ -27,6 +27,7 @@ import {
   applyEventToLabState,
   emptyLabState,
   isContentBearing,
+  normalizeTypeKey,
   type FoldOutcome,
   type LabIdentityRules,
 } from '../../../compiler/state/LabState.js';
@@ -1851,13 +1852,88 @@ export function createLabStatePass(
         });
       };
 
+      // L2-LABSTATE-CONTENTS-1 fix3 (a): carry the compiler's RESOLVED DESIGN
+      // identity onto the create_container event's declared carrier (and onto
+      // the same-document content-bearing events that name the same labware),
+      // BEFORE the fold. The expander's create_container emits only {slot,
+      // labwareType} — the design's resolved record id (the resolve_labware
+      // pass's resolvedLabwares slot) never reaches the create's carrier, so
+      // the minted instance's identityTokens are ABSENT and rung R2 (declared
+      // identityTokens) can never match a design-ref hint. With the record id
+      // on details.labwareId the minted instance carries identityTokens =
+      // [recordId] and R2 EXACTLY matches a design-ref hint (zero hardcoded
+      // vocab strings — the identity rides the resolve_labware pass's resolved
+      // output, never a literal). The join is GENERIC: the create event's
+      // declared labware identity (its candidate's labware hint via the
+      // expand pass's sourceActionIndex provenance, else its labwareType)
+      // normalizes (normalizeTypeKey — the SAME R3 normalization the rung
+      // evaluators use) to the resolvedLabwares entry's hint; a UNIQUE
+      // normalized match carries the recordId, a tie/zero never (never-guess).
+      const aiPrecompile = state.outputs.get('ai_precompile') as
+        { candidateEvents?: Array<Record<string, unknown>> } | undefined;
+      const candidateEvents = aiPrecompile?.candidateEvents ?? [];
+      const labwareResolveOutput = state.outputs.get('resolve_labware') as
+        { resolvedLabwares?: Array<{ hint: string; recordId: string; title?: string }> } | undefined;
+      const resolvedLabwares = labwareResolveOutput?.resolvedLabwares ?? [];
+      // The resolved-design-identity map: normalized create-labware key ->
+      // recordId. A key with >1 distinct recordIds is dropped (never-guess —
+      // a tie is never a pick). Absent/empty resolvedLabwares => inert (the
+      // fold runs byte-identically to pre-fix).
+      const typeKeyToRecordId = new Map<string, string>();
+      const typeKeyRecordCount = new Map<string, Set<string>>();
+      for (const rl of resolvedLabwares) {
+        if (typeof rl?.hint !== 'string' || typeof rl?.recordId !== 'string') continue;
+        const key = normalizeTypeKey(rl.hint);
+        if (!key) continue;
+        let set = typeKeyRecordCount.get(key);
+        if (!set) { set = new Set(); typeKeyRecordCount.set(key, set); }
+        set.add(rl.recordId);
+      }
+      for (const [key, set] of typeKeyRecordCount) {
+        if (set.size === 1) typeKeyToRecordId.set(key, [...set][0]!);
+      }
+      const recordIdFor = (event: PlateEventPrimitive): string | undefined => {
+        const details = (event.details ?? {}) as Record<string, unknown>;
+        // The create's DESIGN identity: the emitting candidate's labware hint
+        // (the provenance join — the sourceActionIndex stamp) else the event's
+        // own labwareType (the expander default). Both normalize to the SAME
+        // type key (the hint '96-well plate' and the type '96-well-plate').
+        const saIdx = typeof details.sourceActionIndex === 'number' ? details.sourceActionIndex : undefined;
+        const cand = saIdx !== undefined ? candidateEvents[saIdx] : undefined;
+        const designHint =
+          (typeof cand?.labware === 'string' && cand.labware.trim() ? cand.labware : undefined)
+          ?? (typeof cand?.labware_id === 'string' && cand.labware_id.trim() ? cand.labware_id : undefined)
+          ?? (typeof details.labwareType === 'string' ? details.labwareType : undefined)
+          ?? (typeof event.labwareId === 'string' ? event.labwareId : undefined);
+        if (typeof designHint !== 'string' || !designHint.trim()) return undefined;
+        return typeKeyToRecordId.get(normalizeTypeKey(designHint));
+      };
+      // Pre-fold: carry the resolved DESIGN record id onto the create_container
+      // event's declared carrier (details.labwareId — the mint's identityTokens
+      // carrier, rung R2). ONLY the create is rewritten: the create is the
+      // emit site of the identity (the minted instance's identityTokens ride
+      // it), and it ships NO carrier today (details = {slot, labwareType}).
+      // The content-bearing events (add_material / mix) keep their expander-
+      // emitted carrier verbatim — the live binder rewrites THOSE to the record
+      // id post-pipeline (the wire done-frame shape), and the fold resolves
+      // them through the ladder (R2 once the instance carries the token, R3 on
+      // a single-instance type). The events array is rebuilt immutably; the
+      // resolve_roles slot (upstream) is never mutated.
+      const foldEvents = events.map((event) => {
+        if (event.event_type !== 'create_container') return event;
+        const details = (event.details ?? {}) as Record<string, unknown>;
+        const rid = recordIdFor(event);
+        if (!rid) return event;
+        return { ...event, details: { ...details, labwareId: rid } } as PlateEventPrimitive;
+      });
+
       // Fold directives FIRST, then events (events depend on post-directive state)
       let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
       const directives = (state.outputs.get('apply_directives') as { directives?: DirectiveNode[] } | undefined)?.directives ?? [];
       for (const d of directives) {
         snapshot = applyDirectiveToLabState(snapshot, d);
       }
-      for (const event of events) {
+      for (const event of foldEvents) {
         const result = applyEventToLabState(snapshot, event, rules);
         snapshot = result.snapshot;
         collectDiagnostic(event, result.outcome);
@@ -1896,7 +1972,13 @@ export function createLabStatePass(
       }
       return {
         ok: true,
-        output: { events, snapshotAfter: snapshot },
+        // The events the fold actually processed (the pre-fold carried-identity
+        // list — the emit-site carrier proof: a create whose resolvedLabwares
+        // carry a recordId ships details.labwareId = that recordId, and the
+        // minted instance's identityTokens carry it for the R2 rung). The wire
+        // done-frame events ride the resolve_roles slot (untouched); this is
+        // the labStateDelta.events artifact only.
+        output: { events: foldEvents, snapshotAfter: snapshot },
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     },

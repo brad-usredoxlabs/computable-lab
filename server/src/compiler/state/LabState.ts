@@ -197,8 +197,11 @@ function normalizeToken(value: string): string {
 
 /** Trim + casefold + collapse non-alnum runs (the R3 unique-declared-type
  *  normalization — a hyphenated and a spaced spelling of the SAME type key
- *  normalize to one key, e.g. '96' + 'well' + 'plate' under any separators). */
-function normalizeTypeKey(value: string): string {
+ *  normalize to one key, e.g. '96' + 'well' + 'plate' under any separators).
+ *  Exported so the pass seam's emit step (the create's resolved-design-identity
+ *  carrier) uses the SAME normalization the rung evaluators use — one declared
+ *  normalization, never a second. */
+export function normalizeTypeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 /** Rung evaluators — GENERIC field-identity evaluators over the field the
