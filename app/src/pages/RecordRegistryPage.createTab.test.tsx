@@ -68,6 +68,20 @@ const REGISTRY_KINDS = [
   'gc-method',
 ] as const
 
+// GC-16 (W2): the knowledge triplet (assertion / claim / evidence) is a
+// REGISTRY_TABS row (RecordRegistryPage.tsx), so this per-tab Create test —
+// which iterates the page's OWN REGISTRY_TABS data — must model them in the
+// served registry too. Unlike the lab/spine kinds above, the knowledge
+// schemas declare `properties.id` with NO `pattern` (verified first-hand on
+// :3092: assertion/claim/evidence all return {type:'string'} for id; the
+// FAIRCommon base in schema/core/common.schema.yaml declares no pattern
+// either). They are therefore NOT seedable by the registry's OQ-3
+// seedIdFromDeclaredPattern path — the governed door REFUSES them loudly
+// ("No id pattern declared …") rather than fabricating a prefix. The
+// working knowledge authoring door is /record/new/:kind (RecordCreatePanel),
+// pinned in RecordCreatePanel.gc16.test.tsx.
+const KNOWLEDGE_KINDS = ['assertion', 'claim', 'evidence'] as const
+
 const mocked = vi.hoisted(() => ({
   draftProjectionCalls: [] as string[],
   schemaFetches: [] as string[],
@@ -134,13 +148,22 @@ vi.mock('../shared/api/client', () => ({
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
     // The schema-registry metadata endpoint (EDITOR-9 fix-1 wiring).
     getSchemas: vi.fn(() =>
-      Promise.resolve(
-        REGISTRY_KINDS.map((kind) => ({
+      Promise.resolve([
+        ...REGISTRY_KINDS.map((kind) => ({
           id: SCHEMA_ID(kind),
           path: `lab/${kind}.schema.yaml`,
           title: kind,
         })),
-      ),
+        // GC-16 (W2): the real served registry also lists the knowledge
+        // triplet (schema/knowledge/<kind>.schema.yaml). deriveSchemaNode
+        // derives the kind from the file stem, exactly as the live GET
+        // /schemas serves it.
+        ...KNOWLEDGE_KINDS.map((kind) => ({
+          id: SCHEMA_ID(kind),
+          path: `knowledge/${kind}.schema.yaml`,
+          title: kind,
+        })),
+      ]),
     ),
     // GET /schemas/:id — returns the FULL schema document (verified live:
     // {id, path, schema:{…properties.id.pattern…}}).
@@ -449,6 +472,13 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     })
     for (const tab of REGISTRY_TABS) {
       const kind = tab.kinds[0]
+      // GC-16 (W2): a tab whose kind declares no `properties.id.pattern`
+      // (the knowledge triplet) is NOT seedable by the registry's OQ-3 path —
+      // the governed door refuses loudly instead of opening a draft.
+      // Seedability is read from the harness's declared-pattern model (the
+      // SAME data getSchema serves to seedIdFromDeclaredPattern), never a
+      // test-side kind list. kind = tab.kinds[0] (the primary kind).
+      const seedable = typeof mocked.patterns[SCHEMA_ID(kind)] === 'string'
       await openTab(tab.label)
       await clickCreate()
       const picker = screen.queryByTestId('registry-create-kind-picker')
@@ -457,6 +487,28 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
         await act(async () => {
           fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
         })
+      }
+      if (!seedable) {
+        // The loud, named, actionable refusal — no fabricated prefix, no
+        // dead draft (the working knowledge door is /record/new/:kind).
+        await waitFor(() => {
+          expect(screen.getByTestId('registry-create-error')).toBeTruthy()
+        })
+        expect(screen.getByTestId('registry-create-error').textContent).toMatch(/id pattern/i)
+        expect(screen.queryByTestId('projection-taptab-editor')).toBeNull()
+        // No new draft was opened for this kind: the last draft-projection
+        // call (if any) is NOT the knowledge schema. (editorDataProp is
+        // stale from the previous tab — the loop does not re-run
+        // beforeEach — so it is not asserted here.)
+        const lastDraft = mocked.draftProjectionCalls[mocked.draftProjectionCalls.length - 1]
+        expect(lastDraft === undefined || lastDraft !== SCHEMA_ID(kind)).toBe(true)
+        expect(mocked.draftProjectionCalls).not.toContain(SCHEMA_ID(kind))
+        // The editor never opens on a refusal (no dead draft), so there is
+        // NO Cancel button to click — the refusal banner is cleared by the
+        // next Create (openCreateForKind resets createError). Knowledge is
+        // the last tab, so the loop ends here; the final assertion below
+        // still holds (no empty schemaId was ever requested).
+        continue
       }
       await waitFor(() => {
         expect(mocked.draftProjectionCalls).toContain(SCHEMA_ID(kind))

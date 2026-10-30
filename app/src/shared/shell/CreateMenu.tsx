@@ -31,7 +31,12 @@ interface CreateMenuItem {
 const ITEMS: CreateMenuItem[] = [
   { label: 'New Run', onCreateRun: true, dominant: true },
   { label: 'New Project', path: '/create/study' },
-  { label: 'New Claim', path: '/claims' },
+  // GC-16 (W3, dead-chrome ban): New Claim opens the WORKING authoring door
+  // (/record/new/claim → RecordHostPage → RecordCreatePanel, which resolves
+  // the claim schema via the served registry), NOT /claims (the claim
+  // COLLECTION view — a list with no create form). One term per entity: the
+  // entry is the schema kind name "Claim" (the working door's kind).
+  { label: 'New Claim', path: '/record/new/claim' },
 ]
 
 export function CreateMenu() {
