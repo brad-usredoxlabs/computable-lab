@@ -104,24 +104,47 @@ export function ObjectWidget({
       <div className="taptab-object-editor" data-widget={widget}>
         {properties.map((prop) => {
           const propValue = getValueAtPath(objValue, prop.name);
+          // WIDGET-R1 fix-run 2 (D2 / ruling ARCHD2L1T1335 OPT-A): a
+          // property whose config carries NON-EMPTY `fields` is a nested
+          // object — render it under the existing label through ANOTHER
+          // ObjectWidget (recursion; the nested editor's onCommit commits
+          // the nested object back at `prop.name` via the SAME
+          // handleFieldChange path, and setValueAtPath walks/creates the
+          // path immutably, so nested commits compose with zero plumbing).
+          // The branch is on NON-EMPTY `fields` ONLY — never on widget
+          // names or field names — and the flat input path below renders
+          // EXACTLY as before for properties without nested fields.
+          const nestedFields = Array.isArray(prop.fields) ? prop.fields : [];
+          const hasNestedFields = nestedFields.length > 0;
           return (
             <div key={prop.name} className="taptab-object-field">
               <label className="taptab-object-field-label">
                 {prop.label}
                 {prop.required && <span className="taptab-object-required">*</span>}
               </label>
-              <input
-                type="text"
-                value={String(propValue ?? '')}
-                onChange={(e) => handleFieldChange(prop.name, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="taptab-object-field-input"
-              />
+              {hasNestedFields ? (
+                <ObjectWidget
+                  value={getValueAtPath(objValue, prop.name)}
+                  widget="object"
+                  properties={nestedFields}
+                  readOnly={false}
+                  onCommit={(v) => handleFieldChange(prop.name, v)}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={String(propValue ?? '')}
+                  onChange={(e) => handleFieldChange(prop.name, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="taptab-object-field-input"
+                />
+              )}
               {prop.help && <span className="taptab-object-field-help">{prop.help}</span>}
             </div>
           );
         })}
         <button
+          type="button"
           className="taptab-object-done"
           onClick={(e) => {
             e.stopPropagation();
