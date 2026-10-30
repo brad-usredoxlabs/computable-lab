@@ -263,39 +263,46 @@ function resolveLabware(
 // the fold-side twin of the read half's `materialBearingEventTypes`), passed
 // in as `declaredEventTypes` — no TS literal list of event types (the B3
 // boundary / no-double-vocabulary discipline: one DATA declaration of the
-// concept, consumed by both halves). The CARRIER half (which declared
-// identity slots an event carries — `labwareId` / `source_labware` / the raw
-// `from.labwareInstanceId`) stays a shape probe in TS: it reads the event's
-// OWN declared slots, it names no event type (the same generic-read posture
-// as the rung evaluators over the declared tokenFields). `declaredEventTypes`
-// empty (absent vocabulary section) => fail-closed: NO event is
-// content-bearing, so the pass surfaces no diagnostics (over-conservative,
-// never-guess-safe). The pure fold module never imports the vocabulary.
+// concept, consumed by both halves). The remaining half is a GENERIC carrier
+// probe, not an event-type branch: an event is content-bearing when it DECLARES
+// a labware-identity carrier the fold is meant to resolve (details.labwareId /
+// details.labwareInstanceId / the top-level labwareId / source_labware /
+// destination_labware / the raw from.labwareInstanceId) — the same generic-
+// read posture as the rung evaluators over the declared tokenFields. An event
+// with NO labware carrier declares nothing to resolve => not content-bearing
+// => no diagnostic (nothing to surface). This is what makes D1's
+// destination-only transfer (top-level labwareId = the destination, no
+// source_labware) VISIBLE: the fold no-ops (unresolvable source) and the pass
+// surfaces the never-guess diagnostic. `declaredEventTypes` empty (absent
+// vocabulary section) => fail-closed: NO event is content-bearing, so the pass
+// surfaces no diagnostics (over-conservative, never-guess-safe). The pure fold
+// module never imports the vocabulary.
 // ---------------------------------------------------------------------------
 export function isContentBearing(
   event: PlateEventPrimitive,
   declaredEventTypes: readonly string[] = [],
 ): boolean {
+  // (1) the event type is declared content-bearing (DATA, the pass seam's
+  // vocabulary list — no TS literal list of event types).
   if (!declaredEventTypes || !declaredEventTypes.includes(event.event_type)) return false;
-  if (event.event_type === 'add_material') return true;
-  // A transfer is content-bearing when it declares a SOURCE labware carrier
-  // (the pre-fix check) OR — D1 (advc fix-run 1) — when it declares a
-  // DESTINATION labware carrier without a resolvable source (the expander's
-  // destination-only shape, where the top-level labwareId IS the destination):
-  // an unresolvable source side is a never-guess failure the pass must
-  // surface. A transfer with NO labware carriers at all is not content-bearing
-  // (nothing to resolve, nothing to surface).
+  // (2) the event declares a labware-identity carrier the fold resolves
+  // (generic shape probe — no event-type branch): add_material always does
+  // (details.labwareInstanceId raw / details.labwareId or top-level labwareId
+  // symbolic); transfer does when it names a source or destination labware
+  // (source_labware / destination_labware / the raw from.labwareInstanceId),
+  // including the destination-only shape where the top-level labwareId IS the
+  // destination. No carrier => nothing to resolve => nothing to surface.
   const details = event.details as Record<string, unknown> | undefined;
   const from = details?.from as Record<string, unknown> | undefined;
-  const hasSourceCarrier =
-    (typeof details?.source_labware === 'string' && details.source_labware)
+  return Boolean(
+    (typeof details?.labwareId === 'string' && details.labwareId)
+    || (typeof details?.labwareInstanceId === 'string' && details.labwareInstanceId)
+    || (typeof event.labwareId === 'string' && event.labwareId)
+    || (typeof details?.source_labware === 'string' && details.source_labware)
+    || (typeof details?.destination_labware === 'string' && details.destination_labware)
     || (from && typeof from.labwareId === 'string' && from.labwareId)
-    || (from && typeof from.labwareInstanceId === 'string' && from.labwareInstanceId);
-  const hasDestinationCarrier =
-    (typeof details?.destination_labware === 'string' && details.destination_labware)
-    || (event.labwareId !== undefined)
-    || (from && typeof from.labwareInstanceId === 'string' && from.labwareInstanceId);
-  return Boolean(hasSourceCarrier || hasDestinationCarrier);
+    || (from && typeof from.labwareInstanceId === 'string' && from.labwareInstanceId),
+  );
 }
 
 // ---------------------------------------------------------------------------

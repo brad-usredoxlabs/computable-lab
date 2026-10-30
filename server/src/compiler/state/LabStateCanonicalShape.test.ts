@@ -26,6 +26,8 @@
  * why the symbolic legs stay RED at base).
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   applyEventToLabState,
   emptyLabState,
@@ -563,5 +565,36 @@ describe('L2-LABSTATE-CONTENTS-1 — canonical shape (real expander output)', ()
     // The empty C1 pair wrote NOTHING (no D1 materialization — the pre-fix
     // fold created `D1: []` here).
     expect(result.snapshot.labware[id]!.wells['D1']).toBeUndefined();
+  });
+
+  // -----------------------------------------------------------------------
+  // D6 (advc fix-run 1, B3 / no-double-vocabulary): the content-bearing
+  // EVENT-TYPE taxonomy is DATA (the vocabulary's
+  // labStateContentBearingEventTypes list), not a TS literal list in the fold
+  // module. Mutation-kill probe: scan the isContentBearing body of the SHIPPED
+  // fold module — if a second literal classification of event types is
+  // reintroduced (e.g. `event_type !== 'add_material' && event_type !==
+  // 'transfer'`), this leg REDs. The event-type membership must come from the
+  // `declaredEventTypes` parameter (threaded at the pass seam), never a TS
+  // literal list.
+  // -----------------------------------------------------------------------
+  it('D6: isContentBearing carries NO hardcoded event-type list (the taxonomy is DATA — the fold-side twin of materialBearingEventTypes)', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'src', 'compiler', 'state', 'LabState.ts'),
+      'utf-8',
+    );
+    // The isContentBearing function body (from its export to the next
+    // top-level declaration).
+    const start = src.indexOf('export function isContentBearing');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = src.indexOf('\nexport function ', start + 1);
+    const body = src.slice(start, end === -1 ? undefined : end);
+    // No event-type literal comparison against event.event_type (the
+    // pre-fix D6 defect: `event.event_type !== 'add_material' && ...`).
+    expect(body).not.toMatch(/event\.event_type\s*(!==?|===?)\s*['"]/);
+    // The event-type membership rides the DATA parameter (threaded at the
+    // pass seam from the vocabulary's labStateContentBearingEventTypes list).
+    expect(body).toMatch(/declaredEventTypes/);
+    expect(body).toMatch(/declaredEventTypes\.includes\(event\.event_type\)/);
   });
 });
