@@ -6,6 +6,20 @@
 # form below binds ONLY declared properties. The stance (supports/refutes/
 # assesses) is the scientist's EXPLICIT choice — the GC-13 authoring form
 # (app/src/run/gc/) starts it empty; no AI/default pre-fills it.
+#
+# GC-16 (W1b, architect GAP-1 audit): the three stance fields were bound to
+# a single `record-ref` widget, which commits ONE structured ref object —
+# but evidence.schema.yaml declares supports/refutes/assesses as
+# `type: array` (minItems: 1, items: $ref datatypes/ref) with
+# unevaluatedProperties: false. A draft built from that spec would 422 with
+# "Expected type: array". Rebound to the repo's array-of-refs idiom — the
+# `reflist` widget (precedent: conversation.linkedArtifacts,
+# instrument-sequence-entry.analysisRunRefs), which serializes as an array
+# of structured refs. `sources` stays the `array` widget with typed
+# {type, ref} item hints because its items are OBJECTS (type + ref), not
+# bare refs. The stance target shape (each entry's type is assertion or
+# claim) is the lint's job (evd-supports/refutes/assesses-target-shape),
+# never a client-side kind table.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/evidence.schema.yaml"
 
@@ -35,18 +49,43 @@ form:
       pre-decided: the form starts empty and submission is the
       scientist's act.
     fields:
+    # GC-16 (W1b): the three stance fields are `type: array, items: $ref ref`
+    # in evidence.schema.yaml — an ARRAY of record refs, not a single ref.
+    # A `record-ref` binding (one object) would 422 with "Expected type:
+    # array" under the schema's minItems: 1. Rebound to the repo's
+    # array-of-refs idiom — `reflist` (precedent: conversation.linkedArtifacts,
+    # instrument-sequence-entry.analysisRunRefs, the W1a context_refs/roles
+    # bindings). Each entry's type must be assertion or claim; that target
+    # shape is the LINT's job (evd-supports/refutes/assesses-target-shape),
+    # never a client-side kind table, and the array is optional at the field
+    # level (the schema's anyOf requires ONE of the three stances to be
+    # present, not all three).
     - path: "$.supports"
-      widget: "record-ref"
+      widget: "reflist"
       label: "Supports (assertion/claim refs)"
       required: false
+      help: >
+        The assertion(s)/claim(s) this bundle supports — an array of record
+        refs (schema type: array, items: ref). Leave empty unless the
+        bundle supports a target; at least one stance field (supports /
+        refutes / assesses) must be non-empty for a stance-bearing bundle.
     - path: "$.refutes"
-      widget: "record-ref"
+      widget: "reflist"
       label: "Refutes (assertion/claim refs)"
       required: false
+      help: >
+        The assertion(s)/claim(s) this bundle refutes — an array of record
+        refs. Lint evd-refutes-target-shape requires each entry's type to be
+        assertion or claim.
     - path: "$.assesses"
-      widget: "record-ref"
+      widget: "reflist"
       label: "Assesses (assertion/claim refs)"
       required: false
+      help: >
+        The assertion(s)/claim(s) this bundle assesses (inconclusive /
+        invalid result) — an array of record refs. Lint
+        evd-assesses-target-shape requires each entry's type to be assertion
+        or claim.
   - title: "Sources (the context arm)"
     help: >
       Sources map declared kinds to the existing type enum (OQ-1 ruling,

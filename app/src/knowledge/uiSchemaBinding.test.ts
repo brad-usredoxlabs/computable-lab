@@ -210,4 +210,29 @@ describe('GC-16 W1 — knowledge ui.yaml binds only declared schema properties (
     const sources = formFields(ui).find((f) => f.path === '$.sources')!
     expect(sources.widget).toBe('array')
   })
+
+  // W1b — the evidence stance arrays bind the ARRAY-of-refs widget, not a
+  // single record-ref. evidence.schema.yaml declares supports/refutes/
+  // assesses as `type: array, minItems: 1, items: $ref datatypes/ref` under
+  // unevaluatedProperties: false. A `record-ref` binding commits ONE object
+  // and would 422 with "Expected type: array" — the same defect class as the
+  // W1a $.claimId/$.content assertion drift. The repo's array-of-refs idiom
+  // is the `reflist` widget (precedent: conversation.linkedArtifacts,
+  // instrument-sequence-entry.analysisRunRefs, the W1a context_refs/roles).
+  it.each(['supports', 'refutes', 'assesses'] as const)(
+    'evidence: $.%s binds the array-of-refs reflist widget (schema declares it type: array, items: ref)',
+    async (arm) => {
+      const [ui, schema] = await Promise.all([loadUi('evidence'), loadSchema('evidence')])
+      const def = (schema.properties ?? {})[arm] as PropDef | undefined
+      expect(def, `${arm} is declared`).toBeDefined()
+      expect(def!.type, `${arm} is a ref array in the schema`).toBe('array')
+      expect(def!.items, `${arm} items are the ref datatype`).toBeTruthy()
+      const field = formFields(ui).find((f) => f.path === `$.${arm}`)
+      expect(field, `evidence.ui.yaml must bind $.${arm}`).toBeDefined()
+      expect(
+        field!.widget,
+        `$.${arm} is a schema ref-array — it must bind a composite array-of-refs widget (was ${field!.widget}; a single record-ref commits an object, not an array)`,
+      ).toBe('reflist')
+    },
+  )
 })
