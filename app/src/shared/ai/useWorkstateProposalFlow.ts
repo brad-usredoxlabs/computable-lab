@@ -49,6 +49,14 @@ export type WorkstateAdapter = 'workstate' | 'analysis' | 'record-drafting' | 'c
  * phase vocabulary is imported from the card, never re-declared here).
  */
 export interface WorkstateProposalCardState {
+  /** L2-CHAT-UI-1 LEG D0: WHICH adapter this pending card came from — the
+   *  same adapter constant the flow's proposeWorkstate takes (no new
+   *  vocabulary). The pane branches on THIS to mount the matching
+   *  presentational card (ChainProposalCard for 'chain',
+   *  WorkstateProposalCard for every other adapter) — the universal seam's
+   *  replacement for AiTabPanel's private flowCardAdapterRef, which the
+   *  universal path never had. */
+  adapter: WorkstateAdapter
   phase: WorkstateCardPhase
   summary?: string
   tabs?: WorkstateCardTab[]
@@ -103,7 +111,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
     async (adapter: WorkstateAdapter, intent: Record<string, unknown>) => {
       const seq = compileSeqRef.current + 1
       compileSeqRef.current = seq
-      setCard({ phase: 'compiling' })
+      setCard({ adapter, phase: 'compiling' })
       const pending = pendingDraftRef.current
       try {
         const res = await apiClient.compileWorkstateDraft({
@@ -135,6 +143,13 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
             ? (result.card as ChainCardView)
             : undefined
         setCard({
+          // L2-CHAT-UI-1 LEG D0: the card's adapter rides into the card state
+          // (the SAME constant in hand at the propose call site — no new
+          // vocabulary), so a surface-agnostic pane can mount the matching
+          // presentational card. AiTabPanel's private flowCardAdapterRef is
+          // replaced on the universal path; the panel's own ref stays byte-
+          // identical (its mount is not touched by this leg).
+          adapter,
           phase: res.canAccept ? 'review' : 'blocked',
           ...(typeof result.summary === 'string' ? { summary: result.summary } : {}),
           ...(docTabs
@@ -155,6 +170,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
       } catch (error) {
         if (seq !== compileSeqRef.current) return // superseded — discard
         setCard({
+          adapter,
           phase: 'blocked',
           diagnostics: [{ message: error instanceof Error ? error.message : 'The compile failed — nothing was written.' }],
         })
