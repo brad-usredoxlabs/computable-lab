@@ -57,7 +57,8 @@ drive-captured payload" evidence form.
   - `turn1b_persistence` — turn 1b's PRIOR already contains turn 1's contents
     (the cache write leg fired) — captured, not asserted-by-construction.
   - `turn2_mix_union` — the mix event's `details` carry the resolved union
-    EXACTLY A1..H1 + A2..H2 (48 wells, the A1:H2 bounding union) BY THE
+    EXACTLY A1..H1 + A2..H2 (the A1:H2 bounding union, 16 wells — count
+    reconciled per ruling LABSTATE-TOKENSITE-gate-l2t2355 Q2) BY THE
     COMMITTED LEDGER. Vacuous `[]==[]` is an ACCEPTANCE FAILURE (WELLSET's
     #1 trap applies verbatim).
   - `control_never_guess` — the unknown-plate control no-ops (no contents

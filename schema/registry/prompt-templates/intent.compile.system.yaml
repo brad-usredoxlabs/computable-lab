@@ -85,10 +85,6 @@ content: |
   - wavelength: "450 nm"
   - instrument: optional
   - material: symbolic material label
-  - wells (on mix — the declared kind: wellset argument): a contents-derived
-    phrase ("all wells that have material") is the vocabulary's DECLARED
-    token all-wells-containing-materials — never a literal well list, never
-    an invented labware noun.
 
   RULES:
   - If you are not certain whether a label names an existing plate or a new

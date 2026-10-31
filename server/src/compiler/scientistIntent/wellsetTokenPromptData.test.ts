@@ -140,7 +140,7 @@ describe('LABSTATE-CONTENTS-1 fix run 2 — the wellset teaching is vocabulary D
     try {
       const shippedData = readFileSync(join(VOCAB_DIR, VOCABULARY_DATA_FILE), 'utf-8');
       const shippedMeta = readFileSync(join(VOCAB_DIR, VOCABULARY_SCHEMA_FILE), 'utf-8');
-      const preChangeMeta = shippedMeta.replace(/^([ \t]*)teaching:\n(?:[ \t]+.*\n)+/m, '');
+      const preChangeMeta = shippedMeta.replace(/^([ \t]*)teaching:[^\n]*\n(?:\1[ \t]+.*\n)+/m, '');
       expect(preChangeMeta, 'the meta copy actually lost the teaching key').not.toBe(shippedMeta);
       writeFileSync(join(dir, VOCABULARY_DATA_FILE), shippedData);
       writeFileSync(join(dir, VOCABULARY_SCHEMA_FILE), preChangeMeta);
@@ -157,7 +157,7 @@ describe('LABSTATE-CONTENTS-1 fix run 2 — the wellset teaching is vocabulary D
     mkdirSync(dir, { recursive: true });
     try {
       const shippedData = readFileSync(join(VOCAB_DIR, VOCABULARY_DATA_FILE), 'utf-8');
-      const stripped = shippedData.replace(/^([ \t]*)teaching:\n(?:[ \t]+.*\n)+/m, '');
+      const stripped = shippedData.replace(/^([ \t]*)teaching:[^\n]*\n(?:\1[ \t]+.*\n)+/m, '');
       expect(stripped, 'the data copy actually lost the teaching field').not.toBe(shippedData);
       writeFileSync(join(dir, VOCABULARY_DATA_FILE), stripped);
       for (const f of [VOCABULARY_SCHEMA_FILE, VOCABULARY_LINT_FILE]) {

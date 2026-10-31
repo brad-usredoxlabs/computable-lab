@@ -78,6 +78,15 @@ export interface ScientistIntentArgContract {
    *  the PANEL's pre-selection (P5). NEVER a filter, never suppression:
    *  binding a non-preferred allowed level is legal without a clarification. */
   preferred?: string;
+  /** L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-l2t2355
+   *  Q1) DECLARATION SLOT — the producer-side teaching for this argument: a
+   *  one-line phrase->value contract contractBlock() renders generically under
+   *  the verb line (the block the live chat sites embed). The render keys off
+   *  the FIELD's presence — no consumer branches on a verb or arg name; a
+   *  kind: wellset arg's line additionally composes the wellsetValueTokens
+   *  DATA list (token membership stays single-homed; zero token literals in
+   *  TS — the B3 discipline resolveWellsetsPass.ts honors). */
+  teaching?: string;
 }
 
 export interface ScientistIntentVerbEntry {
@@ -236,7 +245,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labStateContentBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
@@ -270,6 +279,12 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       // disclosure only (never a filter, never suppression).
       ...(Array.isArray(a.levels) && a.levels.length > 0 ? { levels: a.levels } : {}),
       ...(typeof a.preferred === 'string' ? { preferred: a.preferred } : {}),
+      // FIX RUN 2 [ruling LABSTATE-TOKENSITE-gate-l2t2355 Q1]: the DECLARED
+      // teaching slot (same SPINE-8 idiom — generic read, meta-schema is the
+      // authority, no per-verb/per-arg branches, conditional spread for
+      // exactOptionalPropertyTypes). Only consumed by contractBlock()'s
+      // generic render — the resolver/parser never read it (zero behavior).
+      ...(typeof a.teaching === 'string' ? { teaching: a.teaching } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
@@ -349,6 +364,14 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   // Generated from verbsFrozen + the entries' arg contracts; NO hand-written
   // verb list (the same authority the Ajv enum injection and the prompt block
   // read), so a future verb addition auto-appears in every disclosure site.
+  // FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-l2t2355 Q1): an arg contract
+  // carrying the declared `teaching` slot gets ONE extra indented line under
+  // the verb line, keyed off the FIELD's presence (never off a verb or arg
+  // NAME). A `kind: wellset` arg's line additionally composes the declared
+  // token list from wellsetValueTokens DATA (kind is the declared arg-kind
+  // discriminant — the same shape parseScientistIntent/resolveWellsetsPass
+  // read; a KIND check, not a name branch). Zero token literals in TS: the
+  // B3 boundary.
   const contractBlock = (): string => {
     const lines: string[] = ['ACTIONS (the CLOSED vocabulary — never invent another):'];
     for (const verb of verbsFrozen) {
@@ -356,6 +379,13 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
         .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
         .join(', ');
       lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
+      for (const a of entries.get(verb)!.args) {
+        if (typeof a.teaching !== 'string') continue; // generic FIELD-presence gate
+        const tokenClause = a.kind === 'wellset' && wellsetValueTokensFrozen.length > 0
+          ? ` Declared tokens: ${wellsetValueTokensFrozen.join(', ')}.`
+          : '';
+        lines.push(`  ${a.name}: ${a.teaching}${tokenClause}`);
+      }
     }
     return lines.join('\n');
   };

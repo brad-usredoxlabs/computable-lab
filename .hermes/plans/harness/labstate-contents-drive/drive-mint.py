@@ -23,7 +23,8 @@ Turns:
        answer the card -> recompile -> add_material -> FOLD (R3) -> contents
   1b   "add material B to A2-H2"  -> same
   2    "mix all wells that have material"  -> resolve_wellsets unions the
-       COMMITTED ledger -> A1:H2 (48 wells)
+       COMMITTED ledger -> A1:H2 (16 wells — count reconciled per ruling
+       LABSTATE-TOKENSITE-gate-l2t2355 Q2; the old "48" label was bookkeeping)
 
 NO seeded state, NO cache priming, NO priorLabState fixture: the ONLY external
 inputs are the utterances + the product's own mint+answer interaction (the
@@ -230,8 +231,9 @@ def main():
         "turn1b_prior_labware":t1b_prior,"turn1_after_labware":t1_after_any,
         "note":"turn 1b's compile read a prior that ALREADY contains turn 1's contents (the LabStateCache write leg fired) — the persistence proof, captured from the arm-log (NOT asserted-by-construction)."}
 
-    # LEG 2: turn 2 mix union == the committed-ledger union. The 48-well
-    # A1:H2 bounding union when both A(A1..H1)+B(A2..H2) populated.
+    # LEG 2: turn 2 mix union == the committed-ledger union. The A1:H2
+    # bounding union (16 wells — count reconciled per ruling
+    # LABSTATE-TOKENSITE-gate-l2t2355 Q2) when both A(A1..H1)+B(A2..H2) populated.
     t2=(turns.get("2") or {}).get("done_frame") or {}
     res2=(t2.get("result") or {}) if isinstance(t2,dict) else {}
     mix_events=[e for e in (res2.get("events") or []) if isinstance(e,dict)
@@ -254,11 +256,11 @@ def main():
                 for wid,mats in wmap.items():
                     if isinstance(mats,list) and mats: ledger_union.add(wid)
     legs["turn2_mix_union"]={
-        "ok": bool(mix_wells) and mix_wells == ledger_union and len(ledger_union) == 48,
+        "ok": bool(mix_wells) and mix_wells == ledger_union and len(ledger_union) == 16,
         "mix_event_count":len(mix_events),"mix_wells":sorted(mix_wells),
         "mix_well_count":len(mix_wells),"committed_ledger_union":sorted(ledger_union),
         "committed_ledger_union_count":len(ledger_union),
-        "note":"the mix event's details carry the resolved union BY THE COMMITTED LEDGER (the arm-log prior = the ledger the resolve_wellsets pass reads). Vacuous []==[] is an ACCEPTANCE FAILURE (named, not hidden). Expected the 48-well A1:H2 bounding union when both A(A1..H1)+B(A2..H2) populated."}
+        "note":"the mix event's details carry the resolved union BY THE COMMITTED LEDGER (the arm-log prior = the ledger the resolve_wellsets pass reads). Vacuous []==[] is an ACCEPTANCE FAILURE (named, not hidden). Expected the 16-well A1:H2 bounding union (count reconciled per ruling LABSTATE-TOKENSITE-gate-l2t2355 Q2) when both A(A1..H1)+B(A2..H2) populated."}
 
     report={"item":"L2-LABSTATE-CONTENTS-1","drive":"faithful live product-proof (mint+answer) — spec §11 verbatim drive is blocked at turn 1 by the pre-existing material-noun gate (see report)",
         "run_id":run_id,"base":BASE,"ts":ts,"turns":turns,"legs":legs,
