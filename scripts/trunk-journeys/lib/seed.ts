@@ -21,7 +21,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createRecord, getRecord, createAnalysisRevision } from './api.js';
+import { apiCall, createRecord, getRecord, createAnalysisRevision, SYSTEM_ADMIN_USER } from './api.js';
 
 const S = 'https://computable-lab.com/schema/computable-lab/';
 export const SCHEMA = {
@@ -103,12 +103,78 @@ export function referenceEntryScript(worktree: string): string {
   return readFileSync(join(worktree, 'server/python-executor-service/fixtures/gc-peaks/entry-reference.py'), 'utf8');
 }
 
+/** The harness's own actor user, minted via the SUPPORTED first-run path.
+ *
+ * Why this exists: on a FRESH data dir, the server's startup bootstrap
+ * (`upsertAdminRecord`, LocalIdentityService.ts:61) creates the USR-LOCAL-ADMIN
+ * record WITHOUT an `email`, but user.schema.yaml REQUIRES email since
+ * a43c5601 ("user creation requires email"). The admin record therefore fails
+ * Ajv validation on every fresh dir ("Failed to bootstrap local admin user:
+ * Validation failed"), so no active user exists and the `x-user-id:
+ * USR-LOCAL-ADMIN` bootstrap window is dead on fresh dirs.
+ *
+ * The product's own reference seed documents the supported first-run path
+ * (scripts/qms-demo-seed.mjs:57): create the actor with
+ * POST /api/users { username, email, password } — a schema-valid user with a
+ * persisted credential verifier. That route carries NO identity pre-check
+ * (IdentityHandlers.createUser resolves no request user), so it is reachable
+ * on an empty dir.
+ *
+ * Identity consequence (LocalIdentityService.resolveRequestUser
+ * :116-141): with an active NON-admin user present, `x-user-id:
+ * USR-LOCAL-ADMIN` falls through to ensureLocalAdminUser(), which returns the
+ * FIRST active non-admin user — so EVERY harness call (the api client's
+ * USR-LOCAL-ADMIN header AND the browser's stored cl.currentUserId) resolves
+ * to this actor. This is a harness-side seeding step, NOT a product change.
+ */
+export const ACTOR_USERNAME = 'trunk-journeys-admin';
+export const ACTOR_ID = 'USR-TRUNK-JOURNEYS-ADMIN';
+const ACTOR_EMAIL = 'trunk-journeys-admin@local.lane1';
+const ACTOR_PASSWORD = 'trunk-journeys-local-only';
+
+/** Mint the harness actor user (idempotent: tolerate a 409 CONFLICT). */
+export async function ensureActorUser(backend: string): Promise<string> {
+  const { json } = await apiCall(backend, '/api/users', {
+    method: 'POST',
+    body: {
+      displayName: 'trunk-journeys harness admin',
+      username: ACTOR_USERNAME,
+      email: ACTOR_EMAIL,
+      password: ACTOR_PASSWORD,
+    },
+    user: SYSTEM_ADMIN_USER,
+  });
+  const recordId = json && typeof json === 'object' && typeof (json as Record<string, unknown>).recordId === 'string'
+    ? (json as Record<string, unknown>).recordId as string
+    : ACTOR_ID;
+  if (recordId !== ACTOR_ID) {
+    throw new Error(`actor user minted with unexpected id ${recordId} (expected ${ACTOR_ID})`);
+  }
+  return recordId;
+}
+
 /** Mint the GC fixtures (J1) + the knowledge-layer fixtures (J2). */
 export async function seedJourneyFixtures(
   backend: string,
   worktree: string,
   rand: string,
 ): Promise<SeedIds> {
+  // --- Identity first: the harness actor (see ensureActorUser note). This is
+  //  the ONLY user on the fresh dir; every later call resolves to it. ---
+  try {
+    const actorId = await ensureActorUser(backend);
+    // Read-back: the actor must resolve (a 401 here = the seed identity is
+    // broken and every later step would 401 in a confusing way).
+    const env = await getRecord(backend, actorId);
+    if (!env || !env.payload) {
+      throw new Error(`actor read-back failed for ${actorId}: ${JSON.stringify(env ?? null)}`);
+    }
+  } catch (e) {
+    throw new Error(
+      `seed identity bootstrap failed (fresh-dir admin record lacks the schema-required 'email' — ` +
+        `the harness must mint its actor via POST /api/users): ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
   // --- J1: gc-method (manual-entry provenance arms, schema-valid minimal) ---
   const gcMethod = `GCM-TJ-${rand}`;
   await createRecord(backend, SCHEMA.gcMethod, {
