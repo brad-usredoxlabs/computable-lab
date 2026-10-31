@@ -133,7 +133,12 @@ function stubAssistStream(page: Page, modes: StubMode | StubMode[]) {
     const orig = window.fetch
     let callIndex = 0
     window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes('/ai/assist/stream')) {
+      // The universal pane streams via /ai/assist/stream for most surfaces,
+      // but the DECK surface registers as 'event-editor' (DeckSurfaceChat)
+      // and aiClient.ts routes that surface to /ai/draft-events/stream —
+      // intercept BOTH endpoints so the deck legs are stub-driven too.
+      const url = String(input)
+      if (url.includes('/ai/assist/stream') || url.includes('/ai/draft-events/stream')) {
         const mode = list[Math.min(callIndex, list.length - 1)]
         callIndex += 1
         const frames: unknown[] = [{ type: 'status', message: 'matrix leg working…' }]
@@ -216,10 +221,27 @@ function sendButton(page: Page) {
  *  for the tab (not the pane) first — clicking before the RightPane mounts
  *  is a race. */
 async function openAiPane(page: Page) {
-  const tab = page.locator('[data-testid="right-pane-tab-ai"]')
-  await expect(tab).toBeVisible({ timeout: 20_000 })
-  await tab.click()
+  // HOST-AGNOSTIC pane open (test-port, no product change). The DECK /
+  // project / LEG-C hosts render the universal pane behind a RightPane tab
+  // strip — the live AI tab is `right-pane-tab-ai` (RightPane.tsx:82) — but
+  // the sequences and run hosts mount HarnessChatPane directly with NO
+  // right-pane tab strip. So: race for EITHER the pane (already open /
+  // tab-less host) OR the tab strip (deck / C-host), and only click the AI
+  // tab when the host actually exposes one (an already-active tab click is a
+  // no-op). The pane is the target on every host; the tab is a drive, not an
+  // assertion. (Test-port fix: the original wait-for-tab drive false-reds on
+  // tab-less hosts.)
   const pane = page.locator('[data-testid="harness-chat-pane"]')
+  const tab = page.locator('[data-testid="right-pane-tab-ai"]')
+  await Promise.race([
+    pane.waitFor({ state: 'visible', timeout: 20_000 }),
+    tab.waitFor({ state: 'visible', timeout: 20_000 }),
+  ]).catch(() => {
+    /* neither surfaced -> the pane assertion below fails with the real error */
+  })
+  if ((await tab.count()) > 0) {
+    await tab.click()
+  }
   await expect(pane).toBeVisible({ timeout: 20_000 })
   return pane
 }
