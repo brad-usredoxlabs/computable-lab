@@ -20,22 +20,59 @@
 import { apiClient } from '../api/client'
 
 let exaEnabledPromise: Promise<boolean> | null = null
+/**
+ * GC-17 sticky-negative: once the server has answered the capability question
+ * with an honest refusal (`configured:false` — no key, or the vendor rejected
+ * the credential), the capability is FALSE for the rest of the page load. The
+ * run page has 3-4 vendor-search surfaces; without this they would each
+ * re-probe and each 502. It lives in THIS cache (one cache, one term) — a page
+ * reload re-probes (a pasted-in valid key heals without a redeploy).
+ */
+let exaUnavailableSticky = false
 
 /**
  * Whether the vendor Exa capability is declared on. Resolved once per page
  * load and cached; mirrors normalizeConfig: disabled iff `enabled === false`.
+ * Returns false for the page load after an honest refusal has been noted via
+ * `noteExaUnavailable` (GC-17 sticky-negative) — a config READ FAILURE still
+ * falls back to the server default (enabled): a config outage never silently
+ * removes a capability.
  */
 export function exaVendorEnabled(): Promise<boolean> {
+  if (exaUnavailableSticky) {
+    return Promise.resolve(false)
+  }
   if (!exaEnabledPromise) {
-    exaEnabledPromise = apiClient
-      .getConfig()
-      .then((config) => config.integrations?.exa?.enabled !== false)
-      .catch(() => true)
+    // A read FAILURE (network rejection OR an un-stubbed client, which throws
+    // synchronously) falls back to the server default (enabled) — a config
+    // outage must never silently remove a capability. The try/catch covers the
+    // synchronous-throw case so callers can rely on this always resolving.
+    let read: Promise<boolean>
+    try {
+      read = apiClient
+        .getConfig()
+        .then((config) => config.integrations?.exa?.enabled !== false)
+    } catch {
+      read = Promise.resolve(true)
+    }
+    exaEnabledPromise = read.catch(() => true)
   }
   return exaEnabledPromise
 }
 
-/** Test seam: drop the cached read so a suite can re-declare the flag. */
+/**
+ * GC-17: mark the Exa capability unavailable for the rest of the page load
+ * after the server answered the capability question with an honest refusal
+ * (`configured:false`). Callers: the vendor-Exa search hook, ONLY on a
+ * `configured:false` response — never on a 502-class outage (a blip must not
+ * silently kill the tier for the session).
+ */
+export function noteExaUnavailable(): void {
+  exaUnavailableSticky = true
+}
+
+/** Test seam: drop the cached read AND the sticky negative so a suite can re-declare the flag. */
 export function resetIntegrationFlagCacheForTests(): void {
   exaEnabledPromise = null
+  exaUnavailableSticky = false
 }
