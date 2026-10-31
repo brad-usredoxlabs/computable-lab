@@ -94,9 +94,22 @@ const EMPTY: FakeThread = {
   updatedAt: '1970-01-01T00:00:00.000Z',
 }
 
+/** Threads whose next GET the fake server holds open until `releaseGet` —
+ *  lets a test observe the WIPE transition (old content gone) BEFORE the
+ *  chosen thread's content arrives. */
+const getHolds = new Map<string, { promise: Promise<void>; release: () => void }>()
+function holdGetFor(threadId: string) {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((r) => {
+    release = r
+  })
+  getHolds.set(threadId, { promise, release })
+}
+const releaseGet = (threadId: string) => getHolds.get(threadId)?.release()
+
 /** Single global fetch router (threadScoped.test.ts pattern): thread
  *  GET/POST answered by the wire headers — the exact transport the receipts
- *  show (send rides the OLD scope key, rehydrate rides the NEW). */
+ *  show (send rides the OLD scope header, rehydrate rides the NEW). */
 const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input)
   const method = (init?.method ?? 'GET').toUpperCase()
@@ -110,6 +123,12 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
     const scope = headers['x-cl-thread-scope'] ?? undefined
     const id = headers['x-cl-thread-id'] ?? ''
     if (method === 'GET') {
+      const hold = getHolds.get(id)
+      if (hold) {
+        // Await OUTSIDE the map: the entry is kept so releaseGet(id) still
+        // finds the resolver, and the hold fires at most once per request.
+        await hold.promise
+      }
       const thread = serverThreads[keyOf(scope, id)]
       return okJson(thread ?? EMPTY)
     }
@@ -173,6 +192,7 @@ beforeEach(() => {
   sessionStorage.clear()
   capture.length = 0
   serverThreads = {}
+  getHolds.clear()
   vi.mocked(streamAssist).mockImplementation(async function* () {
     yield { type: 'done', result: { success: true, notes: [] } } as never
   })
@@ -267,23 +287,123 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
     expect(threadB?.messages ?? []).toHaveLength(0)
   })
 
-  it('NEGATIVE PIN (bait #11, byte-for-byte): user-initiated switchThread while IDLE still wipes + rehydrates', async () => {
+  it('NEGATIVE PIN (bait #11): user-initiated switchThread while IDLE is a REAL WIPE TRANSITION — the settled turn is GONE while the chosen thread is still loading, then the chosen thread rehydrates', async () => {
     seedThread(undefined, 'tid-pin-1', ['pinned thread turn'])
 
     const { result } = renderHook(() => useAiChat({ aiContext, endpoint: 'event-editor' }))
     await waitFor(() => expect(getThreadCalls()).toHaveLength(1))
 
+    // D2 (advc l2t1030): the OLD pin mounted with an EMPTY list — it could
+    // never observe a wipe (tautology; mutation control proved it). Seed a
+    // SETTLED turn on the CURRENT thread first — content that must be lost.
+    await act(async () => {
+      await result.current.sendPrompt('settled turn content')
+    })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    expect(result.current.messages.some((m) => m.content === 'settled turn content')).toBe(true)
+
+    // Hold the chosen thread's GET so the WIPE is observable BEFORE its
+    // content can arrive — an actual wipe transition, not just rehydration.
+    holdGetFor('tid-pin-1')
     await act(async () => {
       result.current.switchThread?.('tid-pin-1')
     })
-    // The existing semantics: messages RESET (wipe) then the chosen thread
-    // REHYDRATES — the stale `prev.length > 0` guard would otherwise keep the
-    // old list. Pin: the pane shows EXACTLY the chosen thread's contents.
+    // The old content is GONE while thread B is still in flight: no carry,
+    // and the chosen thread's content has not appeared either.
+    expect(result.current.messages).toHaveLength(0)
+
+    releaseGet('tid-pin-1')
+    // The existing semantics complete: the chosen thread REHYDRATES.
     await waitFor(() =>
       expect(result.current.messages.map((m) => m.content)).toEqual(['pinned thread turn']),
     )
     expect(result.current.threadId).toBe('tid-pin-1')
     expect(readMap()['']).toBe('tid-pin-1')
+  })
+
+  it('NEGATIVE PIN (bait #11, DIRECT-CLEAR — mutation-discriminating): re-picking the CURRENT thread while IDLE still wipes via resetChatState itself', async () => {
+    // This is the pin that pins the `setMessages([])` INSIDE resetChatState:
+    // the switch above ALSO trips the effect re-key reset (two wipers), so a
+    // mutation removing only the direct clear survives it. Re-picking the
+    // CURRENT thread id changes no (scope, id) PRIMITIVE — the hydration
+    // effect does NOT re-run, the effect reset never fires — the ONLY wiper
+    // is resetChatState. Mutation control (advc D2): delete `setMessages([])`
+    // from resetChatState and THIS pin REDS.
+    const { result } = renderHook(() => useAiChat({ aiContext, endpoint: 'event-editor' }))
+    await waitFor(() => expect(getThreadCalls()).toHaveLength(1))
+
+    await act(async () => {
+      await result.current.sendPrompt('settled turn content')
+    })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    expect(result.current.messages.length).toBeGreaterThanOrEqual(2)
+
+    const currentId = result.current.threadId
+    expect(currentId).toBeTruthy()
+    await act(async () => {
+      result.current.switchThread?.(currentId!)
+    })
+    // Pre-fix and post-fix byte-for-byte: a user-initiated pick wipes the
+    // chat through resetChatState even for a no-re-key re-pick.
+    expect(result.current.messages).toHaveLength(0)
+    expect(result.current.threadId).toBe(currentId)
+  })
+
+  it('NEGATIVE PIN (D4, advc l2t1030): a rejection between the in-flight flag and the stream settles the turn and does NOT leak the guard', async () => {
+    // D4: `turnInFlightRef = true` used to sit OUTSIDE the try/finally that
+    // clears it — waitForNextPaint and the context builders ran between. A
+    // rejection there left the flag TRUE forever, permanently suppressing
+    // every re-key reset (the overguard). The fake: make waitForNextPaint's
+    // requestAnimationFrame throw synchronously (its Promise constructor
+    // rejects -> the await inside the now-widened try throws -> the catch
+    // renders the error and the finally clears the flag).
+    const rafOriginal = globalThis.requestAnimationFrame
+    globalThis.requestAnimationFrame = (() => {
+      throw new Error('paint fail (D4 probe)')
+    }) as typeof requestAnimationFrame
+    try {
+      const { result, rerender } = renderHook(
+        ({ scope }: { scope?: string }) =>
+          useAiChat({
+            aiContext,
+            endpoint: 'event-editor',
+            ...(scope !== undefined ? { scope } : {}),
+          }),
+        { initialProps: {} as { scope?: string } },
+      )
+      await waitFor(() => expect(getThreadCalls()).toHaveLength(1))
+
+      await act(async () => {
+        // sendPrompt is void-returning at the public seam (same convention
+        // as the Q2.1 test); an escaped rejection surfaces as unhandled.
+        void result.current.sendPrompt('will fail before the stream')
+      })
+      // The turn SETTLED with an honest error row — the flag did not leak.
+      await waitFor(() => expect(result.current.isStreaming).toBe(false))
+      expect(
+        result.current.messages.some((m) => m.content.includes('paint fail (D4 probe)')),
+        'the rejection surfaced as the honest error message'
+      ).toBe(true)
+
+      // The guard is NOT stuck: a later re-key while IDLE performs its full
+      // pre-fix reset (wipe + rehydrate). At the leaky tip the suppressed
+      // reset left the errored rows carried under the new key instead.
+      // Pre-write B's minted id into the tab map (mint-once honors it) and
+      // seed its content BEFORE the flip — the hydration GET rides the
+      // flip's effect run.
+      sessionStorage.setItem(TAB_ID_KEY, JSON.stringify({ ...readMap(), 'evg-1': 'B-fixed-id' }))
+      seedThread('evg-1', 'B-fixed-id', ['fresh thread B'])
+      rerender({ scope: 'evg-1' })
+      expect(readMap()['evg-1']).toBe('B-fixed-id')
+      // With the flag correctly cleared, the re-key wiped the errored turn;
+      // a leaked flag would have carried the old rows (prev.length > 0 kept
+      // them) and thread B's fresh content could never appear.
+      await waitFor(() =>
+        expect(result.current.messages.map((m) => m.content)).toContain('fresh thread B'),
+      )
+    } finally {
+      globalThis.requestAnimationFrame = rafOriginal
+    }
   })
 
   it('NEGATIVE PIN (bait #11, byte-for-byte): newThread while IDLE after a settled turn still wipes', async () => {
