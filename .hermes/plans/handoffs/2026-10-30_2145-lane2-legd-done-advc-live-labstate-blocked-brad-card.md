@@ -91,7 +91,27 @@ first available coder action once LEG D merges (branch off post-D tip).
 - No credentials recorded. No criterion weakened this tick (ruling re-shaped a
   control-leg utterance WITHIN prior swap authority, supersession documented).
 
+## ADVC C1 VERDICT + FIX RUN 1 (same tick, extended to ~21:55)
+advc C1 exited 21:28 with reviews/L2-CHATUI1-legD-advc-l2t2110.md VERDICT: fix.
+Defects: D1 BLOCKER (coder's e2e trio ran against TRUNK :5193, never the branch —
+so its base-red claims for term-panel/three-pane are unmeasured evidence), D2 MAJOR
+(three-pane header pin vacuously true — can never fail), D3 MAJOR (Run-in-event-editor
+port AUTO-SENDS the prefill vs the component's prefill-staging contract; attachments
+not passed), D4-D10 MINOR (undisclosed assertion re-pins, undisclosed pdfjs mocks,
+duplicate RightPane case, dead .questions-panel rule + wrong receipt, header
+re-wording incomplete, missing __sources CSS, report count/path errors), D11-D14 OBS.
+Reviewer independently confirmed the hard passes (scope app/ only, deletion+note
+verbatim, OQ-8 clean, vitest/tsc counts honest, riders real).
+FIX RUN 1 LIVE 21:51: slot-0 (stagger clear — prior coder dead), unit
+cl-l2-coder-legd-fix1-l2t2110b, flock holder 3262258, coder child 3262263, prompt
+prompts/coder-CHATUI1-legD-fix1-l2t2110b.txt (defect list verbatim + MANDATORY
+on-candidate e2e: coder runs own vite port from the worktree, specs against it, raw
+output in report; budget-survival instructions). Slot-0 flock HELD via placeholder
+unit cl-l2-slot0-holder-legdfix1 (exec-form drop recurrence — retire holder when the
+coder exits). DONE marker 'L2CHATUI1-LEGD-FIX1 DONE <sha>' -> cycle-2 advc (TERMINAL:
+2-cycle cap, any further fix = architect desk).
+
 ## HEALTH / BUDGET
-Entered ~21:11, exited ~21:45 (~34 min). Live at exit: advc cycle-1 (pid 3200598,
-cloud). Fleet: both coder slots FREE, tb bg both FREE. No coder launched (gates
-not met); no blind re-drive launched (ruling forbids).
+Entered ~21:11, checkpointed ~21:55 (~44 min). Live at exit: LEG D FIX RUN 1 coder
+(3262263, slot-0 held via placeholder), advc c1 done. tb bg both FREE. No blind
+re-drive launched (ruling forbids).
