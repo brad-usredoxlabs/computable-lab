@@ -90,3 +90,20 @@ AS-TJ1-OVERFLOW-ROUTE, AS-TJ1-NO-UI-GATE, AS-TJ1-NO-COMMIT-PHASE.
   browser-gate (round-trip form) was still running at budget; close only on its real
   receipts verdict — merging pending verification is an explicit open obligation here,
   never auto-acceptance.
+
+## ADDENDUM l2t1710 (17:57) — BROWSER GATE ACCEPT, LEG F DONE, AS-LEGF-GATE-PENDING CLEARED
+- Gate exited rc=0 17:48: report.md VERDICT: accept. ORCH AUDIT (receipt-audit discipline):
+  trail.json 4 live legs (run/deck + w1 repeats) each record the MID-TURN thread re-key
+  (ids flip at t=2.76/3.19/3.77/3.53) with userBubbles=1 across every poll — the exact
+  defect window pinned; 12 request-body artifacts incl. run-req-02 (POST /api/ai/assist/
+  stream 299B, surface run-workspace) and deck-req-02 (POST /api/ai/draft-events/stream
+  835B, vocabPackId) paired with settle screenshots (run-04/05, deck-04); 22 shots total;
+  zero /api/ai/** interception (only guarded /api/records route, RECORD_DELAY=0);
+  consoleErrors=[] all legs; A3 idle switch/New-thread wipe+rehydrate PASS (a3 shots).
+  Persistence POST rides the PRE-FLIP x-cl-thread-id header on both surfaces — D1's
+  deferred binding proven live, not just in unit. A1/A2/A3 all pass; A4 = orch's own
+  measurement (97/97 + tsc 10=baseline) recorded in the report.
+- Task marked DONE under queue lock. L2-CHAT-UI-1 LEGS A-F FULLY CLOSED.
+- CLEAR AS-LEGF-GATE-PENDING + AS-LEGF-UNIT-GREEN-ORCH-LIVE-GREEN.
+- Remaining open at exit: TJ worker (alive, fresh motion 17:39, no commits — next-tick 7b
+  watch), LABSTATE-FIXRUN3 + MOUNT-NONEVENT Brad cards (unchanged).
