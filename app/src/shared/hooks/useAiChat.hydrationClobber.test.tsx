@@ -152,19 +152,21 @@ const readMap = (): Record<string, string> =>
 
 /** A HELD stream: yields one status frame, then blocks until `release()` —
  *  the assistant stays `isStreaming` across the scope flip (the receipts'
- *  mid-stream t≈2.2s wipe window). */
+ *  mid-stream t≈2.2s wipe window). The latch is a DEFERRED created up front:
+ *  sendPrompt awaits a paint before pulling the stream, so release() may
+ *  fire BEFORE the generator reaches its hold point (an inline
+ *  new-Promise-captures-resolve would race into a never-resolving wait). */
 function heldStream(): { release: () => void } {
-  let release = () => {}
-  vi.mocked(streamAssist).mockImplementation(
-    async function* () {
-      yield { type: 'status', message: 'Prompt received. Starting compiler pipeline...' } as never
-      await new Promise<void>((resolve) => {
-        release = resolve
-      })
-      yield { type: 'done', result: { success: true, notes: [] } } as never
-    },
-  )
-  return { release: () => release() }
+  let resolveHold: () => void = () => {}
+  const hold = new Promise<void>((resolve) => {
+    resolveHold = resolve
+  })
+  vi.mocked(streamAssist).mockImplementation(async function* () {
+    yield { type: 'status', message: 'Prompt received. Starting compiler pipeline...' } as never
+    await hold
+    yield { type: 'done', result: { success: true, notes: [] } } as never
+  })
+  return { release: () => resolveHold() }
 }
 
 beforeEach(() => {
@@ -229,7 +231,12 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
       await settled
     })
     await waitFor(() => expect(result.current.isStreaming).toBe(false))
-    expect(result.current.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+    // The turn's own rows SURVIVE the settle (the empty-done honest-wall
+    // system row is pre-existing behavior — count is not the pin).
+    const roles = result.current.messages.map((m) => m.role)
+    expect(roles[0]).toBe('user')
+    expect(roles[1]).toBe('assistant')
+    expect(result.current.messages[0]!.content).toBe('what does step 1 do?')
 
     // persistedIdsRef is not orphaned: the send-minted user message was
     // POSTed exactly ONCE (its persisted id survived the guard) — it is NOT

@@ -737,6 +737,19 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   const hydratedRef = useRef(false)
   /** The last (scope, threadId) key the hydration effect ran for (reset-on-re-key). */
   const lastThreadKeyRef = useRef<string | null>(null)
+  // L2-CHAT-UI-1 LEG F (in-flight-turn guard): TRUE from the moment a send
+  // mints its messages until the stream settles. The re-key reset below is
+  // bait #11 for USER-initiated switches (picker / New thread — those wipe
+  // DIRECTLY in switchThread/newThread, never through this ref) — but a
+  // MOUNT-TIME lazy scope resolution ("" -> loaded record id, e.g. the
+  // bridges' async `...(state.eventGraphId ? { scope } : {})` spread) is NOT
+  // a switch. Wiping mid-turn destroys the live bubbles AND orphans the
+  // send-minted persisted ids (receipts OBS-1: bubbles 1/1 -> 0/0 ~2s
+  // post-send on every scope-flipping surface). While this ref is set the
+  // re-key still ADVANCES the key + rehydrates (the response is
+  // non-destructive while local messages exist, :851) but never clears the
+  // messages or the persisted-ids ref.
+  const turnInFlightRef = useRef(false)
   // L2-THREAD-SCOPED-1: the tab's thread for the current scope. The map
   // lives in sessionStorage (`cl.ai-thread-tab-ids`) and is SHARED with the
   // client (aiThreadClient.threadHeaders reads/mints the SAME key — one
@@ -750,6 +763,11 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
     setMessages([])
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
+    // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
+    // in-flight protection — those actions keep the pre-fix re-key semantics
+    // byte-for-byte (bait #11): the messages they just cleared can be
+    // cleared again by a following re-key exactly as before the guard.
+    turnInFlightRef.current = false
   }, [])
 
   const switchThread = useCallback(
@@ -805,7 +823,17 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
     // clears the chat so the new thread REHYDRATES (fresh persisted ids; no
     // stale-message carryover; no re-post into the new thread).
     const threadKey = `${activeThread.scope}\u0000${activeThread.id}`
-    if (lastThreadKeyRef.current !== null && lastThreadKeyRef.current !== threadKey) {
+    if (
+      lastThreadKeyRef.current !== null &&
+      lastThreadKeyRef.current !== threadKey &&
+      // LEG F in-flight-turn guard: a turn minted by send (isStreaming
+      // assistant + send-minted user message) survives ANY re-key — the
+      // key still ADVANCES (below) and rehydrates; the GET response is
+      // non-destructive while local messages exist (:851). User-initiated
+      // switch/New-thread never reaches this guard wiped-empty: they wipe
+      // directly in switchThread/newThread (bait #11 byte-preserved).
+      !turnInFlightRef.current
+    ) {
       setMessages([])
       persistedIdsRef.current = new Set()
     }
@@ -1030,6 +1058,12 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
         setMessages((prev) => [...prev, userMsg, assistantMsg])
         setIsStreaming(true)
       })
+      // LEG F: the turn is IN FLIGHT from this synchronous moment — the
+      // re-key reset must not touch these messages until the stream settles
+      // (cleared in the finally below). Set AFTER flushSync so the minted
+      // messages are already committed (no render can observe flight
+      // without the messages existing).
+      turnInFlightRef.current = true
 
       const controller = new AbortController()
       abortRef.current = controller
@@ -1649,6 +1683,9 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       } finally {
         setIsStreaming(false)
         abortRef.current = null
+        // LEG F: the turn has settled (done / error / cancel) — re-key
+        // resets regain their full pre-fix behavior from here on.
+        turnInFlightRef.current = false
       }
     },
     [isStreaming, previewEvents, messages]
