@@ -83,10 +83,32 @@
   (clears at LEG E green receipt), ED-WELLSET-AC2-LIVE (rides the former).
 - No credentials recorded. No criterion weakened this tick.
 
+## RESUME DISPATCH (same tick, ~20:15) — SUPERSEDES the "LEG D alive" line above
+LEG D coder 2909621 DIED 20:06:06 on the ENGINE CONTEXT CAP: log line
+'HTTP 400: prepared prompt exceeds Engine max_context 262144', rc=0. Work is
+SAFE: 5 commits through step 5 (HEAD 2b07c55d), tree CLEAN, report 6251B with
+baselines. No DONE marker -> steps 7 (Playwright trio re-pins) + 8 (dead-CSS
+sweep) + final gates + report tail remain.
+RESUME RUN dispatched 20:14:48 (stagger open — previous coder exited; both
+slot flocks verified FREE first): worktree/branch SAME
+(wt/CHATUI1-LEGD-lane2-l2t1830 @ 2b07c55d), fleet slot-0, systemd unit
+cl-l2-coder-legd-resume-l2t2015 (flock-holder 3082586), launcher
+launchers/launch-CHATUI1-legD-resume-l2t2015.sh --inner, log
+logs/coder-CHATUI1-legD-resume-l2t2015.log, prompt
+prompts/coder-CHATUI1-legD-resume-l2t2015.txt (LEAN by design: reads the
+report first, spec sections named, no full-tree re-orientation — the context
+cap is the hazard, report-first lean brief is the mitigation), SAME report
+path (predecessor's report continued — append-only discipline stated in the
+prompt). Marker 'L2CHATUI1-LEGD DONE <40-char sha>'. DO NOT re-dispatch while
+3082586 or its hermes child is alive; if it dies on the cap AGAIN at <the
+remaining steps, the remaining work (e2e re-pins + CSS sweep) is small enough
+to route to thunderbeast cl-worker instead of a third :18080 attempt.
+Slot-1 pid file now stale (our dead 2909617); flock is truth, left as-is.
+
 ## HEALTH / BUDGET
-Entered ~19:30. Reconcile+drive+matrix+packet+dispatch 19:30-20:12 (soft
-budget reached at checkpoint). Live at exit: LEG D coder (slot-1, healthy,
-step 5/8), architect unit (just launched), no other fleet work. Fleet:
-slot-1 ours; slot-0 pid file is lane-1 DEAD residue (their cleanup). tb bg
-slots FREE. Next tick fires the LEG D gates on DONE and applies the ruling
-on END-RULING.
+Entered ~19:30. Reconcile+drive+matrix+packet+dispatch 19:30-20:15 (soft
+budget crossed; only the cheap high-value resume dispatch added after). Live
+at exit: LEG D RESUME coder (slot-0, systemd cl-l2-coder-legd-resume-l2t2015,
+flock 3082586), architect unit cl-l2-arch-labstate-sampler-l2t1930. Fleet:
+slot-0 ours; slot-1 flock FREE (pid file is our dead coder). tb bg slots FREE.
+Next tick fires the LEG D gates on DONE and applies the ruling on END-RULING.
