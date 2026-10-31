@@ -751,6 +751,35 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   const hydratedRef = useRef(false)
   /** The last (scope, threadId) key the hydration effect ran for (reset-on-re-key). */
   const lastThreadKeyRef = useRef<string | null>(null)
+  // L2-CHAT-UI-1 LEG F (in-flight-turn guard): TRUE from the moment a send
+  // mints its messages until the stream settles. The re-key reset below is
+  // bait #11 for USER-initiated switches (picker / New thread — those wipe
+  // DIRECTLY in switchThread/newThread, never through this ref) — but a
+  // a MOUNT-TIME lazy scope resolution ("" -> loaded record id, e.g. the
+  // bridges' async `...(state.eventGraphId ? { scope } : {})` spread) is NOT
+  // a switch. While this ref is set the re-key DEFERS in full (advc D1):
+  // the effect does not reset, does not advance the key, and does not
+  // hydrate the new pair — the surviving turn stays bound to the thread it
+  // was minted into, so the settled assistant POSTs to the SAME server
+  // thread as the user question (advancing the key while preserving the
+  // messages re-posted the assistant half under the new key — the
+  // cross-scope split forbidden by the block's own invariant and bait #11
+  // at the scope axis, threadScoped.test.ts:322-327).
+  const turnInFlightRef = useRef(false)
+  // LEG F fix run 1 (advc D1): the thread scope the SYNC effect persists
+  // into. Tracks the hydration effect's last ADVANCED binding — during a
+  // guarded re-key that binding stays the turn's minted (pre-flip) scope,
+  // so a surviving turn's whole persistence destination never splits
+  // across two server threads. Equals `activeThread.scope` whenever no
+  // turn is in flight.
+  const persistedScopeRef = useRef<string>('')
+  // LEG F fix run 1 (advc D1): TRUE while the hydration effect has DEFERRED
+  // a re-key because a turn was in flight. The binding (lastThreadKeyRef +
+  // persistedScopeRef) is held on the turn's minted thread until the turn's
+  // settled assistant has POSTed; the next sendPrompt START resumes it onto
+  // the current thread (the settled turn stays visible — O2 carry — and its
+  // ids stay in persistedIdsRef, so nothing re-posts and nothing wipes).
+  const deferredReKeyRef = useRef(false)
   // L2-THREAD-SCOPED-1: the tab's thread for the current scope. The map
   // lives in sessionStorage (`cl.ai-thread-tab-ids`) and is SHARED with the
   // client (aiThreadClient.threadHeaders reads/mints the SAME key — one
@@ -759,11 +788,24 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   // active selection (exposed as `threadId`). The (scope, id) PAIR is held
   // together so a re-key never sees a stale (old scope, old id) combination.
   const [activeThread, setActiveThread] = useState<{ scope: string; id: string } | null>(null)
+  // LEG F fix run 1 (advc D1): stable-ref view of activeThread for the
+  // send-time deferred-re-key resume (sendPrompt is memoized on [isStreaming,
+  // previewEvents, messages]; the ref keeps the CURRENT pair live).
+  const activeThreadRef = useRef(activeThread)
+  activeThreadRef.current = activeThread
 
   const resetChatState = useCallback(() => {
     setMessages([])
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
+    // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
+    // in-flight protection — those actions keep the pre-fix re-key semantics
+    // byte-for-byte (bait #11): the messages they just cleared can be
+    // cleared again by a following re-key exactly as before the guard. A
+    // pending DEFERRED re-key is dropped too — the user has explicitly
+    // chosen a thread; the deferred one is moot (LEG F fix run 1, advc D1).
+    turnInFlightRef.current = false
+    deferredReKeyRef.current = false
   }, [])
 
   const switchThread = useCallback(
@@ -819,11 +861,38 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
     // clears the chat so the new thread REHYDRATES (fresh persisted ids; no
     // stale-message carryover; no re-post into the new thread).
     const threadKey = `${activeThread.scope}\u0000${activeThread.id}`
-    if (lastThreadKeyRef.current !== null && lastThreadKeyRef.current !== threadKey) {
-      setMessages([])
-      persistedIdsRef.current = new Set()
+    const reKeyed =
+      lastThreadKeyRef.current !== null && lastThreadKeyRef.current !== threadKey
+    // LEG F in-flight-turn guard (advc D1 sharpened): while a turn is in
+    // flight, a re-key is DEFERRED for the persistence binding — the reset
+    // AND the key advance are BOTH suppressed. Advancing the key while
+    // preserving the messages rebound the surviving turn to the new pair
+    // and the settled assistant POSTed under it (the cross-scope split:
+    // question on the old thread, orphan answer on the new — forbidden by
+    // the recorded invariant above and bait #11 at the scope axis). The
+    // in-flight turn stays bound to the thread it was MINTED into:
+    // lastThreadKeyRef + persistedScopeRef hold the pre-flip pair, and the
+    // sync effect below keeps POSTing the whole turn there. The hydration
+    // GET still runs (non-destructive while local messages exist, :851/
+    // :879 arm). User-initiated switch/New-thread never sees this guard:
+    // they wipe directly in switchThread/newThread and clear the in-flight
+    // flag first (bait #11 byte-preserved).
+    if (reKeyed && turnInFlightRef.current) {
+      // Deferred: bindings intentionally NOT advanced; see the comment. The
+      // next sendPrompt START resumes them onto the then-current thread.
+      deferredReKeyRef.current = true
+    } else {
+      if (reKeyed) {
+        setMessages([])
+        persistedIdsRef.current = new Set()
+      }
+      lastThreadKeyRef.current = threadKey
+      persistedScopeRef.current = activeThread.scope
+      // A resolved run (idle re-key, user switch, or plain mount/mint) is
+      // the binding landing on the current thread — any pending deferral is
+      // satisfied here, not just by the send-time resume.
+      deferredReKeyRef.current = false
     }
-    lastThreadKeyRef.current = threadKey
     let cancelled = false
     hydratedRef.current = false
     const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
@@ -879,7 +948,13 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
 
   useEffect(() => {
     if (!endpoint || !hydratedRef.current || !activeThread) return
-    const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
+    // LEG F fix run 1 (advc D1): persist into the binding the hydration
+    // effect last ADVANCED — during a deferred in-flight re-key that is the
+    // turn's MINTED (pre-flip) scope, so both roles of the surviving turn
+    // POST to the same server thread. Identical to `activeThread.scope`
+    // whenever no guard is active.
+    const persistScope = persistedScopeRef.current
+    const threadOpts = { ...(persistScope ? { scope: persistScope } : {}) }
     const unsynced = messages.filter(
       (m) => !persistedIdsRef.current.has(m.id) && !m.isStreaming,
     )
@@ -986,6 +1061,22 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       // prior turn's wall.
       setHonestWall(null)
 
+      // LEG F fix run 1 (advc D1): RESUME a deferred re-key at the START of
+      // a new turn. If the thread scope flipped while the previous turn was
+      // in flight, the persistence binding held on that turn's minted thread
+      // so its whole exchange POSTed together (never split across the flip).
+      // Now the previous turn has settled and its rows have persisted; the
+      // binding advances onto the CURRENT thread BEFORE the new turn mints,
+      // so this turn persists where it belongs. The carried turn stays
+      // visible (its ids are in persistedIdsRef — nothing re-posts, nothing
+      // wipes; the O2 carry).
+      const resumeThread = activeThreadRef.current
+      if (resumeThread && deferredReKeyRef.current) {
+        lastThreadKeyRef.current = `${resumeThread.scope}\u0000${resumeThread.id}`
+        persistedScopeRef.current = resumeThread.scope
+        deferredReKeyRef.current = false
+      }
+
       // Auto-reject existing preview before starting new stream.
       // L2-CHAT-1: a send while a preview is staged is a REVISE turn — the
       // staged draft's source prompt joins the revision trail and rides back
@@ -1048,7 +1139,19 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
         setMessages((prev) => [...prev, userMsg, assistantMsg])
         setIsStreaming(true)
       })
+      // LEG F: the turn is IN FLIGHT from this synchronous moment — the
+      // re-key reset must not touch these messages until the stream settles
+      // (cleared in the finally below). Set AFTER flushSync so the minted
+      // messages are already committed (no render can observe flight
+      // without the messages existing).
+      turnInFlightRef.current = true
 
+      // LEG F fix run 1 (advc D4): the try/finally that CLEARS the flag
+      // opens IMMEDIATELY after it is set — waitForNextPaint and the
+      // context builders below run inside it, so a rejection there settles
+      // the turn (flag cleared in the finally) instead of leaking the flag
+      // and permanently suppressing every re-key reset.
+      try {
       const controller = new AbortController()
       abortRef.current = controller
 
@@ -1135,7 +1238,6 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       // proposed" — the same delivered-change arm as deckLayoutDelivered.
       let navActionDelivered = false
 
-      try {
         for await (const event of streamAssist(
           prompt,
           ctx.surface,
@@ -1671,6 +1773,9 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       } finally {
         setIsStreaming(false)
         abortRef.current = null
+        // LEG F: the turn has settled (done / error / cancel) — re-key
+        // resets regain their full pre-fix behavior from here on.
+        turnInFlightRef.current = false
       }
     },
     [isStreaming, previewEvents, messages]
