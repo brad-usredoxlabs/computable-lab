@@ -874,6 +874,10 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       }
       lastThreadKeyRef.current = threadKey
       persistedScopeRef.current = activeThread.scope
+      // A resolved run (idle re-key, user switch, or plain mount/mint) is
+      // the binding landing on the current thread — any pending deferral is
+      // satisfied here, not just by the send-time resume.
+      deferredReKeyRef.current = false
     }
     let cancelled = false
     hydratedRef.current = false
