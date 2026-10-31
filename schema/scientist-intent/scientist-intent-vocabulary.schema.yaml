@@ -171,6 +171,21 @@ properties:
                   NEVER a filter, never suppression: binding a non-preferred
                   allowed level is legal without a clarification. Lint P6 pins
                   preferred ∈ levels.
+              teaching:
+                type: string
+                minLength: 1
+                description: >-
+                  L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling
+                  LABSTATE-TOKENSITE-gate-l2t2355 Q1) DECLARATION SLOT — the
+                  producer-side teaching for this argument: a one-line
+                  phrase->value contract the GENERATED contractBlock renders
+                  under the verb line (the single block the live chat sites
+                  embed). Interpreted generically — no consumer branches on a
+                  verb or arg NAME; the render keys off the FIELD's presence.
+                  For kind: wellset args the renderer additionally composes the
+                  declared token list from wellsetValueTokens DATA into the
+                  line, so the teaching text must NEVER re-list token
+                  literals (one authority for the token value).
 
   wellsetValueTokens:
     type: array

@@ -120,6 +120,20 @@ verbs:
         kind: wellset
         required: false
         domain: labware
+        # L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-
+        # l2t2355 Q1, Brad option A): the PRODUCER-SIDE teaching for the
+        # contents-derived carrier, rendered generically by contractBlock()
+        # into every live prompt site (forced-draft instruction, agent_intent
+        # tool def, repair prompt). The `teaching:` string states the
+        # phrase->token CONTRACT only; the token VALUE stays single-homed in
+        # wellsetValueTokens below (the renderer composes the token list from
+        # that DATA — this text must never re-list token literals).
+        teaching: >-
+          A contents-derived phrase ("all wells that have material") is the
+          DECLARED wellset token (the vocabulary's wellsetValueTokens list) —
+          never a literal well list or well range. Omit labware unless the
+          scientist names it: the token resolves its labware from the
+          contents ledger.
   - name: resuspend
     class: simple
     policyRef: hint-authority

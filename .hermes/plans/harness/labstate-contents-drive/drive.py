@@ -30,8 +30,12 @@ L2-LABSTATE-CONTENTS-1/<UTC ts>/):
     proof: turn 1b's prior must ALREADY contain turn 1's contents) and
     after_labware (the contents this turn wrote).
   - the mix turn: the mix event's details carry the resolved union. The
-    drive asserts the union is EXACTLY the 48 wells A1..H1 + A2..H2 (the
-    A1:H2 bounding union) computed BY THE COMMITTED LEDGER — a vacuous
+    drive asserts the union is EXACTLY the wells A1..H1 + A2..H2 (the
+    A1:H2 bounding union — 16 wells; ruling LABSTATE-TOKENSITE-gate-l2t2355
+    Q2 harness-bookkeeping fix: the leg's old 'expected_48' label/note said
+    48 while enumerating the same 16-well A1:H2 union — the COUNT reconciled
+    to the actual ledger union, the enumerated set unchanged) computed BY THE
+    COMMITTED LEDGER — a vacuous
     []==[] is an ACCEPTANCE FAILURE (WELLSET's #1 trap applies verbatim).
 
 Exit codes: 0 = all acceptance legs met; 1 = one or more failed (each named).
@@ -536,8 +540,10 @@ def main():
     }
 
     # LEG 3 (turn 2 MIX): the mix event's details carry the resolved union
-    # EXACTLY A1..H1 + A2..H2 (48 wells — the A1:H2 bounding union), computed
-    # by the committed ledger. Vacuous []==[] is an ACCEPTANCE FAILURE.
+    # EXACTLY A1..H1 + A2..H2 (the A1:H2 bounding union — 16 wells; the leg's
+    # historical "48" label was harness bookkeeping, reconciled per ruling
+    # LABSTATE-TOKENSITE-gate-l2t2355 Q2: the enumerated union is 16 wells),
+    # computed by the committed ledger. Vacuous []==[] is an ACCEPTANCE FAILURE.
     t2 = results.get("2") or {}
     t2_done = t2.get("done_frame") or {}
     t2_res = t2_done.get("result") or {} if isinstance(t2_done, dict) else {}
@@ -550,19 +556,19 @@ def main():
     for e in mix_events:
         mix_wells.extend(wellset_of(e))
     mix_wells = sorted(set(mix_wells))
-    expected_48 = sorted(
+    expected_union = sorted(
         ["%s%d" % (r, c) for r in "ABCDEFGH" for c in range(1, 3)])
     t2_after = (t2.get("arm_log") or [{}])[-1].get("after_labware") if t2.get("arm_log") else None
     ledger_populated = isinstance(t2_after, dict) and any(
         isinstance(w, dict) and w for w in t2_after.values() if isinstance(w, dict))
     leg["turn2_mix_union"] = {
-        "ok": mix_wells == expected_48,
+        "ok": mix_wells == expected_union and bool(expected_union),
         "mix_event_count": len(mix_events),
         "mix_wells": mix_wells,
         "mix_well_count": len(mix_wells),
-        "expected_48": expected_48,
+        "expected_union": expected_union,
         "turn2_ledger_populated": ledger_populated,
-        "note": "the mix event's details carry the resolved union EXACTLY A1..H1 + A2..H2 (48 wells, the A1:H2 bounding union) BY THE COMMITTED LEDGER. Vacuous []==[] = ACCEPTANCE FAILURE (named, not hidden).",
+        "note": "the mix event's details carry the resolved union EXACTLY A1..H1 + A2..H2 (the A1:H2 bounding union, 16 wells — count reconciled per ruling LABSTATE-TOKENSITE-gate-l2t2355 Q2) BY THE COMMITTED LEDGER. Vacuous []==[] = ACCEPTANCE FAILURE (named, not hidden).",
     }
 
     # LEG 4 (control X): unknown plate -> no contents written (the fold
