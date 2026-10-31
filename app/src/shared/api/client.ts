@@ -1381,6 +1381,13 @@ export interface VendorExaSearchResponse {
   configured: boolean
   query: string
   items: VendorExaHit[]
+  /**
+   * Server-authored typed refusal, present ONLY when `configured` is false
+   * (mirror of the server interface): 'not_configured' (no key / disabled)
+   * or 'key_rejected' (upstream rejected the credential — 401/403 by status).
+   * Type-only mirror; absent on the happy path.
+   */
+  reason?: 'not_configured' | 'key_rejected'
 }
 
 export interface VendorFromExaResponse {

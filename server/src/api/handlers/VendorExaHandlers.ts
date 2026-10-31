@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import type { AppConfig } from '../../config/types.js';
-import { exaSearch, resolveExaConfig } from '../../integrations/exa.js';
+import { exaSearch, ExaRequestError, resolveExaConfig } from '../../integrations/exa.js';
 import type { RecordStore } from '../../store/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
 import { localMaterialIdForLabel, labelSlug, labelHash } from '../../materials/termId.js';
@@ -43,6 +43,14 @@ export interface VendorExaSearchResponse {
   configured: boolean;
   query: string;
   items: VendorExaHit[];
+  /**
+   * Server-authored typed refusal, present ONLY when `configured` is false:
+   * 'not_configured' (no key / disabled — the declared capability is off) or
+   * 'key_rejected' (upstream rejected the credential — 401/403 by STATUS).
+   * Never an echo of upstream response prose. Absent on the happy path
+   * (exactOptionalPropertyTypes: the field is omitted, not set to undefined).
+   */
+  reason?: 'not_configured' | 'key_rejected';
 }
 
 export interface VendorFromExaResponse {
@@ -85,11 +93,17 @@ export function createVendorExaHandlers(deps: {
 
       const config = resolveExaConfig(getAppConfig());
       if (!config) {
-        reply.status(503);
-        return {
-          error: 'EXA_NOT_CONFIGURED',
-          message: 'Exa is not configured. Configure integrations.exa.apiKey before searching vendor products.',
-        };
+        // GC-17: this endpoint answers a CAPABILITY question — "can the Exa
+        // vendor tier search?" — and the honest answer to "not configured" is a
+        // typed capability READ (HTTP 200, configured:false), not an HTTP
+        // failure. The run page mounts this on every load (slash-menu resolver
+        // path); a 5xx here is a browser console error JS cannot suppress.
+        // `reason` is a server-authored constant — no upstream echo, no key
+        // material (EXA_NOT_CONFIGURED stays in its other homes: the
+        // corpusIntake exit-code contract and the equipment/vendor-search
+        // surfaces — those are not on the run-page mount path and are out of
+        // this item's file boundary).
+        return { configured: false, query: q, items: [], reason: 'not_configured' };
       }
 
       const category = parseCategory(body.category);
@@ -123,6 +137,19 @@ export function createVendorExaHandlers(deps: {
           .slice(0, limit);
         return { configured: true, query: q, items };
       } catch (err) {
+        // GC-17 capability split, by UPSTREAM HTTP STATUS on the typed error —
+        // never by matching upstream prose (401/403 = the vendor rejected the
+        // credential, which is a CAPABILITY truth, not an outage):
+        //   credential rejected  -> honest 200 configured:false + reason
+        //     (a dead key is not an abnormal event; re-probing it on every
+        //     keystroke is the D4 console-error class)
+        //   anything else (5xx, timeout, network) -> UNCHANGED 502
+        //     EXA_SEARCH_FAILED: a genuine outage behind a valid key MAY stay
+        //     a visible typed console error — laundering it into 200 would
+        //     hide a real failure (the T3 anti-laundering pin).
+        if (err instanceof ExaRequestError && (err.status === 401 || err.status === 403)) {
+          return { configured: false, query: q, items: [], reason: 'key_rejected' };
+        }
         reply.status(502);
         return {
           error: 'EXA_SEARCH_FAILED',
