@@ -111,44 +111,80 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
  * Both routes parse through the shared `parseTraceValue` (units come from
  * the data: `axis_units`/`value_units`), so the renderer carries no axis/
  * values re-derivation of its own and no GC/engine/point-count knowledge.
+ * The async outcome is keyed to the artifact id that produced it
+ * (`forId`): an artifact prop change invalidates the previous outcome in
+ * the same commit (no stale-frame bleed, no stale resolve winning), inline
+ * is always checked before the error arm, and a settled-but-undefined
+ * payload renders the named empty arm (settled is tracked separately from
+ * "has value").
  */
+type SignalRouteState =
+  | { status: 'idle' }
+  | { status: 'loading'; forId: string }
+  | { status: 'settled'; forId: string; value: unknown }
+  | { status: 'error'; forId: string; message: string }
+
 function SignalView({ artifact }: { artifact: RenderableArtifact }) {
   const drefId = artifact.dataReferenceRef?.id
   const aoutId = artifact.id
-  const [fetched, setFetched] = useState<unknown>(undefined)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const hasInline = artifact.inlineValue !== undefined
+  // The content-route outcome, keyed to the artifact that produced it
+  // (`forId`). `settled` is tracked separately from "has value": a settled
+  // but undefined payload is the named empty arm, never stuck loading.
+  const [routeState, setRouteState] = useState<SignalRouteState>({ status: 'idle' })
 
   useEffect(() => {
-    if (artifact.inlineValue !== undefined) return
+    if (hasInline) return
     if (!drefId || !aoutId) return
     let on = true
-    setFetched(undefined)
-    setFetchError(null)
+    setRouteState({ status: 'loading', forId: aoutId })
     apiClient
       .getAnalysisArtifactContent(aoutId)
       .then((v) => {
-        if (on) setFetched(v)
+        if (on) setRouteState({ status: 'settled', forId: aoutId, value: v })
       })
       .catch((err) => {
-        if (on) setFetchError(err instanceof Error ? err.message : String(err))
+        if (on) setRouteState({ status: 'error', forId: aoutId, message: err instanceof Error ? err.message : String(err) })
       })
     return () => {
       on = false
     }
-  }, [drefId, aoutId, artifact.inlineValue])
+  }, [drefId, aoutId, hasInline])
 
-  const value = artifact.inlineValue !== undefined ? artifact.inlineValue : fetched
+  // Inline is always checked first (a stale error must never shadow an
+  // inline payload). An async outcome is only displayed for the artifact
+  // that produced it (the `forId` key): the moment the artifact prop
+  // changes, the previous outcome stops rendering in the same commit. If
+  // the route is intended for this artifact but no current outcome exists
+  // yet (first paint, or a stale outcome for a different artifact), the
+  // fetch is in flight -> the named loading arm, not the empty arm.
+  const routeIntended = !hasInline && drefId !== undefined && aoutId !== ''
+  let value: unknown
+  let loading = false
+  let routeError: string | null = null
+  if (hasInline) {
+    value = artifact.inlineValue
+  } else if (routeState.status === 'loading' && routeState.forId === aoutId) {
+    loading = true
+  } else if (routeState.status === 'settled' && routeState.forId === aoutId) {
+    value = routeState.value
+  } else if (routeState.status === 'error' && routeState.forId === aoutId) {
+    routeError = routeState.message
+  } else if (routeIntended) {
+    loading = true
+  } else {
+    value = undefined
+  }
   const parsed = useMemo(() => {
     if (value === undefined) return null
     const r = parseTraceValue(value)
     return r.ok ? r.trace : null
   }, [value])
 
-  const loading = drefId !== undefined && artifact.inlineValue === undefined && value === undefined && !fetchError
-  if (fetchError) {
+  if (routeError !== null) {
     return (
       <div className="view-spec__error" data-testid="view-spec-signal-error">
-        Could not load the signal data: {fetchError}
+        Could not load the signal data: {routeError}
       </div>
     )
   }
