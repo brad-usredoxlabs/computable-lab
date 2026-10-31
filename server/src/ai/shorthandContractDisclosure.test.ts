@@ -77,6 +77,34 @@ describe('shorthand contract disclosure (generated, three sites)', () => {
     }
   });
 
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 2 (RED-first, ruling
+  // LABSTATE-TOKENSITE-gate-l2t2355 Q1): the block the live sites read must
+  // ALSO carry the vocabulary's per-arg TEACHING lines — the one generated
+  // block is what teaches the contents-derived wellset token, so a teaching
+  // declared in DATA must reach every live site with zero extra plumbing.
+  // Derived from vocab.argContracts() (every kind:wellset arg), never a typed-
+  // out verb/arg name or token literal.
+  it('every live site carries the generated TEACHING lines for kind:wellset args (fix-run-2 parity)', () => {
+    const teachingLines = vocab.verbs()
+      .flatMap((verb) => vocab.argContracts(verb)
+        .filter((a) => a.kind === 'wellset' && typeof a.teaching === 'string')
+        .map((a) => {
+          const line = block.split('\n').find((l) => l.startsWith('  ') && l.slice(2).startsWith(`${a.name}: `));
+          expect(line, `contractBlock carries the ${verb}.${a.name} teaching line`).toBeDefined();
+          return line!;
+        }));
+    expect(teachingLines.length).toBeGreaterThan(0); // the shipped vocab declares teaching
+    for (const [name, text] of [
+      ['tool def', shorthandDesc],
+      ['forced draft', FORCED_DRAFT_TOOL_INSTRUCTION],
+      ['repair prompt', malformedShorthandRepairPrompt(new ScientistIntentValidationError('x', []), 'intentId: x\nactions: []\n')],
+    ] as const) {
+      for (const line of teachingLines) {
+        expect(text, `${name} must carry the teaching line`).toContain(line);
+      }
+    }
+  });
+
   it('the four ratchet-measured prompt strings stay UNTOUCHED by the disclosure (bait 4)', async () => {
     // SUBMIT_SUGGESTION_TOOL_DEF / SUBMIT_SUGGESTION_INSTRUCTION are the
     // ratchet's strings; the block must never leak into them.
