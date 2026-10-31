@@ -74,12 +74,18 @@ describe('useVendorExaSearch', () => {
   })
 
   /**
-   * GC-17 T6 (RED): the capability gate. When the declared flag says
-   * enabled:false, NO request fires — pinned by CALL COUNT === 0 (not by
-   * empty results: an errored request also yields empty results — the whole
-   * defect). Same idiom as the slash-menu resolvers.
+   * GC-17 T6 (RED, tightened in fix1 D3): the capability gate. When the
+   * declared flag says enabled:false, NO request fires — pinned by CALL COUNT
+   * === 0 (not by empty results: an errored request also yields empty results
+   * — the whole defect). Same idiom as the slash-menu resolvers.
+   *
+   * FIX1 D3: the gate-denial path must ALSO report the capability honestly —
+   * a declared-off / sticky-negative capability is NOT configured, so the hook
+   * reports `configured: false` (quietly: no error string). Before this
+   * tightening the gate-off path left `configured` at its initial true, which
+   * is an un-honest capability read in an honesty item.
    */
-  it('T6: declared enabled:false → ZERO requests (fetch count pinned at exactly 0)', async () => {
+  it('T6: declared enabled:false → ZERO requests (fetch count pinned at exactly 0) and configured reports false (honest capability read)', async () => {
     declareExaEnabled(false)
     const { result } = renderHook(() => useVendorExaSearch({ category: 'catalog' }))
 
@@ -89,9 +95,13 @@ describe('useVendorExaSearch', () => {
     await new Promise((r) => setTimeout(r, 500))
     expect(apiClient.searchVendorExa).toHaveBeenCalledTimes(0)
     expect(result.current.exaResults).toEqual([])
-    // Gate-off is quiet: no error string, configured untouched (the declared
-    // capability answer, not a search result).
+    // Gate-off is quiet (no error string) but HONEST: the capability is
+    // declared off (or already honestly refused this page load) → the hook
+    // reports configured: false. (T6 RED leg at fix1 start: the gate-denial
+    // path returned early without setConfigured(false), so this pin failed
+    // while the count pin already passed.)
     expect(result.current.error).toBeNull()
+    expect(result.current.configured).toBe(false)
   })
 
   /**

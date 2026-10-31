@@ -16,7 +16,10 @@ import { exaVendorEnabled, noteExaUnavailable } from '../lib/integrationFlags'
  *
  * Every fire is gated on the DECLARED capability read (`exaVendorEnabled` —
  * the same once-per-page cached flag the slash-menu resolvers use): declared
- * off, or already honestly refused this page load, → ZERO requests. A
+ * off, or already honestly refused this page load, → ZERO requests AND an
+ * honest `configured: false` read (quietly — no error string; a declared-off
+ * capability is not "configured", so the hook must not report the initial
+ * true). A
  * `configured:false` response (no key / key rejected — the server answers the
  * capability question as an honest 200) surfaces quietly (no error string) and
  * marks the negative STICKY for the page load (`noteExaUnavailable`) so the
@@ -93,7 +96,14 @@ export function useVendorExaSearch(options?: UseVendorExaSearchOptions): UseVend
         // (same idiom as the slash-menu resolvers). Declared off, or already
         // honestly refused this page load (sticky-negative) → ZERO requests.
         const enabled = await exaVendorEnabled()
-        if (!enabled) return
+        if (!enabled) {
+          // FIX1 D3: a declared-off / sticky-negative capability is NOT
+          // configured — report the capability honestly (quietly: no error
+          // string; this is a capability READ, not a failed search) instead of
+          // leaving `configured` at its initial true.
+          if (latestQueryRef.current === query) setConfigured(false)
+          return
+        }
         const response = await apiClient.searchVendorExa({
           q: trimmed,
           ...(category ? { category } : {}),
