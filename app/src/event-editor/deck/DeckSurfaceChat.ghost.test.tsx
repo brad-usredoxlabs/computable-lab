@@ -27,6 +27,17 @@ import { streamAssist } from '../../shared/api/aiClient'
 import { DeckSurfaceChat } from './DeckSurfaceChat'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
+// LEG D step 5 (OQ-4 PORT): HarnessChatPane now mounts the attached-sources
+// chrome (RunInEventEditorButton), whose usePdfViewer excerpt dep reaches
+// pdfjs-dist — jsdom has no DOMMatrix, so mock it (the proven pattern this
+// file already relied on transitively). Mock-only; no assertion changes.
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined })),
+  GlobalWorkerOptions: { workerSrc: '' },
+  TextLayer: class { render() { return Promise.resolve() } },
+}))
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.mjs' }))
+
 const mocks = vi.hoisted(() => ({
   setPreview: vi.fn((preview: unknown) => {
     // Mirror the real reducer: a set_preview dispatch replaces state.preview.

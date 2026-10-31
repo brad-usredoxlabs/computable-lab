@@ -22,15 +22,34 @@
  * picker. No rename affordance.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useOptionalAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
 import { ChatPreviewCard } from './ChatPreviewCard'
 import { SurfaceFocusHeader } from './SurfaceFocusHeader'
+import {
+  SourcesStrip,
+  type AddedSource,
+} from '../event-editor/right-pane/ai/SourcesStrip'
+import { AddSourceModal } from '../event-editor/right-pane/ai/AddSourceModal'
+import { RunInEventEditorButton } from '../event-editor/right-pane/ai/RunInEventEditorButton'
+import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { openContent } from '../shared/lib/openContent'
+import type { WorkspaceTab } from '../event-editor/workspace/types'
 import type { UseAiChatReturn } from '../shared/hooks/useAiChat'
 import type { ThreadSummary } from '../shared/api/aiThreadClient'
 import './HarnessChatPane.css'
+// L2-CHAT-UI-1 LEG D step 5 (OQ-4 PORT): the attached-sources strip chrome
+// (SourcesStrip / AddSourceModal / RunInEventEditorButton) was AiTabPanel-owned.
+// Its styles live in right-pane/ai/ai.css, whose ONLY importer (AiTabPanel) died
+// in the deletion commit — so the pane imports ai.css directly to keep the
+// stripped chrome's classes (sources-strip*, add-source*, run-in-event-editor*,
+// message-log*, chat-input*) reachable. The step-8 dead-CSS sweep keeps the
+// selectors the pane's survivors still render and deletes the rest.
+import '../event-editor/right-pane/ai/ai.css'
 
 export interface HarnessChatPaneProps {
   /** Host review handler threaded into ChatLog's Review-action button. */
@@ -126,6 +145,95 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
   )
 }
 
+/**
+ * AttachedSourcesChrome — the attached-sources strip, ported onto the
+ * universal pane (L2-CHAT-UI-1 LEG D step 5, OQ-4 PORT).
+ *
+ * AiTabPanel owned this chrome (SourcesStrip + AddSourceModal +
+ * RunInEventEditorButton); the panel died in the deletion commit, so the
+ * components (byte-identical, their own testids survive) mount here in the
+ * pane's header region instead. Session-local state, exactly as AiTabPanel's:
+ * the strip shows ONLY sources the user attached this mount, the modal ingests
+ * a vendor PDF (onIngested appends a chip + the user can open it in the
+ * viewer), and the run-in-event-editor button composes a prefill (prompt +
+ * active viewer excerpt) into the pane's OWN composer — the universal pane's
+ * replacement for ChatInput's prefill prop.
+ *
+ * Renders ONLY when the host is a workspace (RunInEventEditorButton needs
+ * useWorkspace; outside one there is no active viewer tab, so the strip's
+ * "+ Add source" attach flow is the whole chrome). Surface-agnostic: no
+ * surface-name branching anywhere (D0 grammar).
+ */
+function AttachedSourcesChrome({
+  chat,
+  studyId,
+  activeTab,
+}: {
+  chat: UseAiChatReturn
+  studyId: string
+  activeTab: WorkspaceTab | null
+}) {
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
+  const [addedSources, setAddedSources] = useState<AddedSource[]>([])
+  const [addSourceOpen, setAddSourceOpen] = useState(false)
+
+  const handleSourceIngested = useCallback(
+    (artifactId: string, info: { title?: string; sourceUrl: string; vendor?: string }) => {
+      setAddedSources((prev) => {
+        if (prev.some((s) => s.artifactId === artifactId)) return prev
+        return [...prev, { artifactId, title: info.title ?? artifactId }]
+      })
+    },
+    [],
+  )
+
+  const handleOpenSource = useCallback(
+    (artifactId: string) => {
+      const existing = addedSources.find((s) => s.artifactId === artifactId)
+      const tab: WorkspaceTab = {
+        id: `tab-pdf-${artifactId}`,
+        kind: 'pdf',
+        artifactId,
+        title: existing?.title ?? artifactId,
+      }
+      openContent(openTabs, navigate, tab, `/artifact/pdf/${artifactId}`)
+    },
+    [addedSources, openTabs, navigate],
+  )
+
+  return (
+    <>
+      <div className="harness-chat-pane__sources" data-testid="harness-chat-sources">
+        <SourcesStrip
+          addedSources={addedSources}
+          onAddSource={() => setAddSourceOpen(true)}
+          onOpenSource={handleOpenSource}
+        />
+        {/* Visible only for non-deck (pdf/document) viewers — the component's
+            own visibility rule; the ghost-preview flow lands somewhere the
+            user can see it. */}
+        <RunInEventEditorButton
+          activeTab={activeTab}
+          promptDraft=""
+          onPrefilled={(text) => {
+            // The universal pane owns its composer state: the composed
+            // prefill stages in the pane's own composer (the AiTabPanel
+            // ChatInput-prefill equivalent).
+            chat.sendPrompt(text)
+          }}
+        />
+      </div>
+      <AddSourceModal
+        isOpen={addSourceOpen}
+        studyId={studyId}
+        onIngested={handleSourceIngested}
+        onClose={() => setAddSourceOpen(false)}
+      />
+    </>
+  )
+}
+
 export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
   // `proposalFlow` is registered by the SAME surface that owns the chat: the
   // pane renders the one pending compile card and drives accept/reject through
@@ -143,6 +251,17 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
   const chat = panel?.chat ?? null
   const proposalFlow = panel?.proposalFlow ?? null
   const [prompt, setPrompt] = useState('')
+
+  // L2-CHAT-UI-1 LEG D step 5 (OQ-4 PORT): the attached-sources chrome mounts
+  // ONLY on workspace hosts (RunInEventEditorButton internally calls the
+  // throwing useWorkspace; outside a WorkspaceProvider there is no active
+  // viewer tab, so the strip's attach flow is not applicable). useOptional*
+  // is safe provider-free (returns null), so this derivation never throws —
+  // the chrome (and the run button) render only when a workspace exists.
+  const ws = useOptionalWorkspace()
+  const activeTab = ws?.state.activeTabId
+    ? ws.state.tabs.find((t: WorkspaceTab) => t.id === ws.state.activeTabId) ?? null
+    : null
 
   if (!chat) {
     return (
@@ -164,6 +283,13 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
           thread-scoped chats (ThreadPicker returns null otherwise — no
           dead chrome). */}
       <ThreadPicker chat={chat} />
+      {/* L2-CHAT-UI-1 LEG D step 5 (OQ-4 PORT): the attached-sources strip
+          (SourcesStrip + AddSourceModal + RunInEventEditorButton) — ported
+          onto the universal pane from the dead AiTabPanel. Workspace-hosts
+          only (the run button needs useWorkspace); surface-agnostic. */}
+      {ws ? (
+        <AttachedSourcesChrome chat={chat} studyId={ws.state.studyId} activeTab={activeTab} />
+      ) : null}
       {/* L2-CHAT-1 §3: the universal honest-failure wall — a success that
           produced nothing mountable is a REPORTED failure in plain language
           (the universal port of AiTabPanel's ai-tab-honest-wall). Owned by
