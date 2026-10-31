@@ -42,7 +42,18 @@ export interface ExpectClause {
   js?: string;
 }
 
-interface SeedStep { kind: 'seed' }
+interface SeedStep {
+  kind: 'seed';
+  /** The .CH point count the journey's synthetic signal carries (DATA — the
+   * driver applies zero domain policy here). MUST keep the runner's
+   * signal_plus_baseline artifact UNDER its 50k-char inline threshold
+   * (analysisRunner.ts isLarge) so the artifact's `value` rides the
+   * manifest inline and the product's `signal` view renders a VISIBLE
+   * trace. A GC scan at ~3 Hz over the 5-min window is a real, smallest
+   * shape that satisfies the peak engine's window sampling AND stays
+   * inline. The seed asserts this fail-closed (see fixtures.ts). */
+  signalPoints?: number;
+}
 interface ApiStep {
   kind: 'api';
   name?: string;
@@ -287,7 +298,8 @@ export async function runStep(step: Step, ctx: RunnerCtx, journeyId: string): Pr
   const name = 'name' in step && typeof step.name === 'string' ? step.name : step.kind;
   if (step.kind === 'seed') {
     ctx.log(journeyId, name, 'seed: minting fixtures + writing .D tree');
-    const ch = buildSyntheticCh(5000, { escIndex: 10 });
+    const pts = (step as SeedStep).signalPoints ?? 5000;
+    const ch = buildSyntheticCh(pts, { escIndex: 10 });
     const dotd = `TJ-${ctx.rand}.D`;
     await writeDotDTree(ctx.mountDir, 'machine1', dotd, ch.bytes, `trunk-journeys ${ctx.rand}`);
     ctx.vars.dotdDirectoryKey = `machine1/${dotd}`;
