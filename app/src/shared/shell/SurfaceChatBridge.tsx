@@ -7,17 +7,18 @@
  * event-editor preview, so there is no ghost mount, no adoption seam, and
  * no deck-layout handler. The bridge RENDERS NOTHING — `useSurfaceChat`
  * registers the chat + proposal flow through AiPanelContext
- * (useRegisterAiChat), and RightPane's `panelSlot?.chat` arm
- * (RightPane.tsx:95) then shows HarnessChatPane automatically instead of
- * the legacy AiTabPanel fallback.
+ * (useRegisterAiChat). RightPane's AI mode ALWAYS renders HarnessChatPane
+ * (LEG D: the legacy AiTabPanel fallback arm and the panelSlot?.chat gate
+ * died), so registering here is what gives that pane the chat to render.
  *
  * Honest no-provider posture: `useRegisterAiChat` THROWS without an
  * AiPanelProvider (AiPanelContext.tsx:211). The routed app always has one
  * (main.tsx wraps the app), but host pages are also rendered provider-free
- * in tests — there the bridge registers NOTHING and RightPane keeps the
- * honest AiTabPanel fallback (a revert of any sub-leg returns to exactly
- * that state). The provider check lives here; the actual hook calls live in
- * the inner component so they are never conditional (rules-of-hooks).
+ * in tests — there the bridge registers NOTHING and the rendered
+ * HarnessChatPane shows its own honest empty state (never a legacy fallback,
+ * which died in LEG D, and never a crash). The provider check lives here; the
+ * actual hook calls live in the inner component so they are never conditional
+ * (rules-of-hooks).
  *
  * Thread identity: endpoint 'browser' (the generic-chat thread endpoint —
  * same choice MaterialsPage made pre-routing, MaterialsPage.tsx:46). Scope

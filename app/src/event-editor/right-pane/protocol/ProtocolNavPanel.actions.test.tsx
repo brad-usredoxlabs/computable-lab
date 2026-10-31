@@ -3,7 +3,6 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ProtocolSelectionProvider, useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolNavPanel } from './ProtocolNavPanel'
-import { AiPanelProvider } from '../../../shared/context/AiPanelContext'
 import { apiClient } from '../../../shared/api/client'
 
 vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
@@ -28,14 +27,16 @@ function Seed() {
   return <output data-testid="visible-ids">{[...(sel?.visibleSteps ?? [])].join(',')}</output>
 }
 function mount() {
-  // LEG D re-pin: the dead ChatContextHeader is dropped from this render. The
-  // pane under test (ProtocolNavPanel) still renders inside a real RightPane in
-  // production, whose AI arm now ALWAYS mounts HarnessChatPane — and that pane
-  // calls useAiPanel(), which THROWS without an AiPanelProvider (the routed app
-  // always has one; main.tsx wraps it). So the provider is added here to match
-  // production; no chat is registered, so the pane renders its honest empty
-  // state and nothing else changes about what this suite asserts.
-  render(<ProtocolSelectionProvider><AiPanelProvider><Seed /><ProtocolNavPanel /></AiPanelProvider></ProtocolSelectionProvider>)
+  // LEG D re-pin: the dead ChatContextHeader is dropped from this render.
+  // FIX RUN 1 (advc D13): the AiPanelProvider that was added here under the
+  // rationale "the pane calls useAiPanel(), which THROWS without an
+  // AiPanelProvider" is REMOVED — that rationale was wrong twice over:
+  // HarnessChatPane consumes the OPTIONAL seam (useOptionalAiPanel, which
+  // returns null provider-free instead of throwing) and is not even mounted
+  // in this suite's render tree (ProtocolNavPanel and its unmocked children
+  // consume no AiPanelContext). Provider-free is the honest test posture
+  // here; nothing in the tree needs one.
+  render(<ProtocolSelectionProvider><Seed /><ProtocolNavPanel /></ProtocolSelectionProvider>)
 }
 beforeEach(() => {
   vi.clearAllMocks()

@@ -17,7 +17,7 @@
  * dep reaches pdfjs-dist (jsdom has no DOMMatrix) — the proven pattern.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { AiPanelProvider, useRegisterAiChat } from '../shared/context/AiPanelContext'
@@ -121,5 +121,25 @@ describe('HarnessChatPane — attached-sources chrome (LEG D step 5, OQ-4 PORT)'
     // (The workspace loads async, so the active-tab-derived button appears once
     // the provider's state settles — await it.)
     expect(await screen.findByTestId('run-in-event-editor')).toBeTruthy()
+  })
+
+  it('run-in-event-editor STAGES the composed text in the composer and does NOT auto-send (Phase 7b contract)', async () => {
+    // FIX RUN 1 (advc D3): the legacy wiring (AiTabPanel.tsx:1595-1599
+    // setPrefill + ChatInput prefill) and the button's own contract
+    // (RunInEventEditorButton.tsx:13-16: "does NOT automatically send the
+    // prompt — it stages it") both stage. The ported pane must do the same:
+    // the composed text lands in the pane's composer (the 'Message' textarea)
+    // and sendPrompt is NOT called — the user reviews, then presses Send.
+    const { chat } = renderChromeHost({ id: 't1', kind: 'pdf', artifactId: 'ART-1', title: 'Vendor protocol' })
+    const button = await screen.findByTestId('run-in-event-editor')
+    fireEvent.click(button)
+    // The composed prefill (-- Source: PDF ART-1 (Vendor protocol) --) is
+    // STAGED in the composer (asserted on the controlled value directly).
+    const composer = screen.getByLabelText('Message', { exact: true }) as HTMLTextAreaElement
+    await waitFor(() => {
+      expect(composer.value).toContain('-- Source: PDF ART-1 (Vendor protocol) --')
+    })
+    // …and the pane did NOT dispatch an AI turn on the user's behalf.
+    expect(chat.sendPrompt).not.toHaveBeenCalled()
   })
 })

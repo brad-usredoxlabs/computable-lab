@@ -2,13 +2,6 @@
    sources strip, scrollable message log, run-in-event-editor button,
    and textarea input. */
 
-.questions-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: auto;
-}
-
 .questions-panel__btn {
   appearance: none;
   border: 1px solid var(--cl-border);

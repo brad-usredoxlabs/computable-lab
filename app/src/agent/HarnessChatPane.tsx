@@ -156,8 +156,11 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
  * the strip shows ONLY sources the user attached this mount, the modal ingests
  * a vendor PDF (onIngested appends a chip + the user can open it in the
  * viewer), and the run-in-event-editor button composes a prefill (prompt +
- * active viewer excerpt) into the pane's OWN composer — the universal pane's
- * replacement for ChatInput's prefill prop.
+ * active viewer excerpt) and STAGES it in the pane's own composer (the pane's
+ * local `prompt` state — the universal pane's replacement for ChatInput's
+ * prefill prop). Phase 7b does NOT auto-send (the button's own contract,
+ * RunInEventEditorButton.tsx:13-16): the composed text lands in the composer
+ * and the user presses Send.
  *
  * Renders ONLY when the host is a workspace (RunInEventEditorButton needs
  * useWorkspace; outside one there is no active viewer tab, so the strip's
@@ -165,13 +168,14 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
  * surface-name branching anywhere (D0 grammar).
  */
 function AttachedSourcesChrome({
-  chat,
   studyId,
   activeTab,
+  onPrefill,
 }: {
-  chat: UseAiChatReturn
   studyId: string
   activeTab: WorkspaceTab | null
+  /** Stages the run-in-event-editor composed text in the pane's composer. */
+  onPrefill: (text: string) => void
 }) {
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
@@ -217,10 +221,17 @@ function AttachedSourcesChrome({
           activeTab={activeTab}
           promptDraft=""
           onPrefilled={(text) => {
-            // The universal pane owns its composer state: the composed
-            // prefill stages in the pane's own composer (the AiTabPanel
-            // ChatInput-prefill equivalent).
-            chat.sendPrompt(text)
+            // STAGE, do not send — the button's own Phase 7b contract
+            // (RunInEventEditorButton.tsx:13-16: "does NOT automatically send
+            // the prompt — it stages it … so the user reviews the composed
+            // text first") and the legacy wiring (AiTabPanel.tsx:1595-1599
+            // setPrefill + :1629 ChatInput prefill) both stage into the
+            // composer. The pane owns its composer state, so staging = the
+            // pane's local `prompt`; the user presses Send. The attached
+            // sources stay session-local chips — the legacy panel never
+            // attached them to the prompt either (Phase 9 upload support
+            // was never wired; AiTabPanel.tsx:223-227).
+            onPrefill(text)
           }}
         />
       </div>
@@ -288,7 +299,16 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
           onto the universal pane from the dead AiTabPanel. Workspace-hosts
           only (the run button needs useWorkspace); surface-agnostic. */}
       {ws ? (
-        <AttachedSourcesChrome chat={chat} studyId={ws.state.studyId} activeTab={activeTab} />
+        <AttachedSourcesChrome
+          studyId={ws.state.studyId}
+          activeTab={activeTab}
+          onPrefill={(text) => {
+            // ChatInput prefill semantics (AiTabPanel's ChatInput.tsx:143-156):
+            // the composed text REPLACES the composer contents — the user
+            // reviews the composed text, then sends it with Send.
+            setPrompt(text)
+          }}
+        />
       ) : null}
       {/* L2-CHAT-1 §3: the universal honest-failure wall — a success that
           produced nothing mountable is a REPORTED failure in plain language

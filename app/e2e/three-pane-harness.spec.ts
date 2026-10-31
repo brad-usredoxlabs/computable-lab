@@ -68,36 +68,58 @@ test.describe('Three-pane agent harness', () => {
 
   test('clicking a step updates the live chat header (EDITING: Step N — concept)', async ({ page }) => {
     await page.goto(RUN_URL)
-    // LEG D re-pin: the chat header is the universal pane's SurfaceFocusHeader
-    // (testid surface-focus-header) — the legacy chat-context-header testid
-    // died with ChatContextHeader. The run page (RunWorkspacePage) publishes
-    // NO ChatFocusContext, so that element is legitimately ABSENT there today:
-    // the pane renders its composer either way (never a crash). The
-    // step-focus → "EDITING: Step N" header behavior is pinned at the unit
-    // level (ChatFocusContext.test.tsx 'working-focus delegation' +
-    // SurfaceFocusHeader) and live on the deck route (DeckHostPage wraps the
-    // right pane in a ChatFocusProvider). Here we pin what the run page MUST
-    // show: the permanent universal pane survived the step click (no crash,
-    // composer still present) and the (optional) header, when present,
-    // reflects the resolved focused step — never AI prose.
+    // LEG D re-pin (FIX RUN 1, advc D2): the working-focus header is the
+    // universal pane's SurfaceFocusHeader (testid surface-focus-header) — the
+    // legacy chat-context-header testid died with ChatContextHeader. The run
+    // page publishes NO ChatFocusContext, so the header is legitimately
+    // ABSENT here — and that absence is now asserted UNCONDITIONALLY (the
+    // old count>0/else conditional was vacuously true on this host and could
+    // never fail). The step-focus behavior the title names is pinned on the
+    // run page by its REAL observable: the clicked nav step becomes the
+    // focused step (aria-pressed — the selection state a published header
+    // would carry), the universal pane survives the focus change with its
+    // composer live (no crash), and the dead legacy header stays absent.
+    // (The header's rendered form — "Working focus: <label>" from the
+    // published ChatFocusContext — is pinned at the unit level,
+    // ChatFocusContext.test.tsx / SurfaceFocusHeader, and live on hosts that
+    // publish a focus, e.g. the deck route.)
     await expect(page.locator('[data-testid="harness-chat-pane"]')).toBeVisible({ timeout: 15_000 })
 
-    // Click a step in the nav rail.
+    // The nav rail resolves the protocol steps asynchronously (RunProtocolStepsLoader
+    // fetch) — wait for the list before driving a step (the sibling 'nav rail
+    // lists the protocol step concepts' test uses the same wait).
+    await expect(page.locator('[data-testid="protocol-nav-list"]')).toBeVisible({ timeout: 15_000 })
+
+    // No published focus on the run page → the header is ABSENT (asserted,
+    // not conditional).
+    await expect(page.locator('[data-testid="surface-focus-header"]')).toHaveCount(0)
+
+    // Click a step in the nav rail. The rail starts with NO focused step
+    // (ProtocolSelectionContext initial focusedStep = null), so the first
+    // click is unambiguously a FOCUS, not a toggle-off.
     const steps = page.locator('[data-testid^="protocol-nav-step-"]')
     const first = steps.first()
+    await expect(first).toBeVisible()
+    await expect(first).toHaveAttribute('aria-pressed', 'false')
     await first.click()
 
-    // The universal pane survives the focus change (no crash, composer live).
+    // The clicked step is now the focused step — the step-selection state the
+    // "EDITING: Step N — concept" header would carry on a focus-publishing
+    // host.
+    await expect(first).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 })
+
+    // The universal pane survives the focus change: no crash, composer live
+    // (ChatLog's Message textarea + Send button).
     await expect(page.locator('[data-testid="harness-chat-pane"]')).toBeVisible()
-    // When the host publishes a focus, the header is the resolved step
-    // (surface-focus-header semantics); on the run page (no published focus)
-    // it is absent — assert the invariant, not the element's presence.
-    const header = page.locator('[data-testid="surface-focus-header"]')
-    if (await header.count() > 0) {
-      await expect(header).toContainText('Step', { timeout: 10_000 })
-    } else {
-      await expect(page.locator('[data-testid="chat-context-header"]')).toHaveCount(0)
-    }
+    await expect(
+      page.locator('[data-testid="harness-chat-pane"]').getByLabel('Message', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.locator('[data-testid="harness-chat-pane"]').getByRole('button', { name: 'Send', exact: true }),
+    ).toBeVisible()
+
+    // The dead legacy header testid is absent (it died with ChatContextHeader).
+    await expect(page.locator('[data-testid="chat-context-header"]')).toHaveCount(0)
   })
 
   test('deck still renders in the action pane', async ({ page }) => {
