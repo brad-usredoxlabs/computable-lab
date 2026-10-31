@@ -703,8 +703,11 @@ actions:
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
     expect(policy?.surfaces).toContain('run-workspace');
+    // ANSWER-CHANNEL 2026-10-31: the deck chat (/deck/:id) is event drafting on
+    // the same universal pane and MUST fold too — it was silently on the
+    // raw-events arm (this assertion used to pin the opposite).
+    expect(surfaceDraftsShorthand('event-editor')).toBe(true);
     // AS-4: the raw-events code stays for surfaces not yet moved.
-    expect(surfaceDraftsShorthand('event-editor')).toBe(false);
     expect(surfaceDraftsShorthand('protocol-builder')).toBe(false);
     expect(surfaceDraftsShorthand(undefined)).toBe(false);
   });

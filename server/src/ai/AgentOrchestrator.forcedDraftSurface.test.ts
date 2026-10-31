@@ -144,9 +144,21 @@ describe('SH-PROMPT-HYGIENE-1 — forced-draft instruction per drafting surface'
     expect(section).not.toMatch(/event_graph|labwareRequirements/);
   });
 
-  it('pin 2 [byte-stability]: event-editor and no-surface callers get the exported const VERBATIM (strict equality)', async () => {
-    expect(forcedSection(await runSystem('event-editor'))).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
+  it('pin 2 [byte-stability]: a NON-shorthand surface and no-surface callers get the exported const VERBATIM (strict equality)', async () => {
+    // 2026-10-31 ANSWER-CHANNEL: `event-editor` (the /deck/:id deck chat) is now
+    // a DECLARED shorthand surface — the campaign's own fixture called it "the
+    // run chat (surface workspace.deck)" while no client ever sent that id, so
+    // the deck chat was being told to draft raw event JSON. `protocol-builder`
+    // is the non-migrated control that still takes the strict-equality arm.
+    expect(forcedSection(await runSystem('protocol-builder'))).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
     expect(forcedSection(await runSystem())).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
+  });
+
+  it('pin 2b: the deck chat (event-editor) composes the SHORTHAND instruction, like the run chat', async () => {
+    const draftTool = (await import('./AgentOrchestrator.js')).FORCED_DRAFT_TOOL_INSTRUCTION;
+    const deckSection = forcedSection(await runSystem('event-editor'));
+    expect(deckSection).not.toBe(draftTool);
+    expect(deckSection).not.toMatch(/event_graph|labwareRequirements/);
   });
 
   it('pin 3 [warm/real parity]: buildPrefixRequest and run() render the identical forced section on run-workspace (selection lives inside buildPrefixRequest — bait #5)', async () => {

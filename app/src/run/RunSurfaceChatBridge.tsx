@@ -20,7 +20,7 @@
  * of the app-level AiPanelContext, so registering from inside the provider
  * changes nothing about what the pane reads.
  */
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useEventEditor } from '../event-editor/EventEditorContext'
 import { useDeckGhostMount } from '../event-editor/deck/useDeckGhostMount'
 import { useSetChatFocus } from '../agent/ChatFocusContext'
@@ -39,6 +39,27 @@ import type { AiContext } from '../types/aiContext'
 export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
   const { state, actions } = useEventEditor()
   const { onProposalDrafted, onPreviewDiscarded } = useDeckGhostMount()
+
+  // WELL-SELECTION CHANNEL (same defect as the deck chat): the page builds its
+  // AiContext ABOVE the EventEditorProvider, so it cannot see the deck
+  // selection at all — and the server's prompt builder only reads
+  // `context.selectedWells` (systemPrompt.ts:672). Net: the run chat told the
+  // model "(none selected)" every turn and drafted events with no wells (no
+  // placement => nothing ghosts). The bridge runs INSIDE the provider, so it is
+  // the one place that can put the selection on the wire under the receiver's
+  // declared name.
+  const chatContext = useMemo<AiContext>(() => {
+    const selection = state.selection
+    return {
+      ...aiContext,
+      surfaceContext: {
+        ...aiContext.surfaceContext,
+        selectedWells: selection
+          ? { labwareId: selection.labwareId, wells: selection.wells ?? [] }
+          : null,
+      },
+    }
+  }, [aiContext, state.selection])
 
   // L2-CHAT-1 FIX3 D1: the COMPLETE-adopter seam (run workspace) — a
   // chat-card Apply commits the FULL staged editor preview through the
@@ -67,7 +88,7 @@ export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
     ) as Promise<HookDeckAdoptionOutcome>
 
   useSurfaceChat({
-    aiContext,
+    aiContext: chatContext,
     endpoint: 'event-editor',
     // L2-THREAD-SCOPED-1 (SUITEA-D3 amendment A-1, review D1 wiring): same
     // deck-scope treatment as DeckSurfaceChat — this bridge owns a deck

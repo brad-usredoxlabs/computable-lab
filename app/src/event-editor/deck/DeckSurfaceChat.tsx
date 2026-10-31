@@ -33,38 +33,71 @@ import type {
   DeckAdoptionOutcome as HookDeckAdoptionOutcome,
   DeckPreviewLike as HookDeckPreviewLike,
 } from '../../shared/hooks/useAiChat'
-import { getEventSummary } from '../../types/events'
 import { getVerbsForDisplay } from '../../shared/vocab/registry'
+import { buildAcceptedEventGraphProjection } from '../../graph/lib/acceptedEventGraphProjection'
 
 export function DeckSurfaceChat() {
   const { state, actions } = useEventEditor()
 
   const aiContext = useMemo<AiContext>(() => {
     const selection = state.selection
-    // L2-CHAT-1 gatefix1 D1: the deck surface's context must carry the SAME
-    // core fields the other chat surfaces send (parity with
-    // graph/hooks/useLabwareAiContext / acceptedEventGraphProjection):
-    // `labwares`, `eventSummary`, `availableVerbs`. The server prompt builder
-    // reads all three, and their absence crashed every deck-chat turn server-
-    // side with a TypeError rendered as the assistant reply. The shape mirrors
-    // the projection's summarizeLabwares (id/type/name + grid dims) and the
-    // getEventSummary join, so the prompt the agent sees is identical in kind
-    // to what the labware editor sends.
-    const labwareSummaries = Object.values(state.labwares).map((lw) => ({
-      labwareId: lw.labwareId,
-      labwareType: lw.labwareType as string,
-      name: lw.name,
-      ...(lw.addressing.type === 'grid'
-        ? { rows: lw.addressing.rows ?? 0, columns: lw.addressing.columns ?? 0 }
+    // PORTED CAPABILITY (2026-10-31). The deleted AiTabPanel built its deck
+    // context with buildAcceptedEventGraphProjection (AiTabPanel.tsx:254-278 @
+    // 8ff1892f^). LEG D replaced the pane and hand-rolled a SUBSET of that
+    // projection, renaming the selection to `selection` — a name NO server code
+    // reads. Consequence, measured live: the prompt builder reported
+    // "(none selected)" on every deck turn, so the drafted shorthand carried no
+    // targetWells and no placement, and nothing could ghost onto the deck.
+    // This is the same builder the old pane used, so the field names, the
+    // selection shape and the well-state snapshot are the server's own
+    // vocabulary instead of a second dialect.
+    const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
+    const allowedSurfaces = variant
+      ? ([
+          ...(variant.slots.length > 0 ? (['slot'] as const) : []),
+          ...(variant.surface || variant.sideLawn ? (['lawn'] as const) : []),
+        ] as const)
+      : undefined
+    const allowedSlots = variant
+      ? variant.slots
+          .filter((slot) => slot.kind !== 'trash' && slot.kind !== 'special' && slot.reachable !== false)
+          .map((slot) => slot.id)
+      : undefined
+    const focusedPlacement = state.focusPlacementId
+      ? state.placements.find((p) => p.placementId === state.focusPlacementId) ?? null
+      : null
+    const projection = buildAcceptedEventGraphProjection({
+      labwares: new Map(Object.entries(state.labwares)),
+      events: state.events,
+      vocabPackId: state.vocabPackId,
+      availableVerbs: getVerbsForDisplay(state.vocabPackId).map((v) => v.verb),
+      ...(selection
+        ? {
+            sourceSelection: {
+              labware: state.labwares[selection.labwareId],
+              selectedWells: selection.wells,
+            },
+          }
         : {}),
-    }))
-    const eventSummary = state.events.length
-      ? state.events.slice(-20).map((event) => getEventSummary(event)).join('; ')
-      : 'No events yet.'
+      deckPlatform: state.platformId,
+      deckVariant: state.variantId,
+      deckPlacements: state.placements.map((p) => ({
+        slotId: p.location.kind === 'slot' ? p.location.slotId : 'lawn',
+        labwareId: p.labwareId,
+      })),
+      ...(allowedSurfaces && allowedSurfaces.length > 0
+        ? { deckAllowedSurfaces: [...allowedSurfaces] }
+        : {}),
+      ...(allowedSlots && allowedSlots.length > 0 ? { deckAllowedSlots: allowedSlots } : {}),
+      ...(focusedPlacement?.labwareId ? { focusedLabwareId: focusedPlacement.labwareId } : {}),
+      ...(state.runId ? { runId: state.runId } : {}),
+      ...(state.eventGraphId ? { eventGraphId: state.eventGraphId } : {}),
+    })
     return {
       surface: 'event-editor',
       summary: `Deck ${state.eventGraphId ?? '(unsaved)'} — ${state.platformId} / ${state.variantId}`,
       surfaceContext: {
+        ...projection,
         eventGraphId: state.eventGraphId,
         runId: state.runId,
         platformId: state.platformId,
@@ -72,13 +105,11 @@ export function DeckSurfaceChat() {
         vocabPackId: state.vocabPackId,
         placementCount: state.placements.length,
         eventCount: state.events.length,
-        labwares: labwareSummaries,
-        eventSummary,
-        availableVerbs: getVerbsForDisplay(state.vocabPackId).map((v) => v.verb),
-        // `wells` is always an ARRAY: the server-side prompt/context builder
-        // reads `.length` on it, and an absent value crashed the turn
-        // ("Cannot read properties of undefined (reading 'length')").
-        selection: selection
+        // Object form on purpose: the projection's array form loses WHICH
+        // labware the wells belong to, and the server prints
+        // "Labware: <id>, A1, ..." only for the object form. `wells` stays an
+        // ARRAY (the server reads `.length`; an absent value crashed a turn).
+        selectedWells: selection
           ? { labwareId: selection.labwareId, wells: selection.wells ?? [] }
           : null,
       },
@@ -90,8 +121,10 @@ export function DeckSurfaceChat() {
     state.platformId,
     state.variantId,
     state.vocabPackId,
-    state.placements.length,
-    state.events.length,
+    state.platforms,
+    state.placements,
+    state.focusPlacementId,
+    state.events,
     state.selection,
     state.labwares,
   ])

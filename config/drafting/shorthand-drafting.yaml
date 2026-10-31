@@ -17,11 +17,14 @@
 # refusal and the no-model wall. The run chat (where the DMEM answer loop was
 # measured) posts `run-workspace`.
 #
-# ONLY the surfaced regression is enabled here. `event-editor` (the deck chat)
-# is deliberately NOT added yet: enabling it also flips that surface's forced-
-# draft contract (SH-PROMPT-HYGIENE pins) — a behaviour change that needs its
-# own decision, not a side effect of this fix.
-surfaces: [run-workspace]
+# BOTH event-drafting chat surfaces, because both are the same universal pane
+# over the same compiler and both were dead: `run-workspace` (the run workspace
+# chat) and `event-editor` (the /deck/:id deck chat — the surface this whole
+# SHORTHAND-CHAT campaign was authored for; its own test fixture called it "the
+# run chat (surface workspace.deck)" while no client ever sent that id).
+# Anything NOT listed here is told to draft RAW event JSON instead, and a model
+# that emits shorthand anyway raises a clarification that can never fold.
+surfaces: [run-workspace, event-editor]
 
 # SH-QA-3 (OQ1 ruling): the NOUN-SHAPE policy — what counts as a CURIE-worthy
 # lab term vs a prose sentence is DECLARED DATA, never a TypeScript branch and

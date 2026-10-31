@@ -48,9 +48,13 @@ function makeState(overrides: Record<string, unknown> = {}) {
     platformId: 'biomix-2',
     variantId: 'biomix-2/1',
     vocabPackId: 'liquid-handling/v1',
-    placements: [],
+    placements: [] as unknown[],
     events: [] as PlateEvent[],
     selection: null,
+    // The real EventEditorState always carries these; the deck chat's context
+    // now reads them (the ported acceptedEventGraphProjection call).
+    platforms: [] as unknown[],
+    focusPlacementId: null as string | null,
     labwares: {} as Record<string, Labware>,
     commitPreview: vi.fn(),
     appendEvent: vi.fn(),
@@ -84,6 +88,25 @@ describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
     expect(ctx.eventSummary).toBe('No events yet.')
     expect(Array.isArray(ctx.availableVerbs)).toBe(true)
     expect((ctx.availableVerbs as string[]).length).toBeGreaterThan(0)
+  })
+
+  it('WELL-SELECTION CHANNEL: the deck selection ships as `selectedWells` — the name the prompt builder reads', () => {
+    // The regression (2026-10-31): this block sent the selection under the name
+    // `selection`, which no server code reads, so the prompt builder always
+    // reported "(none selected)" and the drafting model emitted events with no
+    // targetWells — no placement, nothing ghosted on the deck. Proven live:
+    // context.selection -> no targetWells; context.selectedWells -> targetWells.
+    const state = makeState({ selection: { labwareId: 'LWI-1', wells: ['A1', 'A2', 'A3'] } })
+    useEventEditorMock.mockReturnValue({ state, actions: state })
+    useSurfaceChatMock.mockReturnValue({ chat: {}, flow: {} })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    render(<DeckSurfaceChat />)
+
+    const ctx = capturedAiContext().surfaceContext
+    expect(ctx.selectedWells).toEqual({ labwareId: 'LWI-1', wells: ['A1', 'A2', 'A3'] })
+    // The old, unread name must not linger as a second term for the same entity.
+    expect(ctx.selection).toBeUndefined()
   })
 
   it('shapes the fields like the labware-editor parity source', () => {
@@ -124,8 +147,11 @@ describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
     expect(ctx.eventSummary).toBe('Transfer 10 uL (A1, B2)')
     // availableVerbs: verb names from the active pack (liquid-handling/v1).
     expect(ctx.availableVerbs).toContain('transfer')
-    // The pre-existing deck fields are untouched.
-    expect(ctx.selection).toEqual({ labwareId: 'plate1', wells: ['A1'] })
+    // ANSWER-CHANNEL 2026-10-31: the selection ships as `selectedWells` (the
+    // field the server's prompt builder reads) and as the projection's
+    // `sourceSelection` — the old `selection` key was read by nothing.
+    expect(ctx.selectedWells).toEqual({ labwareId: 'plate1', wells: ['A1'] })
+    expect(ctx.selection).toBeUndefined()
     expect(ctx.eventCount).toBe(1)
   })
 })
