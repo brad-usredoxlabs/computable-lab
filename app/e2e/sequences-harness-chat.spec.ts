@@ -285,7 +285,19 @@ test('agent_action frames drive the tab, the selection, and refuse honestly', as
   await expect(header).toContainText('Sequences — Editor · Lambda control')
   await expect(tabButton('Editor')).toHaveAttribute('aria-pressed', 'true')
   expect(authoringRequests.slice(authoringBefore)).toEqual([])
-  await expect(page.getByRole('alert')).toHaveCount(0)
+  // LEG E (OQ-E2 ratified, stale-pin repair): the refused focus (ANR-000001 is
+  // not selectable) lands as a done with success but NO events — the universal
+  // pane reports it as the LOUD honest wall (role=alert, the ratified
+  // loud-failure behavior, L2-CHAT-1 FIX1 D5 / edef0b5b 10-26; this spec
+  // predates it by ~11 days). The gate-era pin asserted ZERO alerts (the
+  // AiTabPanel-era silence); the honest wall IS the alert now. Re-pin to
+  // EXACTLY the honest wall — the check is PRESERVED and re-pointed to the live
+  // ratified behavior (never a weakened deletion): exactly ONE role=alert, it
+  // is the honest-wall, and it carries the refusal copy.
+  await expect(page.getByRole('alert')).toHaveCount(1)
+  const honestWall = page.getByTestId('honest-wall')
+  await expect(honestWall).toBeVisible()
+  await expect(honestWall).toContainText('Draft produced no events and asked no questions.')
 
   // Leg 3 (negative): an undeclared tab changes NOTHING and says why.
   const pressedBefore = await tabButton('Editor').getAttribute('aria-pressed')
