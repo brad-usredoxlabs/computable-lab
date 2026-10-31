@@ -37,7 +37,14 @@ treeState:
   # array). No verb, arg, token, referentLevel, or policy value changed; the
   # only other delta is comments. BEFORE: 65bff521.., AFTER: 0ce55142e6f7714b
   # 99689ba528123f789bc93452e4e63784c2cee3ca80847927.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 0ce55142e6f7714b99689ba528123f789bc93452e4e63784c2cee3ca80847927}
+  # LABSTATE-CONTENTS-1 REBLESS (merge rider, orch l2t1130, blessed ONCE): the
+  # vocabulary pin was stale against shipped at the fix-run-2 base (0ce55142 vs
+  # 93aab606 — named by the fix-run-2 report and advc O-1) and the merged
+  # LABSTATE vocabulary DATA teaching (296065aa on f577f382) moved the hash
+  # again. No golden fixture/record moved; the delta is the LABSTATE
+  # contents-phrase teaching DATA + comments. BEFORE: 0ce55142..,
+  # AFTER: 15e5820dd22fb27c26b86e2720be6cc71c9022506f698ba842c708cd44d773eb.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 15e5820dd22fb27c26b86e2720be6cc71c9022506f698ba842c708cd44d773eb}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
