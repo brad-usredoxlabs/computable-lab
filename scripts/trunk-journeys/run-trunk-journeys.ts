@@ -218,13 +218,18 @@ async function main(): Promise<number> {
   });
   const page = await context.newPage();
 
+  const rand = ts.replace(/[^a-z0-9]/gi, '').slice(-8) || 'run';
   const ctx: RunnerCtx = {
     backend,
     worktree: WORKTREE,
     mountDir: dirs.mountDir,
     screenshotsDir,
-    rand: ts.replace(/[^a-z0-9]/gi, '').slice(-8) || 'run',
-    vars: { __frontendBase: frontendBase },
+    rand,
+    // `rand` must be in vars (not just ctx.rand): the DATA interpreter's
+    // interpolate() reads vars, and the journeys reference {{rand}} in the
+    // browser step values (title/sample). Exposing it here keeps the
+    // journeys as pure data (the driver supplies the run identity).
+    vars: { __frontendBase: frontendBase, rand },
     page,
     log,
   };

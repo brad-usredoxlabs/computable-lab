@@ -158,19 +158,19 @@ journeys:
         path: "/api/records/{{evidenceId}}"
         expect:
           exists:
-            - payload.kind
-            - payload.supports
-            - payload.sources
+            - record.payload.kind
+            - record.payload.supports
+            - record.payload.sources
           js: >-
             (json) => {
-              const p = json.payload || {};
+              const p = (json.record || json).payload || {};
               const supports = Array.isArray(p.supports) ? p.supports : [];
               const sources = Array.isArray(p.sources) ? p.sources : [];
               const types = sources.map(s => s && s.type).filter(Boolean);
               const supportsAssertion = supports.some(t => t && t.id === "{{assertion}}");
               const hasResultArm = types.includes('result');
               const hasContextArm = types.includes('context') || types.includes('measurement_context');
-              return supportsAssertion && hasResultArm && hasContextArm;
+              return p.kind === 'evidence' && supportsAssertion && hasResultArm && hasContextArm;
             }
 
       - kind: api-expect
@@ -178,12 +178,12 @@ journeys:
         path: "/api/records/{{assertion}}"
         expect:
           exists:
-            - payload.claim_ref
-            - payload.context_refs
+            - record.payload.claim_ref
+            - record.payload.context_refs
           js: >-
             (json) => {
-              const p = json.payload || {};
+              const p = (json.record || json).payload || {};
               const claim = p.claim_ref && p.claim_ref.id;
               const ctxs = Array.isArray(p.context_refs) ? p.context_refs.map(c => c && c.id) : [];
-              return claim === "{{claim}}" && ctxs.includes("{{context}}");
+              return p.kind === 'assertion' && claim === "{{claim}}" && ctxs.includes("{{context}}");
             }

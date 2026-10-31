@@ -29,7 +29,7 @@ export const SCHEMA = {
   engine: `${S}analysis-engine.schema.yaml`,
   revision: `${S}analysis-revision.schema.yaml`,
   claim: `${S}claim.schema.yaml`,
-  context: 'https://computable-lab.com/schema/computable-lab/context.schema.yaml',
+  context: 'computable-lab/context',
   assertion: `${S}assertion.schema.yaml`,
   evidence: `${S}evidence.schema.yaml`,
 };
@@ -132,6 +132,41 @@ export const ACTOR_ID = 'USR-TRUNK-JOURNEYS-ADMIN';
 const ACTOR_EMAIL = 'trunk-journeys-admin@local.lane1';
 const ACTOR_PASSWORD = 'trunk-journeys-local-only';
 
+/** Transition a lifecycle-covered record to `toState` via the REAL supported
+ *  mechanism: PUT /records/:id with the FULL stamped payload (the handler
+ *  replaces the payload wholesale — RecordHandlers.updateRecord) with only
+ *  `state` changed. checkLifecycleTransition gates it (lifecycleMiddleware:
+ *  the registry-ops draft->active transition needs role `author`;
+ *  enforceTransitionRoles defaults to 'allow' — policy/types.ts:137 — so the
+ *  role is not enforced on this path, but the transition shape + state flow
+ *  are exactly the declared ones). Read-back proves the state landed. */
+export async function transitionLifecycleState(
+  backend: string,
+  recordId: string,
+  toState: string,
+): Promise<void> {
+  const { json } = await apiCall(backend, `/api/records/${encodeURIComponent(recordId)}`);
+  const rec = json && typeof json === 'object' ? (json as Record<string, unknown>).record : json;
+  const payload = rec && typeof rec === 'object' ? (rec as Record<string, unknown>).payload : undefined;
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(`transitionLifecycleState: no payload for ${recordId} (read-back: ${JSON.stringify(json ?? null)})`);
+  }
+  const next = { ...(payload as Record<string, unknown>), state: toState };
+  await apiCall(backend, `/api/records/${encodeURIComponent(recordId)}`, {
+    method: 'PUT',
+    body: { payload: next, message: `trunk-journeys seed: transition ${recordId} -> ${toState}` },
+  });
+  // Read-back: the state must have landed (fail closed — a silent no-op
+  // transition would leave the fixture draft and break the flow later).
+  const after = await apiCall(backend, `/api/records/${encodeURIComponent(recordId)}`);
+  const afterRec = after.json && typeof after.json === 'object' ? (after.json as Record<string, unknown>).record : after.json;
+  const afterPayload = afterRec && typeof afterRec === 'object' ? (afterRec as Record<string, unknown>).payload : undefined;
+  const landed = afterPayload && typeof afterPayload === 'object' ? (afterPayload as Record<string, unknown>).state : undefined;
+  if (landed !== toState) {
+    throw new Error(`transitionLifecycleState: ${recordId} state is ${JSON.stringify(landed)} after PUT (expected ${toState})`);
+  }
+}
+
 /** Mint the harness actor user (idempotent: tolerate a 409 CONFLICT). */
 export async function ensureActorUser(backend: string): Promise<string> {
   const { json } = await apiCall(backend, '/api/users', {
@@ -166,7 +201,9 @@ export async function seedJourneyFixtures(
     // Read-back: the actor must resolve (a 401 here = the seed identity is
     // broken and every later step would 401 in a confusing way).
     const env = await getRecord(backend, actorId);
-    if (!env || !env.payload) {
+    const rec = env && typeof env === 'object' && 'record' in env ? (env as Record<string, unknown>).record : env;
+    const recPayload = rec && typeof rec === 'object' ? (rec as Record<string, unknown>).payload : undefined;
+    if (!recPayload || typeof recPayload !== 'object') {
       throw new Error(`actor read-back failed for ${actorId}: ${JSON.stringify(env ?? null)}`);
     }
   } catch (e) {
@@ -175,7 +212,16 @@ export async function seedJourneyFixtures(
         `the harness must mint its actor via POST /api/users): ${e instanceof Error ? e.message : String(e)}`,
     );
   }
-  // --- J1: gc-method (manual-entry provenance arms, schema-valid minimal) ---
+  // --- J1: gc-method (manual-entry provenance arms, schema-valid minimal).
+  //  LIFECYCLE: gc-method is registry-ops coverage (schema/registry/
+  //  registry-kinds.registry.yaml) — the server stamps lifecycleId + the
+  //  coverage's defaultState ('draft') at create (QMS7-3, RecordHandlers
+  //  stamp-at-create). Declaring state:'active' directly is refused
+  //  (INITIAL_STATE_REQUIRED). The supported flow — and what this seed does —
+  //  is create-as-draft, then the draft->active transition the registry-ops
+  //  lifecycle declares (the real mechanism is PUT /records/:id with the
+  //  stamped payload's state flipped; the app's advanceRecordState helper is
+  //  dead code pointing at an unregistered route). ---
   const gcMethod = `GCM-TJ-${rand}`;
   await createRecord(backend, SCHEMA.gcMethod, {
     kind: 'gc-method',
@@ -186,9 +232,8 @@ export async function seedJourneyFixtures(
     provenance_capture: {
       entered_by: { kind: 'ontology', id: 'CHEBI:24431', namespace: 'CHEBI', label: 'person (local admin)' },
     },
-    lifecycleId: 'registry-ops',
-    state: 'active',
   }, `trunk-journeys seed: gc-method ${gcMethod}`);
+  await transitionLifecycleState(backend, gcMethod, 'active');
 
   // --- J1: analysis-engine (python-entry-script, system interpreter, pyyaml) ---
   const engine = `ENG-TJ-${rand}`;
@@ -211,6 +256,10 @@ export async function seedJourneyFixtures(
     availability: { available: true },
     runtime_requirements: { interpreter: 'system' },
   }, `trunk-journeys seed: analysis-engine ${engine}`);
+  // analysis-engine is ALSO registry-ops coverage — the same stamp-at-create +
+  // transition flow (create-as-draft, then draft->active). The analyze gate
+  // only refuses 'archived', but active is the honest operational state.
+  await transitionLifecycleState(backend, engine, 'active');
 
   // --- J1: analysis-revision (entryScript = the REAL reference copy). The
   //  service mints the recordId; the declared input name is `signal` — the
@@ -254,6 +303,7 @@ export async function seedJourneyFixtures(
   //  evidence bundle explains over the complete context graph. ---
   const context = `CTX-TJ-${rand}`;
   await createRecord(backend, SCHEMA.context, {
+    kind: 'context',
     id: context,
     subject_ref: { kind: 'record', id: `SMP-TJ-${rand}`, type: 'sample' },
     notes: 'trunk-journeys context — the GC sample state the evidence bundle explains over.',
@@ -284,11 +334,16 @@ export async function seedJourneyFixtures(
   }, `trunk-journeys seed: assertion ${assertion}`);
 
   // Read-back confirmation: every fixture must resolve (a dangling ref is a
-  // fail-closed stop, mirroring qms-demo-seed's reference gate).
+  // fail-closed stop, mirroring qms-demo-seed's reference gate). GET /api/
+  // records/:id returns { record: { recordId, schemaId, payload, meta } } —
+  // unwrap the .record envelope before asserting.
   for (const [label, id] of Object.entries({ gcMethod, engine, revision, claim, context, assertion })) {
     const env = await getRecord(backend, id);
-    if (!env || (env as Record<string, unknown>).recordId !== id && !env.payload) {
-      throw new Error(`seed read-back failed for ${label} ${id}: ${JSON.stringify(env ?? null)}`);
+    const rec = env && typeof env === 'object' && 'record' in env ? (env as Record<string, unknown>).record : env;
+    const recId = rec && typeof rec === 'object' ? (rec as Record<string, unknown>).recordId : undefined;
+    const recPayload = rec && typeof rec === 'object' ? (rec as Record<string, unknown>).payload : undefined;
+    if (recId !== id || !recPayload || typeof recPayload !== 'object') {
+      throw new Error(`seed read-back failed for ${label} ${id} (got recordId=${JSON.stringify(recId)}, payload=${recPayload ? 'present' : 'MISSING'}): ${JSON.stringify(env ?? null)}`);
     }
   }
 
