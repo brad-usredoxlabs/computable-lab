@@ -95,12 +95,17 @@ TURNS = [
     ("1b", "add ethanol to the plate A2:H2"),
     ("2", "mix all wells that have material"),
 ]
-# The never-guess control (spec §11 failure-arm): an add naming a plate the
-# deck does not hold. The lab_state fold must no-op + the pass must emit a
-# lab_state diagnostic; NO contents written. Control reuses the VERIFIED
-# resolvable material so the ghost-plate leg (not the material gate) is the
-# live bar, per ruling §Q2.
-CONTROL_TURN = ("X", "add beads to the ghost-plate well C1")
+# The never-guess control (spec §11 failure-arm). SWAP 2026-10-31T12:25 EDT
+# (orch, ruling Q-B decisions/LABSTATE-REDRIVE-legs-l2t1050-ruling.md: the
+# ghost-plate utterance bars at resolve_nouns BEFORE the lab_state fold ever
+# runs — arm_lines=0 makes the D3 non-vacuous form unfireable; ratified shape
+# = DECK-ABSENT, STORE-RESOLVABLE label, never placed on the deck so the fold
+# runs and no-ops honestly. Pre-flight probe 12:23 EDT
+# receipts/labstate-control-preflight-l2t1130/: 'Test Tube Racks from Globe
+# Scientific' -> EXACTLY ONE tier-1 bind:pass candidate, ghost plate -> zero
+# (tier-5 mint only). The labware resolves as a STORE record but never maps
+# onto a placed instance -> fold ran, no-op'd, lab_state unresolved code.)
+CONTROL_TURN = ("X", "add beads to the Test Tube Racks from Globe Scientific well C1")
 
 # The held-session identity constants (run-suite-a.py values — the deck
 # surface's byte-stable wire shape).
