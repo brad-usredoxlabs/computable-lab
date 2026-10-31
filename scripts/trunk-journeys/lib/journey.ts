@@ -67,6 +67,11 @@ interface ApiExpectStep {
 interface BrowserAction {
   goto?: string;
   wait?: string; // testid
+  /** Raw CSS selector to wait for (for dynamic testid prefixes, e.g.
+   *  `[data-testid^="gc-analyze-entry-"]`). `wait` is testid-exact; this is
+   *  the selector escape hatch. Data stays declarative — the interpreter
+   *  only picks the selector. */
+  waitSel?: string;
   click?: string; // testid
   type?: { selector: string; value: string };
   select?: { selector: string; index?: number; value?: string };
@@ -175,24 +180,31 @@ export async function runBrowserAction(
 ): Promise<void> {
   const page = ctx.page;
   if (action.goto !== undefined) {
-    const url = action.goto.startsWith('http') ? action.goto : `${ctx.backend.replace(/\/api$/, '')}/${action.goto.replace(/^\//, '')}`;
+    const raw = interpolate(action.goto, ctx.vars);
+    const url = raw.startsWith('http') ? raw : `${ctx.backend.replace(/\/api$/, '')}/${raw.replace(/^\//, '')}`;
     // Frontend base is the VITE server (same origin as /api proxy). Use the
     // frontend origin: the backend origin hosts /api only; the app UI is on the
     // frontend port. The driver passes frontendBase via the backend host:port
     // swap — here we resolve through ctx (see the driver's goto resolution).
-    const gotoUrl = resolveGoto(action.goto, ctx);
+    const gotoUrl = resolveGoto(raw, ctx);
     ctx.log(journeyId, stepName, `goto ${gotoUrl}`);
     await page.goto(gotoUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     return;
   }
   if (action.wait !== undefined) {
-    const sel = `[data-testid="${action.wait}"]`;
+    const sel = `[data-testid="${interpolate(action.wait, ctx.vars)}"]`;
     ctx.log(journeyId, stepName, `wait ${action.wait}`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
     return;
   }
+  if (action.waitSel !== undefined) {
+    const sel = interpolate(action.waitSel, ctx.vars);
+    ctx.log(journeyId, stepName, `waitSel ${sel}`);
+    await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
+    return;
+  }
   if (action.click !== undefined) {
-    const sel = `[data-testid="${action.click}"]`;
+    const sel = `[data-testid="${interpolate(action.click, ctx.vars)}"]`;
     ctx.log(journeyId, stepName, `click ${action.click}`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
     await page.click(sel, { timeout: 30_000 });
