@@ -198,10 +198,10 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
     expect(idA).toBeTruthy()
 
     // Send: user message minted + POSTed into the (scope "", id A) thread,
-    // assistant streaming (held).
-    let settled: Promise<void> | undefined
+    // assistant streaming (held). (sendPrompt is declared void-returning at
+    // the public seam — settle is observed via isStreaming, not a promise.)
     await act(async () => {
-      settled = result.current.sendPrompt('what does step 1 do?')
+      void result.current.sendPrompt('what does step 1 do?')
     })
     await waitFor(() => expect(appendCalls().length).toBeGreaterThanOrEqual(1))
     expect(result.current.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
@@ -228,7 +228,7 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
     // Release the stream: the turn settles normally on the surviving list.
     release()
     await act(async () => {
-      await settled
+      await new Promise((r) => setTimeout(r, 50))
     })
     await waitFor(() => expect(result.current.isStreaming).toBe(false))
     // The turn's own rows SURVIVE the settle (the empty-done honest-wall
