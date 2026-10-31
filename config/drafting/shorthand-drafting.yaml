@@ -9,7 +9,19 @@
 # workstate-composition.yaml precedent — presence-checked, never process-
 # cached); the orchestrator never branches on a surface-name literal (repo
 # rule #1).
-surfaces: [workspace.deck]
+# ANSWER-CHANNEL FIX: this list named `workspace.deck`, a surface id NO client
+# sends (the app's AiSurface union has `run-workspace` / `event-editor`; the
+# deck bridge posts `event-editor`). Consequence: surfaceDraftsShorthand() was
+# false for every live surface, which silently disabled the deterministic
+# clarification-answer fold, the repeat-ask ledger, the event_graph->shorthand
+# refusal and the no-model wall. The run chat (where the DMEM answer loop was
+# measured) posts `run-workspace`.
+#
+# ONLY the surfaced regression is enabled here. `event-editor` (the deck chat)
+# is deliberately NOT added yet: enabling it also flips that surface's forced-
+# draft contract (SH-PROMPT-HYGIENE pins) — a behaviour change that needs its
+# own decision, not a side effect of this fix.
+surfaces: [run-workspace]
 
 # SH-QA-3 (OQ1 ruling): the NOUN-SHAPE policy — what counts as a CURIE-worthy
 # lab term vs a prose sentence is DECLARED DATA, never a TypeScript branch and

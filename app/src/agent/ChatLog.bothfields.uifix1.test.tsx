@@ -99,7 +99,14 @@ describe('ChatLog — L2-SUITE-A-uifix1 F1: a message carrying BOTH clarificatio
     // dead mock interpolated.
     fireEvent.click(screen.getByRole('button', { name: '1. Alpha' }))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
-    expect(onClarificationPick).toHaveBeenCalledWith('Use Alpha for material.')
+    // ANSWER-CHANNEL: the sentence is arg 1; the STRUCTURED answer (with the
+    // chosen record's ref) and its request ride args 2-3 so the host can put
+    // them on the wire — carrying the sentence alone is the loop regression.
+    expect(onClarificationPick).toHaveBeenCalledWith(
+      'Use Alpha for material.',
+      expect.objectContaining({ requestId: 'req-p4', label: 'Alpha' }),
+      expect.objectContaining({ id: 'req-p4' }),
+    )
   })
 
   it('P5 menu-backed shape: one block, exactly ONE picker', () => {
@@ -127,7 +134,12 @@ describe('ChatLog — L2-SUITE-A-uifix1 F1: a message carrying BOTH clarificatio
     expect(document.querySelectorAll('.chat-log-clarification').length).toBe(1)
     fireEvent.click(screen.getByTestId('pick-req-p5'))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
-    expect(onClarificationPick).toHaveBeenCalledWith('Use choice for material.')
+    // ANSWER-CHANNEL: structured answer + request ride args 2-3 (see P4).
+    expect(onClarificationPick).toHaveBeenCalledWith(
+      'Use choice for material.',
+      expect.objectContaining({ label: 'choice' }),
+      expect.objectContaining({ id: 'req-p5' }),
+    )
   })
 
   it('control: a legacy-only message (no typed requests) still renders the legacy block arm', () => {

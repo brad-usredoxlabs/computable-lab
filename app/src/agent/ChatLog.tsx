@@ -29,7 +29,19 @@ export interface ChatLogProps {
   /** Host review handler; absent -> the Review-action button is omitted. */
   onReview?: (proposal: Record<string, unknown>, userRequest?: string) => void
   /** Answer a clarification option as the next chat turn; absent -> options are not offered. */
-  onClarificationPick?: (answerText: string) => void
+  /**
+   * ANSWER-CHANNEL: the third argument is the STRUCTURED answer (the picker's
+   * own `{requestId, label, mentionToken, ref}`) and the fourth the request it
+   * answers. The first argument stays the human sentence the scientist sees in
+   * the transcript. Callers MUST forward the structured pair to the turn —
+   * carrying only the sentence (the pre-fix behaviour) makes the server
+   * re-draft the ambiguous noun instead of folding the choice, which loops.
+   */
+  onClarificationPick?: (
+    answerText: string,
+    answer: AiClarificationAnswer,
+    request: AiClarificationRequest,
+  ) => void
 }
 
 /** Shape the exported lane-2 answer helper expects, built from the message's clarification. */
@@ -160,24 +172,24 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
         {promptDiffers && <p>{clarification.prompt}</p>}
         <ClarificationPicker
           request={request}
-          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request))}
+          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
         />
       </div>
     }
     return <div className="chat-log-clarification" key={`clar-${message.id}`}>
       {promptDiffers && <p>{clarification.prompt}</p>}
       {onClarificationPick && <ol className="chat-log-clarification-options">
-        {options.map((option, optionIndex) => <li key={option.id}>
-          <button onClick={() => onClarificationPick(clarificationAnswerPrompt(
-            {
-              requestId: clarification.id ?? message.id,
-              optionId: option.id,
-              label: option.label,
-              ...(option.ref !== undefined ? { ref: option.ref } : {}),
-            } satisfies AiClarificationAnswer,
-            clarificationRequest(clarification),
-          ))}>{optionIndex + 1}. {option.label}</button>
-        </li>)}
+        {options.map((option, optionIndex) => {
+          const answer = {
+            requestId: clarification.id ?? message.id,
+            optionId: option.id,
+            label: option.label,
+            ...(option.ref !== undefined ? { ref: option.ref } : {}),
+          } satisfies AiClarificationAnswer
+          return <li key={option.id}>
+            <button onClick={() => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}>{optionIndex + 1}. {option.label}</button>
+          </li>
+        })}
       </ol>}
     </div>
   }
@@ -211,24 +223,24 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
       {!promptAlreadyShown && <p>{request.prompt}</p>}
       {options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
-          {options.map((option, optionIndex) => <li key={option.id}>
-            <button onClick={() => onClarificationPick(clarificationAnswerPrompt(
-              {
-                requestId: request.id,
-                optionId: option.id,
-                label: option.label,
-                ...(option.ref !== undefined ? { ref: option.ref } : {}),
-              } satisfies AiClarificationAnswer,
-              request,
-            ))}>{optionIndex + 1}. {option.label}</button>
-          </li>)}
+          {options.map((option, optionIndex) => {
+            const answer = {
+              requestId: request.id,
+              optionId: option.id,
+              label: option.label,
+              ...(option.ref !== undefined ? { ref: option.ref } : {}),
+            } satisfies AiClarificationAnswer
+            return <li key={option.id}>
+              <button onClick={() => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}>{optionIndex + 1}. {option.label}</button>
+            </li>
+          })}
         </ol>
       ) : null}
       {hasPicker && onClarificationPick ? (
         <ClarificationPicker
           key={request.id}
           request={request}
-          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request))}
+          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
         />
       ) : null}
     </div>

@@ -480,7 +480,7 @@ actions:
 
   const RUN_CHAT_REQUEST = {
     prompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL across A1:A3 of the seeding plate',
-    surface: 'workspace.deck' as const,
+    surface: 'run-workspace' as const,
     forceDraftTool: true,
     context: {
       labwares: [{ labwareId: 'LAB-seeding-plate-1', labwareType: 'plate', name: 'Seeding plate' }],
@@ -823,7 +823,7 @@ describe('ANSWER-FOLD-NULL-1 fix2 — AgentOrchestrator fold-success leg on the 
 
   const NESTED_RUN_REQUEST = {
     prompt: 'add 50 uL of Mix Prime to A1 of the seeding plate',
-    surface: 'workspace.deck' as const,
+    surface: 'run-workspace' as const,
     forceDraftTool: true,
     context: {
       labwares: [{ labwareId: 'LAB-seeding-plate-1', labwareType: 'plate', name: 'Seeding plate' }],

@@ -366,7 +366,13 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
         onSend={() => { chat.sendPrompt(prompt); setPrompt('') }}
         onCancel={chat.cancelStream}
         {...(onReviewProposal ? { onReview: onReviewProposal } : {})}
-        onClarificationPick={(answerText) => { chat.sendPrompt(answerText) }}
+        // ANSWER-CHANNEL: the sentence is the visible turn; the structured
+        // answer rides the SAME turn as data so the server can fold the
+        // scientist's choice onto the held intent instead of re-drafting the
+        // ambiguous noun and re-asking forever (the DMEM loop).
+        onClarificationPick={(answerText, answer) => {
+          chat.sendPrompt(answerText, undefined, { clarificationAnswers: [answer] })
+        }}
       />
     </div>
   )

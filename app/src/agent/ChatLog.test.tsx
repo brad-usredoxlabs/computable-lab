@@ -145,7 +145,12 @@ describe('sequence conversation scrolling', () => {
     expect(log).toHaveTextContent('2. BamHI')
     fireEvent.click(screen.getByRole('button', { name: '1. EcoRI' }))
     // The answer rides the exported lane-2 helper: "Use <value> for <target>."
-    expect(onClarificationPick).toHaveBeenCalledWith('Use EcoRI for sequence.')
+    // ANSWER-CHANNEL: plus the structured answer and its request (args 2-3).
+    expect(onClarificationPick).toHaveBeenCalledWith(
+      'Use EcoRI for sequence.',
+      expect.objectContaining({ label: 'EcoRI' }),
+      expect.objectContaining({ id: 'clar-1' }),
+    )
   })
 
   it('omits clarification option buttons when the host offers no answer path', () => {

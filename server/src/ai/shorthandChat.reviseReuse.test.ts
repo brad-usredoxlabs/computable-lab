@@ -194,7 +194,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     // Turn 1 — the draft bars on the ambiguous label (the legitimate hold).
     const draft = await orchestrator.run({
       prompt: 'add 50 uL of test reagent to A1',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],
@@ -209,7 +209,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     // model calls). The answer carries the chosen record's ref.
     const answered = await orchestrator.run({
       prompt: 'Use Test Reagent A for material.',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [
@@ -233,7 +233,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     // already-answered label compiles without re-asking, ghosts remount.
     const revised = await orchestrator.run({
       prompt: 'Actually make it four wells instead, keep the rest the same.',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: { ...BASE_CONTEXT, draftRevision: DRAFT_REVISION_CONTEXT },
       history: [
@@ -255,7 +255,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     ]);
     const draft = await orchestrator.run({
       prompt: 'add 50 uL of test reagent to A1',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],
@@ -263,7 +263,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     const card = draft.clarificationRequests![0]!;
     await orchestrator.run({
       prompt: 'Use Test Reagent A for material.',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],
@@ -277,7 +277,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
 
     const revised = await orchestrator.run({
       prompt: 'Also add 20 uL of other reagent to B1.',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: { ...BASE_CONTEXT, draftRevision: DRAFT_REVISION_CONTEXT },
       history: [],
@@ -298,7 +298,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     ]);
     const draft = await orchestrator.run({
       prompt: 'add 50 uL of test reagent to A1',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],
@@ -306,7 +306,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     const card = draft.clarificationRequests![0]!;
     await orchestrator.run({
       prompt: 'Use Test Reagent A for material.',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],
@@ -323,7 +323,7 @@ describe('REVISE-GHOST-1 — answered-binding reuse on the revise turn (real han
     // and the ambiguous label bars again with its cards.
     const fresh = await orchestrator.run({
       prompt: 'add 50 uL of Test Reagent A to A1',
-      surface: 'workspace.deck',
+      surface: 'run-workspace',
       forceDraftTool: true,
       context: BASE_CONTEXT,
       history: [],

@@ -37,6 +37,7 @@ import type {
   DraftOntologyBinding,
   AiClarification,
   AiClarificationRequest,
+  AiClarificationAnswer,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -271,7 +272,20 @@ export interface UseAiChatReturn {
    */
   previewStagedLabwareCount: number
   inputText: string
-  sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
+  /**
+   * ANSWER-CHANNEL (answer-fold regression): `options.clarificationAnswers`
+   * carries the STRUCTURED answers a clarification turn produced (the
+   * picker's own `{requestId, label, mentionToken, ref}`) — the server's
+   * shorthand fold needs the `ref` to bind the record the scientist chose.
+   * Without it the answer turn is just prose to the model, which re-drafts
+   * and re-asks the same question (the DMEM loop). One-shot per turn: the
+   * caller passes it only on the answer turn.
+   */
+  sendPrompt: (
+    prompt: string,
+    attachments?: FileAttachment[],
+    options?: { clarificationAnswers?: AiClarificationAnswer[] },
+  ) => void
   cancelStream: () => void
   acceptPreview: () => void
   acceptPreviewWithResolutions: (resolutions: Map<string, RecordRef>) => void
@@ -958,7 +972,11 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   // Send a prompt
   // ------------------------------------------------------------------
   const sendPrompt = useCallback(
-    async (prompt: string, attachments?: FileAttachment[]) => {
+    async (
+      prompt: string,
+      attachments?: FileAttachment[],
+      options?: { clarificationAnswers?: AiClarificationAnswer[] },
+    ) => {
       if (isStreaming) return
       const submittedProposalScope = proposalScopeRef.current
 
@@ -1126,6 +1144,10 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
           controller.signal,
           files,
           thinkingMode ? true : undefined,
+          // ANSWER-CHANNEL: the structured answers ride THIS turn only. The
+          // sentence still goes as the user's visible message (prompt above);
+          // the answers are the machine-readable half the server folds.
+          options?.clarificationAnswers,
         )) {
           accumulated.push(event)
 

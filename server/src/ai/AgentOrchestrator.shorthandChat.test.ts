@@ -1,7 +1,7 @@
 /**
  * SHORTHAND-CHAT — the run-chat shorthand acceptance suite (RED-first).
  *
- * The run chat (surface `workspace.deck`, forced `agent_intent` tool) moves from
+ * The run chat (surface `run-workspace`, forced `agent_intent` tool) moves from
  * "model composes event JSON" to "model emits scientist-intent shorthand": the
  * stubbed model emits ONLY an `event_shorthand` call carrying a scientist-intent
  * YAML document; the compiled event graph is produced ONLY by the frozen
@@ -115,7 +115,7 @@ function shorthandCall(yaml: string) {
 
 const RUN_CHAT_REQUEST = {
   prompt: 'add 100 uL of test reagent to A1:A12',
-  surface: 'workspace.deck' as const,
+  surface: 'run-workspace' as const,
   forceDraftTool: true,
   context: {
     labwares: [{ labwareId: 'LAB-plate-1', labwareType: 'plate', name: 'Plate' }],
@@ -388,7 +388,7 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
   it('DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash', async () => {
     const { holdShorthandIntent } = await import('./shorthandChat.js');
     const { deriveContextCacheKey } = await import('./systemPrompt.js');
-    const key = deriveContextCacheKey('workspace.deck' as never, RUN_CHAT_REQUEST.context as never);
+    const key = deriveContextCacheKey('run-workspace' as never, RUN_CHAT_REQUEST.context as never);
     const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
     // A held document whose folded re-serialization CANNOT pass Ajv (a field
     // the wire schema forbids): the fold's final parse through
@@ -702,7 +702,7 @@ actions:
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
-    expect(policy?.surfaces).toContain('workspace.deck');
+    expect(policy?.surfaces).toContain('run-workspace');
     // AS-4: the raw-events code stays for surfaces not yet moved.
     expect(surfaceDraftsShorthand('event-editor')).toBe(false);
     expect(surfaceDraftsShorthand('protocol-builder')).toBe(false);
