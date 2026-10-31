@@ -17,7 +17,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:net';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, createWriteStream } from 'node:fs';
 import { join } from 'node:path';
 
 const pExecFile = promisify(execFile);
@@ -154,7 +154,9 @@ export function renderThrowawayConfig(d: RunDirs, ports: Ports): string {
     '    default: true',
     `    mountPath: ${d.mountDir}`,
     'lab:',
-    '  policyBundleId: POL-SANDBOX',
+    '  materialTracking:',
+    '    mode: relaxed',
+    '    allowAdHocEventInstances: true',
     '',
   ].join('\n');
 }
@@ -175,7 +177,8 @@ export interface SpawnedProcess {
   child: ChildProcess;
 }
 
-/** Spawn a harness-owned process in its own group; record the pid. */
+/** Spawn a harness-owned process in its own group; record the pid.
+ *  stdout+stderr are appended to logPath so a dead spawn is diagnosable. */
 function spawnGroup(opts: {
   cwd: string;
   file: string;
@@ -185,6 +188,7 @@ function spawnGroup(opts: {
   port: number;
   logPath: string;
 }): SpawnedProcess {
+  const out = createWriteStream(opts.logPath, { flags: 'a' });
   const child = spawn(opts.file, opts.args, {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env },
@@ -192,8 +196,9 @@ function spawnGroup(opts: {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (child.pid === undefined) throw new Error(`spawn of ${opts.name} returned no pid`);
-  child.stdout?.on('error', () => {});
-  child.stderr?.on('error', () => {});
+  child.stdout?.pipe(out);
+  child.stderr?.pipe(out);
+  out.on('error', () => {});
   return { name: opts.name, pid: child.pid, logPath: opts.logPath, port: opts.port, child };
 }
 
