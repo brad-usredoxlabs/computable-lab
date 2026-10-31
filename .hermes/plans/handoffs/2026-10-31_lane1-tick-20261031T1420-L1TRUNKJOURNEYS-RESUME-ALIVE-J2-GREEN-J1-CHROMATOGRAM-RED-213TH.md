@@ -84,3 +84,28 @@ check flock truth at dispatch time).
 4. RED-BLOCKS-CLAIMS wires into the tick workflow once merged (check-green vs newest
    receipts/L1-TRUNK-JOURNEYS set before claiming).
 213TH-END
+
+## ADDENDUM (same tick, ~15:10) — resume run #1 DIED (output-token limit), RESUME RUN #2 LIVE slot-0
+- PID 811754 exited 14:37:39 rc=0; log ends with hermes' output-token warning: "No visible answer
+  was produced... reasoning consumed the entire budget" — NOT an engine overflow, NOT product: it
+  died writing its final answer. NO DONE/BLOCKED marker. All in-flight work committed as orch WIP
+  checkpoint 73092951 (journey.ts signalPoints DATA knob — its last witnessed edit; + prior
+  8e8af957, e0f2ed11). Slot-1 flock FREE after exit.
+- Open leg diagnosed by run #1 (report sections + committed code): 5000-pt synthetic signal
+  pushes the analysis artifact over analysisRunner isLarge inline threshold -> product signal
+  view renders no visible trace -> J1 final assertion false. Its fix-in-flight: signal point
+  count as journey DATA (seed asserts fail-closed). NOT a product defect per its evidence; the
+  triage from the body above is resolved in favor of harness fixture-shape.
+- RESUME RUN #2 DISPATCHED 15:09:10 slot-0 (stagger clean: fleet newest live launch was mine
+  12:53:38, exited 14:37). Unit l1trunkj-resume2-l1t1440, launcher
+  launch-L1TRUNKJOURNEYS-resume2-l1t1445.sh, pid file L1TRUNKJOURNEYSRESUME2-1068309-
+  2026-10-31T15:09:10-04:00, log coder-L1TRUNKJOURNEYS-resume2-l1t1445.log (LOCK-ACQUIRED),
+  prompt prompts/coder-L1TRUNKJOURNEYS-resume2-l1t1445.txt (tight resume: finish signalPoints
+  -> fully GREEN -> canary -> check-green demo -> typecheck parity; NEW report
+  l1-trunk-journeys-1-report-l1t1445-resume2.md; CLOSE DISCIPLINE: final chat answer = marker
+  line ONLY, everything in the report — the token-death lesson).
+- Overflow watch superseded by this addendum: deaths so far = 2 (1 engine-context overflow, 1
+  final-answer token loss). Per 212th plan, a 3rd engine-overflow death routes to thunderbeast
+  cl-worker (both bg slots HELD by lane-2 at this tick — would need a slot).
+- Fleet slots at handoff: slot-0 = resume #2 (mine), slot-1 free. Trunk 9e4fe868 (docs-only).
+213TH-END-ADDENDUM
