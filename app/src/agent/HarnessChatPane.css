@@ -18,7 +18,14 @@
 .harness-chat-pane__threads-new { color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); border:1px solid var(--cl-border, #aaa); border-radius:.3rem; padding:.3rem .5rem; font-size:.8rem; }
 .harness-chat-pane__threads-error { font-size:.75rem; color:#b3541e; }
 
-/* L2-CHAT-UI-1 LEG A (A1): the bubble rows (rendered by ChatLog inside this
+/* L2-CHAT-1 LEG A (A1): the bubble rows (rendered by ChatLog inside this
    pane) get horizontal breathing room from the pane edges — the 85% max-width
    boxes must not sit flush against the border. */
 .harness-chat-pane .chat-log-msg { margin: 0 .5rem .4rem; }
+
+/* L2-CHAT-UI-1 LEG D step 5 (OQ-4 PORT): the attached-sources strip wrapper.
+   The ported chrome (SourcesStrip + AddSourceModal + RunInEventEditorButton)
+   sat inside AiTabPanel's `.ai-tab__section--sources` (padding 8px 12px +
+   bottom border) — that section rule died with the panel, so the wrapper
+   carries the same framing on every surface the pane renders on. */
+.harness-chat-pane__sources { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cl-border); }

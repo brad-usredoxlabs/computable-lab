@@ -41,10 +41,12 @@
  * recordingStore + createResolveSpineFromContext) and PASTES the LPR payload +
  * the emitted document. Honestly named — no invented surface.
  *
- * D6 (run graph shown): the ONE merged UI entry is AiTabPanel's shorthand
- * recompile (app/src/event-editor/right-pane/ai/AiTabPanel.tsx:602 ->
- * apiClient.intentCompile, client.ts '/intent/compile' :4003). If the seeded
- * run surfaces it, drive it; otherwise the leg falls back to the honest
+ * D6 (run graph shown): the universal chat entry is the HarnessChatPane
+ * composer (app/src/agent/HarnessChatPane.tsx — the AI mode of every
+ * RightPane-bearing host renders it unconditionally since LEG D; the legacy
+ * AiTabPanel shorthand-recompile UI entry it cites retired with AiTabPanel,
+ * OQ-3 read-only ruling). If the seeded run surfaces the pane, note it;
+ * otherwise the leg falls back to the honest
  * API-paste form (POST /api/intent/compile with the emitted scientist-intent
  * document, paste the artifacts) per the spec row — never a faked UI.
  */
@@ -1723,9 +1725,11 @@ test.describe('W2-11 zymo campaign demo gate', () => {
   })
 
   test('D6: run graph shown — POST /intent/compile artifacts viewable', async ({ page }) => {
-    // Drive the ONE merged UI entry (AiTabPanel shorthand recompile,
-    // AiTabPanel.tsx:602 -> client.ts '/intent/compile' :4003) if the seeded
-    // run surfaces it; the API-paste leg (spec §4 D6 fallback) always runs.
+    // LEG D: the universal chat entry is the HarnessChatPane (the legacy
+    // AiTabPanel shorthand-recompile UI entry retired with AiTabPanel —
+    // OQ-3 read-only ruling; do NOT re-point at a recompile UI). If the
+    // seeded run surfaces the legacy ai-tab testid, note it (it will not,
+    // post-D); the API-paste leg (spec §4 D6 fallback) always runs.
     await ensureFamilySeeded()
     const famPayload = await seededFamilyPayload()
     const lowered = runServerLeg('lower', famPayload, fixtures().answersText, SEED_ROWS)

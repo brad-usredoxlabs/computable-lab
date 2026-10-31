@@ -28,6 +28,17 @@ import { streamAssist } from '../shared/api/aiClient'
 import { HarnessChatPane } from './HarnessChatPane'
 import type { AiContext } from '../types/aiContext'
 
+// LEG D step 5 (OQ-4 PORT): HarnessChatPane now mounts the attached-sources
+// chrome (RunInEventEditorButton), whose usePdfViewer excerpt dep reaches
+// pdfjs-dist — jsdom has no DOMMatrix, so mock it (the proven pattern this
+// file already relied on transitively). Mock-only; no assertion changes.
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined })),
+  GlobalWorkerOptions: { workerSrc: '' },
+  TextLayer: class { render() { return Promise.resolve() } },
+}))
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.mjs' }))
+
 vi.mock('../shared/api/aiClient', () => ({
   streamAssist: vi.fn(),
   getAiHealth: vi.fn().mockResolvedValue({ available: true }),
@@ -43,13 +54,6 @@ vi.mock('../shared/api/client', () => ({
     getRecord: vi.fn(),
     getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }),
   },
-}))
-
-// ChatLog reuses clarificationAnswerPrompt from AiTabPanel, whose import
-// graph reaches pdfjs (proven pattern: DeckSurfaceChat.ghost.test.tsx).
-vi.mock('../event-editor/right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt: (answer: { optionId?: string }, request: { prompt: string }) =>
-    `${request.prompt} — ${answer.optionId ?? 'answer'}`,
 }))
 
 // The workstate flow pulls OpenTabsProvider + navigation into the render

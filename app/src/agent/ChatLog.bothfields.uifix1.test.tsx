@@ -36,13 +36,6 @@ vi.mock('../event-editor/right-pane/ai/ClarificationPicker', () => ({
   requestHasPicker: () => true,
 }))
 
-const mockAnswerPrompt = vi.hoisted(() =>
-  vi.fn((answer: { label?: string }, request: { id: string; prompt: string }) => `Use ${answer.label} for ${request.id}.`),
-)
-vi.mock('../event-editor/right-pane/ai/AiTabPanel', () => ({
-  clarificationAnswerPrompt: mockAnswerPrompt,
-}))
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -99,9 +92,14 @@ describe('ChatLog — L2-SUITE-A-uifix1 F1: a message carrying BOTH clarificatio
     // The answer routes through the typed arm (its request id — not the
     // legacy field's id, which happens to match here; the arm is the one
     // rendering the button).
+    // LEG D re-pin: with the AiTabPanel mock block removed (spec §2.3), the
+    // REAL clarificationAnswerPrompt (shared/hooks) builds the sentence from
+    // request.entityType — production behavior, `Use ${value} for ${target}.`
+    // — so the expected string carries the entity type, not the request id the
+    // dead mock interpolated.
     fireEvent.click(screen.getByRole('button', { name: '1. Alpha' }))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
-    expect(onClarificationPick).toHaveBeenCalledWith('Use Alpha for req-p4.')
+    expect(onClarificationPick).toHaveBeenCalledWith('Use Alpha for material.')
   })
 
   it('P5 menu-backed shape: one block, exactly ONE picker', () => {
@@ -123,10 +121,13 @@ describe('ChatLog — L2-SUITE-A-uifix1 F1: a message carrying BOTH clarificatio
     // THE F1 CLAIM: ONE picker (the gate saw two identical pickers).
     expect(document.querySelectorAll('.message-log__clarification-picker').length).toBe(1)
     // …one block total, and picking answers through the typed arm.
+    // LEG D re-pin: the REAL clarificationAnswerPrompt builds the sentence
+    // from request.entityType (production behavior) — not the request id the
+    // removed AiTabPanel mock interpolated.
     expect(document.querySelectorAll('.chat-log-clarification').length).toBe(1)
     fireEvent.click(screen.getByTestId('pick-req-p5'))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
-    expect(onClarificationPick).toHaveBeenCalledWith('Use choice for req-p5.')
+    expect(onClarificationPick).toHaveBeenCalledWith('Use choice for material.')
   })
 
   it('control: a legacy-only message (no typed requests) still renders the legacy block arm', () => {

@@ -20,12 +20,9 @@
  */
 
 import { useWorkspace } from '../workspace/WorkspaceContext'
-import { useOptionalAiPanel } from '../../shared/context/AiPanelContext'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 import { useOptionalEventEditor } from '../EventEditorContext'
 import type { WorkspaceRightPaneMode } from '../workspace/types'
-import { AiTabPanel } from './ai/AiTabPanel'
-import { ChatContextHeader } from './ai/ChatContextHeader'
 import { SearchTabPanel } from './search/SearchTabPanel'
 import { DetailsTabPanel } from './details/DetailsTabPanel'
 import { ProtocolTabPanel } from './protocol/ProtocolTabPanel'
@@ -40,11 +37,10 @@ const TABS: { mode: WorkspaceRightPaneMode; label: string }[] = [
 
 export function RightPane() {
   const ws = useWorkspace()
-  // Universal chat seam (HARNESS-SEQ-1): a surface that registered its chat
-  // through AiPanelContext gets the SAME pane the sequences/run surfaces use.
-  // Surfaces that registered nothing (registry, record host, artifacts) keep
-  // the legacy AiTabPanel, which owns its own engine.
-  const panelSlot = useOptionalAiPanel()
+  // LEG D: the AI mode unconditionally renders the universal pane. Which chat
+  // (if any) the pane shows is the pane's own concern — it consumes the
+  // registration seam directly (HarnessChatPane useAiPanel; a null chat is the
+  // honest empty state). RightPane no longer gates on the slot.
   const active = ws.state.rightPaneMode === 'find' ? 'ai' : ws.state.rightPaneMode
 
   // Derive runId from the active tab. Only execution tabs and deck tabs
@@ -91,19 +87,12 @@ export function RightPane() {
         ))}
       </div>
       <div className="right-pane__body">
-        {active === 'ai' ? (
-          panelSlot?.chat ? (
-            <HarnessChatPane />
-          ) : (
-            <>
-              {/* Live working-focus header (three-pane harness, plan §9): "EDITING:
-                  Step 3 — <concept>". Derives from the resolved focused step, never
-                  an AI-authored note. */}
-              <ChatContextHeader />
-              <AiTabPanel />
-            </>
-          )
-        ) : null}
+        {/* LEG D: the AI mode ALWAYS renders the universal pane (HarnessChatPane).
+            The legacy AiTabPanel fallback (and its ChatContextHeader) is gone —
+            AiTabPanel died in this leg. A surface that registered no chat gets
+            HarnessChatPane's own honest empty state (HarnessChatPane.tsx:136-146),
+            never a crash; the pane is a pure consumer of the registration seam. */}
+        {active === 'ai' ? <HarnessChatPane /> : null}
         {active === 'search' ? <SearchTabPanel /> : null}
         {active === 'details' ? <DetailsTabPanel /> : null}
         {active === 'protocol' ? <ProtocolTabPanel runId={runId} studyId={ws.state.studyId} /> : null}
