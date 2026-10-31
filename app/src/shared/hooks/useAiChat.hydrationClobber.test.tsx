@@ -238,14 +238,33 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
     expect(roles[1]).toBe('assistant')
     expect(result.current.messages[0]!.content).toBe('what does step 1 do?')
 
-    // persistedIdsRef is not orphaned: the send-minted user message was
-    // POSTed exactly ONCE (its persisted id survived the guard) — it is NOT
-    // re-posted under the new (scope "evg-1", id B) key.
+    // D1/D3 pin (fix run 1, advc l2t1030): the FULL turn's persistence
+    // destination stays on the PRE-FLIP key — BOTH roles, not just the user
+    // half. The reviewer's probe shape: the user POST rode (scope undefined,
+    // id A) and the ASSISTANT must POST to the SAME server-thread key, never
+    // 'evg-1<idB>'. A surviving turn rebound to the new pair is a cross-scope
+    // write (bait #11 at the scope axis, threadScoped.test.ts:322-327; the
+    // re-key block's own recorded invariant, useAiChat.ts:731-735): the old
+    // thread would hold an unanswered question and the new thread an orphan
+    // assistant placeholder. persistedIdsRef is not orphaned EITHER WAY, so a
+    // user-post count cannot certify it — assert the destinations.
     const userPosts = appendCalls().filter((c) =>
       (c.body ?? '').includes('what does step 1 do?'),
     )
-    expect(userPosts).toHaveLength(1)
+    expect(userPosts, 'user message POSTed exactly once').toHaveLength(1)
     expect(userPosts[0]!.headers['x-cl-thread-id']).toBe(idA)
+    const assistantPosts = appendCalls().filter((c) =>
+      (c.body ?? '').includes('"role":"assistant"'),
+    )
+    expect(assistantPosts, 'assistant reply POSTed exactly once').toHaveLength(1)
+    expect(assistantPosts[0]!.headers['x-cl-thread-id'], 'assistant POST rides the MINTED thread id A').toBe(idA)
+    expect(assistantPosts[0]!.headers['x-cl-thread-scope'], 'assistant POST rides the pre-flip scope (none)').toBeUndefined()
+    // Server-side truth (the fake router appends like the real one): thread A
+    // holds the WHOLE turn; thread B received nothing from it.
+    const threadA = serverThreads[keyOf(undefined, idA)]
+    expect(threadA?.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+    const threadB = serverThreads[keyOf('evg-1', idB)]
+    expect(threadB?.messages ?? []).toHaveLength(0)
   })
 
   it('NEGATIVE PIN (bait #11, byte-for-byte): user-initiated switchThread while IDLE still wipes + rehydrates', async () => {
