@@ -1,0 +1,7 @@
+{
+  "name": "trunk-journeys",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Lane-1 trunk journeys harness (L1-TRUNK-JOURNEYS-1). Journeys as YAML DATA, executed by one driver over REAL transport against the harness's own stack. No product code; no /api/ai/** interception."
+}
