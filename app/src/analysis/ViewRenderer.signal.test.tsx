@@ -17,7 +17,7 @@
  * All unit strings below are TEST DATA.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { apiClient } from '../shared/api/client'
 import { ViewRenderer, type RenderableView, type RenderableArtifact } from './ViewRenderer'
 
@@ -25,12 +25,12 @@ vi.mock('../shared/api/client', () => ({ apiClient: { getAnalysisArtifactContent
 
 const signalView: RenderableView = { id: 'v', title: 'Signal', artifact: 'sig', renderer: 'signal' }
 
-function sigArtifact(inline?: unknown, dref?: { id: string }): RenderableArtifact {
+function sigArtifact(inline?: unknown, dref?: { id: string }, id = 'AOUT-000001'): RenderableArtifact {
   return {
     // AOUT-* artifact record id: the content route resolves AOUT ids (the
     // handler 400s NOT_ARTIFACT on a dref id). `dataReferenceRef` only SIGNALS
     // that the bytes live in storage.
-    id: 'AOUT-000001',
+    id,
     name: 'sig',
     dataKind: 'signal',
     ...(inline !== undefined ? { inlineValue: inline } : {}),
@@ -139,5 +139,113 @@ describe('SignalView — inline route preserved (zero regression, zero fetches)'
     render(<ViewRenderer view={signalView} artifact={sigArtifact('just a string')} />)
     expect(screen.getByTestId('view-spec-signal-empty')).toBeDefined()
     expect(screen.queryByTestId('view-spec-signal')).toBeNull()
+  })
+})
+
+/**
+ * Fix run (adversarial review adv-l1-signaldref-1-l1t1805): the async
+ * content-route state must be KEYED to the artifact identity. renderViews
+ * keys each view on view.id only and AnalysisPage mints ids as `v-${i}` from
+ * the SELECTED run's manifest — selecting another run replaces the artifact
+ * prop while the SAME mounted SignalView instance (and its state) survives.
+ * The rerender legs below reproduce exactly that production shape: one
+ * mounted <ViewRenderer>, same view, swapped artifact prop.
+ */
+describe('SignalView — artifact identity (state keyed to the artifact id)', () => {
+  it('dref A resolves, then the artifact prop becomes payload-less: NO stale trace — named empty arm, no extra fetch', async () => {
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockResolvedValue(sigValue())
+    const { rerender } = render(
+      <ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />,
+    )
+    expect(await screen.findByTestId('view-spec-signal')).toBeDefined()
+    expect(signalPoints()).toBeGreaterThan(1)
+    // Same mounted SignalView (same view id/renderer), different artifact:
+    // neither inlineValue nor dataReferenceRef.
+    rerender(<ViewRenderer view={signalView} artifact={sigArtifact(undefined, undefined, 'AOUT-000003')} />)
+    // Run A's trace must NOT be displayed as run B's (AC5: the NAMED empty
+    // arm — the bleed is worse than the blank it replaces).
+    expect(screen.queryByTestId('view-spec-signal')).toBeNull()
+    expect(screen.getByTestId('view-spec-signal-empty').textContent).toContain('No signal data')
+    expect(screen.queryByTestId('view-spec-signal-loading')).toBeNull()
+    expect(screen.queryByTestId('view-spec-signal-error')).toBeNull()
+    // The payload-less artifact triggers no fetch of its own.
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(1)
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledWith('AOUT-000001')
+  })
+
+  it('dref A fails, then the artifact prop becomes inline-backed: inline trace renders, error arm gone (AC1)', async () => {
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockRejectedValue(new Error('storage offline'))
+    const { rerender } = render(
+      <ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />,
+    )
+    expect(await screen.findByTestId('view-spec-signal-error')).toBeDefined()
+    rerender(<ViewRenderer view={signalView} artifact={sigArtifact(sigValue(), undefined, 'AOUT-000002')} />)
+    // The inline route wins; a stale fetch error must never shadow it.
+    expect(screen.queryByTestId('view-spec-signal-error')).toBeNull()
+    expect(screen.getByTestId('view-spec-signal')).toBeDefined()
+    expect(signalPoints()).toBeGreaterThan(1)
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('a dref fetch that settles to undefined is the named empty arm (settled, not stuck loading)', async () => {
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockResolvedValue(undefined)
+    render(<ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />)
+    const empty = await screen.findByTestId('view-spec-signal-empty')
+    expect(empty.textContent).toContain('No signal data')
+    expect(screen.queryByTestId('view-spec-signal-loading')).toBeNull()
+    expect(screen.queryByTestId('view-spec-signal')).toBeNull()
+  })
+})
+
+describe('SignalView — unmount / id-change race (the cancellation contract)', () => {
+  it('unmount before resolve: the late resolve is inert (no crash, no console error, no re-fetch)', async () => {
+    let resolveFetch!: (v: unknown) => void
+    const pending = new Promise((resolve) => {
+      resolveFetch = resolve
+    })
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockReturnValue(pending as Promise<unknown>)
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { unmount } = render(
+      <ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />,
+    )
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(1)
+    unmount()
+    await act(async () => {
+      resolveFetch(sigValue())
+    })
+    // Unmount did not retrigger a fetch; the late resolve (guarded by the
+    // on flag) produced no state update and no console error.
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(1)
+    expect(errSpy).not.toHaveBeenCalled()
+    errSpy.mockRestore()
+  })
+
+  it('id change before A resolves and A settles AFTER B: only the current artifact\'s trace renders (stale resolve cannot win)', async () => {
+    let resolveA!: (v: unknown) => void
+    const pendingA = new Promise((resolve) => {
+      resolveA = resolve
+    })
+    const valueB = { axis: [0, 1, 2], values: [1, 2, 1], axis_units: 'min', value_units: 'pA' }
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockImplementation((id: string) => {
+      if (id === 'AOUT-000001') return pendingA as Promise<unknown>
+      return Promise.resolve(valueB)
+    })
+    const { rerender } = render(
+      <ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />,
+    )
+    // Switch to artifact B while A's fetch is still pending.
+    rerender(<ViewRenderer view={signalView} artifact={sigArtifact(undefined, { id: 'DREF-000002' }, 'AOUT-000002')} />)
+    // B's bytes arrive first: B's 3-point trace renders.
+    expect(await screen.findByTestId('view-spec-signal')).toBeDefined()
+    expect(signalPoints()).toBe(3)
+    // A's stale bytes arrive LATE and must be ignored (the on flag + the
+    // forId key): B's 3-point trace is what stays on screen, never A's 11.
+    await act(async () => {
+      resolveA(sigValue())
+    })
+    expect(screen.getByTestId('view-spec-signal')).toBeDefined()
+    expect(signalPoints()).toBe(3)
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledTimes(2)
+    expect(apiClient.getAnalysisArtifactContent).toHaveBeenCalledWith('AOUT-000002')
   })
 })
