@@ -118,9 +118,12 @@ test.describe('Three-pane agent harness', () => {
     const headerValue = page.locator('[data-testid="surface-focus-header"] .surface-focus-header__value')
     await expect(headerValue).toHaveAttribute('title', /Step \d+: /, { timeout: 10_000 })
     const stepLabel = (await first.textContent())?.replace(/^\d+\s*/, '').trim() ?? ''
-    if (stepLabel) {
-      await expect(headerValue).toHaveAttribute('title', new RegExp(escapeRegExp(stepLabel)))
-    }
+    // D8 (fix1, c1 review): the conditional assertion is killed — an empty
+    // label is itself a defect (the header title is derived from it), so
+    // assert non-empty FIRST; the title check below then ALWAYS runs (the
+    // `if (stepLabel)` guard could previously skip it silently).
+    expect(stepLabel, 'nav-rail step label must be non-empty (the header title derives from it)').not.toHaveLength(0)
+    await expect(headerValue).toHaveAttribute('title', new RegExp(escapeRegExp(stepLabel)))
 
     // The universal pane survives the focus change: no crash, composer live
     // (ChatLog's Message textarea + Send button).
@@ -131,6 +134,15 @@ test.describe('Three-pane agent harness', () => {
     await expect(
       page.locator('[data-testid="harness-chat-pane"]').getByRole('button', { name: 'Send', exact: true }),
     ).toBeVisible()
+
+    // R2 (fix1, c1 review): the chat-context-header ABSENCE guard that
+    // 19be927f deleted is restored — same intent, no reintroduced product
+    // behavior. It has teeth: it fails if the legacy ChatContextHeader is
+    // ever resurrected (which E-α must never do — the run header is the
+    // universal SurfaceFocusHeader). An absence assertion is not a "site"
+    // of the dead testid; keeping it is consistent with the post-E-α
+    // zero-assertion-sites invariant (this IS the absence pin).
+    await expect(page.getByTestId('chat-context-header')).toHaveCount(0)
   })
 
   test('deck still renders in the action pane', async ({ page }) => {
