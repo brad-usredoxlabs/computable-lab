@@ -63,6 +63,24 @@ function trimString(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/**
+ * Typed error carrying the UPSTREAM HTTP status for a non-ok Exa response.
+ *
+ * The capability mapping rides the STATUS (401/403 = the vendor rejected the
+ * credential), never the upstream response prose — string-matching an error
+ * message would bake one vendor's wording into server policy. The message
+ * stays at the current redaction level (status + upstream `error` field /
+ * body text) so no key material or new echo surface is introduced.
+ */
+export class ExaRequestError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ExaRequestError';
+    this.status = status;
+  }
+}
+
 function normalizeConfig(config?: ExaConfig | null): ResolvedExaConfig | null {
   if (!config || config.enabled === false) return null;
   const apiKey = trimString(config.apiKey);
@@ -169,7 +187,7 @@ export async function exaSearch(
     });
 
     if (!response.ok) {
-      throw new Error(`Exa search failed: ${await parseErrorMessage(response)}`);
+      throw new ExaRequestError(`Exa search failed: ${await parseErrorMessage(response)}`, response.status);
     }
 
     return await response.json();
@@ -209,7 +227,7 @@ export async function exaGetContents(
     });
 
     if (!response.ok) {
-      throw new Error(`Exa contents fetch failed: ${await parseErrorMessage(response)}`);
+      throw new ExaRequestError(`Exa contents fetch failed: ${await parseErrorMessage(response)}`, response.status);
     }
 
     return await response.json();
