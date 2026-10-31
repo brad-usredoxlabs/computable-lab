@@ -186,3 +186,14 @@ Orch corroboration (not required, recorded for the architect): gap 1 confirmed a
 `schema/knowledge/assertion.schema.yaml` exists and serves (204 schemas loaded) but no route or
 registry tab reaches it for authoring. Gap 2 confirmed via S4: the Analyze door's only reachable
 revision pins `stub-echo` (metric-only publisher).
+
+## BRAD REVIEW — 2026-10-30 ~20:0x EDT (recorded by architect from phone chat, verbatim)
+"accept dossier, close GC-14 per close-out protocol"
+=> GC-14 human blocker RESOLVED: dossier accepted as-is (failed legs S5/S6 stand recorded
+   verbatim; no laundering). Close-out per the gaps-answer protocol: re-gate ONLY A6 + A7 +
+   lint-refusal demo + console delta at current trunk (GC-15 merged ANREV-DREADER-1 + GC-16
+   Knowledge door + WIDGET-R1 merged); all other sections stand at the audited state; GC-14
+   flips done when that addendum re-gate ACCEPTS.
+Related rulings this exchange: GC-17 (vendor-exa 502, GAPS 3) = QUEUED.
+MOUNT-NONEVENT-1 + MATRES-REPLAY approvals + transform_sequence P10 revcomp = PARK ALL.
+FLEET-3B ninfer restart = authorized to apply when the in-flight run ends (idle window).
