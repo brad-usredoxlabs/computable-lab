@@ -5,9 +5,11 @@
  * visualizations; unknown renderers produce a visible compatibility error
  * rather than silently failing.
  */
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { apiClient } from '../shared/api/client'
 import { ChromatogramView } from './ChromatogramView'
 import { CalibrationCurveView } from './CalibrationCurveView'
+import { parseTraceValue } from './traceModel'
 
 export interface RenderableArtifact {
   id: string
@@ -90,18 +92,89 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
   )
 }
 
-/** Render a signal artifact (x/y series) as an inline SVG polyline. */
+/** Render a signal artifact (x/y series) as an inline SVG polyline.
+ *
+ * L1-SIGNALDREF-1 — the generic OQ-1(a) content route (the same machinery
+ * ChromatogramView already ships, per the lane-1 architect ruling): a view
+ * renders its artifact's payload from wherever the artifact data says the
+ * payload is.
+ *  - `inlineValue` present  -> render inline (current behavior preserved).
+ *  - else dref-backed (an `id` + `dataReferenceRef.id` are stamped by the
+ *    page's toRenderable on both doors) -> resolve the bytes through
+ *    `apiClient.getAnalysisArtifactContent(artifact.id)` — the AOUT record
+ *    id, NEVER the dref id (the handler 400s NOT_ARTIFACT on a dref id).
+ *    A NAMED loading arm is shown while the fetch is pending.
+ *  - route failure          -> a NAMED error arm (the silent blank polyline
+ *    is the defect this fix removes — never again).
+ *  - no payload by either route -> a NAMED empty arm, not a blank SVG
+ *    pretending a trace is there.
+ * Both routes parse through the shared `parseTraceValue` (units come from
+ * the data: `axis_units`/`value_units`), so the renderer carries no axis/
+ * values re-derivation of its own and no GC/engine/point-count knowledge.
+ */
 function SignalView({ artifact }: { artifact: RenderableArtifact }) {
-  const value = isRecord(artifact.inlineValue) ? artifact.inlineValue : {}
-  const axis = Array.isArray(value.axis) ? value.axis.map(Number) : []
-  const values = Array.isArray(value.values) ? value.values.map(Number) : []
+  const drefId = artifact.dataReferenceRef?.id
+  const aoutId = artifact.id
+  const [fetched, setFetched] = useState<unknown>(undefined)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (artifact.inlineValue !== undefined) return
+    if (!drefId || !aoutId) return
+    let on = true
+    setFetched(undefined)
+    setFetchError(null)
+    apiClient
+      .getAnalysisArtifactContent(aoutId)
+      .then((v) => {
+        if (on) setFetched(v)
+      })
+      .catch((err) => {
+        if (on) setFetchError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      on = false
+    }
+  }, [drefId, aoutId, artifact.inlineValue])
+
+  const value = artifact.inlineValue !== undefined ? artifact.inlineValue : fetched
+  const parsed = useMemo(() => {
+    if (value === undefined) return null
+    const r = parseTraceValue(value)
+    return r.ok ? r.trace : null
+  }, [value])
+
+  const loading = drefId !== undefined && artifact.inlineValue === undefined && value === undefined && !fetchError
+  if (fetchError) {
+    return (
+      <div className="view-spec__error" data-testid="view-spec-signal-error">
+        Could not load the signal data: {fetchError}
+      </div>
+    )
+  }
+  if (loading) {
+    return (
+      <div className="view-spec__empty" data-testid="view-spec-signal-loading">
+        Signal loading…
+      </div>
+    )
+  }
+  if (!parsed) {
+    return (
+      <div className="view-spec__empty" data-testid="view-spec-signal-empty">
+        No signal data to display (no axis/values).
+      </div>
+    )
+  }
+
+  const { axis, values } = parsed
   const W = 320
   const H = 120
   const PAD = 8
-  const xMin = axis.length ? Math.min(...axis) : 0
-  const xMax = axis.length ? Math.max(...axis) : 1
-  const yMin = values.length ? Math.min(...values) : 0
-  const yMax = values.length ? Math.max(...values) : 1
+  const xMin = Math.min(...axis)
+  const xMax = Math.max(...axis)
+  const yMin = Math.min(...values)
+  const yMax = Math.max(...values)
   const xSpan = xMax - xMin || 1
   const ySpan = yMax - yMin || 1
   const pts = axis
@@ -111,8 +184,18 @@ function SignalView({ artifact }: { artifact: RenderableArtifact }) {
       return `${px.toFixed(1)},${py.toFixed(1)}`
     })
     .join(' ')
+  const xUnit = parsed.xUnit
+  const yUnit = parsed.yUnit
   return (
-    <svg className="view-spec__signal" width={W} height={H} viewBox={`0 0 ${W} ${H}`} data-testid="view-spec-signal">
+    <svg
+      className="view-spec__signal"
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label={`Signal trace${xUnit ? ` (x: ${xUnit})` : ''}${yUnit ? ` (y: ${yUnit})` : ''}`}
+      data-testid="view-spec-signal"
+    >
       <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   )
