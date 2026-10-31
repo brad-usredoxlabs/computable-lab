@@ -88,3 +88,29 @@
 - NEW AS-TJ1-NO-UI-GATE — no browser gate expected for TRUNK-JOURNEYS-1 (headless driver;
   verified-by (4) is conditional on the runner gaining UI — coder must declare no-UI with
   the diff proving it; orch re-checks).
+
+## Addendum (same tick, 12:35 EDT) — ARCHITECT RULING LANDED, BOTH Qs ACTED
+
+- Ruling decisions/LABSTATE-REDRIVE-legs-l2t1050-ruling.md (END-RULING, architect exited
+  rc=0 11:57). Q-A: PRODUCT owns range->concrete expansion — fix run 3 at
+  simpleVerbs.ts:539-541 (array form through the SAME expandWellTokens, no second parser),
+  plus orch-swept check no other expander repeats the string-only guard. Harness reconciliation
+  REJECTED (would ratify the non-canonical ledger). Q-B: D3 never-guess form UNCHANGED; the
+  CONTROL UTTERANCE moves to the ratified deck-absent store-resolvable shape.
+- Q-A boundary: spec §8 puts simpleVerbs.ts EXPLICITLY OUT OF SCOPE -> per the ruling's own
+  instruction, boundary-amendment card FILED: decisions/LABSTATE-FIXRUN3-boundary-brad-card.md
+  (AWAITING-BRAD, answer (A)/(B); (A) recommended). FIX RUN 3 is NOT dispatched — it waits on
+  the card (boundary change = Brad, per ruling + SOUL). The card is a WAKE-ON-CHANGE artifact;
+  never re-ask, detect file change each tick.
+- Q-B EXECUTED orch-side (authority: ruling Q-B cites LABSTATE-MATERIALNOUN-l2t0310 Q4 —
+  orch owns drive.py TURNS edit + pre-flight): pre-flight probe 12:23 EDT
+  receipts/labstate-control-preflight-l2t1130/ — 'Test Tube Racks from Globe Scientific'
+  -> EXACTLY ONE tier-1 bind:pass; ghost plate -> zero (tier-5 mint only). CONTROL_TURN swapped
+  (comment-documented), parse_arm 42/42 green, committed 0450fbfb.
+- MANIFEST bless rider CONFIRMED off the ruling's DONE list item 3 (b6bb2386).
+- NEXT TICK with a Brad answer on the card -> dispatch fix run 3 (SAME worktree
+  wt/L2-LABSTATE-CONTENTS-1-lane2-l2t2255 branch cl/lane2-labstate-contents-1-l2t2255;
+  fleet stagger vs lane-1 11:10:59). No answer -> item stays blocked-on-Brad, card unchanged.
+- Live workers at tick end: LEG F fix-run1 (612514/612577, ~90 min, at 2x edge — next tick
+  MUST check log motion per rule 7b before anything else), TRUNK-JOURNEYS overflow
+  (734943, ~25 min, healthy window). No new launches this tick beyond TRUNK-JOURNEYS.
