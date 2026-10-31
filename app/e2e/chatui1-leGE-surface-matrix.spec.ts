@@ -1,0 +1,516 @@
+import { test, expect, type Page } from '@playwright/test'
+
+/**
+ * L2-CHAT-UI-1 LEG E — per-surface chat-standard matrix (spec §4 legs 1-5).
+ *
+ * Every surface family that renders the universal HarnessChatPane gets the
+ * STANDARD grammar proven in-browser, STUB-DRIVEN (no model, no live
+ * compile): the deck-ghost fetch-swap pattern (byte-honest done payloads) and
+ * the sequences-harness-chat page.route/fetch-swap pattern for thread
+ * isolation. New builders are DISTINCTLY NAMED (matrixShorthandResult /
+ * matrixChainCard) — the deck-ghost file's two pinned builders
+ * (blobClarificationResult / fixedShorthandResult, byte-extracted by
+ * server/src/ai/shorthandChat.e2eStubHonesty.test.ts) are NEVER re-declared
+ * or edited here.
+ *
+ * Deck legs mutate the shared EVG-SPK-VERIFY fixture -> serial mode (the
+ * matrix owns the fixture only within this file; the deck-ghost file is
+ * serial in its own file).
+ *
+ * Leg 6 (protocol-edit/chain status) + REPORTED-GAP G1-G4 are REPORT-GRADE
+ * status lines in the report, never silent passes (spec §4).
+ */
+test.describe.configure({ mode: 'serial' })
+
+const EVG = 'EVG-SPK-VERIFY'
+const RUN_URL = '/runs/RUN-2026-09-07-run-nzrs'
+
+// ---- LEG E NEW builders (distinct names; NOT the pinned deck-ghost builders) ----
+
+/** Matrix builder: a done result carrying a scientist-intent shorthand + an
+ *  assistant note (the intent-card leg's payload — the universal pane's
+ *  ChatLog intent card renders message.shorthand verbatim, ChatLog.tsx:272-274). */
+function matrixShorthandResult(): unknown {
+  return {
+    success: true,
+    events: [],
+    notes: ['Draft compiled deterministically from the scientist-intent shorthand.'],
+    shorthand:
+      'intentId: matrix-leg1-dmem\nactions:\n  - action: add_material\n    labware: plate\n    material: DMEM\n    volume: { value: 50, unit: uL }\n    targetWells: A1:C3\n',
+  }
+}
+
+/** Matrix builder: the same grammar on a DIFFERENT document — proves the
+ *  run surface's card is the message's shorthand verbatim (not a copy of
+ *  leg 1's text). */
+function matrixRunShorthandResult(): unknown {
+  return {
+    success: true,
+    events: [],
+    notes: ['Draft compiled deterministically from the scientist-intent shorthand.'],
+    shorthand:
+      'intentId: matrix-leg2-growthmedia\nactions:\n  - action: add_material\n    labware: plate\n    material: Growth media\n    volume: { value: 100, unit: uL }\n    targetWells: A1:H12\n',
+  }
+}
+
+/** Matrix builder: the SERVER-BUILT chain card document (the D0 shape —
+ *  useSurfaceChat.chain.test.tsx CHAIN_CARD is the shape authority; this is
+ *  the same document, re-declared distinctly for the browser leg; the client
+ *  must pass it through VERBATIM). */
+function matrixChainCard(): unknown {
+  return {
+    artifactKind: 'attestation-chain',
+    claims: [
+      {
+        label: 'completed — the stock was prepared and split',
+        verb: 'produced',
+        aboutId: 'MATERIALINSTANCE-matrix',
+        aboutType: 'material-instance',
+        occurredAtStatus: 'unknown',
+        identity: { performer: 'unknown', accountSupplier: 'unknown', attestor: 'unknown' },
+      },
+    ],
+    reconciliation: {
+      title: 'Arithmetic check',
+      sumScaled: 1000,
+      preparedScaled: 1000,
+      counts: [{ label: 'used', count: 1 }, { label: 'stored', count: 9 }],
+    },
+    ceilingNote: 'The arithmetic proves this draft is internally consistent. It does not prove the pipetting happened.',
+  }
+}
+
+/** The fetch-swap stub (deck-ghost stubAssistStream pattern): intercept
+ *  /ai/assist/stream and replay a CANNED SSE PER CALL. `modes` is a queue —
+ *  the n-th /ai/assist/stream call serves modes[min(n-1, len-1)] — so one
+ *  leg can drive a multi-turn exchange (question turn, answer turn).
+ *
+ *  The addInitScript closure is SELF-CONTAINED (the builder bodies are pure
+ *  data, mirrored inside the closure — addInitScript serializes the closure,
+ *  so it must not reference module-level helpers). The payloads are the
+ *  matrix's own byte-honest documents — NEVER the deck-ghost pinned builders
+ *  (blobClarificationResult / fixedShorthandResult). */
+type StubMode = 'shorthand' | 'run' | 'clarify' | 'clarified' | 'chain'
+
+function stubAssistStream(page: Page, modes: StubMode | StubMode[]) {
+  const queue: StubMode[] = Array.isArray(modes) ? modes : [modes]
+  return page.addInitScript((list: StubMode[]) => {
+    const SHORTHAND_LEG1 =
+      'intentId: matrix-leg1-dmem\nactions:\n  - action: add_material\n    labware: plate\n    material: DMEM\n    volume: { value: 50, unit: uL }\n    targetWells: A1:C3\n'
+    const SHORTHAND_RUN =
+      'intentId: matrix-leg2-growthmedia\nactions:\n  - action: add_material\n    labware: plate\n    material: Growth media\n    volume: { value: 100, unit: uL }\n    targetWells: A1:H12\n'
+    const SHORTHAND_CUT =
+      'intentId: matrix-leg1-cut\nactions:\n  - action: sequence_cut\n    enzyme: EcoRI\n    target: SEQ-PUC19\n'
+    const resultFor = (mode: StubMode): unknown => {
+      switch (mode) {
+        case 'run':
+          return { success: true, events: [], notes: ['Draft compiled deterministically from the scientist-intent shorthand.'], shorthand: SHORTHAND_RUN }
+        case 'clarify':
+          return {
+            success: true,
+            events: [],
+            notes: [],
+            shorthand: SHORTHAND_CUT,
+            clarification: {
+              id: 'matrix-clar-1',
+              prompt: 'Which enzyme should cut this?',
+              entityType: 'sequence',
+              options: [
+                { id: 'opt-1', label: 'EcoRI' },
+                { id: 'opt-2', label: 'BamHI' },
+              ],
+            },
+          }
+        case 'clarified':
+          return { success: true, events: [], notes: [], clarificationNeeded: 'EcoRI it is.' }
+        case 'chain':
+          return undefined // chain: NO done — the chain_proposal frame defers
+        case 'shorthand':
+        default:
+          return { success: true, events: [], notes: ['Draft compiled deterministically from the scientist-intent shorthand.'], shorthand: SHORTHAND_LEG1 }
+      }
+    }
+    const orig = window.fetch
+    let callIndex = 0
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/ai/assist/stream')) {
+        const mode = list[Math.min(callIndex, list.length - 1)]
+        callIndex += 1
+        const frames: unknown[] = [{ type: 'status', message: 'matrix leg working…' }]
+        if (mode === 'chain') {
+          frames.push({
+            type: 'chain_proposal',
+            chain: { operation: 'compose-execute-chain', intent: { purpose: 'matrix-leg5' } },
+          })
+        } else {
+          frames.push({ type: 'done', result: resultFor(mode) })
+        }
+        const body = frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('')
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(body))
+            controller.close()
+          },
+        })
+        return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
+      }
+      return orig(input, init)
+    }
+  }, queue)
+}
+
+/** Leg 5: stub POST /api/drafts/compile (the chain trust boundary) so the
+ *  proposal flow renders the server-built chain card verbatim. */
+function stubChainCompile(page: Page) {
+  return page.route('**/api/drafts/compile', async (route) => {
+    await route.fulfill({
+      json: {
+        draftId: 'DRAFT-MATRIX-CHAIN',
+        revision: 1,
+        reviewHash: 'm'.repeat(64),
+        canAccept: true,
+        diagnostics: [],
+        result: {
+          summary: 'Execute chain: 1 mL prepared, 10 aliquots of 100 uL',
+          card: matrixChainCard(),
+        },
+      },
+    })
+  })
+}
+
+/** Isolate the app's thread reads from the live thread store (the sequences
+ *  pattern): GET /api/ai/threads/* -> empty thread; non-GET /api/ai/* -> {}.
+ *  Keeps the matrix from polluting real user threads. */
+async function isolateThreads(page: Page) {
+  await page.route('**/api/ai/**', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    if (request.method() === 'GET' && path.startsWith('/api/ai/threads/')) {
+      await route.fulfill({ json: { endpoint: 'browser', userId: 'USR-TEST', mentions: [], updatedAt: '2026-10-30T00:00:00Z', messages: [] } })
+      return
+    }
+    if (request.method() !== 'GET') {
+      await route.fulfill({ json: {} })
+      return
+    }
+    await route.continue()
+  })
+}
+
+/** The universal pane's composer (LEG D: the legacy chat-input composer
+ *  died with AiTabPanel; the ChatLog composer is the textarea labelled
+ *  'Message' + the 'Send' button, ChatLog.tsx:307-308). */
+function composer(page: Page) {
+  return page.getByLabel('Message', { exact: true })
+}
+function sendButton(page: Page) {
+  return page.getByRole('button', { name: 'Send', exact: true })
+}
+
+/** Open the right pane's AI tab and wait for the universal pane. The
+ *  workspace default is 'ai' (WorkspaceContext.tsx:302), but a host can
+ *  override it (the artifact host opens on 'Details'), so the explicit
+ *  tab click MUST precede the pane wait — the same drive the legacy deck
+ *  specs did with right-pane-tab-ai. The artifact host loads async, so wait
+ *  for the tab (not the pane) first — clicking before the RightPane mounts
+ *  is a race. */
+async function openAiPane(page: Page) {
+  const tab = page.locator('[data-testid="right-pane-tab-ai"]')
+  await expect(tab).toBeVisible({ timeout: 20_000 })
+  await tab.click()
+  const pane = page.locator('[data-testid="harness-chat-pane"]')
+  await expect(pane).toBeVisible({ timeout: 20_000 })
+  return pane
+}
+
+/** Re-pin helper: the deck's DeckSetupChip (the legacy variant <select> was
+ *  replaced by the cascading chip, commits a31c7201/2d25f934/31f5382c).
+ *  Drives the chip to the freeform bench through its LIVE controls. */
+async function driveChipToFreeform(page: Page) {
+  await expect(page.locator('[data-testid="deck-setup-chip"]')).toBeVisible({ timeout: 20_000 })
+  if (await page.locator('[data-testid="deck-setup-chip"]').innerText().then((t) => /freeform/i.test(t))) {
+    return // already freeform
+  }
+  await page.locator('[data-testid="deck-setup-trigger"]').click()
+  await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  // Locked deck (a committed tile/placement): arm the explicit switch first.
+  const switchBtn = page.locator('[data-testid="deck-setup-switch"]')
+  if (await switchBtn.count()) {
+    await switchBtn.click()
+    await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  }
+  await page.locator('[data-testid="deck-setup-row-variant"]').first().click()
+  await page.locator('[data-testid="deck-setup-option-manual_freeform"]').first().click()
+  await expect(page.locator('[data-testid="deck-setup-chip"]')).toContainText('freeform', { timeout: 10_000 })
+}
+
+// ============================================================================
+// Leg 1 — sequences: bubble / card / compaction (spec §4.1)
+// ============================================================================
+test('LEG-E leg 1: sequences — directional bubbles, the verbatim intent card before any accept', async ({ page }) => {
+  await isolateThreads(page)
+  await stubAssistStream(page, 'shorthand')
+  await page.goto('/sequences')
+
+  const log = page.getByRole('log', { name: 'Conversation' })
+  // (a) Directional bubbles: user bubble + a DISTINCT assistant bubble.
+  await openAiPane(page)
+  await composer(page).fill('Draft: add 50uL DMEM to A1:C3')
+  await sendButton(page).click()
+  await expect(log).toContainText('Draft: add 50uL DMEM to A1:C3')
+  const userBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--user')
+  const assistantBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant')
+  await expect(userBubble).toHaveCount(1, { timeout: 15_000 })
+  await expect(assistantBubble).toHaveCount(1)
+  // The bubbles are DISTINCT rows (not the same element).
+  const userBox = await userBubble.first().boundingBox()
+  const assistantBox = await assistantBubble.first().boundingBox()
+  expect(userBox && assistantBox && userBox.y !== assistantBox.y).toBe(true)
+
+  // (b) The intent card: the verbatim shorthand BEFORE any accept click.
+  const card = page.locator('[data-testid="chat-log-intent-card"]')
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  const cardBody = page.locator('[data-testid="chat-log-intent-card-body"]')
+  await expect(cardBody).toHaveText(matrixShorthandResultShorthand())
+  // No accept interaction has happened: the deck preview card is absent
+  // (a no-events note turn mounts nothing) — the card BEFORE accept is the
+  // intent card, and nothing has been accepted.
+  await expect(page.locator('[data-testid="chat-preview"]')).toHaveCount(0)
+  expect(await userBubble.count()).toBe(1) // exactly one user turn so far
+})
+
+/** Leg 1c — sequences clarification COMPACTION (spec §4.1 tail): a
+ *  clarifying turn renders the bulky numbered options; answering it
+ *  (the option click fires chat.sendPrompt — HarnessChatPane.tsx:369)
+ *  lands the answer as a USER bubble, so the question's bulky arms come
+ *  OFF the DOM and ONE `chat-log-clarification-answered` row stands in
+ *  (ChatLog.tsx:293, LEG A A4 — the bulky picker GONE from the DOM). */
+test('LEG-E leg 1c: sequences — the clarification turn compacts to the answered row after the answer (bulky picker gone)', async ({ page }) => {
+  await isolateThreads(page)
+  // Two canned turns: question (clarify) -> answer (clarified).
+  await stubAssistStream(page, ['clarify', 'clarified'])
+  await page.goto('/sequences')
+  const log = page.getByRole('log', { name: 'Conversation' })
+  // Turn 1: the bulky clarification renders (numbered options, no answer yet).
+  await openAiPane(page)
+  await composer(page).fill('Cut this sequence')
+  await sendButton(page).click()
+  await expect(log).toContainText('Which enzyme should cut this?', { timeout: 15_000 })
+  await expect(log).toContainText('1. EcoRI')
+  await expect(log).toContainText('2. BamHI')
+  const answeredBefore = await page.locator('[data-testid="chat-log-clarification-answered"]').count()
+  expect(answeredBefore).toBe(0)
+
+  // Turn 2: the numbered option click fires the answer turn (sendPrompt).
+  await log.getByRole('button', { name: '1. EcoRI' }).click()
+  // The question now has a following user bubble -> it COMPACTS: the bulky
+  // arms come off the DOM and ONE answered row stands in for them.
+  await expect(page.locator('[data-testid="chat-log-clarification-answered"]')).toBeVisible({ timeout: 15_000 })
+  const answeredRows = page.locator('[data-testid="chat-log-clarification-answered"]')
+  await expect(answeredRows).toHaveCount(1)
+  await expect(answeredRows.first()).toContainText('Which enzyme should cut this?')
+  // The bulky numbered options of the ANSWERED question are gone from the
+  // DOM (the compact row replaced them). The canned 'clarified' reply
+  // (EcoRI it is.) lands as the assistant's final line.
+  await expect(log).toContainText('EcoRI it is.', { timeout: 15_000 })
+  // The option buttons belonged to the (now answered) bulky arm — the
+  // '1. EcoRI' option button count is 0 (the compact row has no buttons).
+  await expect(log.locator('button', { hasText: '1. EcoRI' })).toHaveCount(0)
+})
+
+/** matrixShorthandResult's shorthand string (re-derived from the builder —
+ *  the assertion is the EXACT bytes the builder emits). */
+function matrixShorthandResultShorthand(): string {
+  return (matrixShorthandResult() as { shorthand: string }).shorthand
+}
+
+// ============================================================================
+// Leg 2 — run surface: same grammar at /runs/RUN-2026-09-07-run-nzrs (spec §4.2)
+// ============================================================================
+test('LEG-E leg 2: run surface — directional bubbles + the verbatim intent card (stubbed stream)', async ({ page }) => {
+  await isolateThreads(page)
+  await stubAssistStream(page, 'run')
+  await page.goto(RUN_URL)
+
+  const log = page.getByRole('log', { name: 'Conversation' })
+  await openAiPane(page)
+  await composer(page).fill('Draft: add 100uL growth media to A1:H12')
+  await sendButton(page).click()
+  await expect(log).toContainText('Draft: add 100uL growth media to A1:H12')
+  const userBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--user')
+  const assistantBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant')
+  await expect(userBubble).toHaveCount(1, { timeout: 15_000 })
+  await expect(assistantBubble).toHaveCount(1)
+
+  // The run surface's intent card carries the RUN leg's shorthand verbatim
+  // (distinct from leg 1's text — proves the card is the message's own
+  // shorthand, not a global copy).
+  const cardBody = page.locator('[data-testid="chat-log-intent-card-body"]')
+  await expect(cardBody).toBeVisible({ timeout: 15_000 })
+  await expect(cardBody).toHaveText(matrixRunShorthandResultShorthand())
+  await expect(page.locator('[data-testid="chat-preview"]')).toHaveCount(0)
+
+  // E-α: the run surface's published working-focus header is present on this
+  // host (label = the run id) — the leg doubles as the E-α live receipt.
+  await expect(page.locator('[data-testid="surface-focus-header"]')).toHaveCount(1)
+  await expect(page.locator('[data-testid="surface-focus-header"]')).toContainText('RUN-2026-09-07-run-nzrs')
+})
+
+function matrixRunShorthandResultShorthand(): string {
+  return (matrixRunShorthandResult() as { shorthand: string }).shorthand
+}
+
+// ============================================================================
+// Leg 3 — LEG C surfaces: composer ENABLED + directional bubble (spec §4.3)
+// ============================================================================
+// The C-hosts' MOUNT receipts exist from leg C (20261030T0915-legC); this leg
+// adds only the STANDARD GRAMMAR: the composer is enabled (NOT the
+// "No surface has registered" empty state) and a directional user bubble
+// lands after one stubbed exchange.
+for (const [label, url] of [
+  ['registry', '/registry'],
+  ['record', '/record/ACL-ALQ-2A5483322E30DC3DE614907ACD52BD93'],
+  ['artifact', '/artifact/writeup/ART-L2C-GATE-1'],
+] as const) {
+  test(`LEG-E leg 3 (${label}): the universal composer is ENABLED and a directional bubble lands (stubbed exchange)`, async ({ page }) => {
+    await isolateThreads(page)
+    await stubAssistStream(page, 'shorthand')
+    await page.goto(url)
+
+    const pane = await openAiPane(page)
+    // The composer is ENABLED: the 'Message' textarea is present (NOT the
+    // "No surface has registered" empty state).
+    const emptyState = pane.getByText(/No surface has registered/i)
+    await expect(emptyState).toHaveCount(0)
+    const composerEl = composer(page)
+    await expect(composerEl).toBeVisible({ timeout: 15_000 })
+    await expect(composerEl).toBeEnabled()
+
+    // One stubbed exchange: the directional USER bubble lands in the log.
+    await composerEl.fill(`Leg 3 ${label} ping`)
+    await sendButton(page).click()
+    const log = page.getByRole('log', { name: 'Conversation' })
+    await expect(log).toContainText(`Leg 3 ${label} ping`, { timeout: 15_000 })
+    const userBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--user')
+    await expect(userBubble).toHaveCount(1)
+  })
+}
+
+// ============================================================================
+// Leg 4 — deck: intent-card-before-accept (spec §4.4, NEW leg appended to the
+// matrix; the deck-ghost file's pinned builders are byte-untouched)
+// ============================================================================
+test('LEG-E leg 4: deck — the verbatim shorthand card renders BEFORE any accept (byte-honest stub payload)', async ({ page, request }) => {
+  await stubAssistStream(page, 'shorthand')
+  // Reset the shared deck fixture to the unlocked empty state (the matrix
+  // owns it serially within this file).
+  await request.put(`/api/records/${EVG}`, {
+    data: {
+      payload: {
+        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
+        events: [], labwares: [],
+        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
+        editorLayout: { surface: 'event-editor/v1', placements: [] },
+      },
+    },
+  })
+  await page.goto(`/deck/${EVG}`)
+  await driveChipToFreeform(page)
+  await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
+
+  await openAiPane(page)
+
+  await composer(page).fill('Draft: add 50uL DMEM to A1:C3 (matrix leg 4)')
+  await sendButton(page).click()
+
+  // The intent card is visible with the VERBATIM shorthand document BEFORE
+  // the ghost tile / ChatPreviewCard Apply (card-before-accept).
+  const card = page.locator('[data-testid="chat-log-intent-card"]')
+  await expect(card).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('[data-testid="chat-log-intent-card-body"]')).toHaveText(matrixShorthandResultShorthand())
+  // No accept click happened: no ghost tile, no preview, no deck preview
+  // card (the no-events note turn mounts nothing) — the card is the proof.
+  await expect(page.locator('.tile[data-ghost="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-preview="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="chat-preview"]')).toHaveCount(0)
+})
+
+// ============================================================================
+// Leg 5 — deck: chain-card UNIVERSAL-HOME VISIBILITY (spec §4.5, report-grade
+// per ruling §5: the chain card HAS a universal home (LEG D0); the PROTOCOL-
+// EDIT card does not — leg 6 reports that, it does not pin it)
+// ============================================================================
+test('LEG-E leg 5: deck — the chain proposal renders the ChainProposalCard on the universal pane; Reject leaves no wall leak', async ({ page, request }) => {
+  await stubAssistStream(page, 'chain')
+  await stubChainCompile(page)
+  await request.put(`/api/records/${EVG}`, {
+    data: {
+      payload: {
+        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
+        events: [], labwares: [],
+        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
+        editorLayout: { surface: 'event-editor/v1', placements: [] },
+      },
+    },
+  })
+  await page.goto(`/deck/${EVG}`)
+  await driveChipToFreeform(page)
+
+  await openAiPane(page)
+
+  await composer(page).fill('Compose the execute chain (matrix leg 5)')
+  await sendButton(page).click()
+
+  // The universal pane's proposal slot mounts the ChainProposalCard (the
+  // D0 universal home — HarnessChatPane.tsx:329-344; card passthrough is
+  // the server-built document verbatim).
+  const proposal = page.locator('[data-testid="harness-chat-proposal"]')
+  await expect(proposal).toBeVisible({ timeout: 20_000 })
+  const chainCard = page.locator('[data-testid="chain-card"]')
+  await expect(chainCard).toBeVisible()
+  await expect(page.locator('[data-testid="chain-card-artifact-kind"]')).toHaveText('attestation-chain')
+  await expect(page.locator('[data-testid="chain-card-claims"]')).toContainText('completed — the stock was prepared and split')
+  await expect(page.locator('[data-testid="chain-card-reconciliation"]')).toContainText('aliquots 1000 / prepared 1000')
+
+  // Reject spends the card; the pane is clean — NO honest-wall leak (a
+  // rejected chain proposal is not a failed turn).
+  await page.locator('[data-testid="chain-card-reject"]').click()
+  await expect(chainCard).toHaveCount(0, { timeout: 10_000 })
+  await expect(page.locator('[data-testid="honest-wall"]')).toHaveCount(0)
+})
+
+// ============================================================================
+// Leg 6 — protocol-edit/chain STATUS (spec §4.6, REPORT-GRADE, not a pin):
+// the universal pane renders NO protocol-edit review card (ruling §2: its
+// home is the routed ReviewAiPanel at /ingestion/vendor-pdf/:recordId). The
+// assertion is the ABSENCE of protocol-edit card chrome on the universal
+// pane at a stubbed deck turn — a by-ruling status, never a silent pass.
+// ============================================================================
+test('LEG-E leg 6: deck — the universal pane renders NO protocol-edit card (by-ruling status, ruling §2)', async ({ page, request }) => {
+  await stubAssistStream(page, 'shorthand')
+  await request.put(`/api/records/${EVG}`, {
+    data: {
+      payload: {
+        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
+        events: [], labwares: [],
+        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
+        editorLayout: { surface: 'event-editor/v1', placements: [] },
+      },
+    },
+  })
+  await page.goto(`/deck/${EVG}`)
+  await driveChipToFreeform(page)
+  const pane = await openAiPane(page)
+
+  await composer(page).fill('Review the protocol (matrix leg 6)')
+  await sendButton(page).click()
+  // Give the stubbed turn a beat to settle, then assert the protocol-edit
+  // card chrome is ABSENT from the universal pane (ruling §2 status).
+  await expect(page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant')).toHaveCount(1, { timeout: 15_000 })
+  // The WorkstateProposalCard/ChainProposalCard chrome is the ONLY card the
+  // pane mounts (HarnessChatPane.tsx:329-344); a protocol-edit card has NO
+  // universal home -> its testids (if any) must be absent.
+  await expect(pane.locator('[data-testid="workstate-card"]')).toHaveCount(0)
+  await expect(pane.locator('[data-testid="chain-card"]')).toHaveCount(0)
+})
