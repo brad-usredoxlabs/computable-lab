@@ -20,8 +20,11 @@
  * of the app-level AiPanelContext, so registering from inside the provider
  * changes nothing about what the pane reads.
  */
+import { useEffect } from 'react'
 import { useEventEditor } from '../event-editor/EventEditorContext'
 import { useDeckGhostMount } from '../event-editor/deck/useDeckGhostMount'
+import { useSetChatFocus } from '../agent/ChatFocusContext'
+import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import {
   adoptStagedPreview,
   type DeckPreviewLike,
@@ -90,6 +93,34 @@ export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
       }
     },
   })
+
+  // LEG E / E-α: publish the pane's working-focus box. The run page moved its
+  // permanent chat onto the universal HarnessChatPane during the chat standard,
+  // and the pane's SurfaceFocusHeader is a CARRIER (it renders the published
+  // ChatFocus only) — without a publish it renders NOTHING, which is how the
+  // run surface lost its "what are we looking at" header (the legacy
+  // ChatContextHeader died with LEG D). Publish EXACTLY as the deck does
+  // (DeckSurfaceChat.tsx:207-216): derived from resolved state only, zero
+  // model calls, the focused-step truth from ProtocolSelectionContext — the
+  // SAME focusedStep the deleted ChatContextHeader read (ChatContextHeader.tsx:
+  // 22-23). The detail key is CONDITIONAL: absent (never `undefined`) when no
+  // step is focused (exactOptionalPropertyTypes discipline — the same
+  // conditional-spread rule HarnessChatPane's chain spreads use).
+  const setFocus = useSetChatFocus()
+  const selection = useProtocolSelection()
+  const focusedStep = selection?.focusedStep ?? null
+  const runLabel = `Run ${state.runId ?? '(unsaved)'}`
+  const focusDetail = focusedStep
+    ? `Step ${focusedStep.ordinal ?? '?'}: ${focusedStep.label}`
+    : undefined
+  useEffect(() => {
+    setFocus({
+      surface: 'run-workspace',
+      label: runLabel,
+      ...(focusDetail !== undefined ? { detail: focusDetail } : {}),
+    })
+    return () => setFocus(null)
+  }, [setFocus, runLabel, focusDetail])
 
   return null
 }

@@ -22,6 +22,7 @@ import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
+import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
@@ -155,19 +156,29 @@ export function RunWorkspacePage() {
         >
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
-            <RunSurfaceChatBridge aiContext={aiContext} />
-            <RunWorkspaceShell
-              navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
-              rightPane={<HarnessChatPane />}
-              viewerToolbar={
-                <div className="run-workspace-toolbar">
-                  <ModeToggle mode={mode} onChange={setMode} />
-                  <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
-                </div>
-              }
-            >
-              <RunWorkspaceContent runId={runId} mode={mode} />
-            </RunWorkspaceShell>
+            {/* LEG E / E-α: the pane's working-focus carrier. The bridge
+                (below) PUBLISHES the run's resolved working focus — the
+                focused step from ProtocolSelectionContext — and the
+                HarnessChatPane's SurfaceFocusHeader (the rightPane slot)
+                RENDERS it; both live inside this provider so the run chat
+                keeps its "what are we looking at" header after LEG D deleted
+                the legacy ChatContextHeader. Deck precedent:
+                DeckHostPage.tsx:138 wraps the deck subtree the same way. */}
+            <ChatFocusProvider>
+              <RunSurfaceChatBridge aiContext={aiContext} />
+              <RunWorkspaceShell
+                navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
+                rightPane={<HarnessChatPane />}
+                viewerToolbar={
+                  <div className="run-workspace-toolbar">
+                    <ModeToggle mode={mode} onChange={setMode} />
+                    <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                  </div>
+                }
+              >
+                <RunWorkspaceContent runId={runId} mode={mode} />
+              </RunWorkspaceShell>
+            </ChatFocusProvider>
           </FocusModalsProvider>
         </EventEditorProvider>
       </WorkspaceProvider>

@@ -188,7 +188,12 @@ function stubAssistStream(page: Page, result: unknown) {
   return page.addInitScript((body: string) => {
     const orig = window.fetch
     window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes('/ai/assist/stream')) {
+      // The deck surface registers as 'event-editor' (DeckSurfaceChat) so
+      // aiClient.ts routes it to /ai/draft-events/stream — intercept BOTH
+      // endpoints (LEG E test-port, l2t0330) or the deck legs hit the live
+      // model. The two pinned builders below are byte-untouched.
+      const url = String(input)
+      if (url.includes('/ai/assist/stream') || url.includes('/ai/draft-events/stream')) {
         const stream = new ReadableStream({
           start(controller) {
             controller.enqueue(new TextEncoder().encode(body))
@@ -214,7 +219,10 @@ function stubAssistStreamSequence(page: Page, results: unknown[]) {
     const orig = window.fetch
     let callIndex = 0
     window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes('/ai/assist/stream')) {
+      // Intercept BOTH stream endpoints (deck = event-editor surface ->
+      // /ai/draft-events/stream, LEG E test-port l2t0330).
+      const url = String(input)
+      if (url.includes('/ai/assist/stream') || url.includes('/ai/draft-events/stream')) {
         const body = bodies[Math.min(callIndex, bodies.length - 1)]
         callIndex += 1
         const frames = [
@@ -294,14 +302,41 @@ async function resetDeckWithPlate(request: APIRequestContext) {
   expect(res.ok(), `deck seed PUT failed: ${res.status()}`).toBe(true)
 }
 
+// LEG E (OQ-E3 test-port repair, measured red at claim l2t0330): the deck's
+// legacy variant <select> is the DeckSetupChip cascade now (a31c7201/
+// 2d25f934/31f5382c — pre-existing trunk change) and the chat-input composer
+// died with AiTabPanel (LEG D). Both re-pins are TEST-PORT to live controls;
+// the two honesty-pinned builders above (blobClarificationResult /
+// fixedShorthandResult) are BYTE-UNTOUCHED (server honesty extractor).
+async function driveChipToFreeform(page: Page) {
+  const chip = page.locator('[data-testid="deck-setup-chip"]')
+  await expect(chip).toBeVisible({ timeout: 20_000 })
+  if (await chip.innerText().then((t) => /freeform/i.test(t))) {
+    return // already freeform
+  }
+  await page.locator('[data-testid="deck-setup-trigger"]').click()
+  await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  // Locked deck (committed placement): arm the explicit switch first.
+  const switchBtn = page.locator('[data-testid="deck-setup-switch"]')
+  if (await switchBtn.count()) {
+    await switchBtn.click()
+    await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  }
+  await page.locator('[data-testid="deck-setup-row-variant"]').first().click()
+  await page.locator('[data-testid="deck-setup-option-manual_freeform"]').first().click()
+  await expect(chip).toContainText('freeform', { timeout: 10_000 })
+}
+
 async function askInChat(page: Page, prompt: string) {
-  // Ask the question — the stub answers.
+  // Ask the question — the stub answers. The deck's AI tab is the universal
+  // HarnessChatPane (RightPane positive arm); its composer is ChatLog's
+  // textarea labelled 'Message' + the 'Send' button (chat-input died with
+  // AiTabPanel in LEG D — test-port, no product change).
   await page.locator('[data-testid="right-pane-tab-ai"]').click()
-  const input = page.locator('[data-testid="chat-input"] .chat-input__editor')
+  const input = page.getByLabel('Message', { exact: true })
   await expect(input).toBeVisible({ timeout: 20_000 })
-  await input.click()
-  await page.keyboard.type(prompt)
-  const sendBtn = page.locator('[data-testid="chat-input-send"]')
+  await input.fill(prompt)
+  const sendBtn = page.getByRole('button', { name: 'Send', exact: true })
   await expect(sendBtn).toBeEnabled()
   await sendBtn.click()
 }
@@ -310,9 +345,8 @@ async function openFreeformDeckAndAsk(page: Page, prompt: string) {
   await page.goto(`/deck/${EVG}`)
 
   // Freeform bench so the lawn renders the seeded placement.
-  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
-  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
-  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  // LEG E re-pin: the DeckSetupChip cascade (the legacy <select> died).
+  await driveChipToFreeform(page)
   await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
 
   await askInChat(page, prompt)
@@ -323,8 +357,16 @@ test('CANONICAL leg: the blob prompt yields the mixture clarification and ghosts
   await resetEmptyDeck(request)
   await openFreeformDeckAndAsk(page, CANONICAL_PROMPT)
 
-  // The clarification turn renders: the questions panel names the blob label.
-  const questions = page.locator('[data-testid="questions-panel"]')
+  // The clarification turn renders: the universal pane's ChatLog material
+  // request card names the blob label. LEG E re-pin (l2t0330): the legacy
+  // `questions-panel` chrome died with AiTabPanel (LEG D); the typed requests
+  // now render as separate `chat-log-request-*` cards (ChatLog.tsx:210), one
+  // per clarificationRequest. The blob label ('50:50 Trypsin-EDTA/DMEM') is
+  // named by the MATERIAL request (unresolved-2 / unresolved-3), while
+  // unresolved-1 is the labware/"plate" request — so pin to the material
+  // request that carries the blob. Same intent (the clarification is visible
+  // and names the blob), pinned to the live control.
+  const questions = page.locator('[data-testid="chat-log-request-unresolved-2"]')
   await expect(questions).toBeVisible({ timeout: 20_000 })
   await expect(questions).toContainText('50:50 Trypsin-EDTA/DMEM', { timeout: 10_000 })
 
@@ -385,9 +427,8 @@ test('CYCLE leg: prompt -> Discard -> re-prompt re-arms the ghost on cycle 2 and
   await resetDeckWithPlate(request)
 
   await page.goto(`/deck/${EVG}`)
-  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
-  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
-  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  // LEG E re-pin (l2t0330): the DeckSetupChip cascade (the legacy <select> died).
+  await driveChipToFreeform(page)
   await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
 
   const plateTile = page.locator('.tile[data-ghost="false"]').filter({ hasText: GHOST_PLATE_NAME })
@@ -397,12 +438,13 @@ test('CYCLE leg: prompt -> Discard -> re-prompt re-arms the ghost on cycle 2 and
   await askInChat(page, GHOST_PROMPT)
   await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
 
-  // ---- CANCEL via the Discard affordance. SH-QC-1 F-6 adds
-  // data-testid="changes-discard" to ChangesPanel's Discard button (in-scope
-  // cancel-leg chrome); the lane stack :5193 serves the TRUNK checkout, so the
-  // locator accepts either the new testid or the existing BEM class — identical
-  // element, works pre- and post-merge. ----
-  const discard = page.locator('[data-testid="changes-discard"], .changes-panel__btn--discard')
+  // ---- CANCEL via the Discard affordance. LEG E re-pin (l2t0330): the
+  // ChangesPanel's `changes-discard` / `.changes-panel__btn--discard` chrome
+  // died with AiTabPanel (LEG D) — ChangesPanel now mounts ONLY in
+  // ReviewAiPanel (grep: zero universal-pane mount). The universal pane's
+  // discard is ChatPreviewCard's `chat-preview-discard` (ChatPreviewCard.tsx:188).
+  // Same intent — the pending proposal's Discard clears everything.
+  const discard = page.locator('[data-testid="chat-preview-discard"]')
   await expect(discard.first()).toBeVisible({ timeout: 20_000 })
   await discard.first().click()
 
@@ -453,24 +495,35 @@ test('CYCLE-B characterization leg: the captured live cycle-2 payload (success:f
   await resetDeckWithPlate(request)
 
   await page.goto(`/deck/${EVG}`)
-  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
-  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
-  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  // LEG E re-pin (l2t0330): the DeckSetupChip cascade (the legacy <select> died).
+  await driveChipToFreeform(page)
   await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
 
   const plateTile = page.locator('.tile[data-ghost="false"]').filter({ hasText: GHOST_PLATE_NAME })
   await expect(plateTile.first()).toBeVisible({ timeout: 20_000 })
 
   // Cycle 1 ghosts (the bound payload), then Discard clears everything.
+  // LEG E re-pin (l2t0330): the universal pane's discard is ChatPreviewCard's
+  // `chat-preview-discard` (ChangesPanel's `changes-discard` died with LEG D).
   await askInChat(page, GHOST_PROMPT)
   await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
-  await page.locator('[data-testid="changes-discard"], .changes-panel__btn--discard').first().click()
+  await page.locator('[data-testid="chat-preview-discard"]').first().click()
   await expect(page.locator('.tile[data-ghost="true"]')).toHaveCount(0)
   await expect(page.locator('[data-preview="true"]')).toHaveCount(0)
 
-  // Cycle 2 with the CAPTURED dead payload: the sidebar card re-opens...
+  // Cycle 2 with the CAPTURED dead payload: the pane renders the draft
+  // response... LEG E re-pin (l2t0330): the draft-ready re-open was pinned to
+  // the AiTabPanel ChangesPanel sidebar (`changes-panel`), which died with
+  // LEG D. On the universal pane the no-events dead payload renders the
+  // payload's note verbatim in the assistant bubble (ChatLog bubble); the
+  // ChatPreviewCard (`chat-preview`) mounts ONLY for event-bearing staged
+  // proposals, so it is absent here by construction. Same intent (the turn
+  // produced a rendered draft response in the pane), pinned to the live
+  // control — and stronger: the EXACT captured note text must render.
   await askInChat(page, GHOST_PROMPT)
-  await expect(page.locator('[data-testid="changes-panel"]')).toBeVisible({ timeout: 20_000 })
+  await expect(
+    page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant').last(),
+  ).toContainText('Drafted 1 event.', { timeout: 20_000 })
 
   // ...but the deck stays dead — exactly the live F4 DOM (report §2b run 11:
   // affectedCommitted 0, previewWells 0, changesPanel true). The client
