@@ -157,9 +157,11 @@ def _api(api_base, method, path, body=None, timeout=30):
     import urllib.request
     import urllib.error
     data = json.dumps(body).encode() if body is not None else None
+    headers = {"x-user-id": "USR-BRAD"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
     req = urllib.request.Request(api_base + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json",
-                                          "x-user-id": "USR-BRAD"})
+                                 headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.load(r)
@@ -295,15 +297,17 @@ def run_journey(journey, run_dir, app_base, api_base):
         if not any(e in seen for e in expected_endpoints):
             violations.append("wire: no outgoing request to %r (saw %r)"
                               % (expected_endpoints, sorted(seen)))
-
-    # Channel assertions: the LAST body that satisfies all assertions must
-    # exist — i.e. every assertion list must be met by SOME captured body
-    # (per-turn bodies differ; the deck channel regression is caught on the
-    # turn that carries the selection).
+    # Channel assertions grade ONLY the bodies riding the declared wire
+    # endpoints (the thread-persistence POSTs share /api/ai/ but carry no
+    # context). ONE captured body on that endpoint must satisfy ALL
+    # assertions (per-turn bodies differ; the deck channel regression is
+    # caught on the turn that carries the selection).
+    wire_bodies = [b for b in bodies if b.get("endpoint") in (expected_endpoints or
+                   {bb.get("endpoint") for bb in bodies})]
     ch = journey.get("assert", {}).get("request_body_channels", [])
     if ch:
-        per_turn = [check_channel_assertions(b, ch) for b in bodies]
-        best = min(per_turn, key=len) if per_turn else ["no AI request captured"]
+        per_turn = [check_channel_assertions(b.get("body"), ch) for b in wire_bodies]
+        best = min(per_turn, key=len) if per_turn else ["no AI request on the declared endpoint"]
         if best:
             violations.extend(best)
 
