@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type APIRequestContext } from '@playwright/test'
 
 /**
  * L2-CHAT-UI-1 LEG E — per-surface chat-standard matrix (spec §4 legs 1-5).
@@ -13,17 +13,60 @@ import { test, expect, type Page } from '@playwright/test'
  * server/src/ai/shorthandChat.e2eStubHonesty.test.ts) are NEVER re-declared
  * or edited here.
  *
- * Deck legs mutate the shared EVG-SPK-VERIFY fixture -> serial mode (the
- * matrix owns the fixture only within this file; the deck-ghost file is
- * serial in its own file).
+ * Deck legs (4/5/6) mutate a DISTINCT record id (EVG-LEGE-MATRIX), NOT the
+ * shared EVG-SPK-VERIFY fixture that deck-ghost-shorthand.spec.ts also PUTs
+ * (R7 fix1 — cross-file parallel-safety for the mandated gate). Each deck
+ * leg resets MATRIX_EVG serially within this file.
  *
  * Leg 6 (protocol-edit/chain status) + REPORTED-GAP G1-G4 are REPORT-GRADE
  * status lines in the report, never silent passes (spec §4).
  */
 test.describe.configure({ mode: 'serial' })
 
-const EVG = 'EVG-SPK-VERIFY'
+// R7 (fix1, c1 review D7): the matrix deck legs (4/5/6) mutate a DISTINCT
+// record id (EVG-LEGE-MATRIX), NOT the shared EVG-SPK-VERIFY fixture that
+// deck-ghost-shorthand.spec.ts also PUTs. The mandated gate command (no
+// --workers flag) runs the two files in parallel workers; two files PUTting
+// the SAME record raced (c1 reproduction: deck-ghost GHOST leg + three-pane
+// 'nav rail' red in parallel, green under --workers=1). Distinct ids make
+// the fixture ownership cross-file safe so the mandated gate is stable.
+// The reset self-seeds the record via POST if it does not exist (PUT is
+// update-only — 404 on a missing record), so the matrix deck legs do not
+// depend on anyone else having created EVG-LEGE-MATRIX.
+const MATRIX_EVG = 'EVG-LEGE-MATRIX'
 const RUN_URL = '/runs/RUN-2026-09-07-run-nzrs'
+
+/** Ensure MATRIX_EVG exists (POST self-seed if missing), then reset it to
+ *  the unlocked empty single-plate state. Distinct from the deck-ghost
+ *  shared fixture EVG-SPK-VERIFY (R7 — cross-file parallel-safety). */
+async function resetMatrixDeck(request: APIRequestContext) {
+  const existing = await request.get(`/api/records/${MATRIX_EVG}`)
+  if (existing.status() === 404) {
+    const created = await request.post('/api/records', {
+      data: {
+        schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
+        payload: {
+          id: MATRIX_EVG, recordId: MATRIX_EVG, kind: 'event-graph', name: 'LEG E matrix deck fixture', status: 'draft',
+          events: [], labwares: [],
+          methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
+          editorLayout: { surface: 'event-editor/v1', placements: [] },
+        },
+      },
+    })
+    expect(created.status(), `matrix deck fixture self-seed POST failed: ${created.status()}`).toBe(201)
+  }
+  const res = await request.put(`/api/records/${MATRIX_EVG}`, {
+    data: {
+      payload: {
+        id: MATRIX_EVG, recordId: MATRIX_EVG, kind: 'event-graph', name: 'LEG E matrix deck fixture', status: 'draft',
+        events: [], labwares: [],
+        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
+        editorLayout: { surface: 'event-editor/v1', placements: [] },
+      },
+    },
+  })
+  expect(res.ok(), `matrix deck fixture reset PUT failed: ${res.status()}`).toBe(true)
+}
 
 // ---- LEG E NEW builders (distinct names; NOT the pinned deck-ghost builders) ----
 
@@ -394,6 +437,12 @@ for (const [label, url] of [
   ['registry', '/registry'],
   ['record', '/record/ACL-ALQ-2A5483322E30DC3DE614907ACD52BD93'],
   ['artifact', '/artifact/writeup/ART-L2C-GATE-1'],
+  // R3 (fix1, c1 review D3): the project surface (route per spec §4.3 —
+  // App.tsx:178 /project/:studyId; leg C's C4 host STU-saturday-morning-
+  // tburg-p-cm9u, the only live study). Spec §4.3 names FOUR surfaces; the
+  // original leg 3 covered only three and the report's "project host covered
+  // by C receipts" proved only the MOUNT, not the grammar this leg pins.
+  ['project', '/project/STU-saturday-morning-tburg-p-cm9u'],
 ] as const) {
   test(`LEG-E leg 3 (${label}): the universal composer is ENABLED and a directional bubble lands (stubbed exchange)`, async ({ page }) => {
     await isolateThreads(page)
@@ -416,6 +465,12 @@ for (const [label, url] of [
     await expect(log).toContainText(`Leg 3 ${label} ping`, { timeout: 15_000 })
     const userBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--user')
     await expect(userBubble).toHaveCount(1)
+    // R3 (fix1, c1 review D3): spec §4.3 says "directional bubble CLASSES
+    // after one stubbed exchange" — i.e. BOTH directions, not just the user
+    // bubble. The stubbed done frame (mode 'shorthand') renders an assistant
+    // note line, so the assistant-direction bubble class is also present.
+    const assistantBubble = page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant')
+    await expect(assistantBubble).toHaveCount(1, { timeout: 15_000 })
   })
 }
 
@@ -425,19 +480,10 @@ for (const [label, url] of [
 // ============================================================================
 test('LEG-E leg 4: deck — the verbatim shorthand card renders BEFORE any accept (byte-honest stub payload)', async ({ page, request }) => {
   await stubAssistStream(page, 'shorthand')
-  // Reset the shared deck fixture to the unlocked empty state (the matrix
-  // owns it serially within this file).
-  await request.put(`/api/records/${EVG}`, {
-    data: {
-      payload: {
-        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
-        events: [], labwares: [],
-        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
-        editorLayout: { surface: 'event-editor/v1', placements: [] },
-      },
-    },
-  })
-  await page.goto(`/deck/${EVG}`)
+  // Reset the DISTINCT matrix deck fixture (R7: not the shared EVG-SPK-VERIFY
+  // that deck-ghost also PUTs) to the unlocked empty state.
+  await resetMatrixDeck(request)
+  await page.goto(`/deck/${MATRIX_EVG}`)
   await driveChipToFreeform(page)
   await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
 
@@ -466,17 +512,9 @@ test('LEG-E leg 4: deck — the verbatim shorthand card renders BEFORE any accep
 test('LEG-E leg 5: deck — the chain proposal renders the ChainProposalCard on the universal pane; Reject leaves no wall leak', async ({ page, request }) => {
   await stubAssistStream(page, 'chain')
   await stubChainCompile(page)
-  await request.put(`/api/records/${EVG}`, {
-    data: {
-      payload: {
-        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
-        events: [], labwares: [],
-        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
-        editorLayout: { surface: 'event-editor/v1', placements: [] },
-      },
-    },
-  })
-  await page.goto(`/deck/${EVG}`)
+  // R7: distinct matrix deck fixture (not the shared EVG-SPK-VERIFY).
+  await resetMatrixDeck(request)
+  await page.goto(`/deck/${MATRIX_EVG}`)
   await driveChipToFreeform(page)
 
   await openAiPane(page)
@@ -506,33 +544,39 @@ test('LEG-E leg 5: deck — the chain proposal renders the ChainProposalCard on 
 // Leg 6 — protocol-edit/chain STATUS (spec §4.6, REPORT-GRADE, not a pin):
 // the universal pane renders NO protocol-edit review card (ruling §2: its
 // home is the routed ReviewAiPanel at /ingestion/vendor-pdf/:recordId). The
-// assertion is the ABSENCE of protocol-edit card chrome on the universal
-// pane at a stubbed deck turn — a by-ruling status, never a silent pass.
+// assertion is the ABSENCE of the ACTUAL protocol-edit card chrome on the
+// universal pane at a stubbed deck turn — a by-ruling status, never a silent
+// pass. R4 (fix1, c1 review D4): the leg previously asserted only that two
+// UNRELATED cards (workstate-card / chain-card) were absent, which is NOT
+// evidence about protocol-edit. The protocol-edit review card IS the
+// ChangesPanel (ChangesPanel.tsx:74 `changes-panel`, :284 `protocol-diff`,
+// :298 `protocol-edit-row`) and its ONLY live mount is ReviewAiPanel.tsx:316
+// (grep: zero universal-pane mount) — so pin those ACTUAL testids at count 0.
 // ============================================================================
 test('LEG-E leg 6: deck — the universal pane renders NO protocol-edit card (by-ruling status, ruling §2)', async ({ page, request }) => {
   await stubAssistStream(page, 'shorthand')
-  await request.put(`/api/records/${EVG}`, {
-    data: {
-      payload: {
-        id: EVG, recordId: EVG, kind: 'event-graph', name: 'Shaker Search Verify', status: 'draft',
-        events: [], labwares: [],
-        methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_single_plate', locked: false },
-        editorLayout: { surface: 'event-editor/v1', placements: [] },
-      },
-    },
-  })
-  await page.goto(`/deck/${EVG}`)
+  // R7: distinct matrix deck fixture (not the shared EVG-SPK-VERIFY).
+  await resetMatrixDeck(request)
+  await page.goto(`/deck/${MATRIX_EVG}`)
   await driveChipToFreeform(page)
   const pane = await openAiPane(page)
 
   await composer(page).fill('Review the protocol (matrix leg 6)')
   await sendButton(page).click()
-  // Give the stubbed turn a beat to settle, then assert the protocol-edit
-  // card chrome is ABSENT from the universal pane (ruling §2 status).
+  // Give the stubbed turn a beat to settle, then assert the ACTUAL
+  // protocol-edit card chrome is ABSENT from the universal pane (ruling §2
+  // status — the card's home is the routed ReviewAiPanel, not this pane).
   await expect(page.locator('[data-testid="harness-chat-pane"] .chat-log-msg--assistant')).toHaveCount(1, { timeout: 15_000 })
-  // The WorkstateProposalCard/ChainProposalCard chrome is the ONLY card the
-  // pane mounts (HarnessChatPane.tsx:329-344); a protocol-edit card has NO
-  // universal home -> its testids (if any) must be absent.
+  // R4: the protocol-edit review card = ChangesPanel. Its live testids
+  // (changes-panel / protocol-diff / protocol-edit-row, ChangesPanel.tsx)
+  // must be ABSENT on the universal pane — that is the real protocol-edit
+  // absence, not the mere absence of two unrelated proposal cards.
+  await expect(pane.locator('[data-testid="changes-panel"]')).toHaveCount(0)
+  await expect(pane.locator('[data-testid="protocol-diff"]')).toHaveCount(0)
+  await expect(pane.locator('[data-testid="protocol-edit-row"]')).toHaveCount(0)
+  // The other universal proposal cards are also absent on a no-event
+  // shorthand turn (workstate-card / chain-card) — kept as the card-mount
+  // boundary.
   await expect(pane.locator('[data-testid="workstate-card"]')).toHaveCount(0)
   await expect(pane.locator('[data-testid="chain-card"]')).toHaveCount(0)
 })
