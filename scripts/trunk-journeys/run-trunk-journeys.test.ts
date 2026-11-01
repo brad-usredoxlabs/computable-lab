@@ -238,11 +238,17 @@ console.log('\n[7] interpolate — strict placeholder grammar (D5)');
 // --- [8] self-check — the idiomatic bypass shapes are caught (D10) ---
 console.log('\n[8] self-check — regex-literal / split-string / axios bypasses caught (D10)');
 {
+  // The banned path is assembled at RUNTIME from parts (as in section [4])
+  // so THIS source file never carries the banned verb+path shapes the
+  // hardened patterns now match — the driver self-checks its own files,
+  // including this test.
+  const AI = '/api/' + 'ai';
+  const reEsc = AI.replace(/\//g, '\\/'); // backslash-escaped slashes (regex-literal form)
   const bypassFiles = [
-    { path: 'bypass1.ts', content: `await page.route(/\\/api\\/ai\\//, (r) => r.fulfill({ json: {} }));` },
-    { path: 'bypass2.ts', content: `const host = 'http://x'; const res = await fetch(host + '/api/' + 'ai' + '/chat', { method: 'GET' });` },
-    { path: 'bypass3.ts', content: `axios.post(\`http://x/api/ai/author\`, body);` },
-    { path: 'bypass4.ts', content: `page.route(new RegExp('/api/ai/'), handler);` },
+    { path: 'bypass1.ts', content: `await page.route(/${reEsc}/, (r) => r.fulfill({ json: {} }));` },
+    { path: 'bypass2.ts', content: ['await fetch(host + ', `'/api/'`, ` + `, `'ai'`, ` + '/chat', { method: 'GET' });`].join('') },
+    { path: 'bypass3.ts', content: `axios.post(\`http://x${AI}/author\`, body);` },
+    { path: 'bypass4.ts', content: `page.route(new RegExp('${AI}/'), handler);` },
   ];
   const bypassViolations = scanForBannedInterception(bypassFiles);
   const caughtFiles = new Set(bypassViolations.map((v) => v.file));

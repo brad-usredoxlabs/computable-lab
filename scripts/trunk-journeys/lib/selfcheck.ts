@@ -24,8 +24,9 @@
  *
  * D10 (adversarial gate 2026-10-31): the original four patterns missed the
  * MOST idiomatic bypass shapes — a regex-literal route target
- * (page.route(/\/api\/ai\//)), a split-string fetch (fetch(host + '/api/'
- * + 'ai' + '/chat')), and axios/node-http callers. The pattern set now
+ * a page.route whose argument is the banned path as a REGEX LITERAL), a
+ * split-string fetch (a quoted /api/ part concatenated with a quoted ai
+ * part), and axios/node-http callers. The pattern set now
  * covers: quoted path strings, REGEX LITERALS (escaped or bare slashes),
  * split-string assembly (a quoted /api/ part concatenated with a quoted
  * ai part), and every common HTTP client verb (fetch/axios/http(s).request).
@@ -56,10 +57,12 @@ export const BANNED_INTERCEPTION_PATTERNS: Array<{ id: string; re: RegExp; why: 
   },
   {
     // D10: a route/RegExp argument that is a REGEX LITERAL naming the AI
-    // path — the most idiomatic bypass: page.route(/\/api\/ai\//, handler).
-    // The literal fragments: slash, optional backslash-slash, api,
-    // optional backslash-slash, ai — so BOTH /\/api\/ai\/ and /api/ai/
-    // (and bare /api/ai) match; /api/analysis-runs never does.
+    // path — the most idiomatic bypass: a page.route whose argument is
+    // the banned path written as a REGEX LITERAL (backslash-escaped
+    // slashes). The literal fragments: slash, optional backslash-slash,
+    // api, optional backslash-slash, ai — so escaped, bare, and
+    // unescaped-slash forms all match; the /api/analysis-runs family
+    // never does (it is a different, allowed surface).
     id: 'route-regex-literal-ai',
     re: new RegExp(`(?:\\.route\\s*\\(|\\broute\\s*\\(|new\\s+RegExp\\s*\\()\\s*\/(?:\\\\/)?api(?:\\\\/)?ai`, 'i'),
     why: 'a route/RegExp argument is a REGEX LITERAL naming the AI path (banned)',
@@ -72,7 +75,8 @@ export const BANNED_INTERCEPTION_PATTERNS: Array<{ id: string; re: RegExp; why: 
   },
   {
     // a fetch call whose URL literal (quoted or template) is the AI path —
-    // anywhere in the call's argument list (fetch(x + '/api/ai/...') too).
+    // anywhere in the call's argument list (a concatenated quoted path
+    // counts: the verb + the quoted path are what make an interception).
     id: 'fetch-ai',
     re: new RegExp(`\\bfetch\\s*\\([^\\n]*['"\`][^\\n]*${AI_PATH}`, 'i'),
     why: 'a fetch() call targets the AI HTTP surface (banned)',
@@ -90,9 +94,10 @@ export const BANNED_INTERCEPTION_PATTERNS: Array<{ id: string; re: RegExp; why: 
     why: 'a node http(s).request call targets the AI HTTP surface (banned)',
   },
   {
-    // D10: SPLIT-STRING assembly — an HTTP client verb whose URL is built by
-    // concatenating a quoted part ending in /api/ with a quoted part
-    // starting ai: fetch(host + '/api/' + 'ai' + '/chat').
+    // D10: SPLIT-STRING assembly — an HTTP client verb whose URL is built
+    // by concatenating a quoted part ending in /api/ with a quoted part
+    // that begins ai (the path is assembled from pieces, never one
+    // literal).
     id: 'split-string-ai-verb',
     re: new RegExp(`\\b(?:fetch|axios|got|ky|request)\\b[^\\n]*['"][^'"]*/api/['"]\\s*\\+\\s*['"][^'"]*ai`, 'i'),
     why: 'a split-string URL builds the AI path across quoted parts (banned)',
