@@ -1,0 +1,5 @@
+# Harness-local ignore (sanctioned D9 fix — repo root .gitignore is NOT touched).
+# The self-check imports run-journeys.py by path, which regenerates __pycache__
+# next to it on every run; that must never be committable.
+__pycache__/
+*.pyc

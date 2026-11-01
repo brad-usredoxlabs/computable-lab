@@ -1,0 +1,84 @@
+# J2 — clarification round trip (pins 0257123d): a clarification card fires
+# on the deck surface, its first offered option is SUBMITTED through the real
+# card affordance, the answered FOLD becomes reachable, the answer does NOT
+# loop, and the follow-up OUTGOING request body carries clarificationAnswers
+# STRUCTURED (not prose-only).
+id: J2
+title: "clarification round trip: card -> structured answer -> fold, no loop"
+file: J2.yaml
+timeout_s: 480
+selection_affordance: >-
+  REAL UI: the ChatLog clarification card's own option button
+  (chat-log-request-* card, ol.chat-log-clarification-options button —
+  ChatLog.tsx:225-236) is clicked; the answer rides structured via
+  HarnessChatPane.tsx:374. NEVER a stubbed route.
+log_selector: '[aria-label="Conversation"]'
+seed:
+  record:
+    recordId: EVG-JOURNEYS-2
+    schemaId: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+    payload:
+      id: EVG-JOURNEYS-2
+      recordId: EVG-JOURNEYS-2
+      kind: event-graph
+      name: L2 trunk journeys J2 deck (TEST DATA)
+      status: draft
+      events: []
+      labwares: []
+      methodContext:
+        runId: none
+        vocabId: liquid-handling/v1
+        platform: manual
+        deckVariant: manual_freeform
+        locked: false
+      editorLayout: { surface: event-editor/v1, placements: [] }
+teardown: { delete_record: EVG-JOURNEYS-2 }
+steps:
+  - step: goto
+    path: /deck/EVG-JOURNEYS-2
+  - step: ensure_deck_variant_freeform
+  - step: open_ai_tab
+  # D3 determinism: the deck thread persists across runs; start on a FRESH
+  # thread (the product's own "New thread" button) so a stale card from an
+  # earlier run can never be the answered one.
+  - step: new_thread
+  # The blob prompt (l2-suite-a corpus prompt 4, (sic) 'All' not here): the
+  # honest deterministic compile asks rather than guessing — the 50/50 blob
+  # card reliably carries offered options (measured probe 2026-10-31).
+  - step: ask
+    text: "Add 100uL of 50/50 Trypsin-EDTA/DMEM with 10% FBS to wells A2:H6"
+  - step: expect_visible
+    selector: '[data-testid^="chat-log-request-"]'
+  - step: screenshot
+    tag: clarification-card
+  - step: click_card_first_option
+  - step: assert_answered_fold_and_no_loop
+  - step: screenshot
+    tag: post-answer
+expected_wire:
+  endpoints: ["/api/ai/draft-events/stream"]
+assert:
+  request_body_channels:
+    # ONE captured body must carry ALL of these: the SECOND turn — the
+    # folded answer request — carries eventGraphId AND structured
+    # clarificationAnswers (0257123d's channel).
+    - path: context.eventGraphId
+      equals: EVG-JOURNEYS-2
+    - path: context.selection
+      absent: true
+    - path: clarificationAnswers
+      present: true
+    - path: clarificationAnswers.0.requestId
+      present: true
+  rendered:
+    - clarification_answered: true
+    - clarification_no_loop: true
+    # D3 (spec J2, verbatim): the folded answer turn must produce a
+    # user-visible answer with the SAME intentId, and must NOT re-ask the
+    # answered question. These assertions are HONEST: if the product
+    # genuinely loops, J2 is RED-BY-PRODUCT-DEFECT with the cite in the
+    # violation — never weakened to keep green.
+    - answer_no_reask: true
+    - answer_intent_id_same: true
+    - assistant_answer_visible: true
+    - turns_at_least: 2
