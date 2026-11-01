@@ -76,6 +76,7 @@ import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
+  carryShorthandIdentity,
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
@@ -1308,6 +1309,20 @@ export function createAgentOrchestrator(
       // quoting repair re-ask, then the honest last-resort failure.
       let emptyShorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
+      // L2-INTENTID-REDRAFT-1 (spec §2): the ANSWER turn's identity-stability
+      // capture. The fold arm consumes the held intent (takeHeldShorthandIntent)
+      // and the fold-null arm re-holds it (one-shot) — so by the time the
+      // model re-extract returns (the event_shorthand handler below) the hold
+      // is ALREADY taken a SECOND time by the message builder and gone. The
+      // carried identity + the answered labels are captured ONCE at the
+      // fold-null else arm (before the consume) and read here by the model
+      // turn's result — a REUSE of held identity, never a second take() (which
+      // returns null and silently skips the carry). Absent (undefined) on
+      // every turn that is not the fold-null fallback: a FRESH ask and the
+      // fold-SUCCESS arm never set them, so the carry is answer-turn-only and
+      // never leaks onto a fresh mint.
+      let fallbackCarryIntentId: string | undefined;
+      let fallbackAnsweredLabels: readonly string[] = [];
       // L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
       // ledger seed for the mapper seams — the LIVE held-intent count
       // (the fold seam; it outranks the wire channel because the re-hold
@@ -1558,6 +1573,17 @@ export function createAgentOrchestrator(
             // No 1:1 mapping — re-hold and let the loop re-extract with the
             // held document + answers as grounded context (extraction-only).
             holdShorthandIntent(conversationKey, held);
+            // L2-INTENTID-REDRAFT-1 (spec §2(b)): capture the HELD identity +
+            // the answered labels for the model re-extract's result, BEFORE
+            // the message builder re-takes (and consumes) the re-held intent.
+            // The carry re-arms the held identity at the answer turn's result
+            // (a REUSE — never a mint, never a guess); the labels ride the
+            // fallback recompile as DATA so the ANSWERED prompt is not
+            // re-offered (rider R1, the 422 / fold-arm precedent). Read here —
+            // the hold is one-shot and the model turn's result site has no
+            // hold left to take.
+            fallbackCarryIntentId = held.doc.intentId;
+            fallbackAnsweredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
             // ANSWER-FOLD-NULL-1 (Leg 1, additive-only): name WHICH null arm
             // tripped. The arm is RE-DERIVED by the pure mirror `foldNullArm`
             // (shorthandChat.ts, byte-mirror of the fold's guards) — the fold
@@ -1571,7 +1597,7 @@ export function createAgentOrchestrator(
               ? ` slotType=${armReport.slotType}`
               : '';
             console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${foldAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
-            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
+            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask (the held intentId is carried onto the answer turn's result; the answered labels ride the recompile so the answered prompt is not re-offered)`);
           }
         }
       }
@@ -2858,7 +2884,7 @@ export function createAgentOrchestrator(
             // VERBATIM on the chat clarification channel; well binding and
             // material grounding already live inside the frozen compile.
             if (agentIntent.intent === 'event_shorthand') {
-              const shorthandYaml = agentIntent.shorthand ?? '';
+              let shorthandYaml = agentIntent.shorthand ?? '';
               const elapsedSh = () => Date.now() - t0;
               const shorthandSummary = (res: AgentResult): void => {
                 const elapsed = elapsedSh();
@@ -2956,6 +2982,26 @@ export function createAgentOrchestrator(
                 return malformedResult;
               }
 
+              // L2-INTENTID-REDRAFT-1 (spec §2(b)): the ANSWER turn's
+              // identity-carry, applied AFTER the model document is parsed
+              // (Ajv sole authority) and BEFORE the fallback recompile — so
+              // the recompile AND the result shorthand BOTH carry the held
+              // identity. ONLY on the fallback answer turn: the capture var is
+              // set exclusively by the fold-null else arm, so a FRESH ask (no
+              // hold) and the fold-SUCCESS arm (which re-serializes the held
+              // intentId verbatim) never reach this and the carry is a no-op.
+              // The held identity wins over the fresh id the sampler minted on
+              // the re-extracted blob (a REUSE — never a mint, never a guess);
+              // actions/unresolved are untouched (the sampler's re-extraction
+              // is otherwise authoritative). Identity field only — no
+              // event-shape / card-content change.
+              const carried = carryShorthandIdentity(shorthandDoc, fallbackCarryIntentId);
+              if (carried) {
+                shorthandDoc = carried.doc;
+                shorthandYaml = carried.yaml;
+                console.log(`[agent ${tid}] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity ${JSON.stringify(fallbackCarryIntentId)} wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity`);
+              }
+
               const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
                 ...(deps.store ? { store: deps.store } : {}),
                 ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
@@ -2977,6 +3023,20 @@ export function createAgentOrchestrator(
                   const cached = getDefaultLabStateCache().get(conversationKey);
                   return cached ? { priorLabState: cached } : {};
                 })(),
+                // L2-INTENTID-REDRAFT-1 (rider R1, OQ-1): on the extraction-only
+                // FALLBACK answer turn ONLY, the answered clarification LABELS
+                // ride the recompile as DATA (the 422 route + fold-arm precedent)
+                // so the ANSWERED prompt is not re-offered (the answered
+                // role-gap bar does not re-fire). Conditional spread: absent on
+                // a fresh turn and the fold-success arm (both leave
+                // fallbackAnsweredLabels empty), so every other caller is
+                // byte-identically unchanged. Labels-only per OQ-1: the
+                // reading bar re-settle needs scientistAnswers, which the
+                // re-extract answers do not structurally carry (they arrive as
+                // prose in the prompt) — flagged honestly in the report.
+                ...(fallbackAnsweredLabels.length > 0
+                  ? { answeredClarificationLabels: fallbackAnsweredLabels }
+                  : {}),
               });
               // WELLSET-RESOLVER-1 (the writer leg): persist the compile's
               // snapshotAfter back to the cache so the NEXT turn sees this

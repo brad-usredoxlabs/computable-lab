@@ -1271,10 +1271,50 @@ export function heldReextractionContext(
   return [
     'CLARIFICATION ANSWERS for your previous shorthand document:',
     ...answerLines,
-    'Re-emit the COMPLETE corrected shorthand document (intent "event_shorthand") with these answers folded in. Keep every other action unchanged. Never write events, labware record ids, or deck slots.',
+    'Re-emit the COMPLETE corrected shorthand document (intent "event_shorthand") with these answers folded in. Keep every other action unchanged and KEEP the held document\'s intentId exactly as it appears below — do not mint a new intentId. Never write events, labware record ids, or deck slots.',
     'Held document:',
     heldYaml,
   ].join('\n');
+}
+
+/**
+ * L2-INTENTID-REDRAFT-1 (spec §2(b)): the deterministic identity-carry at the
+ * ai/ seam for the PERMITTED extraction-only fallback answer turn (OQ1). When
+ * the fold's never-guess null falls through to the model re-extract, the
+ * sampler re-emits the held document and MAY mint a FRESH intentId (Stage A:
+ * the contract quotes `intentId: <short id>` with no stability requirement) —
+ * that fresh id becomes the answer turn's result shorthand and the UI renders
+ * a NEW intent card with a DIFFERENT identity (the churn J2 grades). This
+ * carry makes the HELD identity win (a REUSE of held identity — the
+ * reuseBindings discipline — never a mint, never a guess about a NEW draft),
+ * rewriting the intentId field ONLY: actions/unresolved are untouched (the
+ * sampler's re-extraction is otherwise authoritative).
+ *
+ * Pure and total: returns null (no-op, nothing to carry) when the ids agree or
+ * the held id is absent; otherwise the carried doc (intentId replaced) + the
+ * re-serialized yaml that carries it. The yaml mirrors the fold's canonical
+ * re-serialization (shorthandChat.ts:1069-1074) key order — intentId,
+ * sourcePrompt (conditional — never dropped), actions, unresolved — so the
+ * result shorthand is the SAME canonical shape the fold arm emits. The held
+ * intentId rides the held document's OWN field (the identity the pre-answer
+ * card showed) — read, never re-derived. The caller applies the carry ONLY on
+ * the fallback answer turn (the model-turn result site), never on fresh turns
+ * (a fresh ask must stay free to mint) and never on the fold-SUCCESS arm (the
+ * fold already re-serializes the held intentId verbatim).
+ */
+export function carryShorthandIdentity(
+  doc: ScientistIntent,
+  heldIntentId: string | undefined,
+): { doc: ScientistIntent; yaml: string } | null {
+  if (!heldIntentId || doc.intentId === heldIntentId) return null;
+  const carried: ScientistIntent = { ...doc, intentId: heldIntentId };
+  const yaml = stringifyYaml({
+    intentId: carried.intentId,
+    ...(typeof carried.sourcePrompt === 'string' ? { sourcePrompt: carried.sourcePrompt } : {}),
+    actions: carried.actions,
+    unresolved: carried.unresolved,
+  });
+  return { doc: carried, yaml };
 }
 
 // ---------------------------------------------------------------------------

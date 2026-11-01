@@ -1,0 +1,100 @@
+npm notice run npx
+npm notice run 'vitest' run src/ai/AgentOrchestrator.intentIdStability.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > RED: the extraction-only fallback answer turn carries the HELD intentId and does not re-offer the ANSWERED prompt (labels-only closes R1)
+[agent rvg94k] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent rvg94k] skipping compiler preflight for forced draft tool mode
+[agent rvg94k] tools=1 docDiscussion=false maxTurns=2
+[agent rvg94k] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent rvg94k] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"rvg94k","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":253,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent rvg94k] done event_shorthand success=true events=0 clarifications=2 elapsedMs=253
+[agent mxw49i] fold-null arm=empty-label requestId=unresolved-c-a2eb4c3eef answers=1 heldFacts=2
+[agent mxw49i] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask
+[agent mxw49i] start surface=run-workspace model=test-model promptLen=44 effectivePromptLen=179 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent mxw49i] skipping compiler preflight for forced draft tool mode
+[agent mxw49i] tools=1 docDiscussion=false maxTurns=2
+[agent mxw49i] turn 1 starting, promptChars=15577, docDiscussion=false
+[agent mxw49i] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"mxw49i","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":59,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent mxw49i] done event_shorthand success=true events=0 clarifications=2 elapsedMs=59
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > the fold-SUCCESS arm already carries the held identity end-to-end (guard — the fold re-serializes intentId verbatim)
+[agent ckhipz] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ckhipz] skipping compiler preflight for forced draft tool mode
+[agent ckhipz] tools=1 docDiscussion=false maxTurns=2
+[agent ckhipz] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent ckhipz] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ckhipz","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":54,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. (2 questions looped this turn.) Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent ckhipz] done event_shorthand success=true events=0 clarifications=2 elapsedMs=54
+[agent i6lk8c] shorthand answer folded deterministically onto the held intent (run:RUN-intentid-stability) — no model call
+[agent-summary] {"traceId":"i6lk8c","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":45,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent i6lk8c] done shorthand-fold success=true events=0 elapsedMs=45
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > a FRESH ask on a held conversation stays free to MINT (the carry is answer-turn-only, never a fresh-turn constraint)
+[agent q3a6v0] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent q3a6v0] skipping compiler preflight for forced draft tool mode
+[agent q3a6v0] tools=1 docDiscussion=false maxTurns=2
+[agent q3a6v0] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent q3a6v0] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"q3a6v0","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":50,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. (2 questions looped this turn.) Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent q3a6v0] done event_shorthand success=true events=0 clarifications=2 elapsedMs=50
+[agent gd5ne5] start surface=run-workspace model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent gd5ne5] skipping compiler preflight for forced draft tool mode
+[agent gd5ne5] tools=1 docDiscussion=false maxTurns=2
+[agent gd5ne5] turn 1 starting, promptChars=14760, docDiscussion=false
+[agent gd5ne5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"gd5ne5","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":54,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent gd5ne5] done event_shorthand success=true events=1 clarifications=0 elapsedMs=54
+
+ ❯ src/ai/AgentOrchestrator.intentIdStability.test.ts  (3 tests | 1 failed) 527ms
+   ❯ src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > RED: the extraction-only fallback answer turn carries the HELD intentId and does not re-offer the ANSWERED prompt (labels-only closes R1)
+     → answer turn result shorthand: "intentId: intentid-stability-reemitted\nactions:\n  - action: add_material\n    labware: \"seeding plate\"\n    volumeUl: 50\n    targetWells: [A1:A3]\n    composition:\n      - material: \"Alpha Reagent\"\n        role: other\n        fraction: \"50%\"\n      - material: \"Beta Buffer\"\n        role: buffer_component\n        fraction: \"50%\"\n      - material: \"Gamma Serum\"\n        role: additive\n        fraction: \"10%\"\n      - material: \"Delta Cells\"\n        role: cells\n        count: 10000\n": expected 'intentId: intentid-stability-reemitte…' to match 'intentid-stability-held'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > RED: the extraction-only fallback answer turn carries the HELD intentId and does not re-offer the ANSWERED prompt (labels-only closes R1)
+AssertionError: answer turn result shorthand: "intentId: intentid-stability-reemitted\nactions:\n  - action: add_material\n    labware: \"seeding plate\"\n    volumeUl: 50\n    targetWells: [A1:A3]\n    composition:\n      - material: \"Alpha Reagent\"\n        role: other\n        fraction: \"50%\"\n      - material: \"Beta Buffer\"\n        role: buffer_component\n        fraction: \"50%\"\n      - material: \"Gamma Serum\"\n        role: additive\n        fraction: \"10%\"\n      - material: \"Delta Cells\"\n        role: cells\n        count: 10000\n": expected 'intentId: intentid-stability-reemitte…' to match 'intentid-stability-held'
+
+- Expected
++ Received
+
+- intentid-stability-held
++ intentId: intentid-stability-reemitted
++ actions:
++   - action: add_material
++     labware: "seeding plate"
++     volumeUl: 50
++     targetWells: [A1:A3]
++     composition:
++       - material: "Alpha Reagent"
++         role: other
++         fraction: "50%"
++       - material: "Beta Buffer"
++         role: buffer_component
++         fraction: "50%"
++       - material: "Gamma Serum"
++         role: additive
++         fraction: "10%"
++       - material: "Delta Cells"
++         role: cells
++         count: 10000
++
+
+ ❯ src/ai/AgentOrchestrator.intentIdStability.test.ts:224:99
+    222|     // sampler minted on the re-extracted blob. RED on base (base carr…
+    223|     // fresh re-emitted id).
+    224|     expect(second.shorthand, `answer turn result shorthand: ${JSON.str…
+       |                                                                                                   ^
+    225|     expect(second.shorthand).not.toMatch('intentid-stability-reemitted…
+    226| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  11:33:08
+   Duration  6.35s (transform 2.30s, setup 0ms, collect 4.85s, tests 527ms, environment 0ms, prepare 477ms)
+

@@ -433,7 +433,16 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(model.callCount()).toBe(1);
     expect(JSON.stringify(model.captured[0].messages)).toMatch('CLARIFICATION ANSWERS');
     expect(result.success).toBe(true);
-    expect(result.shorthand).toBe(ADD_DMEM_YAML);
+    // L2-INTENTID-REDRAFT-1 (criterion 2): the fallback answer turn's result
+    // shorthand carries the HELD identity (the held doc's intentId), not the
+    // fresh id the model minted on the re-extracted blob (ADD_DMEM_YAML =
+    // intentId: chat-add-dmem). This byte-exact pin predates the carry and
+    // asserted the model's verbatim bytes; the carry contract (spec §2(b):
+    // "the HELD identity wins") necessarily re-stamps ONLY the intentId —
+    // the re-extracted actions are otherwise byte-stable (no action/
+    // unresolved rewrite).
+    expect(result.shorthand).toMatch('intentId: chat-add-mystery');
+    expect(result.shorthand).not.toMatch('chat-add-dmem');
   });
 
   it('re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document', async () => {
