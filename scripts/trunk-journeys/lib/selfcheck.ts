@@ -17,10 +17,16 @@
  * targets real interceptor LINES (a route/fetch verb + the quoted path), so
  * prose and the pattern table itself stay clean.
  *
- * A real interceptor names the quoted AI path with a route/fetch VERB on the
- * same line. The patterns match that verb+path shape; a plain mention of the
- * path in prose (no verb, no quoted path) does NOT trip them, so documenting
- * the ban is safe.
+ * A real interceptor names the AI path with a route/fetch VERB on the
+ * same line. The QUOTED-PATH patterns match that verb + quoted-path shape;
+ * a plain prose mention of the path (no verb, no quoted path) does NOT trip
+ * THOSE patterns, so documenting the ban in prose is safe FOR THEM. The
+ * regex-literal pattern is the exception to that rule: it matches the path
+ * written as an UNQUOTED REGEX LITERAL (the most idiomatic bypass — the
+ * shape the quoted-path patterns cannot see at all), so a regex literal
+ * naming the path DOES trip it, even in a comment. That is why the module
+ * doc comments were reworded (13cd40e6) so no prose carries a
+ * verb / regex-literal shape naming the path.
  *
  * D10 (adversarial gate 2026-10-31): the original four patterns missed the
  * MOST idiomatic bypass shapes — a regex-literal route target

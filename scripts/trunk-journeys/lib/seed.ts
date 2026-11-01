@@ -11,23 +11,31 @@
  * from the repo — never invented; parameterSchema = the declared-settings RUN
  * PARAMS the peak-integration engine consumes, with defaults so the Analyze
  * handler's collectDefaults seeds them), and a .D acquisition tree written to
- * the throwaway mount. (J2): the subject chain (party -> request -> sample —
+ * the throwaway mount.
+ * (J2): the subject chain (party -> request -> sample —
  * real schema-valid service records, so the context's subject_ref RESOLVES),
- * a claim (a real biological triple — RO:0002411 "causally upstream of"
- * between GO terms, from the repo's predicate registry), a context (the WHY
+ * a claim (a real MEASUREMENT relationship — the GC peak-integration
+ * measurement CL:measures the analyte-peak-presence quantity: a documented
+ * cf: local-term pair, schema/registry/ cf: precedent, with the registry's
+ * "Measurement & Assay" predicate), a context (the WHY
  * arm's context record, knowledge-layer canonical shape, subject_ref = the
  * minted sample), and an assertion (scoped to the context via context_refs).
  *
  * The record payloads are DATA-shaped (schema-driven, Ajv-validated on create).
- * Ontology integrity (adversarial gate D8): the ONLY external ontology refs
- * are the real, verified GO/RO terms of the claim triple (GO:0006635 fatty
- * acid beta-oxidation, RO:0002411 causally upstream of, GO:0006979 response
- * to oxidative stress — the canonical knowledge-layer example's own claim
- * triple). `entered_by` is a record ref to the harness actor — provenance
- * actors are records, never ontology CURIEs. No external CURIE is ever
- * mislabeled, and no invented ontology id is written into the knowledge
- * layer. The engine/revision parameter names are the GC-7 declared-settings
- * contract (peak_integration's §A2) — transcribed, not re-invented.
+ * Ontology integrity (adversarial gate D8 + FIX RUN 2 defect 1): the ONLY
+ * external ontology refs are the registry-legal claim predicate (CL:measures,
+ * the predicate registry's "Measurement & Assay" predicate) and the cf: LOCAL
+ * TERM PAIR it relates (cf:gc-peak-analysis / cf:analyte-peak-presence — the
+ * repo's cf: local-CURIE precedent; a cf: term is a documented local
+ * quantity/measurement concept, never a mislabeled or invented external
+ * CURIE). The claim is about WHAT THE RUN MEASURED (a real
+ * measurement-entity -> measured-quantity relationship), and its
+ * title / statement / triple / the citing assertion carry ONE single meaning
+ * the GC-sample context describes — the knowledge artifact is coherent.
+ * `entered_by` is a record ref to the harness actor — provenance
+ * actors are records, never ontology CURIEs. The engine/revision
+ * parameter names are the GC-7 declared-settings contract
+ * (peak_integration's §A2) — transcribed, not re-invented.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -189,11 +197,18 @@ export async function transitionLifecycleState(
  *
  * D12 (adversarial gate): IDEMPOTENT — the doc always claimed 409 tolerance
  * but the code had no try/catch, so a re-invocation against a populated dir
- * aborted on the 409 CONFLICT. Now: on 409 the actor already exists — read
- * it back via GET /api/users and verify the id, falling back to the
- * canonical id only when the list cannot resolve it. */
+ * aborted on the 409 CONFLICT. Now: on 409 the actor already exists — read it
+ * back via GET /api/users and SELECT IT by username (or, as a fallback, by its
+ * recordId). The list is UNFILTERED (it includes the bootstrap
+ * USR-LOCAL-ADMIN first on a populated dir), so the FIRST-entry-with-any-id
+ * the old code took aborted whenever the actor was not first (FIX RUN 2 /
+ * defect 2). The actor resolves iff a listed user matches
+ * username === ACTOR_USERNAME or recordId === ACTOR_ID; ONLY when neither
+ * resolves does the idempotent path error (fail closed). The returned id is
+ * always ACTOR_ID (the selection PROVES the 409 was the actor's, not a
+ * different user's). */
 export async function ensureActorUser(backend: string): Promise<string> {
-  let recordId: string;
+  let recordId: string | undefined;
   try {
     const { json } = await apiCall(backend, '/api/users', {
       method: 'POST',
@@ -207,7 +222,7 @@ export async function ensureActorUser(backend: string): Promise<string> {
     });
     recordId = json && typeof json === 'object' && typeof (json as Record<string, unknown>).recordId === 'string'
       ? (json as Record<string, unknown>).recordId as string
-      : null!;
+      : undefined;
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       // Already minted (idempotent re-run on a populated dir): read it back.
@@ -215,18 +230,37 @@ export async function ensureActorUser(backend: string): Promise<string> {
       const users = json && typeof json === 'object' && Array.isArray((json as Record<string, unknown>).users)
         ? ((json as Record<string, unknown>).users as unknown[])
         : [];
-      const found = users
-        .map((u) => (u && typeof u === 'object' ? (u as Record<string, unknown>).recordId : undefined))
-        .find((id) => typeof id === 'string' && id.length > 0);
-      if (typeof found !== 'string' || found.length === 0) {
-        throw new Error(`actor user exists (409) but could not be resolved from GET /api/users: ${JSON.stringify(json ?? null)}`);
+      // D12/defect 2: SELECT the actor by username (or recordId) from the
+      // unfiltered list — never the first entry. The bootstrap USR-LOCAL-ADMIN
+      // is first on a populated dir, so first-entry is the wrong user.
+      const matches = users
+        .map((u) => (u && typeof u === 'object' ? (u as Record<string, unknown>) : undefined))
+        .filter(
+          (u) =>
+            u !== undefined &&
+            (u.username === ACTOR_USERNAME || u.recordId === ACTOR_ID),
+        );
+      if (matches.length === 0) {
+        throw new Error(
+          `actor user exists (409) but could not be resolved from GET /api/users ` +
+            `(no user with username '${ACTOR_USERNAME}' or recordId '${ACTOR_ID}'): ${JSON.stringify(json ?? null)}`,
+        );
       }
-      if (found !== ACTOR_ID) {
-        throw new Error(`existing actor user has unexpected id ${found} (expected ${ACTOR_ID})`);
+      const actor = matches[0] as Record<string, unknown>;
+      const actorRecordId = typeof actor.recordId === 'string' ? actor.recordId : undefined;
+      // The selection proves this is the actor; the id must be the canonical
+      // one (a username match with a different id = a colliding/dirty record).
+      if (actorRecordId !== ACTOR_ID) {
+        throw new Error(
+          `existing actor user resolved (username '${ACTOR_USERNAME}' or recordId '${ACTOR_ID}') but has unexpected id ${JSON.stringify(actorRecordId)} (expected ${ACTOR_ID})`,
+        );
       }
-      return found;
+      return actorRecordId;
     }
     throw e;
+  }
+  if (recordId === undefined) {
+    throw new Error('actor user minted but the create response carried no recordId');
   }
   if (recordId !== ACTOR_ID) {
     throw new Error(`actor user minted with unexpected id ${recordId} (expected ${ACTOR_ID})`);
@@ -366,24 +400,38 @@ export async function seedJourneyFixtures(
     notes: 'trunk-journeys fixture — the physical sample the GC run analyzed.',
   }, `trunk-journeys seed: sample ${sample}`);
 
-  // --- J2: claim (atomic, global). D8: a REAL biological triple from the
-  //  repo's predicate registry + the canonical knowledge-layer example's
-  //  own claim — beta-oxidation flux is causally upstream of the oxidative
-  //  stress response (RO:0002411, the registry's registered "causally
-  //  upstream of"). (The old triple was a mislabeled assembly: a CHEBI
-  //  "organic compound" placeholder, the wrong predicate ("part of"), and
-  //  an OBSOLETE GO PI3K-activity term labeled a chromatographic peak; no
-  //  external CURIE is ever mislabeled.) ---
+  // --- J2: claim (atomic, global). FIX RUN 2 / defect 1 (adversarial
+  //  gate cycle-2): the D8 repair had swapped in the canonical
+  //  knowledge-layer EXAMPLE's biology triple (beta-oxidation ->
+  //  oxidative-stress) WITHOUT re-scoping the claim's title or the
+  //  assertion that cites it — the live record wrote a claim TITLE saying
+  //  "GC peak claim" + a STMT/TRIPLE about an unrelated biological
+  //  mechanism, cited by an assertion saying "the GC run shows the analyte
+  //  peak(s)" whose context's subject is the GC sample. The claim now is
+  //  about WHAT THE RUN MEASURED: the GC peak-integration MEASUREMENT and
+  //  the analyte-peak-presence QUANTITY it measures. The triple is
+  //  (measurement --CL:measures--> quantity): a documented cf: LOCAL TERM
+  //  PAIR (the repo's cf: local-CURIE precedent, schema/registry/ — cf:
+  //  terms document a local quantity/measurement concept; no external
+  //  ontology CURIE is mislabeled or invented) with a REGISTRY-LEGAL
+  //  predicate: CL:measures, the predicate registry's "Measurement &
+  //  Assay" predicate, whose subject_kinds include 'measurement' and
+  //  object_kinds include 'quantity' (schema/registry/
+  //  predicates.registry.yaml). title / statement / triple / the citing
+  //  assertion are now a SINGLE meaning (the measurement relationship)
+  //  that the GC-sample context genuinely describes. (The old incoherent
+  //  shape: title "GC peak claim" + a beta-oxidation->oxidative-stress
+  //  biology statement/triple a GC-sample context does not describe.) ---
   const claim = `CLM-TJ-${rand}`;
   await createRecord(backend, SCHEMA.claim, {
     kind: 'claim',
     id: claim,
-    title: `trunk-journeys GC peak claim ${rand}`,
+    title: `trunk-journeys GC peak-integration measurement claim ${rand}`,
     statement:
-      'Fatty acid beta-oxidation flux is causally upstream of the response to oxidative stress.',
-    subject: { kind: 'ontology', id: 'GO:0006635', namespace: 'GO', label: 'fatty acid beta-oxidation' },
-    predicate: { kind: 'ontology', id: 'RO:0002411', namespace: 'RO', label: 'causally upstream of' },
-    object: { kind: 'ontology', id: 'GO:0006979', namespace: 'GO', label: 'response to oxidative stress' },
+      'The GC peak-integration measurement measures the presence of the analyte peak(s) in the chromatogram signal.',
+    subject: { kind: 'ontology', id: 'cf:gc-peak-analysis', namespace: 'cf', label: 'GC peak-integration measurement' },
+    predicate: { kind: 'ontology', id: 'CL:measures', namespace: 'CL', label: 'measures' },
+    object: { kind: 'ontology', id: 'cf:analyte-peak-presence', namespace: 'cf', label: 'analyte peak presence' },
     status: 'active',
   }, `trunk-journeys seed: claim ${claim}`);
 

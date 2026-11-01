@@ -61,18 +61,24 @@ function newestRunDir(receiptsHome: string): string | null {
 /**
  * Does the verdict cover the full declared journey set? The run's declared
  * scope (declaredJourneys) must equal the set of recorded journey results,
- * and every recorded result must be green. Legacy verdicts (no
- * declaredJourneys) are judged on their own recorded set only.
+ * and every recorded result must be green.
+ *
+ * O-A (FIX RUN 2): a verdict that recorded NO declaredJourneys has an UNKNOWN
+ * declared scope — we cannot confirm the full set was covered, so fail CLOSED
+ * (block). The old code returned true for legacy verdicts unconditionally, so
+ * a pre-fix `--only J1` green ("{result:green, journeys:[J1]}", no
+ * declaredJourneys) exited 0 and the message wrongly claimed "full declared
+ * set". The no-run-dirs case is a SEPARATE path (newestRunDir === null ->
+ * code 0) and stays permissive — this predicate is only reached when a run
+ * dir + verdict exist.
  */
 function fullScopeCovered(v: Verdict): boolean {
   const declared = v.declaredJourneys;
   const results = v.journeys ?? [];
   const resultIds = new Set(results.map((j) => j.id));
   if (results.length === 0) return false;
-  if (declared === undefined || declared.length === 0) {
-    // Legacy: no declared scope recorded — the recorded set IS the scope.
-    return true;
-  }
+  // O-A: no declared scope recorded -> unknown scope -> fail closed (block).
+  if (declared === undefined || declared.length === 0) return false;
   // The recorded set must cover EXACTLY the declared scope (no missing, no
   // extras) and be all green.
   for (const id of declared) if (!resultIds.has(id)) return false;
@@ -122,7 +128,11 @@ export function checkGreen(receiptsHome: string = DEFAULT_RECEIPTS_HOME): { code
         message: `check-green: PARTIAL — latest verdict ${path} is green only for ${have} of the declared set [${declared.join(', ')}]. A scoped run does not gate the full set; claims are BLOCKED until the full declared set runs green.`,
       };
     }
-    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys, full declared set, isolation ok)` };
+    // fullScopeCovered===true here implies declaredJourneys is present AND the
+    // recorded set covers it exactly AND every journey is green (O-A), so the
+    // "full declared set" claim is now accurate (the old wording fired on the
+    // legacy no-declaredJourneys path too — that path now blocks).
+    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys; the full declared set [${(verdict.declaredJourneys ?? []).join(', ')}] is covered and every journey is green; isolation ok)` };
   }
   return { code: 2, message: `check-green: unrecognized verdict result '${verdict.result}' at ${path}` };
 }

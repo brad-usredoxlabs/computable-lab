@@ -28,13 +28,15 @@ function newestRunDir(receiptsHome) {
   return dirs.length > 0 ? join(receiptsHome, dirs[dirs.length - 1].name) : null;
 }
 
-/** Full declared scope covered: declared set == recorded set, all green. */
+/** Full declared scope covered: declared set == recorded set, all green.
+ *  O-A (FIX RUN 2): no declaredJourneys -> UNKNOWN scope -> fail closed
+ *  (block); the old mirror returned true for legacy verdicts. */
 function fullScopeCovered(v) {
   const declared = v.declaredJourneys;
   const results = v.journeys ?? [];
   const resultIds = new Set(results.map((j) => j.id));
   if (results.length === 0) return false;
-  if (declared === undefined || declared.length === 0) return true; // legacy: recorded set IS the scope
+  if (declared === undefined || declared.length === 0) return false; // O-A: no declared scope -> unknown -> fail closed
   for (const id of declared) if (!resultIds.has(id)) return false;
   if (results.length !== declared.length) return false;
   return results.every((j) => j.result === 'green');
@@ -71,7 +73,9 @@ export function checkGreen(receiptsHome = DEFAULT_RECEIPTS_HOME) {
       const have = (verdict.journeys ?? []).map((j) => `${j.id}=${j.result}`).join(', ');
       return { code: 4, message: `check-green: PARTIAL — latest verdict ${path} is green only for ${have} of the declared set [${declared.join(', ')}]. A scoped run does not gate the full set; claims are BLOCKED until the full declared set runs green.` };
     }
-    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys, full declared set, isolation ok)` };
+    // O-A: fullScopeCovered===true implies declaredJourneys present + full
+    // coverage + all green, so the "full declared set" claim is accurate.
+    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys; the full declared set [${(verdict.declaredJourneys ?? []).join(', ')}] is covered and every journey is green; isolation ok)` };
   }
   return { code: 2, message: `check-green: unrecognized verdict result '${verdict.result}' at ${path}` };
 }

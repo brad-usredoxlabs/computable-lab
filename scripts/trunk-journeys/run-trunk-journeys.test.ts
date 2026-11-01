@@ -22,6 +22,7 @@ import {
   interpolate,
   JourneyError,
   runStep,
+  journeyOutcome,
   type RunnerCtx,
 } from './lib/journey.js';
 import { checkGreen } from './check-green.js';
@@ -30,6 +31,9 @@ import {
   assertNoBannedInterception,
   BANNED_INTERCEPTION_PATTERNS,
 } from './lib/selfcheck.js';
+// FIX RUN 2 (defect 2): exercise the REAL ensureActorUser 409 path against a
+// stub backend (both list orderings + the empty-list fail-closed case).
+import { ensureActorUser, ACTOR_ID, ACTOR_USERNAME } from './lib/seed.js';
 
 let failures = 0;
 let passes = 0;
@@ -375,6 +379,60 @@ console.log('\n[9] runStep / assertExpect / attribution (D4/D6)');
       `failed-step attribution: ctx.current names the failing assert (got ${JSON.stringify(ctx.current)}, last log line was '${logLines.at(-1) ?? ''}')`,
     );
   }
+  // FIX RUN 2 / defect 3 — the RECORDING of failed_step goes through
+  // journeyOutcome (the driver's red path), not the last LOGGED line. The
+  // gate's exact symptom: a screenshot entry-logged just before a failing
+  // assert meant the last-log parse reported the screenshot path, not the
+  // assert. This leg runs the SAME screenshot-then-failing-assert sequence
+  // and asserts the RECORDED failed_step (journeyOutcome output) — not just
+  // the input ctx.current the old [9] leg checked (journeyOutcome was
+  // imported by no test).
+  {
+    const page = new Proxy({}, {
+      get: (_t, prop: string) =>
+        prop === 'url'
+          ? () => 'http://127.0.0.1:1/'
+          : (..._args: unknown[]) => (prop === 'evaluate' ? Promise.resolve(false) : Promise.resolve()),
+    });
+    const logLines: string[] = [];
+    const ctx: RunnerCtx = {
+      backend, worktree: '/tmp', mountDir: '/tmp', screenshotsDir: '/tmp',
+      rand: 'test0003', vars: {}, page: page as RunnerCtx['page'],
+      log: (j, s, line) => { logLines.push(`[${j}] ${s}: ${line}`); },
+      current: 'execute-and-chromatogram',
+    };
+    let caught: Error | undefined;
+    try {
+      await runStep(
+        {
+          kind: 'browser',
+          name: 'execute-and-chromatogram',
+          actions: [
+            { screenshot: 'j1-chromatogram' },
+            { assertJs: { name: 'chromatogram-non-blank', expr: 'false' } },
+          ],
+        } as never,
+        ctx,
+        'J1',
+      );
+    } catch (e) {
+      caught = e instanceof Error ? e : new Error(String(e));
+    }
+    ok(caught !== undefined, 'D3: the failing assertJs throws (red leg)');
+    const outcome = journeyOutcome('J1', ctx, caught ?? new Error('no throw'));
+    ok(outcome.result === 'red', 'D3: journeyOutcome records a red result on the thrown step');
+    ok(
+      outcome.failed_step === 'chromatogram-non-blank',
+      `D3: journeyOutcome records failed_step = the failing assert NAME (got ${JSON.stringify(outcome.failed_step)})`,
+    );
+    // The last LOGGED line is the screenshot path (entry-logging) — the OLD
+    // last-log attribution would have reported THAT, not the assert. Proves
+    // the recorded field diverges from the log line (the gate's symptom).
+    ok(
+      (logLines.at(-1) ?? '').includes('screenshot'),
+      `D3: the last LOGGED line is the screenshot (so a last-log parse would mis-report; journeyOutcome does not)`,
+    );
+  }
   server.close();
 }
 
@@ -423,14 +481,164 @@ console.log('\n[11] D8/D9 seed knowledge-layer integrity (source invariants)');
   ok(!/RO:0002200/.test(seedSrc), 'D8: RO:0002200 ("part of" / "has phenotype" — wrong predicate) is gone');
   ok(!/entered_by: \{ kind: 'ontology'/.test(seedSrc), 'D8: entered_by is a RECORD ref, not an ontology ref');
   ok(/entered_by: \{ kind: 'record', id: ACTOR_ID/.test(seedSrc), 'D8: entered_by = record ref to the harness actor');
-  // The claim triple must use the registry-verified real terms.
-  ok(/RO:0002411/.test(seedSrc) && /GO:0006635/.test(seedSrc) && /GO:0006979/.test(seedSrc), 'D8: claim triple = real GO/RO terms (RO:0002411 causally upstream of, between GO processes)');
+  // FIX RUN 2 / defect 1: the D8-repair biology triple (GO:0006635 -RO:0002411->
+  // GO:0006979) was incoherent with the claim's TITLE ("GC peak claim") and the
+  // assertion that CITES it ("the GC run shows the expected analyte peak(s)",
+  // outcome.measure = peak_presence) — the context's subject is a GC SAMPLE,
+  // which a beta-oxidation->oxidative-stress biology triple does not describe.
+  // The claim is now a coherent MEASUREMENT relationship (the gate's allowed
+  // shape: a real analyte/measurement entity with a registry-legal predicate
+  // for the GC context, a documented cf: local-term pair): the GC
+  // peak-integration measurement CL:measures the analyte-peak-presence
+  // quantity. title / statement / triple / the citing assertion are
+  // single-meaning (the measurement the GC run performed). The biology terms
+  // are GONE (a GC sample does not beta-oxidize), the registry-legal predicate
+  // CL:measures (Measurement & Assay family, subject_kinds incl. 'measurement',
+  // object_kinds incl. 'quantity') is PRESENT, the documented cf: local-term
+  // pair is PRESENT, and the claim TITLE names the measurement (the old
+  // "GC peak claim" title + unrelated statement are gone).
+  ok(!/GO:0006635/.test(seedSrc) && !/GO:0006979/.test(seedSrc) && !/RO:0002411/.test(seedSrc), 'D1-fix: the incoherent beta-oxidation->oxidative-stress biology triple (a GC sample does not beta-oxidize) is GONE from the claim');
+  ok(/id: 'CL:measures'/.test(seedSrc), 'D1-fix: the claim predicate is the REGISTRY-LEGAL CL:measures (Measurement & Assay; subject=measurement, object=quantity)');
+  ok(/id: 'cf:gc-peak-analysis'/.test(seedSrc) && /id: 'cf:analyte-peak-presence'/.test(seedSrc), 'D1-fix: the claim triple = a documented cf: LOCAL TERM PAIR (measurement -> measured quantity), per the repo cf: precedent');
+  ok(/title: `trunk-journeys GC peak-integration measurement claim/.test(seedSrc), 'D1-fix: the claim TITLE names the measurement (title and statement are single-meaning — the old "GC peak claim" title + unrelated statement pairing is gone)');
+  // The citation is consistent: the assertion's statement names what the claim
+  // says (the GC run shows the expected analyte peak(s)), and its
+  // outcome.measure (peak_presence) is the quantity the claim's OBJECT
+  // measures — title / statement / triple / assertion assert ONE thing.
+  ok(/measure: 'peak_presence'/.test(seedSrc), 'D1-fix: the citing assertion\'s outcome.measure (peak_presence) is the quantity the claim measures (the citation is consistent, not an unrelated biology statement)');
   // D9: the context's subject_ref RESOLVES — the sample is minted and the
   // read-back follows subject_ref.
   ok(/const sample = `SMP-TJ-\$\{rand\}`/.test(seedSrc), 'D9: the sample record (SMP-TJ-<rand>) is minted by the seed');
   ok(/subject_ref: \{ kind: 'record', id: sample/.test(seedSrc), 'D9: context subject_ref = the minted sample id');
   ok(/await getRecord\(backend, sample\);/.test(seedSrc), 'D9: the read-back follows subject_ref to the sample (dangling ref fails closed)');
   ok(seedSrc.includes('party, request, sample, gcMethod, engine, revision, claim, context, assertion'), 'D9: the read-back loop covers the full fixture set incl. the subject chain');
+}
+
+// --- [12] FIX RUN 2 / defect 3 — the driver's RED path records failed_step
+//     via journeyOutcome (not the last logged line). Source/call-site
+//     invariant: journeyOutcome is imported AND called in the catch; the OLD
+//     last-log attribution (parse the last stepLogLines entry into
+//     failed_step) is ABSENT. Neutering the driver's catch back to last-log
+//     parsing (the gate's mutant) leaves the recorded-field unit leg [9]
+//     still meaningful but is caught here in the source.
+console.log('\n[12] driver red-path attribution invariant (D3)');
+{
+  const driver = readFileSync(join(here, 'run-trunk-journeys.ts'), 'utf8');
+  ok(
+    /import\s*\{[^}]*\bjourneyOutcome\b[^}]*\}\s*from\s*'\.\/lib\/journey\.js'/.test(driver),
+    'D3: the driver IMPORTS journeyOutcome from lib/journey.js',
+  );
+  const catchOutcome = driver.match(/catch\s*\(\s*err\s*\)\s*\{[\s\S]*?journeyOutcome\(/);
+  ok(catchOutcome !== null, 'D3: the driver catch BLOCK calls journeyOutcome( (the red path)');
+  // The OLD last-log attribution: parse the last stepLogLines entry into
+  // failed_step. It must be GONE (neutered to last-log parsing = the gate's
+  // mutant that kept the suite green).
+  ok(!driver.includes('jr.failed_step = last'), 'D3: the old last-log failed_step parse (jr.failed_step = last...) is gone');
+  ok(!/stepLogLines\.filter\(/.test(driver), 'D3: the old last-log attribution (stepLogLines.filter(...) to find the failing step) is gone');
+}
+
+// --- [13] FIX RUN 2 / defect 2 — ensureActorUser 409 idempotency. The REAL
+//     exported function against a stub backend (POST /api/users -> 409,
+//     GET /api/users -> the user list). The list is UNFILTERED (bootstrap
+//     USR-LOCAL-ADMIN first on a populated dir), so the actor must be SELECTED
+//     by username/recordId, not taken as the first entry. Both orderings +
+//     the empty-list fail-closed case.
+console.log('\n[13] ensureActorUser 409 idempotency (D12)');
+{
+  const actorEntry = { recordId: ACTOR_ID, username: ACTOR_USERNAME, displayName: 'trunk-journeys harness admin', status: 'active' };
+  const adminEntry = { recordId: 'USR-LOCAL-ADMIN', username: 'local-admin', displayName: 'local admin', status: 'active' };
+  // A stub backend: POST /api/users -> 409 CONFLICT (already exists);
+  // GET /api/users -> { users: [...] }.
+  function stub409Backend(users: unknown[]) {
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      const path = (req.url ?? '').split('?')[0];
+      if (req.method === 'POST' && path === '/api/users') {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ error: 'CONFLICT', message: 'User already exists' }));
+        return;
+      }
+      if (req.method === 'GET' && path === '/api/users') {
+        res.end(JSON.stringify({ users }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: 'not found' }));
+    });
+    return server;
+  }
+  async function startStub(users: unknown[]): Promise<{ backend: string; close: () => Promise<void> }> {
+    const server = stub409Backend(users);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    return { backend: `http://127.0.0.1:${port}`, close: () => new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve()))) };
+  }
+
+  // [A] actor FIRST in the list -> resolves to the actor id (the old code's
+  // only working case; must still hold).
+  {
+    const stub = await startStub([actorEntry, adminEntry]);
+    const id = await ensureActorUser(stub.backend);
+    ok(id === ACTOR_ID, `D12 409 [A] actor-first list resolves to the actor id (got ${id})`);
+    await stub.close();
+  }
+  // [B] admin FIRST (realistic: USR-LOCAL-ADMIN exists first), actor second.
+  // The OLD code took the first entry-with-any-id (the admin) and threw; the
+  // FIXED code selects by username -> resolves the actor.
+  {
+    const stub = await startStub([adminEntry, actorEntry]);
+    const id = await ensureActorUser(stub.backend);
+    ok(id === ACTOR_ID, `D12 409 [B] admin-first list (actor second) still resolves to the actor id (got ${id})`);
+    await stub.close();
+  }
+  // [C] the actor is ABSENT from the list (409 from a different user) -> the
+  // idempotent path FAILS CLOSED (errors), never returns a wrong id.
+  {
+    const stub = await startStub([adminEntry]);
+    let threw = false;
+    let msg = '';
+    try {
+      await ensureActorUser(stub.backend);
+    } catch (e) {
+      threw = true;
+      msg = e instanceof Error ? e.message : String(e);
+    }
+    ok(threw, `D12 409 [C] actor absent from the list -> the idempotent path fails closed (threw: ${msg.slice(0, 60)})`);
+    await stub.close();
+  }
+  // [D] the GET list is EMPTY (no resolvable entry) -> fails closed.
+  {
+    const stub = await startStub([]);
+    let threw = false;
+    try {
+      await ensureActorUser(stub.backend);
+    } catch {
+      threw = true;
+    }
+    ok(threw, 'D12 409 [D] empty user list -> the idempotent path fails closed');
+    await stub.close();
+  }
+}
+
+// --- [14] FIX RUN 2 / O-A — the legacy verdict path. A verdict with NO
+//     declaredJourneys (a pre-fix `--only J1` green) has an UNKNOWN declared
+//     scope: it must now BLOCK (fail closed), not exit 0 claiming "full
+//     declared set". The no-run-dirs permissive policy is UNCHANGED (nothing
+//     has run -> code 0).
+console.log('\n[14] legacy verdict (no declaredJourneys) fails closed (O-A)');
+{
+  // legacy green verdict, NO declaredJourneys, one green journey -> BLOCKED
+  const legacy = mkdtempSync(join(tmpdir(), 'tj-cg-legacy-'));
+  verdictFile(legacy, '2026-10-31T100000000-abc9', { result: 'green', journeys: [{ id: 'J1', result: 'green' }] }, T0 + 1000);
+  const rLegacy = checkGreen(legacy);
+  ok(rLegacy.code !== 0, `O-A: legacy verdict (green, NO declaredJourneys) -> non-zero (got ${rLegacy.code})`);
+  ok(/PARTIAL|declared/i.test(rLegacy.message), `O-A: the legacy message names the missing/partial declared scope (got: ${rLegacy.message.slice(0, 80)})`);
+
+  // no run dirs at all -> STILL code 0 (the permissive policy is unchanged;
+  // O-A only tightens the path where a run dir + verdict exist).
+  const none2 = mkdtempSync(join(tmpdir(), 'tj-cg-none2-'));
+  const rNone2 = checkGreen(none2);
+  ok(rNone2.code === 0, `O-A: no run dirs at all STILL -> 0 (permissive policy unchanged, got ${rNone2.code})`);
 }
 
 console.log(`\nRESULT: ${passes} passed, ${failures} failed`);
