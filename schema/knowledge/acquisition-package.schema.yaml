@@ -221,8 +221,12 @@ properties:
         properties:
           relativePath:
             type: string
-            pattern: "^[A-Za-z0-9][A-Za-z0-9._ -]*(/[A-Za-z0-9][A-Za-z0-9._ -]*)*$"
-            description: "Which package member was read (the run_log member, e.g. RUN.LOG), relative to the package root."
+            pattern: "^(|([A-Za-z0-9][A-Za-z0-9._ -]*)(/[A-Za-z0-9][A-Za-z0-9._ -]*)*)$"
+            description: >-
+              Which package member was read (the run_log member, e.g. RUN.LOG),
+              relative to the package root. EMPTY when no run_log member existed
+              in the package (the honest floor arm: run-log-member-absent) —
+              the decode facts on that arm still name the encoding 'none'.
       decode:
         type: object
         unevaluatedProperties: false

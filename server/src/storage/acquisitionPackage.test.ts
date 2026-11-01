@@ -29,10 +29,12 @@ import {
   registerAcquisitionPackage,
   verifyAcquisitionPackage,
   packageAnalysisInputs,
+  classifyAcquisitionPackageStatus,
   AcquisitionPackageError,
   DEFAULT_ROLE_MAP,
   ACQUIRING_MARKER,
 } from './acquisitionPackage.js';
+import { loadLogPatterns } from './acquisitionPackageStatus.js';
 
 const DEVICE_ID = 'nas0'; // test device id — config DATA, not a real config id
 
@@ -474,6 +476,131 @@ describe('verifyAcquisitionPackage + packageAnalysisInputs (D7 mutation window)'
     await writeFile(join(ctx.mountRoot, 'machine1', 'SYNTH-MUT.D', 'FID1A.CH'), `${ctx.marker}\nTAMPERED again\n`);
     const after = (await ctx.app.store.get('ANR-ACQP-FROZEN'))!;
     expect(after.payload).toEqual(runPayload);
+  });
+});
+
+describe('FAME-1: registration stamps the acquisition status from the run_log member', () => {
+  const ctx: Ctx = { app: null as never, mountRoot: '', wsDir: '', marker: '' };
+
+  /** A strict-UTF-16LE + BOM byte stream (the utf16leBom test idiom). */
+  const utf16leBom = (text: string): Buffer =>
+    Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+
+  const patterns = { id: '', version: '' as string | number };
+
+  beforeAll(async () => {
+    const built = await makeCtx('status');
+    ctx.app = built.app;
+    ctx.mountRoot = built.mountRoot;
+    ctx.wsDir = built.wsDir;
+    ctx.marker = built.marker;
+    const p = await loadLogPatterns();
+    patterns.id = p.id;
+    patterns.version = p.version;
+    // Tree 1: a real instrument-shape RUN.LOG (strict UTF-16LE + BOM) that
+    // carries a method-completed line — the completed arm.
+    const d1 = join(ctx.mountRoot, 'machine1', 'SYNTH-COMPLETE.D');
+    await mkdir(d1, { recursive: true });
+    await writeFile(join(d1, 'FID1A.CH'), `${ctx.marker}\nsignal\n`);
+    await writeFile(join(d1, 'SAMPLE.XML'), `${ctx.marker}\n<sample/>\n`);
+    await writeFile(
+      join(d1, 'RUN.LOG'),
+      utf16leBom(
+        'Method       Method started                                 14:57:04 10/23/26\r\n' +
+          'Method       Method completed                               15:24:43 10/23/26\r\n',
+      ),
+    );
+    // Tree 2: the gate-fixture shape — a PLAIN ASCII RUN.LOG. The naive
+    // utf-16 decode yields mojibake (never a crash); zero rule hits -> the
+    // DECLARED floor (unknown), never completed.
+    const d2 = join(ctx.mountRoot, 'machine1', 'SYNTH-ASCIILOG.D');
+    await mkdir(d2, { recursive: true });
+    await writeFile(join(d2, 'FID1A.CH'), `${ctx.marker}\nsignal\n`);
+    await writeFile(join(d2, 'SAMPLE.XML'), `${ctx.marker}\n<sample/>\n`);
+    await writeFile(join(d2, 'RUN.LOG'), 'L1-SIGNALDREF gate fixture\r\nsynthetic run log\r\n');
+    // Tree 3: a .D with NO run_log member at all (RUN.LOG is not a
+    // REQUIRED_MEMBERS member — registration MUST succeed, status = floor).
+    const d3 = join(ctx.mountRoot, 'machine1', 'SYNTH-NORUNLOG.D');
+    await mkdir(d3, { recursive: true });
+    await writeFile(join(d3, 'FID1A.CH'), `${ctx.marker}\nsignal\n`);
+    await writeFile(join(d3, 'SAMPLE.XML'), `${ctx.marker}\n<sample/>\n`);
+  }, 30000);
+
+  afterAll(async () => {
+    for (const p of [ctx.mountRoot, ctx.wsDir]) {
+      if (p) await rm(p, { recursive: true, force: true });
+    }
+  });
+
+  it('a strict-UTF-16 RUN.LOG with a method-completed line -> completed + verbatim evidence', async () => {
+    const res = await registerAcquisitionPackage(ctx.app, {
+      deviceId: DEVICE_ID,
+      directoryKey: 'machine1/SYNTH-COMPLETE.D',
+    });
+    const payload = res.packagePayload;
+    expect(payload.acquisitionStatus).toBe('completed');
+    const ev = payload.acquisitionStatusEvidence as Record<string, any>;
+    expect(ev.ruleset).toEqual({
+      id: patterns.id,
+      version: patterns.version,
+      sourceFile: 'config/gc-acquisition-status/log-patterns.yaml',
+    });
+    expect(ev.sourceMember).toEqual({ relativePath: 'RUN.LOG' });
+    expect(ev.decode).toEqual({ encoding: 'utf-16le', bomPresent: true });
+    expect(Array.isArray(ev.matched)).toBe(true);
+    expect(ev.matched.length).toBeGreaterThanOrEqual(1);
+    const hit = ev.matched.find((m: { ruleId: string }) => m.ruleId === 'completed-method-completed');
+    expect(hit).toBeDefined();
+    // VERBATIM: the exact decoded line, no trimming/rewriting (bait #7).
+    expect(hit.line).toBe('Method       Method completed                               15:24:43 10/23/26');
+    expect(typeof hit.lineIndex).toBe('number');
+    expect(ev.noEvidenceReason).toBeUndefined();
+    // The record in the store carries the same stamp (payload round-trips).
+    const env = await ctx.app.store.get(res.packageRecordId);
+    expect(env).not.toBeNull();
+    expect((env!.payload as Record<string, unknown>).acquisitionStatus).toBe('completed');
+  });
+
+  it('a plain-ASCII RUN.LOG (gate-fixture shape) -> the DECLARED floor unknown, reason named', async () => {
+    const res = await registerAcquisitionPackage(ctx.app, {
+      deviceId: DEVICE_ID,
+      directoryKey: 'machine1/SYNTH-ASCIILOG.D',
+    });
+    expect(res.packagePayload.acquisitionStatus).toBe('unknown'); // NEVER completed (bait #5)
+    const ev = res.packagePayload.acquisitionStatusEvidence as Record<string, any>;
+    expect(ev.sourceMember).toEqual({ relativePath: 'RUN.LOG' });
+    // The ASCII log is even-length bytes: the strict decode SUCCEEDS into
+    // mojibake (not a decode failure) and zero rules hit.
+    expect(ev.decode.bomPresent).toBe(false);
+    expect(ev.matched).toEqual([]);
+    expect(ev.noEvidenceReason).toBeTruthy();
+  });
+
+  it('a .D with NO run_log member still REGISTERS (bait #5) -> unknown, reason run-log-member-absent', async () => {
+    const res = await registerAcquisitionPackage(ctx.app, {
+      deviceId: DEVICE_ID,
+      directoryKey: 'machine1/SYNTH-NORUNLOG.D',
+    });
+    expect(res.packageRecordId).toMatch(/^ACQP-/); // registration succeeded
+    expect(res.packagePayload.acquisitionStatus).toBe('unknown');
+    const ev = res.packagePayload.acquisitionStatusEvidence as Record<string, any>;
+    expect(ev.sourceMember).toEqual({ relativePath: '' });
+    expect(ev.noEvidenceReason).toBe('run-log-member-absent');
+    expect(ev.matched).toEqual([]);
+  });
+
+  it('the helper floors an unreadable member without throwing (floor-guaranteed)', async () => {
+    const provider = {
+      read: async (_path: string) => {
+        throw new Error('ENOENT: synthetic unreadable member');
+      },
+    };
+    const res = await classifyAcquisitionPackageStatus(provider, 'machine1/X.D', {
+      relativePath: 'RUN.LOG',
+    });
+    expect(res.acquisitionStatus).toBe('unknown');
+    expect(res.acquisitionStatusEvidence.noEvidenceReason).toMatch(/member-unreadable/);
+    expect(res.acquisitionStatusEvidence.decode.encoding).toBe('unreadable');
   });
 });
 

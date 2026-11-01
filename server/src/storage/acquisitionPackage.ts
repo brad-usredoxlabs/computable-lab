@@ -23,6 +23,10 @@ import { createHash } from 'node:crypto';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { acquireDataReference, hashStream } from './acquisition.js';
+import {
+  classifyAcquisitionStatus,
+  loadLogPatterns,
+} from './acquisitionPackageStatus.js';
 import type { AppContext } from '../server.js';
 import { assertSafeRelativePath, StorageError } from './types.js';
 import type { StorageDeviceConfig, StorageEntry } from './types.js';
@@ -476,6 +480,16 @@ export async function registerAcquisitionPackage(
 
   // Step 7: the acquisition-package record — created LAST so a partially
   // failed registration never leaves a package pointing at incomplete pins.
+  // FAME-1: BEFORE the create, classify the acquisition status from the
+  // package's run_log member (strict UTF-16 + the data-declared rule file)
+  // and stamp the result + its evidence onto the payload. Classification is
+  // floor-guaranteed (unknown on any failure, bait #5): it can NEVER fail
+  // registration, and the record is still created LAST.
+  const statusStamp = await classifyAcquisitionPackageStatus(
+    provider,
+    input.directoryKey,
+    fileDrefs.find((f) => f.role === 'run_log'),
+  );
   const packageRecordId = await mintAcquisitionPackageId(ctx);
   const packagePayload: Record<string, unknown> = {
     kind: 'acquisition-package',
@@ -489,6 +503,15 @@ export async function registerAcquisitionPackage(
       role: f.role,
     })),
     signalCollectionRef: { kind: 'record', type: 'data-reference', id: manifestDrefId },
+    // FAME-1: the acquisition status + its evidence (DATA — the matched
+    // lines, the decode facts, the interpretation source). Conditional
+    // spreads throughout: exactOptionalPropertyTypes (bait #1).
+    ...(statusStamp.acquisitionStatus !== undefined
+      ? { acquisitionStatus: statusStamp.acquisitionStatus }
+      : {}),
+    ...(statusStamp.acquisitionStatusEvidence !== undefined
+      ? { acquisitionStatusEvidence: statusStamp.acquisitionStatusEvidence }
+      : {}),
     ...(input.sourceRunRef ? { sourceRunRef: input.sourceRunRef } : {}),
     ...(input.sampleRef ? { sampleRef: input.sampleRef } : {}),
     registeredAt: new Date().toISOString(),
@@ -508,6 +531,113 @@ export async function registerAcquisitionPackage(
     manifestDrefId,
   };
 }
+
+/**
+ * FAME-1 — classify the acquisition status from the package's run_log member
+ * and return the stamp fields for the package payload (the caller stamps them
+ * BEFORE the record is created — the package record stays created LAST,
+ * registration order stands).
+ *
+ * UNKNOWN IS THE FLOOR, and classification NEVER fails registration (bait #5):
+ * no run_log member, an unreadable member, a decode failure, zero rule hits,
+ * even a missing rule FILE (misconfigured deployment) — all land on the
+ * DECLARED fallbackStatus (config/gc-acquisition-status/log-patterns.yaml —
+ * the data file) with a NAMED noEvidenceReason, never on a coded `completed`
+ * default and never on a thrown error. RUN.LOG is not a REQUIRED_MEMBERS
+ * member (acquisitionPackage.ts:69), so a missing/unreadable log is data, not
+ * a fault.
+ *
+ * The run_log member bytes are read through the SAME provider the DREF
+ * acquire path uses (provider.read — the acquisition.ts:100 /
+ * verifyAcquisitionPackage re-hash idiom); the relative path is the
+ * package-root-relative member path (e.g. "RUN.LOG").
+ */
+export async function classifyAcquisitionPackageStatus(
+  provider: { read(path: string): Promise<NodeJS.ReadableStream> },
+  directoryKey: string,
+  runLog: { relativePath: string } | undefined,
+): Promise<{
+  acquisitionStatus: string;
+  acquisitionStatusEvidence: {
+    ruleset: { id: string; version: string | number; sourceFile: string };
+    sourceMember: { relativePath: string };
+    decode: { encoding: string; bomPresent: boolean };
+    matched: Array<{ line: string; ruleId: string; lineIndex: number }>;
+    noEvidenceReason?: string;
+  };
+}> {
+  const floor = (
+    noEvidenceReason: string,
+    sourceRelativePath: string,
+    encoding: string,
+  ) => ({
+    acquisitionStatus: FLOOR_STATUS,
+    acquisitionStatusEvidence: {
+      ruleset: { id: FLOOR_RULESET_ID, version: FLOOR_RULESET_VERSION, sourceFile: PATTERN_SOURCE_LABEL },
+      sourceMember: { relativePath: sourceRelativePath },
+      decode: { encoding, bomPresent: false },
+      matched: [],
+      noEvidenceReason,
+    },
+  });
+  try {
+    const patterns = await loadLogPatterns();
+    // No run_log member declared in the package -> the declared floor, reason
+    // named (bait #5: registration still succeeds).
+    if (runLog === undefined) {
+      return {
+        acquisitionStatus: patterns.fallbackStatus,
+        acquisitionStatusEvidence: {
+          ruleset: { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL },
+          sourceMember: { relativePath: '' },
+          decode: { encoding: 'none', bomPresent: false },
+          matched: [],
+          noEvidenceReason: 'run-log-member-absent',
+        },
+      };
+    }
+    const stream = await provider.read(`${directoryKey}/${runLog.relativePath}`);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
+    const evidence = await classifyAcquisitionStatus(Buffer.concat(chunks), runLog.relativePath);
+    return {
+      acquisitionStatus: evidence.status,
+      acquisitionStatusEvidence: {
+        ruleset: evidence.ruleset,
+        sourceMember: evidence.sourceMember,
+        decode: evidence.decode,
+        matched: evidence.matched,
+        ...(evidence.noEvidenceReason !== undefined
+          ? { noEvidenceReason: evidence.noEvidenceReason }
+          : {}),
+      },
+    };
+  } catch (err) {
+    // An unreadable member OR a missing/malformed rule file is an honest
+    // floor case, never a registration failure: the reason names the failure
+    // (bait #7: facts preserved, never discarded).
+    return floor(
+      `member-unreadable: ${err instanceof Error ? err.message : String(err)}`,
+      runLog?.relativePath ?? '',
+      runLog === undefined ? 'none' : 'unreadable',
+    );
+  }
+}
+
+/**
+ * FAME-1 floor constants for the rule-file-missing / unreadable-member arm of
+ * classifyAcquisitionPackageStatus. These are NOT status-literals-with-
+ * meaning (bait #4): FLOOR_STATUS is a fixed DATA-PLUMBING placeholder — the
+ * DECLARED fallback lives in the rule file (fallbackStatus: unknown), and a
+ * misconfigured deployment with no rule file has no declared value to read,
+ * so the floor is the item's fixed floor word `unknown`, and the ruleset
+ * fields name the rule file's canonical coordinates (id/version as declared)
+ * so the evidence still points at the interpretation source that was UNREAD.
+ */
+const FLOOR_STATUS = 'unknown';
+const FLOOR_RULESET_ID = 'gc-acquisition-status';
+const FLOOR_RULESET_VERSION = 1;
+const PATTERN_SOURCE_LABEL = 'config/gc-acquisition-status/log-patterns.yaml';
 
 /**
  * The execution-time gate (spec D6 verify): re-run S1/S2 (the marker can
