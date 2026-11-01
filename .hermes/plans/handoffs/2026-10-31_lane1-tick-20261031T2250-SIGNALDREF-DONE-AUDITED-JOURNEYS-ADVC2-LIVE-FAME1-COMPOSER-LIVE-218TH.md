@@ -110,3 +110,39 @@
   instance confirmed by pgrep. (Lesson: relaunch pattern = kill launcher AND
   pgrep -f the prompt token before trusting a systemd re-launch.)
 218TH-END
+
+## ADDENDUM (same tick, 23:10) — adv cycle-2 landed FIX; FIX-2 coder LIVE slot-0
+- Adv cycle-2 exited rc=0 @ 22:51:46 (fast but REAL: 26KB report, 10 mutation
+  transcripts, gate re-ran the 68-suite/tsc/self-check itself, live receipt
+  2026-11-01T01022654-76bca193 inspected, OLS4 term labels verified externally).
+  VERDICT: fix — 10/13 defects proven; 3 MAJOR remain: (1) seed.ts claim/
+  assertion knowledge-layer incoherence introduced by the D8 repair (title vs
+  statement vs assertion contradict; subject_ref GC sample vs GO-process
+  subject); (2) ensureActorUser 409 path takes the FIRST user from the
+  unfiltered GET /api/users list (breaks when the actor isn't first — i.e.
+  every populated dir; zero tests on the 409 path); (3) failed_step attribution
+  ungated (reverting the driver catch to last-log parsing keeps 68/0 green).
+- FIX-2 DISPATCHED 23:05:57 (stagger-clear: prior :18080 launch 20:04:14
+  exited 21:05:51; slot-0 flock acquired for session life). Unit
+  l1trunkj-fix2-l1t2310, launcher PID 1979098, pid file
+  L1TRUNKJOURNEYSFIX2-1979098-2026-10-31 23:05:57, log
+  coder-L1TRUNKJOURNEYS-fix2-l1t2310.log, prompt
+  prompts/coder-L1TRUNKJOURNEYS-fix2-l1t2310.txt (defects verbatim + cheap
+  O-D/O-A tightenings; RED-first + /tmp mutation-proof each fix; unique report
+  l1-trunk-journeys-1-report-fix2-l1t2310.md). NO RE-DISPATCH while PID alive
+  or slot-0 held. Expected ~60-120 min; 2x watch ~01:10.
+- Gate budget note: this was cycle-2's FIX; cycle-3 dispatch ONLY as a targeted
+  re-check of the 3 defects; if cycle-3 still says fix -> architect with both
+  reports per SOUL step 7. Harness-only posture unchanged (boundary re-proven:
+  8/8 files scripts/trunk-journeys/**).
+- Gate observations carried for the merge handoff (non-blocking): O-A legacy
+  verdict permissiveness (tightened in FIX-2 window), O-B .mjs mirror untested,
+  O-C ms comment, O-D header wording (fixed in FIX-2), O-E source-grep legs,
+  O-F claim triple lives in TS fixture data (journeys-YAML declaration is the
+  architect-level preference; recorded, not expanded here).
+- FAME-1 composer still ALIVE at 23:10 (~20 min, holds tb-bg slot-1; expected
+  ~30-45 min). On draft: next tick verifies cites, promotes, claims FAME-1,
+  coder dispatch is slot-1-gated (slot-0 busy with FIX-2; fleet max 2; stagger:
+  FIX-2 started 23:05:57 -> a FAME-1 coder launch cannot happen before
+  ~00:05 unless FIX-2 exits first).
+218TH-ADDENDUM-END
