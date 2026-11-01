@@ -150,7 +150,8 @@ describe('REVISE-GHOST-1 fix4 — the answer-fold stream must terminate on the e
   it('fold re-hold (events=0, surviving cards): assistStream emits the done frame, ends the reply, and the payload carries the surviving clarifications', async () => {
     const RUN_ID = 'RUN-rg1-fix4-terminal';
     const context = runContext(RUN_ID);
-    const surface = 'workspace.deck';
+    // 'event-editor': shorthand-drafting DATA list (0257123d) retired the dead surface 'workspace.deck'.
+    const surface = 'event-editor';
 
     const model = stubModel([
       { toolCalls: [{ name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_shorthand', shorthand: AMBIGUOUS_YAML } }] },
