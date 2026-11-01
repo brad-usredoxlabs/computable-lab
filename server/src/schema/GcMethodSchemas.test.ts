@@ -403,6 +403,7 @@ interface RawSlot {
     label: string;
     help?: string;
     required?: boolean;
+    options?: Array<{ value: string; label: string }>;
   }>;
   refKind?: string;
 }
@@ -529,6 +530,10 @@ describe('gc-method ui (G5)', () => {
     expect(compound.slots).toEqual(['compound-assignments-slot']);
     const compoundSlot = byId.get('compound-assignments-slot')!;
     expect(compoundSlot.path).toBe('$.analysis.compound_assignments');
+    // FAME-3 (W3): the entry gains three OPTIONAL declared leaves —
+    // assignment_state (a select whose options are the schema enum verbatim),
+    // provenance (an object-bound leaf, FIX-1 D1), and reporting_basis_ref
+    // (a ref). The five pre-existing leaves survive in order.
     expect(
       (compoundSlot.properties ?? []).map((p) => [p.name, p.required]),
     ).toEqual([
@@ -537,7 +542,19 @@ describe('gc-method ui (G5)', () => {
       ['expected_rt_min', false],
       ['rt_window_min', false],
       ['response_factor', false],
+      ['assignment_state', false],
+      ['provenance', false],
+      ['reporting_basis_ref', false],
     ]);
+    // assignment_state is a select whose options ARE the schema enum verbatim
+    // (the vocabulary lives ONLY in the schema triplet — the D1 doctrine).
+    const stateLeaf = (compoundSlot.properties ?? []).find((p) => p.name === 'assignment_state')!;
+    expect(stateLeaf.widget).toBe('select');
+    const stateOpts = (stateLeaf as { options?: Array<{ value: string }> }).options ?? [];
+    expect(stateOpts.map((o) => o.value)).toEqual(['verified', 'provisional']);
+    expect(
+      (compoundSlot.properties ?? []).find((p) => p.name === 'reporting_basis_ref')!.widget,
+    ).toBe('ref');
 
     const provenance = editor.blocks.find(b => b.id === 'provenance')!;
     expect(provenance.slots).toEqual(['entered-by-slot', 'source-files-slot']);

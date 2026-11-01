@@ -265,6 +265,18 @@ editor:
         - { name: "expected_rt_min", widget: "number", label: "Expected retention time (minutes)", required: false }
         - { name: "rt_window_min", widget: "number", label: "Retention time window (minutes)", required: false }
         - { name: "response_factor", widget: "number", label: "Response factor", required: false }
+        # FAME-3: the entry's domain qualification — a select whose options are
+        # the schema enum verbatim (the vocabulary lives ONLY in the schema
+        # triplet; "unassigned" is the absence of an entry, never a value).
+        - { name: "assignment_state", widget: "select", label: "Assignment state", required: false, options: [ { value: "verified", label: "Verified" }, { value: "provisional", label: "Provisional" } ] }
+        # FAME-3: the entry's provenance as an object-bound leaf (FIX-1 D1:
+        # never a scalar widget over an object — that renders [object
+        # Object]).
+        - { name: "provenance", widget: "object", label: "Provenance", required: false, help: "Who entered it, when, and which run + peak it was read from." }
+        # FAME-3: the reporting face as a declaration (basis is data — NO
+        # enum; a missing basis term is scientist-minted via the existing mint
+        # mechanism). Absent = unknown, never a default.
+        - { name: "reporting_basis_ref", widget: "ref", label: "Reporting basis", required: false }
     # --- provenance ---
     - id: "entered-by-slot"
       path: "$.provenance_capture.entered_by"

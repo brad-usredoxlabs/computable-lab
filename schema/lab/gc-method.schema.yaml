@@ -188,6 +188,37 @@ properties:
               exclusiveMinimum: 0
             response_factor:
               type: number
+            # FAME-3: the entry's domain qualification (distinct from the
+            # record-level lifecycle). EXACTLY the two task terms — "unassigned"
+            # is the ABSENCE of an entry (unknown-is-unknown, the :46-48
+            # doctrine), never a stored value. Absent = unknown, never a
+            # default.
+            assignment_state:
+              type: string
+              enum: [verified, provisional]
+            # FAME-3: the entry's provenance — who entered it, when, and which
+            # run + peak it was read from (the task's who/when/which run+peak).
+            # All four keys declared; additionalProperties:false — no second
+            # vocabulary.
+            provenance:
+              type: object
+              additionalProperties: false
+              properties:
+                entered_by:
+                  $ref: "./datatypes/ref.schema.yaml"
+                recorded_at:
+                  type: string
+                  format: date-time
+                source_run_ref:
+                  $ref: "./datatypes/ref.schema.yaml"
+                source_peak_label:
+                  type: string
+            # FAME-3: the REPORTING face as a declaration (the FID face is the
+            # entry's identity; the basis note renders beside it). NO enum — a
+            # missing basis term is a scientist-minted local term via the
+            # existing mint mechanism. Absent = unknown, never a default.
+            reporting_basis_ref:
+              $ref: "./datatypes/ref.schema.yaml"
       # Internal-standard calibration block.
       calibration:
         type: object
