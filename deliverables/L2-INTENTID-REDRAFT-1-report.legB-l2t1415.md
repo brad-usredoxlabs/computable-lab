@@ -167,3 +167,78 @@ copied from the raw file).
 The RED is the natural one the brief asked for: the handler dropped `surface`, so
 `run()` never receives it. This is the live-path defect reproduced deterministically at
 the handler seam.
+
+---
+
+## 2b. APP RED (request-shape pin)
+
+New file `app/src/shared/api/aiClient.eventEditorSurface.test.ts` (mirrors the
+`chatClient.test.ts` real-client + fetch-stub idiom — drives `streamAssist` with a
+capturing fetch and asserts on the OUTGOING body). Three tests:
+(1) event-editor + answers → legacy `/ai/draft-events/stream`, body carries
+`surface:'event-editor'` + the clarificationAnswers; (2) event-editor, no answers →
+surface still present, the answers key ABSENT (byte-stable); (3) a non-event-editor
+surface (`run-workspace`) → body BYTE-IDENTICAL to the pre-fix shape (the
+byte-stability discipline for the OTHER surfaces is preserved).
+
+APP RED (captured against the PRE-FIX `aiClient.ts` by stashing only the aiClient fix,
+keeping the untracked test; full raw in `deliverables/legb-app-red.l2t1415.txt`). Tests 1+2
+FAIL on the surface assertion (`expected undefined to be 'event-editor'` — the body
+carried no surface); test 3 (non-event-editor byte-identical) PASSES by design. Fix
+restored via `git stash pop` after the capture.
+
+```
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts  (3 tests | 2 failed) 10ms
+   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
+     → expected undefined to be 'event-editor' // Object.is equality
+   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
+     → expected undefined to be 'event-editor' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
+AssertionError: expected undefined to be 'event-editor' // Object.is equality
+
+- Expected: 
+"event-editor"
+
++ Received: 
+undefined
+
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:90:26
+     88|     // THE DEFECT: pre-fix this key was ABSENT for event-editor (the
+     89|     // conditional-spread arm dropped it); RED on base, GREEN post-fix.
+     90|     expect(body.surface).toBe('event-editor')
+       |                          ^
+     91|     // The ANSWER-CHANNEL answers ride the same body (conditional spre…
+     92|     // present because a non-empty array was supplied).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
+AssertionError: expected undefined to be 'event-editor' // Object.is equality
+
+- Expected: 
+"event-editor"
+
++ Received: 
+undefined
+
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:110:26
+    108|     expect(calls[0]!.url).toContain('/ai/draft-events/stream')
+    109|     const body = calls[0]!.body as Record<string, unknown>
+    110|     expect(body.surface).toBe('event-editor')
+       |                          ^
+    111|     // Conditional spread discipline: absent, never undefined.
+    112|     expect('clarificationAnswers' in body).toBe(false)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  14:49:30
+   Duration  7.77s (transform 86ms, setup 850ms, collect 52ms, tests 10ms, environment 5.74s, prepare 409ms)
+```
+CODER-CAPTURED: `deliverables/legb-app-red.l2t1415.txt` (verbatim tail extracted from the
+raw). This is the same defect observed from the app side: the event-editor JSON body
+omitted `surface`, so the server handler could never have read one.

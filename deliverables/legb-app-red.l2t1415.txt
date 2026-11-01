@@ -1,0 +1,56 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/app
+
+(node:4091341) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts  (3 tests | 2 failed) 10ms
+   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
+     → expected undefined to be 'event-editor' // Object.is equality
+   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
+     → expected undefined to be 'event-editor' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
+AssertionError: expected undefined to be 'event-editor' // Object.is equality
+
+- Expected: 
+"event-editor"
+
++ Received: 
+undefined
+
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:90:26
+     88|     // THE DEFECT: pre-fix this key was ABSENT for event-editor (the
+     89|     // conditional-spread arm dropped it); RED on base, GREEN post-fix.
+     90|     expect(body.surface).toBe('event-editor')
+       |                          ^
+     91|     // The ANSWER-CHANNEL answers ride the same body (conditional spre…
+     92|     // present because a non-empty array was supplied).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
+AssertionError: expected undefined to be 'event-editor' // Object.is equality
+
+- Expected: 
+"event-editor"
+
++ Received: 
+undefined
+
+ ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:110:26
+    108|     expect(calls[0]!.url).toContain('/ai/draft-events/stream')
+    109|     const body = calls[0]!.body as Record<string, unknown>
+    110|     expect(body.surface).toBe('event-editor')
+       |                          ^
+    111|     // Conditional spread discipline: absent, never undefined.
+    112|     expect('clarificationAnswers' in body).toBe(false)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  14:49:30
+   Duration  7.77s (transform 86ms, setup 850ms, collect 52ms, tests 10ms, environment 5.74s, prepare 409ms)
+
