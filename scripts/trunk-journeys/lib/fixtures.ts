@@ -14,7 +14,10 @@
  * inventory (server/src/storage/acquisitionPackage.test.ts writeFullDotD) and
  * FID1A.CH is the role-resolved signal channel (acquisitionPackage.ts D10
  * default map). The non-signal members carry dummy bytes (they are
- * register-required members, never decoded by the runner).
+ * register-required members, never decoded by the runner). The knowledge-
+ * layer records the seed mints (seed.ts) carry ONLY real, verified ontology
+ * refs (the claim triple) — provenance actors are record refs, never ontology
+ * CURIEs, and no external CURIE is mislabeled (adversarial gate D8).
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

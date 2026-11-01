@@ -11,17 +11,27 @@
  * from the repo — never invented; parameterSchema = the declared-settings RUN
  * PARAMS the peak-integration engine consumes, with defaults so the Analyze
  * handler's collectDefaults seeds them), and a .D acquisition tree written to
- * the throwaway mount. (J2): a claim + a context (the WHY arm's context
- * record, knowledge-layer canonical shape) + an assertion (scoped to the
- * context via context_refs — the full context graph the bundle targets).
+ * the throwaway mount. (J2): the subject chain (party -> request -> sample —
+ * real schema-valid service records, so the context's subject_ref RESOLVES),
+ * a claim (a real biological triple — RO:0002411 "causally upstream of"
+ * between GO terms, from the repo's predicate registry), a context (the WHY
+ * arm's context record, knowledge-layer canonical shape, subject_ref = the
+ * minted sample), and an assertion (scoped to the context via context_refs).
  *
- * The record payloads are DATA-shaped (schema-driven, Ajv-validated on create);
- * the engine/revision parameter names are the GC-7 declared-settings contract
- * (peak_integration's §A2) — transcribed, not re-invented.
+ * The record payloads are DATA-shaped (schema-driven, Ajv-validated on create).
+ * Ontology integrity (adversarial gate D8): the ONLY external ontology refs
+ * are the real, verified GO/RO terms of the claim triple (GO:0006635 fatty
+ * acid beta-oxidation, RO:0002411 causally upstream of, GO:0006979 response
+ * to oxidative stress — the canonical knowledge-layer example's own claim
+ * triple). `entered_by` is a record ref to the harness actor — provenance
+ * actors are records, never ontology CURIEs. No external CURIE is ever
+ * mislabeled, and no invented ontology id is written into the knowledge
+ * layer. The engine/revision parameter names are the GC-7 declared-settings
+ * contract (peak_integration's §A2) — transcribed, not re-invented.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { apiCall, createRecord, getRecord, createAnalysisRevision, SYSTEM_ADMIN_USER } from './api.js';
+import { apiCall, ApiError, createRecord, getRecord, createAnalysisRevision, SYSTEM_ADMIN_USER } from './api.js';
 
 const S = 'https://computable-lab.com/schema/computable-lab/';
 export const SCHEMA = {
@@ -32,6 +42,11 @@ export const SCHEMA = {
   context: 'computable-lab/context',
   assertion: `${S}assertion.schema.yaml`,
   evidence: `${S}evidence.schema.yaml`,
+  // D9: the context's subject chain (schema/services/*) — real records so the
+  // subject_ref resolves (a dangling ref is a fail-closed stop).
+  party: `${S}party.schema.yaml`,
+  request: `${S}request.schema.yaml`,
+  sample: `${S}sample.schema.yaml`,
 };
 
 /** The GC-7 declared-settings run parameters (§A2). Every scientific value is
@@ -92,6 +107,9 @@ export interface SeedIds {
   gcMethod: string;
   engine: string;
   revision: string;
+  party: string;
+  request: string;
+  sample: string;
   claim: string;
   context: string;
   assertion: string;
@@ -167,21 +185,49 @@ export async function transitionLifecycleState(
   }
 }
 
-/** Mint the harness actor user (idempotent: tolerate a 409 CONFLICT). */
+/** Mint the harness actor user.
+ *
+ * D12 (adversarial gate): IDEMPOTENT — the doc always claimed 409 tolerance
+ * but the code had no try/catch, so a re-invocation against a populated dir
+ * aborted on the 409 CONFLICT. Now: on 409 the actor already exists — read
+ * it back via GET /api/users and verify the id, falling back to the
+ * canonical id only when the list cannot resolve it. */
 export async function ensureActorUser(backend: string): Promise<string> {
-  const { json } = await apiCall(backend, '/api/users', {
-    method: 'POST',
-    body: {
-      displayName: 'trunk-journeys harness admin',
-      username: ACTOR_USERNAME,
-      email: ACTOR_EMAIL,
-      password: ACTOR_PASSWORD,
-    },
-    user: SYSTEM_ADMIN_USER,
-  });
-  const recordId = json && typeof json === 'object' && typeof (json as Record<string, unknown>).recordId === 'string'
-    ? (json as Record<string, unknown>).recordId as string
-    : ACTOR_ID;
+  let recordId: string;
+  try {
+    const { json } = await apiCall(backend, '/api/users', {
+      method: 'POST',
+      body: {
+        displayName: 'trunk-journeys harness admin',
+        username: ACTOR_USERNAME,
+        email: ACTOR_EMAIL,
+        password: ACTOR_PASSWORD,
+      },
+      user: SYSTEM_ADMIN_USER,
+    });
+    recordId = json && typeof json === 'object' && typeof (json as Record<string, unknown>).recordId === 'string'
+      ? (json as Record<string, unknown>).recordId as string
+      : null!;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) {
+      // Already minted (idempotent re-run on a populated dir): read it back.
+      const { json } = await apiCall(backend, '/api/users');
+      const users = json && typeof json === 'object' && Array.isArray((json as Record<string, unknown>).users)
+        ? ((json as Record<string, unknown>).users as unknown[])
+        : [];
+      const found = users
+        .map((u) => (u && typeof u === 'object' ? (u as Record<string, unknown>).recordId : undefined))
+        .find((id) => typeof id === 'string' && id.length > 0);
+      if (typeof found !== 'string' || found.length === 0) {
+        throw new Error(`actor user exists (409) but could not be resolved from GET /api/users: ${JSON.stringify(json ?? null)}`);
+      }
+      if (found !== ACTOR_ID) {
+        throw new Error(`existing actor user has unexpected id ${found} (expected ${ACTOR_ID})`);
+      }
+      return found;
+    }
+    throw e;
+  }
   if (recordId !== ACTOR_ID) {
     throw new Error(`actor user minted with unexpected id ${recordId} (expected ${ACTOR_ID})`);
   }
@@ -230,7 +276,10 @@ export async function seedJourneyFixtures(
     method_name: 'TRUNK-JOURNEYS.M',
     method_version: 1,
     provenance_capture: {
-      entered_by: { kind: 'ontology', id: 'CHEBI:24431', namespace: 'CHEBI', label: 'person (local admin)' },
+      // D8: entered_by is a RECORD REF to the harness actor — provenance
+      // actors are records (users/parties), never ontology CURIEs. (The old
+      // value used a CHEBI "chemical entity" term, mislabeled as a person.)
+      entered_by: { kind: 'record', id: ACTOR_ID, type: 'user', label: 'trunk-journeys harness admin' },
     },
   }, `trunk-journeys seed: gc-method ${gcMethod}`);
   await transitionLifecycleState(backend, gcMethod, 'active');
@@ -284,28 +333,69 @@ export async function seedJourneyFixtures(
   });
   const revision = revRes.recordId;
 
-  // --- J2: claim (atomic, global) ---
+  // --- J2: subject chain (D9): party -> request -> sample. REAL schema-
+  //  valid service records (schema/services/*), minted in dependency order,
+  //  so the context's subject_ref RESOLVES — a dangling ref is a fail-closed
+  //  stop (the old seed pointed subject_ref at SMP-TJ-<rand> which was never
+  //  created, leaving a green suite over an unresolvable graph edge). ---
+  const party = `PARTY-TJ-${rand}`;
+  await createRecord(backend, SCHEMA.party, {
+    kind: 'party',
+    recordId: party,
+    name: 'trunk-journeys requester',
+    partyType: 'organization',
+    status: 'active',
+    notes: 'trunk-journeys fixture — the requestor of the journey sample.',
+  }, `trunk-journeys seed: party ${party}`);
+  const request = `REQ-TJ-${rand}`;
+  await createRecord(backend, SCHEMA.request, {
+    kind: 'request',
+    recordId: request,
+    requesterRef: { kind: 'record', id: party, type: 'party' },
+    status: 'submitted',
+    notes: 'trunk-journeys fixture — the GC analysis request the sample answers.',
+  }, `trunk-journeys seed: request ${request}`);
+  const sample = `SMP-TJ-${rand}`;
+  await createRecord(backend, SCHEMA.sample, {
+    kind: 'sample',
+    recordId: sample,
+    requestRef: { kind: 'record', id: request, type: 'request' },
+    partyRef: { kind: 'record', id: party, type: 'party' },
+    status: 'registered',
+    labDescription: 'trunk-journeys synthetic GC sample (the analyzed subject of the journey).',
+    notes: 'trunk-journeys fixture — the physical sample the GC run analyzed.',
+  }, `trunk-journeys seed: sample ${sample}`);
+
+  // --- J2: claim (atomic, global). D8: a REAL biological triple from the
+  //  repo's predicate registry + the canonical knowledge-layer example's
+  //  own claim — beta-oxidation flux is causally upstream of the oxidative
+  //  stress response (RO:0002411, the registry's registered "causally
+  //  upstream of"). (The old triple was a mislabeled assembly: a CHEBI
+  //  "organic compound" placeholder, the wrong predicate ("part of"), and
+  //  an OBSOLETE GO PI3K-activity term labeled a chromatographic peak; no
+  //  external CURIE is ever mislabeled.) ---
   const claim = `CLM-TJ-${rand}`;
   await createRecord(backend, SCHEMA.claim, {
     kind: 'claim',
     id: claim,
     title: `trunk-journeys GC peak claim ${rand}`,
-    statement: 'The GC-FID signal over this run shows the expected analyte peak(s).',
-    subject: { kind: 'ontology', id: 'CHEBI:15990', namespace: 'CHEBI', label: 'organic compound' },
-    predicate: { kind: 'ontology', id: 'RO:0002200', namespace: 'RO', label: 'part of' },
-    object: { kind: 'ontology', id: 'GO:0035004', namespace: 'GO', label: 'chromatographic peak (illustrative)' },
+    statement:
+      'Fatty acid beta-oxidation flux is causally upstream of the response to oxidative stress.',
+    subject: { kind: 'ontology', id: 'GO:0006635', namespace: 'GO', label: 'fatty acid beta-oxidation' },
+    predicate: { kind: 'ontology', id: 'RO:0002411', namespace: 'RO', label: 'causally upstream of' },
+    object: { kind: 'ontology', id: 'GO:0006979', namespace: 'GO', label: 'response to oxidative stress' },
     status: 'active',
   }, `trunk-journeys seed: claim ${claim}`);
 
   // --- J2: context (the WHY arm's context record; canonical knowledge-layer
-  //  shape — subject_ref is the GC sample the run analyzed). The subject is a
-  //  generic record ref; the context is the biological/measurement state the
-  //  evidence bundle explains over the complete context graph. ---
+  //  shape). subject_ref = the MINTED sample above (D9 — it resolves). The
+  //  context is the biological/measurement state the evidence bundle explains
+  //  over the complete context graph. ---
   const context = `CTX-TJ-${rand}`;
   await createRecord(backend, SCHEMA.context, {
     kind: 'context',
     id: context,
-    subject_ref: { kind: 'record', id: `SMP-TJ-${rand}`, type: 'sample' },
+    subject_ref: { kind: 'record', id: sample, type: 'sample' },
     notes: 'trunk-journeys context — the GC sample state the evidence bundle explains over.',
     layer_provenance: {
       event_derived: [],
@@ -337,7 +427,7 @@ export async function seedJourneyFixtures(
   // fail-closed stop, mirroring qms-demo-seed's reference gate). GET /api/
   // records/:id returns { record: { recordId, schemaId, payload, meta } } —
   // unwrap the .record envelope before asserting.
-  for (const [label, id] of Object.entries({ gcMethod, engine, revision, claim, context, assertion })) {
+  for (const [label, id] of Object.entries({ party, request, sample, gcMethod, engine, revision, claim, context, assertion })) {
     const env = await getRecord(backend, id);
     const rec = env && typeof env === 'object' && 'record' in env ? (env as Record<string, unknown>).record : env;
     const recId = rec && typeof rec === 'object' ? (rec as Record<string, unknown>).recordId : undefined;
@@ -346,6 +436,18 @@ export async function seedJourneyFixtures(
       throw new Error(`seed read-back failed for ${label} ${id} (got recordId=${JSON.stringify(recId)}, payload=${recPayload ? 'present' : 'MISSING'}): ${JSON.stringify(env ?? null)}`);
     }
   }
+  // D9: the context's subject_ref must RESOLVE — read the context back and
+  // follow the ref to the (minted) sample record. A dangling graph edge is a
+  // fail-closed stop, not a silent green.
+  const ctxEnv = await getRecord(backend, context);
+  const ctxRec = ctxEnv && typeof ctxEnv === 'object' && 'record' in ctxEnv ? (ctxEnv as Record<string, unknown>).record : ctxEnv;
+  const ctxPayload = ctxRec && typeof ctxRec === 'object' ? (ctxRec as Record<string, unknown>).payload : undefined;
+  const subjectRef = ctxPayload && typeof ctxPayload === 'object' ? (ctxPayload as Record<string, unknown>).subject_ref : undefined;
+  const subjectId = subjectRef && typeof subjectRef === 'object' ? (subjectRef as Record<string, unknown>).id : undefined;
+  if (typeof subjectId !== 'string' || subjectId !== sample) {
+    throw new Error(`seed read-back failed: context ${context} subject_ref is ${JSON.stringify(subjectId)} (expected the minted sample ${sample})`);
+  }
+  await getRecord(backend, sample); // resolves -> 2xx; a dangling ref 404s and throws
 
-  return { gcMethod, engine, revision, claim, context, assertion };
+  return { gcMethod, engine, revision, party, request, sample, claim, context, assertion };
 }
