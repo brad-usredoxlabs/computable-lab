@@ -276,9 +276,15 @@ export async function* streamAssist(
     const answerField = clarificationAnswers && clarificationAnswers.length > 0
       ? { clarificationAnswers }
       : {}
-    const body = surface === 'event-editor'
-      ? { prompt, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
-      : { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
+    // L2-INTENTID-REDRAFT-1 (leg B): the event-editor JSON body now carries
+    // its `surface` — the multipart branch above already appended it, and the
+    // legacy /ai/draft-events/stream handler reads + passes it so the
+    // orchestrator's shorthand answer arm (fold / identity carry) engages on
+    // the LIVE event-editor path. With surface in BOTH arms the conditional
+    // collapsed: one body, same key order as the multipart (prompt, surface,
+    // context, history). For the non-event-editor surfaces the body is
+    // byte-identical to before.
+    const body = { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
 
     response = await fetch(endpoint, {
       method: 'POST',

@@ -33,6 +33,17 @@ export interface DraftEventsBody {
   deterministicOnly?: boolean;
   /** Per-request thinking-mode override for OpenAI-compatible reasoning models. */
   enableThinking?: boolean;
+  /**
+   * L2-INTENTID-REDRAFT-1 (leg B): the surface the event-editor chat ran on.
+   * The live event-editor pane posts to THIS legacy endpoint and (post-fix)
+   * carries its surface so the orchestrator's shorthand arm engages: without
+   * it the fallback `surface ?? 'default'` (AgentOrchestrator.ts:1288) made
+   * `surfaceDraftsShorthand('default')` false (the DATA list is
+   * [run-workspace, event-editor]) and the ENTIRE answer-fold / identity-carry
+   * arm was silently dead. Absent => byte-identical legacy behavior ('default').
+   * Optional + conditional-spread pass-through (exactOptionalPropertyTypes).
+   */
+  surface?: AiSurface;
 }
 
 export type AiSurface =
@@ -308,6 +319,12 @@ export function createAIHandlers(
       let deterministicOnly: boolean | undefined;
       let enableThinking: boolean | undefined;
       let clarificationAnswers: AgentClarificationAnswer[] | undefined;
+      // L2-INTENTID-REDRAFT-1 (leg B): the event-editor surface, read from the
+      // body when present and passed to the orchestrator when present — the
+      // legacy endpoint predates the field, so it is OPTIONAL and rides
+      // conditional spread (absent, never undefined). Mirrors the assistStream
+      // parse idiom (fields['surface'] / body.surface).
+      let surface: AiSurface | undefined;
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form-data so the event-editor surface can send
@@ -338,6 +355,7 @@ export function createAIHandlers(
         deterministicOnly = fields['deterministicOnly'] === 'true' ? true : undefined;
         enableThinking = fields['enableThinking'] === 'true' ? true : fields['enableThinking'] === 'false' ? false : undefined;
         clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
+        surface = fields['surface'] ? (fields['surface'] as AiSurface) : undefined;
       } else {
         const body = request.body;
         prompt = body.prompt;
@@ -347,6 +365,7 @@ export function createAIHandlers(
         deterministicOnly = body.deterministicOnly;
         enableThinking = body.enableThinking;
         clarificationAnswers = body.clarificationAnswers;
+        surface = body.surface;
       }
 
       reply.raw.writeHead(200, {
@@ -373,6 +392,10 @@ export function createAIHandlers(
           ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
           ...(!deterministicOnly ? { forceDraftTool: true } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
+          // L2-INTENTID-REDRAFT-1 (leg B): the event-editor surface, conditional
+          // spread — absent (not undefined) when the body carried none, so a
+          // legacy body's run() args are byte-identical to before.
+          ...(surface ? { surface } : {}),
           onEvent: sendEvent,
         });
 
