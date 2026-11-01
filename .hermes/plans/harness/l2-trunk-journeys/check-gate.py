@@ -5,8 +5,12 @@ The lane tick runs this BEFORE claiming any new item:
 
     python3 .hermes/plans/harness/l2-trunk-journeys/check-gate.py
     exit 0 = trunk journeys GREEN (or no run yet — never gate a virgin lane)
-    exit 1 = at least one journey RED: the ready set is EMPTY this tick and
-             the printed BLOCKER line names the red journey(s)
+    exit 1 = at least one journey RED, OR the latest run is not a fake-mode
+             run (D2: hard set J1+J2(fake)+J3), OR its A2 restore failed
+             (D1: fake_restore.restore_ok), OR its verdicts table is
+             incomplete, OR its app_base is non-trunk, OR it is advisory —
+             the ready set is EMPTY this tick and the printed BLOCKER line
+             names the cause
     exit 2 = the receipt root itself is unreadable (env error, fail closed
              on claiming too: a broken receipts trail proves nothing green)
 
@@ -94,6 +98,37 @@ def main():
     if meta.get("advisory"):
         print("BLOCKER: latest is an ADVISORY run (A3: advisory verdicts never "
               "clear the gate while the live-drift product defect is open)")
+        print("GATE-VERDICT blocking")
+        return 1
+    # D1 (fix4): the A2 restore grade is RE-DERIVED from the restore record —
+    # a fake run whose restore did not take the live URL back may still point
+    # the shared :3093 backend at the (now-dead) fake. The gate trusts
+    # fake_restore.restore_ok (the graded evidence), never the run's verdict
+    # string: a tampered/stale verdict cannot clear the gate on a failed
+    # restore. Runs WITHOUT fake_restore are non-fake runs — the D2 check
+    # below already blocks those.
+    fr = meta.get("fake_restore")
+    if fr is not None:
+        if not fr.get("restore_ok"):
+            print("BLOCKER: latest's A2 restore FAILED (fake_restore.restore_ok "
+                  "=%r; restored_url=%r vs live_url=%r) — the shared backend "
+                  "may still point at the fake; MANUAL restore required "
+                  "(D1/A2: the restore grade gates the tick)"
+                  % (fr.get("restore_ok"), fr.get("restored_url"),
+                     fr.get("live_url")))
+            print("GATE-VERDICT blocking")
+            return 1
+    # D2 (fix4): the gate's hard set is J1+J2(fake)+J3 — a clearing verdict
+    # requires fake_mode recorded in the run-meta (first-class field the
+    # driver writes in EVERY run since fix-run-4). A complete ALL-GREEN run
+    # made on the LIVE sampler is a lottery win, not a trunk claim, and must
+    # never clear the gate (cycle-3 D2; historically receipt
+    # 20261101T034018Z cleared exactly this way).
+    if not meta.get("fake_mode"):
+        print("BLOCKER: latest is NOT a --fake run (fake_mode missing/false; "
+              "verdict=%s) — the gate's hard set is J1+J2(fake)+J3, a "
+              "live-sampler green is GREEN-NOT-GATING and never clears the "
+              "tick (D2)" % meta.get("verdict"))
         print("GATE-VERDICT blocking")
         return 1
     if reds:

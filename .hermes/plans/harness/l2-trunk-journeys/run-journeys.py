@@ -686,6 +686,80 @@ def run_journey(journey, run_dir, app_base, api_base):
     return jid, ("green" if not violations else "red"), receipt
 
 
+def overall_verdict(reds, terr, complete, trunk, advisory, fake_mode):
+    """D1/D2 (fix4): the run-verdict ladder, PURE — no I/O, so the
+    self-check can pin every rung and the gate can re-derive the same
+    outcome from run-meta. A complete trunk run clears ONLY as
+    ALL-GREEN when it ran on the deterministic model-layer fake (D2: the
+    gate's hard set is J1+J2(fake)+J3 — a live-sampler lottery green is
+    never a trunk claim); otherwise it is GREEN-NOT-GATING (fake not
+    required for the record, but a live green can never own `latest`).
+    Advisory (A3) suffixes its honest verdict; it never gates."""
+    if reds or terr:
+        v = "ENV-ERROR" if (terr and reds == 0) else "RED"
+    elif not complete or not trunk:
+        v = "INCOMPLETE" if not complete else "GREEN-NOT-TRUNK"
+    elif not fake_mode:
+        v = "GREEN-NOT-GATING"
+    else:
+        v = "ALL-GREEN"
+    if advisory:
+        v = v + "-ADVISORY"
+    return v
+
+
+def flips_latest(complete, trunk, advisory, fake_mode):
+    """D1/D2 (fix4): `latest` ownership is PURE over the same flags the
+    verdict ladder uses — a complete trunk claim run on the fake (and
+    never advisory). A failed A2 restore is folded in AFTER this flip:
+    _downgrade_restore_failure un-owns the run (D1)."""
+    return complete and trunk and fake_mode and not advisory
+
+
+def downgrade_restore_failure(run_dir, meta, restore):
+    """D1 (fix4): fold a FAILED A2 restore grade into the run verdict.
+    The restore is the last grade — a fake run whose restore failed is
+    RED, blocks claims, and must NOT own `latest` (the shared :3093
+    backend may still point at the just-killed fake). Steps, all idempotent:
+      1. if this run flipped `latest`, restore it to `latest_was` (or
+         remove it if the run was the first) — the SIGKILL-window poison
+         (cycle-3 D1 aggravator (a)) dies here;
+      2. verdict -> RED-RESTORE-FAILED (advisory suffix preserved),
+         red_blocks_claims -> True, `restore_ok` surfaced top-level,
+         `latest_was` persisted for the audit trail;
+      3. the mutated meta is written back.
+    Returns (mutated meta, latest_note)."""
+    restore = restore or {}
+    link = os.path.join(RECEIPTS_ROOT, "latest")
+    latest_note = ""
+    if os.path.islink(link) and \
+            os.path.realpath(link) == os.path.realpath(run_dir):
+        was = meta.get("latest_was")
+        if was and os.path.exists(was):
+            os.symlink(was, link + ".new")
+            os.replace(link + ".new", link)
+            latest_note = "latest UNDONE -> %s (restore failed, D1)" % was
+        else:
+            os.remove(link)
+            latest_note = "latest REMOVED (restore failed, D1)"
+        meta["latest_undone"] = True
+    # The D1 grade is a RUN grade: a failed restore makes the run RED,
+    # overriding the journey-level verdict (a run whose journeys were all
+    # green but whose restore leaked the pointer is still a failed run).
+    # The -ADVISORY marker survives (the downgrade is a grade, not a
+    # rewrite of the run's mode). Idempotent: never double-apply.
+    prev = meta.get("verdict") or ""
+    if not prev.endswith("-RESTORE-FAILED"):
+        adv = prev.endswith("-ADVISORY")
+        meta["verdict"] = "RED-RESTORE-FAILED" + ("-ADVISORY" if adv else "")
+    meta["red_blocks_claims"] = True
+    meta["restore_ok"] = bool(restore.get("restore_ok"))
+    meta["latest_was"] = meta.get("latest_was")
+    with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+        json.dump(meta, fh, indent=2)
+    return meta, latest_note
+
+
 def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
                              fake_info=None, advisory=False, health=None):
     """Run the selected journeys, write run-meta + the `latest` flip. Returns
@@ -712,16 +786,12 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
     # select the target but never make a scratch FE 'trunk').
     trunk = app_base_is_trunk(args.app_base)
     complete = set(results) == declared_ids(os.path.join(HERE, "journeys"))
-    if reds or terr:
-        verdict_all = "ENV-ERROR" if (terr and reds == 0) else "RED"
-    elif not complete or not trunk:
-        verdict_all = "INCOMPLETE" if not complete else "GREEN-NOT-TRUNK"
-    else:
-        verdict_all = "ALL-GREEN"
-    # A3: an advisory run records its honest verdict but never owns the gate:
-    # red_blocks_claims stays true and `latest` is never moved.
-    if advisory:
-        verdict_all = verdict_all + "-ADVISORY"
+    # D2 (fix4): the gate's hard set is J1+J2(fake)+J3 — a complete trunk
+    # green that ran on the LIVE sampler is a lottery, not a trunk claim:
+    # GREEN-NOT-GATING, and it must never own `latest` (the pure ladder).
+    fake_mode = fake_info is not None
+    verdict_all = overall_verdict(reds, terr, complete, trunk, advisory,
+                                  fake_mode)
     run_meta = {
         "run": ts,
         "harness": "L2-TRUNK-JOURNEYS-1",
@@ -730,6 +800,10 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
         "verdicts": results,            # the tick reads THIS table
         "verdict": verdict_all,
         "advisory": advisory,           # A3: advisory runs never gate
+        "fake_mode": fake_mode,         # D2 (fix4): first-class in EVERY run —
+                                        # the gate requires it for a clearing
+                                        # verdict; live-sampler greens cannot
+                                        # own the tick
         "journeys_run": list(results),
         "journeys_declared": sorted(declared_ids(os.path.join(HERE, "journeys"))),
         "complete": complete,           # D2: verdicts cover EVERY journey file
@@ -742,15 +816,21 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
         "red_blocks_claims": (verdict_all != "ALL-GREEN") or advisory,
     }
     if fake_info is not None:
-        run_meta["fake_mode"] = True
         run_meta["fake"] = fake_info
+    # D1 (fix4): remember what `latest` pointed at BEFORE this run flips it,
+    # so a FAILED A2 restore can UNDO the flip after the restore grades.
+    link = os.path.join(RECEIPTS_ROOT, "latest")
+    if os.path.islink(link):
+        run_meta["latest_was"] = os.path.realpath(link)
     with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
         json.dump(run_meta, fh, indent=2)
-    # D2: `latest` flips ONLY for a complete trunk run — a scratch/partial
-    # run (and every advisory run) must never displace the trunk verdict.
-    flips_latest = (complete and trunk and not advisory)
-    if flips_latest:
-        link = os.path.join(RECEIPTS_ROOT, "latest")
+    # D1/D2 (fix4): `latest` flips ONLY for a complete trunk claim run on the
+    # fake — a scratch/partial run, a live-sampler green (GREEN-NOT-GATING)
+    # and every advisory run must never displace the trunk verdict. The flip
+    # is provisional until the A2 restore grades: a failed restore
+    # un-does it via _downgrade_restore_failure (the restore is LAST).
+    do_flip = flips_latest(complete, trunk, advisory, fake_mode)
+    if do_flip:
         tmp = link + ".new"
         if os.path.islink(tmp) or os.path.exists(tmp):
             os.remove(tmp)
@@ -760,8 +840,10 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
     elif advisory:
         latest_note = "latest NOT moved (advisory run — verdict recorded only, A3)"
     else:
-        latest_note = ("latest NOT moved (complete=%s app_base_is_trunk=%s)"
-                       % (complete, trunk))
+        latest_note = ("latest NOT moved (complete=%s app_base_is_trunk=%s "
+                       "fake_mode=%s — D2: a live-sampler green is "
+                       "GREEN-NOT-GATING and never owns `latest`)"
+                       % (complete, trunk, fake_mode))
 
     for jid in sorted(results):
         print("%s %s" % (jid, results[jid]))
@@ -771,6 +853,7 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
         print("JOURNEYS-JSON " + json.dumps({"run": ts, "dir": run_dir,
                                              "verdict": verdict_all,
                                              "advisory": advisory,
+                                             "fake_mode": fake_mode,
                                              "verdicts": results}))
     return verdict_all
 
@@ -895,6 +978,18 @@ def main():
                 meta["fake_restore"] = restore
                 with open(meta_path, "w") as fh:
                     json.dump(meta, fh, indent=2)
+                # D1 (fix4): the restore grade is a CONSUMER, not a bystander.
+                # A fake run whose restore failed is RED, blocks claims, and
+                # must NOT own `latest` — folded into the verdict + exit
+                # code AFTER the restore grades (the restore is LAST).
+                if not restore_ok:
+                    meta, latest_note = downgrade_restore_failure(
+                        run_dir, meta, restore)
+                    verdict_all = meta["verdict"]
+                    print("D1: run folded to %s (restore failed — "
+                          "red_blocks_claims=true, %s)"
+                          % (verdict_all, latest_note or "`latest` untouched"),
+                          file=sys.stderr)
     else:
         verdict_all = _run_journeys_and_finish(
             args, journeys, run_dir, ts, results,
