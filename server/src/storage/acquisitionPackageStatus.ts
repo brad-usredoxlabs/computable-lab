@@ -343,27 +343,35 @@ export async function classifyAcquisitionStatus(
  * writes onto the package payload BEFORE the record is created.
  *
  * UNKNOWN IS THE FLOOR, and this NEVER fails registration (bait #5): no
- * run_log member, an unreadable member, a decode failure, zero rule hits,
- * even a missing/unreadable rule FILE — all land on the DECLARED
- * fallbackStatus (config/gc-acquisition-status/log-patterns.yaml — the data
- * file) with a NAMED noEvidenceReason, never on a coded `completed` default
- * and never on a thrown error. RUN.LOG is not a REQUIRED_MEMBERS member, so
- * a missing/unreadable log is data, not a fault.
+ * run_log member, an unreadable member, a decode failure, or zero rule hits
+ * land on the DECLARED fallbackStatus (config/gc-acquisition-status/
+ * log-patterns.yaml — the data file) with a NAMED noEvidenceReason, never on
+ * a coded `completed` default and never on a thrown error. The ONE exception
+ * is the degenerate rule-file-missing arm, where there is no declared
+ * fallback value to read — that arm lands on the Coded FLOOR_STATUS
+ * ('unknown', :135), which the rule file cannot itself name. RUN.LOG is not
+ * a REQUIRED_MEMBERS member, so a missing/unreadable log is data, not a
+ * fault.
  *
  * (D4) the rule-file load has its OWN try scope and its OWN named reason
  * ('rule-file-unreadable', encoding 'none'): a missing/malformed rule file
  * must NOT be recorded as the RUN.LOG member being unreadable (the member was
  * never read and no decode ran). 'member-unreadable' is reserved for
- * provider.read / stream / classify failures.
+ * provider.read / stream failures. (FIX2 D3) a declared-pattern COMPILE
+ * failure (the member read and decoded fine) has its OWN named reason
+ * ('pattern-invalid', the successful decode's facts) — it is never folded
+ * into 'member-unreadable'.
  *
- * (D5) the degenerate rule-file-missing arm reports an ABSENCE-SHAPED
- * ruleset — it names the canonical rule-file coordinates (the stable
- * code-owned path label) but OMITS the ruleset id/version rather than
- * restating the YAML's declared identity (no coded copy of declared data).
+ * (D5) the degenerate rule-file-missing arm reports an ABSENCE-SHAPED ruleset
+ * — `ruleset: {}` (NO coordinates at all, :383): with the rule file unread
+ * there is no declared interpretation source to name, so the code does not
+ * restate the YAML's identity (no coded copy of declared data — the no-
+ * evidence reason names the unread rule file).
  *
  * (D7) this is FLOOR-GUARANTEED end to end: the floor ladder belongs in this
- * module, so a direct caller gets the declared floor on every failure path
- * (including rule-file load and pattern-compile failure) — never a throw.
+ * module, so a direct caller gets the declared floor (or the coded
+ * FLOOR_STATUS in the degenerate arm) on every failure path — including
+ * rule-file load and pattern-compile failure — never a throw.
  * The registration caller therefore needs no catch of its own.
  */
 export async function classifyAcquisitionPackageStatus(
@@ -429,12 +437,43 @@ export async function classifyAcquisitionPackageStatus(
     const stream = await provider.read(`${directoryKey}/${runLog.relativePath}`);
     const chunks: Buffer[] = [];
     for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
-    // classifyAcquisitionStatus re-reads the (already-loaded, cached) rule
-    // file and compiles the patterns; a compile failure (a malformed declared
-    // pattern, D7) throws here and is floored as a member-side failure below
-    // (the rule file itself read fine, so 'member-unreadable' is the honest
-    // label for a member/pattern read failure).
-    const evidence = await classifyAcquisitionStatus(Buffer.concat(chunks), runLog.relativePath);
+    const memberBytes = Buffer.concat(chunks);
+    // (FIX2 D3) the member's decode facts, run HERE for the pattern-invalid
+    // arm: the same strict-UTF-16 decode classifyAcquisitionStatus runs
+    // internally (pure + deterministic — identical facts), so a compile
+    // fault records the SUCCESSFUL decode's facts, never a decode-fault
+    // label.
+    const memberDecode = strictUtf16(memberBytes);
+    let evidence: AcqpStatusEvidence;
+    try {
+      // classifyAcquisitionStatus re-reads the (already-loaded, cached) rule
+      // file and compiles the declared patterns (bait #4: the compile is the
+      // PATTERN's step, not the member's).
+      evidence = await classifyAcquisitionStatus(memberBytes, runLog.relativePath);
+    } catch (err) {
+      // (FIX2 D3) a declared-pattern COMPILE failure (new RegExp throws on a
+      // malformed declared pattern). The rule file WAS read (the load try
+      // above) and the member WAS read and decoded (the bytes are in hand) —
+      // so the named reason points at the PATTERN: never 'member-unreadable'
+      // (a false decode-fault label for a member that read fine) and never
+      // 'rule-file-unreadable' (the file read fine). A load failure cannot
+      // reach this arm: the entry point's own load try above would have
+      // floored it first.
+      return {
+        acquisitionStatus: patterns.fallbackStatus,
+        // (D3) the DECLARED qualification for the floor status (data lookup).
+        acquisitionStatusQualified: declaredStatusQualified(patterns, patterns.fallbackStatus),
+        acquisitionStatusEvidence: {
+          ruleset: { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL },
+          sourceMember: { relativePath: runLog.relativePath },
+          // The decode ran and succeeded (the member read fine) — its
+          // FACTS, not the decode-fault word 'unreadable' (bait #7).
+          decode: { encoding: memberDecode.encoding, bomPresent: memberDecode.bomPresent },
+          matched: [],
+          noEvidenceReason: `pattern-invalid: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      };
+    }
     return {
       acquisitionStatus: evidence.status,
       // (D3) the DECLARED qualification for this classified status (data
@@ -451,10 +490,10 @@ export async function classifyAcquisitionPackageStatus(
       },
     };
   } catch (err) {
-    // The rule file IS readable (loaded above); the failure is the member
-    // bytes (or a declared-pattern compile) — the DECLARED fallback applies
-    // and the reason names the member failure (bait #7: facts preserved,
-    // never discarded).
+    // (FIX2 D3) the pattern-invalid arm above caught the compile fault; the
+    // ONLY failure remaining in this scope is the member READ (provider.read
+    // / stream) — the DECLARED fallback applies and the reason names the
+    // member failure (bait #7: facts preserved, never discarded).
     return {
       acquisitionStatus: patterns.fallbackStatus,
       // (D3) the DECLARED qualification for the floor status (data lookup).

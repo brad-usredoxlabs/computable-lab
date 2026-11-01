@@ -15,6 +15,7 @@
  * FIXTURES only; every status pattern lives ONLY in the pattern file.
  */
 import { describe, expect, it } from 'vitest';
+import { rmSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import {
   classifyAcquisitionStatus,
@@ -258,6 +259,54 @@ describe('FAME-1 fix-run (D3/D4/D5/D7): entry point, declared qualification, dis
     // with the D5 absence-shaped degenerate arm).
     expect(res.acquisitionStatusEvidence.ruleset.id).toBeTruthy();
     expect(res.acquisitionStatusEvidence.ruleset.sourceFile).toBeTruthy();
+  });
+
+  it('FIX2 D3: a MALFORMED DECLARED PATTERN (RegExp compile failure) is pattern-invalid, NOT member-unreadable (the member read and decoded fine)', async () => {
+    // The rule file IS readable (the patternFileUrl seam) and the member IS
+    // read and decoded (a valid completed log) — the ONLY fault is the
+    // declared pattern failing to compile (new RegExp throws). The prior
+    // label 'member-unreadable' + decode encoding 'unreadable' was a false
+    // fact of the D4 class (the member was read; no decode failure ran).
+    // The compile fault gets its OWN named reason (pattern-invalid) and the
+    // decode facts come from the SUCCESSFUL decode (bait #7: facts
+    // preserved, never mis-recorded).
+    const badPatternRuleFile = [
+      'ruleset:',
+      '  id: gc-acquisition-status-bad-pattern',
+      '  version: 99',
+      'fallbackStatus: unknown',
+      'rules:',
+      '  - id: bad-pattern',
+      '    status: aborted',
+      '    pattern: "(unclosed"',
+      '    note: a deliberately invalid regex (compile failure)',
+    ].join('\n');
+    // The seam is an ABSOLUTE FILE PATH (loadLogPatterns resolves a
+    // non-URL string directly — fileURLToPath is file:-scheme only, so a
+    // data: URL would hit the load-failure arm, not the compile arm).
+    const badPatternFile = `${process.cwd()}/fame1-fix2-bad-pattern-${Date.now()}.yaml`;
+    writeFileSync(badPatternFile, badPatternRuleFile, 'utf8');
+    try {
+      const res = await classifyAcquisitionPackageStatus(
+        readProvider(utf16leBom(COUNTRYSIDE_LOG)),
+        'machine1/P.D',
+        { relativePath: 'RUN.LOG' },
+        badPatternFile,
+      );
+      expect(res.acquisitionStatus).toBe('unknown'); // the DECLARED fallback
+      // THE FIX: a named pattern fault — never the member-unreadable label.
+      expect(res.acquisitionStatusEvidence.noEvidenceReason).toMatch(/^pattern-invalid:/);
+      expect(res.acquisitionStatusEvidence.noEvidenceReason).not.toMatch(/^member-unreadable:/);
+      // The member WAS read and decoded: the decode facts are the SUCCESSFUL
+      // decode's facts (utf-16le + BOM), NOT 'unreadable' (a decode-fault
+      // word).
+      expect(res.acquisitionStatusEvidence.decode).toEqual({ encoding: 'utf-16le', bomPresent: true });
+      // The rule file WAS readable -> its declared identity IS present.
+      expect(res.acquisitionStatusEvidence.ruleset.id).toBe('gc-acquisition-status-bad-pattern');
+      expect(res.acquisitionStatusEvidence.matched).toEqual([]);
+    } finally {
+      rmSync(badPatternFile, { force: true });
+    }
   });
 
   it('D7: classifyAcquisitionStatus THROWS when the rule file cannot be loaded (the load/compile escape is documented)', async () => {
