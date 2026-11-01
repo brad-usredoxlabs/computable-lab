@@ -415,13 +415,14 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
       'evidence-ruleset-id-slot',
       'evidence-ruleset-version-slot',
       'evidence-ruleset-source-file-slot',
+      'evidence-ruleset-container-carrier-slot',
       'evidence-source-member-slot',
       'evidence-decode-encoding-slot',
       'evidence-decode-bom-present-slot',
+      'evidence-source-member-container-carrier-slot',
       'evidence-matched-lines-slot',
       'evidence-no-evidence-reason-slot',
     ]);
-
     // D2 (was tautological): assert on the REAL projection, not the raw
     // YAML. projectRecord is the server's own projection authority; if the
     // evidence presentation were declared in a shape the projection drops or
@@ -441,6 +442,58 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
       },
     };
     const projection = projectRecord(spec, payload, ACQP_ID, validPackage.id as string);
+
+    // FAME-1 FIX3 (cycle-3 DEFECT 1): the save-direction CARRIER slots. The
+    // serializer's delete-on-empty contract (recordSerializer.ts:122-123)
+    // prunes a container whose per-leaf readonly rows are absent/'' (the
+    // degenerate ruleset:{} arm, the run-log-member-absent relativePath:''
+    // arm) — dropping a schema-REQUIRED member (schema:216/:243) so the save
+    // 422s. A `hidden` carrier at the container path carries the container
+    // object (a non-null, non-composite value the serializer writes back,
+    // never prunes) and renders NOTHING (FieldRow.tsx:125) — the D1
+    // presentation is untouched. The ORDER is load-bearing: each carrier
+    // must be claimed AFTER the leaf slots of the container it protects, or
+    // the leaf rows' delete would run after the carrier's write and prune
+    // the just-restored container again.
+    const carrierRuleset = projection.slots.find(
+      s => s.path === '$.acquisitionStatusEvidence.ruleset',
+    );
+    expect(carrierRuleset, 'the projection must carry the ruleset container carrier').toBeDefined();
+    expect(carrierRuleset!.widget).toBe('hidden');
+    const carrierSourceMember = projection.slots.find(
+      s => s.path === '$.acquisitionStatusEvidence.sourceMember',
+    );
+    expect(carrierSourceMember, 'the projection must carry the sourceMember container carrier').toBeDefined();
+    expect(carrierSourceMember!.widget).toBe('hidden');
+    {
+      const order = statusBlock!.slots as string[];
+      const carrierIds = new Set([
+        'evidence-ruleset-container-carrier-slot',
+        'evidence-source-member-container-carrier-slot',
+      ]);
+      const carrierByPath = new Map<string, string>(
+        projection.slots
+          .filter(s => carrierIds.has(s.id))
+          .map(s => [s.path, s.id] as [string, string]),
+      );
+      // For each carrier, every slot whose path is strictly UNDER the
+      // carrier's path (a leaf of the protected container) must be claimed
+      // BEFORE the carrier.
+      for (const [carrierPath, carrierId] of carrierByPath) {
+        const carrierIdx = order.indexOf(carrierId);
+        expect(carrierIdx, `the carrier ${carrierId} is claimed`).toBeGreaterThanOrEqual(0);
+        for (const otherId of order) {
+          const other = projection.slots.find(s => s.id === otherId);
+          if (!other || carrierByPath.has(other.path)) continue;
+          if (other.path.startsWith(`${carrierPath}.`)) {
+            expect(
+              order.indexOf(otherId),
+              `leaf ${other.path} must be claimed BEFORE its carrier ${carrierId} (save-direction order)`,
+            ).toBeLessThan(carrierIdx);
+          }
+        }
+      }
+    }
 
     // The six flattened readonly evidence slots project with their deep
     // dotted paths (the values the client resolves via getValueAtPath).

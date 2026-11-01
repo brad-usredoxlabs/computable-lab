@@ -28,10 +28,14 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildProjectionDocument } from '../../editor/taptab/documentMapper';
+import { serializeDocument } from '../../editor/taptab/recordSerializer';
 import { createUISpecLoader } from '../../../../server/src/ui/UISpecLoader.js';
 import { projectRecord } from '../../../../server/src/ui/EditorProjectionService.js';
+import { loadAllSchemas } from '../../../../server/src/schema/SchemaLoader.js';
+import { createSchemaRegistry } from '../../../../server/src/schema/SchemaRegistry.js';
+import { createValidator } from '../../../../server/src/validation/AjvValidator.js';
 
 interface DocNode {
   type?: string;
@@ -90,29 +94,31 @@ function fieldRowAttrs(doc: { type: string; content: DocNode[] }, path: string) 
   return row?.attrs ?? null;
 }
 
-describe('FAME-1 FIX2: the evidence presentation is DELIVERED at the client boundary (real projection + real mapper)', () => {
-  const abortedPayload: Record<string, unknown> = {
-    ...basePackage,
-    acquisitionStatus: 'aborted',
-    acquisitionStatusQualified: true,
-    acquisitionStatusEvidence: {
-      ruleset: {
-        id: 'gc-acquisition-status',
-        version: 1,
-        sourceFile: 'config/gc-acquisition-status/log-patterns.yaml',
-      },
-      sourceMember: { relativePath: 'RUN.LOG' },
-      decode: { encoding: 'utf-16le', bomPresent: true },
-      matched: [
-        {
-          line: 'Method       Method aborted                                 13:19:33 10/23/26',
-          ruleId: 'aborted-method-aborted',
-          lineIndex: 5,
-        },
-      ],
+/** The aborted-evidence package — the shared arm A payload (the real
+ *  projection is built from it by every boundary + round-trip leg). */
+const abortedPayload: Record<string, unknown> = {
+  ...basePackage,
+  acquisitionStatus: 'aborted',
+  acquisitionStatusQualified: true,
+  acquisitionStatusEvidence: {
+    ruleset: {
+      id: 'gc-acquisition-status',
+      version: 1,
+      sourceFile: 'config/gc-acquisition-status/log-patterns.yaml',
     },
-  };
+    sourceMember: { relativePath: 'RUN.LOG' },
+    decode: { encoding: 'utf-16le', bomPresent: true },
+    matched: [
+      {
+        line: 'Method       Method aborted                                 13:19:33 10/23/26',
+        ruleId: 'aborted-method-aborted',
+        lineIndex: 5,
+      },
+    ],
+  },
+};
 
+describe('FAME-1 FIX2: the evidence presentation is DELIVERED at the client boundary (real projection + real mapper)', () => {
   it('delivers the six flattened readonly evidence slots with their stored values (the shapes the client ACTUALLY consumes)', async () => {
     const projection = await realProjection(abortedPayload);
     const doc = buildProjectionDocument(projection.blocks, projection.slots, abortedPayload);
@@ -235,5 +241,134 @@ describe('FAME-1 FIX2: the evidence presentation is DELIVERED at the client boun
     expect(statusAttrs).toBeTruthy();
     expect(statusAttrs!.widget).toBe('readonly');
     expect(statusAttrs!.value).toBe('aborted');
+  });
+});
+
+/**
+ * FAME-1 FIX3 (cycle-3 DEFECT 1 — MAJOR): the record surface is TWO-WAY.
+ * RecordEditPanel serializes the SAME fieldRows on every save
+ * (serializeDocument(editor.getJSON(), formData) — the save seam), and the
+ * serializer's delete-on-empty contract (recordSerializer.ts:122-123) prunes
+ * an emptied CONTAINER. On the degenerate arm (ruleset: {}) the three ruleset
+ * leaf rows are absent -> `ruleset` is pruned; on the run-log-member-absent
+ * arm (sourceMember.relativePath: '') the leaf row is '' -> `sourceMember` is
+ * pruned. Both are schema-REQUIRED (acquisition-package.schema.yaml:216,
+ * :243) -> the store rejects the save (422) and the pruned payload is what
+ * the client would have written. The boundary tests above stop at the mapper
+ * and cannot see the save direction — this block is the serialize round-trip
+ * at the true seam: project -> build projection doc -> NO-OP edit (the
+ * stored record is unchanged) -> serialize -> the payload must still carry
+ * every schema-required evidence member and validate against the REAL
+ * schema.
+ */
+describe('FAME-1 FIX3: the evidence survives the record SAVE direction (serialize round-trip, real serializer + real schema)', () => {
+  const SCHEMA_DIR = join(process.cwd(), '..', 'schema');
+  let acqpValidate: (data: unknown) => { valid: boolean; errors?: Array<{ path?: string; message?: string }> };
+  beforeAll(async () => {
+    const loaded = await loadAllSchemas({ basePath: SCHEMA_DIR, recursive: true });
+    const registry = createSchemaRegistry();
+    registry.addSchemas(loaded.entries);
+    const validator = createValidator();
+    for (const id of registry.getTopologicalOrder()) {
+      const entry = registry.getById(id);
+      if (entry) validator.addSchema(entry.schema as never, id);
+    }
+    acqpValidate = (data) => validator.validate(data, SCHEMA_ID) as never;
+  });
+
+  /** The save seam: project -> mapper doc -> NO-OP edit (formData untouched)
+   *  -> serializeDocument(doc, storedRecord). */
+  function roundTripSavedPayload(record: Record<string, unknown>) {
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
+      realProjection(record)
+        .then((projection) => {
+          const doc = buildProjectionDocument(projection.blocks, projection.slots, record);
+          const saved = serializeDocument(doc as never, record);
+          resolve(saved);
+        })
+        .catch(reject);
+    });
+  }
+
+  it('arm A (normal, ruleset populated): a no-op save keeps every evidence field and stays schema-valid', async () => {
+    const saved = await roundTripSavedPayload(abortedPayload);
+    const evidence = saved.acquisitionStatusEvidence as Record<string, unknown>;
+    expect(evidence.ruleset, 'the ruleset container must survive the save').toEqual({
+      id: 'gc-acquisition-status',
+      version: 1,
+      sourceFile: 'config/gc-acquisition-status/log-patterns.yaml',
+    });
+    expect(evidence.sourceMember).toEqual({ relativePath: 'RUN.LOG' });
+    expect(evidence.decode).toEqual({ encoding: 'utf-16le', bomPresent: true });
+    expect(evidence.matched, 'the matched lines survive verbatim').toEqual(
+      (abortedPayload.acquisitionStatusEvidence as { matched: unknown[] }).matched,
+    );
+    expect(acqpValidate(saved), 'the no-op save payload must be schema-valid').toMatchObject({ valid: true });
+  });
+
+  it('arm B (degenerate ruleset: {}): the required ruleset member survives the save (the prune defect)', async () => {
+    const degenerate: Record<string, unknown> = {
+      ...basePackage,
+      id: 'ACQP-TEST-EVIDENCE-B',
+      acquisitionStatus: 'unknown',
+      acquisitionStatusQualified: true,
+      acquisitionStatusEvidence: {
+        ruleset: {},
+        sourceMember: { relativePath: 'RUN.LOG' },
+        decode: { encoding: 'none', bomPresent: false },
+        matched: [],
+        noEvidenceReason: 'rule-file-unreadable: ENOENT: synthetic',
+      },
+    };
+    const saved = await roundTripSavedPayload(degenerate);
+    const evidence = saved.acquisitionStatusEvidence as Record<string, unknown>;
+    // The schema REQUIRES the ruleset member (schema:216). The degenerate arm
+    // is absence-shaped INSIDE it (D5: ruleset: {}) — but the container
+    // itself must survive the save, not be pruned by the delete-on-empty
+    // contract of its (absent) leaf rows.
+    expect(
+      'ruleset' in evidence,
+      'the schema-required ruleset container must survive a no-op save',
+    ).toBe(true);
+    expect(evidence.ruleset, 'the degenerate ruleset is {} — absence-shaped, never fabricated').toEqual({});
+    expect(evidence.sourceMember).toEqual({ relativePath: 'RUN.LOG' });
+    expect(acqpValidate(saved), 'the degenerate-arm save payload must be schema-valid').toMatchObject({ valid: true });
+  });
+
+  it("arm C (run-log-member-absent, relativePath: ''): the required sourceMember member survives the save (the prune defect)", async () => {
+    const noLog: Record<string, unknown> = {
+      ...basePackage,
+      id: 'ACQP-TEST-EVIDENCE-C',
+      acquisitionStatus: 'unknown',
+      acquisitionStatusQualified: true,
+      acquisitionStatusEvidence: {
+        ruleset: {
+          id: 'gc-run-log-acquisition-status',
+          version: 1,
+          sourceFile: 'config/gc-acquisition-status/log-patterns.yaml',
+        },
+        sourceMember: { relativePath: '' },
+        decode: { encoding: 'none', bomPresent: false },
+        matched: [],
+        noEvidenceReason: 'run-log-member-absent',
+      },
+    };
+    const saved = await roundTripSavedPayload(noLog);
+    const evidence = saved.acquisitionStatusEvidence as Record<string, unknown>;
+    // The schema REQUIRES the sourceMember member (schema:216) and
+    // sourceMember.relativePath (schema:243) — the empty relative path is the
+    // honest run-log-member-absent arm (schema:245-252). The '' leaf must not
+    // trigger the delete-on-empty prune of the container.
+    expect(
+      'sourceMember' in evidence,
+      'the schema-required sourceMember container must survive a no-op save',
+    ).toBe(true);
+    expect(evidence.sourceMember, "relativePath '' is the honest floor value — never dropped").toEqual({
+      relativePath: '',
+    });
+    expect((evidence.ruleset as { id?: string }).id, 'the ruleset container also survives (populated arm)').toBe(
+      'gc-run-log-acquisition-status',
+    );
+    expect(acqpValidate(saved), 'the no-log-arm save payload must be schema-valid').toMatchObject({ valid: true });
   });
 });

@@ -69,9 +69,15 @@ editor:
           "evidence-ruleset-id-slot",
           "evidence-ruleset-version-slot",
           "evidence-ruleset-source-file-slot",
+          # FAME-1 FIX3 (cycle-3 DEFECT 1): the ruleset container CARRIER.
+          # Listed AFTER the three ruleset leaf slots (see the serializer
+          # note under the slot) so the save direction re-writes the
+          # container if the leaf rows' delete-on-empty contract pruned it.
+          "evidence-ruleset-container-carrier-slot",
           "evidence-source-member-slot",
           "evidence-decode-encoding-slot",
           "evidence-decode-bom-present-slot",
+          "evidence-source-member-container-carrier-slot",
           "evidence-matched-lines-slot",
           "evidence-no-evidence-reason-slot",
         ]
@@ -254,6 +260,52 @@ editor:
         Present ONLY when nothing matched: the named reason (log absent /
         not decodable / zero rule hits / rule file unreadable). The em-dash
         shows when a classification WAS evidenced.
+    # FAME-1 FIX3 (cycle-3 DEFECT 1 — DATA-ONLY close, fix-2 option (a)
+    # precedent): the record surface is TWO-WAY — the editor SERIALIZES these
+    # same rows on save, and the serializer's delete-on-empty contract
+    # (app/src/editor/taptap/recordSerializer.ts:122-123) prunes an emptied
+    # container. On the two degenerate arms the per-leaf rows above are the
+    # problem: the degenerate rule-file-missing arm (ruleset: {}) has no
+    # ruleset leaf values, and the run-log-member-absent arm
+    # (sourceMember.relativePath: '') has a '' leaf — both trigger the
+    # delete of the schema-REQUIRED container (acquisition-package.schema.
+    # yaml:216 required [ruleset, sourceMember, decode]; :243 required
+    # [relativePath]) -> the store rejects the save (422) and the client
+    # payload silently drops the evidence.
+    #
+    # These CARRIER slots are the data-only fix. `hidden` is a declared
+    # widget (ui-v1.schema.yaml:179 enum; UISpecLoader VALID_WIDGET_TYPES)
+    # that the client renders as NOTHING (FieldRow.tsx:125 returns null) —
+    # so the D1 presentation (the readonly leaf rows) is untouched — and the
+    # serializer does NOT prune a non-null, non-composite value
+    # (isEmptyFieldValue, refValue.ts:93-98): the carrier's value is the
+    # whole container object (getValueAtPath on the container path), which
+    # the serializer writes back via setValueAtPath AFTER the leaf slots
+    # have run (block slot order above), re-creating the pruned container.
+    # The evidence container therefore pins to its stored value on save —
+    # the classification is DATA, not hand-written (the slot help text is
+    # the claim). No app/editor, serializer, or projection code changed.
+    - id: "evidence-ruleset-container-carrier-slot"
+      path: "$.acquisitionStatusEvidence.ruleset"
+      label: "Evidence Rule Set Container"
+      widget: "hidden"
+      help: >
+        Save-direction carrier for the schema-required `ruleset` container:
+        carries the container itself (the interpretation source — id /
+        version / sourceFile, or the absence-shaped empty object of the
+        degenerate rule-file-missing arm, D5) so the serializer's
+        delete-on-empty contract (the absent leaf rows above) cannot prune
+        the required member. Renders nothing.
+    - id: "evidence-source-member-container-carrier-slot"
+      path: "$.acquisitionStatusEvidence.sourceMember"
+      label: "Evidence Source Member Container"
+      widget: "hidden"
+      help: >
+        Save-direction carrier for the schema-required `sourceMember`
+        container: carries { relativePath } — including the EMPTY relative
+        path of the run-log-member-absent arm, the honest floor value — so
+        the serializer's delete-on-empty contract (the '' leaf row above)
+        cannot prune the required member. Renders nothing.
 
 list:
   columns:
