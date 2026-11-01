@@ -38,24 +38,81 @@ function shaShort(s) {
 (async () => {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  const page = await context.newPage();
 
   // ---- attestation bookkeeping ------------------------------------------
-  // routeHandlersUsed counts calls to page.route()/route.fulfill()/abort()/
-  // fail(). This executor contains ZERO such calls (construction) and the
-  // counter below proves nothing incremented it at runtime (belt).
-  const attest = { route_handlers_used: 0, interception_helpers_seen: 0 };
+  // D1 fix: the counter is REAL, not a literal. The route-registration APIs
+  // are wrapped on the live objects BEFORE any other code can run —
+  // context.route / context.routeFromHAR first (before newPage, so even an
+  // injection placed before page creation is counted), then page.route /
+  // page.routeFromHAR. ANY call through ANY receiver increments
+  // route_handlers_used. The python driver fails on nonzero and
+  // test-channel-selfcheck.py proves the counter increments for a
+  // context.route injection on a throwaway copy.
+  const attest = { route_handlers_used: 0, intercepted_paths: [] };
+  const countRoute = (label, target) => {
+    for (const meth of ['route', 'routeFromHAR']) {
+      const orig = target[meth];
+      if (typeof orig !== 'function') continue;
+      const wrapper = function (...a) {
+        attest.route_handlers_used += 1;
+        attest.intercepted_paths.push(label + '.' + meth + ':' + String(a[0]));
+        return orig.apply(this, a);
+      };
+      wrapper._clInterceptionProbe = true;
+      target[meth] = wrapper;
+    }
+  };
+  // We do not call any of these — we only wrap them so an injected handler
+  // is impossible to hide.
+  countRoute('context', context);
+  if (typeof context.setRequestInterception === 'function') {
+    const origSRI = context.setRequestInterception;
+    const sriWrapper = function (...a) {
+      attest.route_handlers_used += 1;
+      attest.intercepted_paths.push('context.setRequestInterception:' + JSON.stringify(a));
+      return origSRI.apply(this, a);
+    };
+    sriWrapper._clInterceptionProbe = true;
+    context.setRequestInterception = sriWrapper;
+  }
+  const page = await context.newPage();
+  countRoute('page', page);
+  attest.route_api_wrapped = (
+    page.route._clInterceptionProbe === true &&
+    context.route._clInterceptionProbe === true);
 
   const aiBodies = [];
   const writeBodies = [];
   const jsErrors = [];
+  // D3: every clarification request the assistant ANNOUNCES on the wire
+  // (threads POST assistant metadata.clarification), with the epoch ms of
+  // capture — the driver uses this to detect a RE-ASK: an announcement whose
+  // prompt equals an answered request's prompt, captured AFTER that answer.
+  const clarificationAnnouncements = [];
+  const answerEvents = [];
   page.on('request', (req) => {
     const url = req.url();
     const method = req.method();
     let parsed = null;
     const post = req.postData();
     if (post) { try { parsed = JSON.parse(post); } catch { parsed = { __unparsed__: post.slice(0, 400) }; } }
+    const cl = parsed && parsed.message && parsed.message.role === 'assistant'
+      && parsed.message.metadata && parsed.message.metadata.clarification;
+    if (cl) {
+      clarificationAnnouncements.push({
+        id: cl.id || null, prompt: cl.prompt || null, query: cl.query || null,
+        intentId: (parsed.message.metadata.shorthand || '')
+          .match(/intentId:\s*(\S+)/)?.[1] || null,
+        captured_at_ms: Date.now(),
+      });
+    }
     if (url.includes(AI_URL_MARK) && (method === 'POST' || method === 'GET')) {
+      if (post && Array.isArray(parsed && parsed.clarificationAnswers)) {
+        answerEvents.push({
+          requestIds: parsed.clarificationAnswers.map((a) => a && a.requestId).filter(Boolean),
+          captured_at_ms: Date.now(),
+        });
+      }
       if (post) {
         aiBodies.push({
           endpoint: new URL(url).pathname,
@@ -184,6 +241,7 @@ function shaShort(s) {
       if ((kind === 'ask' || kind === 'click_card_first_option') && !baselineTaken) {
         baseline = await readAssistantTexts();
         baselineTaken = true;
+        evidence.turns_before = baseline.turns;  // D7: real baseline, not a dead 0
       }
       log('step', kind, JSON.stringify(step).slice(0, 160));
       evidence.step_trace.push(kind);
@@ -285,6 +343,19 @@ function shaShort(s) {
             .count().catch(() => 1);
           evidence.clarification_answer_no_loop = (looped === 0);
           evidence.looped_card_options = looped;
+          // D3 (spec J2): the answer turn must be a USER-VISIBLE ANSWER with
+          // the SAME intentId, and must not RE-ASK the answered question.
+          // Capture the intent cards' intentIds (first pre-answer turn vs the
+          // answer turn) for the driver to grade.
+          evidence.intent_ids = await page.evaluate((sel) => {
+            const root = document.querySelector(sel);
+            if (!root) return [];
+            return Array.from(root.querySelectorAll('.chat-log-intent-card'))
+              .map((c) => (c.textContent.match(/intentId:\s*(\S+)/) || [])[1] || null);
+          }, logSelector).catch(() => []);
+          // The answered request's identity (testid suffix = clarification id).
+          evidence.answered_request_id =
+            String(evidence.answered_card_testid).replace(/^chat-log-request-/, '');
           break;
         }
         case 'click_accept_proposal': {
@@ -328,7 +399,11 @@ function shaShort(s) {
   const receipt = {
     journey: journey.id,
     app_base: appBase,
-    route_handlers_used: attest.route_handlers_used, // structurally always 0 (no page.route in this file)
+    // D1: real runtime counter — incremented by the route/routeFromHAR/
+    // setRequestInterception wrappers installed above. Any injected
+    // interception handler lands here nonzero; route_api_wrapped proves the
+    // instrumentation was live in this exact process.
+    route_handlers_used: attest.route_handlers_used,
     attestations: {
       ...attest,
       transport: 'real fetch through vite proxy to the lane backend; zero route handlers registered',
@@ -336,6 +411,8 @@ function shaShort(s) {
     },
     ai_request_bodies: aiBodies,
     write_request_bodies: writeBodies,
+    clarification_announcements: clarificationAnnouncements,
+    answer_events: answerEvents,
     rendered_evidence: evidence,
     js_errors: jsErrors,
     screenshots: shots,

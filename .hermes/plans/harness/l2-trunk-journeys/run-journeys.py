@@ -23,6 +23,7 @@ Env: CL_JOURNEY_APP_BASE, CL_JOURNEY_API_BASE, CL_RECEIPTS, CL_DATA_REPO.
 """
 import argparse
 import datetime
+import hashlib
 import importlib  # noqa: F401  (kept for selfcheck import symmetry)
 import json
 import os
@@ -79,12 +80,52 @@ def check_channel_assertions(body, assertions):
             if not ok:
                 violations.append("channel %s does not carry any of %r (value=%r)"
                                   % (path, a["contains_any"], val))
+        if "equals_set" in a:  # D5: exact set equality (order-insensitive)
+            want = list(a["equals_set"])
+            ok = (found and isinstance(val, list)
+                  and sorted(map(str, val)) == sorted(map(str, want)))
+            if not ok:
+                violations.append("channel %s is not EXACTLY the set %r (value=%r)"
+                                  % (path, want, val))
     return violations
 
 
 # ---------------------------------------------------------------------------
 # Rendered-outcome assertions — PURE over the ui-drive evidence dict.
 # ---------------------------------------------------------------------------
+
+def _reask_violations(evidence):
+    """D3: a RE-ASK is a clarification announcement whose prompt equals an
+    ANSWERED request's prompt, announced AFTER the answer rode the wire.
+    The answered request's prompt is recovered from the announcements that
+    preceded the answer (match on the answered clarification id)."""
+    anns = evidence.get("clarification_announcements") or []
+    answers = evidence.get("answer_events") or []
+    answered_id = evidence.get("answered_request_id")
+    if not answers:
+        return ["rendered: answer_no_reask declared but NO clarificationAnswers "
+                "request was captured — cannot prove no re-ask"]
+    if not answered_id:
+        return ["rendered: answer_no_reask declared but the answered "
+                "clarification id was not captured"]
+    answered_prompt = None
+    for a in anns:
+        if a.get("id") == answered_id:
+            answered_prompt = a.get("prompt")
+            break
+    if answered_prompt is None:
+        return ["rendered: the answered clarification %r never appeared in "
+                "the captured announcements — cannot prove no re-ask" % answered_id]
+    answer_t = min(ev.get("captured_at_ms", 0) for ev in answers)
+    reasked = [a for a in anns
+               if a.get("prompt") == answered_prompt
+               and a.get("captured_at_ms", 0) > answer_t]
+    if reasked:
+        return ["rendered: RED-BY-PRODUCT-DEFECT — the answer turn RE-ASKED "
+                "the SAME question (id=%s re-announced after the answer): %r"
+                % (answered_id, answered_prompt[:90])]
+    return []
+
 
 def check_rendered_assertions(evidence, assertions):
     violations = []
@@ -111,6 +152,18 @@ def check_rendered_assertions(evidence, assertions):
                 violations.append("rendered: after answering, clarification cards "
                                   "STILL offer options (loop) — cards_offering=%r"
                                   % evidence.get("cards_still_offering"))
+        if "answer_no_reask" in a and a["answer_no_reask"]:  # D3
+            viols = _reask_violations(evidence)
+            violations.extend(viols)
+        if "answer_intent_id_same" in a and a["answer_intent_id_same"]:  # D3
+            ids = [x for x in (evidence.get("intent_ids") or []) if x]
+            if len(ids) < 2:
+                violations.append("rendered: answer-turn intentId cannot be "
+                                  "compared — intent cards seen: %r" % (evidence.get("intent_ids"),))
+            elif ids[0] != ids[-1]:
+                violations.append("rendered: spec J2 — the folded answer turn "
+                                  "must carry the SAME intentId, but pre-answer "
+                                  "intentId %r != answer-turn intentId %r" % (ids[0], ids[-1]))
         if "proposal_accepted" in a and a["proposal_accepted"]:
             if not evidence.get("proposal_accepted"):
                 violations.append("rendered: no proposal diff was accepted (ChangesPanel Accept)")
@@ -129,21 +182,39 @@ def check_rendered_assertions(evidence, assertions):
 # ---------------------------------------------------------------------------
 
 def digest_repo(root, subdir="records"):
+    """D8 fix: content-hash fingerprint (sha256 per file, folded into one
+    digest) — a same-size content change is caught, not just a size change."""
     base = os.path.join(root, subdir)
     if not os.path.isdir(base):
         return None
+    import hashlib
     entries = []
     for dirpath, _dirs, files in os.walk(base):
         for f in files:
             p = os.path.join(dirpath, f)
             try:
-                st = os.stat(p)
+                with open(p, "rb") as fh:
+                    fh_hash = hashlib.sha256(fh.read()).hexdigest()
             except OSError:
                 continue
-            entries.append("%s:%d" % (os.path.relpath(p, root), st.st_size))
+            entries.append("%s:%s" % (os.path.relpath(p, root), fh_hash))
     entries.sort()
-    import hashlib
     return hashlib.sha256("\n".join(entries).encode()).hexdigest()[:16]
+
+
+def declared_ids(js_dir):
+    """D2 helper: the journey ids DECLARED by the journeys/ directory — the
+    complete set a green tick claim must cover."""
+    import yaml
+    ids = set()
+    for f in sorted(os.listdir(js_dir)):
+        if not f.endswith(".yaml"):
+            continue
+        with open(os.path.join(js_dir, f)) as fh:
+            y = yaml.safe_load(fh)
+        if y and y.get("id"):
+            ids.add(y["id"])
+    return ids
 
 
 def latest_run_dir():
@@ -153,11 +224,11 @@ def latest_run_dir():
 
 # ---------------------------------------------------------------------------
 
-def _api(api_base, method, path, body=None, timeout=30):
+def _api(api_base, method, path, body=None, timeout=30, user_id="USR-BRAD"):
     import urllib.request
     import urllib.error
     data = json.dumps(body).encode() if body is not None else None
-    headers = {"x-user-id": "USR-BRAD"}
+    headers = {"x-user-id": user_id}
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(api_base + path, data=data, method=method,
@@ -178,24 +249,25 @@ def seed_journey(journey, api_base):
     """Materialise journey `seed` (idempotent): record create or scratch copy.
     Returns (ok, note, seeded_ids)."""
     seed = journey.get("seed") or {}
+    uid = journey.get("acting_user_id", "USR-BRAD")  # D11: user rides the YAML
     ids = []
     if "record" in seed:
         rec = seed["record"]
         rid = rec["recordId"]
-        st, _ = _api(api_base, "GET", "/api/records/" + rid)
+        st, _ = _api(api_base, "GET", "/api/records/" + rid, user_id=uid)
         if st == 200:
             ids.append(rid)
             return True, "record exists (reused): %s" % rid, ids
         st, body = _api(api_base, "POST", "/api/records",
                         {"schemaId": rec["schemaId"], "payload": rec["payload"],
-                         "message": "L2-TRUNK-JOURNEYS seed"})
+                         "message": "L2-TRUNK-JOURNEYS seed"}, user_id=uid)
         if st not in (200, 201):
             return False, "seed create failed %s -> %s %s" % (rid, st, body), ids
         ids.append(rid)
         return True, "record created: %s" % rid, ids
     if "copy_record" in seed:
         c = seed["copy_record"]
-        st, body = _api(api_base, "GET", "/api/records/" + c["from"])
+        st, body = _api(api_base, "GET", "/api/records/" + c["from"], user_id=uid)
         if st != 200:
             return False, "copy source missing: %s -> %s" % (c["from"], st), ids
         payload = (body.get("record") or body).get("payload") or body.get("payload")
@@ -222,17 +294,22 @@ def seed_journey(journey, api_base):
             for cand in payload.get("candidates") or []:
                 if isinstance(cand, dict) and "status" in cand:
                     del cand["status"]
-        st2, _ = _api(api_base, "GET", "/api/records/" + c["to"])
+        st2, _ = _api(api_base, "GET", "/api/records/" + c["to"], user_id=uid)
         if st2 == 200:
             st3, _ = _api(api_base, "PUT", "/api/records/" + c["to"],
-                          {"payload": payload, "message": "L2-TRUNK-JOURNEYS re-seed"})
+                          {"payload": payload, "message": "L2-TRUNK-JOURNEYS re-seed"},
+                          user_id=uid)
             if st3 not in (200, 201):
                 return False, "re-seed PUT failed %s -> %s" % (c["to"], st3), ids
             ids.append(c["to"])
             return True, "scratch copy reset: %s" % c["to"], ids
+        if not c.get("schemaId"):  # D11: the copy's schema is DECLARED in YAML
+            return False, ("copy seed missing schemaId in journey YAML (D11: "
+                           "the driver hardcodes no schema)"), ids
         st3, body3 = _api(api_base, "POST", "/api/records",
-                          {"schemaId": "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml",
-                           "payload": payload, "message": "L2-TRUNK-JOURNEYS scratch copy"})
+                          {"schemaId": c["schemaId"],
+                           "payload": payload, "message": "L2-TRUNK-JOURNEYS scratch copy"},
+                          user_id=uid)
         if st3 not in (200, 201):
             return False, "copy seed failed %s -> %s %s" % (c["to"], st3, body3), ids
         ids.append(c["to"])
@@ -242,24 +319,77 @@ def seed_journey(journey, api_base):
 
 def teardown_journey(journey, api_base):
     td = journey.get("teardown") or {}
+    uid = journey.get("acting_user_id", "USR-BRAD")
     if "delete_record" in td:
-        st, _ = _api(api_base, "DELETE", "/api/records/" + td["delete_record"])
+        st, _ = _api(api_base, "DELETE", "/api/records/" + td["delete_record"],
+                     user_id=uid)
         return st in (200, 204, 404)
     return True
 
 
-def check_write_proof(proof, api_base):
+def grade_write_proof(journey, ui, api_base):
+    """D4 fix: the write evidence LANDS IN THE RECEIPT and absence is RED.
+
+    Returns (violations, proof_record). Rules:
+      - if the UI captured ANY write body but the journey declares no
+        write_proof block -> RED (silently deleting `write_proof:` can no
+        longer yield green);
+      - expectedSha cross-check: the captured write body's expectedSha must
+        equal the context.attachedProtocol.sha the assistant request rode;
+      - persisted read-back: GET the record, record status + label_found +
+        payload digest in the proof_record.
+    """
+    proof = journey.get("write_proof")
+    writes = [w for w in ui.get("write_request_bodies", [])
+              if w.get("method") in ("PUT", "POST")]
     if not proof:
-        return []
-    st, body = _api(api_base, "GET", "/api/records/" + proof["record"])
+        if writes:
+            return (["write-proof: journey produced %d write request(s) %s but "
+                     "declares NO write_proof block — write evidence must be "
+                     "graded and persisted (D4)"
+                     % (len(writes), [w.get("endpoint") for w in writes])], None)
+        return [], None
+    rec = {"record": proof["record"], "captured_writes": len(writes)}
+    # expectedSha == the attachedProtocol.sha the AI request carried.
+    exp_sha = None
+    for w in writes:
+        if proof["record"] in str(w.get("endpoint", "")):
+            exp_sha = (w.get("body") or {}).get("expectedSha")
+            rec["write_endpoint"] = w.get("endpoint")
+            rec["write_method"] = w.get("method")
+            rec["expected_sha"] = exp_sha
+            rec["write_body_sha256_12"] = hashlib.sha256(
+                json.dumps(w.get("body"), sort_keys=True).encode()).hexdigest()[:12]
+            break
+    ai_sha = None
+    for b in ui.get("ai_request_bodies", []):
+        s = ((((b.get("body") or {}).get("context") or {})
+              .get("attachedProtocol") or {}).get("sha"))
+        if s:
+            ai_sha = s
+    rec["attached_protocol_sha"] = ai_sha
+    violations = []
+    if writes and not exp_sha:
+        violations.append("write-proof: no captured write body carries "
+                          "expectedSha for %s" % proof["record"])
+    elif exp_sha and ai_sha and exp_sha != ai_sha:
+        violations.append("write-proof: expectedSha %r != the request's "
+                          "context.attachedProtocol.sha %r" % (exp_sha, ai_sha))
+    st, body = _api(api_base, "GET", "/api/records/" + proof["record"],
+                    user_id=journey.get("acting_user_id", "USR-BRAD"))
+    rec["readback_status"] = st
     if st != 200:
-        return ["write-proof: record unreadable (%s)" % st]
+        violations.append("write-proof: record unreadable (%s)" % st)
+        return violations, rec
     payload = (body.get("record") or body).get("payload") or body.get("payload") or {}
     hay = json.dumps(payload)
-    if proof.get("label_contains") and proof["label_contains"] not in hay:
-        return ["write-proof: accepted label %r NOT found in the record — the "
-                "expectedSha round trip did not land the write" % proof["label_contains"]]
-    return []
+    rec["payload_sha256_12"] = hashlib.sha256(hay.encode()).hexdigest()[:12]
+    label_found = (proof.get("label_contains") or "") in hay
+    rec["label_found"] = label_found
+    if proof.get("label_contains") and not label_found:
+        violations.append("write-proof: accepted label %r NOT found in the record — the "
+                          "expectedSha round trip did not land the write" % proof["label_contains"])
+    return violations, rec
 
 
 def run_journey(journey, run_dir, app_base, api_base):
@@ -326,8 +456,14 @@ def run_journey(journey, run_dir, app_base, api_base):
             violations.extend(best)
 
     ev = ui.get("rendered_evidence", {})
+    # D3: the wire-level clarification announcements + answer events ride the
+    # evidence dict so the rendered-assertion check (pure over evidence) can
+    # detect a post-answer RE-ASK.
+    ev["clarification_announcements"] = ui.get("clarification_announcements", [])
+    ev["answer_events"] = ui.get("answer_events", [])
     violations.extend(check_rendered_assertions(ev, journey.get("assert", {}).get("rendered", [])))
-    violations.extend(check_write_proof(journey.get("write_proof"), api_base))
+    wp_viol, wp_rec = grade_write_proof(journey, ui, api_base)
+    violations.extend(wp_viol)
 
     teardown_ok = teardown_journey(journey, api_base)
 
@@ -340,8 +476,10 @@ def run_journey(journey, run_dir, app_base, api_base):
         "violations": violations,
         "seed_note": note,
         "teardown_ok": teardown_ok,
-        "selection_affordance": ui.get("selection_affordance"),
+        "selection_affordance": (ui.get("attestations") or {}).get("selection_affordance"),
         "ai_request_bodies": bodies,          # the ROUND-TRIP-GATE-1 artifact
+        "write_request_bodies": ui.get("write_request_bodies", []),  # D4: the write rides IN the receipt
+        "write_proof": wp_rec,                # D4: persisted read-back + expectedSha evidence
         "rendered_evidence": ev,              # the paired rendered outcome
         "screenshots": ui.get("screenshots", []),
         "ui_attestations": ui.get("attestations", {}),
@@ -409,8 +547,26 @@ def main():
     greens = sum(1 for v in results.values() if v == "green")
     reds = sum(1 for v in results.values() if v == "red")
     terr = sum(1 for v in results.values() if v == "transport-error")
-    verdict_all = ("ALL-GREEN" if reds == 0 and terr == 0 and results
-                   else "ENV-ERROR" if terr and reds == 0 else "RED")
+    # D2: an ALL-GREEN claim requires a COMPLETE run (every declared journey
+    # file) against the TRUNK app base. Partial/scratch runs record their
+    # REAL per-journey verdicts but NEVER own a latest-blocking green claim.
+    from urllib.parse import urlparse
+    def _hostport(u):
+        p = urlparse(u)
+        return (p.hostname or "", p.port)
+    trunk_ports = {_hostport(DEFAULT_APP_BASE), ("127.0.0.1", 5193)}
+    app_base_is_trunk = _hostport(args.app_base) in trunk_ports
+    complete = set(results) == declared_ids(os.path.join(HERE, "journeys"))
+    if reds or terr:
+        verdict_all = "ENV-ERROR" if (terr and reds == 0) else "RED"
+    elif not complete or not app_base_is_trunk:
+        # D2: per-journey greens are recorded truthfully, but this run does
+        # NOT own a trunk green claim: verdict is informational only and the
+        # red_blocks_claims flag stays true so a tick can never read it as
+        # green; `latest` is not moved either.
+        verdict_all = "INCOMPLETE" if not complete else "GREEN-NOT-TRUNK"
+    else:
+        verdict_all = "ALL-GREEN"
     run_meta = {
         "run": ts,
         "harness": "L2-TRUNK-JOURNEYS-1",
@@ -419,6 +575,9 @@ def main():
         "verdicts": results,            # the tick reads THIS table
         "verdict": verdict_all,
         "journeys_run": list(results),
+        "journeys_declared": sorted(declared_ids(os.path.join(HERE, "journeys"))),
+        "complete": complete,           # D2: verdicts cover EVERY journey file
+        "app_base_is_trunk": app_base_is_trunk,  # D2: not a scratch frontend
         "digest_before": d_before,
         "digest_after": d_after,
         "digest_clean": (d_before == d_after),
@@ -427,16 +586,24 @@ def main():
     }
     with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
         json.dump(run_meta, fh, indent=2)
-    link = os.path.join(RECEIPTS_ROOT, "latest")
-    tmp = link + ".new"
-    if os.path.islink(tmp) or os.path.exists(tmp):
-        os.remove(tmp)
-    os.symlink(run_dir, tmp)
-    os.replace(tmp, link)  # atomic flip of `latest`
+    # D2: `latest` flips ONLY for a complete trunk run — a scratch/partial
+    # run must never displace the trunk verdict the tick reads.
+    if complete and app_base_is_trunk:
+        link = os.path.join(RECEIPTS_ROOT, "latest")
+        tmp = link + ".new"
+        if os.path.islink(tmp) or os.path.exists(tmp):
+            os.remove(tmp)
+        os.symlink(run_dir, tmp)
+        os.replace(tmp, link)  # atomic flip of `latest`
+        latest_note = "latest -> this run"
+    else:
+        latest_note = ("latest NOT moved (complete=%s app_base_is_trunk=%s)"
+                       % (complete, app_base_is_trunk))
 
     for jid in sorted(results):
         print("%s %s" % (jid, results[jid]))
-    print("run-meta: %s verdict=%s digest_clean=%s" % (run_dir, verdict_all, d_before == d_after))
+    print("run-meta: %s verdict=%s digest_clean=%s (%s)"
+          % (run_dir, verdict_all, d_before == d_after, latest_note))
     if args.json:
         print("JOURNEYS-JSON " + json.dumps({"run": ts, "dir": run_dir,
                                              "verdict": verdict_all, "verdicts": results}))

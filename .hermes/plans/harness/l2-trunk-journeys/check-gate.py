@@ -40,6 +40,36 @@ def main():
     print("latest: %s verdict=%s" % (os.path.realpath(link), meta.get("verdict")))
     for j in sorted(verdicts):
         print("  %s: %s" % (j, verdicts[j]))
+    # D2: fail closed unless the verdict table is a COMPLETE trunk claim.
+    # The declared set is read from the harness's own journeys/ directory.
+    import os as _os
+    js_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "journeys")
+    declared = set()
+    try:
+        import yaml
+        for f in sorted(_os.listdir(js_dir)):
+            if f.endswith(".yaml"):
+                with open(_os.path.join(js_dir, f)) as fh:
+                    y = yaml.safe_load(fh)
+                if y and y.get("id"):
+                    declared.add(y["id"])
+    except Exception as exc:
+        print("GATE: journeys/ unreadable (%s) — FAIL CLOSED" % exc)
+        print("GATE-VERDICT env-error")
+        return 2
+    missing = sorted(declared - set(verdicts))
+    if missing:
+        print("BLOCKER: latest verdicts table is INCOMPLETE — journeys %s never "
+              "ran (D2: an incomplete run may not clear the gate)" % missing)
+        print("GATE-VERDICT blocking")
+        return 1
+    if meta.get("app_base_is_trunk") is False or "127.0.0.1:5195" in str(meta.get("app_base", "")) \
+            or (meta.get("app_base", "").split("//")[-1].split("/")[0] not in
+                ("localhost:5193", "127.0.0.1:5193")):
+        print("BLOCKER: latest run targeted a NON-TRUNK app_base %r (D2: scratch "
+              "frontend runs may not clear the gate)" % meta.get("app_base"))
+        print("GATE-VERDICT blocking")
+        return 1
     if reds:
         for j in reds:
             print("BLOCKER: trunk journey %s is RED (verdict=%s) — "

@@ -69,5 +69,12 @@ assert:
   rendered:
     - clarification_answered: true
     - clarification_no_loop: true
+    # D3 (spec J2, verbatim): the folded answer turn must produce a
+    # user-visible answer with the SAME intentId, and must NOT re-ask the
+    # answered question. These assertions are HONEST: if the product
+    # genuinely loops, J2 is RED-BY-PRODUCT-DEFECT with the cite in the
+    # violation — never weakened to keep green.
+    - answer_no_reask: true
+    - answer_intent_id_same: true
     - assistant_answer_visible: true
     - turns_at_least: 2

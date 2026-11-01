@@ -8,6 +8,7 @@ id: J3
 title: "protocol-edit via chat: draft -> diff -> Accept -> expectedSha write lands"
 file: J3.yaml
 timeout_s: 300
+acting_user_id: USR-BRAD   # D11: the acting identity is DECLARED data, not driver code
 selection_affordance: >-
   REAL UI: ReviewAiPanel's own composer (chat-input TipTap + chat-input-send)
   is typed and sent; the ChangesPanel Accept button (changes-apply) is
@@ -18,6 +19,8 @@ seed:
   copy_record:
     from: XDR-w28-gate0001
     to: XDR-JOURNEYS-3
+    # D11: the copy's schema is declared here, not hardcoded in the driver.
+    schemaId: https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml
     # Scratch-record test-data prep: the LIVE fixture drifted to status
     # 'promoted' (measured 2026-10-31), which findSemanticDraft skips; the
     # merged fixture was born 'pending_review' (e2e/fixtures/w28-said-meant/

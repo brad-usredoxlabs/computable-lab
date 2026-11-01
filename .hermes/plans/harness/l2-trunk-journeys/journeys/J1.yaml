@@ -71,7 +71,9 @@ assert:
     - path: context.selectedWells.labwareId
       equals: LBW-JOURNEYS-1
     - path: context.selectedWells.wells
-      contains_any: [A1, B1]
+      # D5: EXACT set equality on the clicked wells (order-insensitive) —
+      # a partial-loss regression (wells: ["A1"]) must go RED. Never any-of.
+      equals_set: [A1, B1]
     - path: context.sourceSelection
       present: true
     - path: context.selection

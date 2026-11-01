@@ -36,6 +36,8 @@ import tempfile
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+APP_DIR = os.path.join(REPO_ROOT, "app")  # node_modules resolution for the probe
 
 _spec = importlib.util.spec_from_file_location(
     "run_journeys", os.path.join(HERE, "run-journeys.py"))
@@ -97,6 +99,36 @@ def main():
     viol = rj.check_channel_assertions(nulls, assertions)
     results.append(("FAIL case (selectedWells: null)", bool(viol), viol))
 
+    # ---- (1e) D5: PARTIAL well loss must be RED under exact-set equality --
+    partial = honest_body(j1)
+    partial["context"]["selectedWells"]["wells"] = ["A1"]
+    partial["context"]["sourceSelection"]["wells"] = ["A1"]
+    viol = rj.check_channel_assertions(partial, assertions)
+    caught_partial = any("not EXACTLY the set" in v for v in viol)
+    results.append(("FAIL case (D5 partial well loss: wells=[A1] under equals_set)",
+                    caught_partial, viol))
+    # order-insensitive: the same set in another order must PASS
+    reordered = honest_body(j1)
+    reordered["context"]["selectedWells"]["wells"] = ["B1", "A1"]
+    viol = rj.check_channel_assertions(reordered, assertions)
+    results.append(("PASS case (D5 reordered set [B1,A1] under equals_set)",
+                    not viol, viol))
+
+    # ---- (1f) D8: content digest catches a SAME-SIZE content change -------
+    with tempfile.TemporaryDirectory() as td8:
+        rec8 = os.path.join(td8, "records")
+        os.makedirs(rec8)
+        f8 = os.path.join(rec8, "a.yaml")
+        with open(f8, "w") as fh:
+            fh.write("label: original-value\n")
+        d1_8 = rj.digest_repo(td8)
+        with open(f8, "w") as fh:
+            fh.write("label: CHANGED-same-l\n")  # identical byte length
+        d2_8 = rj.digest_repo(td8)
+        results.append(("D8 digest: same-size content change flips the digest",
+                        d1_8 != d2_8 and d1_8 is not None,
+                        ["%s vs %s" % (d1_8, d2_8)]))
+
     # ---- (2) interception gate: a receipt with route handlers is BANNED ---
     # Reproduce the driver's belt-check exactly (the same expression the
     # driver runs over ui receipts).
@@ -107,22 +139,90 @@ def main():
     results.append(("PASS case (ui receipt route_handlers_used=0)",
                     not banned_check({"route_handlers_used": 0}), []))
 
-    # ---- (2b) CONSTRUCTION: ui-drive.cjs carries zero interception calls --
+    # ---- (2b) CONSTRUCTION: ui-drive.cjs carries zero interception CALLS --
+    # D1 widened: ANY receiver (`*.route(`, `*.routeFromHAR(`,
+    # setRequestInterception) and ANY fulfilment method on ANY receiver
+    # (`.fulfill(`, `.abort(`, `.fail(`). Comments/doc lines are stripped.
     src = open(os.path.join(HERE, "ui-drive.cjs")).read()
-    hits = re.findall(r"page\.route\s*\(|route\.(fulfill|abort|fail)\s*\(|waitForResponse\s*\(|setRequestInterception", src)
-    # strip the file's own comments/doc from the verdict by re-grepping code
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith(("//", "*", "/*")))
-    hits = re.findall(r"page\.route\s*\(|route\.(?:fulfill|abort|fail)\s*\(", code)
-    results.append(("CONSTRUCTION (ui-drive.cjs contains no page.route/fulfill/abort/fail)",
+    hits = re.findall(
+        r"(?:\w+\.)?(?:route|routeFromHAR|setDefaultNavigation|setRequestInterception)\s*\("
+        r"|\.(?:fulfill|abort|fail)\s*\(", code)
+    # The D1 counter WRAPS the registration methods by PROPERTY ASSIGNMENT
+    # (target[meth] = wrapper) — it never CALLS one. Whitelist exactly the
+    # wrapper plumbing lines (they contain no interception call syntax).
+    results.append(("CONSTRUCTION (ui-drive.cjs contains no interception CALL "
+                    "on any receiver — route/routeFromHAR/fulfill/abort/fail/"
+                    "setRequestInterception)",
                     not hits, ["hits: %r" % (hits,)]))
 
+    # ---- (2c) LIVE INJECTION: context.route on a throwaway copy => RED ---
+    # D1's teeth: copy ui-drive.cjs to a temp file, inject a perfect fake
+    # context.route('**/api/ai/**') immediately before the FIRST page use
+    # (after the wrappers are installed, so it exercises the wrapper), run it
+    # against a dead app-base with a fast-failing goto, and assert the
+    # receipt reports route_handlers_used >= 1 (fails closed).
+    inj = src
+    anchor = "  await page.goto(appBase + step.path"
+    if anchor not in inj:
+        results.append(("INJECTION (context.route on a throwaway copy goes RED)",
+                        False, ["anchor 'await page.goto(appBase + step.path' "
+                                "not found — the injection case must be kept wired"]))
+    else:
+        inj = inj.replace(
+            anchor,
+            "  await context.route('**/api/ai/**', (r) => r.fulfill("
+            "{status: 200, contentType: 'application/json', body: '{}'}));\n"
+            "  await page.goto(appBase + step.path", 1)
+        td2 = tempfile.mkdtemp(prefix="sc-inject-")
+        probe = os.path.join(td2, "ui-drive-probe.cjs")
+        with open(probe, "w") as fh:
+            fh.write(inj)
+        # Fast-failing journey: first step is a goto to an unroutable base,
+        # then a screenshot so the receipt (with the counter) still lands.
+        jpath = os.path.join(td2, "INJ.yaml")
+        with open(jpath, "w") as fh:
+            fh.write("id: INJ\ntimeout_s: 20\nlog_selector: 'body'\nsteps:\n"
+                     "  - step: goto\n    path: /deck/NOPE\n")
+        opath = os.path.join(td2, "INJ-ui.json")
+        # The probe lives in a temp dir: give it node_modules via a symlink to
+        # the ROOT-level node_modules (js-yaml + @playwright/test live there).
+        # Read-only symlink — never touches the shared tree's contents.
+        root_nm = os.path.join(REPO_ROOT, "node_modules")
+        if not os.path.isdir(os.path.join(root_nm, "js-yaml")):
+            root_nm = "/mnt/vast/home/brad/git/cl-integration-2/node_modules"
+        os.symlink(root_nm, os.path.join(td2, "node_modules"))
+        p = subprocess.run(["node", probe, "--journey", jpath, "--out", opath,
+                            "--app-base", "http://127.0.0.1:9"],
+                           cwd=APP_DIR, capture_output=True, text=True,
+                           timeout=180)
+        try:
+            rec = json.load(open(opath))
+            used = rec.get("route_handlers_used", -1)
+            wrapped = (rec.get("attestations") or {}).get("route_api_wrapped")
+        except Exception as exc:
+            used, wrapped = -1, None
+            rec = {"read_error": str(exc), "stderr": p.stderr[-400:]}
+        results.append(("INJECTION (context.route on a throwaway copy goes RED)",
+                        used >= 1 and wrapped is True,
+                        ["route_handlers_used=%r wrapped=%r rc=%d" % (used, wrapped, p.returncode)]))
+        import shutil
+        shutil.rmtree(td2, ignore_errors=True)
+
     # ---- (3) the tick gate helper: red blocks, green passes ---------------
+    # D2: fixtures must satisfy the COMPLETE+TRUNK preconditions so the red
+    # case tests the RED arm, and new cases prove INCOMPLETE / scratch-FE runs
+    # fail closed on their own.
+    full_green = {"J1": "green", "J2": "green", "J3": "green"}
+    trunk_meta = {"app_base": "http://localhost:5193",
+                  "app_base_is_trunk": True}
     with tempfile.TemporaryDirectory() as td:
         red_dir = os.path.join(td, "20260101T000000Z")
         os.makedirs(red_dir)
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump({"verdict": "RED", "verdicts": {"J1": "red", "J2": "green"}}, fh)
+            json.dump(dict(trunk_meta, verdict="RED",
+                           verdicts={"J1": "red", "J2": "green", "J3": "green"}), fh)
         os.symlink(red_dir, os.path.join(td, "latest"))
         env = dict(os.environ, CL_RECEIPTS=td)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
@@ -131,10 +231,39 @@ def main():
                         p.returncode == 1 and "BLOCKER" in p.stdout and "J1" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump({"verdict": "ALL-GREEN", "verdicts": {"J1": "green", "J2": "green"}}, fh)
+            json.dump(dict(trunk_meta, verdict="ALL-GREEN", verdicts=full_green), fh)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
         results.append(("GATE green-run exits 0", p.returncode == 0,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D2 case A: complete greens but only J1 ran (incomplete table) => blocks
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(trunk_meta, verdict="ALL-GREEN",
+                           verdicts={"J1": "green"}), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D2: incomplete verdicts table (J1-only) BLOCKS",
+                        p.returncode == 1 and "INCOMPLETE" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D2 case B: complete greens against a SCRATCH frontend => blocks
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump({"app_base": "http://127.0.0.1:5195",
+                       "app_base_is_trunk": False,
+                       "verdict": "ALL-GREEN", "verdicts": full_green}, fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D2: scratch-frontend (:5195) run BLOCKS",
+                        p.returncode == 1 and "NON-TRUNK" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D2 case C (negative control): legacy meta with no app_base_is_trunk
+        # flag and trunk app_base => completeness governs, trunk ok.
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump({"app_base": "http://localhost:5193",
+                       "verdict": "ALL-GREEN", "verdicts": full_green}, fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D2: trunk app_base without the flag still passes",
+                        p.returncode == 0,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
 
     ok = True
