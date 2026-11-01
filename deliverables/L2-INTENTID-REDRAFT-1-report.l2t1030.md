@@ -322,7 +322,10 @@ No merge performed; task list untouched; no npm install (node_modules symlinks i
 
 ## 6. END MARKER
 
-Work tip (code + test + report + all captures, clean tree): 0c668e9fc84cdd152dfa315980b2674d3e6662a1
-(This marker-append is the final docs-only commit; the substantive work-tip referenced by the marker below is 0c668e9f.)
+Work tip (all content: code + test + report + all captures): 8a2b47abe4aaf343449f2832c4d94f1e67a8e021
+(This marker line itself lives in the final docs-only commit, which therefore carries a
+sha one commit past the content tip it names — a commit cannot contain its own sha.
+The marker line below references the content-complete tip; the final-turn marker carries
+`git -c core.fileMode=false rev-parse HEAD` of the marker commit, tree clean.)
 
 INTENTID DONE 0c668e9fc84cdd152dfa315980b2674d3e6662a1
