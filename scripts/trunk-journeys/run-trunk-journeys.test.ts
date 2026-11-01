@@ -10,10 +10,11 @@
  *
  * Run: npx tsx run-trunk-journeys.test.ts   (asserts; throws on any failure)
  */
-import { mkdtempSync, writeFileSync, mkdirSync, utimesSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, utimesSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import {
   validateJourneyFile,
   loadJourneyFile,
@@ -263,9 +264,9 @@ console.log('\n[9] runStep / assertExpect / attribution (D4/D6)');
   };
   const server = createServer((req, res) => {
     const id = (req.url ?? '').replace(/^\/api\/records\//, '');
-    const rec = store[id];
+    const entry = store[id] as { recordId?: string; schemaId?: string; payload?: unknown } | undefined;
     res.setHeader('content-type', 'application/json');
-    if (rec) res.end(JSON.stringify({ record: { recordId: id, schemaId: 's', payload: rec as object } }));
+    if (entry) res.end(JSON.stringify({ record: { recordId: id, schemaId: 's', payload: entry.payload } }));
     else {
       res.statusCode = 404;
       res.end(JSON.stringify({ error: 'not found' }));
@@ -292,6 +293,7 @@ console.log('\n[9] runStep / assertExpect / attribution (D4/D6)');
       vars,
       page: page as RunnerCtx['page'],
       log: (j, s, line) => { logLines.push(`[${j}] ${s}: ${line}`); },
+      current: '',
     };
     return { ctx, logLines };
   }
@@ -341,6 +343,7 @@ console.log('\n[9] runStep / assertExpect / attribution (D4/D6)');
       backend, worktree: '/tmp', mountDir: '/tmp', screenshotsDir: '/tmp',
       rand: 'test0002', vars: {}, page: page as RunnerCtx['page'],
       log: (j, s, line) => { logLines.push(`[${j}] ${s}: ${line}`); },
+      current: 'execute-and-chromatogram',
     };
     let threw = false;
     try {
@@ -366,6 +369,39 @@ console.log('\n[9] runStep / assertExpect / attribution (D4/D6)');
     );
   }
   server.close();
+}
+
+// --- [10] D2 isolation gate + D2/D3 driver-source invariants ---
+console.log('\n[10] isolation-violated gate + driver-source invariants (D2/D3)');
+{
+  // check-green: a verdict that records isolation:'violated' blocks even when
+  // the journeys are green (D2: the machine signal must enforce the hard rule).
+  const iv = mkdtempSync(join(tmpdir(), 'tj-cg-isolation-'));
+  verdictFile(iv, '2026-10-31T100000000-abc8', {
+    result: 'green',
+    journeys: [{ id: 'J1', result: 'green' }, { id: 'J2', result: 'green' }],
+    declaredJourneys: ['J1', 'J2'],
+    isolation: 'violated',
+  }, T0 + 1000);
+  const rIso = checkGreen(iv);
+  ok(rIso.code !== 0, `checkGreen isolation:'violated' (green journeys) -> non-zero (got ${rIso.code})`);
+
+  // D2 source invariant: the isolation proof is computed BEFORE the verdict
+  // write, and the verdict's result is gated on the proof (overallGreen
+  // includes isolationOk). Read the driver source directly — the behavioral
+  // proof is the live re-run, but the ORDER is a source property.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const driver = readFileSync(join(here, 'run-trunk-journeys.ts'), 'utf8');
+  const isoBefore = driver.indexOf('const liveAfter = await dirDigest(liveDir)');
+  const verdictWrite = driver.indexOf("writeFile(join(runRoot, 'journeys-verdict.json')");
+  ok(isoBefore !== -1 && verdictWrite !== -1 && isoBefore < verdictWrite, 'D2: isolation digest (liveAfter) computed BEFORE the verdict write');
+  const overallGreenDecl = driver.match(/const overallGreen = journeysGreen && isolationOk;/);
+  ok(overallGreenDecl !== null, 'D2: verdict result is gated on the isolation proof (overallGreen = journeysGreen && isolationOk)');
+
+  // D3 source invariant: the receipt stamp + seed rand never derive from a
+  // minute-precision clock alone.
+  ok(!driver.includes('function tsStamp'), 'D3: the old minute-precision tsStamp is gone');
+  ok(/ts: `\$\{sec\}-\$\{rand\}`/.test(driver) && /randomBytes\(4\)/.test(driver), 'D3: receipt dir = ms stamp + crypto suffix; rand is randomBytes (never clock-derived)');
 }
 
 console.log(`\nRESULT: ${passes} passed, ${failures} failed`);

@@ -21,6 +21,20 @@
  * same line. The patterns match that verb+path shape; a plain mention of the
  * path in prose (no verb, no quoted path) does NOT trip them, so documenting
  * the ban is safe.
+ *
+ * D10 (adversarial gate 2026-10-31): the original four patterns missed the
+ * MOST idiomatic bypass shapes — a regex-literal route target
+ * (page.route(/\/api\/ai\//)), a split-string fetch (fetch(host + '/api/'
+ * + 'ai' + '/chat')), and axios/node-http callers. The pattern set now
+ * covers: quoted path strings, REGEX LITERALS (escaped or bare slashes),
+ * split-string assembly (a quoted /api/ part concatenated with a quoted
+ * ai part), and every common HTTP client verb (fetch/axios/http(s).request).
+ *
+ * RESIDUAL LIMIT (documented — line-based scanner): the scanner is
+ * line-oriented. Path assembly across LINES, via intermediate variables
+ * with no client verb on the same line, or in percent-/unicode-encoded
+ * form, is not caught. The residual is why the pattern list is DATA (add a
+ * row when a new shape appears) and why the check is a GUARD, not a proof.
  */
 
 /** The banned AI HTTP path prefix, in two parts (see the module note). */
@@ -35,10 +49,20 @@ const AI_PATH = AI_PATH_A + AI_PATH_B;
 export const BANNED_INTERCEPTION_PATTERNS: Array<{ id: string; re: RegExp; why: string }> = [
   {
     // Playwright route: page.route / context.route / browser.route / .route(
-    // whose pattern string names the AI path.
+    // whose pattern string (QUOTED) names the AI path.
     id: 'playwright-route-ai',
     re: new RegExp(`(\\.route\\s*\\(|\\bpage\\.route\\b|\\bcontext\\.route\\b|\\bbrowser\\.route\\b)[^\\n]*['"][^'"]*${AI_PATH}`, 'i'),
     why: 'a Playwright route intercepts the AI HTTP surface (banned)',
+  },
+  {
+    // D10: a route/RegExp argument that is a REGEX LITERAL naming the AI
+    // path — the most idiomatic bypass: page.route(/\/api\/ai\//, handler).
+    // The literal fragments: slash, optional backslash-slash, api,
+    // optional backslash-slash, ai — so BOTH /\/api\/ai\/ and /api/ai/
+    // (and bare /api/ai) match; /api/analysis-runs never does.
+    id: 'route-regex-literal-ai',
+    re: new RegExp(`(?:\\.route\\s*\\(|\\broute\\s*\\(|new\\s+RegExp\\s*\\()\\s*\/(?:\\\\/)?api(?:\\\\/)?ai`, 'i'),
+    why: 'a route/RegExp argument is a REGEX LITERAL naming the AI path (banned)',
   },
   {
     // a route('...AI_PATH...') call whose first arg string names the AI path.
@@ -47,10 +71,31 @@ export const BANNED_INTERCEPTION_PATTERNS: Array<{ id: string; re: RegExp; why: 
     why: 'a route(...) call targets the AI HTTP surface (banned)',
   },
   {
-    // a fetch/axios call whose URL literal is the AI path.
+    // a fetch call whose URL literal (quoted or template) is the AI path —
+    // anywhere in the call's argument list (fetch(x + '/api/ai/...') too).
     id: 'fetch-ai',
-    re: new RegExp(`\\bfetch\\s*\\(\\s*(?:\`|['"])\\s*[^\\n]*${AI_PATH}`, 'i'),
+    re: new RegExp(`\\bfetch\\s*\\([^\\n]*['"\`][^\\n]*${AI_PATH}`, 'i'),
     why: 'a fetch() call targets the AI HTTP surface (banned)',
+  },
+  {
+    // D10: an axios call whose URL literal is the AI path.
+    id: 'axios-ai',
+    re: new RegExp(`\\baxios\\.[A-Za-z]+\\s*\\([^\\n]*['"\`][^\\n]*${AI_PATH}`, 'i'),
+    why: 'an axios call targets the AI HTTP surface (banned)',
+  },
+  {
+    // D10: a node http(s).request call whose URL/path literal is the AI path.
+    id: 'node-http-request-ai',
+    re: new RegExp(`\\bhttps?\\.request\\s*\\([^\\n]*['"\`][^\\n]*${AI_PATH}`, 'i'),
+    why: 'a node http(s).request call targets the AI HTTP surface (banned)',
+  },
+  {
+    // D10: SPLIT-STRING assembly — an HTTP client verb whose URL is built by
+    // concatenating a quoted part ending in /api/ with a quoted part
+    // starting ai: fetch(host + '/api/' + 'ai' + '/chat').
+    id: 'split-string-ai-verb',
+    re: new RegExp(`\\b(?:fetch|axios|got|ky|request)\\b[^\\n]*['"][^'"]*/api/['"]\\s*\\+\\s*['"][^'"]*ai`, 'i'),
+    why: 'a split-string URL builds the AI path across quoted parts (banned)',
   },
   {
     // a declarative route-table entry (prefix/match/pattern/url) set to the AI path.

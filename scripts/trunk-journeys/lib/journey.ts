@@ -45,13 +45,15 @@ export interface ExpectClause {
 interface SeedStep {
   kind: 'seed';
   /** The .CH point count the journey's synthetic signal carries (DATA — the
-   * driver applies zero domain policy here). MUST keep the runner's
-   * signal_plus_baseline artifact UNDER its 50k-char inline threshold
-   * (analysisRunner.ts isLarge) so the artifact's `value` rides the
-   * manifest inline and the product's `signal` view renders a VISIBLE
-   * trace. A GC scan at ~3 Hz over the 5-min window is a real, smallest
-   * shape that satisfies the peak engine's window sampling AND stays
-   * inline. The seed asserts this fail-closed (see fixtures.ts). */
+   * driver applies zero domain policy here). A GC scan at ~3 Hz over the
+   * 5-min window (5000 points by default — the TS-side default the
+   * interpreter applies when the YAML declares none) is a real, smallest
+   * shape: the v181 reader decodes every point and the peak-integration
+   * engine integrates over the full window, so the rendered chromatogram
+   * trace is real and non-blank. (The artifact's `value` is ALWAYS a DREF
+   * blob — publish_file never inlines; point count affects decode/integrate
+   * time, not any inline threshold. The seed asserts the point count
+   * landed fail-closed via the run's diag capture.) */
   signalPoints?: number;
 }
 interface ApiStep {
@@ -119,14 +121,32 @@ export function readPointer(root: unknown, path: string): unknown {
   return cur;
 }
 
-/** Interpolate {{var}} refs in a string; fail closed on a missing var. */
+/**
+ * Interpolate {{var}} refs in a string; FAIL CLOSED on any unresolvable
+ * placeholder (D5 — the adversarial gate: the old \w+-only regex let
+ * "{{seed.gcMethod}}", "{{}}", "{{ rand }}", "{{ missing }}" pass through
+ * SILENTLY into selectors/URLs/expressions).
+ *
+ * Grammar: a placeholder is \{\{ name \}\} where the name is the TRIMMED
+ * inner text. The name is looked up EXACTLY in vars (dot-seeded names like
+ * 'seed.gcMethod' are first-class var keys — that is the ONE vocabulary;
+ * there is no dual dotted/flat lookup). Any placeholder whose name is not
+ * a known var is a hard error, and any residual '{{' after substitution
+ * (e.g. a placeholder that contains a stray '}' it cannot span) is a hard
+ * error. A missing var is never silently empty.
+ */
 export function interpolate(s: string, vars: Record<string, unknown>): string {
-  return s.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
-    if (!(name in vars) || vars[name] === undefined) {
-      throw new JourneyError('*', 'interpolate', `missing variable {{${name}}}`);
+  const out = s.replace(/\{\{([^}]*)\}\}/g, (whole, inner: string) => {
+    const name = inner.trim();
+    if (name === '' || !(name in vars) || vars[name] === undefined) {
+      throw new JourneyError('*', 'interpolate', `unresolvable placeholder '{{${inner}}}' (known vars: ${Object.keys(vars).join(', ') || '(none)'})`);
     }
     return String(vars[name]);
   });
+  if (out.includes('{{')) {
+    throw new JourneyError('*', 'interpolate', `residual '{{' after substitution (a placeholder spans or contains '}' — not expressible in the {{name}} grammar): ${out}`);
+  }
+  return out;
 }
 
 /** Validate the parsed journey file shape (fail closed on malformed). */
@@ -180,6 +200,44 @@ export interface RunnerCtx {
   page: import('playwright').Page;
   /** per-step log sink (the driver appends to the receipt step log) */
   log: (journeyId: string, stepName: string, line: string) => void;
+  /**
+   * D4 attribution: the step/action CURRENTLY executing. The driver sets it
+   * before each step and the interpreter updates it before each browser
+   * action; on a throw the driver captures this as the journey's
+   * `failed_step` (the OLD rule parsed the last LOGGED line, which entry-
+   * logging actions like screenshot masked — the real assert failure was
+   * reported as the screenshot path).
+   */
+  current: string;
+}
+
+/**
+ * D4: the failed-step attribution for one journey. Returns the step/action
+ * tag the interpreter had marked current when the journey's throw escaped —
+ * the ACTUAL failing step (or the failing ACTION inside a browser step:
+ * action tags are the more precise localization, e.g. an assertJs's name),
+ * not the last LOGGED line (which entry-logged actions like screenshot
+ * masked). A throw before any step started (startup leg) keeps the pre-run
+ * tag ('(pre-run)').
+ */
+export function journeyOutcome(
+  journeyId: string,
+  ctx: RunnerCtx,
+  error: Error,
+): { id: string; result: 'green' | 'red'; failed_step: string | null; error?: string } {
+  let failedStep = typeof ctx.current === 'string' && ctx.current.length > 0 ? ctx.current : null;
+  // Normalize action tags: a browser action's tag carries its verb
+  // ("assertJs <name>", "wait <testid>", ...). The failed_step record is the
+  // ACTION ITSELF — the assert's name / the selector — not the interpreter
+  // verb, so strip the first token for the action-tag shapes. Step-level
+  // tags (no verb prefix) and the pre-run tag pass through unchanged.
+  if (failedStep && failedStep !== '(pre-run)') {
+    const space = failedStep.indexOf(' ');
+    if (space > 0 && ['assertJs', 'wait', 'waitSel', 'click', 'type', 'select', 'goto', 'waitUrl', 'captureUrl', 'evalJs', 'screenshot'].includes(failedStep.slice(0, space))) {
+      failedStep = failedStep.slice(space + 1);
+    }
+  }
+  return { id: journeyId, result: 'red', failed_step: failedStep, error: error.message };
 }
 
 /** Execute one browser action against the page. */
@@ -192,29 +250,30 @@ export async function runBrowserAction(
   const page = ctx.page;
   if (action.goto !== undefined) {
     const raw = interpolate(action.goto, ctx.vars);
-    const url = raw.startsWith('http') ? raw : `${ctx.backend.replace(/\/api$/, '')}/${raw.replace(/^\//, '')}`;
-    // Frontend base is the VITE server (same origin as /api proxy). Use the
-    // frontend origin: the backend origin hosts /api only; the app UI is on the
-    // frontend port. The driver passes frontendBase via the backend host:port
-    // swap — here we resolve through ctx (see the driver's goto resolution).
+    // D4: mark this action current BEFORE it can throw (the goto URL is the
+    // attribution the driver captures on failure).
+    ctx.current = `goto ${raw}`;
     const gotoUrl = resolveGoto(raw, ctx);
     ctx.log(journeyId, stepName, `goto ${gotoUrl}`);
     await page.goto(gotoUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     return;
   }
   if (action.wait !== undefined) {
+    ctx.current = `wait ${action.wait}`;
     const sel = `[data-testid="${interpolate(action.wait, ctx.vars)}"]`;
     ctx.log(journeyId, stepName, `wait ${action.wait}`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
     return;
   }
   if (action.waitSel !== undefined) {
+    ctx.current = `waitSel ${action.waitSel}`;
     const sel = interpolate(action.waitSel, ctx.vars);
     ctx.log(journeyId, stepName, `waitSel ${sel}`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
     return;
   }
   if (action.click !== undefined) {
+    ctx.current = `click ${action.click}`;
     const sel = `[data-testid="${interpolate(action.click, ctx.vars)}"]`;
     ctx.log(journeyId, stepName, `click ${action.click}`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
@@ -222,6 +281,7 @@ export async function runBrowserAction(
     return;
   }
   if (action.type !== undefined) {
+    ctx.current = `type ${action.type.selector}`;
     const sel = `[data-testid="${interpolate(action.type.selector, ctx.vars)}"]`;
     const text = interpolate(action.type.value, ctx.vars);
     ctx.log(journeyId, stepName, `type ${action.type.selector} = ${JSON.stringify(text)}`);
@@ -230,6 +290,7 @@ export async function runBrowserAction(
     return;
   }
   if (action.select !== undefined) {
+    ctx.current = `select ${action.select.selector}`;
     const sel = `[data-testid="${interpolate(action.select.selector, ctx.vars)}"]`;
     ctx.log(journeyId, stepName, `select ${action.select.selector} (index ${action.select.index ?? 'value ' + action.select.value})`);
     await page.waitForSelector(sel, { state: 'visible', timeout: 60_000 });
@@ -249,16 +310,19 @@ export async function runBrowserAction(
   }
   if (action.waitUrl !== undefined) {
     const want = interpolate(action.waitUrl, ctx.vars);
+    ctx.current = `waitUrl ${want}`;
     ctx.log(journeyId, stepName, `waitUrl ${want}`);
     await page.waitForURL((u) => u.toString().includes(want), { timeout: 90_000 });
     return;
   }
   if (action.captureUrl !== undefined) {
+    ctx.current = `captureUrl ${action.captureUrl}`;
     ctx.vars[action.captureUrl] = page.url();
     ctx.log(journeyId, stepName, `captureUrl ${action.captureUrl} = ${page.url()}`);
     return;
   }
   if (action.evalJs !== undefined) {
+    ctx.current = `evalJs ${action.evalJs.as ?? '(expr)'}`;
     const expr = interpolate(action.evalJs.expr, ctx.vars);
     const val = await page.evaluate((e) => (eval(e) as unknown), expr);
     if (action.evalJs.as) ctx.vars[action.evalJs.as] = val;
@@ -266,6 +330,12 @@ export async function runBrowserAction(
     return;
   }
   if (action.assertJs !== undefined) {
+    // D4: the assert's NAME is the attribution — a failed assert must be
+    // reported by its own name, never masked by an earlier entry-logged
+    // action (the 2329 receipts reported the real chromatogram assert
+    // failure as the screenshot path). The tag is the bare name (the
+    // identifying fact), unlike other actions' "verb <arg>" tags.
+    ctx.current = action.assertJs.name ?? '(unnamed assert)';
     const expr = interpolate(action.assertJs.expr, ctx.vars);
     const val = await page.evaluate((e) => (eval(e) as unknown), expr);
     if (!val) {
@@ -275,6 +345,7 @@ export async function runBrowserAction(
     return;
   }
   if (action.screenshot !== undefined) {
+    ctx.current = `screenshot ${action.screenshot}`;
     const file = `${action.screenshot}.png`;
     const path = `${ctx.screenshotsDir}/${journeyId}-${file}`;
     await page.screenshot({ path, fullPage: true });
@@ -296,6 +367,10 @@ function resolveGoto(raw: string, ctx: RunnerCtx): string {
 /** Execute one step. */
 export async function runStep(step: Step, ctx: RunnerCtx, journeyId: string): Promise<void> {
   const name = 'name' in step && typeof step.name === 'string' ? step.name : step.kind;
+  // D4: mark the step current BEFORE executing — the driver captures
+  // ctx.current on a throw as the journey's failed_step. Browser actions
+  // refine the tag to the failing action.
+  ctx.current = name;
   if (step.kind === 'seed') {
     ctx.log(journeyId, name, 'seed: minting fixtures + writing .D tree');
     const pts = (step as SeedStep).signalPoints ?? 5000;

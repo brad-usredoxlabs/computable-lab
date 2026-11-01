@@ -20,10 +20,11 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { chromium, type Browser } from 'playwright';
-import { loadJourneyFile, runStep, type RunnerCtx, type Journey, type JourneyFile } from './lib/journey.js';
+import { loadJourneyFile, runStep, journeyOutcome, type RunnerCtx, type Journey, type JourneyFile } from './lib/journey.js';
 import {
   pickFreePorts,
   materializeRunDirs,
@@ -130,8 +131,19 @@ async function collectHarnessFiles(root: string): Promise<ScanFile[]> {
   return files;
 }
 
-function tsStamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, '').slice(0, 15); // 20261031T120000Z-ish
+/**
+ * D3: the run stamp. The RECEIPT DIR is second-precision + a CRYPTO-random
+ * hex suffix; the SEED ID suffix (rand) is pure crypto-random. The old
+ * minute-precision stamp + rand-derived-from-the-same-stamp meant two runs
+ * in the same minute shared the receipt dir AND the seed-id suffix — a
+ * same-minute green re-run could clobber a red receipt, or the seed-id
+ * collision 409'd the seed. Record identity is NEVER derived from a clock
+ * alone; the clock is only a sort-friendly prefix.
+ */
+function runStamp(): { ts: string; rand: string } {
+  const sec = new Date().toISOString().replace(/[:.]/g, '').slice(0, 19); // 20261031T120000Z000 (ms)
+  const rand = randomBytes(4).toString('hex'); // 8 hex chars; never clock-derived
+  return { ts: `${sec}-${rand}`, rand };
 }
 
 interface JourneyResult {
@@ -159,8 +171,8 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // ---- receipt dir ----
-  const ts = tsStamp();
+  // ---- receipt dir (D3: ms-precision stamp + crypto suffix; never shared) ----
+  const { ts, rand } = runStamp();
   const runRoot = join(args.receiptsHome, ts);
   await mkdir(runRoot, { recursive: true });
   const screenshotsDir = join(runRoot, 'screenshots');
@@ -169,8 +181,15 @@ async function main(): Promise<number> {
   await mkdir(logsDir, { recursive: true });
   console.log(`[receipts] ${runRoot}`);
 
+  // D13: the isolation proof covers BOTH forbidden roots — the live dir
+  // (~/.computable-lab) AND the shared lane store (/home/brad/
+  // .computable-lab-lane1). AC2 forbids writes to both; the machine proof
+  // must cover both.
   const liveDir = process.env.HOME ? `${process.env.HOME}/.computable-lab` : '/home/brad/.computable-lab';
-  const liveBefore = await dirDigest(liveDir);
+  const laneStoreDir = process.env.HOME
+    ? `${process.env.HOME}/.computable-lab-lane1`
+    : '/home/brad/.computable-lab-lane1';
+  const [liveBefore, laneStoreBefore] = await Promise.all([dirDigest(liveDir), dirDigest(laneStoreDir)]);
 
   // ---- ports + throwaway dirs ----
   const ports: Ports = await pickFreePorts(args.backendCandidates, args.frontendCandidates);
@@ -190,11 +209,15 @@ async function main(): Promise<number> {
 
   // ---- journeys ----
   const journeyFile: JourneyFile = loadJourneyFile(resolve(args.journeys));
+  // D7: the DECLARED journey scope = every journey the YAML declares. The
+  // verdict records it; check-green requires the full declared set (a
+  // `--only J1` run is a scoped run that gates only its own scope).
+  const declaredJourneys = journeyFile.journeys.map((j) => j.id);
   const toRun = args.only.length > 0 ? journeyFile.journeys.filter((j) => args.only.includes(j.id)) : journeyFile.journeys;
   if (args.only.length > 0 && toRun.length === 0) {
     throw new Error(`--only ${args.only.join(',')} matched no journey in ${args.journeys}`);
   }
-  console.log(`[journeys] running ${toRun.map((j) => j.id).join(', ')}`);
+  console.log(`[journeys] running ${toRun.map((j) => j.id).join(', ')} (declared scope: ${declaredJourneys.join(', ')})`);
 
   // ---- step log ----
   const stepLogLines: string[] = [];
@@ -218,20 +241,24 @@ async function main(): Promise<number> {
   });
   const page = await context.newPage();
 
-  const rand = ts.replace(/[^a-z0-9]/gi, '').slice(-8) || 'run';
+  // D3: `rand` comes from runStamp() (crypto-random, above) — never derived
+  // from the clock. It must be in vars (not just ctx.rand): the DATA
+  // interpreter's interpolate() reads vars, and the journeys reference
+  // {{rand}} in the browser step values (title/sample). Exposing it here
+  // keeps the journeys as pure data (the driver supplies the run identity).
   const ctx: RunnerCtx = {
     backend,
     worktree: WORKTREE,
     mountDir: dirs.mountDir,
     screenshotsDir,
     rand,
-    // `rand` must be in vars (not just ctx.rand): the DATA interpreter's
-    // interpolate() reads vars, and the journeys reference {{rand}} in the
-    // browser step values (title/sample). Exposing it here keeps the
-    // journeys as pure data (the driver supplies the run identity).
     vars: { __frontendBase: frontendBase, rand },
     page,
     log,
+    // D4: the current step/action tag (attribution on a thrown step). The
+    // startup leg (stack spawn + wait) has no journey step yet — a throw
+    // there keeps this tag.
+    current: '(pre-run)',
   };
 
   // ---- spawn the stack (recorded PIDs) + wait ready ----
@@ -250,18 +277,20 @@ async function main(): Promise<number> {
     for (const journey of toRun) {
       const jr: JourneyResult = { id: journey.id, result: 'green', failed_step: null };
       console.log(`\n=== journey ${journey.id} (${journey.name ?? journey.id}) ===`);
+      ctx.current = journey.id; // attribution: set before the first step (D4)
       try {
         for (const step of journey.steps) {
-          const stepName = 'name' in step && typeof step.name === 'string' ? step.name : step.kind;
           await runStep(step, ctx, journey.id);
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        // D4: the failing step/action is the interpreter's CURRENT tag —
+        // captured at throw time — not the last LOGGED line (entry-logging
+        // actions like screenshot masked the real failing assert).
+        const outcome = journeyOutcome(journey.id, ctx, err instanceof Error ? err : new Error(String(err)));
         jr.result = 'red';
-        // best-effort: name the failing step from the log's last line for this journey
-        const last = stepLogLines.filter((l) => l.startsWith(`[${journey.id}]`)).pop();
-        jr.failed_step = last ? last.split(': ')[1]?.split(':')[0] ?? null : null;
-        jr.error = msg;
+        jr.failed_step = outcome.failed_step;
+        jr.error = outcome.error;
+        const msg = outcome.error ?? String(err);
         log(journey.id, 'FAILED', msg);
         console.log(`  RED: ${msg}`);
       }
@@ -276,22 +305,38 @@ async function main(): Promise<number> {
     await browser.close().catch(() => {});
   }
 
+  // ---- isolation proof (D2: computed BEFORE any verdict is written; the
+  // verdict's `result` is FORCED red and `isolation` recorded 'violated'
+  // when the proof fails — a green verdict is never written before the
+  // proof passes) ----
   const liveAfter = await dirDigest(liveDir);
+  const laneStoreAfter = await dirDigest(laneStoreDir);
   const liveUnchanged = liveBefore.digest === liveAfter.digest && liveBefore.identity === liveAfter.identity;
-  const overallGreen = results.length > 0 && results.every((r) => r.result === 'green');
+  const laneStoreUnchanged = laneStoreBefore.digest === laneStoreAfter.digest && laneStoreBefore.identity === laneStoreAfter.identity;
+  const isolationOk = liveUnchanged && laneStoreUnchanged;
+  const isolation: 'ok' | 'violated' = isolationOk ? 'ok' : 'violated';
+  const journeysGreen = results.length > 0 && results.every((r) => r.result === 'green');
+  // D2: green is written IFF the journeys are green AND the isolation proof
+  // passed. An isolation breach forces red (the machine signal contradicts
+  // nothing — it is the hard rule itself).
+  const overallGreen = journeysGreen && isolationOk;
 
   // ---- receipts ----
+  const head = execFileSync('git', ['-c', 'core.fileMode=false', 'rev-parse', 'HEAD'], { cwd: WORKTREE }).toString().trim();
   const verdict = {
     result: overallGreen ? 'green' : 'red',
     journeys: results,
+    declaredJourneys,
+    isolation,
     generatedAt: new Date().toISOString(),
     worktree: WORKTREE,
-    head: (await import('node:child_process')).execSync('git -c core.fileMode=false rev-parse HEAD', { cwd: WORKTREE }).toString().trim(),
+    head,
   };
   await writeFile(join(runRoot, 'journeys-verdict.json'), JSON.stringify(verdict, null, 2), 'utf8');
   await writeFile(join(runRoot, 'step.log'), stepLogLines.join('\n') + '\n', 'utf8');
   const runMeta = {
     ts,
+    rand,
     runRoot,
     worktree: WORKTREE,
     head: verdict.head,
@@ -307,20 +352,30 @@ async function main(): Promise<number> {
       after: liveAfter,
       unchanged: liveUnchanged,
     },
+    // D13: the shared lane store is a second forbidden root — proven the
+    // same way (digest + identity before/after).
+    laneStoreProof: {
+      path: laneStoreDir,
+      before: laneStoreBefore,
+      after: laneStoreAfter,
+      unchanged: laneStoreUnchanged,
+    },
+    isolation,
     journeys: results,
+    declaredJourneys,
     overallGreen,
   };
   await writeFile(join(runRoot, 'run-meta.json'), JSON.stringify(runMeta, null, 2), 'utf8');
 
   console.log(`\n[result] ${verdict.result} — ${results.map((r) => `${r.id}=${r.result}${r.failed_step ? ` (failed step ${r.failed_step})` : ''}`).join(', ')}`);
-  console.log(`[live-dir] ${liveUnchanged ? 'UNCHANGED (digest proof holds)' : 'CHANGED — VIOLATION (digest mismatch)'}`);
+  console.log(`[isolation] ${isolationOk ? 'PROOF HOLDS (live dir + lane store: digest + identity unchanged)' : 'VIOLATED (digest mismatch)'}`);
   console.log(`[receipts] ${runRoot}/journeys-verdict.json`);
 
-  if (!liveUnchanged) {
-    console.error('[FATAL] ~/.computable-lab digest CHANGED — the harness must never write there');
+  if (!isolationOk) {
+    console.error('[FATAL] live-dir and/or lane-store digest CHANGED — the harness must never write there; verdict forced red + isolation:violated');
     return 3;
   }
-  return overallGreen ? 0 : 1;
+  return journeysGreen ? 0 : 1;
 }
 
 main().then(

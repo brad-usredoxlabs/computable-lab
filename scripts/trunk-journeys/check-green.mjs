@@ -2,11 +2,13 @@
 /**
  * trunk-journeys — check-green (the tick's pre-claim read), BARE NODE ESM.
  *
- * RED-BLOCKS-CLAIMS: the tick reads the NEWEST journeys-verdict.json under the
- * receipts home BEFORE claiming new work. Newest verdict RED -> exit NON-ZERO
- * (claim declined); GREEN -> exit 0. No verdict yet -> exit 0 (nothing has run;
- * not blocked by a red). This is a pure READ of the machine-readable verdict
- * file — it does NOT run the journeys (that is the driver's job).
+ * RED-BLOCKS-CLAIMS, FAIL CLOSED. Mirror of check-green.ts (keep in sync):
+ * the NEWEST receipt dir is AUTHORITATIVE — newest dir without a parseable
+ * journeys-verdict.json -> code 3 (fail closed; do NOT walk back to an older
+ * green). Green verdicts must cover the FULL declared journey set
+ * (declaredJourneys) and record isolation ok — a partial/scoped green ->
+ * code 4; isolation:'violated' -> code 5; red -> code 1; corrupt -> 2; no
+ * receipt dirs at all -> code 0 (explicit permissive policy).
  *
  *   node check-green.mjs [receiptsHome]
  *   receiptsHome default: /home/brad/.hermes/cl/receipts/L1-TRUNK-JOURNEYS
@@ -16,29 +18,45 @@ import { join } from 'node:path';
 
 const DEFAULT_RECEIPTS_HOME = '/home/brad/.hermes/cl/receipts/L1-TRUNK-JOURNEYS';
 
-function newestVerdictPath(receiptsHome) {
+/** The NEWEST receipt dir (by mtime) — or null when no run dirs exist. */
+function newestRunDir(receiptsHome) {
   if (!existsSync(receiptsHome)) return null;
   const dirs = readdirSync(receiptsHome, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => ({ name: d.name, mtimeMs: statSync(join(receiptsHome, d.name)).mtimeMs }))
     .sort((a, b) => a.mtimeMs - b.mtimeMs);
-  for (let i = dirs.length - 1; i >= 0; i--) {
-    const candidate = join(receiptsHome, dirs[i].name, 'journeys-verdict.json');
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
+  return dirs.length > 0 ? join(receiptsHome, dirs[dirs.length - 1].name) : null;
+}
+
+/** Full declared scope covered: declared set == recorded set, all green. */
+function fullScopeCovered(v) {
+  const declared = v.declaredJourneys;
+  const results = v.journeys ?? [];
+  const resultIds = new Set(results.map((j) => j.id));
+  if (results.length === 0) return false;
+  if (declared === undefined || declared.length === 0) return true; // legacy: recorded set IS the scope
+  for (const id of declared) if (!resultIds.has(id)) return false;
+  if (results.length !== declared.length) return false;
+  return results.every((j) => j.result === 'green');
 }
 
 export function checkGreen(receiptsHome = DEFAULT_RECEIPTS_HOME) {
-  const path = newestVerdictPath(receiptsHome);
-  if (!path) {
-    return { code: 0, message: `check-green: no journeys-verdict.json yet under ${receiptsHome} — nothing red, claim not blocked` };
+  const newestDir = newestRunDir(receiptsHome);
+  if (newestDir === null) {
+    return { code: 0, message: `check-green: no receipt dirs under ${receiptsHome} — nothing has run (explicit permissive policy: claim not blocked)` };
+  }
+  const path = join(newestDir, 'journeys-verdict.json');
+  if (!existsSync(path)) {
+    return { code: 3, message: `check-green: UNKNOWN — the NEWEST receipt dir ${newestDir} has no journeys-verdict.json (a run died before writing its verdict). Fail-closed: claims are BLOCKED until a complete run writes a verdict.` };
   }
   let verdict;
   try {
     verdict = JSON.parse(readFileSync(path, 'utf8'));
   } catch (e) {
     return { code: 2, message: `check-green: could not parse ${path}: ${e instanceof Error ? e.message : e}` };
+  }
+  if (verdict.isolation === 'violated') {
+    return { code: 5, message: `check-green: ISOLATION VIOLATED — verdict ${path} records isolation:'violated' (the live-dir digest proof failed). Fail-closed: claims are BLOCKED.` };
   }
   if (verdict.result === 'red') {
     const reds = (verdict.journeys ?? []).filter((j) => j.result === 'red').map((j) => `${j.id}${j.failed_step ? ` (failed step ${j.failed_step})` : ''}`);
@@ -48,7 +66,12 @@ export function checkGreen(receiptsHome = DEFAULT_RECEIPTS_HOME) {
     };
   }
   if (verdict.result === 'green') {
-    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys)` };
+    if (!fullScopeCovered(verdict)) {
+      const declared = verdict.declaredJourneys ?? [];
+      const have = (verdict.journeys ?? []).map((j) => `${j.id}=${j.result}`).join(', ');
+      return { code: 4, message: `check-green: PARTIAL — latest verdict ${path} is green only for ${have} of the declared set [${declared.join(', ')}]. A scoped run does not gate the full set; claims are BLOCKED until the full declared set runs green.` };
+    }
+    return { code: 0, message: `check-green: GREEN — latest verdict ${path} is green (${(verdict.journeys ?? []).length} journeys, full declared set, isolation ok)` };
   }
   return { code: 2, message: `check-green: unrecognized verdict result '${verdict.result}' at ${path}` };
 }
