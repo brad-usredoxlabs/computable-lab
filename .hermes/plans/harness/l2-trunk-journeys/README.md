@@ -90,27 +90,43 @@ plus `selection_affordance` (the disclosed real-UI affordance), `violations`
 
 ## RED-BLOCKS-CLAIMS (the tick-facing contract)
 
-The driver atomically flips receipts-root `latest` -> the run dir ONLY for a
-COMPLETE run (every journeys/*.yaml id in the verdicts table) against the
-TRUNK app base, where TRUNK is the LITERAL set
-`{localhost:5193, 127.0.0.1:5193}` (N1: no env derivation —
-`CL_JOURNEY_APP_BASE` can select the run target but never make a scratch FE
-'trunk'; check-gate re-derives the same literal from the run's recorded
-app_base, so a lying run-meta flag cannot pass). A partial/scratch run
-records its real per-journey verdicts (verdict INCOMPLETE / GREEN-NOT-TRUNK,
-`red_blocks_claims: true`) but never moves `latest`. An ADVISORY run
-(`--advisory`, the live-sampler J2 shape) records its honest verdict but also
-never moves `latest` and sets `red_blocks_claims: true` (A3). run-meta carries
-the `verdicts` table plus `complete`, `app_base_is_trunk`, `advisory`,
-`failures` (N3: reds carry their failure dict), and — for a `--fake` run —
-`fake`/`fake_restore` (A1/A2: the pointed and restored inference URLs). The
-tick gate (fails closed on both):
+`fake_mode` is a first-class run-meta field in EVERY run (fix4 D2). The
+gate's HARD SET is J1 + J2 (fake) + J3 green on a complete trunk run, and
+ONLY such a run owns `latest`:
+
+- TRUNK is the LITERAL set `{localhost:5193, 127.0.0.1:5193}` (N1: no
+  env derivation — `CL_JOURNEY_APP_BASE` can select the run target but
+  never make a scratch FE 'trunk'; check-gate re-derives the same
+  literal from the run's recorded app_base, so a lying run-meta flag
+  cannot pass).
+- A complete trunk green that ran on the LIVE sampler (no `--fake`) is
+  `GREEN-NOT-GATING` — an honest record, but it never owns `latest` and
+  can never clear the gate (D2: a live-sampler lottery is not a trunk
+  claim).
+- The `latest` flip is GRADED (fix4 D1): the driver flips ONLY after the
+  A2 restore grades OK — a fake run whose restore failed is
+  `RED-RESTORE-FAILED`, `red_blocks_claims: true`, exit 1, and never
+  owns `latest` (a crashed run never flips either).
+- An ADVISORY run (`--advisory`, the live-sampler J2 shape) records its
+  honest verdict but also never moves `latest` and sets
+  `red_blocks_claims: true` (A3).
+
+run-meta carries the `verdicts` table plus `complete`,
+`app_base_is_trunk`, `advisory`, `fake_mode`, `latest_was`, `failures`
+(N3: reds carry their failure dict), and — for a `--fake` run —
+`fake`/`fake_restore` (A1/A2: the pointed and restored inference URLs).
+
+The tick gate (fails closed on all of it):
 
     python3 .hermes/plans/harness/l2-trunk-journeys/check-gate.py
     exit 0 = green (or never-ran) — claim normally
-    exit 1 = prints a BLOCKER line naming each red journey, an INCOMPLETE
-             verdicts table, a NON-TRUNK app_base, or an ADVISORY latest —
-             ready set EMPTY
+    exit 1 = prints a BLOCKER line: a red journey, an INCOMPLETE
+             verdicts table, a NON-TRUNK app_base, a latest that is
+             advisory, a latest whose A2 restore record FAILED, a
+             non-fake latest (hard set), OR — because the graded flip
+             means a failed restore never owns `latest` — the NEWEST
+             restore record in the trail graded FAILED (the trail
+             itself is scanned; a newer run supersedes the failure)
     exit 2 = receipt trail unreadable — fail closed
 
 ## Self-check leg (fails closed)
