@@ -15,9 +15,13 @@
  * FIXTURES only; every status pattern lives ONLY in the pattern file.
  */
 import { describe, expect, it } from 'vitest';
+import { Readable } from 'node:stream';
 import {
   classifyAcquisitionStatus,
+  classifyAcquisitionPackageStatus,
+  declaredStatusQualified,
   loadLogPatterns,
+  resetLogPatternsCache,
 } from './acquisitionPackageStatus.js';
 
 /** The analysisDReader.test.ts:106-129 idiom: real UTF-16LE+BOM bytes. */
@@ -156,5 +160,119 @@ describe('classifyAcquisitionStatus (strict-UTF-16 RUN.LOG -> evidence DATA)', (
     expect(res.matched).toEqual([]);
     expect(res.noEvidenceReason).toBe('decode-failed');
     expect(res.decode.bomPresent).toBe(true); // facts recorded, not discarded (bait #7)
+  });
+});
+
+describe('FAME-1 fix-run (D3/D4/D5/D7): entry point, declared qualification, distinct floors', () => {
+  /** A minimal read provider returning one chunk of bytes for the member. */
+  const readProvider = (bytes: Buffer) => ({
+    read: async (_path: string) => Readable.from([bytes]),
+  });
+
+  it('D3: the rule file DECLARES a per-status run-sheet qualification (data, not code)', async () => {
+    const p = await loadLogPatterns();
+    expect(p.statusQualification).toBeDefined();
+    expect(p.statusQualification!.length).toBeGreaterThanOrEqual(4);
+    // The declared policy: aborted/stopped-by-user/unknown are visibly
+    // qualified; completed is not. This is DATA the chrome renders.
+    expect(declaredStatusQualified(p, 'aborted')).toBe(true);
+    expect(declaredStatusQualified(p, 'stopped-by-user')).toBe(true);
+    expect(declaredStatusQualified(p, 'unknown')).toBe(true);
+    expect(declaredStatusQualified(p, 'completed')).toBe(false);
+    // An UNLISTED status is NOT qualified (the safe default — never a
+    // fabricated warning).
+    expect(declaredStatusQualified(p, 'not-a-declared-status')).toBe(false);
+  });
+
+  it('D3: the entry point stamps the DECLARED qualification onto the payload (no TSX branch)', async () => {
+    // A completed log -> qualified=false (declared).
+    const completed = await classifyAcquisitionPackageStatus(
+      readProvider(utf16leBom(COUNTRYSIDE_LOG)),
+      'machine1/X.D',
+      { relativePath: 'RUN.LOG' },
+    );
+    expect(completed.acquisitionStatus).toBe('completed');
+    expect(completed.acquisitionStatusQualified).toBe(false);
+    // An aborted log -> qualified=true (declared).
+    const aborted = await classifyAcquisitionPackageStatus(
+      readProvider(utf16leBom(WEGMANS_LOG)),
+      'machine1/Y.D',
+      { relativePath: 'RUN.LOG' },
+    );
+    expect(aborted.acquisitionStatus).toBe('aborted');
+    expect(aborted.acquisitionStatusQualified).toBe(true);
+  });
+
+  it('D4: a missing rule file is recorded as rule-file-unreadable (NOT member-unreadable)', async () => {
+    // The run_log member IS readable (a valid completed log); ONLY the rule
+    // file is missing. The degenerate arm must name the RULE FILE as the
+    // fault — never falsely claim the (readable) member was unreadable.
+    const res = await classifyAcquisitionPackageStatus(
+      readProvider(utf16leBom(COUNTRYSIDE_LOG)),
+      'machine1/Z.D',
+      { relativePath: 'RUN.LOG' },
+      '/nonexistent-fame1-fix/rule-file.yaml',
+    );
+    expect(res.acquisitionStatus).toBe('unknown'); // the fixed floor word
+    expect(res.acquisitionStatusEvidence.noEvidenceReason).toMatch(/^rule-file-unreadable:/);
+    // The member was never read -> the decode facts say 'none', not
+    // 'unreadable' (the prior defect recorded a false decode fact).
+    expect(res.acquisitionStatusEvidence.decode.encoding).toBe('none');
+    expect(res.acquisitionStatusEvidence.matched).toEqual([]);
+  });
+
+  it('D5: the degenerate arm reports an ABSENCE-SHAPED ruleset (no restated identity)', async () => {
+    const res = await classifyAcquisitionPackageStatus(
+      readProvider(utf16leBom(COUNTRYSIDE_LOG)),
+      'machine1/Z.D',
+      { relativePath: 'RUN.LOG' },
+      '/nonexistent-fame1-fix/rule-file.yaml',
+    );
+    // The rule file is unread, so there is NO declared interpretation source
+    // to name: the ruleset is EMPTY (id/version/sourceFile all absent) — the
+    // code must not restate the YAML's identity (D5: no coded copy of data).
+    expect(res.acquisitionStatusEvidence.ruleset).toEqual({});
+    expect(res.acquisitionStatusEvidence.ruleset.id).toBeUndefined();
+    expect(res.acquisitionStatusEvidence.ruleset.version).toBeUndefined();
+    expect(res.acquisitionStatusEvidence.ruleset.sourceFile).toBeUndefined();
+  });
+
+  it('D4: an unreadable MEMBER with a readable rule file is member-unreadable (the two arms are distinct)', async () => {
+    // The rule file IS readable (canonical); the member read THROWS. This must
+    // be the member-unreadable arm (declared fallback, full ruleset), NOT the
+    // degenerate rule-file arm.
+    const throwingProvider = {
+      read: async (_path: string) => {
+        throw new Error('ENOENT: synthetic unreadable member');
+      },
+    };
+    const res = await classifyAcquisitionPackageStatus(
+      throwingProvider,
+      'machine1/W.D',
+      { relativePath: 'RUN.LOG' },
+    );
+    expect(res.acquisitionStatus).toBe('unknown'); // the DECLARED fallback
+    expect(res.acquisitionStatusEvidence.noEvidenceReason).toMatch(/^member-unreadable:/);
+    expect(res.acquisitionStatusEvidence.decode.encoding).toBe('unreadable');
+    // The rule file was readable -> its declared identity IS present (contrast
+    // with the D5 absence-shaped degenerate arm).
+    expect(res.acquisitionStatusEvidence.ruleset.id).toBeTruthy();
+    expect(res.acquisitionStatusEvidence.ruleset.sourceFile).toBeTruthy();
+  });
+
+  it('D7: classifyAcquisitionStatus THROWS when the rule file cannot be loaded (the load/compile escape is documented)', async () => {
+    // The low-level extractor does NOT floor the data-source failures — it
+    // propagates them to the FLOOR-GUARANTEED entry point (which distinguishes
+    // rule-file-unreadable from member-unreadable). A direct caller sees a
+    // throw, matching the corrected contract (not the prior false
+    // "never throws" claim). Point the extractor at a MISSING rule file (the
+    // test seam) and observe the load-failure throw.
+    await expect(
+      classifyAcquisitionStatus(
+        utf16leBom(COUNTRYSIDE_LOG),
+        'RUN.LOG',
+        '/nonexistent-fame1-fix/rule-file.yaml',
+      ),
+    ).rejects.toThrow();
   });
 });
