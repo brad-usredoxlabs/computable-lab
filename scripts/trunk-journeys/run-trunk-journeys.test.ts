@@ -33,6 +33,7 @@ import {
 
 let failures = 0;
 let passes = 0;
+const here = dirname(fileURLToPath(import.meta.url));
 function ok(cond: unknown, label: string): void {
   if (cond) {
     passes++;
@@ -390,7 +391,6 @@ console.log('\n[10] isolation-violated gate + driver-source invariants (D2/D3)')
   // write, and the verdict's result is gated on the proof (overallGreen
   // includes isolationOk). Read the driver source directly — the behavioral
   // proof is the live re-run, but the ORDER is a source property.
-  const here = dirname(fileURLToPath(import.meta.url));
   const driver = readFileSync(join(here, 'run-trunk-journeys.ts'), 'utf8');
   const isoBefore = driver.indexOf('const liveAfter = await dirDigest(liveDir)');
   const verdictWrite = driver.indexOf("writeFile(join(runRoot, 'journeys-verdict.json')");
@@ -402,6 +402,29 @@ console.log('\n[10] isolation-violated gate + driver-source invariants (D2/D3)')
   // minute-precision clock alone.
   ok(!driver.includes('function tsStamp'), 'D3: the old minute-precision tsStamp is gone');
   ok(/ts: `\$\{sec\}-\$\{rand\}`/.test(driver) && /randomBytes\(4\)/.test(driver), 'D3: receipt dir = ms stamp + crypto suffix; rand is randomBytes (never clock-derived)');
+}
+
+// --- [11] D8/D9 knowledge-layer integrity invariants (seed source) ---
+console.log('\n[11] D8/D9 seed knowledge-layer integrity (source invariants)');
+{
+  const seedSrc = readFileSync(join(here, 'lib', 'seed.ts'), 'utf8');
+  // D8: the mislabeled external CURIEs the gate verified are GONE, and no
+  // invented external ontology id is written into the knowledge layer.
+  // (The claim triple uses the registry-verified GO/RO terms; entered_by is
+  // a record ref to the harness actor.)
+  ok(!/CHEBI:24431/.test(seedSrc), 'D8: CHEBI:24431 ("chemical entity") no longer labeled as the person actor');
+  ok(!/GO:0035004/.test(seedSrc), 'D8: GO:0035004 (obsolete PI3K term) no longer labeled a chromatographic peak');
+  ok(!/RO:0002200/.test(seedSrc), 'D8: RO:0002200 ("part of" / "has phenotype" — wrong predicate) is gone');
+  ok(!/entered_by: \{ kind: 'ontology'/.test(seedSrc), 'D8: entered_by is a RECORD ref, not an ontology ref');
+  ok(/entered_by: \{ kind: 'record', id: ACTOR_ID/.test(seedSrc), 'D8: entered_by = record ref to the harness actor');
+  // The claim triple must use the registry-verified real terms.
+  ok(/RO:0002411/.test(seedSrc) && /GO:0006635/.test(seedSrc) && /GO:0006979/.test(seedSrc), 'D8: claim triple = real GO/RO terms (RO:0002411 causally upstream of, between GO processes)');
+  // D9: the context's subject_ref RESOLVES — the sample is minted and the
+  // read-back follows subject_ref.
+  ok(/const sample = `SMP-TJ-\$\{rand\}`/.test(seedSrc), 'D9: the sample record (SMP-TJ-<rand>) is minted by the seed');
+  ok(/subject_ref: \{ kind: 'record', id: sample/.test(seedSrc), 'D9: context subject_ref = the minted sample id');
+  ok(/await getRecord\(backend, sample\);/.test(seedSrc), 'D9: the read-back follows subject_ref to the sample (dangling ref fails closed)');
+  ok(seedSrc.includes('party, request, sample, gcMethod, engine, revision, claim, context, assertion'), 'D9: the read-back loop covers the full fixture set incl. the subject chain');
 }
 
 console.log(`\nRESULT: ${passes} passed, ${failures} failed`);
