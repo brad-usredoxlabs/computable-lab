@@ -533,3 +533,128 @@ describe('GcSectionChrome — E Analyze (verify-first, append-only, GC-11 seam)'
     await waitFor(() => expect(screen.queryByTestId('gc-chrome-note')).toBeNull())
   })
 })
+
+describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA, not interpretation)', () => {
+  /** An entry WITH a package whose payload carries the FAME-1 stamp. */
+  const pkgEntry = (status: 'aborted' | 'completed' | 'stopped-by-user' | 'unknown', withLines: boolean): GcChromeEntry => ({
+    recordId: 'ISEN-C-1',
+    payload: ENTRY_WITH_PKG.payload,
+    acquisitionPackage: {
+      kind: 'acquisition-package',
+      id: 'ACQP-000042',
+      acquisitionStatus: status,
+      files: [
+        { relativePath: 'FID1A.CH', role: 'signal_channel', dataReferenceRef: { kind: 'record', type: 'data-reference', id: 'DREF-000101' } },
+        { relativePath: 'RUN.LOG', role: 'run_log', dataReferenceRef: { kind: 'record', type: 'data-reference', id: 'DREF-000103' } },
+      ],
+      ...(withLines
+        ? {
+            acquisitionStatusEvidence: {
+              ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+              sourceMember: { relativePath: 'RUN.LOG' },
+              decode: { encoding: 'utf-16le', bomPresent: true },
+              matched: [
+                { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'aborted-method-aborted', lineIndex: 5 },
+              ],
+            },
+          }
+        : {
+            acquisitionStatusEvidence: {
+              ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+              sourceMember: { relativePath: 'RUN.LOG' },
+              decode: { encoding: 'utf-16le', bomPresent: false },
+              matched: [],
+              noEvidenceReason: 'no-rule-match',
+            },
+          }),
+    },
+  })
+
+  it('an ABORTED package: the status word + a /record/<RUN.LOG DREF> evidence link + the matched lines (visibly qualified)', async () => {
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[pkgEntry('aborted', true)]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    // The status word renders next to the attached id (DATA, verbatim).
+    const status = screen.getByTestId('gc-acqp-status-ISEN-C-1')
+    expect(status.textContent).toContain('acquisition status: aborted')
+    expect(status.className).toContain('gc-acqp-status--qualified')
+    // OQ-1: the link is the generic record host for the RUN.LOG data-reference.
+    const link = screen.getByTestId('gc-acqp-status-link-ISEN-C-1')
+    expect(link.getAttribute('href')).toBe('/record/DREF-000103')
+    // The matched line is readable (verbatim, never a tooltip-only arm).
+    const evidence = screen.getByTestId('gc-acqp-status-evidence-ISEN-C-1')
+    expect(evidence.textContent).toContain('matched RUN.LOG lines (1)')
+    expect(evidence.textContent).toContain('Method       Method aborted                                 13:19:33 10/23/26')
+    // Attachability is NOT gated (bait #10): Analyze stays available.
+    expect(screen.getByTestId('gc-analyze-btn-ISEN-C-1')).toBeDefined()
+  })
+
+  it('a COMPLETED package: a quiet word (no qualified styling, no evidence block)', async () => {
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[pkgEntry('completed', true)]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    const status = screen.getByTestId('gc-acqp-status-ISEN-C-1')
+    expect(status.textContent).toContain('acquisition status: completed')
+    expect(status.className).not.toContain('gc-acqp-status--qualified')
+    expect(screen.queryByTestId('gc-acqp-status-evidence-ISEN-C-1')).toBeNull()
+  })
+
+  it('an UNKNOWN package: visibly qualified with the NAMED no-evidence reason (never completed)', async () => {
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[pkgEntry('unknown', false)]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    const status = screen.getByTestId('gc-acqp-status-ISEN-C-1')
+    expect(status.textContent).toContain('acquisition status: unknown')
+    expect(status.className).toContain('gc-acqp-status--qualified')
+    const evidence = screen.getByTestId('gc-acqp-status-evidence-ISEN-C-1')
+    expect(evidence.textContent).toContain('no-rule-match')
+  })
+
+  it('a package WITHOUT the stamp yet (fetch not landed): the attached id shows, NO status word is invented', async () => {
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[ENTRY_WITH_PKG]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    // The attach id still shows (provenance)…
+    expect(screen.getByTestId('gc-analyze-entry-ISEN-C-1').textContent).toContain('ACQP-000042')
+    // …but no status word is rendered (the record hasn’t been read — never
+    // a fabricated status, bait #5 floor honesty on the read side).
+    expect(screen.queryByTestId('gc-acqp-status-ISEN-C-1')).toBeNull()
+    expect(screen.queryByTestId('gc-acqp-status-link-ISEN-C-1')).toBeNull()
+  })
+})

@@ -147,10 +147,24 @@ beforeEach(() => {
     [ENTRY_1.recordId]: ENTRY_1,
     [ENTRY_2.recordId]: ENTRY_2,
   }
+  // FAME-1 (OQ-2): the attached ACQP record (ENTRY_2's ACQP-000042) — the
+  // extended fence set fetches it by id at mount.
+  const ACQP_PKG: { recordId: string; payload: Record<string, unknown> } = {
+    recordId: 'ACQP-000042',
+    payload: {
+      kind: 'acquisition-package',
+      id: 'ACQP-000042',
+      acquisitionStatus: 'completed',
+      files: [
+        { relativePath: 'RUN.LOG', role: 'run_log', dataReferenceRef: { kind: 'record', type: 'data-reference', id: 'DREF-000103' } },
+      ],
+    },
+  }
   vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
     const env = entryMap[id]
-    if (!env) throw new Error(`404: ${id}`)
-    return env as never
+    if (env) return env as never
+    if (id === ACQP_PKG.recordId) return ACQP_PKG as never
+    throw new Error(`404: ${id}`)
   })
   vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
     record: { recordId: 'ANR-000099', payload: { id: 'ANR-000099', title: 'prior analysis', status: 'succeeded' } },
@@ -207,7 +221,7 @@ describe('GcRunSheetSection — the GC case (a linked sequence renders the sheet
     expect(screen.getByTestId('gc-cell-ISEN-GC12-A-002-analysisRunRefs')).toHaveTextContent('ANR-000099')
   })
 
-  it('mount accounting (D7): probe EXACTLY once, one getRecord per entry, zero writes (bait #5)', async () => {
+  it('mount accounting (D7 + FAME-1/OQ-2): probe EXACTLY once, one getRecord per entry + one per DISTINCT attached ACQP, zero writes (bait #5)', async () => {
     mockProbe([LINKED_SEQUENCE])
     render(wrap(<GcRunSheetSection runId={RUN_ID} />))
     await screen.findByTestId('gc-run-sheet')
@@ -215,8 +229,14 @@ describe('GcRunSheetSection — the GC case (a linked sequence renders the sheet
       // The probe is the ONLY listRecordsByKind call (deduped on runId).
       expect(apiClient.listRecordsByKind).toHaveBeenCalledTimes(1)
     })
-    // Each linked entry is fetched ONCE for its table row.
-    expect(apiClient.getRecord).toHaveBeenCalledTimes(2)
+    // Each linked entry is fetched ONCE for its table row (2), PLUS one
+    // getRecord for the single DISTINCT attached ACQP (FAME-1/OQ-2 fence
+    // extension, ratified 2026-11-01 — the ACQP payload carries the
+    // acquisition status the run sheet must show on a fresh mount). 2 + 1 = 3.
+    await waitFor(() => {
+      expect(apiClient.getRecord).toHaveBeenCalledTimes(3)
+    })
+    expect(vi.mocked(apiClient.getRecord).mock.calls.map((c) => c[0])).toContain('ACQP-000042')
     // Mount NEVER touches the write/execute surface.
     expect(apiClient.registerAcquisitionPackage).not.toHaveBeenCalled()
     expect(apiClient.getPackageAnalysisInputs).not.toHaveBeenCalled()
