@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import { ParameterForm, collectGateIssues, pruneEmpty } from './ParameterForm'
+import { frozenRunInputs, frozenRunParameters, reanalyzeRun } from './reanalyze'
 import type { RenderableArtifact } from './ViewRenderer'
 import {
   CAL_ARTIFACT_COLUMNS,
@@ -86,31 +87,19 @@ export function sortedParamsJson(obj: Record<string, unknown>): string {
 
 /** The active run's frozen inputs (record of ref objects) — carried VERBATIM
  * (the `kind: 'record'` + `id` + `type` shape the analysis-run schema declares
- * at :44-49), never read-live from a component. */
+ * at :44-49), never read-live from a component. Delegates to the shared
+ * reanalyze authority (fix-run 2: ONE frozen-ref reader for the recalc
+ * footer and the generalized surface door — no forked parse paths). */
 function frozenInputs(page: PageContext): Record<string, { kind?: string; id?: string; type?: string }> {
   const p = page.sourceRun
-  if (!isRecord(p) || !isRecord(p.payload)) return {}
-  const inputs = p.payload.inputs
-  if (!isRecord(inputs)) return {}
-  const out: Record<string, { kind?: string; id?: string; type?: string }> = {}
-  for (const [k, v] of Object.entries(inputs)) {
-    if (!isRecord(v)) continue
-    out[k] = {
-      ...(typeof v.kind === 'string' ? { kind: v.kind } : {}),
-      ...(typeof v.id === 'string' ? { id: v.id } : {}),
-      ...(typeof v.type === 'string' ? { type: v.type } : {}),
-    }
-  }
-  return out
+  return frozenRunInputs(isRecord(p) ? p.payload : undefined)
 }
 
 /** The active run's frozen parameters (the recalc prefill — copied, never
- * read-live). */
+ * read-live). Shared authority (reanalyze.frozenRunParameters). */
 function frozenParams(page: PageContext): Record<string, unknown> {
   const p = page.sourceRun
-  if (!isRecord(p) || !isRecord(p.payload)) return {}
-  const params = p.payload.parameters
-  return isRecord(params) ? params : {}
+  return frozenRunParameters(isRecord(p) ? p.payload : undefined)
 }
 
 /** FIX1 D6: find the params levels[] row for a point's LEVEL TAG (data from
@@ -432,24 +421,35 @@ export function CalibrationCurveView(props: {
     // blocked recalc never POSTs (the button's disabled attribute is the
     // chrome; this is the authority).
     if (recalcBlocked) return
-    const recalcParams = buildRecalcParameters()
-    setSubmitting(true)
-    const body: Record<string, unknown> = {
-      title: `recalc of ${page.activeRunId}`,
-      revisionRef: { kind: 'record', id: sourceRevisionRef, type: 'analysis-revision' },
-      inputs: frozenInputs(page),
+    let recalcParams: Record<string, unknown> | undefined
+    try {
+      recalcParams = buildRecalcParameters()
+    } catch (err) {
+      // A manual override that is not a JSON object cannot carry the
+      // parameters — named error, no POST (the invalid-JSON line already
+      // marks the state; this is the submit-side authority).
+      setResolveError(err instanceof Error ? err.message : String(err))
+      return
     }
-    if (recalcParams !== undefined) body.parameters = recalcParams
-    void apiClient
-      .createAnalysisRun(body as Parameters<typeof apiClient.createAnalysisRun>[0])
-      .then((res) => {
-        const newId = res.recordId
-        return apiClient.executeAnalysisRun(newId).then(() => {
-          onRecalcDone?.(newId)
-        })
-      })
-      .catch((err: unknown) => setResolveError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setSubmitting(false))
+    setSubmitting(true)
+    // fix-run 2: the submit MECHANICS ride the shared reanalyze
+    // authority (create-with-frozen-inputs + execute + landing) — the same
+    // one the generalized surface door uses, so the two doors cannot drift
+    // apart. The body contract is unchanged (pinned by this suite): the
+    // revision is the source run's OWN frozen revisionRef, the inputs are
+    // carried verbatim, the parameters are this form's build (or omitted),
+    // the title is `recalc of <run>`, completion lands via onRecalcDone and
+    // a failure names its error in this region's own line.
+    void reanalyzeRun({
+      revisionId: sourceRevisionRef,
+      inputs: frozenInputs(page),
+      ...(recalcParams !== undefined ? { parameters: recalcParams } : {}),
+      title: `recalc of ${page.activeRunId}`,
+      onDone: (newId) => {
+        onRecalcDone?.(newId)
+      },
+      onError: (msg) => setResolveError(msg),
+    }).then(() => setSubmitting(false))
   }
 
   const diffLine = levelDiff(frozenParams(page), params)
