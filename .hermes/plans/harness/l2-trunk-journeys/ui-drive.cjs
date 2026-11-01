@@ -319,11 +319,18 @@ function shaShort(s) {
           await card.waitFor({ state: 'visible', timeout: T });
           evidence.answered_card_testid =
             (await card.getAttribute('data-testid')) || 'unknown';
-          // D3: the card's OWN prompt text — the client testid suffix is a
-          // per-render id, NOT the announced clarification id, so the re-ask
-          // detector must key on the prompt text captured HERE.
-          evidence.answered_prompt =
-            ((await card.innerText().catch(() => '')) || '').trim().slice(0, 300);
+          // D3: the card's QUESTION prompt. The client testid suffix is a
+          // per-render id, NOT the announced clarification id, and the card
+          // innerText leads with the option list — so recover the question
+          // from the announcements captured SO FAR whose prompt text rides
+          // inside the card's own text. Fall back to the raw card text.
+          const cardText = ((await card.innerText().catch(() => '')) || '').trim();
+          const annForCard = clarificationAnnouncements.filter(
+            (a) => a.prompt && cardText.includes(a.prompt.trim()));
+          evidence.answered_prompt = annForCard.length
+            ? annForCard[annForCard.length - 1].prompt.trim()
+            : cardText.slice(0, 300);
+          evidence.answered_card_text_150 = cardText.slice(0, 150);
           const opt = card.locator('ol.chat-log-clarification-options button').first();
           await opt.waitFor({ state: 'visible', timeout: T });
           evidence.clarification_answered = true;
