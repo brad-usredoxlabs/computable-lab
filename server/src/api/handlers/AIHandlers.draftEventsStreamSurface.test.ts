@@ -27,6 +27,13 @@
  *      no `surface` key present at all (conditional spread — absent, never
  *      undefined), same key set as the pre-fix handler produced. This is the
  *      legacy-behaviour guardrail and is GREEN on base by design.
+ *
+ * FIX RUN 1 (adversarial review leg B, defect D1): legs 3 and 4 pin the
+ * MULTIPART arm (request.parts() fixture mirroring jsonRequest()). The live
+ * app sends multipart whenever the event-editor chat turn carries attachments
+ * (aiClient.ts), so the fields['surface'] read on that branch must be pinned
+ * too — a regression dropping it there would leave the JSON legs GREEN and
+ * silently re-kill the shorthand arm for attachment turns.
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -63,6 +70,29 @@ function jsonRequest(body: unknown) {
     log: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
     _error: error,
   } as unknown as FastifyRequest & { _error: ReturnType<typeof vi.fn> };
+}
+
+type MultipartFieldPart = { type: 'field'; fieldname: string; value: string };
+
+/**
+ * A multipart/form-data-branch request whose `parts()` yields the given form
+ * fields (mirrors the jsonRequest() helper for the OTHER parse branch of
+ * draftEventsStream: the handler iterates request.parts() and collects
+ * `type: 'field'` entries into fields[fieldname] = value).
+ */
+function multipartRequest(fields: Record<string, string>) {
+  const parts = async function* () {
+    for (const [fieldname, value] of Object.entries(fields)) {
+      yield { type: 'field', fieldname, value } as MultipartFieldPart;
+    }
+  };
+  const error = vi.fn();
+  return {
+    parts,
+    headers: { 'content-type': 'multipart/form-data' },
+    log: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+    _error: error,
+  } as unknown as FastifyRequest & { parts: () => AsyncIterable<MultipartFieldPart> };
 }
 
 function stubOrchestrator() {
@@ -140,6 +170,73 @@ describe('draftEventsStream — the event-editor surface is wired to the orchest
       forceDraftTool: true,
     });
     // And no stray undefined-valued surface leaked into the serialized args.
+    expect(JSON.stringify(args)).not.toContain('surface');
+  });
+
+  it('passes surface + clarificationAnswers to run() on the MULTIPART arm (parts())', async () => {
+    const { orchestrator, run } = stubOrchestrator();
+    const handlers = createAIHandlers(orchestrator);
+
+    const clarificationAnswers = [
+      { requestId: 'unresolved-c-1', label: 'Which reagent?', value: 'Trypsin', ref: {} },
+    ];
+
+    // The multipart arm: the live app sends form fields (plus a file part in
+    // real attachment turns) when the event-editor chat turn has attachments.
+    // context/history/clarificationAnswers ride as JSON strings.
+    await handlers.draftEventsStream(
+      multipartRequest({
+        prompt: 'add trypsin to dmem with fbs',
+        context: JSON.stringify(baseContext()),
+        history: JSON.stringify([]),
+        clarificationAnswers: JSON.stringify(clarificationAnswers),
+        surface: 'event-editor',
+      }),
+      mockReply(),
+    );
+
+    expect(run).toHaveBeenCalledTimes(1);
+    const args = run.mock.calls[0][0] as Record<string, unknown>;
+
+    // THE MULTIPART READ: fields['surface'] must reach run() — dropping it in
+    // the multipart branch (e.g. when attachment turns start routing here)
+    // would leave the JSON legs GREEN and re-kill the shorthand arm.
+    expect('surface' in args).toBe(true);
+    expect(args.surface).toBe('event-editor');
+    // The JSON-stringified answers parse through unchanged.
+    expect(args.clarificationAnswers).toEqual(clarificationAnswers);
+    expect(args.prompt).toBe('add trypsin to dmem with fbs');
+    expect(args.context).toEqual(baseContext());
+  });
+
+  it('leaves run() args byte-identical on the MULTIPART arm when NO surface field is sent', async () => {
+    const { orchestrator, run } = stubOrchestrator();
+    const handlers = createAIHandlers(orchestrator);
+
+    // A legacy multipart body (attachment-style, no surface field at all).
+    await handlers.draftEventsStream(
+      multipartRequest({
+        prompt: 'add trypsin to dmem',
+        context: JSON.stringify(baseContext()),
+        history: JSON.stringify([]),
+      }),
+      mockReply(),
+    );
+
+    expect(run).toHaveBeenCalledTimes(1);
+    const args = run.mock.calls[0][0] as Record<string, unknown>;
+
+    // Same legacy guardrail as the JSON leg: the surface key is ABSENT (not
+    // `surface: undefined`), and the exact key set is what the pre-fix
+    // handler produced for this body (history:[] truthy so it rides;
+    // forceDraftTool defaults to true because deterministicOnly is absent).
+    expect('surface' in args).toBe(false);
+    expect(dataArgs(args)).toEqual({
+      prompt: 'add trypsin to dmem',
+      context: baseContext(),
+      history: [],
+      forceDraftTool: true,
+    });
     expect(JSON.stringify(args)).not.toContain('surface');
   });
 });
