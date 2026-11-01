@@ -159,6 +159,10 @@ Commits (branch `cl/lane2-intentid-redraft-1`, leg B):
 
 ## 6. END MARKER
 
-INTENTID-LEGB DONE <full-40-sha>  (filled in the docs commit's `git rev-parse HEAD`
-at completion — the marker line lives in the final docs-only commit, so it carries
-the sha of that marker commit, tree clean.)
+Content-complete code tip (all leg-B code + tests landed): `f6f270b127894cf808c528e9e401f376883c4e72`.
+This docs commit carries the GREEN captures + this report; the marker line references the
+content-complete tip (a commit cannot contain its own sha). Verify with:
+`git -c core.fileMode=false log --oneline 6cc8c3b8..HEAD` (4 leg-B commits on top of the
+leg-A merged tip) and the six finish-gate raws in `deliverables/`.
+
+INTENTID-LEGB DONE f6f270b127894cf808c528e9e401f376883c4e72
