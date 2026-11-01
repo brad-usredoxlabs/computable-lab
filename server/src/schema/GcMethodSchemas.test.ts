@@ -405,6 +405,25 @@ interface RawSlot {
     required?: boolean;
     options?: Array<{ value: string; label: string }>;
   }>;
+  /** W2 C1: the loader-honored item-hint dialect (the projection forwards
+   *  slot.items; the decorative `properties:` above is the inert shape).
+   *  Mirrors the house FieldHint spelling (path per field). */
+  items?: {
+    path: string;
+    widget: string;
+    label?: string;
+    fields?: Array<{
+      path: string;
+      widget: string;
+      label?: string;
+      help?: string;
+      required?: boolean;
+      refKind?: string;
+      options?: Array<{ value: string; label: string }>;
+      props?: Record<string, unknown>;
+      fields?: unknown[];
+    }>;
+  };
   refKind?: string;
 }
 interface RawBlock {
@@ -534,8 +553,20 @@ describe('gc-method ui (G5)', () => {
     // assignment_state (a select whose options are the schema enum verbatim),
     // provenance (an object-bound leaf, FIX-1 D1), and reporting_basis_ref
     // (a ref). The five pre-existing leaves survive in order.
+    // W2 C1 (architect OPT-B): the compound slot declares its item
+    // sub-fields via the ALREADY-FORWARDED, ALREADY-CONSUMED `items:`
+    // house dialect (the projection forwards slot.items; the mapper maps
+    // it to the itemHint the ArrayWidget→ObjectWidget path consumes).
+    // The earlier decorative `properties:` block is REPLACED — it was
+    // inert data (the projection never forwarded that member). The other
+    // array slots above keep their `properties:` declarations untouched
+    // (UI-DIALECT-1 owns the platform-wide reconciliation).
+    expect(compoundSlot.properties, 'properties: block replaced by items:').toBeUndefined();
+    const compoundItems = compoundSlot.items as { widget?: string; fields?: Array<{ path: string; widget?: string; required?: boolean }> } | undefined;
+    expect(compoundItems, 'the slot declares an items: member').toBeDefined();
+    expect(compoundItems!.widget).toBe('object');
     expect(
-      (compoundSlot.properties ?? []).map((p) => [p.name, p.required]),
+      compoundItems!.fields!.map((p) => [p.path, p.required]),
     ).toEqual([
       ['label', true],
       ['compound_ref', true],
@@ -548,12 +579,12 @@ describe('gc-method ui (G5)', () => {
     ]);
     // assignment_state is a select whose options ARE the schema enum verbatim
     // (the vocabulary lives ONLY in the schema triplet — the D1 doctrine).
-    const stateLeaf = (compoundSlot.properties ?? []).find((p) => p.name === 'assignment_state')!;
+    const stateLeaf = compoundItems!.fields!.find((p) => p.path === 'assignment_state')!;
     expect(stateLeaf.widget).toBe('select');
     const stateOpts = (stateLeaf as { options?: Array<{ value: string }> }).options ?? [];
     expect(stateOpts.map((o) => o.value)).toEqual(['verified', 'provisional']);
     expect(
-      (compoundSlot.properties ?? []).find((p) => p.name === 'reporting_basis_ref')!.widget,
+      compoundItems!.fields!.find((p) => p.path === 'reporting_basis_ref')!.widget,
     ).toBe('ref');
 
     const provenance = editor.blocks.find(b => b.id === 'provenance')!;

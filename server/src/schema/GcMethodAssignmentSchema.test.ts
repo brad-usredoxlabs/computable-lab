@@ -264,8 +264,8 @@ describe('gc-method compound assignment entry (FAME-3 W3)', () => {
 // 2. UI — the compound-assignments slot gains the matching leaf widgets
 // ---------------------------------------------------------------------------
 
-describe('gc-method ui compound-assignment leaves (FAME-3 W3)', () => {
-  it('the slot properties gain the three new leaves with data-driven widgets', async () => {
+describe('gc-method ui compound-assignment leaves (FAME-3 W3, W2 C1 items: re-shape)', () => {
+  it('the slot declares its item sub-fields via the loader-honored items: dialect (NOT the decorative properties: block) with the three W3 leaves', async () => {
     const loader = createUISpecLoader();
     const result = await loadAllUISpecs(loader, SCHEMA_DIR);
     const mine = result.errors.filter((e) => e.path.includes('gc-method.ui.yaml'));
@@ -278,8 +278,22 @@ describe('gc-method ui compound-assignment leaves (FAME-3 W3)', () => {
       (s) => s.path === '$.analysis.compound_assignments',
     );
     expect(slot, 'compound-assignments slot').toBeDefined();
-    const props = (slot!.properties as Array<Record<string, unknown>>) ?? [];
-    const byName = new Map(props.map((p) => [String(p.name), p]));
+
+    // W2 C1 (architect OPT-B ruling, C1 condition): the item sub-fields ride
+    // the ALREADY-FORWARDED, ALREADY-CONSUMED `items:` house dialect
+    // (EditorProjectionService forwards slot.items → mapper itemHint →
+    // ArrayWidget → ObjectWidget). The decorative `properties:` block is
+    // REPLACED, never kept side by side (one spelling per slot).
+    expect(
+      slot!.properties,
+      'the decorative properties: block is replaced by the items: declaration',
+    ).toBeUndefined();
+    const items = slot!.items as Record<string, unknown> | undefined;
+    expect(items, 'the slot declares an items: member').toBeDefined();
+    expect(items!.widget, 'the item hint is an object widget').toBe('object');
+    const fields = items!.fields as Array<Record<string, unknown>>;
+    expect(Array.isArray(fields) && fields.length > 0, 'the item hint declares sub-fields').toBe(true);
+    const byName = new Map(fields.map((p) => [String(p.path), p]));
 
     // assignment_state: a select whose options ARE the schema enum verbatim.
     const state = byName.get('assignment_state');
@@ -296,21 +310,58 @@ describe('gc-method ui compound-assignment leaves (FAME-3 W3)', () => {
     expect(basis, 'reporting_basis_ref leaf declared').toBeDefined();
     expect(basis!.widget, 'reporting_basis_ref is a ref').toBe('ref');
 
-    // provenance: the entry's who/when/which-run+peak as an object leaf — a
-    // scalar widget over an object is the D1 [object Object] defect, so the
-    // leaf binds the object (never text/number/…).
+    // provenance: the entry's who/when/which-run+peak as a NESTED object with
+    // its four declared sub-fields — a scalar widget over an object is the D1
+    // [object Object] defect, so the field binds the object (never
+    // text/number/…).
     const provenance = byName.get('provenance');
     expect(provenance, 'provenance leaf declared').toBeDefined();
     expect(
       provenance!.widget,
       'provenance binds the object, never a scalar widget',
     ).toBe('object');
+    const provFields = provenance!.fields as Array<Record<string, unknown>>;
+    expect(Array.isArray(provFields), 'provenance declares its sub-fields').toBe(true);
+    const provByPath = new Map(provFields.map((p) => [String(p.path), p]));
+    // The provenance sub-fields mirror the schema's four declared keys
+    // exactly (schema gc-method.schema.yaml provenance: entered_by
+    // record-ref / recorded_at date-time / source_run_ref record-ref /
+    // source_peak_label string).
+    expect(provByPath.has('entered_by'), 'entered_by sub-field declared').toBe(true);
+    expect(provByPath.get('entered_by')!.widget, 'entered_by is a record ref').toBe('record-ref');
+    expect(provByPath.get('entered_by')!.refKind, 'entered_by targets person records').toBe('person');
+    expect(provByPath.has('recorded_at'), 'recorded_at sub-field declared').toBe(true);
+    expect(provByPath.get('recorded_at')!.widget, 'recorded_at is text').toBe('text');
+    expect(provByPath.has('source_run_ref'), 'source_run_ref sub-field declared').toBe(true);
+    expect(provByPath.get('source_run_ref')!.widget, 'source_run_ref is a record ref').toBe('record-ref');
+    expect(provByPath.get('source_run_ref')!.refKind, 'source_run_ref targets analysis-run records').toBe('analysis-run');
+    expect(provByPath.has('source_peak_label'), 'source_peak_label sub-field declared').toBe(true);
+    expect(provByPath.get('source_peak_label')!.widget, 'source_peak_label is text').toBe('text');
+
+    // compound_ref: the ontology-ref picker is ENABLED by data (the
+    // claim.ui.yaml ontology-ref pattern: the 'ols' source turns on the
+    // /resolve spine in RefCombobox, and valueShape ontology-ref commits the
+    // canonical ref OBJECT). No namespace literal in the ui.yaml — the
+    // namespace rides the runtime resolve result, never the declaration.
+    const compound = byName.get('compound_ref');
+    expect(compound, 'compound_ref leaf survives').toBeDefined();
+    expect(compound!.widget, 'compound_ref is a ref').toBe('ref');
+    expect(compound!.required, 'compound_ref stays required').toBe(true);
+    const compoundProps = compound!.props as Record<string, unknown>;
+    expect(compoundProps, 'compound_ref declares its suggestion props').toBeDefined();
+    expect(
+      (compoundProps.sources as string[]).includes('ols'),
+      'compound_ref searches the ontology spine (ols source)',
+    ).toBe(true);
+    expect(
+      compoundProps.valueShape,
+      'compound_ref commits the canonical ontology ref object',
+    ).toBe('ontology-ref');
 
     // The pre-existing leaves survive (regression guard).
-    for (const name of ['label', 'compound_ref', 'expected_rt_min', 'rt_window_min', 'response_factor']) {
+    for (const name of ['label', 'expected_rt_min', 'rt_window_min', 'response_factor']) {
       expect(byName.get(name), `${name} leaf survives`).toBeDefined();
     }
-    expect(byName.get('compound_ref')!.widget).toBe('ref');
   });
 
   it('the loader exposes the slot with the new leaves for the projection path', async () => {

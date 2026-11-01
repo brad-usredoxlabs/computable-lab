@@ -254,29 +254,109 @@ editor:
         - { name: "area_reject_au", widget: "number", label: "Area reject (AU)", required: false }
         - { name: "height_reject_au", widget: "number", label: "Height reject (AU)", required: false }
     # --- compound assignments (array of identities) ---
+    # W2 C1 (architect OPT-B ruling): the item sub-fields ride the
+    # ALREADY-FORWARDED, ALREADY-CONSUMED `items:` house dialect (the
+    # evidence.ui.yaml $.sources / $.supports precedent; UISpecLoader
+    # validates field.items for widget:array; EditorProjectionService
+    # forwards slot.items → the mapper's itemHint → ArrayWidget →
+    # ObjectWidget). This REPLACES the earlier decorative `properties:`
+    # block — the projection never forwarded that shape, so it was inert
+    # data (one spelling per slot; the dialect question itself is the
+    # platform item UI-DIALECT-1, NOT a forward built in this feature).
     - id: "compound-assignments-slot"
       path: "$.analysis.compound_assignments"
       label: "Compound assignments"
       widget: "array"
       help: "FAME/FFA identities this method integrates (ontology/record refs)."
-      properties:
-        - { name: "label", widget: "text", label: "Label", required: true }
-        - { name: "compound_ref", widget: "ref", label: "Compound reference", required: true }
-        - { name: "expected_rt_min", widget: "number", label: "Expected retention time (minutes)", required: false }
-        - { name: "rt_window_min", widget: "number", label: "Retention time window (minutes)", required: false }
-        - { name: "response_factor", widget: "number", label: "Response factor", required: false }
-        # FAME-3: the entry's domain qualification — a select whose options are
-        # the schema enum verbatim (the vocabulary lives ONLY in the schema
-        # triplet; "unassigned" is the absence of an entry, never a value).
-        - { name: "assignment_state", widget: "select", label: "Assignment state", required: false, options: [ { value: "verified", label: "Verified" }, { value: "provisional", label: "Provisional" } ] }
-        # FAME-3: the entry's provenance as an object-bound leaf (FIX-1 D1:
-        # never a scalar widget over an object — that renders [object
-        # Object]).
-        - { name: "provenance", widget: "object", label: "Provenance", required: false, help: "Who entered it, when, and which run + peak it was read from." }
-        # FAME-3: the reporting face as a declaration (basis is data — NO
-        # enum; a missing basis term is scientist-minted via the existing mint
-        # mechanism). Absent = unknown, never a default.
-        - { name: "reporting_basis_ref", widget: "ref", label: "Reporting basis", required: false }
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Assignment entry"
+        fields:
+          - path: "label"
+            widget: "text"
+            label: "Label"
+            required: true
+          # The canonical compound identity: an ontology ref picked via the
+          # EXISTING ref picker machinery (never free text). The picker is
+          # enabled BY DATA (the claim.ui.yaml ontology-ref pattern): the
+          # 'ols' source turns on the /resolve spine in RefCombobox and
+          # valueShape ontology-ref commits the canonical ref OBJECT
+          # {kind:ontology, id:<CURIE>, namespace, label}. NO namespace
+          # literal lives here — the namespace rides the runtime resolve
+          # result, and a missing term is scientist-minted through the
+          # existing mint mechanism (the never-guess round trip).
+          - path: "compound_ref"
+            widget: "ref"
+            label: "Compound reference"
+            required: true
+            props:
+              sources: ["local", "ols"]
+              valueShape: "ontology-ref"
+              ontologyBinding: "allow-ontology"
+          - path: "expected_rt_min"
+            widget: "number"
+            label: "Expected retention time (minutes)"
+            required: false
+          - path: "rt_window_min"
+            widget: "number"
+            label: "Retention time window (minutes)"
+            required: false
+          - path: "response_factor"
+            widget: "number"
+            label: "Response factor"
+            required: false
+          # The entry's domain qualification — a select whose options are
+          # the schema enum verbatim (the vocabulary lives ONLY in the
+          # schema triplet; "unassigned" is the absence of an entry,
+          # never a value).
+          - path: "assignment_state"
+            widget: "select"
+            label: "Assignment state"
+            required: false
+            options: [ { value: "verified", label: "Verified" }, { value: "provisional", label: "Provisional" } ]
+          # The entry's provenance — who entered it, when, and which run +
+          # peak it was read from. A NESTED object (FIX-1 D1: never a
+          # scalar widget over an object) whose sub-fields are authorable
+          # through the existing recursion (data-driven, no widget change
+          # for the nesting itself).
+          - path: "provenance"
+            widget: "object"
+            label: "Provenance"
+            required: false
+            help: "Who entered it, when, and which run + peak it was read from."
+            fields:
+              - path: "entered_by"
+                widget: "record-ref"
+                label: "Entered by"
+                required: false
+                refKind: "person"
+              - path: "recorded_at"
+                widget: "text"
+                label: "Recorded at (ISO date-time)"
+                required: false
+                help: "ISO-8601 date-time of the entry."
+              - path: "source_run_ref"
+                widget: "record-ref"
+                label: "Source run"
+                required: false
+                refKind: "analysis-run"
+              - path: "source_peak_label"
+                widget: "text"
+                label: "Source peak label"
+                required: false
+          # The reporting face as a declaration (basis is data — NO
+          # enum; a missing basis term is scientist-minted via the existing
+          # mint mechanism). Absent = unknown, never a default. Same
+          # ontology-ref picker contract as compound_ref.
+          - path: "reporting_basis_ref"
+            widget: "ref"
+            label: "Reporting basis"
+            required: false
+            props:
+              sources: ["local", "ols"]
+              valueShape: "ontology-ref"
+              ontologyBinding: "allow-ontology"
     # --- provenance ---
     - id: "entered-by-slot"
       path: "$.provenance_capture.entered_by"
