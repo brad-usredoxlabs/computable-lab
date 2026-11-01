@@ -79,6 +79,36 @@ export interface Envelope<P = unknown> {
   [key: string]: unknown
 }
 
+/**
+ * FAME-1 — the acquisition-package payload (schema/knowledge/
+ * acquisition-package). The status + evidence fields are DATA the
+ * registration stamps at attach time (strict-UTF-16 RUN.LOG decode + the
+ * declared rule file); the run sheet READS them, it never re-derives them
+ * (no interpretation in TSX — the classification is the record's own).
+ * `acquisitionStatus`/`evidence` are optional: a package registered before
+ * FAME-1 carries neither.
+ */
+export interface AcquisitionPackagePayload {
+  kind?: string
+  id?: string
+  title?: string
+  storageDeviceId?: string
+  directoryKey?: string
+  files?: Array<{ relativePath: string; role: string; dataReferenceRef?: RecordRef }>
+  signalCollectionRef?: RecordRef
+  sampleRef?: RecordRef
+  state?: string
+  acquisitionStatus?: 'completed' | 'aborted' | 'stopped-by-user' | 'unknown'
+  acquisitionStatusEvidence?: {
+    ruleset: { id: string; version: string | number; sourceFile: string }
+    sourceMember: { relativePath: string }
+    decode: { encoding: string; bomPresent: boolean }
+    matched: Array<{ line: string; ruleId: string; lineIndex: number }>
+    noEvidenceReason?: string
+  }
+  [key: string]: unknown
+}
+
 const RECORD_REF_KEYS = ['kind', 'id', 'type', 'label', 'revisionRef']
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -271,3 +301,30 @@ export function appendAnalysisRunRef(
 }
 
 export { RECORD_REF_KEYS }
+
+/**
+ * FAME-1 — the RUN.LOG data-reference id for an acquisition package: the
+ * `files[]` item whose role is `run_log`, its `dataReferenceRef.id`. This is
+ * the /record/<DREF> the run-sheet evidence link points at (OQ-1: the generic
+ * record host — there is NO raw-blob route for the log bytes). Returns
+ * undefined when the package has no run_log file (the absent arm: the link
+ * is simply not rendered, the status word still is).
+ */
+export function runLogDrefId(payload: AcquisitionPackagePayload): string | undefined {
+  const files = Array.isArray(payload.files) ? payload.files : []
+  const runLog = files.find((f) => f.role === 'run_log')
+  const ref = runLog?.dataReferenceRef
+  return ref && typeof ref.id === 'string' && ref.id.length > 0 ? ref.id : undefined
+}
+
+/**
+ * FAME-1 — the verbatim matched RUN.LOG lines on the package's status
+ * evidence (the WHY a human reads instead of a byte-serving route). Empty
+ * when there is no evidence or nothing matched (the noEvidenceReason arm).
+ * Reads DATA verbatim — never rewrites or drops a line (bait #7).
+ */
+export function matchedAcquisitionLines(payload: AcquisitionPackagePayload): Array<{ line: string; ruleId: string; lineIndex: number }> {
+  const ev = payload.acquisitionStatusEvidence
+  const matched = ev?.matched
+  return Array.isArray(matched) ? matched : []
+}

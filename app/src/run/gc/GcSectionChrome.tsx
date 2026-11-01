@@ -45,6 +45,9 @@ import {
   appendAnalysisRunRef,
   type EntryPayload,
   type RecordRef,
+  type AcquisitionPackagePayload,
+  runLogDrefId,
+  matchedAcquisitionLines,
 } from './gcRunSheetModel'
 import { buildGcSampleAdd } from './gcSheetCreate'
 import { GcAttachPanel } from './GcAttachPanel'
@@ -53,6 +56,14 @@ import { GcAttachPanel } from './GcAttachPanel'
 export interface GcChromeEntry {
   recordId: string
   payload: EntryPayload
+  /**
+   * FAME-1: the attached acquisition-package payload (status + evidence
+   * DATA), when the entry carries an acquisitionPackageRef AND the section
+   * has fetched it. Absent when the entry has no package OR the fetch
+   * hasn't landed — the qualification arm renders only what the record
+   * actually says (never a fabricated status word).
+   */
+  acquisitionPackage?: AcquisitionPackagePayload
 }
 
 interface MethodRecord {
@@ -330,6 +341,24 @@ export function GcSectionChrome({
               )}
               {entries.map((e) => {
                 const hasPkg = Boolean(e.payload.acquisitionPackageRef?.id)
+                // FAME-1: the acquisition-status qualification, next to the
+                // "attached: ACQP-…" line. It renders ONLY DATA the package
+                // record carries (no interpretation in TSX — no
+                // `.includes('abort')`): the status word, the /record/<RUN.LOG
+                // DREF> evidence link (OQ-1: the generic record host — no
+                // raw-blob route), and the verbatim matched lines.
+                // aborted / stopped-by-user / unknown = VISIBLY qualified
+                // (a non-collapsing warning line, never a tooltip); completed
+                // = a quiet word. The package payload is absent until the
+                // section's ACQP fetch lands — then only the attach id shows.
+                // Attach/Analyze stay available in ALL cases (bait #10): this
+                // is extra visible data, never a gate.
+                const acqpStatus = e.acquisitionPackage?.acquisitionStatus
+                const acqpStatusQualified =
+                  acqpStatus === 'aborted' || acqpStatus === 'stopped-by-user' || acqpStatus === 'unknown'
+                const runLogDref = e.acquisitionPackage ? runLogDrefId(e.acquisitionPackage) : undefined
+                const matchedLines = e.acquisitionPackage ? matchedAcquisitionLines(e.acquisitionPackage) : []
+                const noEvidenceReason = e.acquisitionPackage?.acquisitionStatusEvidence?.noEvidenceReason
                 return (
                   <div key={e.recordId} className="gc-chrome__row" data-testid={`gc-analyze-entry-${e.recordId}`}>
                     <span>{e.recordId}</span>
@@ -354,6 +383,53 @@ export function GcSectionChrome({
                         <span className="gc-chrome__notready">
                           attached: {e.payload.acquisitionPackageRef?.id}
                         </span>
+                        {acqpStatus && (
+                          <span
+                            className={
+                              acqpStatusQualified
+                                ? 'gc-acqp-status gc-acqp-status--qualified'
+                                : 'gc-acqp-status'
+                            }
+                            data-testid={`gc-acqp-status-${e.recordId}`}
+                          >
+                            acquisition status: {acqpStatus}
+                            {runLogDref && (
+                              <>
+                                {' · '}
+                                <a
+                                  href={`/record/${encodeURIComponent(runLogDref)}`}
+                                  data-testid={`gc-acqp-status-link-${e.recordId}`}
+                                  title="RUN.LOG evidence (the matched lines are on the package record)"
+                                >
+                                  RUN.LOG evidence
+                                </a>
+                              </>
+                            )}
+                          </span>
+                        )}
+                        {acqpStatusQualified && (
+                          <details
+                            className="gc-acqp-status__evidence"
+                            data-testid={`gc-acqp-status-evidence-${e.recordId}`}
+                          >
+                            <summary>
+                              {acqpStatus === 'unknown'
+                                ? `no RUN.LOG evidence (${noEvidenceReason ?? 'reason unstated'})`
+                                : `matched RUN.LOG lines (${matchedLines.length})`}
+                            </summary>
+                            {matchedLines.length > 0 ? (
+                              <ul>
+                                {matchedLines.map((m, i) => (
+                                  <li key={i} title={`matched by rule ${m.ruleId} (line ${m.lineIndex})`}>
+                                    {m.line}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p>{noEvidenceReason ?? 'no evidence recorded'}</p>
+                            )}
+                          </details>
+                        )}
                         <button type="button" data-testid={`gc-analyze-btn-${e.recordId}`} onClick={() => void analyze(e)}>
                           Analyze
                         </button>

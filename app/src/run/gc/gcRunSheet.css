@@ -122,3 +122,36 @@
   display: flex;
   gap: 0.5rem;
 }
+
+/* FAME-1 — the acquisition-status qualification on the run sheet. The
+   status word renders next to the "attached: ACQP-…" line. A QUALIFIED
+   status (aborted / stopped-by-user / unknown) is a non-collapsing warning
+   line — visibly qualified, never a tooltip; completed is a quiet word.
+   The evidence <details> block is the matched RUN.LOG lines (DATA), the
+   WHY a human reads instead of a byte-serving route. */
+.gc-acqp-status {
+  display: inline-block;
+  margin: 0 0.5rem 0 0.75rem;
+  font-size: 0.95em;
+  white-space: nowrap;
+}
+.gc-acqp-status--qualified {
+  border: 1px solid #b3471f;
+  background: #fdece4;
+  color: #7c2d12;
+  border-radius: 3px;
+  padding: 0.1rem 0.45rem;
+  font-weight: 600;
+}
+.gc-acqp-status__evidence {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.9em;
+}
+.gc-acqp-status__evidence ul {
+  margin: 0.25rem 0 0 1.1rem;
+  padding: 0;
+}
+.gc-acqp-status__evidence li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}

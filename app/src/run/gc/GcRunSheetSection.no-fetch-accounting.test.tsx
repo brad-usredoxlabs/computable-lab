@@ -12,6 +12,21 @@
  * (deduped on the resolved id — a re-render with the same runId must not
  * re-fire it).
  *
+ * FAME-1 (OQ-2, orch-ratified 2026-11-01): the allowed set is EXTENDED by
+ * exactly ONE read — one getRecord per DISTINCT attached
+ * acquisitionPackageRef (deduped across entries), each ONCE, at mount (and
+ * again after a user-triggered refresh, mirroring the entry fetch). RATIONALE
+ * (this commit, per the fence-edit rule): surfacing the acquisition status
+ * on the run sheet (aborted / stopped / unknown = visibly qualified) REQUIRES
+ * the ACQP record's own payload — the entry payloads carry only the ACQP REF,
+ * not the status — and "visibly qualified" on a FRESH mount rules out a
+ * show-status-only-after-reload reading. The alternative (no ACQP fetch)
+ * fails the FAME-1 acceptance on a fresh mount, so the fence is extended
+ * deliberately and minimally: ONE getRecord per DISTINCT attached ACQP,
+ * deduped, cancel-on-unmount (mirroring the entry-fetch pattern). Silently
+ * relaxing counts, or fetching the package on every re-render, would be a
+ * reject — the counts below pin the extended set exactly.
+ *
  * Pinned here, separate from the section's rendering tests (the D7 pin is
  * the leg-F deliverable — "accounting pin + docs").
  */
@@ -119,10 +134,29 @@ beforeEach(() => {
     [ENTRY_1.recordId]: ENTRY_1,
     [ENTRY_2.recordId]: ENTRY_2,
   }
+  // FAME-1 (OQ-2): the attached ACQP record for ENTRY_1 (the fence's extended
+  // set — one getRecord per DISTINCT attached ACQP).
+  const ACQP_1: { recordId: string; payload: Record<string, unknown> } = {
+    recordId: 'ACQP-F-1',
+    payload: {
+      kind: 'acquisition-package',
+      id: 'ACQP-F-1',
+      acquisitionStatus: 'aborted',
+      acquisitionStatusEvidence: {
+        ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+        sourceMember: { relativePath: 'RUN.LOG' },
+        decode: { encoding: 'utf-16le', bomPresent: true },
+        matched: [
+          { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'aborted-method-aborted', lineIndex: 5 },
+        ],
+      },
+    },
+  }
   vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
     const env = entryMap[id]
-    if (!env) throw new Error(`404: ${id}`)
-    return env as never
+    if (env) return env as never
+    if (id === ACQP_1.recordId) return ACQP_1 as never
+    throw new Error(`404: ${id}`)
   })
   vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
     record: { recordId: 'ANR-F-1', payload: { status: 'succeeded' } },
@@ -169,19 +203,21 @@ describe('GcRunSheetSection — D7 no-fetch-accounting pin (bait #5)', () => {
     expect(screen.queryByTestId('gc-run-sheet')).toBeNull()
   })
 
-  it('GC case: the probe once + one getRecord per linked entry, each ONCE; zero writes', async () => {
+  it('GC case: the probe once + one getRecord per linked entry + one per DISTINCT attached ACQP, each ONCE; zero writes', async () => {
     render(wrap(RUN_GC, 'gc'))
     await screen.findByTestId('gc-run-sheet')
     await waitFor(() => {
       expect(probeCalls()).toBe(1)
     })
-    // The two linked entries are fetched ONCE each (no second list, no
-    // duplicate getRecord).
+    // FAME-1 (OQ-2) extended set: the two linked entries + ONE getRecord for
+    // the single DISTINCT attached ACQP (ENTRY_1's ACQP-F-1; ENTRY_2 has no
+    // package). 2 entries + 1 ACQP = 3 getRecord calls, deduped.
     await waitFor(() => {
-      expect(apiClient.getRecord).toHaveBeenCalledTimes(2)
+      expect(apiClient.getRecord).toHaveBeenCalledTimes(3)
     })
-    const entryGetCalls = vi.mocked(apiClient.getRecord).mock.calls.map((c) => c[0])
-    expect(new Set(entryGetCalls).size).toBe(2) // no duplicates
+    const getCallIds = vi.mocked(apiClient.getRecord).mock.calls.map((c) => c[0])
+    expect(new Set(getCallIds).size).toBe(3) // no duplicates (entries + the one ACQP)
+    expect(getCallIds).toContain('ACQP-F-1') // the attached ACQP was fetched
     // The mount NEVER touches the write/execute surface.
     expect(apiClient.registerAcquisitionPackage).not.toHaveBeenCalled()
     expect(apiClient.getPackageAnalysisInputs).not.toHaveBeenCalled()
@@ -189,6 +225,67 @@ describe('GcRunSheetSection — D7 no-fetch-accounting pin (bait #5)', () => {
     expect(apiClient.executeAnalysisRun).not.toHaveBeenCalled()
     expect(apiClient.createRecord).not.toHaveBeenCalled()
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
+  })
+
+  it('FAME-1 (OQ-2): two entries sharing ONE attached ACQP -> exactly ONE getRecord for it (deduped, not per-entry)', async () => {
+    // Model two entries that BOTH attach the same ACQP (the dedup the fence
+    // requires: DISTINCT attached ACQP, not per-entry). Override the probe so
+    // the linked sequence references two entries that share an acquisitionPackageRef.
+    vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
+      if (kind === 'instrument-sequence') {
+        return {
+          records: [
+            {
+              recordId: 'ISEQ-F-DUP',
+              payload: {
+                kind: 'instrument-sequence',
+                id: 'ISEQ-F-DUP',
+                title: 'Dup sheet',
+                runRef: { kind: 'record', id: RUN_GC, type: 'run' },
+                entryRefs: [
+                  { kind: 'record', id: 'ISEN-F-D1', type: 'instrument-sequence-entry' },
+                  { kind: 'record', id: 'ISEN-F-D2', type: 'instrument-sequence-entry' },
+                ],
+              },
+            },
+          ] as unknown as never,
+          total: 1,
+        }
+      }
+      return { records: [], total: 0 }
+    })
+    const dupEntry = (id: string): { recordId: string; payload: EntryPayload } => ({
+      recordId: id,
+      payload: {
+        kind: 'instrument-sequence-entry',
+        id,
+        position: { vial: '1' },
+        runRef: { kind: 'record', id: RUN_GC, type: 'run' },
+        acquisitionPackageRef: { kind: 'record', id: 'ACQP-F-SHARED', type: 'acquisition-package' },
+      },
+    })
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
+      if (id === 'ISEN-F-D1') return dupEntry('ISEN-F-D1') as never
+      if (id === 'ISEN-F-D2') return dupEntry('ISEN-F-D2') as never
+      if (id === 'ACQP-F-SHARED') {
+        return {
+          recordId: 'ACQP-F-SHARED',
+          payload: { kind: 'acquisition-package', id: 'ACQP-F-SHARED', acquisitionStatus: 'unknown' },
+        } as never
+      }
+      throw new Error(`404: ${id}`)
+    })
+    render(wrap(RUN_GC, 'gc-dup'))
+    await screen.findByTestId('gc-run-sheet')
+    // Two entries + ONE shared ACQP = 3 getRecord calls (NOT 4 — the ACQP is
+    // deduped across the two entries that attach it).
+    await waitFor(() => {
+      expect(apiClient.getRecord).toHaveBeenCalledTimes(3)
+    })
+    const acqpFetches = vi
+      .mocked(apiClient.getRecord)
+      .mock.calls.filter((c) => c[0] === 'ACQP-F-SHARED').length
+    expect(acqpFetches).toBe(1) // deduped: ONE fetch for the shared ACQP
   })
 
   it('the probe fires at most ONCE per runId — a re-render (same run) does not re-fire it', async () => {
