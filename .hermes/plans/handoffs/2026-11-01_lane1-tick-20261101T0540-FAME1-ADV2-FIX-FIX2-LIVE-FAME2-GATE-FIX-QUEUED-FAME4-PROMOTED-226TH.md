@@ -117,3 +117,39 @@
 - Trunk cl/integration-1 tip: 2b48b30a (+ this handoff commit).
 - :3001/:5174 untouched.
 226TH-END
+
+## ADDENDUM (05:58, budget checkpoint) — FAME-3 session died at engine context cap; W2 platform gap routed to architect
+- FAME-3 coder (slot-1, wrapper 2765279) EXITED 05:37:25 rc=0 — last log line `HTTP 400: prepared
+  prompt exceeds Engine max_context 262144` (session-context death class, NOT a work failure; the
+  report + W3 commit 393fee16 landed, 240-line report is coherent). Worktree wt/fame-3-lane1-l1t0245
+  holds UNCOMMITTED W6-in-flight drafts (config/drafting/adapters.yaml, FormDraftService.ts,
+  adapters.ts, recordDraftCompile.ts, NEW config/drafting/record-edit-guards.yaml) — PRESERVE, do
+  not reset; resume run owns them.
+- Report §W2-BLOCKED returns requires-rescope on a platform gap beyond OQ-1..5: the W3 fields don't
+  reach the client record-surface projection without an out-of-list generic slot-member forwarding
+  ("part 3", sketched but NOT committed). Structured blocker recorded in the task block
+  (blocker_kind_20261101T0555, watch path below).
+- ARCHITECT DISPATCHED (unit fame3w2-arch-l1t0555, ~05:55; thunderbeast reserved headroom, no bg
+  slot taken): decision request
+  .hermes/plans/2026-11-01_fame-3-w2-forward-decision-request.md -> decision file
+  .hermes/plans/2026-11-01_fame-3-w2-forward-decision.md ending `DECISION: OPT-A|OPT-B`. OPT-A =
+  ratify the generic forward; OPT-B = DATA-only flattened siblings (the route FAME-1 fix2 is
+  proving right now). Convergence risk + the worker-sketch uncertainty (server-only 'fields'
+  forward may land inert vs client {name,..} expectation) are in the request; orch recommends
+  OPT-B this cycle, OPT-A as a next-intake platform item.
+- CONSEQUENCE FOR FAME-4: its dispatch gate (FAME-3 MERGED) now sits behind (a) the architect
+  decision, (b) a brief-slimmed FAME-3 RESUME run (independent legs W4-API/W5/W6/W7/W8 continue;
+  W2/W4-editor/W8-surface legs gated on the decision), then the normal adv+verify+merge cycle. The
+  FAME-4 spec §18 R-5 stands unchanged — FAME-4 stays undispatched meanwhile. Fleet: slot-1 is FREE
+  (FAME-3 gone); slot-0 FAME-1 fix2 live then FAME-2 fix2 chained — the FAME-3 resume should take
+  slot-1 with the stagger rule vs FAME-1-fix2's start (05:32), gated on the decision file.
+## assumptions (addendum):
+- AS-L1T226-4: FAME-3's uncommitted W6 drafts attributed to its in-flight OPT-A edit-arm work per
+  the report's W6 section; treated as resumable worker state, not as trunk-adjacent work.
+  evidence_debt: false. owner: orchestrator (verify at resume).
+- AS-L1T226-5: FAME-3 session death classified context-cap (log's explicit HTTP 400), NOT a work
+  blocker — artifacts adopted as valid per the first-hand report/commit inspection above.
+  evidence_debt: false. owner: orchestrator.
+- Architect OPT-A/OPT-B outcome pending — FAME-3's W2 leg and the FAME-1 flatten-vs-forward
+  reconciliation are explicitly OPEN, carried until the decision file lands.
+226TH-END-ADDENDUM
