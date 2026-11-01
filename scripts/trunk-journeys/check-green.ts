@@ -12,7 +12,7 @@
  * the authoritative signal; this is just its one-line consumer.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const DEFAULT_RECEIPTS_HOME = '/home/brad/.hermes/cl/receipts/L1-TRUNK-JOURNEYS';
 
@@ -69,13 +69,16 @@ function main(): number {
 }
 
 function isMain(): boolean {
+  // Must be exact-entry, not suffix-guess: any import of this module (e.g. the
+  // unit tests importing checkGreen) runs with argv[1] set and must NOT
+  // self-execute the gate. (D6: the suite cannot even import checkGreen while
+  // the suffix test fires.)
   const entry = process.argv[1];
   if (!entry) return false;
   try {
-    const u = new URL(`file://${entry}`);
-    return import.meta.url === u.href || import.meta.url.endsWith('/check-green.ts');
+    return import.meta.url === new URL(`file://${resolve(entry)}`).href;
   } catch {
-    return entry.endsWith('check-green.ts') || entry.endsWith('check-green.mjs');
+    return false;
   }
 }
 
