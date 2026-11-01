@@ -117,4 +117,30 @@
 3. After both gates: queue empty -> GC-17 carriers stay next-intake-only; consider a
    lane-1 intake proposal ONLY if the list is to grow (architect-led; no invention).
 4. Dead-code note stands: client.ts advanceRecordState :3996 unregistered route.
-216TH-END
+
+
+## CHECKPOINT ADDENDUM (20:07) — journeys gate came back FIX; fix-1 run LIVE
+- GATE 1 on journeys (adv-l1-trunkjourneys-l1t1950.md): VERDICT FIX — 5 MAJOR + 4 MINOR
+  (D1 check-green walks back to stale green on newest-dir-no-verdict; D2 green verdict
+  written BEFORE isolation proof; D3 minute-precision receipt dir + rand clobber/seed-
+  collision; D6 check-green untested (27/27 pass with red->exit-0 mutation); D8 seed
+  mislabels CHEBI:24431 as person / obsolete GO:0035004 as chromatographic peak —
+  verified vs OLS4; D4 failed_step mislocalization; D5 silent interpolation pass-through;
+  D7 --only-J1 partial green unblocks claims; D9 dangling subject_ref; D10 selfcheck
+  gap, see report).
+  IMPORTANT: the demonstrated ACCEPTANCE receipts (J1+J2 green, canary arms) were run on
+  code the gate itself rates "PASS as demonstrated, FAIL as an engineering artifact" —
+  the acceptance evidence stands, the harness that produced it needs the teeth repaired
+  before the branch merges (the red-decline entry point is the item's whole point).
+- FIX-1 DISPATCHED 20:04:14 slot-0 (stagger-clear: last coder exit 19:33:26 >60min):
+  unit l1trunkj-fix1-l1t2010, launcher PID 1631075, log
+  coder-L1TRUNKJOURNEYS-fix1-l1t2010.log, prompt
+  prompts/coder-L1TRUNKJOURNEYS-fix1-l1t2010.txt (defect list verbatim, RED-first,
+  mandated live re-run + mutation self-demo, anti-cap discipline, marker contract).
+  NO RE-DISPATCH while PID 1631075 alive or slot-0 held.
+- TICK EXIT STATE at ~20:07 (started 18:01, 45-min dispatch budget consumed): NO other
+  live lane-1 workers. Coder slot-1 FREE, slot-0 held by fix-1. TB bg: slot-1 lane-2
+  alive (734943), slot-0 dead-pid free. Trunk @ docs commit atop 73ab233d. Both browser
+  gates remain open evidence debt (SIGNALDREF pinned 73ab233d; journeys post-merge
+  posture decided per handoff).
+216TH-END-ADDENDUM
