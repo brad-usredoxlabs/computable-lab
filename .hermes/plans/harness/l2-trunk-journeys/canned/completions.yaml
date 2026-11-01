@@ -4,12 +4,14 @@
 # the SSE/JSON framing. Every completion's CONTENT — the scientist-intent
 # shorthand YAML, the protocol_edit ops, the intentId — lives HERE.
 #
-# Keying: the server reads the last user message of the /chat/completions body.
-#   * journey = the entry whose `prompt_contains` substring appears in the user
-#     content (the journey ask, declared in journeys/J*.yaml steps).
-#   * turn    = 2 iff the content carries the product's "[Answered clarifications]"
-#     marker (appendClarificationAnswersToPrompt, AgentOrchestrator.ts:261-275),
-#     else 1.
+# Keying (fix4 D3): the JOURNEY SET IS THIS FILE — the server iterates
+# `journeys.items()` keyed by each block's own id (no hardcoded id tuple in
+# code: adding a journey block = it dispatches). Matching runs on the
+# CURRENT user message FIRST, the whole conversation (history) SECOND, so a
+# thread whose history mentions several journey prompts binds by the current
+# turn. Turn: 2 iff a prior assistant message rides the request (the
+# deterministic turn-2 key on this trunk) or the product's
+# "[Answered clarifications]" marker is present (secondary key), else 1.
 # The model writes ONLY shorthand / protocol_edit ops — it never writes events
 # (the deterministic compiler owns event-graph expansion). A fixed intentId on
 # BOTH turns is what makes the J2 answer-turn intentId stability deterministic.

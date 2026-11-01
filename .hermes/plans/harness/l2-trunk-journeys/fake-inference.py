@@ -12,11 +12,17 @@ It does ONLY two things (ruling Q-B: canned completions are DATA, not logic):
   1. GET  {base}/models           -> a valid /models list (the probe the
                                      backend runs on config activation).
   2. POST {base}/chat/completions -> a canned completion, looked up as
-       journey = the canned entry whose `prompt_contains` substring appears
-                 in the last user message;
-       turn    = 2 if the message carries the product's "[Answered
-                 clarifications]" marker (appendClarificationAnswersToPrompt,
-                 AgentOrchestrator.ts:261-275), else 1.
+       journey = the canned block whose `prompt_contains` substring appears
+                 in the CURRENT user message first, the whole conversation
+                 (history) second — the journey SET is the canned YAML
+                 itself (fix4 D3: no hardcoded id tuple in code);
+       turn    = 2 if a prior assistant message rides the request (the
+                 deterministic turn-2 key on this trunk) or the product's
+                 "[Answered clarifications]" marker is present (secondary
+                 key), else 1. The receipt log records that SAME resolved
+                 turn, `saw_assistant`, and which canned block served (fix4
+                 D4 — the pre-fix4 log recomputed the turn from the marker
+                 alone and misreported the answer turn).
      The completion body (the agent_intent tool call: event_shorthand with a
      scientist-intent YAML, or protocol_edit with ops) comes VERBATIM from
      canned/completions.yaml. The model writes shorthand/ops only — it never
@@ -47,27 +53,80 @@ def load_canned(path):
         return yaml.safe_load(fh)
 
 
-def pick_completion(canned, convo_text, saw_assistant=False):
-    """Pure (journey, turn) lookup over the DATA. `convo_text` is the WHOLE
-    conversation (all messages joined) — on an answer turn the journey prompt
-    rides in the HISTORY messages while the answer is the current user message.
-    `saw_assistant` (True iff a prior assistant message is in the request) is
-    the deterministic TURN-2 key on this trunk: the ask turn's request has no
-    assistant message, the answer turn's carries the assistant's own prior
-    card. The [Answered clarifications] marker is a secondary key (surfaces
-    that append it). Returns {'intent','shorthand'?, 'ops'?} or None."""
+def pick_completion(canned, convo_text, saw_assistant=False, current_text=None):
+    """D3 (fix4): the (journey, turn) lookup over the DATA. The JOURNEY SET
+    IS THE CANNED YAML — `canned["journeys"].items()` (YAML order), keyed by
+    each block's own id; adding a journey = adding a block, no code change
+    here (the pre-fix4 version iterated a hardcoded ("J1","J2","J3") tuple
+    and a new J4 block never dispatched).
+
+    Matching order: the CURRENT user message first, the whole conversation
+    (`convo_text`, history included) second — a thread whose history
+    mentions several journey prompts binds to the journey the CURRENT turn
+    asks (the pre-fix4 version matched the joined conversation first-match-
+    wins, i.e. by id order, not by the current turn).
+
+    The TURN key is unchanged: `saw_assistant` (True iff a prior assistant
+    message is in the request) is the deterministic turn-2 signal on this
+    trunk; the MARKER is the secondary key. Returns
+    (journey_id, spec, matched_in) — matched_in in {'current','history',
+    None}; spec is the turn's block dict or None."""
     if not isinstance(convo_text, str):
-        return None
-    is_answer = saw_assistant or (MARKER in convo_text)
-    for jid in ("J1", "J2", "J3"):
-        j = (canned.get("journeys") or {}).get(jid) or {}
-        needle = j.get("prompt_contains")
-        if needle and needle in convo_text:
-            turn = 2 if is_answer else 1
-            spec = j.get("turn%d" % turn) or j.get("turn1")
-            if isinstance(spec, dict):
-                return spec
-    return None
+        return None, None, None
+    journeys = (canned or {}).get("journeys") or {}
+    if not isinstance(journeys, dict):
+        return None, None, None
+    is_answer = bool(saw_assistant) or (MARKER in convo_text)
+
+    def lookup(haystack):
+        if not isinstance(haystack, str) or not haystack:
+            return None, None
+        for jid, j in journeys.items():          # D3: the DATA drives the set
+            if not isinstance(j, dict):
+                continue
+            needle = j.get("prompt_contains")
+            if needle and needle in haystack:
+                spec = j.get("turn2" if is_answer else "turn1")
+                if not isinstance(spec, dict) and is_answer:
+                    spec = j.get("turn1")        # block declares turn1 only
+                if isinstance(spec, dict):
+                    return jid, spec
+        return None, None
+
+    if isinstance(current_text, str) and current_text:
+        jid, spec = lookup(current_text)         # D3: current message first
+        if jid is not None:
+            return jid, spec, "current"
+    jid, spec = lookup(convo_text)               # D3: history second
+    if jid is not None:
+        return jid, spec, "history"
+    return None, None, None
+
+
+def describe_request(messages, convo_text, saw_assistant, current_text,
+                     jid, spec, matched_in, stream, path):
+    """D4 (fix4): ONE resolved turn for dispatch AND the receipt logs. The
+    pre-fix4 log computed `turn` from the MARKER key alone while dispatch
+    used `saw_assistant` — the answer turn (no marker on this trunk's wire)
+    was misreported as turn 1. Returns (convo_dump, log_entry); the log
+    entry carries the resolved turn variable, `saw_assistant`, the marker
+    flag, which phase matched, and the CANNED BLOCK id that served the
+    request (None = no canned block matched)."""
+    marker = MARKER in (convo_text or "")
+    turn = 2 if (bool(saw_assistant) or marker) else 1
+    convo_dump = {"messages": messages,
+                  "convo_len": len(convo_text or ""),
+                  "marker": marker,
+                  "n_messages": len(messages)}
+    log_entry = {"method": "POST", "path": path, "stream": bool(stream),
+                 "turn": turn,                   # the RESOLVED turn (dispatch)
+                 "saw_assistant": bool(saw_assistant),  # the turn-2 key
+                 "marker": marker,               # secondary key, recorded too
+                 "matched_in": matched_in,       # D3: which phase matched
+                 "journey_block": jid,           # D4: the block that served
+                 "journey_match": bool(spec),
+                 "n_messages": len(messages)}
+    return convo_dump, log_entry
 
 
 class FakeHandler(BaseHTTPRequestHandler):
@@ -143,29 +202,44 @@ class FakeHandler(BaseHTTPRequestHandler):
                 parts.append(" ".join(x.get("text", "") for x in c
                                        if isinstance(x, dict)))
         convo_text = "\n".join(parts)
+        # The CURRENT user message (D3): the last user role message — the
+        # dispatch matches on it FIRST (a thread whose history mentions
+        # several journey prompts binds by the current turn, not by id
+        # order), the joined conversation SECOND.
+        current_text = None
+        for m in reversed(messages):
+            if isinstance(m, dict) and m.get("role") == "user":
+                c = m.get("content")
+                if isinstance(c, str):
+                    current_text = c
+                elif isinstance(c, list):
+                    current_text = " ".join(x.get("text", "") for x in c
+                                            if isinstance(x, dict))
+                break
         # Turn key: the answer turn's request carries the assistant's own
         # prior card as a message (the ask turn's does not) — the deterministic
         # signal, since the [Answered clarifications] marker does not ride this
-        # trunk's model request. The marker stays a secondary key.
-        spec = pick_completion(self.canned, convo_text, saw_assistant=saw_assistant)
-        # Dump the conversation so turn keying can be verified (never relied
-        # on blindly): the [Answered clarifications] marker's location is a
-        # product contract, and the harness must SEE where it rides.
+        # trunk's model request. The marker stays a secondary key. D4 (fix4):
+        # the resolved turn + which block served is logged from the SAME
+        # variables dispatch used (the pre-fix4 log recomputed turn from the
+        # MARKER alone and misreported the answer turn).
+        jid, spec, matched_in = pick_completion(
+            self.canned, convo_text, saw_assistant=saw_assistant,
+            current_text=current_text)
+        # Dump the conversation + the receipt log entry in one place so the
+        # two can never diverge on the turn key (D4). The .convo dump exists
+        # so turn keying can be verified: the marker's location is a product
+        # contract, and the harness must SEE where it rides.
+        convo_dump, log_entry = describe_request(
+            messages, convo_text, saw_assistant, current_text,
+            jid, spec, matched_in, body.get("stream"), self.path)
         if self.log_path:
             try:
                 with open(self.log_path + ".convo", "a") as cfh:
-                    cfh.write(json.dumps({"messages": messages,
-                                          "convo_len": len(convo_text),
-                                          "marker": MARKER in convo_text,
-                                          "n_messages": len(messages)})
-                              + "\n")
+                    cfh.write(json.dumps(convo_dump) + "\n")
             except Exception:
                 pass
-        self._log({"method": "POST", "path": self.path,
-                   "stream": bool(body.get("stream")),
-                   "journey_match": bool(spec),
-                   "turn": (2 if MARKER in convo_text else 1),
-                   "n_messages": len(messages)})
+        self._log(log_entry)
         if spec is None:
             # No canned completion for this prompt: a clean tool-call that
             # proposes NOTHING is the honest answer (never fabricate an event).
