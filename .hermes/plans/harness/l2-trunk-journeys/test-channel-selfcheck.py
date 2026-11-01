@@ -300,6 +300,66 @@ def main():
         import shutil
         shutil.rmtree(td2p, ignore_errors=True)
 
+    # ---- (2e) N4 LIMITATION PIN: NO-DELETE PROTOTYPE CALL STAYS GREEN -----
+    # advc cycle-1 DEFECT 1: the ITEM-CITED bypass shape is
+    # `Object.getPrototypeOf(context).route.call(...)` with NO deletion of
+    # the own-property wrapper. The identity snapshot CANNOT see it (own
+    # property intact => recv[meth] === _wrappers[key] stays true) and the
+    # counter misses it (the original runs). This arm PINS THAT LIMITATION
+    # HONESTLY: it asserts the known residual (route_api_wrapped stays True,
+    # counter 0 = silent green for THIS tripwire), labelled as a limitation
+    # pin, NOT a pass claim — the defense for that class is the construction
+    # ban + the real-transport ai_request_bodies receipt. If anyone ever
+    # "fixes" the snapshot to bite this shape, this arm fails LOUDLY and the
+    # comment/report must be updated then. PINGS THE GAP SO THE OVERCLAIM
+    # CANNOT SILENTLY RETURN (spec N4 arm 3).
+    inj_l = src
+    anchor_l = "  await page.goto(appBase + step.path"
+    if anchor_l not in inj_l:
+        results.append(("N4 LIMITATION PIN (no-delete prototype call stays TRUE "
+                        "= known residual, not a detection claim)",
+                        False, ["anchor 'await page.goto(appBase + step.path' "
+                                "not found — the limitation-pin case must be "
+                                "kept wired"]))
+    else:
+        inj_l = inj_l.replace(
+            anchor_l,
+            "  const _protoL = Object.getPrototypeOf(context);\n"
+            "  await _protoL.route.call(context, '**/api/ai/**', (r) => r.fulfill("
+            "{status: 200, contentType: 'application/json', body: '{}'}));\n"
+            "  await page.goto(appBase + step.path", 1)
+        td2l = tempfile.mkdtemp(prefix="sc-inject-nodel-")
+        probe_l = os.path.join(td2l, "ui-drive-nodel.cjs")
+        with open(probe_l, "w") as fh:
+            fh.write(inj_l)
+        jpath_l = os.path.join(td2l, "INJL.yaml")
+        with open(jpath_l, "w") as fh:
+            fh.write("id: INJL\ntimeout_s: 20\nlog_selector: 'body'\nsteps:\n"
+                     "  - step: goto\n    path: /deck/NOPE\n")
+        opath_l = os.path.join(td2l, "INJL-ui.json")
+        root_nm_l = os.path.join(REPO_ROOT, "node_modules")
+        if not os.path.isdir(os.path.join(root_nm_l, "js-yaml")):
+            root_nm_l = "/mnt/vast/home/brad/git/cl-integration-2/node_modules"
+        os.symlink(root_nm_l, os.path.join(td2l, "node_modules"))
+        p = subprocess.run(["node", probe_l, "--journey", jpath_l,
+                            "--out", opath_l,
+                            "--app-base", "http://127.0.0.1:9"],
+                           cwd=APP_DIR, capture_output=True, text=True,
+                           timeout=180)
+        try:
+            rec_l = json.load(open(opath_l))
+            used_l = rec_l.get("route_handlers_used", -1)
+            wrapped_l = (rec_l.get("attestations") or {}).get("route_api_wrapped")
+        except Exception as exc:
+            used_l, wrapped_l = -1, None
+        results.append(("N4 LIMITATION PIN (no-delete prototype call stays TRUE "
+                        "= known residual, not a detection claim)",
+                        used_l == 0 and wrapped_l is True,
+                        ["route_handlers_used=%r wrapped=%r rc=%d"
+                         % (used_l, wrapped_l, p.returncode)]))
+        import shutil
+        shutil.rmtree(td2l, ignore_errors=True)
+
     # ---- (3) the tick gate helper: red blocks, green passes ---------------
     # D2 (fix4): a clearing verdict requires fake_mode (hard set
     # J1+J2(fake)+J3); D1 (fix4): the gate RE-DERIVES the A2 grade from

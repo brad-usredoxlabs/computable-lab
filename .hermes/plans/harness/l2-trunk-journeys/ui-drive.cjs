@@ -49,13 +49,24 @@ function shaShort(s) {
   //   * a call that goes THROUGH the wrapped own property on either receiver
   //     (any registration placed after the wrap lands, incl. before page
   //     creation) -> route_handlers_used increments;
-  //   * a prototype-chain detour (delete the own-property wrapper, call the
-  //     ORIGINAL resolved off the prototype) -> the counter MISSES it (the
-  //     original never runs our code), BUT the identity snapshot below
-  //     re-checks at receipt time that every resolved method is still OUR
-  //     recorded wrapper, so route_api_wrapped flips false and the python
-  //     driver grades the journey RED (run-journeys.py attestation_violations).
-  // Residual gaps, named: (a) the identity check compares against the
+  //   * a prototype-chain detour that DELETES the own-property wrapper and
+  //     then calls the ORIGINAL resolved off the prototype -> the counter
+  //     MISSES it (the original never runs our code), BUT the identity
+  //     snapshot below re-checks at receipt time that every resolved method
+  //     is still OUR recorded wrapper, so route_api_wrapped flips false and
+  //     the python driver grades the journey RED (run-journeys.py
+  //     attestation_violations). The snapshot bites the DELETE variant ONLY.
+  // Residual gaps, named: (d) the ITEM-CITED no-delete shape —
+  // `Object.getPrototypeOf(context).route.call(...)` with the own wrapper
+  // left INTACT — is an UNDETECTABLE residual for this tripwire: the own
+  // property still resolves to our wrapper, so `recv[meth] === _wrappers[key]`
+  // stays true and route_api_wrapped stays TRUE while the ORIGINAL runs
+  // (counter 0). No property/identity inspection from node can see that
+  // class; the construction ban (ui-drive never CALLS route APIs) + the
+  // real-transport ai_request_bodies receipt are the defense for it. The
+  // self-check pins this limitation (route_api_wrapped must stay true for
+  // the no-delete shape) so the overclaim cannot silently return.
+  // (a) the identity check compares against the
   // WRAPPER IDENTITY, not just the _clInterceptionProbe marker, so a forged
   // marker on a foreign function also fails the check; (b) nothing here can
   // catch interception performed OUTSIDE these objects (CDP-level
