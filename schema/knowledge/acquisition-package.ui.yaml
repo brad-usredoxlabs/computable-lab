@@ -63,7 +63,18 @@ editor:
         records the interpretation source, the decode facts, and every matched
         RUN.LOG line VERBATIM (the data a human reads INSTEAD of a byte-serving
         route — OQ-1). Absent on packages registered before FAME-1.
-      slots: ["acquisition-status-slot", "acquisition-status-evidence-slot"]
+      slots:
+        [
+          "acquisition-status-slot",
+          "evidence-ruleset-id-slot",
+          "evidence-ruleset-version-slot",
+          "evidence-ruleset-source-file-slot",
+          "evidence-source-member-slot",
+          "evidence-decode-encoding-slot",
+          "evidence-decode-bom-present-slot",
+          "evidence-matched-lines-slot",
+          "evidence-no-evidence-reason-slot",
+        ]
   slots:
     - id: "id-slot"
       path: "$.id"
@@ -151,89 +162,98 @@ editor:
         completed default). Set at registration from the RUN.LOG evidence;
         rendered non-editable (the classification is DATA, not hand-written).
         Absent on packages registered before FAME-1.
-    - id: "acquisition-status-evidence-slot"
-      path: "$.acquisitionStatusEvidence"
-      label: "Acquisition Status Evidence"
-      widget: "object"
-      # D1: the nested hints are declared under `fields:` (the object widget's
-      # FORWARDABLE key) and `items:` (the matched array's item hint) — the
-      # keys EditorProjectionService actually forwards. `properties:` is NOT
-      # forwarded (it is silently dropped by the projector — the pre-existing
-      # $.files latent shape the D1 defect named). D9: the non-editable
-      # presentation is the widget type, not an inert `readonly:` key.
+    # FAME-1 FIX2 (D1, cycle-2 ruling, option (a) — DATA-ONLY): the evidence
+    # presentation is declared in the shapes the CLIENT mapper
+    # (app/src/editor/taptab/documentMapper.ts) ACTUALLY consumes:
+    #   - sibling `readonly` slots at the deep dotted paths — the mapper
+    #     resolves a slot's value via getValueAtPath (documentMapper.ts:276 ->
+    #     formHelpers.ts:15-25, which walks `$.a.b.c`), and a `readonly` row
+    #     renders its stored value through ReadonlyWidget (a stable,
+    #     NON-EDITABLE display — the widget type is the non-editable claim,
+    #     the repo's id-slot / state-slot idiom; a `readonly: true` key is
+    #     inert, D9);
+    #   - a top-level `array` slot for $.acquisitionStatusEvidence.matched
+    #     with an `items` hint — the array/items path IS consumed
+    #     (documentMapper.ts:335-347 -> attrs.itemHint; the ArrayWidget seeds
+    #     items from the hint and renders each item through the
+    #     ObjectWidget).
+    # The pre-fix shape (ONE `widget: object` slot whose nested hints ride
+    # `fields:`) was INERT at the client: the editor-config projection never
+    # emits the `properties:` key documentMapper.ts:309 keys object
+    # decomposition on, so the evidence object rendered undecomposed
+    # (cycle-2 DEFECT 1). A top-level slot's `fields:` hints are therefore
+    # DROPPED — they carried no client surface. No new key spelling, no
+    # client-code change.
+    - id: "evidence-ruleset-id-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.id"
+      label: "Rule Set Id"
+      widget: "readonly"
       help: >
-        The evidence behind the acquisition status: the rule set used
-        (interpretation source), which member was read, the strict-UTF-16
-        decode facts, every matched RUN.LOG line VERBATIM (never rewritten),
-        and — when nothing matched — the named no-evidence reason. This is the
-        surface a human reads INSTEAD of a byte-serving route (OQ-1): the
-        verbatim lines + the /record/<RUN.LOG data-reference> anchor make the
-        WHY visible without a raw-blob route.
-      fields:
-        - path: "ruleset"
-          widget: "object"
-          label: "Rule Set"
-          help: >
-            The interpretation source: the rule-set id, version, and the rule
-            file they came from. ABSENCE-SHAPED (empty) in the degenerate
-            rule-file-missing arm (D5) — the code does not restate the YAML's
-            identity when the file is unread.
-          fields:
-            - path: "id"
-              widget: "text"
-              label: "Rule Set Id"
-            - path: "version"
-              widget: "text"
-              label: "Version"
-            - path: "sourceFile"
-              widget: "text"
-              label: "Source File"
-        - path: "sourceMember"
-          widget: "object"
-          label: "Source Member"
-          help: "Which package member was read (the run_log member, e.g. RUN.LOG)."
-          fields:
-            - path: "relativePath"
-              widget: "text"
-              label: "Relative Path"
-        - path: "decode"
-          widget: "object"
-          label: "Decode"
-          help: >
-            The strict-UTF-16 decode facts (the encoding used and whether the
-            FF FE BOM was present), recorded even on decode failure.
-          fields:
-            - path: "encoding"
-              widget: "text"
-              label: "Encoding"
-            - path: "bomPresent"
-              widget: "text"
-              label: "Bom Present"
-        - path: "matched"
-          widget: "array"
-          label: "Matched Lines"
-          help: "Every RUN.LOG line a declared rule matched — preserved VERBATIM, never dropped."
-          items:
-            path: "$.item"
-            widget: "object"
-            label: "Matched Line"
-            fields:
-              - path: "line"
-                widget: "text"
-                label: "Line"
-                help: "The matched line, verbatim (the exact decoded line)."
-              - path: "ruleId"
-                widget: "text"
-                label: "Rule Id"
-              - path: "lineIndex"
-                widget: "number"
-                label: "Line Index"
-        - path: "noEvidenceReason"
-          widget: "text"
-          label: "No Evidence Reason"
-          help: >
-            Present ONLY when nothing matched: the named reason (log absent /
-            not decodable / zero rule hits / rule file unreadable).
+        The interpretation source's rule-set id, as declared in the rule file
+        (config/gc-acquisition-status/log-patterns.yaml). ABSENT in the
+        degenerate rule-file-missing arm (the ruleset is absence-shaped — D5):
+        the display shows the em-dash, never a fabricated identity.
+    - id: "evidence-ruleset-version-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.version"
+      label: "Rule Set Version"
+      widget: "readonly"
+      help: "The interpretation source's rule-set version (declared data; absent in the degenerate arm)."
+    - id: "evidence-ruleset-source-file-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.sourceFile"
+      label: "Rule Set Source File"
+      widget: "readonly"
+      help: "The rule file the id/version came from (the stable config path label)."
+    - id: "evidence-source-member-slot"
+      path: "$.acquisitionStatusEvidence.sourceMember.relativePath"
+      label: "Source Member Relative Path"
+      widget: "readonly"
+      help: "Which package member was read (the run_log member's package-relative path, e.g. RUN.LOG)."
+    - id: "evidence-decode-encoding-slot"
+      path: "$.acquisitionStatusEvidence.decode.encoding"
+      label: "Decode Encoding"
+      widget: "readonly"
+      help: >
+        The strict-UTF-16 decode encoding used ('utf-16le' — FF FE BOM
+        consumed by the utf-16 family, BOM-less falls back to explicit
+        utf-16-le; 'none' when no member was read; 'unreadable' when the
+        member bytes could not be read). Recorded even on decode failure.
+    - id: "evidence-decode-bom-present-slot"
+      path: "$.acquisitionStatusEvidence.decode.bomPresent"
+      label: "Decode BOM Present"
+      widget: "readonly"
+      help: "Whether the FF FE BOM was present (the decode fact, recorded even on failure)."
+    - id: "evidence-matched-lines-slot"
+      path: "$.acquisitionStatusEvidence.matched"
+      label: "Matched Lines"
+      widget: "array"
+      help: >
+        Every RUN.LOG line a declared rule matched — preserved VERBATIM, never
+        dropped (the data a human reads INSTEAD of a byte-serving route —
+        OQ-1). Each item: the verbatim line, the declared rule id, and the
+        0-based line index.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Matched Line"
+        fields:
+          - path: "line"
+            widget: "text"
+            label: "Line"
+            help: "The matched line, verbatim (the exact decoded line)."
+          - path: "ruleId"
+            widget: "text"
+            label: "Rule Id"
+          - path: "lineIndex"
+            widget: "number"
+            label: "Line Index"
+    - id: "evidence-no-evidence-reason-slot"
+      path: "$.acquisitionStatusEvidence.noEvidenceReason"
+      label: "No Evidence Reason"
+      widget: "readonly"
+      help: >
+        Present ONLY when nothing matched: the named reason (log absent /
+        not decodable / zero rule hits / rule file unreadable). The em-dash
+        shows when a classification WAS evidenced.
 
 list:
   columns:

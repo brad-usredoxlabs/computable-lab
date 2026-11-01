@@ -391,27 +391,42 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
     expect(spec.editor!.slots.find(s => s.path === '$.signalCollectionRef')?.label).toBe('Signal Collection Ref');
   });
 
-  it('FAME-1: the acquisition-status section PROJECTS its evidence decomposition (real projectRecord — D1/D2)', async () => {
+  it('FAME-1: the acquisition-status section PROJECTS its evidence presentation (real projectRecord — D1/D2, FIX2 flattened shape)', async () => {
     const loader = createUISpecLoader();
     const uiPath = join(SCHEMA_DIR, 'knowledge', 'acquisition-package.ui.yaml');
     const content = await readFile(uiPath, 'utf-8');
     const res = loader.load(content, uiPath);
     expect(res.success).toBe(true);
     const spec = res.spec!;
-    // The section block claims BOTH slots (the status word + the evidence view).
+    // The section block claims the status word slot + the EVIDENCE
+    // PRESENTATION slots. FAME-1 FIX2 (cycle-2 DEFECT 1, option (a)): the
+    // presentation is FLATTENED — sibling readonly slots at the deep dotted
+    // evidence paths + one array slot for matched — in the shapes the client
+    // mapper actually consumes (documentMapper getValueAtPath walks deep
+    // paths; attrs.itemHint is the array path). The pre-fix single
+    // `widget: object` evidence slot (nested `fields:` hints) is INERT at the
+    // client: the editor-config projection never emits the `properties:` key
+    // documentMapper.ts:309 keys object decomposition on.
     const statusBlock = spec.editor!.blocks.find(b => b.id === 'acquisition-status');
     expect(statusBlock).toBeDefined();
     expect(statusBlock!.kind).toBe('section');
     expect(statusBlock!.slots).toEqual([
       'acquisition-status-slot',
-      'acquisition-status-evidence-slot',
+      'evidence-ruleset-id-slot',
+      'evidence-ruleset-version-slot',
+      'evidence-ruleset-source-file-slot',
+      'evidence-source-member-slot',
+      'evidence-decode-encoding-slot',
+      'evidence-decode-bom-present-slot',
+      'evidence-matched-lines-slot',
+      'evidence-no-evidence-reason-slot',
     ]);
 
-    // D2 (was tautological): assert on the REAL projection, not the raw YAML.
-    // projectRecord is the server's own projection authority; if the evidence
-    // hints were declared under a non-forwardable key (the `properties:`
-    // defect), the projected slot would carry NO `fields`/`items` and this
-    // test goes RED — the inert-deliverable the prior test papered over.
+    // D2 (was tautological): assert on the REAL projection, not the raw
+    // YAML. projectRecord is the server's own projection authority; if the
+    // evidence presentation were declared in a shape the projection drops or
+    // the client cannot consume (the object/`fields:` defect, or a
+    // `properties:` regression), this test goes RED.
     const payload: Record<string, unknown> = {
       ...validPackage,
       acquisitionStatus: 'aborted',
@@ -427,38 +442,53 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
     };
     const projection = projectRecord(spec, payload, ACQP_ID, validPackage.id as string);
 
-    // The evidence slot is a projected OBJECT whose NESTED hints actually
-    // leave the server: `fields` carrying the four sub-fields (ruleset /
-    // sourceMember / decode / matched), NOT an inert `properties` key.
-    const evidenceSlot = projection.slots.find(s => s.path === '$.acquisitionStatusEvidence');
-    expect(evidenceSlot).toBeDefined();
-    expect(evidenceSlot!.widget).toBe('object');
-    expect(evidenceSlot!.fields).toBeDefined();
-    const fieldPaths = (evidenceSlot!.fields as Array<{ path: string }>).map(f => f.path);
-    expect(fieldPaths).toEqual(expect.arrayContaining(['ruleset', 'sourceMember', 'decode', 'matched']));
-    // The nested object hints are FORWARDABLE (ruleset's sub-fields carry the
-    // interpretation-source path keys), so the decomposition is not just a
-    // top-level label.
-    const rulesetField = (evidenceSlot!.fields as Array<{ path: string; fields?: Array<{ path: string }> }>).find(
-      f => f.path === 'ruleset',
-    );
-    expect(rulesetField).toBeDefined();
-    expect(rulesetField!.fields?.map(f => f.path)).toEqual(expect.arrayContaining(['id', 'version', 'sourceFile']));
-    // The matched ARRAY slot carries its item hint via `items` (the
-    // forwardable key) with the item's sub-field set (line/ruleId/lineIndex).
-    const matchedField = (evidenceSlot!.fields as Array<{ path: string; items?: { path?: string; widget?: string; fields?: Array<{ path: string }> } }>).find(
-      f => f.path === 'matched',
-    );
-    expect(matchedField).toBeDefined();
-    expect(matchedField!.items).toBeDefined();
-    expect(matchedField!.items!.path).toBeTruthy();
-    expect(matchedField!.items!.widget).toBe('object');
-    expect(matchedField!.items!.fields?.map(f => f.path)).toEqual(
+    // The six flattened readonly evidence slots project with their deep
+    // dotted paths (the values the client resolves via getValueAtPath).
+    const readonlyPaths = [
+      '$.acquisitionStatusEvidence.ruleset.id',
+      '$.acquisitionStatusEvidence.ruleset.version',
+      '$.acquisitionStatusEvidence.ruleset.sourceFile',
+      '$.acquisitionStatusEvidence.sourceMember.relativePath',
+      '$.acquisitionStatusEvidence.decode.encoding',
+      '$.acquisitionStatusEvidence.decode.bomPresent',
+    ];
+    for (const p of readonlyPaths) {
+      const slot = projection.slots.find(s => s.path === p);
+      expect(slot, `the projection must carry the readonly slot ${p}`).toBeDefined();
+      expect(slot!.widget).toBe('readonly');
+    }
+    // The no-evidence reason slot is a readonly display (present only when
+    // nothing matched — the projection still declares the slot).
+    const reasonSlot = projection.slots.find(s => s.path === '$.acquisitionStatusEvidence.noEvidenceReason');
+    expect(reasonSlot).toBeDefined();
+    expect(reasonSlot!.widget).toBe('readonly');
+
+    // The matched ARRAY slot projects its item hint via `items` (the
+    // forwardable key the client's documentMapper consumes as attrs.itemHint)
+    // with the item's sub-field set (line/ruleId/lineIndex).
+    const matchedSlot = projection.slots.find(s => s.path === '$.acquisitionStatusEvidence.matched') as
+      | { widget: string; items?: { path?: string; widget?: string; fields?: Array<{ path: string }> } }
+      | undefined;
+    expect(matchedSlot).toBeDefined();
+    expect(matchedSlot!.widget).toBe('array');
+    expect(matchedSlot!.items).toBeDefined();
+    expect(matchedSlot!.items!.path).toBeTruthy();
+    expect(matchedSlot!.items!.widget).toBe('object');
+    expect(matchedSlot!.items!.fields?.map(f => f.path)).toEqual(
       expect.arrayContaining(['line', 'ruleId', 'lineIndex']),
     );
-    // The INERT key must NOT be the carrier (the D1 regression guard): the
-    // projection has no `properties` member to leak from.
-    expect((evidenceSlot! as unknown as { properties?: unknown }).properties).toBeUndefined();
+
+    // The INERT shape must NOT be the carrier (the D1 regression guard): no
+    // object slot at $.acquisitionStatusEvidence (the pre-fix undecomposed
+    // row), and no object slot anywhere in this spec projects a `properties`
+    // member (the editor-config projection never emits it — an object slot
+    // would render undecomposed at the client). The `$.files` array slot's
+    // `properties` (the arraySchema shape, pre-existing) is untouched.
+    expect(projection.slots.find(s => s.path === '$.acquisitionStatusEvidence')).toBeUndefined();
+    for (const slot of projection.slots) {
+      if (slot.widget !== 'object') continue;
+      expect((slot as unknown as { properties?: unknown }).properties, `no properties on ${slot.path}`).toBeUndefined();
+    }
 
     // D9: the status slot is projected as a stable NON-EDITABLE display
     // (widget: readonly), not an inert `readonly: true` select. The projected
