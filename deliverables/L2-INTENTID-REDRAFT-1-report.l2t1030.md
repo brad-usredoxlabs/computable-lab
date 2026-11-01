@@ -281,12 +281,13 @@ compares EVENTS (intentId is a passthrough) and stays green. This is a non-owned
 minimal, correct consequence of the approved fix contract and is flagged here for the
 orchestrator/reviewer.
 
-### Diff stat (vs base b9b998cd)
+### Diff stat (vs base b9b998cd) — actual `git diff --stat b9b998cd..HEAD -- server/`:
 ```
- server/src/ai/AgentOrchestrator.ts                 | 64 +++++++++++++++++++--
- server/src/ai/shorthandChat.ts                     | 42 +++++++++++++-
- server/src/ai/AgentOrchestrator.shorthandChat.test.ts | 11 +++-  (DEFECT-4 pin)
- server/src/ai/AgentOrchestrator.intentIdStability.test.ts | NEW (211 lines)
+ server/src/ai/AgentOrchestrator.intentIdStability.test.ts | 312 ++++++++++ (NEW)
+ server/src/ai/AgentOrchestrator.shorthandChat.test.ts     |  11 +-  (DEFECT-4 pin)
+ server/src/ai/AgentOrchestrator.ts                        |  64 +-
+ server/src/ai/shorthandChat.ts                            |  42 +-
+ 4 files changed, 425 insertions(+), 4 deletions(-)
 ```
 Commits (branch `cl/lane2-intentid-redraft-1`, off b9b998cd):
 - `acdeac5c` test(lane2): RED-first intentId stability pin (RED capture committed)
