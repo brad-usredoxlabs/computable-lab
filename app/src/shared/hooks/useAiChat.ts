@@ -582,6 +582,11 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
       const history = buildConversationHistory(messages)
       const accumulated: AiStreamEvent[] = [{ type: 'status', message: initialStatus }]
+      // GATE-FIX-1 D1: a turn-scoped flag — set when this turn's INTENT frame
+      // was HANDLED by a proposal relay (the card the host renders). The
+      // done branch uses it to keep the empty-success bubble from contradicting
+      // the card the same turn already produced.
+      let handledProposalFrame = false
 
       const files = attachments?.map((a) => a.file)
 
@@ -710,6 +715,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             if (recordDraftProposalRef.current) {
               try {
                 recordDraftProposalRef.current(event.recordDraft)
+                handledProposalFrame = true
               } catch (err: unknown) {
                 setMessages((prev) => [
                   ...prev,
@@ -875,7 +881,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             const hasEvents = (result.events?.length ?? 0) > 0
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
             const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
-            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
+            // GATE-FIX-1 D1: a handled record-draft proposal is a PROPOSAL —
+            // the host's card says so. The empty-success bubble contradicts
+            // it, so the turn-scoped flag excludes this case.
+            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs && !handledProposalFrame) {
               setMessages((prev) => [
                 ...prev,
                 {
