@@ -760,6 +760,19 @@ def downgrade_restore_failure(run_dir, meta, restore):
     return meta, latest_note
 
 
+def commit_latest_flip(run_dir):
+    """D1 (fix4): the ATOMIC `latest` flip. Called ONLY after the A2
+    restore grades OK (the restore is LAST) — a failed restore never owns
+    `latest`, and a run that flipped and then failed to restore is
+    un-owned by downgrade_restore_failure (defense in depth)."""
+    link = os.path.join(RECEIPTS_ROOT, "latest")
+    tmp = link + ".new"
+    if os.path.islink(tmp) or os.path.exists(tmp):
+        os.remove(tmp)
+    os.symlink(run_dir, tmp)
+    os.replace(tmp, link)  # atomic flip of `latest`
+
+
 def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
                              fake_info=None, advisory=False, health=None):
     """Run the selected journeys, write run-meta + the `latest` flip. Returns
@@ -824,19 +837,15 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
         run_meta["latest_was"] = os.path.realpath(link)
     with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
         json.dump(run_meta, fh, indent=2)
-    # D1/D2 (fix4): `latest` flips ONLY for a complete trunk claim run on the
-    # fake — a scratch/partial run, a live-sampler green (GREEN-NOT-GATING)
-    # and every advisory run must never displace the trunk verdict. The flip
-    # is provisional until the A2 restore grades: a failed restore
-    # un-does it via _downgrade_restore_failure (the restore is LAST).
-    do_flip = flips_latest(complete, trunk, advisory, fake_mode)
-    if do_flip:
-        tmp = link + ".new"
-        if os.path.islink(tmp) or os.path.exists(tmp):
-            os.remove(tmp)
-        os.symlink(run_dir, tmp)
-        os.replace(tmp, link)  # atomic flip of `latest`
-        latest_note = "latest -> this run"
+    # D1/D2 (fix4): `latest` eligibility is DECIDED here (a complete trunk
+    # claim run on the fake — a scratch/partial run, a live-sampler green
+    # (GREEN-NOT-GATING) and every advisory run are never eligible), but the
+    # FLIP ITSELF happens only AFTER the A2 restore grades OK (main's
+    # finally — the restore is LAST). A failed restore therefore never owns
+    # `latest`; a crashed run never flips at all.
+    flip_eligible = flips_latest(complete, trunk, advisory, fake_mode)
+    if flip_eligible:
+        latest_note = "latest PENDING — flips only if the A2 restore grades OK (D1)"
     elif advisory:
         latest_note = "latest NOT moved (advisory run — verdict recorded only, A3)"
     else:
@@ -854,8 +863,9 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
                                              "verdict": verdict_all,
                                              "advisory": advisory,
                                              "fake_mode": fake_mode,
+                                             "flip_eligible": flip_eligible,
                                              "verdicts": results}))
-    return verdict_all
+    return verdict_all, flip_eligible
 
 
 def main():
@@ -939,8 +949,10 @@ def main():
                      "pointed_url": pointed_url}
         print("FAKE-MODE on: backend inferenceUrl -> %s (live was %s)"
               % (pointed_url, live_url), flush=True)
+        flip_eligible = False  # set by _run_journeys_and_finish; the finally
+                               # must not flip if that call crashed
         try:
-            verdict_all = _run_journeys_and_finish(
+            verdict_all, flip_eligible = _run_journeys_and_finish(
                 args, journeys, run_dir, ts, results,
                 fake_info=fake_info, advisory=args.advisory, health=health)
         finally:
@@ -978,10 +990,21 @@ def main():
                 meta["fake_restore"] = restore
                 with open(meta_path, "w") as fh:
                     json.dump(meta, fh, indent=2)
-                # D1 (fix4): the restore grade is a CONSUMER, not a bystander.
-                # A fake run whose restore failed is RED, blocks claims, and
-                # must NOT own `latest` — folded into the verdict + exit
-                # code AFTER the restore grades (the restore is LAST).
+                # D1 (fix4): the `latest` flip is GRADED — it happens only
+                # here, AFTER the A2 restore grades (the restore is LAST).
+                # A failed restore therefore NEVER owns `latest`: the run
+                # is folded to RED-RESTORE-FAILED, red_blocks_claims=true,
+                # exit 1, and the previous `latest` (or none) stands.
+                if restore_ok and flip_eligible:
+                    commit_latest_flip(run_dir)
+                    print("latest -> this run (A2 restore graded OK — the "
+                          "flip runs AFTER the restore, D1)", flush=True)
+                elif restore_ok:
+                    pass  # not flip-eligible (advisory / non-claim run)
+                # D1 (fix4): the restore grade is a CONSUMER, not a
+                # bystander. A fake run whose restore failed is RED, blocks
+                # claims, and must NOT own `latest` — folded into the
+                # verdict + exit code AFTER the restore grades.
                 if not restore_ok:
                     meta, latest_note = downgrade_restore_failure(
                         run_dir, meta, restore)
@@ -991,7 +1014,7 @@ def main():
                           % (verdict_all, latest_note or "`latest` untouched"),
                           file=sys.stderr)
     else:
-        verdict_all = _run_journeys_and_finish(
+        verdict_all, _ = _run_journeys_and_finish(
             args, journeys, run_dir, ts, results,
             fake_info=None, advisory=args.advisory, health=health)
     return 0 if verdict_all == "ALL-GREEN" else 1

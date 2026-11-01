@@ -303,7 +303,8 @@ def main():
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
         results.append(("GATE D1: fake run with FAILED restore BLOCKS (gate re-derives restore_ok)",
-                        p.returncode == 1 and "restore FAILED" in p.stdout,
+                        p.returncode == 1 and "BLOCKER" in p.stdout
+                        and "FAILED" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # D1 case B (fix4): a TAMPERED meta — verdict ALL-GREEN +
         # red_blocks_claims false but the graded restore record says the
@@ -317,18 +318,87 @@ def main():
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
         results.append(("GATE D1: tampered verdict over a FAILED restore STILL BLOCKS",
-                        p.returncode == 1 and "restore FAILED" in p.stdout,
+                        p.returncode == 1 and "BLOCKER" in p.stdout
+                        and "FAILED" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D1 case C (fix4): the GRADED FLIP means a failed restore never
+        # owns `latest` — so the gate must catch the poisoned state from
+        # the TRAIL itself: `latest` points at the older GREEN run, the
+        # NEWER run's restore record failed.
+        ok_dir = os.path.join(td, "20260101T000001Z")
+        os.makedirs(ok_dir)
+        with open(os.path.join(ok_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_restore=dict(ok_restore)), fh)
+        os.remove(os.path.join(td, "latest"))
+        os.symlink(ok_dir, os.path.join(td, "latest"))
+        fail2_dir = os.path.join(td, "20260101T000002Z")  # NEWER, restore failed
+        os.makedirs(fail2_dir)
+        with open(os.path.join(fail2_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_restore=dict(fail_restore)), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D1: a FAILED restore in the trail BLOCKS even when `latest` targets the older green run",
+                        p.returncode == 1 and "BLOCKER" in p.stdout
+                        and "restore" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D1 case D (fix4): the trail MOVES ON — a newer run with a
+        # SUCCESSFUL restore supersedes the older failed record; the gate
+        # clears again (no permanent trip-wire).
+        with open(os.path.join(fail2_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_restore=dict(ok_restore)), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D1: a newer ok-restore run supersedes the older failed record (gate clears again)",
+                        p.returncode == 0,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # A3: an advisory latest (should be unreachable via the driver — it
         # never flips latest — but the gate blocks if one lands there).
-        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump(dict(fake_meta, verdict="RED-ADVISORY",
+        # Point `latest` at the advisory run explicitly (D1-C above moved
+        # the link to ok_dir).
+        adv_dir = os.path.join(td, "20260101T000003Z")
+        os.makedirs(adv_dir)
+        with open(os.path.join(adv_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN-ADVISORY",
                            verdicts=full_green, advisory=True), fh)
+        os.remove(os.path.join(td, "latest"))
+        os.symlink(adv_dir, os.path.join(td, "latest"))
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
         results.append(("GATE A3: an advisory latest BLOCKS",
                         p.returncode == 1 and "ADVISORY" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D1 case E (fix4): the FRESH-ROOT shape — a failed-restore run
+        # with NO `latest` at all (the first fake run on a new receipts
+        # root, restore forced failing) must FAIL CLOSED: a missing
+        # `latest` is "no verdict", not "green" — and the newest restore
+        # record in the trail graded FAILED. (Pre-scan, this shape
+        # printed "GATE-VERDICT green (never-ran)" over a poisoned
+        # backend: the fail-open D1 exists to kill.)
+        fresh_td = tempfile.mkdtemp(prefix="sc-freshroot-")
+        try:
+            fr_dir = os.path.join(fresh_td, "20260101T000003Z")
+            os.makedirs(fr_dir)
+            with open(os.path.join(fr_dir, "run-meta.json"), "w") as fh:
+                json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                               verdicts=full_green,
+                               fake_restore=dict(fail_restore)), fh)
+            env_fresh = dict(os.environ, CL_RECEIPTS=fresh_td)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                               capture_output=True, text=True, env=env_fresh)
+            results.append(("GATE D1: a fresh root with ONLY a failed-restore run FAILS CLOSED (no `latest` is not green)",
+                            p.returncode == 1 and "BLOCKER" in p.stdout
+                            and "restore" in p.stdout.lower(),
+                            ["rc=%d out=%s" % (p.returncode,
+                                               p.stdout.strip()[:160])]))
+        finally:
+            import shutil
+            shutil.rmtree(fresh_td, ignore_errors=True)
 
     # ---- (4) A2: the model-layer fake restore is GRADED, not promised ----
     # A leaked fake pointer (restored != live) must grade FAILED; an exact

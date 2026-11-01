@@ -40,7 +40,74 @@ def app_base_is_trunk(u):
     return _hostport(u) in TRUNK_PORTS
 
 
+def newest_restore_record(root):
+    """D1 (fix4): the NEWEST run in `root` that carries an A2 restore
+    record (run-meta.json's fake_restore or top-level restore_ok, or the
+    fake-restore.json sidecar — either one). The graded flip means a
+    failed restore never OWNS `latest`, so the poisoned state (the shared
+    :3093 backend may still point at the just-killed fake) must be caught
+    by the run trail itself — and the NEWEST restore record is the newest
+    known state of the shared backend. A newer run (successful restore, or
+    a non-fake run that proves the backend answered) supersedes an older
+    failed record: once the trail moves on past the failure, the gate
+    clears again. Returns (name, dir, restore_ok) for the newest record,
+    else None."""
+    newest = None
+    try:
+        entries = os.listdir(root)
+    except OSError:
+        return None
+    for name in entries:
+        if name == "latest" or name == "latest.new":
+            continue
+        d = os.path.join(root, name)
+        if not os.path.isdir(d):
+            continue
+        ok = None
+        for fn in ("run-meta.json", "fake-restore.json"):
+            p = os.path.join(d, fn)
+            if not os.path.isfile(p):
+                continue
+            try:
+                with open(p) as fh:
+                    j = json.load(fh)
+            except Exception:
+                continue
+            if not isinstance(j, dict):
+                continue
+            fr = j.get("fake_restore")
+            if isinstance(fr, dict) and "restore_ok" in fr:
+                ok = bool(fr.get("restore_ok"))
+                break
+            if "restore_ok" in j:
+                ok = bool(j.get("restore_ok"))
+                break
+        if ok is not None:
+            if newest is None or name > newest[0]:
+                newest = (name, d, ok)
+    return newest
+
+
 def main():
+    # D1 (fix4): the poisoned-backend check comes FIRST. A failed A2
+    # restore never owns `latest` (the flip is graded — the driver only
+    # flips after the restore grades OK), so `latest` alone can no longer
+    # reveal that the shared :3093 backend may still point at the
+    # just-killed fake. The gate scans the run trail for the NEWEST
+    # restore record: if it graded FAILED, the gate is BLOCKED until the
+    # trail moves past the failure (a newer run — with a successful
+    # restore, or a non-fake run that proves the backend answered —
+    # supersedes it) or the record is re-graded after a manual restore.
+    rr = newest_restore_record(RECEIPTS_ROOT)
+    if rr is not None and not rr[2]:
+        print("BLOCKER: newest A2 restore record FAILED (run %s; "
+              "fake_restore.restore_ok=False) — the shared :3093 backend "
+              "may still point at the (now-dead) fake. MANUAL restore "
+              "required, then re-run or re-grade (D1/A2: the restore "
+              "grade gates the tick; a failed restore never owns `latest`, "
+              "so the trail itself is checked)" % rr[0])
+        print("GATE-VERDICT blocking")
+        return 1
     link = os.path.join(RECEIPTS_ROOT, "latest")
     if not os.path.exists(link):
         print("GATE: no trunk-journeys run yet at %s — no verdict, not blocking"
