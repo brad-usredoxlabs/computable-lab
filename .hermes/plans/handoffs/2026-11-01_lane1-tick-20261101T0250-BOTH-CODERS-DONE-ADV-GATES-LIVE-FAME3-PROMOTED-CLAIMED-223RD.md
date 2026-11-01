@@ -103,3 +103,32 @@
   wt/fame-2-lane1-l1t0200 @12280925 (awaiting gate), wt/fame-3-lane1-l1t0245 @79e2235b (queued).
 - :3001/:5174 untouched.
 223RD-END
+
+## Addendum at 03:06 (-0500), pre-exit — GATES RETURNED: BOTH VERDICT: fix
+- adv-fame1 rc=0 02:49:42 VERDICT: fix — 4 MAJOR + 5 MINOR (D1 inert ui decomposition
+  [properties: not forwardable — use fields:/items:]; D2 tautological test — assert
+  projectRecord output; D3 HARDCODED status literals in GcSectionChrome.tsx:357/416
+  [forbidden class — declare qualified-ness in data]; D4 rule-file-missing masked as
+  member-unreadable + unexercised degenerate arm; D5 code-duplicated ruleset identity;
+  D6 orchestration in wrong file; D7 false never-throws contract; D8 css scope note;
+  D9 inert readonly claim). Reviewer spot-ran suites green (its own runs in report).
+  FIX-1 CODER DISPATCHED slot-0 03:04:02 (unit fame1-fix1-coder-l1t0257, log
+  coder-FAME1-fix1-slot0-l1t0257.log, prompt prompts/fame1-fix1-l1t0255.txt, same
+  worktree wt/fame-1-lane1-l1t0100, new report fame-1-report-fix1-l1t0255.md, final
+  marker FAME-1-FIX1 DONE <sha>). D1/D9 explicitly bounded: NO loader/projection change
+  (platform => architect), forwardable-keys only.
+- adv-fame2 rc=0 02:47:27 VERDICT: fix — TWO minor, both in the C1 TableView arm:
+  (1) ViewRenderer.tsx:79-81 non-array columns throws / empty-columns blank table (guard
+  Array.isArray && length>0 => inferred-header fallback); (2) test missing the two
+  fallback legs. EVERYTHING ELSE PASSED incl. live peak-table column contract, immutability
+  (successor-only verified via lane-data git), evidence-chain consistency (31/2 actuals,
+  tunes, VSPEC/AOUT ids all re-verified by reviewer). AS-L1T223-1 band question
+  reviewer-endorsed as DATA routing, not code.
+  FIX-1 NOT LAUNCHED — stagger gate (FAME-1 fix1 fresh at 03:04). Prompt READY
+  prompts/fame2-fix1-l1t0257.txt; report path fame-2-report-fix1-l1t0257.md; queue on
+  slot-1 next tick when stagger >=60min or FAME-1 fixer exits.
+- OQ-4 architect unit still ACTIVE (fame3-oq4-arch-l1t0240).
+- FAME-3 coder still gated: FAME-2 merge must precede (frozen-artifact premise).
+- 223RD exits here (soft budget exceeded at ~65 min; nothing else launchable: coder
+  semaphore 1/2 with FAME-2 fix1 stagger-blocked, browser gates gated on merges).
+223RD-ADDENDUM-END
