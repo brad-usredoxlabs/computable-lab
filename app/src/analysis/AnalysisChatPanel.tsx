@@ -26,17 +26,30 @@ import { useWorkstateProposalFlow } from '../shared/ai/useWorkstateProposalFlow'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import type { AiContext } from '../types/aiContext'
 
-export function AnalysisChatPanel() {
+/** FAME-3 W5: the ACTIVE RUN identity threaded into the chat's outgoing
+ * aiContext.surfaceContext (the run page's context discipline, one memo). */
+export interface AnalysisChatPanelActiveRun {
+  recordId: string
+  revisionRefId?: string
+}
+
+export function AnalysisChatPanel({ activeRun }: { activeRun?: AnalysisChatPanelActiveRun } = {}) {
   // The `analysis` surface carries no params (surfaces.yaml:57-62 — an
   // AI-context surface, not deep-linkable), so the context payload is the
-  // surface identity + a stable summary; per-run detail rides the prompt.
+  // surface identity + a stable summary + the ACTIVE RUN identity (W5:
+  // the chat leg cannot resolve a peak into a compound without the run id;
+  // the outgoing spread already exists — useAiChat.ts:572). Per-run detail
+  // rides the prompt.
   const aiContext = useMemo<AiContext>(
     () => ({
       surface: 'analysis',
       summary: 'Analysis work surface — methods (revisions), runs, and rendered outputs.',
-      surfaceContext: {},
+      surfaceContext: {
+        ...(activeRun ? { activeRunId: activeRun.recordId } : {}),
+        ...(activeRun?.revisionRefId ? { activeRevisionRefId: activeRun.revisionRefId } : {}),
+      },
     }),
-    [],
+    [activeRun],
   )
 
   const flow = useWorkstateProposalFlow()
@@ -51,6 +64,17 @@ export function AnalysisChatPanel() {
     // the server emits was silently dropped on this mount.
     onAnalysisProposal: (intent) => {
       void flow.proposeWorkstate('analysis', intent)
+    },
+    // FAME-3 W5: the record-drafting INTENT rides the SAME flow on the
+    // analysis mount — one adapter constant ('record-drafting'), the same
+    // compile→card→accept/reject machinery (the workstate/analysis/
+    // record-drafting pattern at AiTabPanel.tsx:884 copied verbatim).
+    // Before this wire the record_draft_proposal frame the server emits
+    // (QMS7-7 frame handler, useAiChat.ts:709) was surfaced here only as a
+    // NAMED system bubble (the unwired arm) and no compile request was ever
+    // issued — the peak-assignment chat leg was dead at this mount.
+    onRecordDraftProposal: (intent) => {
+      void flow.proposeWorkstate('record-drafting', intent)
     },
     onAgentAction: flow.handleAgentAction,
   })

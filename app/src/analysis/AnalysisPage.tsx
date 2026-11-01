@@ -712,8 +712,14 @@ export function AnalysisPage() {
     <div className="analysis-right" data-testid="analysis-right">
       {/* PB-CH-6 (OQ2 ruling (a)): compact chat column above the artifact
           area — the chat + proposal card stack rides the right pane, matching
-          the run page's chat-right discipline. No new layout machinery. */}
-      <AnalysisChatPanel />
+          the run page's chat-right discipline. No new layout machinery.
+          FAME-3 W5: the ACTIVE RUN identity (recordId + its revisionRef id)
+          is threaded into the chat's outgoing surfaceContext so the record-
+          drafting chat leg can bind a peak to the run the user is looking
+          at (one memo; the panel renders with no run until one is active). */}
+      <AnalysisChatPanel
+        {...(activeRun ? { activeRun: { recordId: activeRun.recordId, ...(activeRun.payload.revisionRef?.id ? { revisionRefId: activeRun.payload.revisionRef.id } : {}) } } : {})}
+      />
       <div className="analysis-right__title">
         <span className="analysis-right__title-text">
           {activeRun?.payload.title ?? (activeRunId ? runs.find((r) => r.recordId === activeRunId)?.payload.title : null) ?? 'Results'}
