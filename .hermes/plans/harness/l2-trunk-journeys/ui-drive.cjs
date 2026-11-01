@@ -319,6 +319,11 @@ function shaShort(s) {
           await card.waitFor({ state: 'visible', timeout: T });
           evidence.answered_card_testid =
             (await card.getAttribute('data-testid')) || 'unknown';
+          // D3: the card's OWN prompt text — the client testid suffix is a
+          // per-render id, NOT the announced clarification id, so the re-ask
+          // detector must key on the prompt text captured HERE.
+          evidence.answered_prompt =
+            ((await card.innerText().catch(() => '')) || '').trim().slice(0, 300);
           const opt = card.locator('ol.chat-log-clarification-options button').first();
           await opt.waitFor({ state: 'visible', timeout: T });
           evidence.clarification_answered = true;
@@ -356,6 +361,24 @@ function shaShort(s) {
           // The answered request's identity (testid suffix = clarification id).
           evidence.answered_request_id =
             String(evidence.answered_card_testid).replace(/^chat-log-request-/, '');
+          // D3 re-ask, DOM arm: any OTHER clarification card still offering
+          // option buttons whose text repeats the ANSWERED prompt — a fresh
+          // card re-asking the same question is the loop the old assertion
+          // could not see (0257123d reviewer evidence).
+          if (evidence.answered_prompt) {
+            const key = evidence.answered_prompt.slice(0, 80);
+            evidence.reask_new_cards = await page.evaluate(({ sel, ansId, k }) => {
+              const cards = Array.from(
+                document.querySelectorAll('[data-testid^="chat-log-request-"]'));
+              return cards.filter((c) =>
+                c.getAttribute('data-testid') !== ('chat-log-request-' + ansId) &&
+                c.querySelector('ol.chat-log-clarification-options button') &&
+                (c.textContent || '').includes(k)).length;
+            }, { sel: logSelector, ansId: evidence.answered_request_id, k: key })
+              .catch(() => 0);
+          } else {
+            evidence.reask_new_cards = 0;
+          }
           break;
         }
         case 'click_accept_proposal': {

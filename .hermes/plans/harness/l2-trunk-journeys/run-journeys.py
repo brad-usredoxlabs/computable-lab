@@ -95,35 +95,42 @@ def check_channel_assertions(body, assertions):
 # ---------------------------------------------------------------------------
 
 def _reask_violations(evidence):
-    """D3: a RE-ASK is a clarification announcement whose prompt equals an
-    ANSWERED request's prompt, announced AFTER the answer rode the wire.
-    The answered request's prompt is recovered from the announcements that
-    preceded the answer (match on the answered clarification id)."""
+    """D3: a RE-ASK is the answered clarification's question appearing AGAIN
+    after the answer. Two arms:
+      (wire) an announcement whose prompt matches the answered card's captured
+        prompt text, announced AFTER the clarificationAnswers request rode;
+      (DOM) evidence.reask_new_cards — fresh cards still offering option
+        buttons whose text repeats the answered prompt.
+    Fails closed: neither arm capturable => violation."""
     anns = evidence.get("clarification_announcements") or []
     answers = evidence.get("answer_events") or []
-    answered_id = evidence.get("answered_request_id")
+    answered_prompt = (evidence.get("answered_prompt") or "").strip()
+    if not answered_prompt:
+        return ["rendered: answer_no_reask declared but the answered card's "
+                "prompt text was not captured — cannot prove no re-ask"]
+    if (evidence.get("reask_new_cards") or 0) > 0:
+        return ["rendered: RED-BY-PRODUCT-DEFECT — %d NEW clarification "
+                "card(s) still offer options repeating the ANSWERED prompt "
+                "%r (D3 loop)" % (evidence["reask_new_cards"],
+                                  answered_prompt[:90])]
     if not answers:
         return ["rendered: answer_no_reask declared but NO clarificationAnswers "
                 "request was captured — cannot prove no re-ask"]
-    if not answered_id:
-        return ["rendered: answer_no_reask declared but the answered "
-                "clarification id was not captured"]
-    answered_prompt = None
-    for a in anns:
-        if a.get("id") == answered_id:
-            answered_prompt = a.get("prompt")
-            break
-    if answered_prompt is None:
-        return ["rendered: the answered clarification %r never appeared in "
-                "the captured announcements — cannot prove no re-ask" % answered_id]
+    # Wire arm: find the announcement(s) that match the answered card's
+    # prompt (the client testid is a per-render id, so match on prompt text).
+    def matches(a_prompt):
+        if not a_prompt:
+            return False
+        ap = a_prompt.strip()
+        return answered_prompt.startswith(ap[:min(60, len(ap))]) or \
+            ap.startswith(answered_prompt[:min(60, len(answered_prompt))])
     answer_t = min(ev.get("captured_at_ms", 0) for ev in answers)
-    reasked = [a for a in anns
-               if a.get("prompt") == answered_prompt
+    reasked = [a for a in anns if matches(a.get("prompt"))
                and a.get("captured_at_ms", 0) > answer_t]
     if reasked:
         return ["rendered: RED-BY-PRODUCT-DEFECT — the answer turn RE-ASKED "
-                "the SAME question (id=%s re-announced after the answer): %r"
-                % (answered_id, answered_prompt[:90])]
+                "the SAME question on the wire (re-announced after the "
+                "answer): %r" % (answered_prompt[:90],)]
     return []
 
 
@@ -343,18 +350,17 @@ def grade_write_proof(journey, ui, api_base):
     writes = [w for w in ui.get("write_request_bodies", [])
               if w.get("method") in ("PUT", "POST")]
     if not proof:
-        own = set()
         seed = journey.get("seed") or {}
-        if "record" in seed:
-            own.add(seed["record"]["recordId"])
-        if journey.get("write_target"):
-            own.add(journey["write_target"])
         # D4's anti-silent-deletion teeth: a write to the SCRATCH COPY (or an
         # explicitly declared write_target) IS the journey's declared write —
         # deleting `write_proof:` from the YAML must go RED, not silent-green.
-        intentional = set(own)
+        intentional = set()
         if "copy_record" in seed:
             intentional.add(seed["copy_record"]["to"])
+        if journey.get("write_target"):
+            intentional.add(journey["write_target"])
+        # the deck pane AUTOSAVES its own event-graph record on every edit —
+        # that PUT is incidental UI plumbing, not the journey's write.
         deck_autosave = {seed["record"]["recordId"]} if "record" in seed else set()
         for w in writes:
             ep = str(w.get("endpoint", ""))
