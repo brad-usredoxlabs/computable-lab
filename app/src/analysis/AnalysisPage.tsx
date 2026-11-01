@@ -21,6 +21,7 @@ import { CompareTraces } from './CompareTraces'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
 import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
 import { classifyCalibrationModel, classifyCalibrationTable, classifyResultView, hasCalibrationPair } from './calibrationModel'
+import { ReanalyzeDoor } from './ReanalyzeDoor'
 import './AnalysisPage.css'
 
 interface RunPayload {
@@ -750,6 +751,24 @@ export function AnalysisPage() {
           onClose={() => setCompareOpen(false)}
         />
       )}
+      {/* FAME-2 fix-run 2: the generalized re-Analyze door (orch ruling: the
+          shipped calibration recalc door beyond calibration). Capability-gated
+          on the ACTIVE RUN's own declared data (reanalyzeCapable — succeeded +
+          frozen inputs present + the run's revision declares a parameterSchema;
+          NEVER an artifact-kind branch): the door renders itself only when the
+          gate passes and stays invisible otherwise (the page passes the raw
+          payload — the door's authority re-checks). Prefilled from the run's
+          frozen parameters; the submit carries the SAME frozen inputs verbatim
+          + the edited parameters and lands on the new run through the SAME
+          recalc-completion seam (onRecalcDone -> selectRun + refresh) the
+          calibration footer rides. */}
+      {activeRun !== null ? (
+        <ReanalyzeDoor
+          runPayload={activeRun.payload}
+          revisions={revisions.map((r) => ({ recordId: r.recordId, payload: r.payload as unknown as Record<string, unknown> }))}
+          onDone={onRecalcDone}
+        />
+      ) : null}
       {activeProcessed ? (
         rendered.length > 0 ? (
           <div className="analysis-right__views">{rendered}</div>
