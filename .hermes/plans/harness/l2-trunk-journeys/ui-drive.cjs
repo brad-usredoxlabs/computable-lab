@@ -40,15 +40,48 @@ function shaShort(s) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 
   // ---- attestation bookkeeping ------------------------------------------
-  // D1 fix: the counter is REAL, not a literal. The route-registration APIs
-  // are wrapped on the live objects BEFORE any other code can run —
-  // context.route / context.routeFromHAR first (before newPage, so even an
-  // injection placed before page creation is counted), then page.route /
-  // page.routeFromHAR. ANY call through ANY receiver increments
-  // route_handlers_used. The python driver fails on nonzero and
-  // test-channel-selfcheck.py proves the counter increments for a
-  // context.route injection on a throwaway copy.
+  // D1 fix + N4 (prototype-identity snapshot): the counter is REAL, not a
+  // literal. The route-registration APIs are wrapped on the live objects
+  // BEFORE any other code can run — context.route / context.routeFromHAR /
+  // setRequestInterception first (before newPage), then page.route /
+  // page.routeFromHAR. What the tripwires ACTUALLY catch (stated honestly,
+  // N4 comment-honesty — the pre-N4 wording here overstated it):
+  //   * a call that goes THROUGH the wrapped own property on either receiver
+  //     (any registration placed after the wrap lands, incl. before page
+  //     creation) -> route_handlers_used increments;
+  //   * a prototype-chain detour that DELETES the own-property wrapper and
+  //     then calls the ORIGINAL resolved off the prototype -> the counter
+  //     MISSES it (the original never runs our code), BUT the identity
+  //     snapshot below re-checks at receipt time that every resolved method
+  //     is still OUR recorded wrapper, so route_api_wrapped flips false and
+  //     the python driver grades the journey RED (run-journeys.py
+  //     attestation_violations). The snapshot bites the DELETE variant ONLY.
+  // Residual gaps, named: (d) the ITEM-CITED no-delete shape —
+  // `Object.getPrototypeOf(context).route.call(...)` with the own wrapper
+  // left INTACT — is an UNDETECTABLE residual for this tripwire: the own
+  // property still resolves to our wrapper, so `recv[meth] === _wrappers[key]`
+  // stays true and route_api_wrapped stays TRUE while the ORIGINAL runs
+  // (counter 0). No property/identity inspection from node can see that
+  // class; the construction ban (ui-drive never CALLS route APIs) + the
+  // real-transport ai_request_bodies receipt are the defense for it. The
+  // self-check pins this limitation (route_api_wrapped must stay true for
+  // the no-delete shape) so the overclaim cannot silently return.
+  // (a) the identity check compares against the
+  // WRAPPER IDENTITY, not just the _clInterceptionProbe marker, so a forged
+  // marker on a foreign function also fails the check; (b) nothing here can
+  // catch interception performed OUTSIDE these objects (CDP-level
+  // Fetch.enable from injected page code is not observable from node);
+  // (c) the snapshot grades at receipt WRITE time — a wrapper restored to
+  // ours between the detour and the write hides the counter miss only if
+  // the detour also left route_handlers_used consistent, which a real
+  // handler cannot do (the handler itself was registered off-protocol).
   const attest = { route_handlers_used: 0, intercepted_paths: [] };
+  // N4: the recorded wrapper identities + the live receivers they must still
+  // resolve to at receipt time (own property gone => prototype lookup => the
+  // ORIGINAL => identity mismatch => route_api_wrapped false).
+  const _wrappers = {};
+  const _liveReceivers = { context: null, page: null };
+  _liveReceivers.context = context;
   const countRoute = (label, target) => {
     for (const meth of ['route', 'routeFromHAR']) {
       const orig = target[meth];
@@ -60,6 +93,7 @@ function shaShort(s) {
       };
       wrapper._clInterceptionProbe = true;
       target[meth] = wrapper;
+      _wrappers[label + '.' + meth] = wrapper;
     }
   };
   // We do not call any of these — we only wrap them so an injected handler
@@ -74,12 +108,25 @@ function shaShort(s) {
     };
     sriWrapper._clInterceptionProbe = true;
     context.setRequestInterception = sriWrapper;
+    _wrappers['context.setRequestInterception'] = sriWrapper;
   }
   const page = await context.newPage();
+  _liveReceivers.page = page;
   countRoute('page', page);
-  attest.route_api_wrapped = (
-    page.route._clInterceptionProbe === true &&
-    context.route._clInterceptionProbe === true);
+  // N4 identity snapshot: true ONLY while EVERY wrapped key still resolves
+  // (own property first, prototype chain as fallback) to its recorded
+  // wrapper. Evaluated at wrap time AND re-evaluated at receipt write time.
+  const routeApiWrappedNow = () => {
+    for (const key of Object.keys(_wrappers)) {
+      const dot = key.indexOf('.');
+      const label = key.slice(0, dot);
+      const meth = key.slice(dot + 1);
+      const recv = _liveReceivers[label];
+      if (!recv || recv[meth] !== _wrappers[key]) return false;
+    }
+    return Object.keys(_wrappers).length > 0;
+  };
+  attest.route_api_wrapped = routeApiWrappedNow();
 
   const aiBodies = [];
   const writeBodies = [];
@@ -445,7 +492,11 @@ function shaShort(s) {
     // instrumentation was live in this exact process.
     route_handlers_used: attest.route_handlers_used,
     attestations: {
-      ...attest,
+      // N4: re-evaluate the identity snapshot AT RECEIPT WRITE TIME — a
+      // prototype-chain detour (own wrapper deleted, original called off
+      // the prototype) makes the resolved method != the recorded wrapper,
+      // flipping route_api_wrapped false even though the counter missed.
+      ...(attest, { route_api_wrapped: routeApiWrappedNow() }),
       transport: 'real fetch through vite proxy to the lane backend; zero route handlers registered',
       selection_affordance: journey.selection_affordance || null,
     },

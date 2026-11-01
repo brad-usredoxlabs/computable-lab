@@ -7,8 +7,10 @@ The lane tick runs this BEFORE claiming any new item:
     exit 0 = trunk journeys GREEN (or no run yet — never gate a virgin lane)
     exit 1 = at least one journey RED, OR the latest run is not a fake-mode
              run (D2: hard set J1+J2(fake)+J3), OR its A2 restore failed
-             (D1: fake_restore.restore_ok), OR its verdicts table is
-             incomplete, OR its app_base is non-trunk, OR it is advisory —
+             (D1: fake_restore.restore_ok), OR its verdicts table does not
+             EXACTLY match the declared journeys (N5: superset OR missing
+             both block, naming the diff), OR its app_base is non-trunk, OR
+             it is advisory —
              the ready set is EMPTY this tick and the printed BLOCKER line
              names the cause
     exit 2 = the receipt root itself is unreadable (env error, fail closed
@@ -144,10 +146,30 @@ def main():
         print("GATE: journeys/ unreadable (%s) — FAIL CLOSED" % exc)
         print("GATE-VERDICT env-error")
         return 2
-    missing = sorted(declared - set(verdicts))
-    if missing:
-        print("BLOCKER: latest verdicts table is INCOMPLETE — journeys %s never "
-              "ran (D2: an incomplete run may not clear the gate)" % missing)
+    # N5: EXACT-SET equality between declared journeys and the verdicts
+    # table. Pre-N5 only INCOMPLETENESS blocked (missing = declared -
+    # verdicts), so a SUPERSET table — an extra bogus journey declared green
+    # by a tampered run-meta — cleared the gate. Superset OR missing both
+    # BLOCK, naming the diff in each direction.
+    declared_minus_verdicts = sorted(declared - set(verdicts))
+    verdicts_minus_declared = sorted(set(verdicts) - declared)
+    if declared_minus_verdicts or verdicts_minus_declared:
+        if declared_minus_verdicts and verdicts_minus_declared:
+            print("BLOCKER: latest verdicts table does not EXACTLY match the "
+                  "declared journeys — MISSING %s never ran AND UNDECLARED %s "
+                  "appear in the table (N5: exact-set equality; a superset "
+                  "table is tamper evidence, an incomplete one cannot prove "
+                  "coverage)" % (declared_minus_verdicts,
+                                 verdicts_minus_declared))
+        elif declared_minus_verdicts:
+            print("BLOCKER: latest verdicts table is INCOMPLETE — journeys %s "
+                  "never ran (D2/N5: an incomplete run may not clear the "
+                  "gate)" % declared_minus_verdicts)
+        else:
+            print("BLOCKER: latest verdicts table is a SUPERSET of the "
+                  "declared journeys — UNDECLARED %s appear in the table "
+                  "(N5: exact-set equality; extra verdict keys are tamper "
+                  "evidence, not coverage)" % verdicts_minus_declared)
         print("GATE-VERDICT blocking")
         return 1
     # N1: the app_base must be the LITERAL trunk FE (same set the driver uses).

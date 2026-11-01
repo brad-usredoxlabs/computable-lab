@@ -475,6 +475,41 @@ def teardown_journey(journey, api_base):
     return True
 
 
+# ---------------------------------------------------------------------------
+# Interception-ban ATTESTATION grading (N4) — PURE over the ui receipt dict.
+# The construction ban (ui-drive never CALLS route APIs) has two runtime
+# tripwires: the counter (route_handlers_used) and the wrapper-identity
+# snapshot (attestations.route_api_wrapped, re-evaluated at receipt write).
+# Pre-N4 the driver read only the counter — the DELETE-variant prototype-chain
+# detour misses it, so the attestation is the remaining tripwire and MUST be
+# enforced: missing/false = RED, never silently green. Scope stated honestly:
+# the snapshot catches only the delete/replace variant; a no-delete
+# prototype-chain call (own wrapper intact) leaves this flag TRUE and is a
+# named undetectable residual defended by the construction ban + the
+# real-transport receipt (ui-drive.cjs comment block, gap (d)). Pure so the
+# self-check drives THE SAME FUNCTION the driver runs (no helper divergence).
+# ---------------------------------------------------------------------------
+
+def attestation_violations(ui):
+    violations = []
+    if ui.get("route_handlers_used", 0) != 0:
+        violations.append("BANNED: %d route handler(s) touched /api/ai/**"
+                          % ui["route_handlers_used"])
+    att = ui.get("attestations") or {}
+    if att.get("route_api_wrapped") is not True:
+        violations.append(
+            "ATTESTATION-RED: attestations.route_api_wrapped is %r (want "
+            "true) — the route-registration wrappers were NOT verifiably "
+            "live at receipt time (missing = pre-N4 receipt shape; false = "
+            "the own-property wrapper was deleted or swapped so the "
+            "prototype-chain resolution no longer lands on it — the delete/"
+            "replace variant only; a no-delete prototype-chain call leaves "
+            "this flag true and is a NAMED UNDETECTABLE residual, see the "
+            "ui-drive.cjs comment block)"
+            % (att.get("route_api_wrapped"),))
+    return violations
+
+
 def grade_write_proof(journey, ui, api_base):
     """D4 fix: the write evidence LANDS IN THE RECEIPT and absence is RED.
 
@@ -625,9 +660,10 @@ def run_journey(journey, run_dir, app_base, api_base):
     if ui.get("failure"):
         violations.append("ui: %s" % ui["failure"])
     # Interception-free guarantee (belt AND construction): ui-drive declares
-    # zero route handlers; the receipt records that attestation.
-    if ui.get("route_handlers_used", 0) != 0:
-        violations.append("BANNED: %d route handler(s) touched /api/ai/**" % ui["route_handlers_used"])
+    # zero route handlers; the receipt records the counter AND the
+    # wrapper-identity attestation. N4: BOTH are graded here (missing/false
+    # route_api_wrapped = RED — never silently green).
+    violations.extend(attestation_violations(ui))
 
     bodies = ui.get("ai_request_bodies", [])
     expected_endpoints = journey.get("expected_wire", {}).get("endpoints", [])

@@ -133,24 +133,49 @@ def main():
                         ["%s vs %s" % (d1_8, d2_8)]))
 
     # ---- (2) interception gate: a receipt with route handlers is BANNED ---
-    # Reproduce the driver's belt-check exactly (the same expression the
-    # driver runs over ui receipts).
-    def banned_check(ui):
-        return (ui.get("route_handlers_used", 0) != 0)
+    # Drives THE SAME function the driver runs (run-journeys.py
+    # attestation_violations) — no local copy that could diverge.
     results.append(("FAIL case (ui receipt route_handlers_used=1)",
-                    banned_check({"route_handlers_used": 1}), []))
-    results.append(("PASS case (ui receipt route_handlers_used=0)",
-                    not banned_check({"route_handlers_used": 0}), []))
+                    any("BANNED" in v for v in
+                        rj.attestation_violations({"route_handlers_used": 1})), []))
+    results.append(("PASS case (ui receipt route_handlers_used=0, wrapped=true)",
+                    not rj.attestation_violations(
+                        {"route_handlers_used": 0,
+                         "attestations": {"route_api_wrapped": True}}), []))
+    # ---- (2a2) N4: the ATTESTATION arm — missing/false = journey RED -----
+    # The prototype-identity tripwire: route_api_wrapped false (wrapper
+    # identities detoured) or missing (pre-N4 receipt shape) must name the
+    # violation even when the counter reads a clean 0.
+    v_false = rj.attestation_violations(
+        {"route_handlers_used": 0, "attestations": {"route_api_wrapped": False}})
+    results.append(("N4 FAIL case (route_api_wrapped=false, counter clean -> RED)",
+                    any("route_api_wrapped" in v for v in v_false), v_false))
+    v_missing = rj.attestation_violations({"route_handlers_used": 0})
+    results.append(("N4 FAIL case (attestations missing entirely -> RED)",
+                    any("route_api_wrapped" in v for v in v_missing), v_missing))
+    v_nottrue = rj.attestation_violations(
+        {"route_handlers_used": 0, "attestations": {"route_api_wrapped": "yes"}})
+    results.append(("N4 FAIL case (route_api_wrapped truthy-but-not-true -> RED)",
+                    any("route_api_wrapped" in v for v in v_nottrue), v_nottrue))
 
     # ---- (2b) CONSTRUCTION: ui-drive.cjs carries zero interception CALLS --
     # D1 widened: ANY receiver (`*.route(`, `*.routeFromHAR(`,
     # setRequestInterception) and ANY fulfilment method on ANY receiver
     # (`.fulfill(`, `.abort(`, `.fail(`). Comments/doc lines are stripped.
+    # N5: the setDefaultNavigation arm was DEAD — `setDefaultNavigation\s*\(`
+    # can never match the real Playwright API name
+    # `setDefaultNavigationTimeout(` (the literal `Timeout` sits before the
+    # paren). Fixed to the REAL name so a text scan can see that call. NOTE
+    # (honest residual): ui-drive wraps only route/routeFromHAR/
+    # setRequestInterception today — nothing counter-wraps
+    # setDefaultNavigationTimeout — so this arm closes the TEXT-SCAN hole
+    # only; a real setDefaultNavigationTimeout call would be caught here at
+    # construction time, not by the runtime counter.
     src = open(os.path.join(HERE, "ui-drive.cjs")).read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith(("//", "*", "/*")))
     hits = re.findall(
-        r"(?:\w+\.)?(?:route|routeFromHAR|setDefaultNavigation|setRequestInterception)\s*\("
+        r"(?:\w+\.)?(?:route|routeFromHAR|setDefaultNavigationTimeout|setRequestInterception)\s*\("
         r"|\.(?:fulfill|abort|fail)\s*\(", code)
     # The D1 counter WRAPS the registration methods by PROPERTY ASSIGNMENT
     # (target[meth] = wrapper) — it never CALLS one. Whitelist exactly the
@@ -208,10 +233,132 @@ def main():
             used, wrapped = -1, None
             rec = {"read_error": str(exc), "stderr": p.stderr[-400:]}
         results.append(("INJECTION (context.route on a throwaway copy goes RED)",
-                        used >= 1 and wrapped is True,
+                        used >= 1 and wrapped is True
+                        and any("route_api_wrapped" in v
+                                for v in rj.attestation_violations(rec)) is False,
                         ["route_handlers_used=%r wrapped=%r rc=%d" % (used, wrapped, p.returncode)]))
         import shutil
         shutil.rmtree(td2, ignore_errors=True)
+
+    # ---- (2d) N4 LIVE INJECTION: PROTOTYPE EXTRACTION => attestation RED --
+    # advc-c2's bypass shape on a throwaway copy: DELETE the own-property
+    # wrapper, then call the ORIGINAL resolved off the prototype chain
+    # (Object.getPrototypeOf(context).route.call(context, ...)). The counter
+    # misses it by construction (the original never runs our wrapper code) —
+    # the identity snapshot is the remaining tripwire, so post-fix the
+    # receipt MUST carry route_api_wrapped=false and the driver's
+    # attestation_violations() MUST name it. Pre-fix this injection produced
+    # route_handlers_used=0 AND route_api_wrapped=true (silent green — the
+    # N4 defect).
+    inj_p = src
+    anchor_p = "  await page.goto(appBase + step.path"
+    if anchor_p not in inj_p:
+        results.append(("N4 INJECTION (prototype-extraction flips the attestation)",
+                        False, ["anchor 'await page.goto(appBase + step.path' "
+                                "not found — the prototype-extraction case "
+                                "must be kept wired"]))
+    else:
+        inj_p = inj_p.replace(
+            anchor_p,
+            "  delete context.route;\n"
+            "  const _proto = Object.getPrototypeOf(context);\n"
+            "  await _proto.route.call(context, '**/api/ai/**', (r) => r.fulfill("
+            "{status: 200, contentType: 'application/json', body: '{}'}));\n"
+            "  await page.goto(appBase + step.path", 1)
+        td2p = tempfile.mkdtemp(prefix="sc-inject-proto-")
+        probe_p = os.path.join(td2p, "ui-drive-proto.cjs")
+        with open(probe_p, "w") as fh:
+            fh.write(inj_p)
+        jpath_p = os.path.join(td2p, "INJP.yaml")
+        with open(jpath_p, "w") as fh:
+            fh.write("id: INJP\ntimeout_s: 20\nlog_selector: 'body'\nsteps:\n"
+                     "  - step: goto\n    path: /deck/NOPE\n")
+        opath_p = os.path.join(td2p, "INJP-ui.json")
+        root_nm_p = os.path.join(REPO_ROOT, "node_modules")
+        if not os.path.isdir(os.path.join(root_nm_p, "js-yaml")):
+            root_nm_p = "/mnt/vast/home/brad/git/cl-integration-2/node_modules"
+        os.symlink(root_nm_p, os.path.join(td2p, "node_modules"))
+        p = subprocess.run(["node", probe_p, "--journey", jpath_p,
+                            "--out", opath_p,
+                            "--app-base", "http://127.0.0.1:9"],
+                           cwd=APP_DIR, capture_output=True, text=True,
+                           timeout=180)
+        try:
+            rec_p = json.load(open(opath_p))
+            used_p = rec_p.get("route_handlers_used", -1)
+            wrapped_p = (rec_p.get("attestations") or {}).get("route_api_wrapped")
+            att_viol_p = rj.attestation_violations(rec_p)
+        except Exception as exc:
+            rec_p, used_p, wrapped_p, att_viol_p = {}, -1, None, []
+            rec_p = {"read_error": str(exc), "stderr": p.stderr[-400:]}
+        results.append(("N4 INJECTION (prototype-extraction flips the attestation "
+                        "+ driver names the violation)",
+                        wrapped_p is False
+                        and any("route_api_wrapped" in v for v in att_viol_p),
+                        ["route_handlers_used=%r wrapped=%r rc=%d viol=%r"
+                         % (used_p, wrapped_p, p.returncode, att_viol_p[:1])]))
+        import shutil
+        shutil.rmtree(td2p, ignore_errors=True)
+
+    # ---- (2e) N4 LIMITATION PIN: NO-DELETE PROTOTYPE CALL STAYS GREEN -----
+    # advc cycle-1 DEFECT 1: the ITEM-CITED bypass shape is
+    # `Object.getPrototypeOf(context).route.call(...)` with NO deletion of
+    # the own-property wrapper. The identity snapshot CANNOT see it (own
+    # property intact => recv[meth] === _wrappers[key] stays true) and the
+    # counter misses it (the original runs). This arm PINS THAT LIMITATION
+    # HONESTLY: it asserts the known residual (route_api_wrapped stays True,
+    # counter 0 = silent green for THIS tripwire), labelled as a limitation
+    # pin, NOT a pass claim — the defense for that class is the construction
+    # ban + the real-transport ai_request_bodies receipt. If anyone ever
+    # "fixes" the snapshot to bite this shape, this arm fails LOUDLY and the
+    # comment/report must be updated then. PINGS THE GAP SO THE OVERCLAIM
+    # CANNOT SILENTLY RETURN (spec N4 arm 3).
+    inj_l = src
+    anchor_l = "  await page.goto(appBase + step.path"
+    if anchor_l not in inj_l:
+        results.append(("N4 LIMITATION PIN (no-delete prototype call stays TRUE "
+                        "= known residual, not a detection claim)",
+                        False, ["anchor 'await page.goto(appBase + step.path' "
+                                "not found — the limitation-pin case must be "
+                                "kept wired"]))
+    else:
+        inj_l = inj_l.replace(
+            anchor_l,
+            "  const _protoL = Object.getPrototypeOf(context);\n"
+            "  await _protoL.route.call(context, '**/api/ai/**', (r) => r.fulfill("
+            "{status: 200, contentType: 'application/json', body: '{}'}));\n"
+            "  await page.goto(appBase + step.path", 1)
+        td2l = tempfile.mkdtemp(prefix="sc-inject-nodel-")
+        probe_l = os.path.join(td2l, "ui-drive-nodel.cjs")
+        with open(probe_l, "w") as fh:
+            fh.write(inj_l)
+        jpath_l = os.path.join(td2l, "INJL.yaml")
+        with open(jpath_l, "w") as fh:
+            fh.write("id: INJL\ntimeout_s: 20\nlog_selector: 'body'\nsteps:\n"
+                     "  - step: goto\n    path: /deck/NOPE\n")
+        opath_l = os.path.join(td2l, "INJL-ui.json")
+        root_nm_l = os.path.join(REPO_ROOT, "node_modules")
+        if not os.path.isdir(os.path.join(root_nm_l, "js-yaml")):
+            root_nm_l = "/mnt/vast/home/brad/git/cl-integration-2/node_modules"
+        os.symlink(root_nm_l, os.path.join(td2l, "node_modules"))
+        p = subprocess.run(["node", probe_l, "--journey", jpath_l,
+                            "--out", opath_l,
+                            "--app-base", "http://127.0.0.1:9"],
+                           cwd=APP_DIR, capture_output=True, text=True,
+                           timeout=180)
+        try:
+            rec_l = json.load(open(opath_l))
+            used_l = rec_l.get("route_handlers_used", -1)
+            wrapped_l = (rec_l.get("attestations") or {}).get("route_api_wrapped")
+        except Exception as exc:
+            used_l, wrapped_l = -1, None
+        results.append(("N4 LIMITATION PIN (no-delete prototype call stays TRUE "
+                        "= known residual, not a detection claim)",
+                        used_l == 0 and wrapped_l is True,
+                        ["route_handlers_used=%r wrapped=%r rc=%d"
+                         % (used_l, wrapped_l, p.returncode)]))
+        import shutil
+        shutil.rmtree(td2l, ignore_errors=True)
 
     # ---- (3) the tick gate helper: red blocks, green passes ---------------
     # D2 (fix4): a clearing verdict requires fake_mode (hard set
@@ -259,6 +406,41 @@ def main():
                            capture_output=True, text=True, env=env)
         results.append(("GATE D2: incomplete verdicts table (J1-only) BLOCKS",
                         p.returncode == 1 and "INCOMPLETE" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # N5 case A: a SUPERSET verdicts table — the exact greens PLUS a
+        # bogus extra journey (a tampered run-meta's shape) — must BLOCK
+        # and name the undeclared key (pre-N5 the missing-only check waved
+        # it through: RED capture in the report).
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=dict(full_green, **{"JBOGUS": "green"})), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE N5: SUPERSET verdicts table (extra JBOGUS) BLOCKS, names the diff",
+                        p.returncode == 1 and "SUPERSET" in p.stdout
+                        and "JBOGUS" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # N5 case B: BOTH directions wrong (J3 missing AND JBOGUS extra) —
+        # the diff must name both sides.
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts={"J1": "green", "J2": "green",
+                                     "JBOGUS": "green"}), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE N5: mixed diff (J3 missing + JBOGUS extra) BLOCKS, names BOTH",
+                        p.returncode == 1 and "EXACTLY" in p.stdout
+                        and "JBOGUS" in p.stdout and "J3" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # N5 regression: the EXACT declared set still greens (the check above
+        # re-greens full_green only if this holds; keep an explicit pin).
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE N5: EXACT declared set (J1/J2/J3) still greens",
+                        p.returncode == 0,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # D2 case B: complete greens against a SCRATCH frontend => blocks
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
