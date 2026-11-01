@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 
 export const REVISION_SCHEMA = 'https://computable-lab.com/schema/computable-lab/record-revision.schema.yaml';
@@ -36,13 +37,35 @@ export function controlledContent(payload: unknown): string {
 export function revisionRef(recordId: string): RevisionRef { return { kind: 'record', type: 'record-revision', id: recordId }; }
 export function token(record: RecordEnvelope): string | undefined { return record.meta?.contentSha ?? record.meta?.commitSha; }
 const locks = new WeakMap<RecordStore, Map<string, Promise<unknown>>>();
+/** FAME-3 W6: the record-edit onAccept hook applies its single governed
+ *  store.update INSIDE accept's lockSources region over the same target —
+ *  a re-acquire of the `write:<target>` key from the same async execution
+ *  context. A plain promise queue is non-reentrant, so that re-acquire
+ *  awaits the outer call that can only finish after the inner one → the
+ *  accept hangs forever (no writes, no error). The ALS slot makes the lock
+ *  REENTRANT for the same execution context: a nested same-key acquire runs
+ *  the inner fn directly (the outer fn already owns the lock; the inner
+ *  update is the work the outer is waiting for). DISTINCT contexts (concurrent
+ *  accepts, a concurrent direct store.update) still serialize through the
+ *  queue exactly as before — behavior-preserving for every existing caller,
+ *  which never re-acquired its own key. */
+const lockContext = new AsyncLocalStorage<Set<string>>();
 export async function withRecordLock<T>(store: RecordStore, id: string, fn: () => Promise<T>): Promise<T> {
-  let queue = locks.get(store);
-  if (!queue) { queue = new Map(); locks.set(store, queue); }
-  const previous = queue.get(id) ?? Promise.resolve();
-  const next = previous.catch(() => {}).then(fn);
-  queue.set(id, next);
-  try { return await next; } finally { if (queue.get(id) === next) queue.delete(id); }
+  const held = lockContext.getStore();
+  if (held?.has(id)) {
+    // Same execution context already owns this key: run the work directly.
+    return await fn();
+  }
+  const mine = held ? new Set(held) : new Set<string>();
+  mine.add(id);
+  return lockContext.run(mine, async () => {
+    let queue = locks.get(store);
+    if (!queue) { queue = new Map(); locks.set(store, queue); }
+    const previous = queue.get(id) ?? Promise.resolve();
+    const next = previous.catch(() => {}).then(fn);
+    queue.set(id, next);
+    try { return await next; } finally { if (queue.get(id) === next) queue.delete(id); }
+  });
 }
 
 export class RecordRevisionService {
