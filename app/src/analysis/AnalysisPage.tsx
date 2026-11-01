@@ -53,6 +53,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** FAME-3 D1 (OQ-4 OPT-A step 7): the schemaId the record-edit guard is keyed
+ * to for peak-assignment edits (config/drafting/record-edit-guards.yaml). The
+ * active run's NAMED edit target is the gc-method record the run's peaks are
+ * assigned to; the guard refuses any other schemaId (EDIT_GUARD_UNDECLARED),
+ * so the derived target must match this. The app's established schema-id
+ * constant pattern (MATERIAL_SCHEMA_ID / RUN_SCHEMA_ID) — a declared $id,
+ * never a kind branch in the interpreter. */
+const GC_METHOD_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/gc-method.schema.yaml'
+
 /** The artifactRefs name-map the page's `rendered` useMemo consumes,
  *  hydrated from a fetched run record's persisted manifest (defect 1). */
 function artifactRefsFromRecord(
@@ -175,6 +184,17 @@ export function AnalysisPage() {
   const [paramValues, setParamValues] = useState<Record<string, unknown>>({})
   const [activeRunId, setActiveRunId] = useState('')
   const [activeRun, setActiveRun] = useState<{ recordId: string; payload: RunPayload } | null>(null)
+  // FAME-3 D1 (OQ-4 OPT-A step 7): the gc-method record id the active run's
+  // peaks are assigned to — the chat's edit-record arm NAMED target. DERIVED
+  // from the active run via the reverse-reference endpoint (the gc-method's
+  // assignment provenance.source_run_ref points at the run; the run carries
+  // no forward method field — spec §8: "nothing on the analysis chain refs
+  // the gc-method record"). Exactly one gc-method referencing the run is the
+  // method; zero or more is ABSENT (never-guess — the chat edit arm then
+  // compiles to the NAMED EDIT_TARGET_REQUIRED refusal, never a guessed
+  // target). Auxiliary lookup: a failure leaves it absent, never errors the
+  // page.
+  const [methodRecordId, setMethodRecordId] = useState<string | null>(null)
   const [manifest, setManifest] = useState<{ artifacts: unknown[]; views: unknown[]; metrics: unknown[] } | null>(null)
   const [artifactRefs, setArtifactRefs] = useState<Record<string, { artifactRecordId: string; dataReferenceId?: string }>>({})
   const [error, setError] = useState<string | null>(null)
@@ -291,6 +311,40 @@ export function AnalysisPage() {
     // once (the one-shot rule); searchParams/setSearchParams are stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkRun, runs])
+
+  // FAME-3 D1 (OQ-4 OPT-A step 7): derive the gc-method record id the active
+  // run's peaks are assigned to — the chat's edit-record arm NAMED target.
+  // The reverse-reference endpoint (GET /records/:id/related) returns every
+  // record whose payload references the run; the gc-method's assignment
+  // provenance.source_run_ref points at the run (the run carries no forward
+  // method field — spec §8). Exactly one gc-method schemaId hit is the method;
+  // zero or more is ABSENT (never-guess) — the chat edit arm then compiles to
+  // the NAMED EDIT_TARGET_REQUIRED refusal, never a guessed target. Auxiliary
+  // lookup: a failure (or an un-mocked endpoint in a page test) leaves it
+  // absent and never errors the page.
+  useEffect(() => {
+    let cancelled = false
+    const runId = activeRun?.recordId
+    if (!runId) {
+      setMethodRecordId(null)
+      return
+    }
+    setMethodRecordId(null) // a new run is not the previous run's method
+    void (async () => {
+      try {
+        const { related } = await apiClient.getRelatedRecords(runId)
+        const hits = related.filter((r) => r.schemaId === GC_METHOD_SCHEMA_ID)
+        if (cancelled) return
+        // Never-guess: exactly one gc-method referencing the run is the method.
+        setMethodRecordId(hits.length === 1 ? (hits[0]?.recordId ?? null) : null)
+      } catch {
+        if (!cancelled) setMethodRecordId(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeRun?.recordId])
 
   // GC-9 (deliverable C + fix1 D3/D7): (re)initialize the form values from the
   // selected revision's schema defaults AND clear any manual advanced-JSON
@@ -718,7 +772,7 @@ export function AnalysisPage() {
           drafting chat leg can bind a peak to the run the user is looking
           at (one memo; the panel renders with no run until one is active). */}
       <AnalysisChatPanel
-        {...(activeRun ? { activeRun: { recordId: activeRun.recordId, ...(activeRun.payload.revisionRef?.id ? { revisionRefId: activeRun.payload.revisionRef.id } : {}) } } : {})}
+        {...(activeRun ? { activeRun: { recordId: activeRun.recordId, ...(activeRun.payload.revisionRef?.id ? { revisionRefId: activeRun.payload.revisionRef.id } : {}), ...(methodRecordId ? { methodRecordId } : {}) } } : {})}
       />
       <div className="analysis-right__title">
         <span className="analysis-right__title-text">

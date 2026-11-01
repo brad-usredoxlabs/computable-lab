@@ -31,6 +31,16 @@ import type { AiContext } from '../types/aiContext'
 export interface AnalysisChatPanelActiveRun {
   recordId: string
   revisionRefId?: string
+  /** FAME-3 D1 (OQ-4 OPT-A step 7): the gc-method record the active run's
+   * peaks are assigned to — the edit-record arm's NAMED target. The
+   * record-drafting envelope is additionalProperties:false and carries no
+   * target, so this rides the compile REQUEST BODY (body.target.recordId),
+   * not the intent. It is the METHOD record id (gc-method), never the run id
+   * (ANR) or the analysis-revision ref (ANREV) — those would compile to
+   * EDIT_GUARD_UNDECLARED. Absent when the run's method carries no
+   * source_run_ref link to a gc-method: the chat edit arm then compiles to a
+   * NAMED EDIT_TARGET_REQUIRED refusal, never a guessed target. */
+  methodRecordId?: string
 }
 
 export function AnalysisChatPanel({ activeRun }: { activeRun?: AnalysisChatPanelActiveRun } = {}) {
@@ -65,16 +75,18 @@ export function AnalysisChatPanel({ activeRun }: { activeRun?: AnalysisChatPanel
     onAnalysisProposal: (intent) => {
       void flow.proposeWorkstate('analysis', intent)
     },
-    // FAME-3 W5: the record-drafting INTENT rides the SAME flow on the
-    // analysis mount — one adapter constant ('record-drafting'), the same
-    // compile→card→accept/reject machinery (the workstate/analysis/
-    // record-drafting pattern at AiTabPanel.tsx:884 copied verbatim).
-    // Before this wire the record_draft_proposal frame the server emits
-    // (QMS7-7 frame handler, useAiChat.ts:709) was surfaced here only as a
-    // NAMED system bubble (the unwired arm) and no compile request was ever
-    // issued — the peak-assignment chat leg was dead at this mount.
+    // FAME-3 D1 (OQ-4 OPT-A step 7): the record-drafting INTENT rides the SAME
+    // flow on the analysis mount — one adapter constant ('record-drafting'),
+    // the same compile→card→accept/reject machinery. The edit-record arm's
+    // NAMED target (the gc-method record id) is a compile REQUEST-BODY channel
+    // (body.target.recordId), NOT an intent field — the envelope is
+    // additionalProperties:false and carries no target. It is forwarded only
+    // when the active run's method supplies it (activeRun.methodRecordId); an
+    // edit that omits it compiles to the NAMED EDIT_TARGET_REQUIRED refusal,
+    // never a guessed target. The run id (ANR) and the analysis-revision ref
+    // (ANREV) are NOT valid targets — they would compile to EDIT_GUARD_UNDECLARED.
     onRecordDraftProposal: (intent) => {
-      void flow.proposeWorkstate('record-drafting', intent)
+      void flow.proposeWorkstate('record-drafting', intent, activeRun?.methodRecordId ? { recordId: activeRun.methodRecordId } : undefined)
     },
     onAgentAction: flow.handleAgentAction,
   })

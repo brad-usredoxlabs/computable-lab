@@ -64,12 +64,16 @@ vi.mock('../shared/ai/useWorkstateProposalFlow', () => ({
 }))
 
 // The VERBATIM server frame (the W6 edit-record arm's proposal; envelope shape
-// per the recordDraft tool-def property — operation + target + term + fields).
+// per the recordDraft tool-def property — operation + term + fields ONLY).
+// FAME-3 D1 (adv-review D1): the envelope is additionalProperties:false and
+// carries NO target (only operation/requestId/kind/fields/term are legal).
+// The edit target is a compile REQUEST-BODY channel (body.target.recordId),
+// relayed by the flow as a THIRD proposeWorkstate argument — it never rides
+// inside the recordDraft frame.
 const RECORD_DRAFT_FRAME = {
   type: 'record_draft_proposal',
   recordDraft: {
     operation: 'edit-record',
-    target: { id: 'GCM-FAME3-WORKING-L1T1030' },
     term: 'FAME-LOCAL:methyl-octanoate-n8',
     fields: { label: 'C8:0 (octanoic acid) FAME peak 7', expected_rt_min: 19.0624, rt_window_min: 0.2 },
   },
@@ -99,7 +103,40 @@ describe('AnalysisChatPanel — record_draft_proposal reaches the flow (FAME-3 W
     fireEvent.click(screen.getByTestId('analysis-chat-send'))
 
     await waitFor(() => expect(mocks.proposeWorkstate).toHaveBeenCalledTimes(1), { timeout: 3000 })
-    expect(mocks.proposeWorkstate).toHaveBeenCalledWith('record-drafting', RECORD_DRAFT_FRAME.recordDraft)
+    // FAME-3 D1: the frame is relayed VERBATIM (no target inside the envelope)
+    // and the target argument is ABSENT (no activeRun ⇒ no method record id) —
+    // a third arg of undefined, never a fabricated target.
+    expect(mocks.proposeWorkstate).toHaveBeenCalledWith('record-drafting', RECORD_DRAFT_FRAME.recordDraft, undefined)
+  })
+
+  it('a record_draft_proposal on a run WITH a method record id forwards the gc-method id as the compile REQUEST-BODY target (body.target.recordId) — never the run id or the analysis-revision ref', async () => {
+    vi.mocked(streamAssist).mockImplementation(async function* () {
+      yield RECORD_DRAFT_FRAME as never
+      yield { type: 'done', result: { success: true, notes: ['Proposed a record edit — review the card; nothing was written.'] } } as never
+    })
+
+    // The gc-method record id (the edit arm's NAMED target — the guard in
+    // record-edit-guards.yaml is keyed to the gc-method schemaId; the run id
+    // ANR-000033 and the analysis-revision ANREV-000013 would both compile to
+    // EDIT_GUARD_UNDECLARED).
+    render(
+      <ThemeProvider>
+        <MemoryRouter>
+          <AnalysisChatPanel activeRun={{ recordId: 'ANR-000033', revisionRefId: 'ANREV-000013', methodRecordId: 'GCM-FAME3-WORKING-L1T1030' }} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+
+    const input = await screen.findByTestId('analysis-chat-input')
+    fireEvent.change(input, { target: { value: 'assign the FAME peak at 19 minutes to octanoate' } })
+    fireEvent.click(screen.getByTestId('analysis-chat-send'))
+
+    await waitFor(() => expect(mocks.proposeWorkstate).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    expect(mocks.proposeWorkstate).toHaveBeenCalledWith('record-drafting', RECORD_DRAFT_FRAME.recordDraft, { recordId: 'GCM-FAME3-WORKING-L1T1030' })
+    // The run id / analysis-revision ref never ride as the target.
+    const targetArg = mocks.proposeWorkstate.mock.calls[0]?.[2]
+    expect(targetArg).not.toEqual({ recordId: 'ANR-000033' })
+    expect(targetArg).not.toEqual({ recordId: 'ANREV-000013' })
   })
 
   it('the ACTIVE RUN identity (runId + revisionRef id) rides the outgoing surfaceContext', async () => {
