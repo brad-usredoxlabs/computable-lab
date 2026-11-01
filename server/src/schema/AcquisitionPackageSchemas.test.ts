@@ -24,6 +24,7 @@ import { createValidator } from '../validation/AjvValidator.js';
 import { loadAllLintSpecs } from '../lint/LintSpecLoader.js';
 import { createLintEngine } from '../lint/LintEngine.js';
 import { createUISpecLoader, loadAllUISpecs } from '../ui/UISpecLoader.js';
+import { projectRecord } from '../ui/EditorProjectionService.js';
 
 const SCHEMA_ID = (name: string) =>
   `https://computable-lab.com/schema/computable-lab/${name}`;
@@ -390,7 +391,7 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
     expect(spec.editor!.slots.find(s => s.path === '$.signalCollectionRef')?.label).toBe('Signal Collection Ref');
   });
 
-  it('FAME-1: declares the acquisition-status section (status slot + evidence slot) and a list column', async () => {
+  it('FAME-1: the acquisition-status section PROJECTS its evidence decomposition (real projectRecord — D1/D2)', async () => {
     const loader = createUISpecLoader();
     const uiPath = join(SCHEMA_DIR, 'knowledge', 'acquisition-package.ui.yaml');
     const content = await readFile(uiPath, 'utf-8');
@@ -405,29 +406,67 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
       'acquisition-status-slot',
       'acquisition-status-evidence-slot',
     ]);
-    // The status slot is a READ-ONLY select over the four declared words.
-    const statusSlot = spec.editor!.slots.find(s => s.path === '$.acquisitionStatus') as
-      | { widget?: string; readonly?: boolean; options?: Array<{ value: string; label: string }> }
-      | undefined;
-    expect(statusSlot).toBeDefined();
-    expect(statusSlot!.widget).toBe('select');
-    expect(statusSlot!.readonly).toBe(true);
-    expect(statusSlot!.options?.map(o => o.value)).toEqual([
-      'completed',
-      'aborted',
-      'stopped-by-user',
-      'unknown',
-    ]);
-    // The evidence slot is a read-only OBJECT view with a properties hint
-    // (interpretation source, member, decode facts, matched lines).
-    const evidenceSlot = spec.editor!.slots.find(s => s.path === '$.acquisitionStatusEvidence') as
-      | { widget?: string; readonly?: boolean; properties?: Array<{ name: string; widget: string }> }
-      | undefined;
+
+    // D2 (was tautological): assert on the REAL projection, not the raw YAML.
+    // projectRecord is the server's own projection authority; if the evidence
+    // hints were declared under a non-forwardable key (the `properties:`
+    // defect), the projected slot would carry NO `fields`/`items` and this
+    // test goes RED — the inert-deliverable the prior test papered over.
+    const payload: Record<string, unknown> = {
+      ...validPackage,
+      acquisitionStatus: 'aborted',
+      acquisitionStatusQualified: true,
+      acquisitionStatusEvidence: {
+        ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+        sourceMember: { relativePath: 'RUN.LOG' },
+        decode: { encoding: 'utf-16le', bomPresent: true },
+        matched: [
+          { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'aborted-method-aborted', lineIndex: 5 },
+        ],
+      },
+    };
+    const projection = projectRecord(spec, payload, ACQP_ID, validPackage.id as string);
+
+    // The evidence slot is a projected OBJECT whose NESTED hints actually
+    // leave the server: `fields` carrying the four sub-fields (ruleset /
+    // sourceMember / decode / matched), NOT an inert `properties` key.
+    const evidenceSlot = projection.slots.find(s => s.path === '$.acquisitionStatusEvidence');
     expect(evidenceSlot).toBeDefined();
     expect(evidenceSlot!.widget).toBe('object');
-    expect(evidenceSlot!.readonly).toBe(true);
-    expect(evidenceSlot!.properties?.some(p => p.name === 'matched')).toBe(true);
-    expect(evidenceSlot!.properties?.some(p => p.name === 'ruleset')).toBe(true);
+    expect(evidenceSlot!.fields).toBeDefined();
+    const fieldPaths = (evidenceSlot!.fields as Array<{ path: string }>).map(f => f.path);
+    expect(fieldPaths).toEqual(expect.arrayContaining(['ruleset', 'sourceMember', 'decode', 'matched']));
+    // The nested object hints are FORWARDABLE (ruleset's sub-fields carry the
+    // interpretation-source path keys), so the decomposition is not just a
+    // top-level label.
+    const rulesetField = (evidenceSlot!.fields as Array<{ path: string; fields?: Array<{ path: string }> }>).find(
+      f => f.path === 'ruleset',
+    );
+    expect(rulesetField).toBeDefined();
+    expect(rulesetField!.fields?.map(f => f.path)).toEqual(expect.arrayContaining(['id', 'version', 'sourceFile']));
+    // The matched ARRAY slot carries its item hint via `items` (the
+    // forwardable key) with the item's sub-field set (line/ruleId/lineIndex).
+    const matchedField = (evidenceSlot!.fields as Array<{ path: string; items?: { path?: string; widget?: string; fields?: Array<{ path: string }> } }>).find(
+      f => f.path === 'matched',
+    );
+    expect(matchedField).toBeDefined();
+    expect(matchedField!.items).toBeDefined();
+    expect(matchedField!.items!.path).toBeTruthy();
+    expect(matchedField!.items!.widget).toBe('object');
+    expect(matchedField!.items!.fields?.map(f => f.path)).toEqual(
+      expect.arrayContaining(['line', 'ruleId', 'lineIndex']),
+    );
+    // The INERT key must NOT be the carrier (the D1 regression guard): the
+    // projection has no `properties` member to leak from.
+    expect((evidenceSlot! as unknown as { properties?: unknown }).properties).toBeUndefined();
+
+    // D9: the status slot is projected as a stable NON-EDITABLE display
+    // (widget: readonly), not an inert `readonly: true` select. The projected
+    // slot's widget type is the non-editable claim.
+    const statusSlot = projection.slots.find(s => s.path === '$.acquisitionStatus');
+    expect(statusSlot).toBeDefined();
+    expect(statusSlot!.widget).toBe('readonly');
+
     // The list surface carries the status column (the package list shows the
     // classification at a glance).
     const statusColumn = (spec.list?.columns as Array<{ path?: string }> | undefined)?.find(

@@ -134,24 +134,33 @@ editor:
     - id: "acquisition-status-slot"
       path: "$.acquisitionStatus"
       label: "Acquisition Status"
-      widget: "select"
-      readonly: true
+      # D9: rendered as a stable, NON-EDITABLE display (widget: readonly). The
+      # editor-config projection path hardcodes readOnly: false and does NOT
+      # forward a `readonly:` key, so a `readonly: true` claim on a select is
+      # INERT (the slot projects as an editable select — the D9 defect). The
+      # non-editable presentation is therefore declared via the WIDGET TYPE
+      # itself (the repo's id-slot / state-slot idiom), not an inert key.
+      # Dropped the select's `options` (a readonly display renders the raw
+      # stored value; the friendly-label map only served the editable select
+      # the platform can no longer honestly claim).
+      widget: "readonly"
       help: >
         How the acquisition ended (classification, not lifecycle — distinct
         from State). completed / aborted / stopped-by-user / unknown. unknown
         is the declared floor for a package with no parseable log (never a
         completed default). Set at registration from the RUN.LOG evidence;
-        read-only afterward. Absent on packages registered before FAME-1.
-      options:
-        - { value: "completed", label: "Completed" }
-        - { value: "aborted", label: "Aborted" }
-        - { value: "stopped-by-user", label: "Stopped by user" }
-        - { value: "unknown", label: "Unknown" }
+        rendered non-editable (the classification is DATA, not hand-written).
+        Absent on packages registered before FAME-1.
     - id: "acquisition-status-evidence-slot"
       path: "$.acquisitionStatusEvidence"
       label: "Acquisition Status Evidence"
       widget: "object"
-      readonly: true
+      # D1: the nested hints are declared under `fields:` (the object widget's
+      # FORWARDABLE key) and `items:` (the matched array's item hint) — the
+      # keys EditorProjectionService actually forwards. `properties:` is NOT
+      # forwarded (it is silently dropped by the projector — the pre-existing
+      # $.files latent shape the D1 defect named). D9: the non-editable
+      # presentation is the widget type, not an inert `readonly:` key.
       help: >
         The evidence behind the acquisition status: the rule set used
         (interpretation source), which member was read, the strict-UTF-16
@@ -160,73 +169,71 @@ editor:
         surface a human reads INSTEAD of a byte-serving route (OQ-1): the
         verbatim lines + the /record/<RUN.LOG data-reference> anchor make the
         WHY visible without a raw-blob route.
-      properties:
-        - name: "ruleset"
+      fields:
+        - path: "ruleset"
           widget: "object"
-          readonly: true
           label: "Rule Set"
-          help: "The interpretation source: the rule-set id, version, and the rule file they came from."
-          properties:
-            - name: "id"
+          help: >
+            The interpretation source: the rule-set id, version, and the rule
+            file they came from. ABSENCE-SHAPED (empty) in the degenerate
+            rule-file-missing arm (D5) — the code does not restate the YAML's
+            identity when the file is unread.
+          fields:
+            - path: "id"
               widget: "text"
-              readonly: true
               label: "Rule Set Id"
-            - name: "version"
+            - path: "version"
               widget: "text"
-              readonly: true
               label: "Version"
-            - name: "sourceFile"
+            - path: "sourceFile"
               widget: "text"
-              readonly: true
               label: "Source File"
-        - name: "sourceMember"
+        - path: "sourceMember"
           widget: "object"
-          readonly: true
           label: "Source Member"
           help: "Which package member was read (the run_log member, e.g. RUN.LOG)."
-          properties:
-            - name: "relativePath"
+          fields:
+            - path: "relativePath"
               widget: "text"
-              readonly: true
               label: "Relative Path"
-        - name: "decode"
+        - path: "decode"
           widget: "object"
-          readonly: true
           label: "Decode"
-          help: "The strict-UTF-16 decode facts (the encoding used and whether the FF FE BOM was present), recorded even on decode failure."
-          properties:
-            - name: "encoding"
+          help: >
+            The strict-UTF-16 decode facts (the encoding used and whether the
+            FF FE BOM was present), recorded even on decode failure.
+          fields:
+            - path: "encoding"
               widget: "text"
-              readonly: true
               label: "Encoding"
-            - name: "bomPresent"
-              widget: "boolean"
-              readonly: true
+            - path: "bomPresent"
+              widget: "text"
               label: "Bom Present"
-        - name: "matched"
+        - path: "matched"
           widget: "array"
-          readonly: true
           label: "Matched Lines"
           help: "Every RUN.LOG line a declared rule matched — preserved VERBATIM, never dropped."
-          properties:
-            - name: "line"
-              widget: "code"
-              readonly: true
-              label: "Line"
-              help: "The matched line, verbatim (the exact decoded line)."
-            - name: "ruleId"
-              widget: "text"
-              readonly: true
-              label: "Rule Id"
-            - name: "lineIndex"
-              widget: "number"
-              readonly: true
-              label: "Line Index"
-        - name: "noEvidenceReason"
+          items:
+            path: "$.item"
+            widget: "object"
+            label: "Matched Line"
+            fields:
+              - path: "line"
+                widget: "text"
+                label: "Line"
+                help: "The matched line, verbatim (the exact decoded line)."
+              - path: "ruleId"
+                widget: "text"
+                label: "Rule Id"
+              - path: "lineIndex"
+                widget: "number"
+                label: "Line Index"
+        - path: "noEvidenceReason"
           widget: "text"
-          readonly: true
           label: "No Evidence Reason"
-          help: "Present ONLY when nothing matched: the named reason (log absent / not decodable / zero rule hits)."
+          help: >
+            Present ONLY when nothing matched: the named reason (log absent /
+            not decodable / zero rule hits / rule file unreadable).
 
 list:
   columns:
