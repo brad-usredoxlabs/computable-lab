@@ -316,3 +316,12 @@ At 5/5 the J2-live advisory carve-out flips to gate-worthy — the ORCHESTRATOR 
    allowed pre-answer influence is the prompt-contract clause, which is applied).
 
 No merge performed; task list untouched; no npm install (node_modules symlinks intact).
+
+---
+
+## 6. END MARKER
+
+Work tip (code + test + report + all captures, clean tree): 0c668e9fc84cdd152dfa315980b2674d3e6662a1
+(This marker-append is the final docs-only commit; the substantive work-tip referenced by the marker below is 0c668e9f.)
+
+INTENTID DONE 0c668e9fc84cdd152dfa315980b2674d3e6662a1
