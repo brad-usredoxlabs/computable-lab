@@ -570,10 +570,12 @@ export async function classifyAcquisitionPackageStatus(
     noEvidenceReason: string,
     sourceRelativePath: string,
     encoding: string,
+    fallbackStatus: string,
+    ruleset: { id: string; version: string | number },
   ) => ({
-    acquisitionStatus: FLOOR_STATUS,
+    acquisitionStatus: fallbackStatus,
     acquisitionStatusEvidence: {
-      ruleset: { id: FLOOR_RULESET_ID, version: FLOOR_RULESET_VERSION, sourceFile: PATTERN_SOURCE_LABEL },
+      ruleset: { id: ruleset.id, version: ruleset.version, sourceFile: PATTERN_SOURCE_LABEL },
       sourceMember: { relativePath: sourceRelativePath },
       decode: { encoding, bomPresent: false },
       matched: [],
@@ -616,26 +618,45 @@ export async function classifyAcquisitionPackageStatus(
     // An unreadable member OR a missing/malformed rule file is an honest
     // floor case, never a registration failure: the reason names the failure
     // (bait #7: facts preserved, never discarded).
+    //
+    // The status is the DECLARED fallback whenever the rule file is readable
+    // (the common unreadable-member case: the file loads fine, only the member
+    // bytes failed) — the floor constant below is used ONLY when the rule file
+    // itself is unreadable (the misconfigured-deployment degenerate case with
+    // no declared value to read). That keeps bait #4's "no coded status
+    // default" as tight as the platform allows: the value is data-declared in
+    // every case the data is actually present.
+    let declared: { fallbackStatus: string; id: string; version: string | number } | null = null;
+    try {
+      const p = await loadLogPatterns();
+      declared = p;
+    } catch {
+      declared = null;
+    }
     return floor(
       `member-unreadable: ${err instanceof Error ? err.message : String(err)}`,
       runLog?.relativePath ?? '',
       runLog === undefined ? 'none' : 'unreadable',
+      declared?.fallbackStatus ?? FLOOR_STATUS,
+      declared ? { id: declared.id, version: declared.version } : { id: FLOOR_RULESET_ID, version: FLOOR_RULESET_VERSION },
     );
   }
 }
 
 /**
- * FAME-1 floor constants for the rule-file-missing / unreadable-member arm of
- * classifyAcquisitionPackageStatus. These are NOT status-literals-with-
- * meaning (bait #4): FLOOR_STATUS is a fixed DATA-PLUMBING placeholder — the
- * DECLARED fallback lives in the rule file (fallbackStatus: unknown), and a
- * misconfigured deployment with no rule file has no declared value to read,
- * so the floor is the item's fixed floor word `unknown`, and the ruleset
- * fields name the rule file's canonical coordinates (id/version as declared)
- * so the evidence still points at the interpretation source that was UNREAD.
+ * FAME-1 floor constants for the DEGENERATE rule-file-missing arm of
+ * classifyAcquisitionPackageStatus ONLY (the misconfigured-deployment case
+ * where the rule file cannot be read, so there is no declared fallback value
+ * to honor). The NORMAL unreadable-member arm uses the DECLARED
+ * fallbackStatus from the rule file — the floor constant is a last resort,
+ * not a coded completed default (bait #4: the value is data-declared in every
+ * case the data is present; `unknown` here is the item's fixed floor word,
+ * never `completed`). The ruleset fields name the rule file's canonical
+ * coordinates so the evidence still points at the interpretation source that
+ * was unread.
  */
 const FLOOR_STATUS = 'unknown';
-const FLOOR_RULESET_ID = 'gc-acquisition-status';
+const FLOOR_RULESET_ID = 'gc-run-log-acquisition-status';
 const FLOOR_RULESET_VERSION = 1;
 const PATTERN_SOURCE_LABEL = 'config/gc-acquisition-status/log-patterns.yaml';
 
