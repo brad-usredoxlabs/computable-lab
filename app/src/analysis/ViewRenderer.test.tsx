@@ -84,3 +84,86 @@ describe('renderViews', () => {
     expect(getByText(/Missing artifact/)).toBeDefined()
   })
 })
+
+describe('TableView declared-object shape (C1)', () => {
+  // The shipped table artifact shape is an OBJECT { columns, rows }, not a
+  // bare array. TableView must teach this shape declaratively (shape-only
+  // detection; the plain-array behavior stays verbatim above).
+  const declaredShape = {
+    columns: [
+      { name: 'col_a', units: 'u' },
+      { name: 'col_b' },
+    ],
+    rows: [
+      { col_b: 'x', col_a: 1.5 },
+      { col_a: 2.5, col_b: 'y' },
+    ],
+  }
+
+  it('renders declared rows with header labels in declared column order', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', declaredShape)}
+      />,
+    )
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual(['col_a', 'col_b'])
+    const cells = screen.getAllByRole('cell').map((c) => c.textContent)
+    expect(cells).toEqual(['1.5', 'x', '2.5', 'y'])
+    expect(screen.queryByText('No rows')).toBeNull()
+  })
+
+  it('honours string[] column labels', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { columns: ['col_a', 'col_b'], rows: [{ col_a: 1, col_b: 2 }] })}
+      />,
+    )
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['col_a', 'col_b'])
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1', '2'])
+  })
+
+  it('keeps the named No rows arm for an empty declared rows array', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { columns: [{ name: 'col_a' }], rows: [] })}
+      />,
+    )
+    expect(screen.getByText('No rows')).toBeDefined()
+  })
+
+  it('keeps today fallback when the rows member is not an array', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { rows: 'not-an-array' })}
+      />,
+    )
+    expect(screen.getByText('No rows')).toBeDefined()
+  })
+
+  it('infers headers from row keys when the columns member is absent', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { rows: [{ a: 1 }] })}
+      />,
+    )
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a'])
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1'])
+  })
+
+  it('keeps today fallback when the columns member is not an array', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { columns: null, rows: [{ a: 1 }] })}
+      />,
+    )
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a'])
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1'])
+  })
+})
