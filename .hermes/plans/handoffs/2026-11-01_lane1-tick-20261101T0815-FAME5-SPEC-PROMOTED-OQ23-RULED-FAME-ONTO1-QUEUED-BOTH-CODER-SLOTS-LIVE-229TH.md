@@ -1,0 +1,82 @@
+# Lane 1 — tick 229TH (2026-11-01 ~08:15-08:30 EST) — FAME-5 SPEC PROMOTED (OQ-1/2/3 folded) · FAME-ONTO-1 QUEUED · FAME-6 COMPOSER LIVE · both coder slots LIVE (fix3 + FAME-3 resume)
+
+## Fleet state at checkpoint
+- slot-0: FAME-1 FIX-3 CODER LIVE — queue wrapper 3076947, hermes 3182779 (child, confirmed via
+  pstree at 08:20, ~7 min live), lock acquired 07:50:57 (slot pid
+  FAME1FIX3-3076947-2026-11-01 07:50:57-0500). Log coder-FAME1-fix3-slot0-l1t0655.log (0 bytes —
+  normal pre-exit). Report fame-1-report-fix3-l1t0655.txt (not yet created). Expected 1-2h; do
+  NOT re-dispatch.
+- slot-1: FAME-3 RESUME CODER LIVE — wrapper 3058594, hermes 3058611, start 06:50:40 (~1h30m at
+  08:20, expected 2-3h). Report fame-3-report-resume-l1t0650.md last append 07:36 (W2 C1 GREEN
+  section — items:-shaped DATA declaration landed, server pins updated, RED evidence recorded,
+  C6 honesty note present: properties-forward DECLINED per UI-DIALECT-1). 44 min of report
+  silence treated as mid-leg generation (C2 typed sub-fields, RED-first), NOT a hang (healthy
+  RSS, process live). NEXT CHECK: report motion; escalate per 2x/3x ladder if frozen.
+- tb-bg slot-0: FREE (flock + dead PID 2903204). tb-bg slot-1: FAME-6 COMPOSER LIVE —
+  systemd-run unit fame6-composer-l1t0825, wrapper 3240811 start 08:23:37; log
+  composer-FAME6-l1t0825.log; draft path
+  .hermes/plans/2026-11-01_fame-6-spec-draft-l1t0825.md; prompt
+  prompts/composer-FAME6-l1t0825.txt. Composing against trunk e45481d1 (SHA recorded in its
+  brief; re-verify at promotion).
+- Architect: OQ-2/OQ-3 packet EXITED with the decision ON DISK (07:57, 3154725 gone) —
+  'FAME-5 OQ-2+OQ-3 RULED'. No architect work outstanding.
+- Vision slot: FREE, nothing queued this tick.
+- Lane stack: :3092 http=200, :5192 http=200 (orch status, 08:2x).
+
+## Per-item
+FAME-1 (in-progress): FIX-3 running (D1-D5 closed at fix2; fix3 = adv-c3's 2 new defects:
+  serializer delete-on-empty pruning schema-required ruleset/sourceMember on degenerate arms +
+  D3 test cache poisoning). On DONE exit -> adv cycle 4 (unique report path
+  fame-1-adv-c4-l1t<ts>.md), browser gate stays post-merge.
+FAME-3 (in-progress, slot-1 LIVE): W1/W3 done, W2 C1 GREEN per report; C2 onward in flight. On
+  DONE exit: adv gate -> merge -> STACK RESTART (W3 YAML fields; A-L1T227-2 stands) -> browser
+  gate incl. the await-restart W4 editor-UI leg if the coder took the PUT-API data leg.
+  FAME-4 dispatch opens the moment merge+restart complete.
+FAME-4 (claimed, dispatch-gated): unchanged — FAME-3 merge + restart is the gate.
+FAME-5 (spec promoted THIS TICK): canonical .hermes/plans/2026-11-01_fame-5-spec.md = byte-copy
+  of the draft (md5 9dec523414ea9914dc4d96f3093a6e91) + §15 ORCHESTRATOR PROMOTION & RULINGS
+  folding the architect decision: OQ-2=Option A minting OWNED BY FAME-ONTO-1 (FAME-5 stays
+  zero-schema; expected_analyte = {kind:ontology,id:FAME-LOCAL:methyl-palmitate-n16} once live,
+  Option-B label wording as fallback, never block); OQ-3=Option A confirmed (eligible-set
+  denominator, both denominators side-by-side, within/outside PERMITTED with
+  denominator_basis:subset-vs-total labeling, not-assessable outranks, tolerance absent =>
+  comparison-only); OQ-1 = parameterSchema DATA default (A-L1T229-2). Ontology cites re-verified
+  first-hand at e45481d1 (6 terms, 0 palmit, test counts :15/:67 = 10 as the decision names).
+  DISPATCH GATE unchanged: FAME-4 merged + FAME-3 merged + restart.
+FAME-6 (todo): composer LIVE (see fleet state). Next composer in queue after it: none named.
+FAME-ONTO-1 (NEW, todo, QUEUED): architect-ruled housekeeping (fame-local.yaml two-term append
+  VERBATIM from the decision file + OntologyTermRegistry.test.ts :15/:67 10->12; orch restart at
+  merge). NOT dispatched — dispatch requires (a) a coder slot + stagger, (b) Brad's affirmative
+  per the amendment-approval reading (A-L1T229-3; OPS-1's precedent needed an explicit Brad
+  approval for a schema-adjacent amendment). Lands on trunk BEFORE FAME-5 dispatch ideally;
+  FAME-5 proceeds Option-B if not.
+
+## assumptions (this tick) — also in /home/brad/.hermes/cl/lanes/1/assumptions.md
+- A-L1T229-1: promotion as byte-copy + appended §15 (precedence declared) rather than in-place
+  surgery; draft preserved untouched.
+- A-L1T229-2: OQ-1 treated as ratified-by-non-rebuttal (parameterSchema DATA default).
+- A-L1T229-3: FAME-ONTO-1 held for Brad's affirmative — no locatable standing pre-approval of
+  architect-ruled schema-tree edits; OPS-1 R1 precedent required explicit approval. Surface at
+  next Brad contact. (Moot today: no free coder slot anyway.)
+- A-L1T229-4: FAME-3 report silence 44 min = slow leg, not hang (process healthy; pre-2x).
+
+## evidence debt (carried)
+- OPEN: FAME-1 browser gate on the run-sheet surface (post-merge, after fix3 + adv c4).
+- OPEN: AS-L1T223-1 band note (31/2 vs ~17/~12) = DATA, informational only.
+- OPEN: FAME-3 W4 editor-UI round-trip leg may land as await-restart obligation (A-L1T227-2) —
+  becomes a re-gate obligation at merge if the coder took the PUT-API data leg.
+- CLEARED: none this tick.
+
+## next checks (next tick, in order)
+1. FAME-1 fix3 DONE marker (fame-1-report-fix3-l1t0655.txt tail / FINAL marker
+   FAME-1...DONE <sha>) -> adv cycle 4. Report-first: if the log tail shows cap death, assess
+   from committed state in wt/fame-1-lane1-l1t0100.
+2. FAME-3 resume: report motion since 07:36 + W2->W4->... progression; 2x-expected (08:50+)
+   ladder applies. On DONE: adv gate -> merge -> RESTART -> browser gate (W4 leg). FAME-4
+   dispatch immediately after merge+restart (spec promoted, brief-ready).
+3. FAME-6 composer draft (composer-FAME6-l1t0825.log COMPOSER_EXITED) -> orch review + cite
+   spot-check vs trunk, promote after FAME-5 merge re-shapes cites (FAME-6 deps: FAME-4, FAME-5).
+4. Brad-contact checklist: FAME-ONTO-1 go/no-go (A-L1T229-3); adv-c2 observations 1-3 +
+   UI-DIALECT-1 + FAME-1 DEFECT-1 residual -> next intake packet.
+5. If coder slots free AND FAME-3 merged: FAME-4 coder dispatch (stagger check vs fix3 start
+   07:50:57), then FAME-ONTO-1 dispatch if Brad approved.
