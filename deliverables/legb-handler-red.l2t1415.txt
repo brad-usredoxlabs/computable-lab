@@ -1,0 +1,33 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+ ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts  (2 tests | 1 failed) 8ms
+   ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts > draftEventsStream — the event-editor surface is wired to the orchestrator (leg B) > passes surface + clarificationAnswers to run() when the body carries them
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts > draftEventsStream — the event-editor surface is wired to the orchestrator (leg B) > passes surface + clarificationAnswers to run() when the body carries them
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts:103:31
+    101|     // THE DEFECT: on base the handler dropped `surface` entirely, so …
+    102|     // the RED assertion (run() received no surface at all).
+    103|     expect('surface' in args).toBe(true);
+       |                               ^
+    104|     expect(args.surface).toBe('event-editor');
+    105|     // The ANSWER-CHANNEL answers ride alongside the surface (the live…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  14:44:06
+   Duration  4.41s (transform 1.06s, setup 0ms, collect 2.67s, tests 8ms, environment 0ms, prepare 387ms)
+
