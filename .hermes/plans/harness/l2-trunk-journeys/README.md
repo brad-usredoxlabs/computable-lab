@@ -70,12 +70,17 @@ plus `selection_affordance` (the disclosed real-UI affordance), `violations`
 
 ## RED-BLOCKS-CLAIMS (the tick-facing contract)
 
-The driver atomically flips receipts-root `latest` -> the run dir; run-meta
-carries the `verdicts` table. The tick gate:
+The driver atomically flips receipts-root `latest` -> the run dir ONLY for a
+COMPLETE run (every journeys/*.yaml id in the verdicts table) against the
+TRUNK app base; a partial/scratch run records its real per-journey verdicts
+(verdict INCOMPLETE / GREEN-NOT-TRUNK, `red_blocks_claims: true`) but never
+moves `latest`. run-meta carries the `verdicts` table plus `complete` and
+`app_base_is_trunk`. The tick gate (fails closed on both):
 
     python3 .hermes/plans/harness/l2-trunk-journeys/check-gate.py
     exit 0 = green (or never-ran) — claim normally
-    exit 1 = prints a BLOCKER line naming each red journey — ready set EMPTY
+    exit 1 = prints a BLOCKER line naming each red journey, an INCOMPLETE
+             verdicts table, or a NON-TRUNK app_base — ready set EMPTY
     exit 2 = receipt trail unreadable — fail closed
 
 ## Self-check leg (fails closed)
