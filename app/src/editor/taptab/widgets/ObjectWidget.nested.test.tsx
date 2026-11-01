@@ -57,6 +57,44 @@ import type { ObjectFieldConfig } from '../types'
 
 const Ajv2020 = (Ajv2020Module as unknown as { default: typeof Ajv2020Module }).default
 
+// W2 part 2 — the ref sub-field renders the EXISTING picker machinery
+// (RefCombobox over the /resolve spine). Mock the two search hooks the same
+// way RefCombobox.test.tsx does — one local result + one ontology candidate —
+// so the picker is driven deterministically (the mocks are module-scoped; the
+// other legs in this file use flat inputs / nested objects and never render a
+// ref picker, so they are unaffected).
+vi.mock('../../../shared/hooks/useTagSuggestions', () => ({
+  useTagSuggestions: vi.fn((_opts: { query: string; field: string; enabled?: boolean }) => ({
+    suggestions: [{ value: 'local-term-a', count: 1, source: 'local' as const }],
+    loading: false,
+    error: null,
+  })),
+}))
+vi.mock('../../hooks/useResolveOntology', () => ({
+  useResolveOntology: vi.fn((_opts: { query: string; enabled?: boolean }) => ({
+    results: [
+      {
+        // OBO-shaped resolve result (the /resolve spine returns the
+        // CURIE + the IRI whose obo: tail carries it) — the canonical
+        // derivation the shared commitRefSelection applies is the IRI-tail
+        // branch; a hyphenated CURIE string would fall through to the
+        // label-slug branch (a different id) and is not what the spine
+        // returns.
+        curie: 'TESTNS:test_compound',
+        label: 'Test compound',
+        namespace: 'TESTNS',
+        tier: 2 as const,
+        level: 'concept' as const,
+        score: 1,
+        source: 'oak' as const,
+        uri: 'http://purl.obolibrary.org/obo/TESTNS_test_compound',
+      },
+    ],
+    loading: false,
+    fromCache: false,
+  })),
+}))
+
 const SCHEMA_ROOT = resolve(process.cwd(), '..', 'schema')
 
 /** Walk schema/** for .schema.yaml and register every $id (mirrors the
@@ -477,5 +515,98 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
     const nested = lastCommit[0].nested
     expect(typeof nested).toBe('object')
     expect(Object.keys(nested as object).sort()).toEqual(['inner', 'kind'])
+  })
+
+  it('(e) W2 part 2: a `widget: ref` item sub-field renders the EXISTING ref picker (RefCombobox over the /resolve spine) — NEVER a free-text input — and commits the canonical ontology ref OBJECT', () => {
+    // A minimal item hint carrying ONE ref sub-field (no field/kind names
+    // from the domain — the branch under test is on the DECLARED widget
+    // `ref`, not on any field name). The ref sub-field's declared props carry
+    // the ontology-ref suggestion shape (the 'ols' source turns on the
+    // /resolve spine; valueShape ontology-ref commits the canonical object).
+    const itemHint = {
+      path: '$.item',
+      widget: 'object',
+      label: 'Ref item',
+      fields: [
+        { path: 'name', widget: 'text', label: 'Name', required: true },
+        {
+          path: 'target_ref',
+          widget: 'ref',
+          label: 'Target reference',
+          required: true,
+          props: {
+            sources: ['local', 'ols'],
+            valueShape: 'ontology-ref',
+            ontologyBinding: 'allow-ontology',
+          },
+        },
+      ],
+    }
+    const onCommit = vi.fn()
+    const view = render(
+      <ArrayWidget value={[]} widget="array" readOnly={false} onCommit={onCommit} itemHint={itemHint} />,
+    )
+    openArrayEditor(view.container)
+    addArrayItem(view.container)
+    // THE SEED (part 2, C2): a ref sub-field is seeded ABSENT (its key is not
+    // present), not '' — '' into a ref-object position is schema-invalid
+    // (the QMS-6E "Expected type: object" 422). The flat text sub-field
+    // seeds '' as before (behavior preserved for non-ref sub-fields).
+    const seeded = lastArrayCommit(onCommit) as Array<Record<string, unknown>>
+    expect(seeded).toHaveLength(1)
+    expect(seeded[0].name).toBe('')
+    expect(
+      'target_ref' in seeded[0],
+      'the ref sub-field must be ABSENT from the seed (never "")',
+    ).toBe(false)
+    // Re-render with the committed (seeded) item, as FieldRow would.
+    view.rerender(
+      <ArrayWidget value={lastArrayCommit(onCommit)} widget="array" readOnly={false} onCommit={onCommit} itemHint={itemHint} />,
+    )
+    openObjectEditor(view.container)
+    // THE PART-2 RENDERING CONTRACT: the ref sub-field renders the EXISTING
+    // RefCombobox picker (the ref-combobox container), NOT a flat
+    // .taptab-object-field-input text input. The flat `name` sub-field STILL
+    // renders its text input (the non-ref path is byte-identical).
+    const flatInputs = view.container.querySelectorAll('.taptab-object-field-input')
+    expect(
+      flatInputs,
+      'only the flat text sub-field renders a text input — the ref sub-field renders the picker',
+    ).toHaveLength(1)
+    expect(
+      (flatInputs[0]?.closest('.taptab-object-field')?.querySelector('.taptab-object-field-label')?.textContent ?? ''),
+      'the one text input is the flat sub-field (name)',
+    ).toContain('Name')
+    const refCombobox = view.container.querySelector('.ref-combobox')
+    expect(
+      refCombobox,
+      'the ref sub-field must render the EXISTING RefCombobox picker (never free text)',
+    ).toBeTruthy()
+    // Navigate the picker: skip the single local result, commit the ontology
+    // candidate (the /resolve spine hit the mocked useResolveOntology serves).
+    const input = refCombobox!.querySelector('input') as HTMLInputElement
+    act(() => {
+      fireEvent.change(input, { target: { value: 'compound' } })
+    })
+    fireEvent.keyDown(input, { key: 'ArrowDown' }) // local result
+    fireEvent.keyDown(input, { key: 'ArrowDown' }) // ontology candidate
+    fireEvent.keyDown(input, { key: 'Enter' })
+    // THE PART-2 COMMIT CONTRACT: the picker commits the canonical ontology
+    // ref OBJECT (the datatypes/ref ontology shape: kind:ontology +
+    // namespace + id(CURIE) + label + uri) — never a free-text string, never
+    // a bare CURIE string. The whole item object is spliced back (the name
+    // sub-field's seeded '' survives the splice).
+    const lastCommit = lastArrayCommit(onCommit) as Array<Record<string, unknown>>
+    expect(lastCommit).toHaveLength(1)
+    const committed = lastCommit[0]
+    const refValue = committed.target_ref
+    expect(typeof refValue, 'the committed ref is an OBJECT, not a string').toBe('object')
+    expect(refValue).toEqual({
+      kind: 'ontology',
+      id: 'TESTNS:test_compound',
+      namespace: 'TESTNS',
+      label: 'Test compound',
+      uri: 'http://purl.obolibrary.org/obo/TESTNS_test_compound',
+    })
   })
 })

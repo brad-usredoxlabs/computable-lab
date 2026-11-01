@@ -156,6 +156,23 @@ export interface ArrayItemHintField {
   /** Options for select/radio/multiselect. */
   options?: Array<{ value: string | number | boolean; label: string }>;
   /**
+   * W2 part 2 (typed sub-fields through the existing widget switch): the
+   * ui.yaml-declared `refKind` for ref/record-ref sub-fields — forwarded
+   * so a `widget: record-ref` item sub-field opens the RecordRefPicker
+   * scoped to the declared kind (the same generic forwarding as the
+   * top-level slot's refKind; shape-only, no field-name branch).
+   */
+  refKind?: string;
+  /**
+   * W2 part 2: the ui.yaml-declared suggestion `props` for the sub-field
+   * (sources / valueShape / ontologyBinding). Forwarded so a ref sub-field
+   * renders the ref picker with the SAME suggestion plan the top-level
+   * slot would (buildSuggestionPlanFromFieldHint over the declared props —
+   * the ontology-ref pattern: the 'ols' source turns on the /resolve
+   * spine, valueShape ontology-ref commits the canonical ref OBJECT).
+   */
+  props?: Record<string, unknown>;
+  /**
    * Nested field hints — present ONLY when this field is a nested object.
    * Self-recursive: each nested field may itself declare `fields`.
    */
@@ -178,6 +195,24 @@ export interface ObjectFieldConfig {
   required?: boolean;
   /** Options for select/multiselect */
   options?: Array<{ value: string; label: string }>;
+  /**
+   * W2 part 2: the ui.yaml-declared `refKind` for a ref/record-ref property.
+   * Forwarded so a ref-typed sub-field renders the existing picker machinery
+   * (RefCombobox / RecordRefPicker) scoped to the declared kind — the SAME
+   * generic forwarding the top-level slot's refKind gets (shape-only, no
+   * field-name / kind-name branch). Absent for non-ref properties.
+   */
+  refKind?: string;
+  /**
+   * W2 part 2: the ui.yaml-declared suggestion `props` (sources / valueShape
+   * / ontologyBinding) for a ref sub-field. The ObjectWidget renders the
+   * ref sub-field through the existing WidgetRenderer switch with a
+   * suggestion plan built from these props (the ontology-ref pattern: the
+   * 'ols' source turns on the /resolve spine and valueShape ontology-ref
+   * commits the canonical ref OBJECT, never free text). Absent for
+   * non-ref / flat properties (byte-identical rendering).
+   */
+  props?: Record<string, unknown>;
   /**
    * WIDGET-R1 fix-run 2 (D2 / ruling ARCHD2L1T1335 OPT-A): nested property
    * definitions — present ONLY when this property is a nested object. The
