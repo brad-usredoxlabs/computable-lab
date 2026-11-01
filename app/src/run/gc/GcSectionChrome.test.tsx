@@ -534,15 +534,27 @@ describe('GcSectionChrome — E Analyze (verify-first, append-only, GC-11 seam)'
   })
 })
 
-describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA, not interpretation)', () => {
-  /** An entry WITH a package whose payload carries the FAME-1 stamp. */
-  const pkgEntry = (status: 'aborted' | 'completed' | 'stopped-by-user' | 'unknown', withLines: boolean): GcChromeEntry => ({
+describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DECLARED flag, not interpretation)', () => {
+  /**
+   * An entry WITH a package whose payload carries the FAME-1 stamp.
+   * `qualified` is the DECLARED `acquisitionStatusQualified` flag (the rule
+   * file's statusQualification, stamped at registration) — the chrome renders
+   * THIS flag, never a status-literal branch (D3). It is passed EXPLICITLY
+   * (decoupled from `status`) so the tests can prove the chrome follows the
+   * flag, not the status word.
+   */
+  const pkgEntry = (
+    status: 'aborted' | 'completed' | 'stopped-by-user' | 'unknown',
+    withLines: boolean,
+    qualified: boolean,
+  ): GcChromeEntry => ({
     recordId: 'ISEN-C-1',
     payload: ENTRY_WITH_PKG.payload,
     acquisitionPackage: {
       kind: 'acquisition-package',
       id: 'ACQP-000042',
       acquisitionStatus: status,
+      acquisitionStatusQualified: qualified,
       files: [
         { relativePath: 'FID1A.CH', role: 'signal_channel', dataReferenceRef: { kind: 'record', type: 'data-reference', id: 'DREF-000101' } },
         { relativePath: 'RUN.LOG', role: 'run_log', dataReferenceRef: { kind: 'record', type: 'data-reference', id: 'DREF-000103' } },
@@ -570,11 +582,11 @@ describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA
     },
   })
 
-  it('an ABORTED package: the status word + a /record/<RUN.LOG DREF> evidence link + the matched lines (visibly qualified)', async () => {
+  it('an ABORTED package (declared qualified): the status word + a /record/<RUN.LOG DREF> evidence link + the matched lines (visibly qualified)', async () => {
     render(
       wrap(
         <GcSectionChrome
-          entries={[pkgEntry('aborted', true)]}
+          entries={[pkgEntry('aborted', true, true)]}
           runId="RUN-C-1"
           sequenceRef={SEQUENCE}
           onEntryUpdated={vi.fn()}
@@ -598,11 +610,11 @@ describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA
     expect(screen.getByTestId('gc-analyze-btn-ISEN-C-1')).toBeDefined()
   })
 
-  it('a COMPLETED package: a quiet word (no qualified styling, no evidence block)', async () => {
+  it('a COMPLETED package (declared not qualified): a quiet word (no qualified styling, no evidence block)', async () => {
     render(
       wrap(
         <GcSectionChrome
-          entries={[pkgEntry('completed', true)]}
+          entries={[pkgEntry('completed', true, false)]}
           runId="RUN-C-1"
           sequenceRef={SEQUENCE}
           onEntryUpdated={vi.fn()}
@@ -617,11 +629,11 @@ describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA
     expect(screen.queryByTestId('gc-acqp-status-evidence-ISEN-C-1')).toBeNull()
   })
 
-  it('an UNKNOWN package: visibly qualified with the NAMED no-evidence reason (never completed)', async () => {
+  it('an UNKNOWN package (declared qualified): visibly qualified with the NAMED no-evidence reason (never completed)', async () => {
     render(
       wrap(
         <GcSectionChrome
-          entries={[pkgEntry('unknown', false)]}
+          entries={[pkgEntry('unknown', false, true)]}
           runId="RUN-C-1"
           sequenceRef={SEQUENCE}
           onEntryUpdated={vi.fn()}
@@ -635,6 +647,51 @@ describe('GcSectionChrome — FAME-1: the acquisition-status qualification (DATA
     expect(status.className).toContain('gc-acqp-status--qualified')
     const evidence = screen.getByTestId('gc-acqp-status-evidence-ISEN-C-1')
     expect(evidence.textContent).toContain('no-rule-match')
+  })
+
+  it('D3 (decoupling proof): an ABORTED status with the DECLARED flag=false renders QUIET (the chrome follows the flag, not the status literal)', async () => {
+    // If the chrome still branched on the status literal, this would render
+    // qualified. It must render quiet: qualification is the DECLARED flag.
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[pkgEntry('aborted', true, false)]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    const status = screen.getByTestId('gc-acqp-status-ISEN-C-1')
+    expect(status.textContent).toContain('acquisition status: aborted')
+    expect(status.className).not.toContain('gc-acqp-status--qualified')
+    // No evidence block (the qualified-only surface is off).
+    expect(screen.queryByTestId('gc-acqp-status-evidence-ISEN-C-1')).toBeNull()
+  })
+
+  it('D3 (decoupling proof): a COMPLETED status with the DECLARED flag=true renders VISIBLY QUALIFIED (the flag, not the status word, wins)', async () => {
+    // The declared data could, in principle, mark a status qualified that the
+    // old hardcoded set excluded. The chrome must honor the flag: completed
+    // with qualified=true renders the qualified treatment + evidence block.
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[pkgEntry('completed', true, true)]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    await screen.findByTestId('gc-analyze-entry-ISEN-C-1')
+    const status = screen.getByTestId('gc-acqp-status-ISEN-C-1')
+    expect(status.textContent).toContain('acquisition status: completed')
+    expect(status.className).toContain('gc-acqp-status--qualified')
+    // The evidence block renders (qualified => non-collapsing surface).
+    expect(screen.getByTestId('gc-acqp-status-evidence-ISEN-C-1')).toBeDefined()
   })
 
   it('a package WITHOUT the stamp yet (fetch not landed): the attached id shows, NO status word is invented', async () => {

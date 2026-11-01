@@ -97,3 +97,39 @@ rules:
       The method's terminal state line says Method completed (COUNTRYSIDE
       20201023 "Method completed 15:24:43"; RES35077-4/RES35077-5 end the
       same way).
+
+# ---------------------------------------------------------------------------
+# FAME-1 (D3): the per-status RUN-SHEET DISPLAY QUALIFICATION — DATA, not a
+# TSX branch. Which classified statuses render as VISIBLY QUALIFIED on the
+# run sheet (a non-collapsing warning line next to "attached: ACQP-…") is a
+# domain/policy decision that belongs in THIS file (the rule file already
+# knows every status it can emit), not in a hardcoded status-literal branch
+# in GcSectionChrome.tsx. A status with qualified: true renders visibly
+# qualified; a status with qualified: false (or absent) renders a quiet word.
+# The registration stamps this onto the package payload
+# (acquisitionStatusQualified) so the chrome renders the DECLARED flag —
+# changing the qualified set is a data edit here, never a TSX rebuild.
+# (The four statuses are the schema's fixed vocabulary; qualification is
+# policy about that vocabulary, declared once, here.)
+# ---------------------------------------------------------------------------
+statusQualification:
+  - status: completed
+    qualified: false
+    note: >-
+      A completed acquisition is the quiet, expected outcome — no run-sheet
+      warning. The package stays attached and the evidence stays readable.
+  - status: aborted
+    qualified: true
+    note: >-
+      An aborted acquisition is a non-completed outcome that an operator
+      should see at a glance — visibly qualified (the WEGMANS F2 finding).
+  - status: stopped-by-user
+    qualified: true
+    note: >-
+      An operator-stop is a non-completed outcome — visibly qualified.
+  - status: unknown
+    qualified: true
+    note: >-
+      Unknown (no parseable log / no rule hit) is the DECLARED floor — it is
+      visibly qualified because an unexplained non-completed state is the
+      one a reviewer most needs to see (never silently treated as completed).

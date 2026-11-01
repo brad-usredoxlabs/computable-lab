@@ -341,21 +341,23 @@ export function GcSectionChrome({
               )}
               {entries.map((e) => {
                 const hasPkg = Boolean(e.payload.acquisitionPackageRef?.id)
-                // FAME-1: the acquisition-status qualification, next to the
-                // "attached: ACQP-…" line. It renders ONLY DATA the package
-                // record carries (no interpretation in TSX — no
-                // `.includes('abort')`): the status word, the /record/<RUN.LOG
-                // DREF> evidence link (OQ-1: the generic record host — no
-                // raw-blob route), and the verbatim matched lines.
-                // aborted / stopped-by-user / unknown = VISIBLY qualified
-                // (a non-collapsing warning line, never a tooltip); completed
-                // = a quiet word. The package payload is absent until the
-                // section's ACQP fetch lands — then only the attach id shows.
+                // FAME-1 (D3): the acquisition-status qualification, next to
+                // the "attached: ACQP-…" line. It renders ONLY DATA the
+                // package record carries (no interpretation in TSX): the
+                // status word, the /record/<RUN.LOG DREF> evidence link
+                // (OQ-1), and the verbatim matched lines. Which statuses are
+                // VISIBLY QUALIFIED is the DECLARED `acquisitionStatusQualified`
+                // flag (the rule file's statusQualification, stamped at
+                // registration) — a DATA decision, NEVER a hardcoded
+                // status-literal branch (the D3 defect). A qualified status
+                // renders a non-collapsing warning line; a non-qualified one a
+                // quiet word. The package payload is absent until the section's
+                // ACQP fetch lands — then only the attach id shows.
                 // Attach/Analyze stay available in ALL cases (bait #10): this
                 // is extra visible data, never a gate.
                 const acqpStatus = e.acquisitionPackage?.acquisitionStatus
                 const acqpStatusQualified =
-                  acqpStatus === 'aborted' || acqpStatus === 'stopped-by-user' || acqpStatus === 'unknown'
+                  e.acquisitionPackage?.acquisitionStatusQualified === true
                 const runLogDref = e.acquisitionPackage ? runLogDrefId(e.acquisitionPackage) : undefined
                 const matchedLines = e.acquisitionPackage ? matchedAcquisitionLines(e.acquisitionPackage) : []
                 const noEvidenceReason = e.acquisitionPackage?.acquisitionStatusEvidence?.noEvidenceReason
@@ -413,9 +415,9 @@ export function GcSectionChrome({
                             data-testid={`gc-acqp-status-evidence-${e.recordId}`}
                           >
                             <summary>
-                              {acqpStatus === 'unknown'
-                                ? `no RUN.LOG evidence (${noEvidenceReason ?? 'reason unstated'})`
-                                : `matched RUN.LOG lines (${matchedLines.length})`}
+                              {matchedLines.length > 0
+                                ? `matched RUN.LOG lines (${matchedLines.length})`
+                                : `no RUN.LOG evidence (${noEvidenceReason ?? 'reason unstated'})`}
                             </summary>
                             {matchedLines.length > 0 ? (
                               <ul>

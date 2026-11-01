@@ -99,6 +99,14 @@ export interface AcquisitionPackagePayload {
   sampleRef?: RecordRef
   state?: string
   acquisitionStatus?: 'completed' | 'aborted' | 'stopped-by-user' | 'unknown'
+  /**
+   * FAME-1 (D3): the DECLARED run-sheet qualification for acquisitionStatus
+   * (the rule file's `statusQualification`, stamped at registration — DATA,
+   * not code). The chrome renders THIS flag to decide visibly-qualified vs
+   * quiet word; it never branches on the status literal in TSX. Absent on
+   * packages registered before FAME-1.
+   */
+  acquisitionStatusQualified?: boolean
   acquisitionStatusEvidence?: {
     ruleset: { id: string; version: string | number; sourceFile: string }
     sourceMember: { relativePath: string }
