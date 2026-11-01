@@ -41,6 +41,26 @@ DATA_REPO = os.environ.get("CL_DATA_REPO", "/home/brad/.computable-lab/worktrees
 UI_DRIVER = os.path.join(HERE, "ui-drive.cjs")
 APP_DIR = os.path.join(REPO_ROOT, "app")
 TURN_TIMEOUT = int(os.environ.get("CL_JOURNEY_TIMEOUT", "660"))
+FAKE_SERVER = os.path.join(HERE, "fake-inference.py")
+FAKE_CANNED = os.path.join(HERE, "canned", "completions.yaml")
+
+# N1 (ruling Q-D): the trunk FE identity is a LITERAL set. NO env derivation:
+# CL_JOURNEY_APP_BASE (or --app-base) selects the run's target, but it can
+# never MAKE a target count as trunk. A scratch vite on any other port is a
+# scratch run, full stop. check-gate.py compares the SAME literal.
+TRUNK_PORTS = {("localhost", 5193), ("127.0.0.1", 5193)}
+
+
+def _hostport(u):
+    from urllib.parse import urlparse
+    p = urlparse(u or "")
+    return (p.hostname or "", p.port)
+
+
+def app_base_is_trunk(u):
+    """A4: literal-set membership. run-meta must not be able to lie about
+    which FE a run exercised (the cycle-1 D2 defect class)."""
+    return _hostport(u) in TRUNK_PORTS
 
 # ---------------------------------------------------------------------------
 # Channel assertions — PURE over the captured request-body artifact.
@@ -233,6 +253,124 @@ def latest_run_dir():
 
 
 # ---------------------------------------------------------------------------
+# A1/A2 — the model-layer fake lifecycle (ruling Q-A/Q-B).
+# The fake is pointed at the backend ONLY through the shipped config surface
+# (the AI-profile lifecycle: save -> activate -> [run] -> restore). Every wire
+# stays REAL: browser -> :3093 /api/ai/** (untouched), backend -> fake (real
+# HTTP). The browser never intercepts (the ban + self-check are untouched).
+# ---------------------------------------------------------------------------
+
+def health_ai(api_base):
+    import urllib.request
+    with urllib.request.urlopen(api_base + "/api/health", timeout=10) as r:
+        return (json.load(r).get("components") or {}).get("ai") or {}
+
+
+def active_ai_profile(api_base):
+    import urllib.request
+    with urllib.request.urlopen(api_base + "/api/config/ai/profiles",
+                                timeout=15) as r:
+        return json.load(r).get("activeProfile")
+
+
+def start_fake_server(log_path, timeout=60):
+    """Launch fake-inference.py on a dedicated free port (port 0 = OS picks).
+    Returns (proc, fake_base). Raises on bring-up failure (the new seed-
+    failure shape N3 names)."""
+    cmd = ["python3", FAKE_SERVER, "--port", "0",
+           "--canned", FAKE_CANNED, "--log", log_path]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+    out_pipe = proc.stdout or sys.stderr
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            out = out_pipe.read() or ""
+            raise RuntimeError("fake server exited during bring-up: %s"
+                               % out[-400:])
+        line = out_pipe.readline()
+        if not line:
+            continue
+        if line.startswith("FAKE-READY port="):
+            port = int(line.split("port=")[1].split()[0])
+            return proc, "http://127.0.0.1:%d/api/v1" % port
+        print("[fake] %s" % line.strip(), file=sys.stderr)
+    proc.terminate()
+    raise RuntimeError("fake server did not report FAKE-READY within %ds"
+                       % timeout)
+
+
+def fake_point(api_base, fake_base, run_dir):
+    """Point the backend's OWN inference config at the fake via the shipped
+    profile surface. Saves a fresh 'l2trunkj-fake' profile, activates it, and
+    PROVES (A2) /api/health.ai.inferenceUrl now reports the fake. Returns
+    (live_profile, live_url, fake_url) for the restore + receipt record."""
+    live_profile = active_ai_profile(api_base)
+    if not live_profile:
+        raise RuntimeError("cannot snapshot the live AI profile — refusing to "
+                           "point the backend at the fake without a restore "
+                           "target (A2)")
+    live_url = health_ai(api_base).get("inferenceUrl")
+    if not live_url:
+        raise RuntimeError("health reports no live inferenceUrl — no A2 "
+                           "restore target")
+    # The profile lifecycle is the seam: activate() copies the profile's
+    # inference into the effective config and re-runs initializeAiRuntime
+    # (server.ts:1449). No product test-mode branch anywhere.
+    st, body = _api(api_base, "PUT", "/api/config/ai/profiles/l2trunkj-fake",
+                    {"inference": {"provider": "openai-compatible",
+                                   "baseUrl": fake_base,
+                                   "model": "l2trunkj-fake"},
+                     "agent": {}})
+    if st not in (200, 201):
+        raise RuntimeError("fake profile save failed %s -> %s" % (st, body))
+    st, body = _api(api_base, "POST",
+                    "/api/config/ai/profiles/l2trunkj-fake/activate")
+    if st not in (200, 201):
+        # Never leave a half-pointed backend: roll the profile back.
+        _api(api_base, "POST",
+             "/api/config/ai/profiles/%s/activate" % live_profile)
+        raise RuntimeError("fake profile activate failed %s -> %s" % (st, body))
+    time.sleep(1.5)  # let the probe (GET fake/models) + runtime init settle
+    url_now = health_ai(api_base).get("inferenceUrl")
+    if url_now != fake_base.rstrip("/"):
+        # A2: a leaked fake pointer would poison every lane-2 surface — if the
+        # point did not take, restore now and fail loud.
+        _api(api_base, "POST",
+             "/api/config/ai/profiles/%s/activate" % live_profile)
+        raise RuntimeError("inferenceUrl did not follow the fake: %r (want %r)"
+                           % (url_now, fake_base))
+    with open(os.path.join(run_dir, "fake-config.json"), "w") as fh:
+        json.dump({"mode": "fake", "live_profile": live_profile,
+                   "live_url": live_url, "fake_base": fake_base,
+                   "pointed_url": url_now}, fh, indent=2)
+    return live_profile, live_url, url_now
+
+
+def restore_ok(live_url, restored_url):
+    """A2: the restore is graded by EXACT equality with the live sampler URL.
+    A leaked fake pointer (restored != live) must be caught, not waved through —
+    the shared :3093 stack must never be left pointed at the fake. Pure so the
+    self-check can exercise the grading arm without a live server."""
+    return bool(live_url) and restored_url == live_url
+
+
+def fake_restore(api_base, live_profile, live_url):
+    """A2: graded restoration, not a promise. Delete the fake profile,
+    re-activate the live profile, and ASSERT /api/health.ai.inferenceUrl is
+    back to the live sampler URL. Returns the (restored_url, ok) pair."""
+    _api(api_base, "DELETE", "/api/config/ai/profiles/l2trunkj-fake")
+    st, _body = _api(api_base, "POST",
+                     "/api/config/ai/profiles/%s/activate" % live_profile)
+    if st not in (200, 201):
+        raise RuntimeError("live profile re-activate failed %s" % st)
+    time.sleep(1.5)
+    url_now = health_ai(api_base).get("inferenceUrl")
+    ok = restore_ok(live_url, url_now)
+    return url_now, ok
+
+
+# ---------------------------------------------------------------------------
 
 def _api(api_base, method, path, body=None, timeout=30, user_id="USR-BRAD"):
     import urllib.request
@@ -419,14 +557,36 @@ def grade_write_proof(journey, ui, api_base):
     return violations, rec
 
 
+def write_stub_receipt(run_dir, jid, verdict, violations, failure, note=None,
+                       stderr_tail=None):
+    """N3 (ruling Q-D): a per-journey receipt is written on EVERY path —
+    including seed/exec failure — carrying the failure text and the stderr
+    tail. A red journey with no receipt is a receipt-honesty defect (D4's
+    spirit): the tick artefact must show WHY it is red."""
+    receipt = {
+        "journey": jid,
+        "verdict": verdict,
+        "violations": violations,
+        "failure": failure,
+        "seed_note": note,
+        "stderr_tail": stderr_tail,
+    }
+    with open(os.path.join(run_dir, "%s.json" % jid), "w") as fh:
+        json.dump(receipt, fh, indent=2)
+    return receipt
+
+
 def run_journey(journey, run_dir, app_base, api_base):
     """Run one journey via ui-drive.cjs, then grade its receipt. Returns
     (journey_id, verdict, dict) with verdict in green/red/transport-error."""
     jid = journey["id"]
     ok, note, seeded = seed_journey(journey, api_base)
     if not ok:
-        return jid, "transport-error" if note.startswith("copy source") else "red", \
-               {"failure": "seed: " + note}
+        verdict = "transport-error" if note.startswith("copy source") else "red"
+        failure = {"failure": "seed: " + note}
+        write_stub_receipt(run_dir, jid, verdict, ["seed failure: " + note],
+                           failure, note=note)
+        return jid, verdict, failure
     out_path = os.path.join(run_dir, "%s-ui.json" % jid)
     cmd = ["node", UI_DRIVER,
            "--journey", os.path.join(HERE, "journeys", journey["file"]),
@@ -438,20 +598,28 @@ def run_journey(journey, run_dir, app_base, api_base):
         proc = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True,
                               timeout=TURN_TIMEOUT)
     except subprocess.TimeoutExpired:
-        with open(os.path.join(run_dir, "%s.json" % jid), "w") as fh:
-            json.dump({"journey": jid, "verdict": "red",
-                       "violations": ["ui-drive timeout after %ds" % TURN_TIMEOUT],
-                       "seed_note": note}, fh, indent=2)
-        return jid, "red", {"failure": "ui-drive timeout after %ds" % TURN_TIMEOUT}
+        failure = {"failure": "ui-drive timeout after %ds" % TURN_TIMEOUT}
+        write_stub_receipt(run_dir, jid, "red",
+                           ["ui-drive timeout after %ds" % TURN_TIMEOUT],
+                           failure, note=note)
+        return jid, "red", failure
     if proc.returncode == 2:
-        return jid, "transport-error", {"failure": "env error from ui-drive",
-                                        "stderr_tail": proc.stderr[-800:]}
+        failure = {"failure": "env error from ui-drive",
+                   "stderr_tail": (proc.stderr or "")[-800:]}
+        write_stub_receipt(run_dir, jid, "transport-error",
+                           ["ui-drive env error (rc=2)"], failure, note=note,
+                           stderr_tail=failure["stderr_tail"])
+        return jid, "transport-error", failure
     try:
         with open(out_path) as fh:
             ui = json.load(fh)
     except Exception as exc:
-        return jid, "red", {"failure": "ui-drive receipt unreadable: %s" % exc,
-                            "stderr_tail": proc.stderr[-800:]}
+        failure = {"failure": "ui-drive receipt unreadable: %s" % exc,
+                   "stderr_tail": (proc.stderr or "")[-800:]}
+        write_stub_receipt(run_dir, jid, "red",
+                           ["ui-drive receipt unreadable: %s" % exc], failure,
+                           note=note, stderr_tail=failure["stderr_tail"])
+        return jid, "red", failure
 
     violations = []
     if ui.get("failure"):
@@ -518,6 +686,95 @@ def run_journey(journey, run_dir, app_base, api_base):
     return jid, ("green" if not violations else "red"), receipt
 
 
+def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
+                             fake_info=None, advisory=False, health=None):
+    """Run the selected journeys, write run-meta + the `latest` flip. Returns
+    the overall verdict string (the exit-code source). `advisory` (A3) records
+    the real verdict but NEVER flips `latest` and sets red_blocks_claims so an
+    advisory run can never clear the gate. `fake_info`/restore records ride in
+    run-meta for A1/A2 grading."""
+    d_before = digest_repo(DATA_REPO)
+    failures = {}
+    for j in journeys:
+        print("== %s %s" % (j["id"], j.get("title", "")), flush=True)
+        jid, verdict, info = run_journey(j, run_dir, args.app_base, args.api_base)
+        results[jid] = verdict
+        if verdict != "green" and isinstance(info, dict):
+            failures[jid] = info        # N3: the failure dict is persisted
+        print("   -> %s" % verdict.upper(), flush=True)
+    d_after = digest_repo(DATA_REPO)
+
+    reds = sum(1 for v in results.values() if v == "red")
+    terr = sum(1 for v in results.values() if v == "transport-error")
+    # D2 + N1: an ALL-GREEN claim requires a COMPLETE run (every declared
+    # journey file) against the TRUNK app base — the TRUNK identity is the
+    # LITERAL set TRUNK_PORTS (no env derivation; CL_JOURNEY_APP_BASE can
+    # select the target but never make a scratch FE 'trunk').
+    trunk = app_base_is_trunk(args.app_base)
+    complete = set(results) == declared_ids(os.path.join(HERE, "journeys"))
+    if reds or terr:
+        verdict_all = "ENV-ERROR" if (terr and reds == 0) else "RED"
+    elif not complete or not trunk:
+        verdict_all = "INCOMPLETE" if not complete else "GREEN-NOT-TRUNK"
+    else:
+        verdict_all = "ALL-GREEN"
+    # A3: an advisory run records its honest verdict but never owns the gate:
+    # red_blocks_claims stays true and `latest` is never moved.
+    if advisory:
+        verdict_all = verdict_all + "-ADVISORY"
+    run_meta = {
+        "run": ts,
+        "harness": "L2-TRUNK-JOURNEYS-1",
+        "app_base": args.app_base,
+        "api_base": args.api_base,
+        "verdicts": results,            # the tick reads THIS table
+        "verdict": verdict_all,
+        "advisory": advisory,           # A3: advisory runs never gate
+        "journeys_run": list(results),
+        "journeys_declared": sorted(declared_ids(os.path.join(HERE, "journeys"))),
+        "complete": complete,           # D2: verdicts cover EVERY journey file
+        "app_base_is_trunk": trunk,     # D2/N1: literal trunk set, not env-derived
+        "failures": failures,           # N3: reds carry their failure dicts
+        "digest_before": d_before,
+        "digest_after": d_after,
+        "digest_clean": (d_before == d_after),
+        "backend_health_ai": (health or {}).get("components", {}).get("ai", {}),
+        "red_blocks_claims": (verdict_all != "ALL-GREEN") or advisory,
+    }
+    if fake_info is not None:
+        run_meta["fake_mode"] = True
+        run_meta["fake"] = fake_info
+    with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+        json.dump(run_meta, fh, indent=2)
+    # D2: `latest` flips ONLY for a complete trunk run — a scratch/partial
+    # run (and every advisory run) must never displace the trunk verdict.
+    flips_latest = (complete and trunk and not advisory)
+    if flips_latest:
+        link = os.path.join(RECEIPTS_ROOT, "latest")
+        tmp = link + ".new"
+        if os.path.islink(tmp) or os.path.exists(tmp):
+            os.remove(tmp)
+        os.symlink(run_dir, tmp)
+        os.replace(tmp, link)  # atomic flip of `latest`
+        latest_note = "latest -> this run"
+    elif advisory:
+        latest_note = "latest NOT moved (advisory run — verdict recorded only, A3)"
+    else:
+        latest_note = ("latest NOT moved (complete=%s app_base_is_trunk=%s)"
+                       % (complete, trunk))
+
+    for jid in sorted(results):
+        print("%s %s" % (jid, results[jid]))
+    print("run-meta: %s verdict=%s digest_clean=%s (%s)"
+          % (run_dir, verdict_all, d_before == d_after, latest_note))
+    if args.json:
+        print("JOURNEYS-JSON " + json.dumps({"run": ts, "dir": run_dir,
+                                             "verdict": verdict_all,
+                                             "advisory": advisory,
+                                             "verdicts": results}))
+    return verdict_all
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true")
@@ -526,6 +783,20 @@ def main():
     ap.add_argument("--app-base", default=DEFAULT_APP_BASE)
     ap.add_argument("--api-base", default=DEFAULT_API_BASE)
     ap.add_argument("--json", action="store_true", help="machine-readable summary line last")
+    # A1: point the BACKEND's own inference config at the harness-owned
+    # deterministic model-layer fake (canned/completions.yaml) for this run.
+    # The browser wire is untouched — the fake sits on the BACKEND side of
+    # /api/ai/**. A2: the live inference URL is restored + asserted after.
+    ap.add_argument("--fake", action="store_true",
+                    help="run the journeys against the deterministic model-layer "
+                         "fake (points the backend's inference config at it, "
+                         "restores + asserts the live URL afterwards)")
+    # A3: advisory live-sampler variant — an honest verdict, but it NEVER flips
+    # `latest` and does NOT gate claims while the live-drift product defect
+    # (L2-INTENTID-REDRAFT-1) is open. Use `--journey J2 --advisory`.
+    ap.add_argument("--advisory", action="store_true",
+                    help="record the verdict but NEVER flip `latest` (advisory "
+                         "live-sampler runs — J2-live shape)")
     args = ap.parse_args()
 
     import yaml  # stdlib-only except this; journeys are YAML by design
@@ -561,79 +832,73 @@ def main():
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = os.path.join(RECEIPTS_ROOT, ts)
     os.makedirs(run_dir, exist_ok=True)
-
-    d_before = digest_repo(DATA_REPO)
     results = {}
-    for j in journeys:
-        print("== %s %s" % (j["id"], j.get("title", "")), flush=True)
-        jid, verdict, _ = run_journey(j, run_dir, args.app_base, args.api_base)
-        results[jid] = verdict
-        print("   -> %s" % verdict.upper(), flush=True)
-    d_after = digest_repo(DATA_REPO)
 
-    greens = sum(1 for v in results.values() if v == "green")
-    reds = sum(1 for v in results.values() if v == "red")
-    terr = sum(1 for v in results.values() if v == "transport-error")
-    # D2: an ALL-GREEN claim requires a COMPLETE run (every declared journey
-    # file) against the TRUNK app base. Partial/scratch runs record their
-    # REAL per-journey verdicts but NEVER own a latest-blocking green claim.
-    from urllib.parse import urlparse
-    def _hostport(u):
-        p = urlparse(u)
-        return (p.hostname or "", p.port)
-    trunk_ports = {_hostport(DEFAULT_APP_BASE), ("127.0.0.1", 5193)}
-    app_base_is_trunk = _hostport(args.app_base) in trunk_ports
-    complete = set(results) == declared_ids(os.path.join(HERE, "journeys"))
-    if reds or terr:
-        verdict_all = "ENV-ERROR" if (terr and reds == 0) else "RED"
-    elif not complete or not app_base_is_trunk:
-        # D2: per-journey greens are recorded truthfully, but this run does
-        # NOT own a trunk green claim: verdict is informational only and the
-        # red_blocks_claims flag stays true so a tick can never read it as
-        # green; `latest` is not moved either.
-        verdict_all = "INCOMPLETE" if not complete else "GREEN-NOT-TRUNK"
+    # A1/A2: fake-mode lifecycle. The fake is brought up and pointed at the
+    # backend BEFORE any journey runs; the live inference URL is restored and
+    # ASSERTED afterwards (finally: on crash/timeout too — a leaked fake
+    # pointer would poison every lane-2 surface sharing :3093).
+    restore = None
+    if args.fake:
+        try:
+            fake_proc, fake_base = start_fake_server(os.path.join(run_dir, "fake-server.log"))
+        except Exception as exc:
+            print("ENV ERROR: fake endpoint bring-up failed: %s" % exc, file=sys.stderr)
+            return 2
+        try:
+            live_profile, live_url, pointed_url = fake_point(args.api_base, fake_base, run_dir)
+        except Exception as exc:
+            fake_proc.terminate()
+            print("ENV ERROR: could not point the backend at the fake: %s" % exc, file=sys.stderr)
+            return 2
+        fake_info = {"fake_proc_pid": fake_proc.pid, "fake_base": fake_base,
+                     "live_profile": live_profile, "live_url": live_url,
+                     "pointed_url": pointed_url}
+        print("FAKE-MODE on: backend inferenceUrl -> %s (live was %s)"
+              % (pointed_url, live_url), flush=True)
+        try:
+            verdict_all = _run_journeys_and_finish(
+                args, journeys, run_dir, ts, results,
+                fake_info=fake_info, advisory=args.advisory, health=health)
+        finally:
+            # A2 restore runs on EVERY path (crash/timeout included).
+            try:
+                restored_url, restore_ok = fake_restore(args.api_base,
+                                                        live_profile, live_url)
+            except Exception as exc:
+                restored_url, restore_ok = None, False
+                print("RESTORE ERROR: %s" % exc, file=sys.stderr)
+            restore = {"restored_url": restored_url, "restore_ok": restore_ok,
+                       "live_url": live_url, "pointed_url": pointed_url}
+            fake_proc.terminate()
+            try:
+                fake_proc.wait(timeout=10)
+            except Exception:
+                fake_proc.kill()
+            print("FAKE-MODE off: inferenceUrl restored -> %s (ok=%s, live was %s)"
+                  % (restored_url, restore_ok, live_url), flush=True)
+            if not restore_ok:
+                print("RESTORE FAILED: inferenceUrl is %r, expected live %r — "
+                      "MANUAL restore required (A2)" % (restored_url, live_url),
+                      file=sys.stderr)
+            with open(os.path.join(run_dir, "fake-restore.json"), "w") as fh:
+                json.dump({"pointed_url": pointed_url, "live_url": live_url,
+                           "restored_url": restored_url, "restore_ok": restore_ok},
+                          fh, indent=2)
+            # Persist the A2 restore record INTO the run-meta the tick reads.
+            meta_path = os.path.join(run_dir, "run-meta.json")
+            if os.path.exists(meta_path):
+                with open(meta_path) as fh:
+                    meta = json.load(fh)
+                meta["fake_mode"] = True
+                meta["fake"] = fake_info
+                meta["fake_restore"] = restore
+                with open(meta_path, "w") as fh:
+                    json.dump(meta, fh, indent=2)
     else:
-        verdict_all = "ALL-GREEN"
-    run_meta = {
-        "run": ts,
-        "harness": "L2-TRUNK-JOURNEYS-1",
-        "app_base": args.app_base,
-        "api_base": args.api_base,
-        "verdicts": results,            # the tick reads THIS table
-        "verdict": verdict_all,
-        "journeys_run": list(results),
-        "journeys_declared": sorted(declared_ids(os.path.join(HERE, "journeys"))),
-        "complete": complete,           # D2: verdicts cover EVERY journey file
-        "app_base_is_trunk": app_base_is_trunk,  # D2: not a scratch frontend
-        "digest_before": d_before,
-        "digest_after": d_after,
-        "digest_clean": (d_before == d_after),
-        "backend_health_ai": health.get("components", {}).get("ai", {}),
-        "red_blocks_claims": verdict_all != "ALL-GREEN",
-    }
-    with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
-        json.dump(run_meta, fh, indent=2)
-    # D2: `latest` flips ONLY for a complete trunk run — a scratch/partial
-    # run must never displace the trunk verdict the tick reads.
-    if complete and app_base_is_trunk:
-        link = os.path.join(RECEIPTS_ROOT, "latest")
-        tmp = link + ".new"
-        if os.path.islink(tmp) or os.path.exists(tmp):
-            os.remove(tmp)
-        os.symlink(run_dir, tmp)
-        os.replace(tmp, link)  # atomic flip of `latest`
-        latest_note = "latest -> this run"
-    else:
-        latest_note = ("latest NOT moved (complete=%s app_base_is_trunk=%s)"
-                       % (complete, app_base_is_trunk))
-
-    for jid in sorted(results):
-        print("%s %s" % (jid, results[jid]))
-    print("run-meta: %s verdict=%s digest_clean=%s (%s)"
-          % (run_dir, verdict_all, d_before == d_after, latest_note))
-    if args.json:
-        print("JOURNEYS-JSON " + json.dumps({"run": ts, "dir": run_dir,
-                                             "verdict": verdict_all, "verdicts": results}))
+        verdict_all = _run_journeys_and_finish(
+            args, journeys, run_dir, ts, results,
+            fake_info=None, advisory=args.advisory, health=health)
     return 0 if verdict_all == "ALL-GREEN" else 1
 
 

@@ -3,12 +3,23 @@
 Standing, re-runnable journeys that treat the lane TRUNK stack (:3093 /
 :5193) as ONE system. Journeys are DATA (`journeys/J*.yaml`); ONE driver
 (`run-journeys.py`) runs them over REAL transport. Fakes live at the MODEL
-layer only — and today none are needed: the lane backend answers with its
-real configured sampler (see run-meta `backend_health_ai`). Interception of
-any `/api/ai/**` path (page.route / fulfill / abort) is BANNED BY
-CONSTRUCTION: `ui-drive.cjs` contains zero route-handler calls (the
-self-check greps the file and fails closed), the receipt attests
-`route_handlers_used: 0`, and the driver grades ANY nonzero as RED.
+layer only. The J2 clarification round trip is determinizable two ways:
+
+- **live** (default): the lane backend answers with its real configured
+  sampler (run-meta `backend_health_ai`). J2's answer-turn intentId can drift
+  with the sampler's phrasing — that is a PRODUCT defect (filed separately),
+  so the live J2 is run as an **advisory** signal (A3) while it is open.
+- **fake** (`--fake`, A1): a harness-owned deterministic openai-compatible
+  inference endpoint (`fake-inference.py`) stands in for the sampler. The
+  backend's OWN inference config is pointed at it through the shipped
+  profile surface only (PUT/activate a `l2trunkj-fake` profile), so EVERY
+  wire stays REAL: browser -> :3093 `/api/ai/**` (untouched), backend -> fake
+  (real HTTP). Canned completions are DATA (`canned/completions.yaml`). The
+  live inference URL is RESTORED and asserted afterwards (A2). Interception
+  of any `/api/ai/**` path is still BANNED BY CONSTRUCTION in BOTH modes:
+  `ui-drive.cjs` contains zero route-handler calls (the self-check greps the
+  file and fails closed), the receipt attests `route_handlers_used: 0`, and
+  the driver grades ANY nonzero as RED. The fake never touches the browser.
 
 ## How to run
 
@@ -16,7 +27,16 @@ cwd = the lane worktree root:
 
     python3 .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --all
     python3 .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --journey J1
+    # A1: run against the deterministic model-layer fake (points the backend's
+    # inference config at it, restores + asserts the live URL afterwards).
+    python3 .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --all --fake
+    # A3: advisory live-sampler J2 — honest verdict, NEVER flips `latest`,
+    # does NOT gate claims while the live-drift product defect is open.
+    python3 .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --journey J2 --advisory
     python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py
+
+The GATE'S HARD SET is J1 + J2 (fake) + J3 green on a complete trunk run; that
+run owns `latest`. The live-sampler J2 (`--advisory`) is extra signal only.
 
 Env: `CL_JOURNEY_APP_BASE` (default http://localhost:5193 — TRUNK),
 `CL_JOURNEY_API_BASE` (default http://localhost:3093), `CL_RECEIPTS`
@@ -72,15 +92,25 @@ plus `selection_affordance` (the disclosed real-UI affordance), `violations`
 
 The driver atomically flips receipts-root `latest` -> the run dir ONLY for a
 COMPLETE run (every journeys/*.yaml id in the verdicts table) against the
-TRUNK app base; a partial/scratch run records its real per-journey verdicts
-(verdict INCOMPLETE / GREEN-NOT-TRUNK, `red_blocks_claims: true`) but never
-moves `latest`. run-meta carries the `verdicts` table plus `complete` and
-`app_base_is_trunk`. The tick gate (fails closed on both):
+TRUNK app base, where TRUNK is the LITERAL set
+`{localhost:5193, 127.0.0.1:5193}` (N1: no env derivation —
+`CL_JOURNEY_APP_BASE` can select the run target but never make a scratch FE
+'trunk'; check-gate re-derives the same literal from the run's recorded
+app_base, so a lying run-meta flag cannot pass). A partial/scratch run
+records its real per-journey verdicts (verdict INCOMPLETE / GREEN-NOT-TRUNK,
+`red_blocks_claims: true`) but never moves `latest`. An ADVISORY run
+(`--advisory`, the live-sampler J2 shape) records its honest verdict but also
+never moves `latest` and sets `red_blocks_claims: true` (A3). run-meta carries
+the `verdicts` table plus `complete`, `app_base_is_trunk`, `advisory`,
+`failures` (N3: reds carry their failure dict), and — for a `--fake` run —
+`fake`/`fake_restore` (A1/A2: the pointed and restored inference URLs). The
+tick gate (fails closed on both):
 
     python3 .hermes/plans/harness/l2-trunk-journeys/check-gate.py
     exit 0 = green (or never-ran) — claim normally
     exit 1 = prints a BLOCKER line naming each red journey, an INCOMPLETE
-             verdicts table, or a NON-TRUNK app_base — ready set EMPTY
+             verdicts table, a NON-TRUNK app_base, or an ADVISORY latest —
+             ready set EMPTY
     exit 2 = receipt trail unreadable — fail closed
 
 ## Self-check leg (fails closed)
@@ -92,7 +122,10 @@ on the honest outgoing body and go RED on the rename form
 (selectedWells -> selection), the empty-wells form and the null form;
 (2) a ui receipt with route_handlers_used=1 is BANNED and `ui-drive.cjs`
 contains no interception call at all; (3) check-gate.py blocks on a red
-run-meta (exit 1 + BLOCKER) and passes on a green one.
+run-meta (exit 1 + BLOCKER) and passes on a green one; (4) the A2 restore
+grades a leaked fake pointer FAILED and an exact live-URL restore OK; (5) the
+A4/N1 literal-trunk set — :5193 is trunk, :5195/None are not (env cannot
+spoof), and a lying-flag scratch run-meta is BLOCKED by the gate.
 
 ## Canary (how to reproduce the acceptance demo)
 
@@ -115,6 +148,8 @@ the data-repo digest before/after is recorded and came back clean.
 
     run-journeys.py               # the ONE driver (python3; yaml is the only import)
     ui-drive.cjs                  # the browser executor (ZERO route handlers, by construction)
-    check-gate.py                 # the tick-facing red-blocks-claims gate
-    test-channel-selfcheck.py     # the fails-closed self-check leg
+    check-gate.py                 # the tick-facing red-blocks-claims gate (literal trunk set)
+    test-channel-selfcheck.py     # the fails-closed self-check leg (incl. A2 + A4/N1 arms)
+    fake-inference.py             # the A1 model-layer fake (openai-compatible, driver-managed)
+    canned/completions.yaml       # A1 canned completions (DATA, keyed to journey + turn)
     journeys/J1.yaml J2.yaml J3.yaml   # the journeys (DATA: add a journey = add a file)

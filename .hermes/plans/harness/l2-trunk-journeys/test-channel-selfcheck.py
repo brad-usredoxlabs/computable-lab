@@ -266,6 +266,54 @@ def main():
                         p.returncode == 0,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
 
+    # ---- (4) A2: the model-layer fake restore is GRADED, not promised ----
+    # A leaked fake pointer (restored != live) must grade FAILED; an exact
+    # restore of the live sampler URL must grade OK. Pure helper — no server.
+    live = "http://127.0.0.1:18099/api/v1"
+    fakeu = "http://127.0.0.1:43210/api/v1"
+    results.append(("A2 restore: exact live URL grades OK",
+                    rj.restore_ok(live, live),
+                    ["restore_ok(%r, %r)=%r" % (live, live, rj.restore_ok(live, live))]))
+    results.append(("A2 restore: a LEAKED fake pointer grades FAILED",
+                    not rj.restore_ok(live, fakeu),
+                    ["restore_ok(%r, %r)=%r" % (live, fakeu, rj.restore_ok(live, fakeu))]))
+    results.append(("A2 restore: a null live URL never grades OK",
+                    not rj.restore_ok(None, live),
+                    ["restore_ok(None, %r)=%r" % (live, rj.restore_ok(None, live))]))
+
+    # ---- (5) A4/N1: the trunk FE identity is a LITERAL set, no env -------
+    # CL_JOURNEY_APP_BASE (or --app-base) may SELECT the run target, but it
+    # must NEVER make a scratch frontend count as trunk. check-gate re-derives
+    # the same literal. The cycle-1 D2 defect (env-spoofable app_base_is_trunk)
+    # must be gone.
+    results.append(("N1 literal-trunk: :5193 (both hosts) IS trunk",
+                    rj.app_base_is_trunk("http://localhost:5193")
+                    and rj.app_base_is_trunk("http://127.0.0.1:5193"),
+                    ["TRUNK_PORTS=%r" % (getattr(rj, "TRUNK_PORTS", None),)]))
+    results.append(("N1 literal-trunk: a scratch FE (:5195) is NOT trunk (env cannot spoof)",
+                    not rj.app_base_is_trunk("http://127.0.0.1:5195")
+                    and not rj.app_base_is_trunk("http://localhost:5195"),
+                    []))
+    results.append(("N1 literal-trunk: a missing/None app_base is NOT trunk",
+                    not rj.app_base_is_trunk(None) and not rj.app_base_is_trunk(""),
+                    []))
+    # The gate must BLOCK a run whose app_base is scratch even when the
+    # run-meta flag claims trunk (the gate re-derives from app_base, N1).
+    with tempfile.TemporaryDirectory() as td_n1:
+        spoof_dir = os.path.join(td_n1, "20260101T000001Z")
+        os.makedirs(spoof_dir)
+        with open(os.path.join(spoof_dir, "run-meta.json"), "w") as fh:
+            json.dump({"app_base": "http://127.0.0.1:5195",
+                       "app_base_is_trunk": True,   # a LYING flag
+                       "verdict": "ALL-GREEN", "verdicts": full_green}, fh)
+        os.symlink(spoof_dir, os.path.join(td_n1, "latest"))
+        env = dict(os.environ, CL_RECEIPTS=td_n1)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("N1 gate: a LIES-flag scratch run is BLOCKED (gate re-derives trunk)",
+                        p.returncode == 1 and "NON-TRUNK" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+
     ok = True
     for name, passed, notes in results:
         print("%-64s %s" % (name, "OK" if passed else "RED"))

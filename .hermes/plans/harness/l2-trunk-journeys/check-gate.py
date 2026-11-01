@@ -19,6 +19,22 @@ import sys
 RECEIPTS_ROOT = os.environ.get(
     "CL_RECEIPTS", "/home/brad/.hermes/cl/receipts/L2-TRUNK-JOURNEYS")
 
+# N1 (ruling Q-D): the SAME literal trunk set the driver compares
+# (run-journeys.py TRUNK_PORTS). NO env derivation — a scratch vite on any
+# other port can never be a trunk run, and the gate re-derives it from the
+# run's app_base independently of the run-meta flag.
+TRUNK_PORTS = {("localhost", 5193), ("127.0.0.1", 5193)}
+
+
+def _hostport(u):
+    from urllib.parse import urlparse
+    p = urlparse(u or "")
+    return (p.hostname or "", p.port)
+
+
+def app_base_is_trunk(u):
+    return _hostport(u) in TRUNK_PORTS
+
 
 def main():
     link = os.path.join(RECEIPTS_ROOT, "latest")
@@ -63,11 +79,21 @@ def main():
               "ran (D2: an incomplete run may not clear the gate)" % missing)
         print("GATE-VERDICT blocking")
         return 1
-    if meta.get("app_base_is_trunk") is False or "127.0.0.1:5195" in str(meta.get("app_base", "")) \
-            or (meta.get("app_base", "").split("//")[-1].split("/")[0] not in
-                ("localhost:5193", "127.0.0.1:5193")):
-        print("BLOCKER: latest run targeted a NON-TRUNK app_base %r (D2: scratch "
-              "frontend runs may not clear the gate)" % meta.get("app_base"))
+    # N1: the app_base must be the LITERAL trunk FE (same set the driver uses).
+    # check-gate re-derives this from the run's recorded app_base, so a run-meta
+    # flag alone can never make a scratch frontend pass.
+    if not app_base_is_trunk(meta.get("app_base")):
+        print("BLOCKER: latest run targeted a NON-TRUNK app_base %r (D2/N1: "
+              "scratch frontend runs may not clear the gate)"
+              % meta.get("app_base"))
+        print("GATE-VERDICT blocking")
+        return 1
+    # A3: an advisory live-sampler run (J2-live shape) records an honest
+    # verdict but never gates — and it never flips `latest`, so if one is
+    # found here the gate blocks rather than clears on advisory data.
+    if meta.get("advisory"):
+        print("BLOCKER: latest is an ADVISORY run (A3: advisory verdicts never "
+              "clear the gate while the live-drift product defect is open)")
         print("GATE-VERDICT blocking")
         return 1
     if reds:
