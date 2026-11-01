@@ -65,3 +65,12 @@ FAME-5 (spec-draft stage): orch review THIS tick — load-bearing cites spot-ver
    re-verify cites vs post-FAME-3/4 trunk, fold ruling into §W3 + OQ-1 default block).
 4. If OQ-2 = Option A (minting): record which item owns the ontology edit + restart, per the ruling.
 5. adv-c2 observations 1-3 + UI-DIALECT-1 + FAME-1 DEFECT-1 residual -> next intake packet.
+
+## Addendum at tick exit (~07:56)
+- FAME-1 FIX-3 LAUNCH CONFIRMED: LOCK-ACQUIRED slot-0 07:50:57 (stagger cleared exactly); hermes
+  3076947 (slot pid FAME1FIX3-3076947-2026-11-01 07:50:57-0500), log
+  coder-FAME1-fix3-slot0-l1t0655.log, worktree wt/fame-1-lane1-l1t0100, report
+  fame-1-report-fix3-l1t0655.txt. BOTH coder slots now live fleet-wide (fix3 slot-0, FAME-3-resume
+  slot-1 3058611); no further coder dispatch possible or needed.
+- Architect OQ-2/OQ-3 decision file NOT yet on disk at exit — next tick watches
+  .hermes/plans/2026-11-01_fame-5-oq2-oq3-decision.md.
