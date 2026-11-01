@@ -76,3 +76,28 @@ terms:
       cas: 110-42-9
       chain: 10:0
       species: methyl-ester
+# ChEBI ids architect-verified live at OLS4 2026-11-01 (CAS via PubChem PUG):
+#   palmitic acid       CHEBI:15756   (CAS 57-10-3; PubChem CID 985; OLS4 synonyms
+#                                     incl. "Palmitic acid"/"Palmitate")
+#   methyl palmitate    CHEBI:69187   (label "Methyl palmitate"; CAS 112-39-0;
+#                                     PubChem CID 8181; synonym "Methyl hexadecanoate")
+  - kind: ontology-term
+    id: FAME-LOCAL:palmitic-acid-n16
+    source: manual
+    label: "Palmitic acid (free fatty acid, 16:0)"
+    definition: "Free fatty acid species of the palmitic (16:0) chain; distinct from its methyl ester."
+    meta:
+      chebi_id: CHEBI:15756
+      cas: 57-10-3
+      chain: 16:0
+      species: ffa
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-palmitate-n16
+    source: manual
+    label: "Methyl palmitate (FAME, 16:0-OMe)"
+    definition: "Methyl ester (FAME) of palmitic acid; the 16:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:69187
+      cas: 112-39-0
+      chain: 16:0
+      species: methyl-ester
