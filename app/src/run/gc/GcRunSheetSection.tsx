@@ -28,6 +28,7 @@ import {
   findLinkedSequences,
   type EntryPayload,
   type SequencePayload,
+  type AcquisitionPackagePayload,
 } from './gcRunSheetModel'
 import { GcRunTable, type GcRunTableEntry } from './GcRunTable'
 import { GcSectionChrome, type GcChromeEntry } from './GcSectionChrome'
@@ -82,6 +83,15 @@ function GcResultsList({
 export function GcRunSheetSection({ runId }: { runId: string }) {
   const [sequences, setSequences] = useState<unknown[]>([])
   const [entries, setEntries] = useState<Record<string, EntryPayload>>({})
+  // FAME-1 (OQ-2): the attached ACQP payloads, keyed by ACQP id — fetched ONE
+  // getRecord per DISTINCT attached acquisitionPackageRef (deduped across
+  // entries; the mount-fetch fence extension, rationale in the no-fetch
+  // accounting test header). This is what lets the run sheet show the
+  // acquisition status (aborted / stopped / unknown = visibly qualified) on
+  // a FRESH mount — the entry payloads carry only the ACQP REF, not its
+  // status. Read-only: no fetch is ever triggered by a render (the effect
+  // keys on the joined distinct ids).
+  const [acqpPayloads, setAcqpPayloads] = useState<Record<string, AcquisitionPackagePayload>>({})
   const [probed, setProbed] = useState(false)
   const [statuses, setStatuses] = useState<Record<string, Record<string, string>>>({})
   // The user-triggered refresh tick (sample add / attach / analyze): the
@@ -115,6 +125,7 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
     prevRunIdRef.current = runId
     setRefreshTick(0) // a new run starts at its MOUNT pass, not a refresh
     setEntries({}) // never show another run's entry payloads
+    setAcqpPayloads({}) // never show another run's attached-package statuses
     setProbed(false)
     setSequences([])
     probeDoneRef.current = null // re-arm the dedupe for the new runId
@@ -239,6 +250,49 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedEntryIds.join(','), refreshTick])
 
+  // FAME-1 (OQ-2): the DISTINCT attached ACQP ids (deduped across entries —
+  // the fence extension: one getRecord per DISTINCT attached ACQP, each
+  // ONCE). Derived from the entry payloads' acquisitionPackageRef; absent
+  // refs are skipped, never invented.
+  const linkedAcqpIds: string[] = []
+  {
+    const seen = new Set<string>()
+    for (const id of linkedEntryIds) {
+      const ref = entries[id]?.acquisitionPackageRef
+      const acqpId = ref && typeof ref.id === 'string' && ref.id.length > 0 ? ref.id : undefined
+      if (acqpId && !seen.has(acqpId)) {
+        seen.add(acqpId)
+        linkedAcqpIds.push(acqpId)
+      }
+    }
+  }
+
+  // Fetch the attached ACQP records (one getRecord per DISTINCT attached
+  // ACQP). Re-fires on a user-triggered refresh (an attach added/changed an
+  // ACQP ref) — never on its own. CANCEL-ON-UNMOUNT (mirror the entry-fetch
+  // pattern above): a cancelled pass must not write payloads.
+  useEffect(() => {
+    if (linkedAcqpIds.length === 0) return
+    let cancelled = false
+    void (async () => {
+      const fetched: Record<string, AcquisitionPackagePayload> = {}
+      for (const id of linkedAcqpIds) {
+        try {
+          const env = await apiClient.getRecord(id)
+          if (!cancelled) fetched[id] = env.payload as AcquisitionPackagePayload
+        } catch {
+          // A missing ACQP is skipped (never invented) — the row renders its
+          // absent status arm (the "attached" id still shows).
+        }
+      }
+      if (!cancelled) setAcqpPayloads((prev) => ({ ...prev, ...fetched }))
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedAcqpIds.join(','), refreshTick])
+
   // The rendered rows (linked entries that resolved to payloads).
   const rows: LinkedRow[] = linkedEntryIds.flatMap((id) => {
     const payload = entries[id]
@@ -298,7 +352,20 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
     recordId: firstSeq.recordId,
     entryRefs: (firstSeq.payload.entryRefs ?? []) as Array<{ kind: 'record'; id: string; type: string }>,
   }
-  const chromeEntries: GcChromeEntry[] = rows.map((r) => ({ recordId: r.recordId, payload: r.payload }))
+  // FAME-1: each chrome entry also carries its attached ACQP payload (the
+  // status + evidence DATA), so the qualification renders next to the
+  // "attached: ACQP-…" line. Absent when the fetch hasn't landed (the row
+  // shows the attach id, no status word — never a fabricated one).
+  const chromeEntries: GcChromeEntry[] = rows.map((r) => ({
+    recordId: r.recordId,
+    payload: r.payload,
+    // FAME-1 fix-run (D10): conditional spread — omit the key when there is no
+    // attached package rather than setting it to `undefined` (the server-side
+    // house pattern; exactOptionalPropertyTypes discipline).
+    ...(r.payload.acquisitionPackageRef?.id
+      ? { acquisitionPackage: acqpPayloads[r.payload.acquisitionPackageRef.id] }
+      : {}),
+  }))
 
   return (
     <section data-testid="gc-run-sheet" className="gc-run-sheet">

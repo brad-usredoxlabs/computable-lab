@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { acquireDataReference, hashStream } from './acquisition.js';
+import { classifyAcquisitionPackageStatus } from './acquisitionPackageStatus.js';
 import type { AppContext } from '../server.js';
 import { assertSafeRelativePath, StorageError } from './types.js';
 import type { StorageDeviceConfig, StorageEntry } from './types.js';
@@ -476,6 +477,16 @@ export async function registerAcquisitionPackage(
 
   // Step 7: the acquisition-package record — created LAST so a partially
   // failed registration never leaves a package pointing at incomplete pins.
+  // FAME-1: BEFORE the create, classify the acquisition status from the
+  // package's run_log member (strict UTF-16 + the data-declared rule file)
+  // and stamp the result + its evidence onto the payload. Classification is
+  // floor-guaranteed (unknown on any failure, bait #5): it can NEVER fail
+  // registration, and the record is still created LAST.
+  const statusStamp = await classifyAcquisitionPackageStatus(
+    provider,
+    input.directoryKey,
+    fileDrefs.find((f) => f.role === 'run_log'),
+  );
   const packageRecordId = await mintAcquisitionPackageId(ctx);
   const packagePayload: Record<string, unknown> = {
     kind: 'acquisition-package',
@@ -489,6 +500,20 @@ export async function registerAcquisitionPackage(
       role: f.role,
     })),
     signalCollectionRef: { kind: 'record', type: 'data-reference', id: manifestDrefId },
+    // FAME-1: the acquisition status + its evidence (DATA — the matched
+    // lines, the decode facts, the interpretation source) + the DECLARED
+    // run-sheet qualification (D3: the rule file's statusQualification,
+    // stamped so the chrome renders DATA, not a hardcoded status branch).
+    // Conditional spreads throughout: exactOptionalPropertyTypes (bait #1).
+    ...(statusStamp.acquisitionStatus !== undefined
+      ? { acquisitionStatus: statusStamp.acquisitionStatus }
+      : {}),
+    ...(statusStamp.acquisitionStatusQualified !== undefined
+      ? { acquisitionStatusQualified: statusStamp.acquisitionStatusQualified }
+      : {}),
+    ...(statusStamp.acquisitionStatusEvidence !== undefined
+      ? { acquisitionStatusEvidence: statusStamp.acquisitionStatusEvidence }
+      : {}),
     ...(input.sourceRunRef ? { sourceRunRef: input.sourceRunRef } : {}),
     ...(input.sampleRef ? { sampleRef: input.sampleRef } : {}),
     registeredAt: new Date().toISOString(),
@@ -508,6 +533,31 @@ export async function registerAcquisitionPackage(
     manifestDrefId,
   };
 }
+
+/**
+ * FAME-1 — classify the acquisition status from the package's run_log member
+ * and return the stamp fields for the package payload (the caller stamps them
+ * BEFORE the record is created — the package record stays created LAST,
+ * registration order stands).
+ *
+ * UNKNOWN IS THE FLOOR, and classification NEVER fails registration (bait #5):
+ * no run_log member, an unreadable member, a decode failure, zero rule hits,
+ * even a missing rule FILE (misconfigured deployment) — all land on the
+ * DECLARED fallbackStatus (config/gc-acquisition-status/log-patterns.yaml —
+ * the data file) with a NAMED noEvidenceReason, never on a coded `completed`
+ * default and never on a thrown error. RUN.LOG is not a REQUIRED_MEMBERS
+ * member (acquisitionPackage.ts:69), so a missing/unreadable log is data, not
+ * a fault.
+ *
+ * The run_log member bytes are read through the SAME provider the DREF
+ * acquire path uses (provider.read — the acquisition.ts:100 /
+ * verifyAcquisitionPackage re-hash idiom); the relative path is the
+ * package-root-relative member path (e.g. "RUN.LOG").
+ *
+ * (D6) the read+classify orchestration (provider read, floor ladder, the
+ * degenerate rule-file arm) lives in acquisitionPackageStatus.ts — this file
+ * keeps the classification CALL + the payload stamp ONLY (spec scope).
+ */
 
 /**
  * The execution-time gate (spec D6 verify): re-run S1/S2 (the marker can

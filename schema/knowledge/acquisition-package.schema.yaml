@@ -159,3 +159,129 @@ properties:
     type: string
     enum: [ draft, active, archived ]
     description: "Lifecycle state (operational). DISTINCT from domain status/result fields."
+
+  # ---------------------------------------------------------------------------
+  # FAME-1 — the acquisition status, classified at registration from the
+  # RUN.LOG member (strict UTF-16) + the declared package-member signals.
+  # This is DOMAIN status (how the acquisition ended), deliberately named
+  # acquisitionStatus and DISTINCT from the lifecycle `state` above (bait #3:
+  # `state` is lifecycle; never reuse it). All four words are FIXED by the
+  # item; completed/aborted already exist as enum values on OTHER kinds
+  # (instrument-log / run) — the SAME words, not new vocab. The
+  # interpretation (which log lines mean which status) lives ONLY in
+  # config/gc-acquisition-status/log-patterns.yaml (DATA); the code only
+  # decodes + matches + records. ABSENT is legal (a package registered before
+  # FAME-1, or whose run_log member could not be read — the floor is honest
+  # unknown, recorded as DATA via acquisitionStatusEvidence, never a coded
+  # completed default).
+  # ---------------------------------------------------------------------------
+  acquisitionStatus:
+    type: string
+    enum: [ completed, aborted, stopped-by-user, unknown ]
+    description: >
+      How the acquisition ended, classified at registration from the RUN.LOG
+      member (strict UTF-16) using the declared rule file. completed = the log
+      carries an explicit method-completed line; aborted = an abort /
+      method-aborted / instrument-error-stopped line; stopped-by-user = the
+      operator stopped the sequence; unknown = no run_log member, an
+      unreadable/undecodable log, or zero rule hits (the DECLARED floor —
+      never completed). Absent on packages registered before FAME-1.
+
+  # FAME-1 (D3): the DECLARED run-sheet qualification for acquisitionStatus —
+  # the rule file's `statusQualification` lookup stamped at registration
+  # (DATA, not code). The run-sheet chrome renders THIS flag to decide whether
+  # the status word is visibly qualified (a non-collapsing warning line) or a
+  # quiet word — it NEVER branches on the status literal in TSX. true for the
+  # non-completed statuses (aborted / stopped-by-user / unknown), false for
+  # completed (declared in log-patterns.yaml). Absent on packages registered
+  # before FAME-1 (or the degenerate rule-file-missing arm, which cannot read
+  # the declared qualification).
+  acquisitionStatusQualified:
+    type: boolean
+    description: >
+      Whether this acquisitionStatus renders VISIBLY QUALIFIED on the run
+      sheet (the declared statusQualification from
+      config/gc-acquisition-status/log-patterns.yaml). DATA: the run-sheet
+      chrome renders this, never a hardcoded status-literal branch.
+
+  # The evidence that produced acquisitionStatus — the interpretation source
+  # and every matched line, preserved VERBATIM (the d_reader lossless
+  # doctrine: matched lines are never rewritten nor dropped). This is the
+  # surface a human reads INSTEAD of a byte-serving route (OQ-1): the
+  # verbatim matched lines + the /record/<RUN.LOG DREF> anchor let a reviewer
+  # see WHY without a raw-blob route.
+  acquisitionStatusEvidence:
+    type: object
+    unevaluatedProperties: false
+    required: [ ruleset, sourceMember, decode ]
+    properties:
+      # FAME-1 (D5): the ruleset is ABSENCE-SHAPED in the degenerate
+      # rule-file-missing arm — when the rule file itself is unread there is
+      # no declared interpretation source to name, so the arm reports an
+      # EMPTY ruleset (no id / version / sourceFile restated from the YAML)
+      # rather than a coded copy of the file's identity. The readable-file
+      # arms carry the full id / version / sourceFile. All three are therefore
+      # OPTIONAL (the lint belt R5/R6 is the honesty check, not the schema).
+      ruleset:
+        type: object
+        unevaluatedProperties: false
+        properties:
+          id:
+            type: string
+            minLength: 1
+            description: "The rule-set id declared in log-patterns.yaml (the interpretation source). ABSENT in the degenerate rule-file-missing arm."
+          version:
+            type: [ string, number ]
+            description: "The rule-set version declared in log-patterns.yaml. ABSENT in the degenerate rule-file-missing arm."
+          sourceFile:
+            type: string
+            minLength: 1
+            description: "The rule file the rules came from (config/gc-acquisition-status/log-patterns.yaml). ABSENT in the degenerate rule-file-missing arm."
+      sourceMember:
+        type: object
+        unevaluatedProperties: false
+        required: [ relativePath ]
+        properties:
+          relativePath:
+            type: string
+            pattern: "^(|([A-Za-z0-9][A-Za-z0-9._ -]*)(/[A-Za-z0-9][A-Za-z0-9._ -]*)*)$"
+            description: >-
+              Which package member was read (the run_log member, e.g. RUN.LOG),
+              relative to the package root. EMPTY when no run_log member existed
+              in the package (the honest floor arm: run-log-member-absent) —
+              the decode facts on that arm still name the encoding 'none'.
+      decode:
+        type: object
+        unevaluatedProperties: false
+        required: [ encoding, bomPresent ]
+        properties:
+          encoding:
+            type: string
+            minLength: 1
+            description: "The strict-UTF-16 decode that produced the text (e.g. utf-16le), recorded even on decode failure (facts preserved, bait #7)."
+          bomPresent:
+            type: boolean
+            description: "Whether the member carried the FF FE BOM (true -> the utf-16 family consumes it; false -> explicit utf-16-le)."
+      matched:
+        type: array
+        description: "Every RUN.LOG line a declared rule matched — preserved VERBATIM, never dropped (d_reader lossless doctrine)."
+        items:
+          type: object
+          unevaluatedProperties: false
+          required: [ line, ruleId, lineIndex ]
+          properties:
+            line:
+              type: string
+              description: "The matched line VERBATIM (the exact decoded line, no trimming/rewriting)."
+            ruleId:
+              type: string
+              pattern: "^[a-z][a-z0-9-]*$"
+              description: "The declared rule id that matched (the rule file's vocabulary; pattern-enforced here and re-checked by the lint belt)."
+            lineIndex:
+              type: integer
+              minimum: 0
+              description: "The 0-based index of the line within the decoded text."
+      noEvidenceReason:
+        type: string
+        minLength: 1
+        description: "Named ONLY when matched is empty: why no line matched (e.g. no run_log member / log not decodable / zero rule hits). The honest no-evidence arm."

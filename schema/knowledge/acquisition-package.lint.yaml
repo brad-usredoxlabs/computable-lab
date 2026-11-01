@@ -11,6 +11,19 @@
 #      DREF- prefix (error — catches dangling-by-typo without store access);
 #   R4 the directoryKey is a safe RELATIVE key (error — no .., no backslash,
 #      no leading / — belt for the code-level S-checks).
+# FAME-1 additions (record-scope, honest ops ONLY — no store access):
+#   R5 when acquisitionStatus is a NON-completed value (aborted /
+#      stopped-by-user / unknown), the package must carry evidence — either
+#      a non-empty matched[] (the verbatim log lines that drove the
+#      classification) or a named noEvidenceReason (the no-evidence arm).
+#      An unknown-with-no-explanation is the F2 defect (the drive found the
+#      aborted WEGMANS package surfacing as if nothing happened); this is
+#      the belt that keeps the floor HONEST.
+#   R6 every matched line names a declared rule id (non-empty, the schema's
+#      ruleId shape) — the matched[].line text itself is the verbatim
+#      evidence; lint disciplines the record SHAPE, it does NOT re-read the
+#      log bytes (the DSL cannot open files, same as it cannot open the
+#      store).
 # Do NOT add a store-resolution rule (reviewer bait #1): any YAML rule claiming
 # "dangling ref rejected" is a tautology or a lie in this DSL.
 lintVersion: 1
@@ -79,4 +92,81 @@ rules:
       pattern: "^[A-Za-z0-9][A-Za-z0-9._ -]*(/[A-Za-z0-9][A-Za-z0-9._ -]*)*$"
     message:
       template: "Acquisition package '{{$.id}}' has an unsafe directoryKey (traversal or absolute path) — directoryKey must be a safe relative key within the device root"
+      paths: ["$.id"]
+  # R5 — FAME-1: a NON-completed acquisitionStatus (aborted / stopped-by-user
+  # / unknown) must be backed by evidence on the record. Either matched[]
+  # carries at least one verbatim log line (the lines that drove the
+  # classification) or noEvidenceReason names the no-evidence case (log
+  # absent / not decodable / zero rule hits). completed is exempt (the
+  # positive case is not the F2 defect), and a package with NO
+  # acquisitionStatus (pre-FAME-1 registration) passes vacuously. An
+  # unknown-with-no-explanation is exactly the defect this item closes —
+  # the belt that keeps the floor HONEST.
+  - id: "acqp-status-evidence-honest"
+    title: "A non-completed acquisition status must carry its evidence"
+    description: >-
+      When acquisitionStatus is aborted, stopped-by-user, or unknown, the
+      package must record WHY: at least one verbatim matched RUN.LOG line
+      (acquisitionStatusEvidence.matched non-empty) or a named noEvidenceReason
+      (the honest no-evidence arm). Record-scope ONLY — lint does not re-read
+      the log bytes (the DSL cannot open files, same as it cannot open the
+      store); it disciplines that the classification is never bare.
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "any"
+      predicates:
+        - op: "not"
+          not:
+            op: "exists"
+            path: "$.acquisitionStatus"
+        - op: "equals"
+          path: "$.acquisitionStatus"
+          value: "completed"
+        - op: "any"
+          predicates:
+            - op: "nonEmpty"
+              path: "$.acquisitionStatusEvidence.matched"
+            - op: "nonEmpty"
+              path: "$.acquisitionStatusEvidence.noEvidenceReason"
+    message:
+      template: "Acquisition package '{{$.id}}' claims a non-completed acquisitionStatus without evidence — declare at least one verbatim matched RUN.LOG line or a named noEvidenceReason (never a bare status, never an unexplained unknown)"
+      paths: ["$.id", "$.acquisitionStatus"]
+  # R6 — FAME-1: every matched line names a declared rule (a non-empty,
+  # schema-shaped ruleId) and carries the verbatim line text itself.
+  # Vacuous-pass branch (not(exists)): a package with no acquisitionStatus
+  # evidence at all (pre-FAME-1) passes — everyItem LOUD-FAILs on an
+  # unresolvable collection, so the guard is required, not cosmetic.
+  - id: "acqp-matched-ruleid-shape"
+    title: "Every matched log line names a declared rule"
+    description: >-
+      acquisitionStatusEvidence.matched[].ruleId must be non-empty and carry
+      the schema's ruleId shape (^[a-z][a-z0-9-]*$ — the rule file's own
+      id vocabulary), and matched[].line must be non-empty (the verbatim
+      evidence, never an empty placeholder). Lint disciplines the record
+      SHAPE only; it does not re-derive the status from the line text
+      (that interpretation is the rule file's job, not the lint DSL's).
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "any"
+      predicates:
+        - op: "not"
+          not:
+            op: "exists"
+            path: "$.acquisitionStatusEvidence.matched"
+        - op: "everyItem"
+          collectionPath: "acquisitionStatusEvidence.matched"
+          assert:
+            op: "all"
+            predicates:
+              - op: "nonEmpty"
+                path: "ruleId"
+              - op: "regex"
+                path: "ruleId"
+                pattern: "^[a-z][a-z0-9-]*$"
+              - op: "nonEmpty"
+                path: "line"
+    message:
+      template: "Acquisition package '{{$.id}}' has a matched RUN.LOG line without a declared rule id or without its verbatim line text"
       paths: ["$.id"]
