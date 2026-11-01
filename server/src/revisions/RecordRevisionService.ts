@@ -48,23 +48,50 @@ const locks = new WeakMap<RecordStore, Map<string, Promise<unknown>>>();
  *  update is the work the outer is waiting for). DISTINCT contexts (concurrent
  *  accepts, a concurrent direct store.update) still serialize through the
  *  queue exactly as before — behavior-preserving for every existing caller,
- *  which never re-acquired its own key. */
-const lockContext = new AsyncLocalStorage<Set<string>>();
+ *  which never re-acquired its own key.
+ *
+ *  FAME-3 D4 (adv-review cycle-1): the reentrancy marker is keyed by the
+ *  (store, id) PAIR, not id alone — the queue itself is (store, id) keyed
+ *  (WeakMap<RecordStore, Map<id>>), so a nested same-id acquire on a
+ *  DIFFERENT store must NOT short-circuit that store's queue as reentrant.
+ *  Each held entry also carries a mutable `released` flag flipped in the
+ *  outer finally: the ALS value is not invalidated when the outer critical
+ *  section ends, so a continuation spawned inside fn that outlives it must
+ *  not re-enter the lock-free path (it would otherwise run lock-free
+ *  concurrently with a new holder). The flag forces such a continuation to
+ *  acquire the queue lock instead. */
+interface LockHeldEntry { released: boolean }
+type LockHeldMap = Map<RecordStore, Map<string, LockHeldEntry>>;
+const lockContext = new AsyncLocalStorage<LockHeldMap>();
 export async function withRecordLock<T>(store: RecordStore, id: string, fn: () => Promise<T>): Promise<T> {
   const held = lockContext.getStore();
-  if (held?.has(id)) {
-    // Same execution context already owns this key: run the work directly.
+  const mine = held?.get(store)?.get(id);
+  if (mine && !mine.released) {
+    // Same (store, id) already owned by this live execution context: run the
+    // work directly (the outer fn already owns the lock). A stale marker
+    // (released) is NOT reentrant — it must re-acquire the queue lock.
     return await fn();
   }
-  const mine = held ? new Set(held) : new Set<string>();
-  mine.add(id);
-  return lockContext.run(mine, async () => {
+  const next: LockHeldMap = held ? new Map(held) : new Map();
+  // Deep-copy the per-store entry map we are about to touch so a nested
+  // same-store acquire (e.g. lockSources over ids[0], ids[1]) never mutates
+  // the outer context's marker map.
+  let perStore = next.get(store);
+  if (perStore) { perStore = new Map(perStore); next.set(store, perStore); }
+  else { perStore = new Map(); next.set(store, perStore); }
+  const entry: LockHeldEntry = { released: false };
+  perStore.set(id, entry);
+  return lockContext.run(next, async () => {
     let queue = locks.get(store);
     if (!queue) { queue = new Map(); locks.set(store, queue); }
     const previous = queue.get(id) ?? Promise.resolve();
-    const next = previous.catch(() => {}).then(fn);
-    queue.set(id, next);
-    try { return await next; } finally { if (queue.get(id) === next) queue.delete(id); }
+    const nextLock = previous.catch(() => {}).then(fn);
+    queue.set(id, nextLock);
+    try { return await nextLock; }
+    finally {
+      if (queue.get(id) === nextLock) queue.delete(id);
+      entry.released = true; // invalidate the marker for post-release continuations
+    }
   });
 }
 
