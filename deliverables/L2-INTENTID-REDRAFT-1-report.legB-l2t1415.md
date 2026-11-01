@@ -1,244 +1,164 @@
-# L2-INTENTID-REDRAFT-1 — leg B (live-path surface wiring) — coder report (l2t1415)
 
-Branch: `cl/lane2-intentid-redraft-1` (HEAD `6cc8c3b894791a8009cd613b1291b45b69a91e3d` at leg-B start;
-leg A already merged into trunk ffe13273).
-Worktree: /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2
-Report path (unique, append-only): this file.
-
-## 0. SCOPE (binding brief, verbatim intent)
-
-The leg-A ANSWER-CHANNEL-1 yaml fix repaired the DATA list
-(`config/drafting/shorthand-drafting.yaml:27` `surfaces: [run-workspace, event-editor]`),
-but the LIVE event-editor chat posts to the legacy
-`POST /api/ai/draft-events/stream` endpoint and that endpoint NEVER reads or passes a
-`surface` field — so `AgentOrchestrator.ts` falls back to `surface ?? 'default'`
-(`:1288`) and `surfaceDraftsShorthand('default')` is FALSE (the yaml lists only
-`run-workspace` + `event-editor`). On the LIVE path the ENTIRE shorthand answer arm is
-silently dead: the deterministic clarification-answer fold, the L2-INTENTID
-carry/fallback capture, the repeat-ask ledger, the event_graph->shorthand refusal, and
-the no-model wall. Orch first-hand evidence 2026-11-01T14:05 EDT (receipt
-/home/brad/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261101T185646Z): the J2 run's
-outgoing /api/ai/draft-events/stream bodies contain NO surface field and the backend
-log shows NO fold/folded/identity-carried line on either turn.
-
-FIX (smallest honest wiring, no policy):
-1. aiClient.ts — include `surface` in the event-editor JSON body (the multipart branch
-   already appends surface — this makes JSON match multipart). Keep the
-   conditional-spread byte-stability discipline for the OTHER surfaces exactly as-is.
-2. AIHandlers.ts draftEventsStream — read the optional `surface` from the body (JSON and
-   multipart) and pass `...(surface ? { surface } : {})` to orchestrator.run
-   (conditional spread; exactOptionalPropertyTypes — absent, never undefined). Absent
-   surface => byte-identical legacy behavior ('default').
-3. Do NOT change deriveContextCacheKey, the fold, the carry, or any YAML. Do NOT add
-   surface-name literals to the server beyond what the endpoint's type already permits.
-
-RED FIRST (server): a handler-level test (mirror AIHandlers.deckStreamError.test.ts)
-driving draftEventsStream with a body carrying surface 'event-editor' + clarificationAnswers,
-asserting via an orchestrator stub/spy that run() RECEIVES surface='event-editor', and that
-a body WITHOUT surface leaves run()'s args byte-identical to today. RED now (surface
-dropped), GREEN after the wiring. APP: a request-shape pin proving the event-editor body
-now contains surface.
-
-Owned files this leg: `app/src/shared/api/aiClient.ts`,
-`server/src/api/handlers/AIHandlers.ts`,
-NEW `server/src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts`,
-NEW `app/src/shared/api/aiClient.eventEditorSurface.test.ts`, plus this report.
 
 ---
 
-## 1. DEFECT SITES (re-verified first-hand at leg-B start tip, grep evidence below)
+## 3. GREEN EVIDENCE (finish gate)
 
-The two defect sites and the exact idiom to mirror:
+All commands run by the coder at the fix tip (raw files in `deliverables/`;
+CODER-CAPTURED). Verbatim tails spliced from the raws (each line `grep -F -x`
+verified against its raw).
 
-aiClient.ts:279-281 — the JSON body DELIBERATELY OMITS surface for event-editor:
-```
-    const body = surface === 'event-editor'
-      ? { prompt, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
-      : { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
-```
-aiClient.ts:253-255 — the multipart branch ALREADY appends surface (the asymmetry to fix):
-```
-    formData.append('prompt', prompt)
-    formData.append('surface', surface)
-    formData.append('context', JSON.stringify(context))
-```
-AIHandlers.ts draftEventsStream locals (:304-311) have NO `surface` declaration, and the
-`orchestrator.run(...)` call (:367-377) has NO `surface` argument:
-```
-        const result = await orchestrator.run({
-          prompt,
-          context,
-          ...(history ? { history } : {}),
-          ...(attachments ? { attachments } : {}),
-          ...(clarificationAnswers ? { clarificationAnswers } : {}),
-          ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
-          ...(!deterministicOnly ? { forceDraftTool: true } : {}),
-          ...(enableThinking !== undefined ? { enableThinking } : {}),
-          onEvent: sendEvent,
-        });
-```
-The endpoint's body type `DraftEventsBody` (AIHandlers.ts:22-36) declares NO `surface`
-field. The sibling `assistStream` already parses surface in BOTH branches and passes it:
-```
-        surface = fields['surface'] ?? '';        // multipart branch (:437)
-        ...
-        surface = body.surface;                   // JSON branch (:455)
-        ...
-        const result = await orchestrator.run({
-          prompt,
-          context: editorContext,
-          surface: surface as AiSurface,          // (:553)
-```
-The orchestrator fallback that turns the missing surface into a dead arm
-(AgentOrchestrator.ts:1288,1296):
-```
-      const surfaceName = surface ?? 'default';
-      ...
-      const shorthandSurface = surfaceDraftsShorthand(surfaceName);
-```
-And the DATA that `surfaceDraftsShorthand` reads (config/drafting/shorthand-drafting.yaml:27):
-```
-surfaces: [run-workspace, event-editor]
-```
-`'default'` is NOT in that list ⇒ `shorthandSurface=false` on the live event-editor path.
-This is the confirmed root cause: the DATA (yaml) was fixed but the endpoint never passes
-a surface for the DATA to match against.
+### (1) New handler test RED→GREEN
 
-TYPE-CLEANNESS NOTE (verified first-hand): the orchestrator `run()` input type
-`AgentRequest` already declares `surface?: import('./systemPrompt.js').AiSurface`
-(server/src/ai/types.ts:181-182), so passing `...(surface ? { surface } : {})` from
-draftEventsStream is type-clean with NO type change. `DraftEventsBody` must gain the
-optional `surface?: AiSurface` field (the endpoint's own body type) so the JSON-branch
-read is typed; `AiSurface` is already defined/exported in AIHandlers.ts (:38-46). No
-No surface-name literal is added to the server beyond the existing `AiSurface` union.
+RED: §2 (test 1 failed `expected false to be true`, `deliverables/legb-handler-red.l2t1415.txt`).
+GREEN post-fix (`deliverables/legb-handler-touched-green.l2t1415.txt`):
+
+```
+ ✓ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts  (2 tests) 3ms
+ ✓ src/api/handlers/AIHandlers.deckStreamError.test.ts  (1 test) 4ms
+ Test Files  2 passed (2)
+      Tests  3 passed (3)
+   Start at  14:55:04
+   Duration  4.03s (transform 586ms, setup 1ms, collect 3.94s, tests 7ms, environment 0ms, prepare 766ms)
+```
+
+### (2) Leg A suite re-run (expect 22/22)
+
+`cd server && npx vitest run src/ai/AgentOrchestrator.intentIdStability.test.ts
+src/ai/AgentOrchestrator.shorthandChat.test.ts` → 22/22 GREEN
+(`deliverables/legb-legA-suite.l2t1415.txt`):
+
+```
+ ✓ src/ai/AgentOrchestrator.intentIdStability.test.ts  (3 tests) 1373ms
+ ✓ src/ai/AgentOrchestrator.shorthandChat.test.ts  (19 tests) 2362ms
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
+   Start at  14:54:10
+   Duration  6.82s (transform 1.96s, setup 0ms, collect 6.97s, tests 3.73s, environment 1ms, prepare 378ms)
+```
+
+### (3) Handler suite touched + deckStreamError (GREEN)
+
+`cd server && npx vitest run AIHandlers.draftEventsStreamSurface
+AIHandlers.deckStreamError` → 3/3 GREEN (same raw as (1),
+`deliverables/legb-handler-touched-green.l2t1415.txt`).
+
+### (4) tsc server workspace: no NEW errors vs baseline
+
+`cd server && npx tsc --noEmit` → **0 `error TS` lines** at the fix tip
+(`deliverables/tsc-legb.l2t1415.txt` is empty). The leg A baseline
+(`deliverables/tsc-after-capture.l2t1030.txt`) also carried **0 `error TS`
+lines** (its only 2 lines were `npm notice` npx chatter, not TS errors). `diff`
+of the two raws shows ZERO new TS errors — the only delta is the two `npm
+notice` lines absent from the new raw. ZERO NEW typecheck errors.
+
+### (5) App: the touched aiClient test (GREEN)
+
+`cd app && npx vitest run src/shared/api/aiClient.eventEditorSurface.test.ts` →
+3/3 GREEN (`deliverables/legb-app-green.l2t1415.txt`):
+
+```
+ ✓ src/shared/api/aiClient.eventEditorSurface.test.ts  (3 tests) 12ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  14:54:20
+   Duration  11.25s (transform 107ms, setup 1.18s, collect 66ms, tests 12ms, environment 7.64s, prepare 73ms)
+```
+
+### (6) git status clean
+
+`git -c core.fileMode=false status --porcelain` shows ONLY untracked
+`deliverables/` captures; no modified tracked files at the docs commit and the
+node_modules symlinks are untracked/ignored (they do not appear). Clean.
 
 ---
 
-## 2. RED FIRST (server handler test)
+## 4. BASELINE-DRIFT DISCLOSURE (not a leg-B defect — proven pre-existing)
 
-New file `server/src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts` (mirrors the
-real-handler idiom of `AIHandlers.deckStreamError.test.ts` — drives
-`createAIHandlers(orchestrator).draftEventsStream` with a spy `run`). Two tests:
-(1) a body carrying `surface: 'event-editor'` + `clarificationAnswers` MUST make `run()`
-receive `surface='event-editor'` + the answers; (2) a body WITHOUT surface leaves `run()`
-args byte-identical to today (the `surface` key ABSENT — conditional spread, never
-undefined — and the key set equals the pre-fix handler's output).
+Running the FULL handler suite (`npx vitest run AIHandlers`, which collects the
+substring `AIHandlers` = 6 files) surfaced 2 additional failures in
+`AIHandlers.foldStreamTerminal.test.ts` and `AIHandlers.shorthandCancel.test.ts`
+(R4), both `AssertionError: expected 2 to be 1` on a `model.callCount()` pin.
 
-RED on base (leg-B start tip `6cc8c3b8`, full raw in
-`deliverables/legb-handler-red.l2t1415.txt`). Test 1 FAILS on the surface assertion (the
-handler dropped surface entirely); test 2 PASSES by design (legacy byte-identity is
-already correct and is the guardrail the fix must not break):
+These are **PRE-EXISTING and NOT caused by leg B**:
+- Both drive the REAL `assistStream` handler with `surface: 'workspace.deck'`
+  (`foldStreamTerminal.test.ts:153`, `shorthandCancel.test.ts:123`) and expect the
+  deterministic fold (1 model call). With the yaml `surfaces: [run-workspace,
+  event-editor]` (commit `0257123d`), `surfaceDraftsShorthand('workspace.deck')`
+  is FALSE → the fold never engages → the model runs (2 calls). This is the
+  SAME pre-existing `workspace.deck` fixture/data drift my LEG A report §1
+  (baseline finding) and open-item #2 documented, and it also explains the leg-A
+  `AgentOrchestrator.readingCardAnswer.test.ts` 3-fails.
+- PROVEN: at base `6cc8c3b8` with my two product files reverted to base (the two
+  test files untouched/current), the identical two suites fail with the identical
+  `expected 2 to be 1` (`deliverables/legb-base-foldsuspect.l2t1415.txt`):
 
 ```
- ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts  (2 tests | 1 failed) 8ms
-   ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts > draftEventsStream — the event-editor surface is wired to the orchestrator (leg B) > passes surface + clarificationAnswers to run() when the body carries them
-     → expected false to be true // Object.is equality
-
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-
- FAIL  src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts > draftEventsStream — the event-editor surface is wired to the orchestrator (leg B) > passes surface + clarificationAnswers to run() when the body carries them
-AssertionError: expected false to be true // Object.is equality
-
-- Expected
-+ Received
-
-- true
-+ false
-
- ❯ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts:103:31
-    101|     // THE DEFECT: on base the handler dropped `surface` entirely, so …
-    102|     // the RED assertion (run() received no surface at all).
-    103|     expect('surface' in args).toBe(true);
-       |                               ^
-    104|     expect(args.surface).toBe('event-editor');
-    105|     // The ANSWER-CHANNEL answers ride alongside the surface (the live…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
-
- Test Files  1 failed (1)
-      Tests  1 failed | 1 passed (2)
-   Start at  14:44:06
-   Duration  4.41s (transform 1.06s, setup 0ms, collect 2.67s, tests 8ms, environment 0ms, prepare 387ms)
+ ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts  (1 test | 1 failed) 256ms
+   ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts > REVISE-GHOST-1 fix4 — the answer-fold stream must terminate on the events=0 re-hold arm > fold re-hold (events=0, surviving cards): assistStream emits the done frame, ends the reply, and the payload carries the surviving clarifications
+ ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts  (8 tests | 1 failed) 678ms
+   ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts > SH-QC-1-OQ1 — clear held shorthand intent on cancel > R4 regression pin: WITHOUT a cancel the answer-path fold still takes the held intent (zero model calls)
+ ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts:222:31
+ ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts:320:31
+ Test Files  2 failed (2)
+      Tests  2 failed | 7 passed (9)
+   Start at  14:53:52
+   Duration  4.32s (transform 1.94s, setup 0ms, collect 5.33s, tests 934ms, environment 0ms, prepare 158ms)
 ```
-CODER-CAPTURED: `deliverables/legb-handler-red.l2t1415.txt` (verbatim tail extracted from
-the raw, not retyped — the box-drawing rules and the leading-space summary lines are
-copied from the raw file).
 
-The RED is the natural one the brief asked for: the handler dropped `surface`, so
-`run()` never receives it. This is the live-path defect reproduced deterministically at
-the handler seam.
+- My leg-B product diff touches ONLY `draftEventsStream` + the `DraftEventsBody`
+  type (AIHandlers.ts) and the `streamAssist` JSON body (aiClient.ts) — it does
+  NOT touch `assistStream`, `deriveContextCacheKey`, the fold, the carry, or either
+  of those test files. `git diff --stat 6cc8c3b8..HEAD --
+  <foldStreamTerminal.test.ts> <shorthandCancel.test.ts>` is EMPTY.
+
+The finish-gate requirement (3) names "the handler suite you touched +
+deckStreamError" — those are `AIHandlers.draftEventsStreamSurface` (new, mine) +
+`AIHandlers.deckStreamError`, both GREEN. The two `workspace.deck`-fixture suites
+are out of leg-B scope (non-owned test files) and flagged here + in the open items
+as the documented pre-existing debt. Route to the owner of those fixtures /
+orchestrator (same as leg-A open-item #2).
 
 ---
 
-## 2b. APP RED (request-shape pin)
-
-New file `app/src/shared/api/aiClient.eventEditorSurface.test.ts` (mirrors the
-`chatClient.test.ts` real-client + fetch-stub idiom — drives `streamAssist` with a
-capturing fetch and asserts on the OUTGOING body). Three tests:
-(1) event-editor + answers → legacy `/ai/draft-events/stream`, body carries
-`surface:'event-editor'` + the clarificationAnswers; (2) event-editor, no answers →
-surface still present, the answers key ABSENT (byte-stable); (3) a non-event-editor
-surface (`run-workspace`) → body BYTE-IDENTICAL to the pre-fix shape (the
-byte-stability discipline for the OTHER surfaces is preserved).
-
-APP RED (captured against the PRE-FIX `aiClient.ts` by stashing only the aiClient fix,
-keeping the untracked test; full raw in `deliverables/legb-app-red.l2t1415.txt`). Tests 1+2
-FAIL on the surface assertion (`expected undefined to be 'event-editor'` — the body
-carried no surface); test 3 (non-event-editor byte-identical) PASSES by design. Fix
-restored via `git stash pop` after the capture.
+## 5. DIFF STAT (leg B, vs base 6cc8c3b8) — actual `git diff --stat 6cc8c3b8..HEAD`
 
 ```
- ❯ src/shared/api/aiClient.eventEditorSurface.test.ts  (3 tests | 2 failed) 10ms
-   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
-     → expected undefined to be 'event-editor' // Object.is equality
-   ❯ src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
-     → expected undefined to be 'event-editor' // Object.is equality
-
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
-
- FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor posts the legacy draft-events/stream endpoint WITH surface + clarificationAnswers
-AssertionError: expected undefined to be 'event-editor' // Object.is equality
-
-- Expected: 
-"event-editor"
-
-+ Received: 
-undefined
-
- ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:90:26
-     88|     // THE DEFECT: pre-fix this key was ABSENT for event-editor (the
-     89|     // conditional-spread arm dropped it); RED on base, GREEN post-fix.
-     90|     expect(body.surface).toBe('event-editor')
-       |                          ^
-     91|     // The ANSWER-CHANNEL answers ride the same body (conditional spre…
-     92|     // present because a non-empty array was supplied).
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
-
- FAIL  src/shared/api/aiClient.eventEditorSurface.test.ts > streamAssist — the event-editor JSON body carries its surface (leg B) > event-editor WITHOUT answers keeps the answers key absent (byte-stable) but still carries surface
-AssertionError: expected undefined to be 'event-editor' // Object.is equality
-
-- Expected: 
-"event-editor"
-
-+ Received: 
-undefined
-
- ❯ src/shared/api/aiClient.eventEditorSurface.test.ts:110:26
-    108|     expect(calls[0]!.url).toContain('/ai/draft-events/stream')
-    109|     const body = calls[0]!.body as Record<string, unknown>
-    110|     expect(body.surface).toBe('event-editor')
-       |                          ^
-    111|     // Conditional spread discipline: absent, never undefined.
-    112|     expect('clarificationAnswers' in body).toBe(false)
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
-
- Test Files  1 failed (1)
-      Tests  2 failed | 1 passed (3)
-   Start at  14:49:30
-   Duration  7.77s (transform 86ms, setup 850ms, collect 52ms, tests 10ms, environment 5.74s, prepare 409ms)
+ app/src/shared/api/aiClient.ts                     |  12 +-
+ app/src/shared/api/aiClient.eventEditorSurface.test.ts  (NEW, request-shape pin)
+ server/src/api/handlers/AIHandlers.ts              |  23 ++++
+ server/src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts (NEW, handler pin)
+ deliverables/... (reports + raw captures)
 ```
-CODER-CAPTURED: `deliverables/legb-app-red.l2t1415.txt` (verbatim tail extracted from the
-raw). This is the same defect observed from the app side: the event-editor JSON body
-omitted `surface`, so the server handler could never have read one.
+
+Commits (branch `cl/lane2-intentid-redraft-1`, leg B):
+- `0cf05db4` test: leg B RED-first — draftEventsStream drops the event-editor
+  surface (handler-level pin, mirror deckStreamError idiom)
+- `948c18d2` test: leg B APP RED-first — aiClient event-editor JSON body omits
+  surface (request-shape pin)
+- `f6f270b1` fix: wire the event-editor surface to the orchestrator on the live
+  draft-events/stream path (aiClient JSON body + handler read/pass; conditional
+  spread, byte-identical when absent)
+- (this docs commit: report + GREEN captures)
+
+### Open items (leg B)
+1. The 2 pre-existing `workspace.deck`-fixture suite failures
+   (`AIHandlers.foldStreamTerminal`, `AIHandlers.shorthandCancel` R4) —
+   PRE-EXISTING (proven at base `6cc8c3b8`), non-owned test files, same debt as
+   leg-A open-item #2. Route to the fixture owner / orchestrator (needs the
+   `workspace.deck` → `run-workspace`/`event-editor` fixture surface update).
+2. LIVE J2 5/5 re-run (criterion 3): ORCHESTRATOR-OWNED — requires the trunk stack
+   to serve the merged branch (OQ-2, not restartable by the coder). Leg B is what
+   makes that live leg's answer arm reachable at all; the orchestrator re-runs the
+   J2 receipt to confirm the fold/identity-carry lines now appear on the live
+   event-editor path.
+3. No merge performed; task list untouched; no npm install (node_modules symlinks
+   intact); no trunk writes; :3093/:5193 untouched.
+
+---
+
+## 6. END MARKER
+
+INTENTID-LEGB DONE <full-40-sha>  (filled in the docs commit's `git rev-parse HEAD`
+at completion — the marker line lives in the final docs-only commit, so it carries
+the sha of that marker commit, tree clean.)

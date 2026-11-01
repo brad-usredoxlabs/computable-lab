@@ -1,0 +1,238 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > RED: the extraction-only fallback answer turn carries the HELD intentId and does not re-offer the ANSWERED prompt (labels-only closes R1)
+[agent rqo6n8] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent rqo6n8] skipping compiler preflight for forced draft tool mode
+[agent rqo6n8] tools=1 docDiscussion=false maxTurns=2
+[agent rqo6n8] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent rqo6n8] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"rqo6n8","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":469,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent rqo6n8] done event_shorthand success=true events=0 clarifications=2 elapsedMs=469
+[agent 5pc5hm] fold-null arm=empty-label requestId=unresolved-c-a2eb4c3eef answers=1 heldFacts=2
+[agent 5pc5hm] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask (the held intentId is carried onto the answer turn's result; the answered labels ride the recompile so the answered prompt is not re-offered)
+[agent 5pc5hm] start surface=run-workspace model=test-model promptLen=44 effectivePromptLen=179 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent 5pc5hm] skipping compiler preflight for forced draft tool mode
+[agent 5pc5hm] tools=1 docDiscussion=false maxTurns=2
+[agent 5pc5hm] turn 1 starting, promptChars=15672, docDiscussion=false
+[agent 5pc5hm] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 5pc5hm] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity "intentid-stability-held" wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity
+[agent-summary] {"traceId":"5pc5hm","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":169,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 5pc5hm] done event_shorthand success=true events=0 clarifications=1 elapsedMs=169
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > the fold-SUCCESS arm already carries the held identity end-to-end (guard — the fold re-serializes intentId verbatim)
+[agent l8o0k9] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent l8o0k9] skipping compiler preflight for forced draft tool mode
+[agent l8o0k9] tools=1 docDiscussion=false maxTurns=2
+[agent l8o0k9] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent l8o0k9] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"l8o0k9","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":148,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent l8o0k9] done event_shorthand success=true events=0 clarifications=2 elapsedMs=148
+[agent uu68rv] shorthand answer folded deterministically onto the held intent (run:RUN-intentid-stability) — no model call
+[agent-summary] {"traceId":"uu68rv","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":127,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent uu68rv] done shorthand-fold success=true events=0 elapsedMs=127
+
+stdout | src/ai/AgentOrchestrator.intentIdStability.test.ts > L2-INTENTID-REDRAFT-1 — the clarification ANSWER turn is identity-stable end-to-end > a FRESH ask on a held conversation stays free to MINT (the carry is answer-turn-only, never a fresh-turn constraint)
+[agent cxbo28] start surface=run-workspace model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cxbo28] skipping compiler preflight for forced draft tool mode
+[agent cxbo28] tools=1 docDiscussion=false maxTurns=2
+[agent cxbo28] turn 1 starting, promptChars=14841, docDiscussion=false
+[agent cxbo28] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"cxbo28","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":249,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"Alpha Reagent, Beta Buffer, Gamma Serum\" (reason: composition-fraction-sum), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. (2 questions looped this turn.) Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent cxbo28] done event_shorthand success=true events=0 clarifications=2 elapsedMs=249
+[agent t4ko63] start surface=run-workspace model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent t4ko63] skipping compiler preflight for forced draft tool mode
+[agent t4ko63] tools=1 docDiscussion=false maxTurns=2
+[agent t4ko63] turn 1 starting, promptChars=14760, docDiscussion=false
+[agent t4ko63] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"t4ko63","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":175,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent t4ko63] done event_shorthand success=true events=1 clarifications=0 elapsedMs=175
+
+ ✓ src/ai/AgentOrchestrator.intentIdStability.test.ts  (3 tests) 1373ms
+ ✓ src/ai/AgentOrchestrator.shorthandChat.test.ts  (19 tests) 2362ms
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > compiles the stubbed shorthand-only turn into the SAME bound graph the deterministic compiler produces
+[agent o5od0m] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent o5od0m] skipping compiler preflight for forced draft tool mode
+[agent o5od0m] tools=1 docDiscussion=false maxTurns=2
+[agent o5od0m] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent o5od0m] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"o5od0m","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":457,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent o5od0m] done event_shorthand success=true events=12 clarifications=0 elapsedMs=457
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > carries NO shorthand key at all when the turn carries none (exactOptionalPropertyTypes)
+[agent gvct8i] start surface=run-workspace model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent gvct8i] skipping compiler preflight for forced draft tool mode
+[agent gvct8i] tools=1 docDiscussion=false maxTurns=2
+[agent gvct8i] turn 1 starting, promptChars=14739, docDiscussion=false
+[agent gvct8i] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"gvct8i","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":40,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent gvct8i] done deck_layout success=true variant=manual_freeform elapsedMs=40
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent sqscvm] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent sqscvm] skipping compiler preflight for forced draft tool mode
+[agent sqscvm] tools=1 docDiscussion=false maxTurns=3
+[agent sqscvm] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent sqscvm] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent sqscvm] turn 2 starting, promptChars=15609, docDiscussion=false
+[agent sqscvm] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"sqscvm","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":214,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent sqscvm] done event_shorthand success=true events=12 clarifications=0 elapsedMs=214
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent sqscvm] refused raw event_graph on shorthand surface run-workspace; re-asking for shorthand
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent yqqer1] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent yqqer1] skipping compiler preflight for forced draft tool mode
+[agent yqqer1] tools=1 docDiscussion=false maxTurns=3
+[agent yqqer1] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent yqqer1] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent yqqer1] turn 2 starting, promptChars=15609, docDiscussion=false
+[agent yqqer1] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"yqqer1","surface":"run-workspace","model":"test-model","success":false,"elapsedMs":21,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent yqqer1] done event_graph_refusal success=false events=0 elapsedMs=21
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent yqqer1] refused raw event_graph on shorthand surface run-workspace; re-asking for shorthand
+[agent yqqer1] refused a REPEAT raw event_graph on shorthand surface run-workspace; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled
+[agent mu214y] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent mu214y] skipping compiler preflight for forced draft tool mode
+[agent mu214y] tools=1 docDiscussion=false maxTurns=3
+[agent mu214y] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent mu214y] turn 1 finish=stop contentLen=103 toolCalls=0
+[agent mu214y] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent mu214y] turn 2 starting, promptChars=15609, docDiscussion=false
+[agent mu214y] turn 2 finish=stop contentLen=103 toolCalls=0
+[agent mu214y] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"mu214y","surface":"run-workspace","model":"test-model","success":false,"elapsedMs":20,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent mu214y] done event_graph_refusal success=false events=0 elapsedMs=20
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled
+[agent mu214y] refused raw event_graph on shorthand surface run-workspace; re-asking for shorthand
+[agent mu214y] refused a REPEAT raw event_graph on shorthand surface run-workspace; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)
+[agent l3f3um] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent l3f3um] skipping compiler preflight for forced draft tool mode
+[agent l3f3um] tools=1 docDiscussion=false maxTurns=3
+[agent l3f3um] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent l3f3um] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent l3f3um] turn 2 starting, promptChars=15609, docDiscussion=false
+[agent l3f3um] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"l3f3um","surface":"run-workspace","model":"test-model","success":false,"elapsedMs":24,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent l3f3um] done event_graph_refusal success=false events=0 elapsedMs=24
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)
+[agent l3f3um] refused raw event_graph on shorthand surface run-workspace; re-asking for shorthand
+[agent l3f3um] refused a REPEAT raw event_graph on shorthand surface run-workspace; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash
+[agent bkwtsd] fold-null arm=ajv-reparse-fail requestId= answers=1 heldFacts=1
+[agent bkwtsd] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask (the held intentId is carried onto the answer turn's result; the answered labels ride the recompile so the answered prompt is not re-offered)
+[agent bkwtsd] start surface=run-workspace model=test-model promptLen=16 effectivePromptLen=144 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent bkwtsd] skipping compiler preflight for forced draft tool mode
+[agent bkwtsd] tools=1 docDiscussion=false maxTurns=2
+[agent bkwtsd] turn 1 starting, promptChars=15944, docDiscussion=false
+[agent bkwtsd] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent bkwtsd] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity "chat-add-mystery" wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity
+[agent-summary] {"traceId":"bkwtsd","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":156,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null}
+[agent bkwtsd] done event_shorthand success=true events=12 clarifications=0 elapsedMs=156
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document
+[agent o9zh00] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent o9zh00] skipping compiler preflight for forced draft tool mode
+[agent o9zh00] tools=1 docDiscussion=false maxTurns=3
+[agent o9zh00] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent o9zh00] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent o9zh00] turn 2 starting, promptChars=21830, docDiscussion=false
+[agent o9zh00] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"o9zh00","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":134,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent o9zh00] done event_shorthand success=true events=12 clarifications=0 elapsedMs=134
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent vaa436] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent vaa436] skipping compiler preflight for forced draft tool mode
+[agent vaa436] tools=1 docDiscussion=false maxTurns=3
+[agent vaa436] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent vaa436] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent vaa436] turn 2 starting, promptChars=21830, docDiscussion=false
+[agent vaa436] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"vaa436","surface":"run-workspace","model":"test-model","success":false,"elapsedMs":25,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)"}
+[agent vaa436] done event_shorthand success=false events=0 clarifications=0 elapsedMs=25
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent vaa436] The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the 422-class round-trip: needs-clarification rides the chat clarification channel VERBATIM
+[agent s96zr9] start surface=run-workspace model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent s96zr9] skipping compiler preflight for forced draft tool mode
+[agent s96zr9] tools=1 docDiscussion=false maxTurns=2
+[agent s96zr9] turn 1 starting, promptChars=14742, docDiscussion=false
+[agent s96zr9] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"s96zr9","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":137,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent s96zr9] done event_shorthand success=true events=0 clarifications=1 elapsedMs=137
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > a clarification answer folds deterministically: splice → Ajv re-parse → re-compile, ZERO model calls
+[agent xup2eg] start surface=run-workspace model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent xup2eg] skipping compiler preflight for forced draft tool mode
+[agent xup2eg] tools=1 docDiscussion=false maxTurns=2
+[agent xup2eg] turn 1 starting, promptChars=14742, docDiscussion=false
+[agent xup2eg] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"xup2eg","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":142,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"mystery goop\" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent xup2eg] done event_shorthand success=true events=0 clarifications=1 elapsedMs=142
+[agent lx6t44] shorthand answer folded deterministically onto the held intent (run:RUN-shorthand-test) — no model call
+[agent-summary] {"traceId":"lx6t44","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":111,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent lx6t44] done shorthand-fold success=true events=1 elapsedMs=111
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > SH-QA-1 fold-leg ledger: a re-hold after a partial fold carries answeredSlots for the closed slot
+[agent uqr0w5] start surface=run-workspace model=test-model promptLen=39 effectivePromptLen=39 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent uqr0w5] skipping compiler preflight for forced draft tool mode
+[agent uqr0w5] tools=1 docDiscussion=false maxTurns=2
+[agent uqr0w5] turn 1 starting, promptChars=14750, docDiscussion=false
+[agent uqr0w5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"uqr0w5","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":111,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent uqr0w5] done event_shorthand success=true events=0 clarifications=2 elapsedMs=111
+[agent ye7jho] shorthand answer folded deterministically onto the held intent (run:RUN-shorthand-test) — no model call
+[agent-summary] {"traceId":"ye7jho","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":95,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"clarification_loop: the draft names \"mystery plate\" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied."}
+[agent ye7jho] done shorthand-fold success=true events=0 elapsedMs=95
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ3: a forced-draft shorthand turn with NO model configured says so LOUDLY and never silently event-compiles
+[agent 30gvyl] no model configured — cannot draft shorthand on run-workspace
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ1 fallback: an answer with no 1:1 mapping falls back to ONE extraction-only re-ask carrying the held shorthand + answers as grounded context
+[agent uqx52o] start surface=run-workspace model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent uqx52o] skipping compiler preflight for forced draft tool mode
+[agent uqx52o] tools=1 docDiscussion=false maxTurns=2
+[agent uqx52o] turn 1 starting, promptChars=14742, docDiscussion=false
+[agent uqx52o] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"uqx52o","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":97,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent uqx52o] done event_shorthand success=true events=0 clarifications=1 elapsedMs=97
+[agent 471ax1] fold-null arm=empty-label requestId=unresolved-1 answers=1 heldFacts=1
+[agent 471ax1] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask (the held intentId is carried onto the answer turn's result; the answered labels ride the recompile so the answered prompt is not re-offered)
+[agent 471ax1] start surface=run-workspace model=test-model promptLen=16 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent 471ax1] skipping compiler preflight for forced draft tool mode
+[agent 471ax1] tools=1 docDiscussion=false maxTurns=2
+[agent 471ax1] turn 1 starting, promptChars=15560, docDiscussion=false
+[agent 471ax1] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 471ax1] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity "chat-add-mystery" wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity
+[agent-summary] {"traceId":"471ax1","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":101,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 471ax1] done event_shorthand success=true events=12 clarifications=0 elapsedMs=101
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the shorthand path omits termManifest explicitly (bait 9: no raw-draft classifier to disagree with; the client never re-derives)
+[agent 2fqtyw] start surface=run-workspace model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 2fqtyw] skipping compiler preflight for forced draft tool mode
+[agent 2fqtyw] tools=1 docDiscussion=false maxTurns=2
+[agent 2fqtyw] turn 1 starting, promptChars=14747, docDiscussion=false
+[agent 2fqtyw] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"2fqtyw","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":90,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 2fqtyw] done event_shorthand success=true events=12 clarifications=0 elapsedMs=90
+
+
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
+   Start at  14:54:10
+   Duration  6.82s (transform 1.96s, setup 0ms, collect 6.97s, tests 3.73s, environment 1ms, prepare 378ms)
+
