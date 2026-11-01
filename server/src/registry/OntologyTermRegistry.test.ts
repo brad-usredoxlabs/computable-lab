@@ -12,7 +12,7 @@ describe('OntologyTermRegistry', () => {
   it('loads all manual seed terms', () => {
     const manualTerms = listBySource('manual');
     // GC-2 F: +6 FAME/FFA identity terms (fame-local.yaml, source manual).
-    expect(manualTerms).toHaveLength(10);
+    expect(manualTerms).toHaveLength(12);
   });
 
   it('loads all chebi seed terms', () => {
@@ -64,7 +64,7 @@ describe('OntologyTermRegistry', () => {
   it('listBySource("manual") returns all 10 terms', () => {
     const terms = listBySource('manual');
     // 4 seed placeholders + 6 GC-2 FAME/FFA terms (fame-local.yaml).
-    expect(terms).toHaveLength(10);
+    expect(terms).toHaveLength(12);
   });
 
   it('listBySource("chebi") returns ≥ 20 terms', () => {
