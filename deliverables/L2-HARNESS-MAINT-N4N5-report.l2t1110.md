@@ -152,5 +152,19 @@ committed in the follow-on commit on the same branch.
    attestation field (if any existed post-merge) grades RED by design — the
    spec's "missing = RED" mandate; all lane receipts from the merged
    harness carry the field true (real latest verified green above).
+5. AMENDMENT (fix-run 1, advc cycle-1 DEFECT 1, append-only — items 1-4 and
+   the RED captures above stand as originally written): items 1-4 did NOT
+   name the ITEM-CITED no-delete prototype-extraction shape. With the own
+   wrapper left INTACT, `Object.getPrototypeOf(context).route.call(...)`
+   (no deletion) keeps `recv[meth] === _wrappers[key]` TRUE, so
+   route_api_wrapped stays TRUE while the ORIGINAL runs (counter 0):
+   proven SILENT GREEN pre-fix (P1/P3 captures, fix-run 1 report). This is
+   an UNDETECTABLE residual for the identity-snapshot tripwire — no
+   property/identity inspection from node can see that class; only the
+   construction ban + the real-transport ai_request_bodies receipt defend
+   it. Fixed in fix-run 1: comment gap (d) in ui-drive.cjs, narrowed
+   violation text in run-journeys.py, and self-check arm (2e) PINS the
+   limitation (asserts route_api_wrapped stays TRUE for the no-delete
+   shape — labelled a limitation pin, not a detection claim).
 
 N4N5 DONE 24ef453775b66d4e2799fb2895e71ba6e456e120
