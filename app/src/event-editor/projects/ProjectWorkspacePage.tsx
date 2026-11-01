@@ -43,6 +43,7 @@ import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
 import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
+import { DeckSurfaceChat } from '../deck/DeckSurfaceChat'
 import type { AiContext } from '../../types/aiContext'
 import { ProjectCollectionView } from '../../collections/ProjectCollectionView'
 import { RunCollectionView } from '../../collections/RunCollectionView'
@@ -116,6 +117,16 @@ function ProjectSurfaceChat({ studyId }: { studyId: string }) {
         : {}),
     },
   }), [studyId, activeTab])
+  // WELL-SELECTION / DECK CONTEXT (2026-11-01): this registrar is mounted at
+  // the PAGE level — ABOVE EventEditorProvider — so on a deck tab it can only
+  // ever send `{studyId, activeTabKind}`: no labwares, no events, no
+  // selection. Measured live on this page:
+  //   {"surface":"analysis","context":{"studyId":"STU-scratch","activeTabKind":"project-details"}}
+  // The deck tab therefore answered "add 100ul of DMEM" with no wells and
+  // ghosted nothing. When the active tab IS a deck, stand down and let the
+  // deck's own bridge register from INSIDE the provider (see the deck branch
+  // below) — one registrar at a time, the deck one.
+  if (activeTab?.kind === 'deck') return null
   return <SurfaceChatBridge aiContext={aiContext} scope={studyId} />
 }
 
@@ -261,6 +272,12 @@ function WorkspaceShellHost({
         {...(activeTab.runId ? { runId: activeTab.runId } : {})}
       >
         <FocusModalsProvider>
+          {/* The deck tab's chat, registered from INSIDE the provider so it
+              sees what the page-level registrar structurally could not:
+              labwares, events, deck placements and the WELL SELECTION. Same
+              bridge the /deck/:id route uses (one implementation, no second
+              dialect). ProjectSurfaceChat stands down on deck tabs. */}
+          <DeckSurfaceChat />
           {shellContent}
           <ProtocolPreviewBridge />
         </FocusModalsProvider>
