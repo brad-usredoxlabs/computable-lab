@@ -1,0 +1,160 @@
+/**
+ * FAME-1: acquisition-status classification — the RUN.LOG reader (strict
+ * UTF-16) + the data-declared rule file (config/gc-acquisition-status/
+ * log-patterns.yaml). RED-first per the spec's "First targeted check":
+ * this file is authored BEFORE the module exists (expected RED: module
+ * missing), and the fixture bytes are built in-test via the utf16leBom
+ * idiom (analysisDReader.test.ts:106-129) — NEVER vendored real bytes
+ * (the no-bytes invariant: acquisitionPackage.test.ts pins tmp-tree byte
+ * hygiene).
+ *
+ * Hardcode boundary (reviewer bait #4): the lines below are copied
+ * VERBATIM from the real corpus (the receipts + the composer's on-device
+ * verification): WEGMANS 20201023 (aborted), COUNTRYSIDE 20201023
+ * (completed), KERRYGOLD 20201023 (stopped-by-user). They are TEST
+ * FIXTURES only; every status pattern lives ONLY in the pattern file.
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  classifyAcquisitionStatus,
+  loadLogPatterns,
+} from './acquisitionPackageStatus.js';
+
+/** The analysisDReader.test.ts:106-129 idiom: real UTF-16LE+BOM bytes. */
+function utf16leBom(text: string): Buffer {
+  const enc = Buffer.from(text, 'utf16le');
+  return Buffer.concat([Buffer.from([0xff, 0xfe]), enc]);
+}
+
+// The WEGMANS 20201023 tail — verbatim corpus lines (receipts
+// 20261031T191154Z report.md:69-72; notes.md:178-183). The log carries
+// BOTH a "Method/Sequence stopped" line AND "Method aborted": the aborted
+// rule must land FIRST (precedence = pattern-file order, bait #6).
+const WEGMANS_LOG = [
+  'Method       Method started                                 12:41:55 10/23/26',
+  'Method       Instrument running sample Vial 101 (front)     12:41:56 10/23/26',
+  '6890       1 I/O error with 6890 GC                         13:19:32 10/23/26',
+  '6890       1 Closing signal 1 due to I/O error              13:19:33 10/23/26',
+  'Method       Instrument Error - Method/Sequence stopped     13:19:33 10/23/26',
+  'Method       Method aborted                                 13:19:33 10/23/26',
+].join('\r\n');
+
+// COUNTRYSIDE 20201023 tail — verbatim (composer on-device verification).
+// It carries BOTH "Instrument run completed" AND "Method completed" — the
+// completed rule keys on the Method line, never the bare "completed".
+const COUNTRYSIDE_LOG = [
+  'Method       Method started                                 14:57:04 10/23/26',
+  'Method       Instrument running sample Vial 101 (front)     14:57:05 10/23/26',
+  'Method       Instrument run completed                       15:24:33 10/23/26',
+  'Method       Method completed                               15:24:43 10/23/26',
+].join('\r\n');
+
+// KERRYGOLD 20201023 tail — verbatim. It ALSO carries "Instrument run
+// completed" (the run finished, the sequence was stopped by the user):
+// stopped-by-user must win over a bare "run completed" reading (bait #6).
+const KERRYGOLD_LOG = [
+  'Method       Method started                                 13:49:06 10/23/26',
+  'Method       Instrument running sample Vial 101 (front)     13:49:07 10/23/26',
+  'Method       Instrument run completed                       14:16:18 10/23/26',
+  'Method       Method stopped by user                         14:16:27 10/23/26',
+].join('\r\n');
+
+// The lane1-gate-fixtures shape (verified with file(1): PLAIN ASCII, e.g.
+// L1GATE-95dc64.D/RUN.LOG). A naive utf-16 decode of this yields mojibake,
+// NOT a crash; every rule is a no-hit -> the declared fallback (unknown).
+const ASCII_LOG = 'L1-SIGNALDREF gate fixture 95dc64\r\nsynthetic run log\r\n';
+
+describe('loadLogPatterns (the data-declared rule file)', () => {
+  it('loads config/gc-acquisition-status/log-patterns.yaml with the four declared statuses', async () => {
+    const p = await loadLogPatterns();
+    expect(p.id).toBeTruthy();
+    expect(p.version).toBeTruthy();
+    expect(p.fallbackStatus).toBe('unknown'); // DECLARED, not coded (bait #4)
+    expect(p.rules.length).toBeGreaterThan(0);
+    const statuses = new Set(p.rules.map((r) => r.status));
+    expect(statuses.has('aborted')).toBe(true);
+    expect(statuses.has('stopped-by-user')).toBe(true);
+    expect(statuses.has('completed')).toBe(true);
+    for (const r of p.rules) {
+      expect(r.pattern).toBeTruthy();
+      expect(r.note).toBeTruthy();
+    }
+  });
+});
+
+describe('classifyAcquisitionStatus (strict-UTF-16 RUN.LOG -> evidence DATA)', () => {
+  it('WEGMANS lines (BOM + CRLF) -> aborted; the matched line is verbatim', async () => {
+    const res = await classifyAcquisitionStatus(utf16leBom(WEGMANS_LOG), 'RUN.LOG');
+    expect(res.status).toBe('aborted');
+    expect(res.ruleset.id).toBeTruthy();
+    expect(typeof res.ruleset.version === 'string' || typeof res.ruleset.version === 'number').toBe(true);
+    expect(typeof res.ruleset.sourceFile).toBe('string');
+    expect(res.sourceMember).toEqual({ relativePath: 'RUN.LOG' });
+    expect(res.decode).toEqual({ encoding: 'utf-16le', bomPresent: true });
+    expect(res.matched.length).toBeGreaterThanOrEqual(1);
+    const abortedHit = res.matched.find((m) => m.ruleId === 'aborted-method-aborted');
+    expect(abortedHit).toBeDefined();
+    expect(abortedHit!.line).toBe(
+      'Method       Method aborted                                 13:19:33 10/23/26',
+    );
+    expect(abortedHit!.lineIndex).toBe(5); // 0-based index within the decoded text
+  });
+
+  it('the I/O-error line corroborates the abort (declared corroborating rule)', async () => {
+    const res = await classifyAcquisitionStatus(utf16leBom(WEGMANS_LOG), 'RUN.LOG');
+    const ioHit = res.matched.find((m) => m.ruleId === 'aborted-io-error');
+    expect(ioHit).toBeDefined();
+    expect(ioHit!.line).toBe(
+      '6890       1 I/O error with 6890 GC                         13:19:32 10/23/26',
+    );
+  });
+
+  it('COUNTRYSIDE lines -> completed (the "Method completed" line, verbatim)', async () => {
+    const res = await classifyAcquisitionStatus(utf16leBom(COUNTRYSIDE_LOG), 'RUN.LOG');
+    expect(res.status).toBe('completed');
+    expect(res.matched.some((m) => m.ruleId === 'completed-method-completed')).toBe(true);
+    expect(res.matched.find((m) => m.ruleId === 'completed-method-completed')!.line).toBe(
+      'Method       Method completed                               15:24:43 10/23/26',
+    );
+    expect(res.noEvidenceReason).toBeUndefined();
+  });
+
+  it('KERRYGOLD lines -> stopped-by-user, NOT completed (precedence: the user-stop rule precedes the completed rule)', async () => {
+    const res = await classifyAcquisitionStatus(utf16leBom(KERRYGOLD_LOG), 'RUN.LOG');
+    expect(res.status).toBe('stopped-by-user');
+    expect(res.matched.some((m) => m.ruleId === 'stopped-by-user-method-stopped-by-user')).toBe(true);
+  });
+
+  it('a BOM-less UTF-16LE log still decodes (the d_reader fallback path)', async () => {
+    const res = await classifyAcquisitionStatus(
+      Buffer.from(COUNTRYSIDE_LOG, 'utf16le'),
+      'RUN.LOG',
+    );
+    expect(res.status).toBe('completed');
+    expect(res.decode).toEqual({ encoding: 'utf-16le', bomPresent: false });
+  });
+
+  it('the ASCII gate-fixture log -> unknown (mojibake never decodes into a rule hit; never completed)', async () => {
+    const res = await classifyAcquisitionStatus(Buffer.from(ASCII_LOG, 'ascii'), 'RUN.LOG');
+    expect(res.status).toBe('unknown');
+    expect(res.matched).toEqual([]);
+    expect(res.noEvidenceReason).toBe('no-rule-match');
+  });
+
+  it('an empty log -> unknown with the named no-evidence reason', async () => {
+    const res = await classifyAcquisitionStatus(Buffer.alloc(0), 'RUN.LOG');
+    expect(res.status).toBe('unknown');
+    expect(res.matched).toEqual([]);
+    expect(res.noEvidenceReason).toBe('log-empty');
+  });
+
+  it('an undecodable byte stream (odd length) -> unknown with the decode-failure reason, decode facts preserved', async () => {
+    const full = utf16leBom(COUNTRYSIDE_LOG);
+    const truncated = full.subarray(0, full.length - 1); // odd byte count
+    const res = await classifyAcquisitionStatus(truncated, 'RUN.LOG');
+    expect(res.status).toBe('unknown');
+    expect(res.matched).toEqual([]);
+    expect(res.noEvidenceReason).toBe('decode-failed');
+    expect(res.decode.bomPresent).toBe(true); // facts recorded, not discarded (bait #7)
+  });
+});
