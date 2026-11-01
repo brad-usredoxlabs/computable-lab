@@ -108,7 +108,15 @@ export interface AcquisitionPackagePayload {
    */
   acquisitionStatusQualified?: boolean
   acquisitionStatusEvidence?: {
-    ruleset: { id: string; version: string | number; sourceFile: string }
+    /**
+     * FAME-1 FIX2 (D5, mirror the schema): the ruleset identity is present
+     * ONLY when the rule file is readable — the degenerate
+     * rule-file-missing arm stamps an ABSENCE-SHAPED (empty) ruleset
+     * (acquisitionPackageStatus.ts, `ruleset: {}`), so every member is
+     * optional on a legitimate record (the schema
+     * acquisition-package.schema.yaml declares the same).
+     */
+    ruleset: { id?: string; version?: string | number; sourceFile?: string }
     sourceMember: { relativePath: string }
     decode: { encoding: string; bomPresent: boolean }
     matched: Array<{ line: string; ruleId: string; lineIndex: number }>
