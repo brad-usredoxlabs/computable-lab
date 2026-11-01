@@ -144,4 +144,26 @@ describe('TableView declared-object shape (C1)', () => {
     )
     expect(screen.getByText('No rows')).toBeDefined()
   })
+
+  it('infers headers from row keys when the columns member is absent', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { rows: [{ a: 1 }] })}
+      />,
+    )
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a'])
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1'])
+  })
+
+  it('keeps today fallback when the columns member is not an array', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', { columns: null, rows: [{ a: 1 }] })}
+      />,
+    )
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a'])
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1'])
+  })
 })

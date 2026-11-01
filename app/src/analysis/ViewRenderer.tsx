@@ -76,7 +76,7 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
   const declared = isRecord(value) && Array.isArray(value.rows)
   const rows = Array.isArray(value) ? value : declared ? (value.rows as unknown[]) : []
   if (rows.length === 0) return <div className="view-spec__empty">No rows</div>
-  const declaredHeaders = declared && value.columns !== undefined
+  const declaredHeaders = declared && Array.isArray(value.columns) && value.columns.length > 0
   const declaredLabels = declaredHeaders
     ? (value.columns as unknown[]).map((c) => (typeof c === 'string' ? c : isRecord(c) && typeof c.name === 'string' ? c.name : null))
     : null
