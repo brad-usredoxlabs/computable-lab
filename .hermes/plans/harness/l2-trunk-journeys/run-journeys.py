@@ -343,11 +343,29 @@ def grade_write_proof(journey, ui, api_base):
     writes = [w for w in ui.get("write_request_bodies", [])
               if w.get("method") in ("PUT", "POST")]
     if not proof:
-        if writes:
-            return (["write-proof: journey produced %d write request(s) %s but "
-                     "declares NO write_proof block — write evidence must be "
-                     "graded and persisted (D4)"
-                     % (len(writes), [w.get("endpoint") for w in writes])], None)
+        own = set()
+        seed = journey.get("seed") or {}
+        if "record" in seed:
+            own.add(seed["record"]["recordId"])
+        if journey.get("write_target"):
+            own.add(journey["write_target"])
+        # D4's anti-silent-deletion teeth: a write to the SCRATCH COPY (or an
+        # explicitly declared write_target) IS the journey's declared write —
+        # deleting `write_proof:` from the YAML must go RED, not silent-green.
+        intentional = set(own)
+        if "copy_record" in seed:
+            intentional.add(seed["copy_record"]["to"])
+        deck_autosave = {seed["record"]["recordId"]} if "record" in seed else set()
+        for w in writes:
+            ep = str(w.get("endpoint", ""))
+            if any(r in ep for r in intentional):
+                return (["write-proof: journey wrote to %r but declares NO "
+                         "write_proof block — write evidence must be graded "
+                         "and persisted (D4)" % ep], None)
+            if not any(r in ep for r in deck_autosave | intentional):
+                # an AI write must not leak outside the fixture sandbox
+                return (["write-proof: write request to a record OUTSIDE the "
+                         "journey's fixture sandbox: %s" % ep], None)
         return [], None
     rec = {"record": proof["record"], "captured_writes": len(writes)}
     # expectedSha == the attachedProtocol.sha the AI request carried.
