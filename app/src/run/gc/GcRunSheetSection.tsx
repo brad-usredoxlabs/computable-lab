@@ -359,9 +359,12 @@ export function GcRunSheetSection({ runId }: { runId: string }) {
   const chromeEntries: GcChromeEntry[] = rows.map((r) => ({
     recordId: r.recordId,
     payload: r.payload,
-    acquisitionPackage: r.payload.acquisitionPackageRef?.id
-      ? acqpPayloads[r.payload.acquisitionPackageRef.id]
-      : undefined,
+    // FAME-1 fix-run (D10): conditional spread — omit the key when there is no
+    // attached package rather than setting it to `undefined` (the server-side
+    // house pattern; exactOptionalPropertyTypes discipline).
+    ...(r.payload.acquisitionPackageRef?.id
+      ? { acquisitionPackage: acqpPayloads[r.payload.acquisitionPackageRef.id] }
+      : {}),
   }))
 
   return (
