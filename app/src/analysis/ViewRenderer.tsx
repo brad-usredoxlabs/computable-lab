@@ -63,16 +63,28 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-/** Render a table artifact (rows of plain values). */
+/** Render a table artifact (rows of plain values).
+ *
+ * C1 (FAME-2): the generic table also understands the DECLARED object shape
+ * `{ columns, rows }` — column entries are either `{ name, ... }` objects or
+ * plain strings, and rows are records. Detection is SHAPE-ONLY (an object
+ * whose `rows` member is an array); a bare array of rows keeps today's
+ * behavior verbatim, `{ rows: [] }` keeps the named "No rows" arm, and any
+ * other value keeps the existing fallback. */
 function TableView({ artifact }: { artifact: RenderableArtifact }) {
   const value = artifact.inlineValue
-  const rows = Array.isArray(value) ? value : []
+  const declared = isRecord(value) && Array.isArray(value.rows)
+  const rows = Array.isArray(value) ? value : declared ? (value.rows as unknown[]) : []
   if (rows.length === 0) return <div className="view-spec__empty">No rows</div>
+  const declaredHeaders = declared && value.columns !== undefined
+  const declaredLabels = declaredHeaders
+    ? (value.columns as unknown[]).map((c) => (typeof c === 'string' ? c : isRecord(c) && typeof c.name === 'string' ? c.name : null))
+    : null
   const headers = new Set<string>()
   for (const r of rows) {
     if (isRecord(r)) for (const k of Object.keys(r)) headers.add(k)
   }
-  const columns = [...headers]
+  const columns = declaredLabels ? (declaredLabels as string[]).filter((c): c is string => c !== null) : [...headers]
   return (
     <table className="view-spec__table">
       <thead>
