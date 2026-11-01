@@ -392,6 +392,44 @@ describe('record-drafting edit arm (FAME-3 W6, OQ-4 OPT-A)', () => {
     }
     expect(afterObj.analysis).toMatchObject({ compound_assignments: list });
   }, 60000);
+
+  it('the card row + summary name the RESOLVED ONTOLOGY IDENTITY (the registry CURIE) alongside the term label — criterion (b): the user sees WHICH CURIE resolved, not only the label', async () => {
+    const target = await seedGcMethod('GCM-W6-EDIT-006');
+    const term = knownTerm('Methyl decanoate (FAME, 10:0-OMe)');
+    const policyBundleService = new PolicyBundleService();
+    policyBundleService.loadFromDir(join(schemaRoot, 'core/policy-bundles'));
+    const ctx = {
+      store,
+      validator,
+      schemaRegistry: registry,
+      policyBundleService,
+      workspaceRoot: root,
+      recordsDir: root,
+    } as unknown as AppContext;
+    const service = new FormDraftService(ctx, ACTOR);
+
+    const compiled = await service.compile({
+      adapter: 'record-drafting',
+      intent: {
+        operation: 'edit-record',
+        term: term.label,
+        fields: { label: 'card identity leg', expected_rt_min: 22.0949971128188 },
+      },
+      target: { recordId: target.recordId },
+    });
+    expect(compiled.canAccept, JSON.stringify(compiled.diagnostics)).toBe(true);
+    const result = object(compiled.result) as {
+      summary?: string;
+      recordFields?: Array<{ label: string; value: string }>;
+    };
+    // The card row (criterion b: "card shows the resolved ontology term")
+    // carries the resolved identity — the registry CURIE the user can see
+    // and trust — alongside the human label, not the label alone.
+    const termRow = result.recordFields?.find((f) => f.label === 'Compound term');
+    expect(termRow?.value).toContain(term.label);
+    expect(termRow?.value, 'the Compound term row must name the resolved CURIE').toContain(term.id);
+    expect(result.summary, 'the summary must name the resolved CURIE').toContain(term.id);
+  }, 60000);
 });
 
 /**
