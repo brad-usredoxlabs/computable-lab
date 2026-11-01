@@ -7,7 +7,7 @@
 id: J3
 title: "protocol-edit via chat: draft -> diff -> Accept -> expectedSha write lands"
 file: J3.yaml
-timeout_s: 480
+timeout_s: 300
 selection_affordance: >-
   REAL UI: ReviewAiPanel's own composer (chat-input TipTap + chat-input-send)
   is typed and sent; the ChangesPanel Accept button (changes-apply) is
@@ -18,6 +18,12 @@ seed:
   copy_record:
     from: XDR-w28-gate0001
     to: XDR-JOURNEYS-3
+    # Scratch-record test-data prep: the LIVE fixture drifted to status
+    # 'promoted' (measured 2026-10-31), which findSemanticDraft skips; the
+    # merged fixture was born 'pending_review' (e2e/fixtures/w28-said-meant/
+    # xdr.json). The COPY is reset to that birth state; the shared fixture is
+    # never touched.
+    set_status: pending_review
     # The join stays on the REAL VPDF: findSemanticDraft picks the NEWEST
     # draft per source_artifact.id, so the copy carries createdAt=now (the
     # driver stamps it) and wins the join. Teardown deletes the copy and the
@@ -31,6 +37,12 @@ steps:
     path: /ingestion/vendor-pdf/VPDF-5256F3288E3C
   - step: expect_visible
     selector: '[data-testid="review-ai-panel"]'
+  # Pin the async draft JOIN before asking: the MEANT pane names the scratch
+  # record only once the extraction-draft discovery fetch landed (a bare
+  # panel-visible would race the panel's own useOpenDraft effect and ship
+  # attachedProtocol:null).
+  - step: wait_for_body_text
+    text: XDR-JOURNEYS-3
   - step: ask
     scope: review
     text: 'reword the label of step-lyse to "Lyse the sample (journeys J3)"'

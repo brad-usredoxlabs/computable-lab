@@ -241,6 +241,17 @@ function shaShort(s) {
         case 'expect_visible':
           await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: T });
           break;
+        case 'wait_for_body_text': {
+          // Waits for a string ANYWHERE in the live page text — used to pin
+          // async discovery joins (e.g. the review page's draft join) BEFORE
+          // asking, so the request body carries the joined context.
+          const needle = step.text;
+          await page.waitForFunction(
+            (n) => document.body.innerText.includes(n), needle,
+            { timeout: T, polling: 500 },
+          );
+          break;
+        }
         case 'click_card_first_option': {
           // The FIRST card that offers concrete option buttons (the
           // deterministic compile's answerable card; ambiguous-noun cards

@@ -39,7 +39,7 @@ RECEIPTS_ROOT = os.environ.get("CL_RECEIPTS",
 DATA_REPO = os.environ.get("CL_DATA_REPO", "/home/brad/.computable-lab/worktrees/main")
 UI_DRIVER = os.path.join(HERE, "ui-drive.cjs")
 APP_DIR = os.path.join(REPO_ROOT, "app")
-TURN_TIMEOUT = int(os.environ.get("CL_JOURNEY_TIMEOUT", "420"))
+TURN_TIMEOUT = int(os.environ.get("CL_JOURNEY_TIMEOUT", "660"))
 
 # ---------------------------------------------------------------------------
 # Channel assertions — PURE over the captured request-body artifact.
@@ -212,6 +212,16 @@ def seed_journey(journey, api_base):
             # (semanticDraft.ts takesBest); stamp now so the copy wins.
             payload["createdAt"] = datetime.datetime.now(
                 datetime.timezone.utc).isoformat()
+        if c.get("set_status"):
+            # Scratch-record test-data prep (the live fixture drifted to
+            # 'promoted', which findSemanticDraft skips AND whose candidate
+            # lock (XDR_CANDIDATE_LOCKED) refuses chat-accepted writes; the
+            # merged fixture was born status:'pending_review' with NO
+            # per-candidate status — e2e/fixtures/w28-said-meant/xdr.json).
+            payload["status"] = c["set_status"]
+            for cand in payload.get("candidates") or []:
+                if isinstance(cand, dict) and "status" in cand:
+                    del cand["status"]
         st2, _ = _api(api_base, "GET", "/api/records/" + c["to"])
         if st2 == 200:
             st3, _ = _api(api_base, "PUT", "/api/records/" + c["to"],
@@ -271,6 +281,10 @@ def run_journey(journey, run_dir, app_base, api_base):
         proc = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True,
                               timeout=TURN_TIMEOUT)
     except subprocess.TimeoutExpired:
+        with open(os.path.join(run_dir, "%s.json" % jid), "w") as fh:
+            json.dump({"journey": jid, "verdict": "red",
+                       "violations": ["ui-drive timeout after %ds" % TURN_TIMEOUT],
+                       "seed_note": note}, fh, indent=2)
         return jid, "red", {"failure": "ui-drive timeout after %ds" % TURN_TIMEOUT}
     if proc.returncode == 2:
         return jid, "transport-error", {"failure": "env error from ui-drive",
