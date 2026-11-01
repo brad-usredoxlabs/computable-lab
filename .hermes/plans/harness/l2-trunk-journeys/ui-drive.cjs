@@ -257,6 +257,16 @@ function shaShort(s) {
         case 'open_ai_tab':
           await page.locator('[data-testid="right-pane-tab-ai"]').first().click();
           break;
+        case 'new_thread':
+          // D3 determinism: the deck chat thread PERSISTS across runs (the
+          // thread list carried yesterday's unanswered cards into this run,
+          // so click_card_first_option could answer a STALE card). Use the
+          // product's own affordance — the composer's "New thread" button —
+          // to start the journey on a clean thread.
+          await page.getByRole('button', { name: 'New thread', exact: true })
+            .first().click();
+          await page.waitForTimeout(800);
+          break;
         case 'ensure_deck_variant_freeform': {
           // Test-port affordance copied from deck-ghost-shorthand.spec.ts:
           // the DeckSetupChip cascade (live control since a31c7201).

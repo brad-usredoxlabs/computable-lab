@@ -38,6 +38,10 @@ steps:
     path: /deck/EVG-JOURNEYS-2
   - step: ensure_deck_variant_freeform
   - step: open_ai_tab
+  # D3 determinism: the deck thread persists across runs; start on a FRESH
+  # thread (the product's own "New thread" button) so a stale card from an
+  # earlier run can never be the answered one.
+  - step: new_thread
   # The blob prompt (l2-suite-a corpus prompt 4, (sic) 'All' not here): the
   # honest deterministic compile asks rather than guessing — the 50/50 blob
   # card reliably carries offered options (measured probe 2026-10-31).
