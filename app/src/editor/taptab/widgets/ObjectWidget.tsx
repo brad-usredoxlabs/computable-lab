@@ -222,8 +222,7 @@ export function ObjectWidget({
                   // The current value as a declared option's VALUE (the stored
                   // value is a flat token; an object-shaped value falls back to
                   // its label/id — the same display derivation the ref pickers
-                  // use). A stored value that names no option renders the
-                  // first option (never a free-text echo).
+                  // use).
                   const raw = propValue;
                   const current =
                     typeof raw === 'string'
@@ -235,14 +234,29 @@ export function ObjectWidget({
                               ? String((raw as Record<string, unknown>).id)
                               : '')
                         : '';
-                  const matched = prop.options!.find((o) => o.value === current) ?? prop.options![0]!;
+                  const matched = prop.options!.find((o) => o.value === current);
+                  // GATE-FIX-2 N1 (adv-l1t1730): a stored value that names NO
+                  // declared option (absent / '' / an unrecognized token)
+                  // renders the control in an explicit UNSET state — a
+                  // selectable empty placeholder option (value "") FIRST —
+                  // instead of coercing to options[0] (the editor must not
+                  // display a value the record does not hold; absent =
+                  // unknown, never a default). The matching case keeps the
+                  // exactly-the-declared-options render with that option
+                  // selected (the D2 contract). The placeholder TEXT is the
+                  // field's own declared label (data-derived, never a
+                  // hardcoded string).
+                  const isUnset = matched === undefined;
                   return (
                     <select
                       className="taptab-object-field-select"
-                      value={matched.value}
+                      value={matched ? matched.value : ''}
                       onChange={(e) => handleFieldChange(prop.name, e.target.value)}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {isUnset && (
+                        <option value="">{prop.label}</option>
+                      )}
                       {prop.options!.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
