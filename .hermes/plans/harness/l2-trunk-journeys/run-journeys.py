@@ -168,9 +168,12 @@ def check_rendered_assertions(evidence, assertions):
                 violations.append("rendered: answer-turn intentId cannot be "
                                   "compared — intent cards seen: %r" % (evidence.get("intent_ids"),))
             elif ids[0] != ids[-1]:
-                violations.append("rendered: spec J2 — the folded answer turn "
-                                  "must carry the SAME intentId, but pre-answer "
-                                  "intentId %r != answer-turn intentId %r" % (ids[0], ids[-1]))
+                violations.append("rendered: RED-BY-PRODUCT-DEFECT — spec J2 "
+                                  "\"the folded answer turn produces a "
+                                  "user-visible answer with the same "
+                                  "intentId\": pre-answer intentId %r != "
+                                  "answer-turn intentId %r (intent cards: %r)"
+                                  % (ids[0], ids[-1], evidence.get("intent_ids")))
         if "proposal_accepted" in a and a["proposal_accepted"]:
             if not evidence.get("proposal_accepted"):
                 violations.append("rendered: no proposal diff was accepted (ChangesPanel Accept)")
