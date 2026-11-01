@@ -31,6 +31,7 @@
 
 import { useState } from 'react';
 import type { WidgetType, ArrayItemHintField, ObjectFieldConfig } from '../types';
+import { isRefWidget } from '../refValue';
 import { ObjectWidget } from './ObjectWidget';
 
 /**
@@ -108,11 +109,22 @@ function formatItem(item: unknown): string {
  * datatypes/ref `kind` discriminator is declared that way in the merged
  * knowledge ui.yaml — the value is read FROM THE HINT); every other
  * sub-field seeds `''`.
+ *
+ * W2 part 2 (C2): a `ref` / `record-ref` sub-field is seeded ABSENT (its key
+ * is NOT present in the seed), never `''`. A ref position holds a structured
+ * ref OBJECT (datatypes/ref.schema.yaml) or is absent — `''` into a ref slot
+ * is schema-invalid (the QMS-6E "Expected type: object" 422). The branch is
+ * on the DECLARED widget type (the isRefWidget discriminator from refValue
+ * — the single source of truth for which widget types hold a ref object),
+ * never on a field name.
  */
 function seedItemFromHint(hint: ArrayItemHint): Record<string, unknown> {
   const seed: Record<string, unknown> = {};
   for (const field of hint.fields ?? []) {
     if (!field || typeof field.path !== 'string' || field.path.length === 0) continue;
+    // Ref sub-fields are seeded absent (never ''), per the ref value
+    // emission contract.
+    if (isRefWidget(field.widget)) continue;
     const isSingleOptionSelect =
       (field.widget === 'select' || field.widget === 'radio') &&
       Array.isArray(field.options) &&
@@ -143,10 +155,19 @@ function mapHintFieldsToObjectFields(
     label: f.label ?? f.path,
     help: f.help,
     required: f.required ?? false,
-    options: f.options?.map((o) => ({
-      value: String(o.value),
-      label: o.label,
-    })),
+    ...(f.options !== undefined && {
+      options: f.options?.map((o) => ({
+        value: String(o.value),
+        label: o.label,
+      })),
+    }),
+    // W2 part 2: forward the declared refKind + suggestion props so the
+    // ObjectWidget can render a ref/record-ref sub-field through the
+    // EXISTING picker machinery (RefCombobox / RecordRefPicker) with the
+    // same suggestion plan the top-level slot would get. Absent for flat
+    // sub-fields (byte-identical).
+    ...(f.refKind !== undefined && { refKind: f.refKind }),
+    ...(f.props !== undefined && { props: f.props }),
     ...(Array.isArray(f.fields) && f.fields.length > 0
       ? { fields: mapHintFieldsToObjectFields(f.fields) }
       : {}),

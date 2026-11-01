@@ -2455,6 +2455,13 @@ export const apiClient = {
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
+    /** FAME-3 W6 (OQ-4 OPT-A step 7): the edit-record arm's target record.
+     * The record-drafting envelope itself is additionalProperties:false and
+     * carries NO target (the trust boundary is Ajv + the server's guard); the
+     * target rides the compile REQUEST BODY as body.target (FormDraftService),
+     * forwarded verbatim by the flow. Absent on the create arm and on every
+     * non-edit adapter (conditional-spread — never an undefined slot). */
+    target?: { recordId: string }
   }): Promise<{
     draftId: string
     revision: number

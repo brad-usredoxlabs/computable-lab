@@ -144,6 +144,13 @@ function mapHintFieldEntry(f: ArrayItemHintField): ArrayItemHintField {
     ...(f.options !== undefined && {
       options: f.options.map((o) => ({ value: o.value, label: o.label })),
     }),
+    // W2 part 2: forward the declared refKind + suggestion props so a
+    // ref/record-ref item sub-field reaches the ObjectWidget with enough
+    // data to render the EXISTING picker machinery (RefCombobox /
+    // RecordRefPicker) — the same generic shape-only forwarding as the
+    // options/fields maps. Absent for flat fields (byte-identical).
+    ...(f.refKind !== undefined && { refKind: f.refKind }),
+    ...(f.props !== undefined && { props: f.props }),
     ...(Array.isArray(f.fields) && f.fields.length > 0
       ? { fields: f.fields.map(mapHintFieldEntry) }
       : {}),

@@ -5,6 +5,11 @@
 
 import { useState } from 'react';
 import type { WidgetType, ObjectFieldConfig } from '../types';
+import { isRefWidget, isDisplayOnlyRefValue } from '../refValue';
+import { buildSuggestionPlanFromFieldHint } from '../../../shared/forms/suggestionPlan';
+import { RefCombobox } from '../RefCombobox';
+import { RecordRefPicker, type RecordRefSelection } from '../RecordRefPicker';
+import { commitRefSelection } from '../refSelectionValue';
 
 export interface ObjectWidgetProps {
   value: unknown;
@@ -54,6 +59,31 @@ function setValueAtPath(
   const lastPart = parts[parts.length - 1]!;
   current[lastPart] = value;
   return result;
+}
+
+/**
+ * W2 part 2 (OPT-B C2): the ref-picker SEED text for a ref sub-field's
+ * current value — what RefCombobox / RecordRefPicker show before the user
+ * re-searches. A ref OBJECT displays its label (or its id when label-less);
+ * a legacy plain string displays verbatim; absent/null/'' display ''.
+ * Display-only (the picker's initial query) — the COMMIT is always the
+ * canonical ref OBJECT (commitRefSelection / the record picker's own
+ * object), never this string.
+ */
+function refPickerDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') {
+    // A placeholder/'—'/empty string is the TRUE empty for a ref position
+    // (isDisplayOnlyRefValue / normalizeRefFieldValue contract) — the
+    // picker's seed query starts empty, never re-echoing the placeholder.
+    return isDisplayOnlyRefValue(value) ? '' : value;
+  }
+  if (typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    if (typeof o.label === 'string' && o.label.length > 0) return o.label;
+    if (typeof o.id === 'string') return o.id;
+  }
+  return '';
 }
 
 export function ObjectWidget({
@@ -116,6 +146,21 @@ export function ObjectWidget({
           // EXACTLY as before for properties without nested fields.
           const nestedFields = Array.isArray(prop.fields) ? prop.fields : [];
           const hasNestedFields = nestedFields.length > 0;
+          // W2 part 2 (OPT-B C2): a FLAT sub-field whose DECLARED widget is a
+          // ref/record-ref (the isRefWidget discriminator from refValue —
+          // the single source of truth for which widget types hold a ref
+          // object; the branch is on the declared widget, NEVER on a field
+          // name / kind name) renders the EXISTING picker machinery instead
+          // of the flat text input: RefCombobox over the /resolve spine for
+          // `ref` (the suggestion plan built from the ui.yaml-declared
+          // props — the ontology-ref pattern: the 'ols' source turns on the
+          // spine, valueShape ontology-ref commits the canonical ref OBJECT
+          // via the shared commitRefSelection), RecordRefPicker for
+          // `record-ref` scoped to the declared refKind (it commits its own
+          // canonical {kind:'record',...} object). A placeholder/'—' string
+          // (isDisplayOnlyRefValue) is the TRUE empty for a ref position and
+          // commits null (normalizeRefFieldValue) — never a stored ''.
+          const isRefSubField = !hasNestedFields && isRefWidget(prop.widget);
           return (
             <div key={prop.name} className="taptab-object-field">
               <label className="taptab-object-field-label">
@@ -130,6 +175,36 @@ export function ObjectWidget({
                   readOnly={false}
                   onCommit={(v) => handleFieldChange(prop.name, v)}
                 />
+              ) : isRefSubField ? (
+                prop.widget === 'record-ref' ? (
+                  <RecordRefPicker
+                    value={refPickerDisplayValue(propValue)}
+                    refKind={prop.refKind || 'default'}
+                    onSelect={(ref: RecordRefSelection) =>
+                      handleFieldChange(prop.name, ref)
+                    }
+                    onCancel={() => undefined}
+                  />
+                ) : (
+                  <RefCombobox
+                    value={refPickerDisplayValue(propValue)}
+                    refKind={prop.refKind || 'default'}
+                    suggestionPlan={
+                      prop.widget === 'ref'
+                        ? buildSuggestionPlanFromFieldHint(
+                            prop.widget,
+                            prop.props,
+                            prop.refKind,
+                            prop.options,
+                          )
+                        : undefined
+                    }
+                    onSelect={(v, s, t) =>
+                      handleFieldChange(prop.name, commitRefSelection(v, s, t))
+                    }
+                    onCancel={() => undefined}
+                  />
+                )
               ) : (
                 <input
                   type="text"

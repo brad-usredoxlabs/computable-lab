@@ -34,6 +34,38 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { ArrayWidget } from './ArrayWidget'
 
+// W2 part 2 (OPT-B C2) — the ref sub-field leg renders the EXISTING
+// RefCombobox picker; mock the two search hooks the same way
+// ObjectWidget.nested.test.tsx does (one local result + one ontology
+// candidate) so the picker is driven deterministically. The pre-existing
+// legs in this file use a select/text hint (no ref picker renders) and are
+// unaffected.
+vi.mock('../../../shared/hooks/useTagSuggestions', () => ({
+  useTagSuggestions: vi.fn((_opts: { query: string; field: string; enabled?: boolean }) => ({
+    suggestions: [{ value: 'local-term-a', count: 1, source: 'local' as const }],
+    loading: false,
+    error: null,
+  })),
+}))
+vi.mock('../../hooks/useResolveOntology', () => ({
+  useResolveOntology: vi.fn((_opts: { query: string; enabled?: boolean }) => ({
+    results: [
+      {
+        curie: 'TESTNS:hint_compound',
+        label: 'Hint compound',
+        namespace: 'TESTNS',
+        tier: 2 as const,
+        level: 'concept' as const,
+        score: 1,
+        source: 'oak' as const,
+        uri: 'http://purl.obolibrary.org/obo/TESTNS_hint_compound',
+      },
+    ],
+    loading: false,
+    fromCache: false,
+  })),
+}))
+
 /** Mirror of the REAL evidence.ui.yaml `$.supports` item-hint (the
  *  datatypes/ref object the schema declares): kind (single-option select,
  *  value "record"), type, id, label. Same shape as assertion.ui.yaml
@@ -248,5 +280,62 @@ describe('ArrayWidget item-hint authoring (WIDGET-R1)', () => {
     addArrayItem(form)
     expect(onCommit).toHaveBeenCalledTimes(1)
     expect(onFormSubmit, '"+ Add item" must NOT submit the enclosing form').not.toHaveBeenCalled()
+  })
+
+  it('W2 part 2 (OPT-B C2): a `widget: ref` sub-field in the hint seeds ABSENT (schema-valid seed) and renders the EXISTING ref picker in the item editor — never a flat text input', () => {
+    // A hint carrying ONE flat text sub-field + ONE ref sub-field whose
+    // declared props carry the ontology-ref suggestion shape (the 'ols'
+    // source turns on the /resolve spine; valueShape ontology-ref commits
+    // the canonical ref OBJECT). The branch under test is on the DECLARED
+    // widget `ref` — no field/kind names from the domain.
+    const REF_ITEM_HINT = {
+      path: '$.item',
+      widget: 'object',
+      label: 'Hint item',
+      fields: [
+        { path: 'note', widget: 'text', label: 'Note', required: true },
+        {
+          path: 'target_ref',
+          widget: 'ref',
+          label: 'Target reference',
+          required: true,
+          props: {
+            sources: ['local', 'ols'],
+            valueShape: 'ontology-ref',
+            ontologyBinding: 'allow-ontology',
+          },
+        },
+      ],
+    }
+    const onCommit = vi.fn()
+    const view = render(
+      <ArrayWidget value={[]} widget="array" readOnly={false} onCommit={onCommit} itemHint={REF_ITEM_HINT} />
+    )
+    openEditor(view.container)
+    addArrayItem(view.container)
+    // THE SEED CONTRACT: the ref sub-field is ABSENT from the seed (its key
+    // is not present) — a ref position holds a structured ref OBJECT or
+    // nothing; '' into a ref-object position is schema-invalid. The flat
+    // text sub-field seeds '' exactly as before (existing pins stay GREEN).
+    const committed = onCommit.mock.calls[0][0] as Array<Record<string, unknown>>
+    expect(committed).toHaveLength(1)
+    expect(committed[0].note).toBe('')
+    expect(
+      'target_ref' in committed[0],
+      'the ref sub-field must be ABSENT from the seed (never "")',
+    ).toBe(false)
+    // THE RENDER CONTRACT: re-render with the committed item (as FieldRow
+    // would), open the item's object editor — the ref sub-field renders the
+    // EXISTING RefCombobox picker, the flat sub-field keeps its text input.
+    view.rerender(
+      <ArrayWidget value={onCommit.mock.calls[0][0]} widget="array" readOnly={false} onCommit={onCommit} itemHint={REF_ITEM_HINT} />
+    )
+    act(() => {
+      fireEvent.click(view.container.querySelector('.taptab-object-value') as HTMLElement)
+    })
+    expect(view.container.querySelector('.taptab-object-editor')).toBeTruthy()
+    const flatInputs = view.container.querySelectorAll('.taptab-object-field-input')
+    expect(flatInputs, 'only the flat text sub-field renders a text input').toHaveLength(1)
+    expect(view.container.querySelector('.ref-combobox'), 'the ref sub-field renders the EXISTING RefCombobox picker').toBeTruthy()
   })
 })

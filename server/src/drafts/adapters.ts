@@ -5,7 +5,8 @@ import { SequenceService } from '../sequences/SequenceService.js';
 import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity.js';
 import { compileWorkstateIntent, workstateDepsFromContext } from './workstateCompile.js';
 import { compileAnalysisIntent, analysisDepsFromContext } from './analysisCompile.js';
-import { compileRecordDraftIntent, recordDraftDepsFromContext } from './recordDraftCompile.js';
+import { compileRecordDraftIntent, recordDraftDepsFromContext, buildRecordEditMerge } from './recordDraftCompile.js';
+import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
 import { compileReceivingIntent, receivingDepsFromContext } from '../receiving/MaterialReceivingDraft.js';
 import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID } from '../receiving/receivingIdentity.js';
 import { compileExecuteChainIntent, chainDepsFromContext } from '../chain/ExecuteChainDraft.js';
@@ -29,7 +30,13 @@ export interface DraftAdapter {
   // same class of seam as stage/project/checkRequest. The loop NEVER
   // dispatches on an adapter name or a kind; an adapter without the hook is
   // byte-identical to before.
-  onAccept?(writes: RecordEnvelope[], acceptNow: string, store: RecordStore): Promise<AcceptOutcome>;
+  //
+  // OQ-4 OPT-A (20261101T032x): the hook gains ONE additive trailing arg —
+  // the draft's stored input (intent + target). The edit-record arm arms its
+  // single governed edit from that intent (the operation + term + fields) and
+  // its target (the record to edit). Existing hooks IGNORE the extra arg
+  // (additive; byte-identical for create-only adapters).
+  onAccept?(writes: RecordEnvelope[], acceptNow: string, store: RecordStore, draftInput?: { intent?: Record<string, unknown>; target?: { recordId: string } }): Promise<AcceptOutcome>;
 }
 /** Registration attaches mechanics to YAML contracts, without schema-name dispatch. */
 export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
@@ -103,13 +110,57 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
   // draft-ness is the read-side lifecycle fallback (recordDraftCompile.ts).
   'record-drafting': {
     async stage(context,actor,intent,_targetId,now) {
-      const compiled = await compileRecordDraftIntent(intent, recordDraftDepsFromContext(context), actor, now);
+      const compiled = await compileRecordDraftIntent(intent, recordDraftDepsFromContext(context), actor, now, _targetId);
       if(!compiled.ok)throw new Error(compiled.diagnostics.map(d=>`${d.code} ${d.path}: ${d.message}`).join('; '));
       return {...compiled.result};
     },
+    // OQ-4 OPT-A (20261101T032x): the record-drafting adapter gains the ONE
+    // additive onAccept hook. The accept loop is CREATE-ONLY (FormDraftService
+    // :228-231 — a prior that exists with a divergent payload 409s), so the
+    // edit arm's single governed edit rides THIS hook: the create arm returns
+    // {writes} UNCHANGED (byte-identical); the edit arm (operation
+    // edit-record, armed from draftInput) re-derives the merged payload through
+    // the SAME buildRecordEditMerge helper the compile used (byte-identical)
+    // and applies exactly ONE store.update, returning the merged envelope as
+    // the write so the loop's content-equal skip + ensureOwnerPolicy fire as
+    // shipped. NO state is ever injected by the code — assignment_state rides
+    // the guard DATA (record-edit-guards.yaml defaults) or the human-approved
+    // payload, never a TS literal. The create arm never reaches the edit
+    // branch (its draftInput.operation is compose-record), so it is
+    // byte-identical to before.
+    async onAccept(writes, _acceptNow, store, draftInput) {
+      const operation = draftInput?.intent && typeof draftInput.intent === 'object'
+        ? (draftInput.intent as Record<string, unknown>).operation
+        : undefined;
+      const targetId = draftInput?.target?.recordId;
+      if (operation !== 'edit-record') return { writes }; // the create arm — unchanged
+      if (!targetId) throw new Error('record-edit accept: the edit arm names no target record (body.target.recordId is required).');
+      const merged = await buildRecordEditMerge({
+        intent: draftInput!.intent!,
+        targetId,
+        store,
+        ontologyTerms: () => getOntologyTermRegistry().list(),
+      });
+      if (!merged.ok) throw new Error(merged.diagnostics.map(d=>`${d.code} ${d.path}: ${d.message}`).join('; '));
+      const saved = await store.update({
+        envelope: merged.mergedEnvelope,
+        message: `Accept record-edit draft (operation edit-record) on ${targetId}`,
+      });
+      if (!saved.success) {
+        const detail = saved.validation?.errors?.length
+          ? saved.validation.errors.map((e) => `${e.path || '/'}: ${e.message}`).join('; ')
+          : saved.error ?? 'the governed edit was rejected by the store';
+        throw new Error(`record-edit accept: the single governed edit was refused — ${detail}. Nothing was written.`);
+      }
+      // Return the merged envelope as THE write: the loop's prior-content
+      // comparison sees the store it just updated (content-equal → skip the
+      // create) and ensureOwnerPolicy fires on the edited record.
+      return { writes: [merged.mergedEnvelope] };
+    },
     project(projection) {
       // The projection is the intent echo; the card document rides in `result`
-      // and the single staged record create rides in `writes`.
+      // and the single staged record create rides in `writes` (the edit arm
+      // stages ZERO writes — its single governed edit rides the onAccept hook).
       return projection;
     },
   },
