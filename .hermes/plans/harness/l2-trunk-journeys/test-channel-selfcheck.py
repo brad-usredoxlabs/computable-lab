@@ -45,6 +45,9 @@ if _spec is None or _spec.loader is None:
     raise SystemExit("SELFCHECK: cannot load the driver module by path")
 rj = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rj)
+# The D1 consumer arm below retargets the driver module's RECEIPTS_ROOT at a
+# temp receipts root; remember the imported default to restore it after.
+RECEIPTS_ROOT_DEFAULT = rj.RECEIPTS_ROOT
 
 
 def honest_body(j1):
@@ -211,18 +214,28 @@ def main():
         shutil.rmtree(td2, ignore_errors=True)
 
     # ---- (3) the tick gate helper: red blocks, green passes ---------------
-    # D2: fixtures must satisfy the COMPLETE+TRUNK preconditions so the red
-    # case tests the RED arm, and new cases prove INCOMPLETE / scratch-FE runs
-    # fail closed on their own.
+    # D2 (fix4): a clearing verdict requires fake_mode (hard set
+    # J1+J2(fake)+J3); D1 (fix4): the gate RE-DERIVES the A2 grade from
+    # fake_restore.restore_ok — fixtures must carry the first-class
+    # fake_mode field + an honest fake_restore record so the red case tests
+    # the RED arm, and the new cases prove the D1/D2 arms bite.
     full_green = {"J1": "green", "J2": "green", "J3": "green"}
     trunk_meta = {"app_base": "http://localhost:5193",
                   "app_base_is_trunk": True}
+    live_u = "http://127.0.0.1:18099/api/v1"
+    fake_u = "http://127.0.0.1:39329/api/v1"
+    ok_restore = {"restore_ok": True, "live_url": live_u,
+                  "pointed_url": fake_u, "restored_url": live_u}
+    fail_restore = {"restore_ok": False, "live_url": live_u,
+                    "pointed_url": fake_u, "restored_url": fake_u}
+    fake_meta = dict(trunk_meta, fake_mode=True, fake_restore=dict(ok_restore))
     with tempfile.TemporaryDirectory() as td:
         red_dir = os.path.join(td, "20260101T000000Z")
         os.makedirs(red_dir)
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump(dict(trunk_meta, verdict="RED",
-                           verdicts={"J1": "red", "J2": "green", "J3": "green"}), fh)
+            json.dump(dict(fake_meta, verdict="RED",
+                           verdicts={"J1": "red", "J2": "green",
+                                     "J3": "green"}), fh)
         os.symlink(red_dir, os.path.join(td, "latest"))
         env = dict(os.environ, CL_RECEIPTS=td)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
@@ -231,14 +244,16 @@ def main():
                         p.returncode == 1 and "BLOCKER" in p.stdout and "J1" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump(dict(trunk_meta, verdict="ALL-GREEN", verdicts=full_green), fh)
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green), fh)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
-        results.append(("GATE green-run exits 0", p.returncode == 0,
+        results.append(("GATE fake ALL-GREEN (restore ok) exits 0",
+                        p.returncode == 0,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # D2 case A: complete greens but only J1 ran (incomplete table) => blocks
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump(dict(trunk_meta, verdict="ALL-GREEN",
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
                            verdicts={"J1": "green"}), fh)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
@@ -248,22 +263,71 @@ def main():
         # D2 case B: complete greens against a SCRATCH frontend => blocks
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
             json.dump({"app_base": "http://127.0.0.1:5195",
-                       "app_base_is_trunk": False,
+                       "app_base_is_trunk": False, "fake_mode": True,
+                       "fake_restore": dict(ok_restore),
                        "verdict": "ALL-GREEN", "verdicts": full_green}, fh)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
         results.append(("GATE D2: scratch-frontend (:5195) run BLOCKS",
                         p.returncode == 1 and "NON-TRUNK" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
-        # D2 case C (negative control): legacy meta with no app_base_is_trunk
-        # flag and trunk app_base => completeness governs, trunk ok.
+        # D2 case C (fix4): a complete ALL-GREEN run WITHOUT --fake
+        # (live-sampler lottery; the historical 20261101T034018Z shape) must
+        # NOT clear the gate — the hard set is J1+J2(fake)+J3.
         with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
-            json.dump({"app_base": "http://localhost:5193",
-                       "verdict": "ALL-GREEN", "verdicts": full_green}, fh)
+            json.dump(dict(trunk_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_mode=False), fh)
         p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
                            capture_output=True, text=True, env=env)
-        results.append(("GATE D2: trunk app_base without the flag still passes",
-                        p.returncode == 0,
+        results.append(("GATE D2: non-fake complete ALL-GREEN BLOCKS (lottery)",
+                        p.returncode == 1 and "--fake" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D2 case D (fix4): LEGACY meta with the fake_mode key MISSING
+        # entirely (pre-fix4 receipts) must also block — fail closed.
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(trunk_meta, verdict="ALL-GREEN",
+                           verdicts=full_green), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D2: legacy meta (fake_mode key missing) BLOCKS",
+                        p.returncode == 1 and "--fake" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D1 case A (fix4): a fake run whose A2 restore FAILED must block the
+        # gate even though its verdict table is complete + green.
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_restore=dict(fail_restore),
+                           red_blocks_claims=True), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D1: fake run with FAILED restore BLOCKS (gate re-derives restore_ok)",
+                        p.returncode == 1 and "restore FAILED" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # D1 case B (fix4): a TAMPERED meta — verdict ALL-GREEN +
+        # red_blocks_claims false but the graded restore record says the
+        # pointer leaked — must STILL block (the gate trusts the restore
+        # record, never the verdict string).
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="ALL-GREEN",
+                           verdicts=full_green,
+                           fake_restore=dict(fail_restore),
+                           red_blocks_claims=False), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE D1: tampered verdict over a FAILED restore STILL BLOCKS",
+                        p.returncode == 1 and "restore FAILED" in p.stdout,
+                        ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # A3: an advisory latest (should be unreachable via the driver — it
+        # never flips latest — but the gate blocks if one lands there).
+        with open(os.path.join(red_dir, "run-meta.json"), "w") as fh:
+            json.dump(dict(fake_meta, verdict="RED-ADVISORY",
+                           verdicts=full_green, advisory=True), fh)
+        p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py")],
+                           capture_output=True, text=True, env=env)
+        results.append(("GATE A3: an advisory latest BLOCKS",
+                        p.returncode == 1 and "ADVISORY" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
 
     # ---- (4) A2: the model-layer fake restore is GRADED, not promised ----
@@ -280,6 +344,92 @@ def main():
     results.append(("A2 restore: a null live URL never grades OK",
                     not rj.restore_ok(None, live),
                     ["restore_ok(None, %r)=%r" % (live, rj.restore_ok(None, live))]))
+    # ---- (4b) D1 (fix4): the restore grade is CONSUMED by the driver -----
+    # The pure helper above is only one half of A2. These arms drive the
+    # DRIVER CONSUMER (downgrade_restore_failure): a run whose restore failed
+    # must be downgraded to RED-RESTORE-FAILED, must set red_blocks_claims,
+    # and must UNDO its own `latest` flip (restore-last, D1 aggravator (a)).
+    with tempfile.TemporaryDirectory() as td_d1:
+        # a previous green fake run owns `latest` ...
+        prev_dir = os.path.join(td_d1, "20260101T000010Z")
+        os.makedirs(prev_dir)
+        with open(os.path.join(prev_dir, "run-meta.json"), "w") as fh:
+            json.dump({"run": "20260101T000010Z", "verdict": "ALL-GREEN",
+                       "verdicts": dict(full_green), "fake_mode": True,
+                       "fake_restore": dict(ok_restore)}, fh)
+        os.symlink(prev_dir, os.path.join(td_d1, "latest"))
+        # ... then a LATER fake run flips `latest` to itself and its
+        # restore FAILS — the driver consumer must un-do the flip.
+        fail_dir = os.path.join(td_d1, "20260101T000020Z")
+        os.makedirs(fail_dir)
+        meta_fail = {"run": "20260101T000020Z", "verdict": "ALL-GREEN",
+                     "verdicts": dict(full_green), "fake_mode": True,
+                     "advisory": False, "latest_was": prev_dir}
+        with open(os.path.join(fail_dir, "run-meta.json"), "w") as fh:
+            json.dump(meta_fail, fh)
+        os.remove(os.path.join(td_d1, "latest"))  # the driver's flip
+        os.symlink(fail_dir, os.path.join(td_d1, "latest"))
+        rj.RECEIPTS_ROOT = td_d1  # the consumer operates on the module's root
+        try:
+            meta2, note = rj.downgrade_restore_failure(
+                fail_dir, meta_fail, {"restore_ok": False, "live_url": live,
+                                      "restored_url": fake_u})
+        finally:
+            rj.RECEIPTS_ROOT = RECEIPTS_ROOT_DEFAULT
+        latest_now = (os.path.realpath(os.path.join(td_d1, "latest"))
+                      if os.path.islink(os.path.join(td_d1, "latest"))
+                      else None)
+        results.append(("D1 driver: a FAILED restore UNDOES this run's `latest` flip (restore-last)",
+                        latest_now == prev_dir and "UNDONE" in note,
+                        ["latest_now=%r note=%r" % (latest_now, note)]))
+        results.append(("D1 driver: the run is downgraded to RED-RESTORE-FAILED + red_blocks_claims",
+                        meta2["verdict"] == "RED-RESTORE-FAILED"
+                        and meta2["red_blocks_claims"] is True
+                        and meta2["restore_ok"] is False
+                        and os.path.isfile(os.path.join(fail_dir, "run-meta.json"))
+                        and json.load(open(os.path.join(fail_dir, "run-meta.json")))["verdict"]
+                        == "RED-RESTORE-FAILED",
+                        ["verdict=%r rbc=%r" % (meta2["verdict"],
+                                                meta2["red_blocks_claims"])]))
+        # the advisory suffix survives the downgrade (an advisory run's
+        # honest verdict must stay honest).
+        meta_adv = {"run": "20260101T000021Z", "verdict": "GREEN-NOT-GATING-ADVISORY",
+                    "verdicts": dict(full_green), "advisory": True,
+                    "latest_was": None}
+        with open(os.path.join(fail_dir, "run-meta.json"), "w") as fh:
+            json.dump(meta_adv, fh)
+        meta3, _ = rj.downgrade_restore_failure(
+            fail_dir, meta_adv, {"restore_ok": False, "live_url": live,
+                                 "restored_url": fake_u})
+        results.append(("D1 driver: the advisory marker survives the downgrade (run grade RED, advisory mode kept)",
+                        meta3["verdict"] == "RED-RESTORE-FAILED-ADVISORY"
+                        and meta3["red_blocks_claims"] is True,
+                        ["verdict=%r" % meta3["verdict"]]))
+        # no regression: the driver's consumer is the guard `if not
+        # restore_ok:` itself — a successful restore record must NOT trigger
+        # the downgrade. Pin the exact guard the finally block runs.
+        results.append(("D1 driver: the downgrade guard (not restore_ok) fires ONLY on failure (ok-restore is a no-op)",
+                        (not rj.restore_ok(live, live)) is False
+                        and (not rj.restore_ok(live, fake_u)) is True,
+                        ["ok-restore guard=%r fail-restore guard=%r" % (
+                            not rj.restore_ok(live, live),
+                            not rj.restore_ok(live, fake_u))]))
+    # ---- (4c) D2 (fix4): the verdict ladder is FAKE-GATED (pure) --------
+    # A complete trunk green on the LIVE sampler is GREEN-NOT-GATING and can
+    # never own `latest`; only the fake claim run does. These pin the pure
+    # functions the driver and the gate both consume.
+    results.append(("D2 ladder: complete+trunk+FAKE greens are ALL-GREEN",
+                    rj.overall_verdict(0, 0, True, True, False, True) == "ALL-GREEN",
+                    ["overall_verdict(0,0,True,True,False,True)"]))
+    results.append(("D2 ladder: complete+trunk+NON-fake greens are GREEN-NOT-GATING",
+                    rj.overall_verdict(0, 0, True, True, False, False) == "GREEN-NOT-GATING",
+                    ["overall_verdict(0,0,True,True,False,False)"]))
+    results.append(("D2 flip: a non-fake complete trunk run NEVER owns `latest`",
+                    rj.flips_latest(True, True, False, True) is True
+                    and rj.flips_latest(True, True, False, False) is False,
+                    ["flips_latest(fake=True)=%r flips_latest(fake=False)=%r"
+                     % (rj.flips_latest(True, True, False, True),
+                        rj.flips_latest(True, True, False, False))]))
 
     # ---- (5) A4/N1: the trunk FE identity is a LITERAL set, no env -------
     # CL_JOURNEY_APP_BASE (or --app-base) may SELECT the run target, but it
@@ -313,6 +463,94 @@ def main():
         results.append(("N1 gate: a LIES-flag scratch run is BLOCKED (gate re-derives trunk)",
                         p.returncode == 1 and "NON-TRUNK" in p.stdout,
                         ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+
+    # ---- (6) D3/D4 (fix4): the fake dispatch is DATA-driven and logs the
+    # RESOLVED turn ------------------------------------------------------
+    # The journey set is the canned YAML (no hardcoded id tuple), matching
+    # runs on the current user message first / history second, and the
+    # receipt log carries the SAME turn variable dispatch used (D4: the
+    # pre-fix4 log recomputed turn from the marker alone and misreported
+    # the answer turn as turn 1).
+    _spec_fi = importlib.util.spec_from_file_location(
+        "fake_inference", os.path.join(HERE, "fake-inference.py"))
+    if _spec_fi is None or _spec_fi.loader is None:
+        raise SystemExit("SELFCHECK: cannot load fake-inference by path")
+    fi = importlib.util.module_from_spec(_spec_fi)
+    _spec_fi.loader.exec_module(fi)
+    with open(os.path.join(HERE, "canned", "completions.yaml")) as fh:
+        canned = yaml.safe_load(fh)
+    j2_ask = "Add 100uL of 50/50 Trypsin-EDTA/DMEM with 10% FBS to wells A2:H6"
+    j2_answer = "Use whole-mixture supplement"
+    # (6a) D3: the ANSWER turn of J2 — the journey prompt rides the HISTORY
+    # (current message is the answer); dispatch resolves J2 + turn 2, and
+    # the receipt log entry (built from the SAME variables) agrees.
+    msgs_a = [{"role": "system", "content": "sys"},
+              {"role": "user", "content": j2_ask},
+              {"role": "assistant", "content": "[card]"},
+              {"role": "user", "content": j2_answer}]
+    convo_a = "\n".join(m["content"] for m in msgs_a)
+    jid_a, spec_a, where_a = fi.pick_completion(canned, convo_a,
+                                                saw_assistant=True,
+                                                current_text=j2_answer)
+    dump_a, log_a = fi.describe_request(msgs_a, convo_a, True, j2_answer,
+                                        jid_a, spec_a, where_a, False,
+                                        "/api/v1/chat/completions")
+    results.append(("D3 fake: J2 answer turn dispatches via HISTORY (current-first, then history)",
+                    jid_a == "J2" and where_a == "history"
+                    and spec_a is not None and spec_a.get("shorthand", "").count("45%") == 2,
+                    ["jid=%r where=%r" % (jid_a, where_a)]))
+    results.append(("D4 fake: the answer-turn LOG carries the resolved turn 2 + saw_assistant + the block id that served",
+                    log_a["turn"] == 2 and log_a["saw_assistant"] is True
+                    and log_a["journey_block"] == "J2"
+                    and log_a["journey_match"] is True,
+                    ["log=%r" % log_a]))
+    # (6b) D3: a NEW journey block dispatches with NO code change — the
+    # journey set is the canned YAML (the pre-fix4 hardcoded
+    # ("J1","J2","J3") tuple would never reach J4).
+    canned4 = {"model": "l2trunkj-fake",
+               "journeys": dict(canned["journeys"],
+                                **{"J4": {"prompt_contains": "vortex the plate",
+                                          "turn1": {"intent": "event_shorthand",
+                                                    "shorthand": "intentId: vortex-all\n"}}})}
+    jid4, spec4, where4 = fi.pick_completion(
+        canned4, "please vortex the plate now", saw_assistant=False,
+        current_text="please vortex the plate now")
+    results.append(("D3 fake: a NEW canned block (J4) dispatches with no code change",
+                    jid4 == "J4" and where4 == "current" and spec4 is not None,
+                    ["jid=%r where=%r" % (jid4, where4)]))
+    # (6c) D3: current-first over history — history mentions J1 (first in
+    # the joined text), the CURRENT turn asks J2: dispatch must bind J2.
+    convo_c = "mix all wells that have material\n" + j2_ask
+    jid_c, spec_c, where_c = fi.pick_completion(canned, convo_c,
+                                                saw_assistant=False,
+                                                current_text=j2_ask)
+    results.append(("D3 fake: current turn binds over history (J2 despite J1 earlier in convo)",
+                    jid_c == "J2" and where_c == "current",
+                    ["jid=%r where=%r" % (jid_c, where_c)]))
+    # (6d) D4: a MARKER-carrying request (a surface that appends the marker)
+    # resolves turn 2 even without an assistant message — and the log says so.
+    marker_convo = j2_ask + " [Answered clarifications]"
+    jid_m, spec_m, where_m = fi.pick_completion(
+        canned, marker_convo, saw_assistant=False, current_text=marker_convo)
+    dump_m, log_m = fi.describe_request(
+        [{"role": "user", "content": marker_convo}], marker_convo, False,
+        marker_convo, jid_m, spec_m, where_m, True, "/x")
+    results.append(("D4 fake: the marker (secondary key) resolves turn 2 and the log agrees",
+                    spec_m is not None and log_m["turn"] == 2
+                    and log_m["marker"] is True and log_m["saw_assistant"] is False,
+                    ["log=%r" % log_m]))
+    # (6e) D3/D4: an unmatched prompt yields the honest unknown arm, and the
+    # log still records the resolved turn + the (absent) block id.
+    jid_x, spec_x, where_x = fi.pick_completion(
+        canned, "hello there", saw_assistant=False, current_text="hello there")
+    dump_x, log_x = fi.describe_request(
+        [{"role": "user", "content": "hello"}], "hello", False, "hello",
+        jid_x, spec_x, where_x, False, "/x")
+    results.append(("D3/D4 fake: an unmatched prompt logs journey_block None + honest unknown arm",
+                    jid_x is None and spec_x is None
+                    and log_x["journey_match"] is False
+                    and log_x["journey_block"] is None and log_x["turn"] == 1,
+                    ["log=%r" % log_x]))
 
     ok = True
     for name, passed, notes in results:
