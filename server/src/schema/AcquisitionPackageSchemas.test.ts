@@ -177,6 +177,180 @@ describe('acquisition-package lint (R1/R2/R4 over the real engine)', () => {
   });
 });
 
+describe('acquisition-package schema — FAME-1 acquisitionStatus + evidence', () => {
+  let validator: ReturnType<typeof createValidator>;
+
+  beforeAll(async () => {
+    const loaded = await loadAllSchemas({ basePath: SCHEMA_DIR, recursive: true });
+    const registry = createSchemaRegistry();
+    registry.addSchemas(loaded.entries);
+    validator = createValidator();
+    for (const id of registry.getTopologicalOrder()) {
+      const entry = registry.getById(id);
+      if (entry) {
+        validator.addSchema(entry.schema as never, id);
+      }
+    }
+  });
+
+  /** A package whose status was classified completed at registration. */
+  const completedWithEvidence = {
+    ...validPackage,
+    acquisitionStatus: 'completed',
+    acquisitionStatusEvidence: {
+      ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+      sourceMember: { relativePath: 'RUN.LOG' },
+      decode: { encoding: 'utf-16le', bomPresent: true },
+      matched: [
+        {
+          line: 'Method       Method completed                               15:24:43 10/23/26',
+          ruleId: 'completed-method-completed',
+          lineIndex: 3,
+        },
+      ],
+    },
+  };
+
+  /** A package with NO parseable log — the honest floor, reason-named. */
+  const unknownNoEvidence = {
+    ...validPackage,
+    acquisitionStatus: 'unknown',
+    acquisitionStatusEvidence: {
+      ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+      sourceMember: { relativePath: 'RUN.LOG' },
+      decode: { encoding: 'utf-16le', bomPresent: false },
+      matched: [],
+      noEvidenceReason: 'no-rule-match',
+    },
+  };
+
+  it('accepts a completed status with its evidence (additive; pre-FAME-1 payloads stay valid)', () => {
+    const ok = validator.validate(completedWithEvidence, ACQP_ID);
+    expect(ok.errors ?? []).toEqual([]);
+    expect(ok.valid).toBe(true);
+  });
+
+  it('accepts the unknown floor with a named noEvidenceReason', () => {
+    const ok = validator.validate(unknownNoEvidence, ACQP_ID);
+    expect(ok.errors ?? []).toEqual([]);
+    expect(ok.valid).toBe(true);
+  });
+
+  it('rejects a status outside the four declared words (enum)', () => {
+    const ok = validator.validate({ ...validPackage, acquisitionStatus: 'succeeded' }, ACQP_ID);
+    expect(ok.valid).toBe(false);
+    expect(ok.errors?.some(e => e.keyword === 'enum' && e.path === '/acquisitionStatus')).toBe(true);
+  });
+
+  it('rejects evidence with an undeclared key (evidence unevaluatedProperties: false)', () => {
+    const ok = validator.validate({
+      ...completedWithEvidence,
+      acquisitionStatusEvidence: {
+        ...completedWithEvidence.acquisitionStatusEvidence,
+        notDeclared: true,
+      },
+    }, ACQP_ID);
+    expect(ok.valid).toBe(false);
+  });
+
+  it('rejects a matched line whose ruleId is not the declared id shape', () => {
+    const ok = validator.validate({
+      ...completedWithEvidence,
+      acquisitionStatusEvidence: {
+        ...completedWithEvidence.acquisitionStatusEvidence,
+        matched: [{ line: 'x', ruleId: 'Not_A_Rule', lineIndex: 0 }],
+      },
+    }, ACQP_ID);
+    expect(ok.valid).toBe(false);
+    expect(
+      ok.errors?.some(e => e.keyword === 'pattern' && /ruleId/.test(e.path ?? '')),
+    ).toBe(true);
+  });
+});
+
+describe('acquisition-package lint — FAME-1 R5/R6 (record-scope evidence honesty)', () => {
+  let engine: ReturnType<typeof createLintEngine>;
+
+  beforeAll(async () => {
+    const result = await loadAllLintSpecs({ basePath: SCHEMA_DIR, recursive: true });
+    const bad = result.errors.filter(e => e.path.includes('acquisition-package.lint.yaml'));
+    expect(bad).toEqual([]);
+    engine = createLintEngine();
+    for (const s of result.specs) engine.addSpec(s.name, s.spec);
+  });
+
+  const evidenceOf = (matched: unknown[], noEvidenceReason?: string) => ({
+    ruleset: { id: 'gc-acquisition-status', version: 1, sourceFile: 'config/gc-acquisition-status/log-patterns.yaml' },
+    sourceMember: { relativePath: 'RUN.LOG' },
+    decode: { encoding: 'utf-16le', bomPresent: true },
+    matched,
+    ...(noEvidenceReason !== undefined ? { noEvidenceReason } : {}),
+  });
+
+  it('R5: an unknown status with NO evidence is a violation (the F2 defect, named)', () => {
+    const bad = { ...validPackage, acquisitionStatus: 'unknown' };
+    const lintResult = engine.lint(bad, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-status-evidence-honest')).toBe(true);
+  });
+
+  it('R5: a completed status without evidence is NOT flagged (the positive case)', () => {
+    const pkg = { ...validPackage, acquisitionStatus: 'completed' };
+    const lintResult = engine.lint(pkg, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-status-evidence-honest')).toBe(false);
+  });
+
+  it('R5: an aborted status WITH a verbatim matched line passes', () => {
+    const pkg = {
+      ...validPackage,
+      acquisitionStatus: 'aborted',
+      acquisitionStatusEvidence: evidenceOf([
+        { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'aborted-method-aborted', lineIndex: 5 },
+      ]),
+    };
+    const lintResult = engine.lint(pkg, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-status-evidence-honest')).toBe(false);
+  });
+
+  it('R5: a stopped-by-user status with only a named noEvidenceReason is NOT flagged', () => {
+    const pkg = {
+      ...validPackage,
+      acquisitionStatus: 'stopped-by-user',
+      acquisitionStatusEvidence: evidenceOf([], 'log-empty'),
+    };
+    const lintResult = engine.lint(pkg, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-status-evidence-honest')).toBe(false);
+  });
+
+  it('R5: a pre-FAME-1 package (no acquisitionStatus at all) passes vacuously', () => {
+    const lintResult = engine.lint(validPackage, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-status-evidence-honest')).toBe(false);
+  });
+
+  it('R6: a matched line with a bad ruleId shape is flagged (and nothing else on the record is)', () => {
+    const pkg = {
+      ...validPackage,
+      acquisitionStatus: 'aborted',
+      acquisitionStatusEvidence: evidenceOf([
+        { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'BAD RULE', lineIndex: 5 },
+      ]),
+    };
+    const lintResult = engine.lint(pkg, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-matched-ruleid-shape')).toBe(true);
+  });
+
+  it('R6: well-shaped matched lines lint clean', () => {
+    const pkg = {
+      ...validPackage,
+      acquisitionStatus: 'aborted',
+      acquisitionStatusEvidence: evidenceOf([
+        { line: 'Method       Method aborted                                 13:19:33 10/23/26', ruleId: 'aborted-method-aborted', lineIndex: 5 },
+      ]),
+    };
+    const lintResult = engine.lint(pkg, ACQP_ID);
+    expect(lintResult.violations.some(v => v.ruleId === 'acqp-matched-ruleid-shape')).toBe(false);
+  });
+});
+
 describe('acquisition-package UI spec (D12 promotion fix: section block + array slot)', () => {
   it('loads acquisition-package.ui.yaml with zero spec errors', async () => {
     const loader = createUISpecLoader();
@@ -214,5 +388,51 @@ describe('acquisition-package UI spec (D12 promotion fix: section block + array 
     expect(spec.editor!.slots.find(s => s.path === '$.storageDeviceId')?.label).toBe('Storage Device Id');
     expect(spec.editor!.slots.find(s => s.path === '$.directoryKey')?.label).toBe('Directory Key');
     expect(spec.editor!.slots.find(s => s.path === '$.signalCollectionRef')?.label).toBe('Signal Collection Ref');
+  });
+
+  it('FAME-1: declares the acquisition-status section (status slot + evidence slot) and a list column', async () => {
+    const loader = createUISpecLoader();
+    const uiPath = join(SCHEMA_DIR, 'knowledge', 'acquisition-package.ui.yaml');
+    const content = await readFile(uiPath, 'utf-8');
+    const res = loader.load(content, uiPath);
+    expect(res.success).toBe(true);
+    const spec = res.spec!;
+    // The section block claims BOTH slots (the status word + the evidence view).
+    const statusBlock = spec.editor!.blocks.find(b => b.id === 'acquisition-status');
+    expect(statusBlock).toBeDefined();
+    expect(statusBlock!.kind).toBe('section');
+    expect(statusBlock!.slots).toEqual([
+      'acquisition-status-slot',
+      'acquisition-status-evidence-slot',
+    ]);
+    // The status slot is a READ-ONLY select over the four declared words.
+    const statusSlot = spec.editor!.slots.find(s => s.path === '$.acquisitionStatus') as
+      | { widget?: string; readonly?: boolean; options?: Array<{ value: string; label: string }> }
+      | undefined;
+    expect(statusSlot).toBeDefined();
+    expect(statusSlot!.widget).toBe('select');
+    expect(statusSlot!.readonly).toBe(true);
+    expect(statusSlot!.options?.map(o => o.value)).toEqual([
+      'completed',
+      'aborted',
+      'stopped-by-user',
+      'unknown',
+    ]);
+    // The evidence slot is a read-only OBJECT view with a properties hint
+    // (interpretation source, member, decode facts, matched lines).
+    const evidenceSlot = spec.editor!.slots.find(s => s.path === '$.acquisitionStatusEvidence') as
+      | { widget?: string; readonly?: boolean; properties?: Array<{ name: string; widget: string }> }
+      | undefined;
+    expect(evidenceSlot).toBeDefined();
+    expect(evidenceSlot!.widget).toBe('object');
+    expect(evidenceSlot!.readonly).toBe(true);
+    expect(evidenceSlot!.properties?.some(p => p.name === 'matched')).toBe(true);
+    expect(evidenceSlot!.properties?.some(p => p.name === 'ruleset')).toBe(true);
+    // The list surface carries the status column (the package list shows the
+    // classification at a glance).
+    const statusColumn = (spec.list?.columns as Array<{ path?: string }> | undefined)?.find(
+      c => c.path === '$.acquisitionStatus',
+    );
+    expect(statusColumn).toBeDefined();
   });
 });
