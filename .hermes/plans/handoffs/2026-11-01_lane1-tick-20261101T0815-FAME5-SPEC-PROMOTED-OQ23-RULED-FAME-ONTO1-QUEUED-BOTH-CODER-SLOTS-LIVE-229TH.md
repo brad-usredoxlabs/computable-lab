@@ -98,3 +98,27 @@ FAME-ONTO-1 (NEW, todo, QUEUED): architect-ruled housekeeping (fame-local.yaml t
   approves — A-L1T229-3 — else hold for FAME-4 the moment its gate opens).
 - Next tick reconcile: (1) resume2 LOCK-ACQUIRED expected ~08:51 — verify; (2) fix3 status;
   (3) FAME-6 composer exit -> review.
+
+## Addendum 2 at tick exit (~08:42) — FAME-1 FIX-3 DONE, ADV C4 LIVE; RESUME2 LAUNCHED EARLY (gate-legal)
+- FAME-1 FIX-3 EXITED 08:37:26 rc=0 FINAL MARKER `FAME-1-FIX3 DONE
+  224fc8a28acdd05e77dad5e87dddc3e51b411631`. Commits e70c5a48 (D1 MAJOR closed DATA-ONLY: two
+  hidden-widget carrier slots keep required ruleset/sourceMember containers post-serialize; RED
+  2f/5p -> GREEN app 7/7 server 28/28 via real Ajv) + 224fc8a2 (D2 MINOR closed: loadLogPatterns
+  cache-write only on canonical load + seam + hermetic tmpdir fixture; shuffle seeds 1/7/42/999
+  16/16). Coder claims: server tsc 0 new, app tsc 20 byte-identical 13-file baseline set, zero
+  in run/gc, worktree clean. Report fame-1-report-fix3-l1t0655.md (note: .md, not .txt — brief
+  drifted; fine).
+- ADVERSARIAL CYCLE 4 DISPATCHED (OpenRouter, no slot): unit adv-fame1-c4-l1t0840 active; brief
+  prompts/adv-fame1-c4-l1t0840.txt; report path adv-l1-fame1-c4-l1t0840-<ts>.md under
+  ~/.hermes/cl/reviews/; log adv-fame1-c4-l1t0840.log. ATTACK FOCUS: hidden-carrier survival on
+  all degenerate arms + no UI leak + real-Ajv boundary test; cache-write semantics change; tsc
+  parity. On ACCEPT -> orch merge FAME-1 to trunk + RESTART (D1 touched ui.yaml!) + browser gate
+  (run-sheet surface, evidence debt OPEN). On FIX -> cycle-5 fix run (staggered).
+- RESUME2 ACTUAL LAUNCH: queue gate opened on fix3-gone at 08:37:38 (gate-legal per
+  launch-rule (b): first coder exited). hermes PID 3265302 live under slot-1 (pid file
+  FAME3RESUME2-3265504...). Fleet coder occupancy = 1 (slot-1); slot-0 FREE. If adv c4 returns
+  FIX, the fix run takes slot-0 next tick subject to stagger vs 08:37:38 (>=09:37 or
+  resume2-exited).
+- FAME-6 composer still composing (~20 min, normal). FAME-4 gate: unchanged (FAME-3 unmerged).
+- Tick budget (~08:45 soft): checkpoint here. Nothing else dispatchable this tick: FAME-4 gate
+  closed, FAME-5 gate closed, FAME-ONTO-1 awaiting Brad (A-L1T229-3), FAME-6 deps unmerged.
