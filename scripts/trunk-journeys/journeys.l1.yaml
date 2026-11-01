@@ -1,0 +1,234 @@
+# trunk-journeys — LANE 1 journeys (DATA).
+#
+# The GC product loop end-to-end against the lane-1 TRUNK stack over REAL
+# transport. Journeys are DATA: the single driver (run-trunk-journeys.ts)
+# interprets these steps — no per-step product policy lives in the driver.
+#
+# Step kinds: seed | api | api-capture | api-expect | browser.
+# {{var}} interpolation; vars set by seed / api-set / browser evalJs-capture.
+#
+# The `seed` step mints the fixtures (gc-method, analysis-engine,
+# analysis-revision, + the J2 knowledge-layer context/assertion/claim) via the
+# REAL API and writes the REAL .D acquisition tree to the throwaway mount.
+# The .CH inside is a real v181 signal (GC-7 doctrine), decoded by the shipped
+# reader at execute time.
+#
+# HARD RULE: no /api/ai/** interception anywhere (the driver self-checks its
+# own files and FAILS CLOSED before any journey runs).
+
+journeys:
+  - id: J1
+    name: "GC loop: create -> bind method -> add sample -> attach real .D -> Analyze -> flow-back row -> chromatogram visible"
+    steps:
+      - kind: seed
+        name: seed-fixtures
+
+      - kind: browser
+        name: create-run-sheet
+        actions:
+          - goto: /runs
+          - click: gc-run-collection-new
+          - wait: gc-run-create-form
+          - type: { selector: gc-run-create-title, value: "trunk-journeys GC run {{rand}}" }
+          - type: { selector: gc-run-create-vial, value: "101" }
+          - type: { selector: gc-run-create-sample, value: "TJ-sample-{{rand}}" }
+          - select: { selector: gc-run-create-method, index: 1 }
+          - click: gc-run-create-submit
+          - waitUrl: /runs/
+          - evalJs:
+              as: runId
+              expr: >-
+                (function(){
+                  return location.pathname.split('/').pop();
+                })()
+
+      - kind: browser
+        name: attach-real-dotd
+        actions:
+          - wait: gc-run-sheet
+          - click: gc-chrome-toggle
+          - wait: gc-chrome-body
+          # The entry rows (gc-analyze-entry-{id}) render only after the run
+          # sheet finishes loading its linked entries (async getRecord fan-out).
+          # Wait for the dynamic prefix row BEFORE reading the entry id.
+          - waitSel: "[data-testid^='gc-analyze-entry-']"
+          - evalJs:
+              as: entryId
+              expr: >-
+                (function(){
+                  var el = document.querySelector('[data-testid^="gc-analyze-entry-"]');
+                  return el ? el.getAttribute('data-testid').slice('gc-analyze-entry-'.length) : null;
+                })()
+          - click: "gc-attach-toggle-{{entryId}}"
+          - wait: "gc-attach-{{entryId}}"
+          - select: { selector: "gc-attach-device-{{entryId}}", index: 0 }
+          - type: { selector: "gc-attach-key-{{entryId}}", value: "{{dotdDirectoryKey}}" }
+          - click: "gc-attach-register-{{entryId}}"
+          - wait: "gc-analyze-btn-{{entryId}}"
+
+      - kind: browser
+        name: analyze
+        actions:
+          - select: { selector: gc-analyze-rev, index: 1 }
+          - click: "gc-analyze-btn-{{entryId}}"
+          - waitUrl: /analysis?run=
+          - evalJs:
+              as: analysisRunId
+              expr: >-
+                (function(){
+                  return new URL(location.href).searchParams.get('run');
+                })()
+
+      - kind: browser
+        name: flow-back-row
+        actions:
+          # SPEC ORDER: the results flow-back row appears with the run's status
+          # IMMEDIATELY after Analyze (the run was just created — status queued —
+          # the Analyze click's client-side analysisRunRefs append is the row's
+          # source; this is the seam the CANARY severs). This leg comes BEFORE
+          # the execute/chromatogram leg so the canary seam is proven and the
+          # chromatogram leg (the product gap) is isolated to the final step.
+          - goto: "/runs/{{runId}}"
+          - wait: gc-run-sheet
+          - wait: "gc-results-{{entryId}}"
+          - wait: "gc-result-{{entryId}}-{{analysisRunId}}"
+          - screenshot: j1-flow-back
+          - assertJs:
+              name: flow-back-status-present
+              expr: >-
+                (function(){
+                  var el = document.querySelector('[data-testid="gc-result-status-{{entryId}}-{{analysisRunId}}"]');
+                  if (!el) return false;
+                  var t = (el.textContent || '').trim();
+                  return t.length > 0 && t !== 'unknown';
+                })()
+
+      - kind: browser
+        name: execute-and-chromatogram
+        actions:
+          # The /analysis?run=<id> leg: execute the run (real transport) and
+          # assert the chromatogram is VISIBLE (non-blank, trace present).
+          - goto: "/analysis?run={{analysisRunId}}"
+          - click: "analysis-run-execute-{{analysisRunId}}"
+          - wait: view-spec-signal
+          # DIAGNOSTIC (evidence, not an assertion): capture the rendered
+          # signal-view DOM state + the full set of view-spec renderers + the
+          # run status. Proves WHETHER the chromatogram trace is present
+          # (polyline point count) vs. blank. Feeds the BLOCKED evidence.
+          - evalJs:
+              as: diagChromatogram
+              expr: >-
+                (function(){
+                  var out = { views: [], signalPoints: -1, anyTraceSvg: 0, status: null };
+                  document.querySelectorAll('[data-testid^="view-spec-"]').forEach(function(el){
+                    out.views.push(el.getAttribute('data-testid'));
+                  });
+                  var svg = document.querySelector('[data-testid="view-spec-signal"]');
+                  if (svg) {
+                    var pl = svg.querySelector('polyline');
+                    var pts = pl ? (pl.getAttribute('points') || '').trim() : '';
+                    out.signalPoints = pts ? pts.split(/\s+/).filter(Boolean).length : 0;
+                  }
+                  document.querySelectorAll('svg polyline').forEach(function(pl){
+                    var n = (pl.getAttribute('points') || '').split(/\s+/).filter(Boolean).length;
+                    if (n > 50) out.anyTraceSvg += 1;
+                  });
+                  var st = document.querySelector('[data-testid="analysis-run-status-{{analysisRunId}}"]')
+                    || document.querySelector('.analysis__status, [class*="status"]');
+                  out.status = st ? st.textContent.trim().slice(0, 80) : null;
+                  return JSON.stringify(out);
+                })()
+          - screenshot: j1-chromatogram
+          - assertJs:
+              name: chromatogram-non-blank
+              expr: >-
+                (function(){
+                  var svg = document.querySelector('[data-testid="view-spec-signal"]');
+                  if (!svg) return false;
+                  var pl = svg.querySelector('polyline');
+                  if (!pl) return false;
+                  var pts = (pl.getAttribute('points') || '').trim();
+                  return pts.split(/\s+/).filter(Boolean).length > 50;
+                })()
+
+  - id: J2
+    name: "evidence hand-off -> bundle -> assertion with the full context graph"
+    steps:
+      - kind: browser
+        name: open-handoff
+        actions:
+          - goto: "/runs/{{runId}}"
+          - wait: gc-run-sheet
+          - wait: "gc-results-{{entryId}}"
+          - click: gc-evidence-handoff-open
+          # The chips load asynchronously after the hand-off opens (the body
+          # renders "loading run outputs…" until getAnalysisRun settles).
+          # Wait for the dynamic chip prefix BEFORE counting chips — without
+          # this the eval reads the loading state (chips===null).
+          - waitSel: "[data-testid^='gc-evidence-artifact-chip-']"
+          - evalJs:
+              as: signalChip
+              expr: >-
+                (function(){
+                  var chips = Array.prototype.slice.call(document.querySelectorAll('[data-testid^="gc-evidence-artifact-chip-"]'));
+                  return chips.length > 0 ? true : false;
+                })()
+          - assertJs:
+              name: handoff-artifact-chip-present
+              expr: "{{signalChip}} === true"
+
+      - kind: browser
+        name: author-bundle
+        actions:
+          - click: gc-evidence-add-as-evidence
+          - wait: gc-evidence-form
+          - click: gc-evidence-form-stance-supports
+          - type: { selector: gc-evidence-form-target-id, value: "{{assertion}}" }
+          - click: gc-evidence-form-target-type-assertion
+          - type: { selector: gc-evidence-form-extra-source-id, value: "{{context}}" }
+          - click: gc-evidence-form-extra-source-add
+          - screenshot: j2-evidence-form
+          - click: gc-evidence-form-submit
+          - wait: gc-evidence-form-created
+          - evalJs:
+              as: evidenceId
+              expr: >-
+                (function(){
+                  var a = document.querySelector('[data-testid="gc-evidence-form-created"] a');
+                  return a ? a.getAttribute('href').replace('/record/', '') : null;
+                })()
+
+      - kind: api-expect
+        name: evidence-bundle-context-graph
+        path: "/api/records/{{evidenceId}}"
+        expect:
+          exists:
+            - record.payload.kind
+            - record.payload.supports
+            - record.payload.sources
+          js: >-
+            (json) => {
+              const p = (json.record || json).payload || {};
+              const supports = Array.isArray(p.supports) ? p.supports : [];
+              const sources = Array.isArray(p.sources) ? p.sources : [];
+              const types = sources.map(s => s && s.type).filter(Boolean);
+              const supportsAssertion = supports.some(t => t && t.id === "{{assertion}}");
+              const hasResultArm = types.includes('result');
+              const hasContextArm = types.includes('context') || types.includes('measurement_context');
+              return p.kind === 'evidence' && supportsAssertion && hasResultArm && hasContextArm;
+            }
+
+      - kind: api-expect
+        name: assertion-full-context-graph
+        path: "/api/records/{{assertion}}"
+        expect:
+          exists:
+            - record.payload.claim_ref
+            - record.payload.context_refs
+          js: >-
+            (json) => {
+              const p = (json.record || json).payload || {};
+              const claim = p.claim_ref && p.claim_ref.id;
+              const ctxs = Array.isArray(p.context_refs) ? p.context_refs.map(c => c && c.id) : [];
+              return p.kind === 'assertion' && claim === "{{claim}}" && ctxs.includes("{{context}}");
+            }
