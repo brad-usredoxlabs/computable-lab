@@ -578,18 +578,30 @@ console.log('\n[13] ensureActorUser 409 idempotency (D12)');
   // only working case; must still hold).
   {
     const stub = await startStub([actorEntry, adminEntry]);
-    const id = await ensureActorUser(stub.backend);
-    ok(id === ACTOR_ID, `D12 409 [A] actor-first list resolves to the actor id (got ${id})`);
-    await stub.close();
+    let id: string | undefined;
+    let err = '';
+    try {
+      id = await ensureActorUser(stub.backend);
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e);
+    }
+    ok(id === ACTOR_ID, `D12 409 [A] actor-first list resolves to the actor id (got ${JSON.stringify(id)}${err ? `, threw: ${err.slice(0, 50)}` : ''})`);
+    await stub.close().catch(() => {});
   }
   // [B] admin FIRST (realistic: USR-LOCAL-ADMIN exists first), actor second.
   // The OLD code took the first entry-with-any-id (the admin) and threw; the
   // FIXED code selects by username -> resolves the actor.
   {
     const stub = await startStub([adminEntry, actorEntry]);
-    const id = await ensureActorUser(stub.backend);
-    ok(id === ACTOR_ID, `D12 409 [B] admin-first list (actor second) still resolves to the actor id (got ${id})`);
-    await stub.close();
+    let id: string | undefined;
+    let err = '';
+    try {
+      id = await ensureActorUser(stub.backend);
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e);
+    }
+    ok(id === ACTOR_ID, `D12 409 [B] admin-first list (actor second) still resolves to the actor id (got ${JSON.stringify(id)}${err ? `, threw: ${err.slice(0, 50)}` : ''})`);
+    await stub.close().catch(() => {});
   }
   // [C] the actor is ABSENT from the list (409 from a different user) -> the
   // idempotent path FAILS CLOSED (errors), never returns a wrong id.
