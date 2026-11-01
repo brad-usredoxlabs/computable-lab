@@ -29,12 +29,13 @@ import {
   registerAcquisitionPackage,
   verifyAcquisitionPackage,
   packageAnalysisInputs,
-  classifyAcquisitionPackageStatus,
   AcquisitionPackageError,
   DEFAULT_ROLE_MAP,
   ACQUIRING_MARKER,
 } from './acquisitionPackage.js';
-import { loadLogPatterns } from './acquisitionPackageStatus.js';
+// D6: the read+classify entry point moved to the status module (this file
+// keeps the classification call + payload stamp only).
+import { classifyAcquisitionPackageStatus, loadLogPatterns } from './acquisitionPackageStatus.js';
 
 const DEVICE_ID = 'nas0'; // test device id — config DATA, not a real config id
 

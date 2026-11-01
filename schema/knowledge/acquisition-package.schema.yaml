@@ -187,6 +187,23 @@ properties:
       unreadable/undecodable log, or zero rule hits (the DECLARED floor —
       never completed). Absent on packages registered before FAME-1.
 
+  # FAME-1 (D3): the DECLARED run-sheet qualification for acquisitionStatus —
+  # the rule file's `statusQualification` lookup stamped at registration
+  # (DATA, not code). The run-sheet chrome renders THIS flag to decide whether
+  # the status word is visibly qualified (a non-collapsing warning line) or a
+  # quiet word — it NEVER branches on the status literal in TSX. true for the
+  # non-completed statuses (aborted / stopped-by-user / unknown), false for
+  # completed (declared in log-patterns.yaml). Absent on packages registered
+  # before FAME-1 (or the degenerate rule-file-missing arm, which cannot read
+  # the declared qualification).
+  acquisitionStatusQualified:
+    type: boolean
+    description: >
+      Whether this acquisitionStatus renders VISIBLY QUALIFIED on the run
+      sheet (the declared statusQualification from
+      config/gc-acquisition-status/log-patterns.yaml). DATA: the run-sheet
+      chrome renders this, never a hardcoded status-literal branch.
+
   # The evidence that produced acquisitionStatus — the interpretation source
   # and every matched line, preserved VERBATIM (the d_reader lossless
   # doctrine: matched lines are never rewritten nor dropped). This is the
@@ -198,22 +215,28 @@ properties:
     unevaluatedProperties: false
     required: [ ruleset, sourceMember, decode ]
     properties:
+      # FAME-1 (D5): the ruleset is ABSENCE-SHAPED in the degenerate
+      # rule-file-missing arm — when the rule file itself is unread there is
+      # no declared interpretation source to name, so the arm reports an
+      # EMPTY ruleset (no id / version / sourceFile restated from the YAML)
+      # rather than a coded copy of the file's identity. The readable-file
+      # arms carry the full id / version / sourceFile. All three are therefore
+      # OPTIONAL (the lint belt R5/R6 is the honesty check, not the schema).
       ruleset:
         type: object
         unevaluatedProperties: false
-        required: [ id, version, sourceFile ]
         properties:
           id:
             type: string
             minLength: 1
-            description: "The rule-set id declared in log-patterns.yaml (the interpretation source)."
+            description: "The rule-set id declared in log-patterns.yaml (the interpretation source). ABSENT in the degenerate rule-file-missing arm."
           version:
             type: [ string, number ]
-            description: "The rule-set version declared in log-patterns.yaml."
+            description: "The rule-set version declared in log-patterns.yaml. ABSENT in the degenerate rule-file-missing arm."
           sourceFile:
             type: string
             minLength: 1
-            description: "The rule file the rules came from (config/gc-acquisition-status/log-patterns.yaml)."
+            description: "The rule file the rules came from (config/gc-acquisition-status/log-patterns.yaml). ABSENT in the degenerate rule-file-missing arm."
       sourceMember:
         type: object
         unevaluatedProperties: false

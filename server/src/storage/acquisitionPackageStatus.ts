@@ -33,6 +33,31 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
+/**
+ * The acquisition-package stamp the registration flow writes onto the package
+ * payload BEFORE the record is created (FAME-1). The ruleset identity (id /
+ * version / sourceFile) is present ONLY when the rule file is readable — the
+ * degenerate rule-file-missing arm reports an ABSENCE-SHAPED (empty) ruleset
+ * (D5), so every ruleset member is optional here.
+ */
+export interface AcqpPackageStatusStamp {
+  acquisitionStatus: string;
+  /**
+   * FAME-1 (D3): the DECLARED run-sheet qualification for this status (the
+   * rule file's `statusQualification` lookup — DATA, not code). Stamped
+   * conditionally on the payload (exactOptionalPropertyTypes); the chrome
+   * renders this flag, never a hardcoded status-literal branch.
+   */
+  acquisitionStatusQualified?: boolean;
+  acquisitionStatusEvidence: {
+    ruleset: { id?: string; version?: string | number; sourceFile?: string };
+    sourceMember: { relativePath: string };
+    decode: { encoding: string; bomPresent: boolean };
+    matched: Array<{ line: string; ruleId: string; lineIndex: number }>;
+    noEvidenceReason?: string;
+  };
+}
+
 /** The rule file's home (config/gc-acquisition-status, orch OQ-3 ratified). */
 const PATTERN_FILE = 'log-patterns.yaml';
 const PATTERN_SOURCE_LABEL = `config/gc-acquisition-status/${PATTERN_FILE}`;
@@ -44,11 +69,31 @@ export interface LogRule {
   note?: string;
 }
 
+/**
+ * FAME-1 (D3): one declared per-status RUN-SHEET display qualification from
+ * the rule file's `statusQualification` list — DATA, not code. Which
+ * statuses render visibly qualified on the run sheet is declared here (the
+ * rule file knows every status it can emit); the chrome renders the flag,
+ * never a hardcoded status-literal branch.
+ */
+export interface StatusQualification {
+  status: string;
+  qualified: boolean;
+  note?: string;
+}
+
 export interface LogPatterns {
   id: string;
   version: string | number;
   fallbackStatus: string;
   rules: LogRule[];
+  /**
+   * FAME-1 (D3): the declared per-status run-sheet qualification. Present in
+   * the rule file; parsed generically (no status literals in code — the
+   * lookup by status string is data-driven). Absent on a rule file that
+   * predates D3 (defensive: an unlisted status is NOT qualified).
+   */
+  statusQualification?: StatusQualification[];
 }
 
 export interface AcqpMatch {
@@ -79,17 +124,33 @@ export interface AcqpStatusEvidence {
  * stack must be restarted after a rule-file edit; the cache makes that
  * explicit rather than half-true.)
  */
+/**
+ * The item's FIXED floor word for the DEGENERATE rule-file-missing arm ONLY
+ * (bait #4/#5): when the rule file itself is unreadable there is no declared
+ * fallback value to honor, so the status lands on this word — never a coded
+ * `completed` default. (D5) this is the floor WORD only; it does NOT restate
+ * the rule file's declared identity (id/version/sourceFile) — those belong to
+ * the unread file, so the degenerate arm's ruleset is ABSENCE-SHAPED (empty).
+ */
+const FLOOR_STATUS = 'unknown';
+
 let patternsCache: LogPatterns | null = null;
-export async function loadLogPatterns(): Promise<LogPatterns> {
-  if (patternsCache) return patternsCache;
-  const text = await readFile(
-    fileURLToPath(new URL(`../../../config/gc-acquisition-status/${PATTERN_FILE}`, import.meta.url)),
-    'utf8',
-  );
+export async function loadLogPatterns(patternFileUrl?: URL | string): Promise<LogPatterns> {
+  // The process-lifetime cache serves the CANONICAL rule file only. An
+  // explicit override (a test seam — the degenerate rule-file-missing arm,
+  // D4) always re-reads; resetLogPatternsCache clears the canonical cache.
+  if (patternsCache && patternFileUrl === undefined) return patternsCache;
+  const resolvedPath = patternFileUrl
+    ? patternFileUrl instanceof URL
+      ? fileURLToPath(patternFileUrl)
+      : patternFileUrl
+    : fileURLToPath(new URL(`../../../config/gc-acquisition-status/${PATTERN_FILE}`, import.meta.url));
+  const text = await readFile(resolvedPath, 'utf8');
   const doc = parse(text) as {
     ruleset?: { id?: unknown; version?: unknown };
     fallbackStatus?: unknown;
     rules?: Array<{ id?: unknown; status?: unknown; pattern?: unknown; note?: unknown }>;
+    statusQualification?: Array<{ status?: unknown; qualified?: unknown; note?: unknown }>;
   };
   const ruleset = doc.ruleset ?? {};
   const { id: setId, version: setVersion } = ruleset as { id?: unknown; version?: unknown };
@@ -114,11 +175,32 @@ export async function loadLogPatterns(): Promise<LogPatterns> {
       ...(typeof r.note === 'string' ? { note: r.note } : {}),
     };
   });
+  // FAME-1 (D3): the declared per-status run-sheet qualification (DATA).
+  // Parsed generically — a malformed entry (non-string status or non-boolean
+  // qualified) is a load-time error, so a bad qualification can never
+  // silently render as quiet/qualified the wrong way.
+  let statusQualification: StatusQualification[] | undefined;
+  if (doc.statusQualification !== undefined) {
+    if (!Array.isArray(doc.statusQualification)) {
+      throw new Error(`acquisition-status rule file is malformed: statusQualification must be an array (${PATTERN_SOURCE_LABEL})`);
+    }
+    statusQualification = doc.statusQualification.map((q) => {
+      if (typeof q.status !== 'string' || typeof q.qualified !== 'boolean') {
+        throw new Error(`acquisition-status rule file is malformed: a statusQualification entry needs string status + boolean qualified (${PATTERN_SOURCE_LABEL})`);
+      }
+      return {
+        status: q.status,
+        qualified: q.qualified,
+        ...(typeof q.note === 'string' ? { note: q.note } : {}),
+      };
+    });
+  }
   const p: LogPatterns = {
     id: setId,
     version: setVersion,
     fallbackStatus: doc.fallbackStatus,
     rules,
+    ...(statusQualification !== undefined ? { statusQualification } : {}),
   };
   patternsCache = p;
   return p;
@@ -127,6 +209,22 @@ export async function loadLogPatterns(): Promise<LogPatterns> {
 /** Test seam: clear the process-lifetime rule-file cache. */
 export function resetLogPatternsCache(): void {
   patternsCache = null;
+}
+
+/**
+ * FAME-1 (D3): the DECLARED run-sheet qualification for one classified
+ * status — a pure data lookup over the rule file's `statusQualification`
+ * list (DATA, not code). NO status literals in this function: the lookup is
+ * by the status STRING the data already produced. An unlisted status is NOT
+ * qualified (the safe default: a status the rule file does not declare as
+ * visibly-qualified renders a quiet word — never a fabricated warning).
+ */
+export function declaredStatusQualified(
+  patterns: LogPatterns,
+  status: string,
+): boolean {
+  const entry = patterns.statusQualification?.find((q) => q.status === status);
+  return entry?.qualified === true;
 }
 
 /**
@@ -164,16 +262,31 @@ function strictUtf16(bytes: Uint8Array): {
  * `memberBytes` is the full member content (the caller read it via the
  * storage provider — this module does no I/O of its own beyond the rule
  * file); `relativePath` is the member's package-relative path (e.g.
- * "RUN.LOG"). NEVER throws: every failure path is an honest-evidence
- * classification on the declared fallbackStatus (the registration flow
- * stamps the result unconditionally — bait #5: classification must never
- * fail registration).
+ * "RUN.LOG").
+ *
+ * Contract (D7 — corrected from the prior false "never throws" claim):
+ * this floors the DECODE / MATCH paths (decode failure, empty log, zero rule
+ * hits -> an honest-evidence classification on the declared fallbackStatus,
+ * never a throw — bait #5/#7), but it THROWS on the two data-source failures
+ * it cannot honestly re-label on its own: `loadLogPatterns()` (a missing /
+ * malformed rule file) and `new RegExp(pattern)` (a malformed declared
+ * pattern). Those propagate to the FLOOR-GUARANTEED entry point
+ * (classifyAcquisitionPackageStatus), whose floor ladder distinguishes
+ * 'rule-file-unreadable' from 'member-unreadable' and never lets registration
+ * fail. A direct caller of THIS function must treat a thrown load/compile
+ * failure as the rule-file-missing arm, not a member fault.
+ *
+ * `patternFileUrl` is an OPTIONAL TEST SEAM (mirrors the entry point): it is
+ * forwarded to loadLogPatterns so a test can point the extractor at a missing
+ * / malformed rule file and observe the documented load-failure throw.
+ * Production callers omit it (the canonical file is used).
  */
 export async function classifyAcquisitionStatus(
   memberBytes: Uint8Array,
   relativePath: string,
+  patternFileUrl?: URL | string,
 ): Promise<AcqpStatusEvidence> {
-  const patterns = await loadLogPatterns();
+  const patterns = await loadLogPatterns(patternFileUrl);
   const ruleset = { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL };
   const decode = strictUtf16(memberBytes);
   const base: Omit<AcqpStatusEvidence, 'matched' | 'noEvidenceReason'> = {
@@ -218,4 +331,141 @@ export async function classifyAcquisitionStatus(
     status,
     matched,
   };
+}
+
+/**
+ * FAME-1 (D6): the registration read+classify ENTRY POINT — moved out of
+ * acquisitionPackage.ts so the registration file keeps the classification
+ * call + payload stamp ONLY (spec scope). Reads the package's run_log member
+ * through the SAME storage provider the DREF acquire path uses
+ * (provider.read — the acquisition.ts:100 / verifyAcquisitionPackage
+ * re-hash idiom) and classifies it; returns the stamp fields the caller
+ * writes onto the package payload BEFORE the record is created.
+ *
+ * UNKNOWN IS THE FLOOR, and this NEVER fails registration (bait #5): no
+ * run_log member, an unreadable member, a decode failure, zero rule hits,
+ * even a missing/unreadable rule FILE — all land on the DECLARED
+ * fallbackStatus (config/gc-acquisition-status/log-patterns.yaml — the data
+ * file) with a NAMED noEvidenceReason, never on a coded `completed` default
+ * and never on a thrown error. RUN.LOG is not a REQUIRED_MEMBERS member, so
+ * a missing/unreadable log is data, not a fault.
+ *
+ * (D4) the rule-file load has its OWN try scope and its OWN named reason
+ * ('rule-file-unreadable', encoding 'none'): a missing/malformed rule file
+ * must NOT be recorded as the RUN.LOG member being unreadable (the member was
+ * never read and no decode ran). 'member-unreadable' is reserved for
+ * provider.read / stream / classify failures.
+ *
+ * (D5) the degenerate rule-file-missing arm reports an ABSENCE-SHAPED
+ * ruleset — it names the canonical rule-file coordinates (the stable
+ * code-owned path label) but OMITS the ruleset id/version rather than
+ * restating the YAML's declared identity (no coded copy of declared data).
+ *
+ * (D7) this is FLOOR-GUARANTEED end to end: the floor ladder belongs in this
+ * module, so a direct caller gets the declared floor on every failure path
+ * (including rule-file load and pattern-compile failure) — never a throw.
+ * The registration caller therefore needs no catch of its own.
+ */
+export async function classifyAcquisitionPackageStatus(
+  provider: { read(path: string): Promise<NodeJS.ReadableStream> },
+  directoryKey: string,
+  runLog: { relativePath: string } | undefined,
+  patternFileUrl?: URL | string,
+): Promise<AcqpPackageStatusStamp> {
+  // The DEGENERATE arm only: the rule file itself could not be read, so there
+  // is no declared fallback value to honor. FLOOR_STATUS is the item's fixed
+  // floor word (bait #4/#5) — never a coded `completed` default.
+  const degenerateFloor = (
+    noEvidenceReason: string,
+    sourceRelativePath: string,
+  ): AcqpPackageStatusStamp => ({
+    acquisitionStatus: FLOOR_STATUS,
+    acquisitionStatusEvidence: {
+      // Absence-shaped (D5): the rule file is unread, so there is no declared
+      // interpretation source to name — the ruleset is EMPTY (no id, version,
+      // or sourceFile restated from the YAML). The noEvidenceReason is the
+      // named truth about why.
+      ruleset: {},
+      sourceMember: { relativePath: sourceRelativePath },
+      decode: { encoding: 'none', bomPresent: false },
+      matched: [],
+      noEvidenceReason,
+    },
+  });
+
+  // (D4) the rule-file load gets its OWN try scope and its OWN named reason.
+  // A missing / malformed rule file must be recorded as 'rule-file-unreadable'
+  // — NOT 'member-unreadable' (the member was never read, no decode ran). The
+  // `patternFileUrl` arg is a TEST SEAM (D6 testability): production always
+  // passes the canonical file; a test points it at an unreadable path to
+  // exercise the degenerate arm in isolation.
+  let patterns: LogPatterns;
+  try {
+    patterns = await loadLogPatterns(patternFileUrl);
+  } catch (err) {
+    return degenerateFloor(
+      `rule-file-unreadable: ${err instanceof Error ? err.message : String(err)}`,
+      runLog?.relativePath ?? '',
+    );
+  }
+
+  try {
+    // No run_log member declared in the package -> the declared floor, reason
+    // named (bait #5: registration still succeeds).
+    if (runLog === undefined) {
+      return {
+        acquisitionStatus: patterns.fallbackStatus,
+        // (D3) the DECLARED qualification for the floor status (data lookup).
+        acquisitionStatusQualified: declaredStatusQualified(patterns, patterns.fallbackStatus),
+        acquisitionStatusEvidence: {
+          ruleset: { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL },
+          sourceMember: { relativePath: '' },
+          decode: { encoding: 'none', bomPresent: false },
+          matched: [],
+          noEvidenceReason: 'run-log-member-absent',
+        },
+      };
+    }
+    const stream = await provider.read(`${directoryKey}/${runLog.relativePath}`);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
+    // classifyAcquisitionStatus re-reads the (already-loaded, cached) rule
+    // file and compiles the patterns; a compile failure (a malformed declared
+    // pattern, D7) throws here and is floored as a member-side failure below
+    // (the rule file itself read fine, so 'member-unreadable' is the honest
+    // label for a member/pattern read failure).
+    const evidence = await classifyAcquisitionStatus(Buffer.concat(chunks), runLog.relativePath);
+    return {
+      acquisitionStatus: evidence.status,
+      // (D3) the DECLARED qualification for this classified status (data
+      // lookup over the rule file's statusQualification — not a code branch).
+      acquisitionStatusQualified: declaredStatusQualified(patterns, evidence.status),
+      acquisitionStatusEvidence: {
+        ruleset: evidence.ruleset,
+        sourceMember: evidence.sourceMember,
+        decode: evidence.decode,
+        matched: evidence.matched,
+        ...(evidence.noEvidenceReason !== undefined
+          ? { noEvidenceReason: evidence.noEvidenceReason }
+          : {}),
+      },
+    };
+  } catch (err) {
+    // The rule file IS readable (loaded above); the failure is the member
+    // bytes (or a declared-pattern compile) — the DECLARED fallback applies
+    // and the reason names the member failure (bait #7: facts preserved,
+    // never discarded).
+    return {
+      acquisitionStatus: patterns.fallbackStatus,
+      // (D3) the DECLARED qualification for the floor status (data lookup).
+      acquisitionStatusQualified: declaredStatusQualified(patterns, patterns.fallbackStatus),
+      acquisitionStatusEvidence: {
+        ruleset: { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL },
+        sourceMember: { relativePath: runLog?.relativePath ?? '' },
+        decode: { encoding: 'unreadable', bomPresent: false },
+        matched: [],
+        noEvidenceReason: `member-unreadable: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
 }

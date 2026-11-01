@@ -23,10 +23,7 @@ import { createHash } from 'node:crypto';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { acquireDataReference, hashStream } from './acquisition.js';
-import {
-  classifyAcquisitionStatus,
-  loadLogPatterns,
-} from './acquisitionPackageStatus.js';
+import { classifyAcquisitionPackageStatus } from './acquisitionPackageStatus.js';
 import type { AppContext } from '../server.js';
 import { assertSafeRelativePath, StorageError } from './types.js';
 import type { StorageDeviceConfig, StorageEntry } from './types.js';
@@ -504,10 +501,15 @@ export async function registerAcquisitionPackage(
     })),
     signalCollectionRef: { kind: 'record', type: 'data-reference', id: manifestDrefId },
     // FAME-1: the acquisition status + its evidence (DATA — the matched
-    // lines, the decode facts, the interpretation source). Conditional
-    // spreads throughout: exactOptionalPropertyTypes (bait #1).
+    // lines, the decode facts, the interpretation source) + the DECLARED
+    // run-sheet qualification (D3: the rule file's statusQualification,
+    // stamped so the chrome renders DATA, not a hardcoded status branch).
+    // Conditional spreads throughout: exactOptionalPropertyTypes (bait #1).
     ...(statusStamp.acquisitionStatus !== undefined
       ? { acquisitionStatus: statusStamp.acquisitionStatus }
+      : {}),
+    ...(statusStamp.acquisitionStatusQualified !== undefined
+      ? { acquisitionStatusQualified: statusStamp.acquisitionStatusQualified }
       : {}),
     ...(statusStamp.acquisitionStatusEvidence !== undefined
       ? { acquisitionStatusEvidence: statusStamp.acquisitionStatusEvidence }
@@ -551,114 +553,11 @@ export async function registerAcquisitionPackage(
  * acquire path uses (provider.read — the acquisition.ts:100 /
  * verifyAcquisitionPackage re-hash idiom); the relative path is the
  * package-root-relative member path (e.g. "RUN.LOG").
+ *
+ * (D6) the read+classify orchestration (provider read, floor ladder, the
+ * degenerate rule-file arm) lives in acquisitionPackageStatus.ts — this file
+ * keeps the classification CALL + the payload stamp ONLY (spec scope).
  */
-export async function classifyAcquisitionPackageStatus(
-  provider: { read(path: string): Promise<NodeJS.ReadableStream> },
-  directoryKey: string,
-  runLog: { relativePath: string } | undefined,
-): Promise<{
-  acquisitionStatus: string;
-  acquisitionStatusEvidence: {
-    ruleset: { id: string; version: string | number; sourceFile: string };
-    sourceMember: { relativePath: string };
-    decode: { encoding: string; bomPresent: boolean };
-    matched: Array<{ line: string; ruleId: string; lineIndex: number }>;
-    noEvidenceReason?: string;
-  };
-}> {
-  const floor = (
-    noEvidenceReason: string,
-    sourceRelativePath: string,
-    encoding: string,
-    fallbackStatus: string,
-    ruleset: { id: string; version: string | number },
-  ) => ({
-    acquisitionStatus: fallbackStatus,
-    acquisitionStatusEvidence: {
-      ruleset: { id: ruleset.id, version: ruleset.version, sourceFile: PATTERN_SOURCE_LABEL },
-      sourceMember: { relativePath: sourceRelativePath },
-      decode: { encoding, bomPresent: false },
-      matched: [],
-      noEvidenceReason,
-    },
-  });
-  try {
-    const patterns = await loadLogPatterns();
-    // No run_log member declared in the package -> the declared floor, reason
-    // named (bait #5: registration still succeeds).
-    if (runLog === undefined) {
-      return {
-        acquisitionStatus: patterns.fallbackStatus,
-        acquisitionStatusEvidence: {
-          ruleset: { id: patterns.id, version: patterns.version, sourceFile: PATTERN_SOURCE_LABEL },
-          sourceMember: { relativePath: '' },
-          decode: { encoding: 'none', bomPresent: false },
-          matched: [],
-          noEvidenceReason: 'run-log-member-absent',
-        },
-      };
-    }
-    const stream = await provider.read(`${directoryKey}/${runLog.relativePath}`);
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
-    const evidence = await classifyAcquisitionStatus(Buffer.concat(chunks), runLog.relativePath);
-    return {
-      acquisitionStatus: evidence.status,
-      acquisitionStatusEvidence: {
-        ruleset: evidence.ruleset,
-        sourceMember: evidence.sourceMember,
-        decode: evidence.decode,
-        matched: evidence.matched,
-        ...(evidence.noEvidenceReason !== undefined
-          ? { noEvidenceReason: evidence.noEvidenceReason }
-          : {}),
-      },
-    };
-  } catch (err) {
-    // An unreadable member OR a missing/malformed rule file is an honest
-    // floor case, never a registration failure: the reason names the failure
-    // (bait #7: facts preserved, never discarded).
-    //
-    // The status is the DECLARED fallback whenever the rule file is readable
-    // (the common unreadable-member case: the file loads fine, only the member
-    // bytes failed) — the floor constant below is used ONLY when the rule file
-    // itself is unreadable (the misconfigured-deployment degenerate case with
-    // no declared value to read). That keeps bait #4's "no coded status
-    // default" as tight as the platform allows: the value is data-declared in
-    // every case the data is actually present.
-    let declared: { fallbackStatus: string; id: string; version: string | number } | null = null;
-    try {
-      const p = await loadLogPatterns();
-      declared = p;
-    } catch {
-      declared = null;
-    }
-    return floor(
-      `member-unreadable: ${err instanceof Error ? err.message : String(err)}`,
-      runLog?.relativePath ?? '',
-      runLog === undefined ? 'none' : 'unreadable',
-      declared?.fallbackStatus ?? FLOOR_STATUS,
-      declared ? { id: declared.id, version: declared.version } : { id: FLOOR_RULESET_ID, version: FLOOR_RULESET_VERSION },
-    );
-  }
-}
-
-/**
- * FAME-1 floor constants for the DEGENERATE rule-file-missing arm of
- * classifyAcquisitionPackageStatus ONLY (the misconfigured-deployment case
- * where the rule file cannot be read, so there is no declared fallback value
- * to honor). The NORMAL unreadable-member arm uses the DECLARED
- * fallbackStatus from the rule file — the floor constant is a last resort,
- * not a coded completed default (bait #4: the value is data-declared in every
- * case the data is present; `unknown` here is the item's fixed floor word,
- * never `completed`). The ruleset fields name the rule file's canonical
- * coordinates so the evidence still points at the interpretation source that
- * was unread.
- */
-const FLOOR_STATUS = 'unknown';
-const FLOOR_RULESET_ID = 'gc-run-log-acquisition-status';
-const FLOOR_RULESET_VERSION = 1;
-const PATTERN_SOURCE_LABEL = 'config/gc-acquisition-status/log-patterns.yaml';
 
 /**
  * The execution-time gate (spec D6 verify): re-run S1/S2 (the marker can
