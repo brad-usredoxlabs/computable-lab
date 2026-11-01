@@ -466,6 +466,23 @@ export async function buildRecordEditMerge(params: {
       `The merged payload was rejected by the target schema: ${detail}. Nothing was written.`);
   }
 
+  // (g2) run the REAL store-level LINT on the MERGED payload (the OQ-4 W6 step-3
+  //      contract: "run REAL validate+lint on the MERGED payload via
+  //      context.store"). The store's own update runs validate AND lint
+  //      (RecordStoreImpl update) — a merged payload the store would lint-reject
+  //      at accept (e.g. gc-method: analysis.timed_events present with no
+  //      analysis.executable_binding) must be refused at COMPILE, by name,
+  //      carrying the lint message; otherwise accept throws after the card is
+  //      shown with no actionable path. ZERO writes.
+  const lint = await store.lint(mergedEnvelope);
+  if (!lint.valid) {
+    const detail = lint.violations
+      .map((v) => `${v.ruleId}${v.path ? ` @ ${v.path}` : ''}: ${v.message ?? 'lint violation'}`)
+      .join('; ');
+    return fail('EDIT_MERGE_REJECTED', '/payload',
+      `The merged payload was rejected by the target schema's lint rules: ${detail}. Nothing was written.`);
+  }
+
   // (h) the card document (the OQ-4 receipt shape: the resolved term, the rt,
   //     the state, the entry-count before/after).
   const rtMin = appendedEntry && typeof appendedEntry === 'object'

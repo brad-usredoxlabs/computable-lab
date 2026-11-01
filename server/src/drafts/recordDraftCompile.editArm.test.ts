@@ -31,6 +31,7 @@ import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
 import { loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { LintEngine } from '../lint/LintEngine.js';
+import { loadAllLintSpecs } from '../lint/LintSpecLoader.js';
 import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
 import { createRecordStore } from '../store/RecordStoreImpl.js';
 import { PolicyBundleService } from '../policy/PolicyBundleService.js';
@@ -337,4 +338,92 @@ describe('record-drafting edit arm (FAME-3 W6, OQ-4 OPT-A)', () => {
     }
     expect(afterObj.analysis).toMatchObject({ compound_assignments: list });
   }, 60000);
+});
+
+/**
+ * FAME-3 D2 (OQ-4 W6 step 3): the merge must run the REAL store-level LINT on
+ * the MERGED payload, not just the schema validate. The store's own update
+ * runs validate AND lint (RecordStoreImpl.update); a merged payload the store
+ * would lint-reject at accept must be refused at COMPILE — by name, carrying
+ * the lint message — never shown then thrown inside onAccept with no
+ * actionable path.
+ *
+ * The gc-method lint rule (gc-method.lint.yaml, severity error) refuses a
+ * record that captures timed integration events (analysis.timed_events
+ * nonEmpty) without a declared analysis.executable_binding. executable_binding
+ * is schema-OPTIONAL (a lint-only gate), so a gc-method with timed_events and
+ * no executable_binding is schema-VALID but LINT-INVALID — the exact D2 case.
+ *
+ * This describe wires a SEPARATE store with the REAL lint specs loaded
+ * (production wiring: loadAllLintSpecs -> engine.addSpec), isolated from the
+ * empty-lint store the sibling tests use.
+ */
+describe('record-drafting edit arm — lint gate (FAME-3 D2, OQ-4 W6 step 3)', () => {
+  let lintRoot: string;
+  let lintEngine: LintEngine;
+  let lintStore: ReturnType<typeof createRecordStore>;
+
+  beforeEach(async () => {
+    lintRoot = await mkdtemp(join(tmpdir(), 'cl-fame3-d2-lint-'));
+    lintEngine = new LintEngine();
+    const lintLoad = await loadAllLintSpecs({ basePath: schemaRoot, recursive: true });
+    for (const { name, spec } of lintLoad.specs) lintEngine.addSpec(name, spec);
+    expect(
+      lintEngine.getRule('gcmethod-timed-events-require-executable-binding'),
+      'the gc-method lint rule must be loaded from gc-method.lint.yaml',
+    ).toBeDefined();
+    lintStore = createRecordStore(createLocalRepoAdapter({ basePath: lintRoot }), validator, lintEngine);
+  }, 60000);
+  afterEach(async () => { if (lintRoot) await rm(lintRoot, { recursive: true, force: true }); });
+
+  it('a LINT-invalid merged payload (gc-method: timed_events present, no executable_binding) is refused at COMPILE with EDIT_MERGE_REJECTED carrying the lint message — zero writes, the target untouched', async () => {
+    const recordId = 'GCM-D2-LINT-001';
+    // Schema-valid but lint-invalid: captures timed integration events with no
+    // declared executable binding. skipLint so the seed lands (the gate under
+    // test is COMPILE, not the seed).
+    const payload: Record<string, unknown> = {
+      kind: 'gc-method',
+      id: recordId,
+      name: 'D2 lint-invalid working method',
+      method_version: 1,
+      analysis: {
+        timed_events: [
+          { at_min: 19.0, integration: 'on' },
+          { at_min: 19.6, integration: 'off' },
+        ],
+        compound_assignments: [],
+      },
+    };
+    const seeded = await lintStore.create({
+      envelope: { recordId, schemaId: GC_METHOD_SCHEMA_ID, payload },
+      message: 'seed the D2 lint-invalid target',
+      skipLint: true,
+    });
+    expect(seeded.success, `seed should land (schema-valid, lint skipped): ${seeded.error ?? JSON.stringify(seeded.validation)}`).toBe(true);
+    // Proof the seed is schema-valid but LINT-invalid — the pre-condition of the gate.
+    expect((await lintStore.validate({ recordId, schemaId: GC_METHOD_SCHEMA_ID, payload })).valid).toBe(true);
+    expect(lintEngine.lint(payload, GC_METHOD_SCHEMA_ID).valid, 'the seeded target must be lint-invalid (timed_events, no executable_binding)').toBe(false);
+
+    const term = knownTerm('Methyl hexanoate (FAME, 6:0-OMe)');
+    const merged = await buildRecordEditMerge({
+      intent: {
+        operation: 'edit-record',
+        term: term.label,
+        fields: { label: 'd2 lint probe', expected_rt_min: 15.7507 },
+      },
+      targetId: recordId,
+      store: lintStore,
+      ontologyTerms: realTerms,
+    });
+    // The gate: refused at COMPILE, by name, with the lint message carried.
+    expect(merged.ok).toBe(false);
+    if (merged.ok) throw new Error('unreachable — the lint-invalid merge must be refused at compile');
+    const diag = merged.diagnostics[0]!;
+    expect(diag.code).toBe('EDIT_MERGE_REJECTED');
+    expect(diag.message).toContain('gcmethod-timed-events-require-executable-binding');
+    expect(diag.message).toContain('executable binding');
+    // Zero writes: the target is byte-identical (the edit was never applied).
+    const after = await lintStore.get(recordId);
+    expect(after?.payload).toEqual(payload);
+  });
 });
