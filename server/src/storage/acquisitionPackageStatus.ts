@@ -115,8 +115,8 @@ export async function loadLogPatterns(): Promise<LogPatterns> {
     };
   });
   const p: LogPatterns = {
-    id: ruleset.id,
-    version: ruleset.version,
+    id: setId,
+    version: setVersion,
     fallbackStatus: doc.fallbackStatus,
     rules,
   };
@@ -191,16 +191,25 @@ export async function classifyAcquisitionStatus(
   }
   const compiled = patterns.rules.map((r) => ({ rule: r, re: new RegExp(r.pattern) }));
   const matched: AcqpMatch[] = [];
+  // PRECEDENCE = RULE-FILE ORDER (bait #4/#6): the status is the status of
+  // the FIRST rule (in declared file order) that matches ANY line — never a
+  // line-order or coded-severity branch. Every line is still recorded once,
+  // against the first rule (in file order) it satisfies, verbatim (bait #7).
   let status: string | undefined;
-  lines.forEach((line, lineIndex) => {
-    for (const { rule, re } of compiled) {
-      if (re.test(line)) {
-        if (status === undefined) status = rule.status; // first match wins (file order)
-        matched.push({ line, ruleId: rule.id, lineIndex });
-        break; // one entry per line (its first matching rule)
+  for (const { rule, re } of compiled) {
+    if (status === undefined) {
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const candidate = lines[lineIndex];
+        if (candidate !== undefined && re.test(candidate)) {
+          status = rule.status;
+          break;
+        }
       }
     }
-  });
+    lines.forEach((line, lineIndex) => {
+      if (re.test(line)) matched.push({ line, ruleId: rule.id, lineIndex });
+    });
+  }
   if (status === undefined) {
     return { ...base, matched: [], noEvidenceReason: 'no-rule-match' };
   }

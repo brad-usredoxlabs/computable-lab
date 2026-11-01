@@ -51,6 +51,19 @@ editor:
         the sha256 of the canonical per-file manifest string, not a hash of the
         directory) and the optional run/sample links.
       slots: ["signal-collection-ref-slot", "source-run-ref-slot", "sample-ref-slot"]
+    - id: "acquisition-status"
+      kind: "section"
+      label: "Acquisition Status"
+      help: >
+        How the acquisition ended, classified at registration from the RUN.LOG
+        member (strict UTF-16) using the declared rule file
+        (config/gc-acquisition-status/log-patterns.yaml). completed / aborted /
+        stopped-by-user / unknown. unknown is the DECLARED floor (a package with
+        no parseable log) — never a completed default. The evidence block
+        records the interpretation source, the decode facts, and every matched
+        RUN.LOG line VERBATIM (the data a human reads INSTEAD of a byte-serving
+        route — OQ-1). Absent on packages registered before FAME-1.
+      slots: ["acquisition-status-slot", "acquisition-status-evidence-slot"]
   slots:
     - id: "id-slot"
       path: "$.id"
@@ -118,6 +131,102 @@ editor:
       label: "Sample Ref"
       widget: "ref"
       help: "Optional record ref to the sample (plain record ref — no CHEBI minting; compound/sample identity lives on gc-method / instrument-sequence-entry)."
+    - id: "acquisition-status-slot"
+      path: "$.acquisitionStatus"
+      label: "Acquisition Status"
+      widget: "select"
+      readonly: true
+      help: >
+        How the acquisition ended (classification, not lifecycle — distinct
+        from State). completed / aborted / stopped-by-user / unknown. unknown
+        is the declared floor for a package with no parseable log (never a
+        completed default). Set at registration from the RUN.LOG evidence;
+        read-only afterward. Absent on packages registered before FAME-1.
+      options:
+        - { value: "completed", label: "Completed" }
+        - { value: "aborted", label: "Aborted" }
+        - { value: "stopped-by-user", label: "Stopped by user" }
+        - { value: "unknown", label: "Unknown" }
+    - id: "acquisition-status-evidence-slot"
+      path: "$.acquisitionStatusEvidence"
+      label: "Acquisition Status Evidence"
+      widget: "object"
+      readonly: true
+      help: >
+        The evidence behind the acquisition status: the rule set used
+        (interpretation source), which member was read, the strict-UTF-16
+        decode facts, every matched RUN.LOG line VERBATIM (never rewritten),
+        and — when nothing matched — the named no-evidence reason. This is the
+        surface a human reads INSTEAD of a byte-serving route (OQ-1): the
+        verbatim lines + the /record/<RUN.LOG data-reference> anchor make the
+        WHY visible without a raw-blob route.
+      properties:
+        - name: "ruleset"
+          widget: "object"
+          readonly: true
+          label: "Rule Set"
+          help: "The interpretation source: the rule-set id, version, and the rule file they came from."
+          properties:
+            - name: "id"
+              widget: "text"
+              readonly: true
+              label: "Rule Set Id"
+            - name: "version"
+              widget: "text"
+              readonly: true
+              label: "Version"
+            - name: "sourceFile"
+              widget: "text"
+              readonly: true
+              label: "Source File"
+        - name: "sourceMember"
+          widget: "object"
+          readonly: true
+          label: "Source Member"
+          help: "Which package member was read (the run_log member, e.g. RUN.LOG)."
+          properties:
+            - name: "relativePath"
+              widget: "text"
+              readonly: true
+              label: "Relative Path"
+        - name: "decode"
+          widget: "object"
+          readonly: true
+          label: "Decode"
+          help: "The strict-UTF-16 decode facts (the encoding used and whether the FF FE BOM was present), recorded even on decode failure."
+          properties:
+            - name: "encoding"
+              widget: "text"
+              readonly: true
+              label: "Encoding"
+            - name: "bomPresent"
+              widget: "boolean"
+              readonly: true
+              label: "Bom Present"
+        - name: "matched"
+          widget: "array"
+          readonly: true
+          label: "Matched Lines"
+          help: "Every RUN.LOG line a declared rule matched — preserved VERBATIM, never dropped."
+          properties:
+            - name: "line"
+              widget: "code"
+              readonly: true
+              label: "Line"
+              help: "The matched line, verbatim (the exact decoded line)."
+            - name: "ruleId"
+              widget: "text"
+              readonly: true
+              label: "Rule Id"
+            - name: "lineIndex"
+              widget: "number"
+              readonly: true
+              label: "Line Index"
+        - name: "noEvidenceReason"
+          widget: "text"
+          readonly: true
+          label: "No Evidence Reason"
+          help: "Present ONLY when nothing matched: the named reason (log absent / not decodable / zero rule hits)."
 
 list:
   columns:
@@ -132,3 +241,6 @@ list:
   - path: "$.state"
     label: "State"
     width: "100px"
+  - path: "$.acquisitionStatus"
+    label: "Acquisition Status"
+    width: "150px"

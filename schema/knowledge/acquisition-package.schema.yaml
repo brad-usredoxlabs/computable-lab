@@ -159,3 +159,102 @@ properties:
     type: string
     enum: [ draft, active, archived ]
     description: "Lifecycle state (operational). DISTINCT from domain status/result fields."
+
+  # ---------------------------------------------------------------------------
+  # FAME-1 — the acquisition status, classified at registration from the
+  # RUN.LOG member (strict UTF-16) + the declared package-member signals.
+  # This is DOMAIN status (how the acquisition ended), deliberately named
+  # acquisitionStatus and DISTINCT from the lifecycle `state` above (bait #3:
+  # `state` is lifecycle; never reuse it). All four words are FIXED by the
+  # item; completed/aborted already exist as enum values on OTHER kinds
+  # (instrument-log / run) — the SAME words, not new vocab. The
+  # interpretation (which log lines mean which status) lives ONLY in
+  # config/gc-acquisition-status/log-patterns.yaml (DATA); the code only
+  # decodes + matches + records. ABSENT is legal (a package registered before
+  # FAME-1, or whose run_log member could not be read — the floor is honest
+  # unknown, recorded as DATA via acquisitionStatusEvidence, never a coded
+  # completed default).
+  # ---------------------------------------------------------------------------
+  acquisitionStatus:
+    type: string
+    enum: [ completed, aborted, stopped-by-user, unknown ]
+    description: >
+      How the acquisition ended, classified at registration from the RUN.LOG
+      member (strict UTF-16) using the declared rule file. completed = the log
+      carries an explicit method-completed line; aborted = an abort /
+      method-aborted / instrument-error-stopped line; stopped-by-user = the
+      operator stopped the sequence; unknown = no run_log member, an
+      unreadable/undecodable log, or zero rule hits (the DECLARED floor —
+      never completed). Absent on packages registered before FAME-1.
+
+  # The evidence that produced acquisitionStatus — the interpretation source
+  # and every matched line, preserved VERBATIM (the d_reader lossless
+  # doctrine: matched lines are never rewritten nor dropped). This is the
+  # surface a human reads INSTEAD of a byte-serving route (OQ-1): the
+  # verbatim matched lines + the /record/<RUN.LOG DREF> anchor let a reviewer
+  # see WHY without a raw-blob route.
+  acquisitionStatusEvidence:
+    type: object
+    unevaluatedProperties: false
+    required: [ ruleset, sourceMember, decode ]
+    properties:
+      ruleset:
+        type: object
+        unevaluatedProperties: false
+        required: [ id, version, sourceFile ]
+        properties:
+          id:
+            type: string
+            minLength: 1
+            description: "The rule-set id declared in log-patterns.yaml (the interpretation source)."
+          version:
+            type: [ string, number ]
+            description: "The rule-set version declared in log-patterns.yaml."
+          sourceFile:
+            type: string
+            minLength: 1
+            description: "The rule file the rules came from (config/gc-acquisition-status/log-patterns.yaml)."
+      sourceMember:
+        type: object
+        unevaluatedProperties: false
+        required: [ relativePath ]
+        properties:
+          relativePath:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9._ -]*(/[A-Za-z0-9][A-Za-z0-9._ -]*)*$"
+            description: "Which package member was read (the run_log member, e.g. RUN.LOG), relative to the package root."
+      decode:
+        type: object
+        unevaluatedProperties: false
+        required: [ encoding, bomPresent ]
+        properties:
+          encoding:
+            type: string
+            minLength: 1
+            description: "The strict-UTF-16 decode that produced the text (e.g. utf-16le), recorded even on decode failure (facts preserved, bait #7)."
+          bomPresent:
+            type: boolean
+            description: "Whether the member carried the FF FE BOM (true -> the utf-16 family consumes it; false -> explicit utf-16-le)."
+      matched:
+        type: array
+        description: "Every RUN.LOG line a declared rule matched — preserved VERBATIM, never dropped (d_reader lossless doctrine)."
+        items:
+          type: object
+          unevaluatedProperties: false
+          required: [ line, ruleId, lineIndex ]
+          properties:
+            line:
+              type: string
+              description: "The matched line VERBATIM (the exact decoded line, no trimming/rewriting)."
+            ruleId:
+              type: string
+              pattern: "^[a-z][a-z0-9-]*$"
+              description: "The declared rule id that matched (the rule file's vocabulary; pattern-enforced here and re-checked by the lint belt)."
+            lineIndex:
+              type: integer
+              minimum: 0
+              description: "The 0-based index of the line within the decoded text."
+      noEvidenceReason:
+        type: string
+        minLength: 1
+        description: "Named ONLY when matched is empty: why no line matched (e.g. no run_log member / log not decodable / zero rule hits). The honest no-evidence arm."
