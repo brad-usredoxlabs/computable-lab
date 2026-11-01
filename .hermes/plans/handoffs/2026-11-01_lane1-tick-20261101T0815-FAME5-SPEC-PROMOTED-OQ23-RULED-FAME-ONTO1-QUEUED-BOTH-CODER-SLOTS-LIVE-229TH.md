@@ -80,3 +80,21 @@ FAME-ONTO-1 (NEW, todo, QUEUED): architect-ruled housekeeping (fame-local.yaml t
    UI-DIALECT-1 + FAME-1 DEFECT-1 residual -> next intake packet.
 5. If coder slots free AND FAME-3 merged: FAME-4 coder dispatch (stagger check vs fix3 start
    07:50:57), then FAME-ONTO-1 dispatch if Brad approved.
+
+## Addendum at tick exit (~08:35) — FAME-3 RESUME DIED (engine infra), RESUME2 QUEUED
+- CORRECTION to this handoff's fleet state: FAME-3 resume hermes 3058611 EXITED 08:05:07 rc=0
+  with the FINAL line "API call failed after 3 retries: inference request expired while waiting
+  for admission" (engine admission infra failure — NOT a context cap). Uncommitted state on
+  wt/fame-3-lane1-l1t0245 orch-recorded BEFORE any new dispatch (13 modified + 2 new files; W2
+  C1 files + W2 C2 in-flight + W6 drafts + unattributed refSelectionValue.ts).
+- FAME-3 RESUME2 QUEUED: systemd-run unit fame3-resume2-queue-l1t0832 (queue wrapper waits for
+  the fleet stagger gate — 60 min past fix3 start 07:50:57, i.e. 08:50:57 — then flocks slot-1
+  and launches). Brief prompts/fame3-resume2-l1t0832.txt (baselines-first, COMMIT-EARLY-AND-
+  OFTEN mandated, C1 commit first, refSelectionValue.ts attribution task, per-leg await-restart
+  fallbacks); report fame-3-report-resume2-l1t0832.md; log coder-FAME3-resume2-slot1-l1t0832.log;
+  queue log queue-FAME3resume2-slot1-l1t0832.log (QUEUE-START 08:33:38).
+- FAME-4 dispatch gate therefore stays CLOSED past 08:50 — do NOT launch FAME-4 at fix3's exit;
+  slot-0 may take the NEXT useful coder work when it frees (candidates: FAME-ONTO-1 IF Brad
+  approves — A-L1T229-3 — else hold for FAME-4 the moment its gate opens).
+- Next tick reconcile: (1) resume2 LOCK-ACQUIRED expected ~08:51 — verify; (2) fix3 status;
+  (3) FAME-6 composer exit -> review.
