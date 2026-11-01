@@ -146,13 +146,24 @@ describe('ArrayWidget item-hint authoring (WIDGET-R1)', () => {
     // The seeded item renders as an ObjectWidget in display mode.
     const itemValue = view.container.querySelector('.taptab-object-value')
     expect(itemValue, 'the seeded item must render through the ObjectWidget').toBeTruthy()
-    // Clicking the item opens the ObjectWidget's edit mode with one input per
-    // hint sub-field (kind / type / id / label).
+    // Clicking the item opens the ObjectWidget's edit mode with one control
+    // per hint sub-field (kind / type / id / label). GATE-FIX-1 D2: `kind`
+    // declares `widget: select` + options → it renders a native <select>;
+    // the other three remain text inputs.
     act(() => {
       fireEvent.click(itemValue as HTMLElement)
     })
     const inputs = view.container.querySelectorAll('.taptab-object-field-input')
-    expect(inputs, 'the ObjectWidget must render one sub-field input per hint field').toHaveLength(4)
+    expect(
+      inputs,
+      'the ObjectWidget must render one text input per options-less hint field',
+    ).toHaveLength(3)
+    const selects = Array.from(view.container.querySelectorAll('.taptab-object-field-select')) as HTMLSelectElement[]
+    expect(
+      selects,
+      'the declared select hint field (kind) must render a <select>',
+    ).toHaveLength(1)
+    expect(Array.from(selects[0]!.options).map((o) => o.value)).toEqual(['record'])
   })
 
   it('editing a hinted item sub-field splices the whole-object commit back at the item index (reuse of ObjectWidget onCommit)', () => {
@@ -173,8 +184,10 @@ describe('ArrayWidget item-hint authoring (WIDGET-R1)', () => {
       fireEvent.click(itemValue)
     })
     const inputs = Array.from(view.container.querySelectorAll('.taptab-object-field-input')) as HTMLInputElement[]
-    // `id` is the 3rd hint sub-field (kind, type, id, label).
-    const idInput = inputs[2]
+    // `id` is the 2nd TEXT input (GATE-FIX-1 D2: `kind` — the first hint
+    // sub-field, a declared select — renders a <select>, so the text inputs
+    // are type, id, label).
+    const idInput = inputs[1]
     expect(idInput).toBeTruthy()
     act(() => {
       fireEvent.change(idInput, { target: { value: 'CLM-1' } })

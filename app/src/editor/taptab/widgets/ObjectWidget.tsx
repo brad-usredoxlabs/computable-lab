@@ -161,6 +161,18 @@ export function ObjectWidget({
           // (isDisplayOnlyRefValue) is the TRUE empty for a ref position and
           // commits null (normalizeRefFieldValue) — never a stored ''.
           const isRefSubField = !hasNestedFields && isRefWidget(prop.widget);
+          // GATE-FIX-1 D2 (gate-l1t1520): a FLAT sub-field whose DECLARED
+          // widget is `select` with NON-EMPTY `options` data renders a native
+          // <select> offering exactly those options — the same data-driven
+          // dispatch discipline as the ref/fields branches above (the branch
+          // is on the declared widget + options members, never on field names
+          // or option values). A select WITHOUT options falls through to the
+          // text input, exactly as before.
+          const isSelectSubField =
+            !hasNestedFields &&
+            prop.widget === 'select' &&
+            Array.isArray(prop.options) &&
+            prop.options.length > 0;
           return (
             <div key={prop.name} className="taptab-object-field">
               <label className="taptab-object-field-label">
@@ -205,6 +217,40 @@ export function ObjectWidget({
                     onCancel={() => undefined}
                   />
                 )
+              ) : isSelectSubField ? (
+                (() => {
+                  // The current value as a declared option's VALUE (the stored
+                  // value is a flat token; an object-shaped value falls back to
+                  // its label/id — the same display derivation the ref pickers
+                  // use). A stored value that names no option renders the
+                  // first option (never a free-text echo).
+                  const raw = propValue;
+                  const current =
+                    typeof raw === 'string'
+                      ? raw
+                      : raw !== null && typeof raw === 'object'
+                        ? (typeof (raw as Record<string, unknown>).label === 'string'
+                            ? String((raw as Record<string, unknown>).label)
+                            : typeof (raw as Record<string, unknown>).id === 'string'
+                              ? String((raw as Record<string, unknown>).id)
+                              : '')
+                        : '';
+                  const matched = prop.options!.find((o) => o.value === current) ?? prop.options![0]!;
+                  return (
+                    <select
+                      className="taptab-object-field-select"
+                      value={matched.value}
+                      onChange={(e) => handleFieldChange(prop.name, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {prop.options!.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()
               ) : (
                 <input
                   type="text"
