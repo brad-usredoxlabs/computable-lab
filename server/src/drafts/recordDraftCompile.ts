@@ -305,12 +305,30 @@ function mergeAppendEntry(payload: Record<string, unknown>, dotPath: string, ent
   return result;
 }
 
+/** Canonical JSON text: recursively key-sorted so two objects with the SAME
+ *  content but a DIFFERENT key order (hand-authored YAML, a migrated record,
+ *  a later field-order change) serialize identically. Primitive handling
+ *  mirrors JSON.stringify exactly (undefined -> null in arrays; an object key
+ *  whose value is undefined is dropped), so the canonical form of any
+ *  JSON.stringify-stable value is stable and key-order-insensitive. */
+function canonicalJson(value: unknown): string {
+  if (value === undefined) return 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record)
+    .filter((k) => record[k] !== undefined)
+    .sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(record[k])}`).join(',')}}`;
+}
+
 /** A deep structural equality over the entry the guard would append (the
- *  duplicate-content refusal). JSON-normalized (key order-insensitive) so an
- *  identical entry re-proposed is recognized as a duplicate, not a new write. */
+ *  duplicate-content refusal). Canonicalized (recursively key-sorted) so a
+ *  content-identical entry re-proposed — even with a DIFFERENT key order —
+ *  is recognized as a duplicate, not a new write. */
 function entryAlreadyPresent(list: unknown[], entry: Record<string, unknown>): boolean {
-  const want = JSON.stringify(entry);
-  return list.some((item) => JSON.stringify(item) === want);
+  const want = canonicalJson(entry);
+  return list.some((item) => canonicalJson(item) === want);
 }
 
 /** Resolve the model's compound noun through the ontology-term registry —

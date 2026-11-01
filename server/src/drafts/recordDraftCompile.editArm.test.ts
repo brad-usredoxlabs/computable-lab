@@ -267,6 +267,60 @@ describe('record-drafting edit arm (FAME-3 W6, OQ-4 OPT-A)', () => {
     expect(assignments(after)).toHaveLength(2);
   });
 
+  it('a content-identical pre-existing entry stored with REVERSED key order is recognized as a duplicate (canonicalized comparison — a re-draft is refused by name, never appended twice)', async () => {
+    const target = await seedGcMethod('GCM-W6-EDIT-005');
+    const term = knownTerm('Methyl decanoate (FAME, 10:0-OMe)');
+    const entryFields = { label: 'seed-reversed-order entry' };
+    // The interpreter's drafted entry is {assignment_state, label,
+    // compound_ref} (guard defaults first, fields verbatim, ref last).
+    // Seed the target with a CONTENT-IDENTICAL entry whose key order is
+    // reversed (label, compound_ref, assignment_state) — the hand-authored
+    // / migrated-record shape the stringify comparison must survive.
+    const seedRef: Record<string, unknown> = {
+      kind: 'ontology',
+      namespace: term.id.includes(':') ? term.id.split(':')[0] : '',
+      id: term.id,
+      label: term.label,
+    };
+    if (term.definition !== undefined) seedRef.definition = term.definition;
+    const saved = await store.update({
+      envelope: {
+        recordId: target.recordId,
+        schemaId: GC_METHOD_SCHEMA_ID,
+        payload: {
+          ...(target.payload as Record<string, unknown>),
+          analysis: {
+            compound_assignments: [
+              ...assignments(target),
+              {
+                label: entryFields.label,
+                compound_ref: seedRef,
+                assignment_state: 'provisional',
+              },
+            ],
+          },
+        },
+      },
+      message: 'seed a content-identical entry with reversed key order',
+    });
+    expect(saved.success, JSON.stringify(saved)).toBe(true);
+    // Re-draft the SAME proposal: the reversed-order entry is
+    // content-identical -> NAMED refusal, no append.
+    const merged = await buildRecordEditMerge({
+      intent: { operation: 'edit-record', term: term.label, fields: entryFields },
+      targetId: target.recordId,
+      store,
+      ontologyTerms: realTerms,
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) throw new Error('unreachable');
+    expect(merged.diagnostics[0]!.code).toBe('EDIT_DUPLICATE_ENTRY');
+    // Still exactly TWO entries (the reversed-order seed + the pre-
+    // existing one) — the re-draft was refused, not appended.
+    const after = await store.get(target.recordId);
+    expect(assignments(after)).toHaveLength(2);
+  });
+
   it('end-to-end through the REAL service: compile (canAccept:true, ZERO staged writes) -> accept applies EXACTLY ONE governed edit -> the record carries the new entry and the pre-existing entry is untouched', async () => {
     const target = await seedGcMethod('GCM-W6-EDIT-004');
     const term = knownTerm('Methyl decanoate (FAME, 10:0-OMe)');
