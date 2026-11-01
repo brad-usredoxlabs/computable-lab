@@ -16,6 +16,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import {
   classifyAcquisitionStatus,
@@ -284,7 +286,10 @@ describe('FAME-1 fix-run (D3/D4/D5/D7): entry point, declared qualification, dis
     // The seam is an ABSOLUTE FILE PATH (loadLogPatterns resolves a
     // non-URL string directly — fileURLToPath is file:-scheme only, so a
     // data: URL would hit the load-failure arm, not the compile arm).
-    const badPatternFile = `${process.cwd()}/fame1-fix2-bad-pattern-${Date.now()}.yaml`;
+    // (FAME-1 FIX3, cycle-3 DEFECT 2) The fixture lives under os.tmpdir(),
+    // NOT process.cwd() (inside server/): a crash between write and finally
+    // must never leave an untracked YAML in the worktree.
+    const badPatternFile = join(tmpdir(), `fame1-fix3-bad-pattern-${Date.now()}-${process.pid}.yaml`);
     writeFileSync(badPatternFile, badPatternRuleFile, 'utf8');
     try {
       const res = await classifyAcquisitionPackageStatus(
@@ -306,6 +311,15 @@ describe('FAME-1 fix-run (D3/D4/D5/D7): entry point, declared qualification, dis
       expect(res.acquisitionStatusEvidence.matched).toEqual([]);
     } finally {
       rmSync(badPatternFile, { force: true });
+      // (FAME-1 FIX3, cycle-3 DEFECT 2) Hermetic: this test is the FIRST to
+      // successfully load a patternFileUrl OVERRIDE. The seam's override load
+      // must not poison the process-wide canonical patterns cache (FIX3 makes
+      // the seam not write the cache on an override), but this finally ALSO
+      // resets it so the test is order-independent even if that seam regresses
+      // — every later canonical caller sees the canonical file. The reset is
+      // idempotent (clearing an already-null cache is a no-op) and does not
+      // affect the other tests, which never load an override.
+      resetLogPatternsCache();
     }
   });
 

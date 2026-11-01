@@ -202,7 +202,14 @@ export async function loadLogPatterns(patternFileUrl?: URL | string): Promise<Lo
     rules,
     ...(statusQualification !== undefined ? { statusQualification } : {}),
   };
-  patternsCache = p;
+  // (FAME-1 FIX3, cycle-3 DEFECT 2) The cache serves the CANONICAL file only
+  // (the contract stated above and in the D4 doc). An explicit override (the
+  // test seam) re-reads and MUST NOT write the canonical cache: writing it
+  // left the process-wide cache holding the OVERRIDE's ruleset, so every
+  // later canonical caller in the same module instance mis-classified
+  // (order-dependent; --sequence.shuffle RED). Production always passes the
+  // canonical file (patternFileUrl undefined), so this changes nothing there.
+  if (patternFileUrl === undefined) patternsCache = p;
   return p;
 }
 
@@ -446,10 +453,22 @@ export async function classifyAcquisitionPackageStatus(
     const memberDecode = strictUtf16(memberBytes);
     let evidence: AcqpStatusEvidence;
     try {
-      // classifyAcquisitionStatus re-reads the (already-loaded, cached) rule
-      // file and compiles the declared patterns (bait #4: the compile is the
-      // PATTERN's step, not the member's).
-      evidence = await classifyAcquisitionStatus(memberBytes, runLog.relativePath);
+      // (FIX2 D3) classifyAcquisitionStatus compiles the declared patterns
+      // (bait #4: the compile is the PATTERN's step, not the member's).
+      // (FAME-1 FIX3, cycle-3 DEFECT 2) the TEST SEAM is threaded through to
+      // the extractor: an explicit override re-reads the SAME file end to end
+      // (the seam contract — "an explicit override always re-reads"), so the
+      // pattern-invalid arm is reachable deterministically from the override
+      // itself. Pre-fix the arm was reached only because the override's load
+      // POISONED the process-wide canonical cache and the (seam-less) inner
+      // call read the bad pattern FROM THE CACHE — the very side effect this
+      // fix removes. Production callers omit the seam (canonical file, both
+      // levels), so this changes nothing there.
+      evidence = await classifyAcquisitionStatus(
+        memberBytes,
+        runLog.relativePath,
+        patternFileUrl,
+      );
     } catch (err) {
       // (FIX2 D3) a declared-pattern COMPILE failure (new RegExp throws on a
       // malformed declared pattern). The rule file WAS read (the load try
