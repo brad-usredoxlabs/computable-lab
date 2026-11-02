@@ -34,7 +34,7 @@
  *   - Shift left-drag  = PAN (translate the x-domain)
  *   - Reset button     = restore the FULL data extent
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import type { RenderableArtifact } from './ViewRenderer'
 import {
@@ -111,10 +111,31 @@ export function ChromatogramView({
   //      is the very thing derived from the viewBox). Unmeasured (jsdom /
   //      zero rect) falls back to the pre-B1 fixed width — geometry only,
   //      no data semantics. ----
+  // D1 (fix run 1): the observer MUST attach when the measured wrapper
+  // actually exists. The chart renders behind async branches — on any
+  // dref-backed artifact (every live chromatogram of the campaign is
+  // fetched through the content route) the FIRST commit is the "Loading
+  // trace…" / error / empty early-return div, which does NOT carry the
+  // wrapper ref. A mount-time `useEffect(..., [])` read the null ref,
+  // returned, and never re-ran when the fetch resolved and the chart div
+  // mounted — the pane-fit silently never engaged (viewBox stuck at the
+  // 720-unit canvas; scale 0.742 at the shipped 534 px pane). The ref
+  // callback below PUBLISHES the element when it mounts (and nulls it on
+  // unmount); the effect re-runs whenever the published element changes,
+  // so the observer installs the moment the wrapper exists and its
+  // cleanup disconnects on teardown.
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null)
+  const wrapRefCb = useCallback(
+    (el: HTMLDivElement | null) => {
+      wrapRef.current = el
+      setWrapEl(el)
+    },
+    [],
+  )
   const [measuredW, setMeasuredW] = useState(0)
   useEffect(() => {
-    const el = wrapRef.current
+    const el = wrapEl
     if (!el || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width
@@ -122,7 +143,7 @@ export function ChromatogramView({
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [wrapEl])
   const W = measuredW > 0 ? Math.round(measuredW) : FALLBACK_W
   const PLOT_W = W - PAD_L - PAD_R
   const PLOT_H = H - PAD_T - PAD_B
@@ -311,7 +332,7 @@ export function ChromatogramView({
 
   return (
     <div
-      ref={wrapRef}
+      ref={wrapRefCb}
       className="view-spec__chromatogram"
       data-testid="view-spec-chromatogram"
       data-x-domain={domain ? `${domain.x0}:${domain.x1}` : undefined}

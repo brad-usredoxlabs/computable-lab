@@ -26,18 +26,23 @@ const PLOT_W = 654
 // The callback receives the RESIZE-OBSERVER entry LIST (the component reads
 // entries[0].contentRect.width) — the stub mirrors that shape.
 type ROEntry = { contentRect: { width: number } }
+// `disconnected` counts teardowns (D1: the cleanup still disconnects).
 const resizeObservers: Array<(entries: ROEntry[]) => void> = []
+let roDisconnects = 0
 ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
   constructor(cb: (entries: ROEntry[]) => void) {
     resizeObservers.push(cb)
   }
   observe() {}
-  disconnect() {}
+  disconnect() {
+    roDisconnects++
+  }
   unobserve() {}
 }
 
 beforeEach(() => {
   resizeObservers.length = 0
+  roDisconnects = 0
   vi.clearAllMocks()
   // jsdom has no layout: stub the SVG rect so pointer math is deterministic.
   const svgProto = SVGElement.prototype as unknown as { getBoundingClientRect: () => unknown }
@@ -315,6 +320,54 @@ describe('ChromatogramView — B1 pane-fit: renders at 1:1 CSS px per SVG unit (
     expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 534 280')
     fireMeasuredWidth(800)
     expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 800 280')
+  })
+
+  // D1 (fix run 1): the LIVE path. Every campaign chromatogram is dref-backed
+  // (ANR-000041 → signal_plus_baseline via dataReferenceRef), so the FIRST
+  // commit is the "Loading trace…" early-return div, which does NOT carry the
+  // wrapper ref. The pane-fit observer must engage WHEN the measured wrapper
+  // actually mounts (content arrived after the pending fetch) — a mount-time
+  // effect keyed on [] read the null ref and never re-ran (the reviewer probe:
+  // inline control = 1 observer, dref = 0, viewBox stuck at "0 0 720 280").
+  it('dref-backed path (fetch pending on mount, content arrives after): the observer installs at chart mount and the measured width drives the viewBox', async () => {
+    const value = sigValue()
+    let resolveContent!: (v: unknown) => void
+    const content = new Promise<unknown>((resolve) => {
+      resolveContent = resolve
+    })
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockReturnValue(content)
+    const { unmount } = render(<ChromatogramView artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />)
+    // First commit is the loading early-return (no chart, NO wrapper ref):
+    // nothing measurable yet and no observer installed.
+    expect(screen.getByTestId('chromatogram-empty').textContent).toContain('Loading trace')
+    expect(screen.queryByTestId('chromatogram-svg')).toBeNull()
+    expect(resizeObservers.length).toBe(0)
+
+    // Content arrives AFTER mount (the pending fetch resolves outside the
+    // first commit — exactly the live dref shape).
+    await act(async () => {
+      resolveContent(value)
+    })
+    const svg = await screen.findByTestId('chromatogram-svg')
+    const el = screen.getByTestId('view-spec-chromatogram')
+    // The wrapper div now exists and the ResizeObserver is INSTALLED on it —
+    // this is the load-bearing assertion: at base (mount-time [] effect over
+    // a null ref) resizeObservers.length is 0 here.
+    expect(resizeObservers.length).toBe(1)
+    // Unmeasured fallback holds until the pane reports a width: H stays 280.
+    expect(svg.getAttribute('viewBox')).toBe('0 0 720 280')
+    expect(el.getAttribute('data-width')).toBe('720')
+
+    // The pane reports its width (simulated; jsdom cannot layout) and the
+    // MEASURED width drives the viewBox — the pane engages post-mount.
+    fireMeasuredWidth(534)
+    expect(svg.getAttribute('viewBox')).toBe('0 0 534 280')
+    expect(el.getAttribute('data-width')).toBe('534')
+    expect(svg.querySelectorAll('text.chromatogram__ticklabel').length).toBeGreaterThanOrEqual(4)
+
+    // The cleanup still disconnects (the observer's teardown runs on unmount).
+    unmount()
+    expect(roDisconnects).toBeGreaterThanOrEqual(1)
   })
 })
 
