@@ -196,19 +196,31 @@ export function ChromatogramView({
     return siblings.find((a) => a.name === b.markersFrom)
   }, [markerArtifact, b.markersFrom, siblings])
 
+  // The resolved marker field names (DATA: the bindings, or the shipped
+  // default names held in DEFAULT_MARKER_FIELDS). The table header renders
+  // these names (B2: the column names are data-carried).
+  const markerFields = useMemo(
+    () => ({
+      rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
+      label: b.markerLabelField ?? DEFAULT_MARKER_FIELDS.label,
+      saturated: b.markerSaturatedField ?? DEFAULT_MARKER_FIELDS.saturated,
+      flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
+    }),
+    [b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField],
+  )
+
   const markers = useMemo<MarkerRow[]>(() => {
     const ma = resolvedMarkerArtifact
     if (!ma) return []
     const inline = isRecord(ma.inlineValue) ? ma.inlineValue : {}
     const rows = Array.isArray(inline.rows) ? inline.rows : []
-    const fields = {
-      rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
-      label: b.markerLabelField ?? DEFAULT_MARKER_FIELDS.label,
-      saturated: b.markerSaturatedField ?? DEFAULT_MARKER_FIELDS.saturated,
-      flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
-    }
-    return parseMarkerRows(rows, fields)
-  }, [resolvedMarkerArtifact, b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField])
+    return parseMarkerRows(rows, {
+      rt: markerFields.rt,
+      label: markerFields.label,
+      saturated: markerFields.saturated,
+      flags: markerFields.flags,
+    })
+  }, [resolvedMarkerArtifact, markerFields])
 
   const skippedNoRt = markers.filter((m) => m.rt === null).length
 
@@ -370,7 +382,12 @@ export function ChromatogramView({
         )}
       </svg>
 
-      {/* peak-table micro-table with row <-> trace sync */}
+      {/* peak-table micro-table with row <-> trace sync.
+          B2: the table carries a <thead> — the column names are
+          DATA-CARRIED (the resolved binding field names), and the RT header
+          carries the unit ONCE (from parsed.xUnit — data, never a literal;
+          absent unit ⇒ bare field name, nothing invented). The RT cells are
+          numeric-only (the per-cell unit append is removed). */}
       {markers.length > 0 && (
         <div className="chromatogram__tablewrap">
           {skippedNoRt > 0 && (
@@ -379,6 +396,14 @@ export function ChromatogramView({
             </div>
           )}
           <table className="chromatogram__table">
+            <thead>
+              <tr>
+                <th className="chromatogram__rowlabel">{markerFields.label}</th>
+                <th>{xUnit ? `RT (${xUnit})` : 'RT'}</th>
+                <th>{markerFields.saturated}</th>
+                <th>{markerFields.flags}</th>
+              </tr>
+            </thead>
             <tbody>
               {markers.map((m) => (
                 <tr
@@ -388,7 +413,7 @@ export function ChromatogramView({
                   onClick={() => setActivePeak(activePeak === m.peakId ? null : m.peakId)}
                 >
                   <td className="chromatogram__rowlabel">{m.label}</td>
-                  <td>{m.rt === null ? '—' : `${fmt(m.rt)}${xUnit ? ` ${xUnit}` : ''}`}</td>
+                  <td>{m.rt === null ? '—' : fmt(m.rt)}</td>
                   <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? 'saturated' : ''}</td>
                   <td className="chromatogram__rowflags">{m.flags}</td>
                 </tr>

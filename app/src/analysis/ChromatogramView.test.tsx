@@ -318,6 +318,70 @@ describe('ChromatogramView — B1 pane-fit: renders at 1:1 CSS px per SVG unit (
   })
 })
 
+describe('ChromatogramView — B2 unit ownership: units on the axis title only, never per-cell (spec §5 B2)', () => {
+  it('the RT unit appears exactly ONCE in the table header; the tick labels and the RT cells carry no unit (xUnit = min)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const el = root()
+    // (i) container text carries the xUnit at most twice: the x-axis title +
+    // the RT header (the yUnit 'pA' is a different string).
+    const unitCount = (el.textContent ?? '').split('min').length - 1
+    expect(unitCount).toBe(2)
+    // (ii) no tick label contains the unit string.
+    const svg = screen.getByTestId('chromatogram-svg')
+    for (const t of svg.querySelectorAll('text.chromatogram__ticklabel')) {
+      expect(t.textContent).not.toContain('min')
+    }
+    // (iii) no RT cell (the 2nd td of every row) contains the unit — numeric
+    // only (the pre-fix per-cell `${fmt(m.rt)}${xUnit ? ` ${xUnit}` : ''}`
+    // append is gone).
+    const table = el.querySelector('table.chromatogram__table')!
+    for (const tr of table.querySelectorAll('tbody tr')) {
+      const rtCell = tr.querySelectorAll('td')[1]
+      expect(rtCell.textContent).not.toContain('min')
+    }
+  })
+
+  it('the table has a thead whose RT header carries the unit ONCE, derived from the passed-in unit string (data, not a literal)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const table = root().querySelector('table.chromatogram__table')!
+    const head = table.querySelector('thead')
+    expect(head).not.toBeNull()
+    // The RT column header is the fixed human label 'RT' with the unit once,
+    // derived from the passed-in unit string (data, not a literal).
+    const headers = Array.from(head!.querySelectorAll('th')).map((th) => th.textContent)
+    expect(headers).toContain('RT (min)')
+    // Exactly one header cell carries the unit.
+    expect(headers.filter((h) => h.includes('min')).length).toBe(1)
+  })
+
+  it('a second fixture with xUnit = s renders the unit from the DATA (not a literal): the header says RT (s)', () => {
+    const valueS = { axis: [0, 1, 2], values: [1, 3, 1], axis_units: 's', value_units: 'pA' }
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(valueS)}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const table = root().querySelector('table.chromatogram__table')!
+    const headers = Array.from(table.querySelectorAll('thead th')).map((th) => th.textContent)
+    expect(headers).toContain('RT (s)')
+    expect(headers).not.toContain('RT (min)')
+  })
+})
+
 describe('ChromatogramView hardcode boundary (bait #7 source-pin)', () => {
   it('prod ChromatogramView.tsx carries zero unit/domain literals (beyond the sanctioned field-name const)', () => {
     const source = readFileSync('src/analysis/ChromatogramView.tsx', 'utf8')
