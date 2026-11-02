@@ -18,6 +18,14 @@ import {
   type RenderableView,
 } from './ViewRenderer'
 import { CompareTraces } from './CompareTraces'
+import {
+  boundInputs,
+  declaredInputsOf,
+  inputGate,
+  matchingSlotsForArtifact,
+  type DeclaredInput,
+  type StagedInputRef,
+} from './declaredInputs'
 import { AnalysisChatPanel } from './AnalysisChatPanel'
 import { ParameterForm, collectDefaults, collectGateIssues, pruneEmpty } from './ParameterForm'
 import { classifyCalibrationModel, classifyCalibrationTable, classifyResultView, hasCalibrationPair } from './calibrationModel'
@@ -90,6 +98,22 @@ interface RevPayload {
   /** Free-form JSON-Schema fragment the UI renders as controls (spec F1/F2:
    *  already delivered by the list endpoint — no new fetch). */
   parameterSchema?: Record<string, unknown>
+  /** FAME-7 (W5a): the declared input contract the Run-method card renders
+   *  controls for (analysis-revision `inputs` items — the page could not see
+   *  this contract before; the hardcoded `inputs: {}` createRun body was the
+   *  result). Generic keys only (OQ-3): acceptsKinds / acceptedArtifactNames. */
+  inputs?: DeclaredInput[]
+}
+
+/** FAME-7 (W5c): the frozen identity a manual Bind… resolves BEFORE staging
+ *  (the row renders it before submit). A subset of StagedInputRef. */
+interface InputIdentity {
+  producerRunId?: string
+  producerContentSha?: string
+  contentHash?: string
+  dataKind?: string
+  /** The artifact's promoted data-reference link (the frozen identity line). */
+  dataReferenceId?: string
 }
 
 // --- Parameter-form submit gate (GC-9 deliverable B, fix1) -------------------
@@ -205,6 +229,12 @@ export function AnalysisPage() {
   // GC-10 [E]: the Compare surface (D4) — a prominent header action over the
   // results pane. Open state is view-only (no record written by opening).
   const [compareOpen, setCompareOpen] = useState(false)
+  // FAME-7 (W5): the Run-method card's declared-input staging. One staged ref
+  // per declared slot (Bind… records it; Clear removes it). The staged ref
+  // carries the FROZEN IDENTITY (artifact/DREF ids, producer run + contentSha,
+  // the promoted DREF contentHash) that the page shows BEFORE submit.
+  const [stagedInputs, setStagedInputs] = useState<Record<string, StagedInputRef>>({})
+  const [stagingBusy, setStagingBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -370,6 +400,20 @@ export function AnalysisPage() {
       setParamAdvanced((prev) => ({ ...prev, manual: null }))
     }
   }, [selectedRevId, selectedRev])
+  // FAME-7 (W5c): the declared-input contract of the SELECTED revision (read
+  // from the already-fetched list payload — no extra fetch; zero declarations
+  // ⇒ zero rows, no dead chrome). Staging is scoped to the revision it was
+  // authored under (a staged ref must never be submitted against a different
+  // revision — the F7 poisoned-run class), so it resets on selection change.
+  const declaredInputs = useMemo(() => declaredInputsOf(selectedRev ? selectedRev.payload : undefined), [selectedRev])
+  useEffect(() => {
+    setStagedInputs({})
+  }, [selectedRevId])
+  // The createRun body's `inputs` value (the W5d fix: the built object, never
+  // a hardcoded `{}`) + the pre-submit gate (named block lines; the server's
+  // declaredInputs.ts is the validation authority, this is the visible gate).
+  const stagedInputsBody = useMemo(() => boundInputs(declaredInputs, stagedInputs), [declaredInputs, stagedInputs])
+  const inputGateResult = useMemo(() => inputGate(declaredInputs, stagedInputs), [declaredInputs, stagedInputs])
   // D7: the legacy demo literal is a SINGLE named constant and belongs to the
   // no-schema textarea path ONLY (spec §B). The schema-mode Advanced box is
   // seeded from the current form values instead (or empty when nothing is
@@ -427,19 +471,127 @@ export function AnalysisPage() {
   }, [aiPrompt, refresh])
 
   const [promoteResult, setPromoteResult] = useState<string | null>(null)
+  // FAME-7 (W5e): the staged-binding outcome (a named visible line — success
+  // names the STAGED slot + its frozen identity; the 0-match case names the
+  // artifact and that no declared slot accepts it; the ≥2 case names the slots
+  // to pick from). No silent drop, no auto-submit: the user still presses
+  // Create run with the frozen identity visible on the card.
+  const [stagedPromote, setStagedPromote] = useState<string | null>(null)
+
+  // FAME-7 (W5e): route a promoted artifact INTO the Run-method card's
+  // declared-input staging (the SAME path the manual Bind… uses — one staging
+  // state, one createRun body). Matching is DECLARED-DATA (the slot's
+  // acceptedArtifactNames ∋ the artifact's own `name` + the slot admits the
+  // artifact record kind) — never a hardcoded name.
+  const stageInput = useCallback(async (artifactRecordId: string, artifactName: string | undefined, dataReferenceId: string | undefined) => {
+    setStagingBusy(true)
+    try {
+      const env = await apiClient.getRecord(artifactRecordId)
+      const payload = env.payload as {
+        name?: string
+        runRef?: { id?: string }
+        dataReferenceRef?: { id?: string }
+      }
+      const matches = matchingSlotsForArtifact(
+        declaredInputs,
+        payload.name ?? artifactName,
+        'analysis-output-artifact',
+      )
+      const drefId = payload.dataReferenceRef?.id ?? dataReferenceId
+      if (matches.length === 0) {
+        setStagedPromote(
+          `No declared input slot of the selected method accepts artifact '${payload.name ?? artifactRecordId}' (promoted as ${drefId ?? 'no DREF'}) — nothing was staged.`,
+        )
+        return
+      }
+      if (matches.length >= 2) {
+        setStagedPromote(
+          `Multiple declared slots accept artifact '${payload.name ?? artifactRecordId}': ${matches.join(', ')} — pick a slot on the Run method card (Bind… the artifact id, or use its staged name).`,
+        )
+        return
+      }
+      const slot = matches[0]
+      const ref: StagedInputRef = {
+        kind: 'record',
+        id: artifactRecordId,
+        type: 'analysis-output-artifact',
+        ...(drefId ? { dataReferenceId: drefId } : {}),
+        ...(payload.runRef?.id ? { producerRunId: payload.runRef.id } : {}),
+      }
+      setStagedInputs((prev) => ({ ...prev, [slot]: ref }))
+      setStagedPromote(
+        `Staged artifact '${payload.name ?? artifactRecordId}' into slot '${slot}'` +
+        (drefId ? ` (promoted as ${drefId})` : '') +
+        ' — the frozen identity is shown on the Run method card; press Create run to bind it.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStagingBusy(false)
+    }
+  }, [declaredInputs])
 
   const useResult = useCallback(async (name: string) => {
     const ref = artifactRefs[name]
     if (!ref) return
     setError(null)
     setPromoteResult(null)
+    setStagedPromote(null)
     try {
+      // Promote first (the shipped idempotent door — a second call returns
+      // created:false and mints nothing), THEN stage into the declared slot:
+      // "Use result downstream" routes to the SAME path as the manual Bind….
       const res = await apiClient.promoteAnalysisArtifact(ref.artifactRecordId)
-      setPromoteResult(`Artifact "${name}" is ready downstream — reference DREF ${res.dataReferenceId} in a new run's inputs.`)
+      await stageInput(ref.artifactRecordId, name, res.dataReferenceId)
+      setPromoteResult(`Artifact "${name}" promoted (DREF ${res.dataReferenceId}, created: ${res.created}) — routed to the Run method card's declared-input staging.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [artifactRefs])
+  }, [artifactRefs, stageInput])
+
+  // FAME-7 (W5c): manual Bind… — resolve the typed record id into its FROZEN
+  // IDENTITY before staging it (the "showing producer run/artifact/frozen
+  // identity before submit" requirement: the staged row then renders the
+  // artifact/DREF id, the producer run + contentSha, and the DREF contentHash
+  // BEFORE the user presses Create run).
+  const bindInput = useCallback(async (slotName: string, refId: string, refType: string) => {
+    const id = refId.trim()
+    if (!id) return
+    setStagingBusy(true)
+    setError(null)
+    try {
+      // getRecord returns the RecordEnvelope directly (client.ts L2398).
+      const env = await apiClient.getRecord(id)
+      const payload = env.payload as {
+        runRef?: { id?: string }
+        dataReferenceRef?: { id?: string }
+        dataKind?: string
+        contentHash?: string
+      }
+      const identity: InputIdentity = {
+        ...(typeof payload.dataKind === 'string' ? { dataKind: payload.dataKind } : {}),
+      }
+      if (refType === 'analysis-output-artifact') {
+        if (payload.runRef?.id) identity.producerRunId = payload.runRef.id
+        if (env.meta?.contentSha) identity.producerContentSha = env.meta.contentSha
+        if (payload.dataReferenceRef?.id) {
+          identity.dataReferenceId = payload.dataReferenceRef.id
+          const denv = await apiClient.getRecord(payload.dataReferenceRef.id)
+          const dpayload = denv.payload as { contentHash?: string; dataKind?: string }
+          if (typeof dpayload.contentHash === 'string') identity.contentHash = dpayload.contentHash
+          if (typeof dpayload.dataKind === 'string' && identity.dataKind === undefined) identity.dataKind = dpayload.dataKind
+        }
+      } else if (typeof payload.contentHash === 'string') {
+        identity.contentHash = payload.contentHash
+      }
+      const ref: StagedInputRef = { kind: 'record', id, type: refType, ...identity }
+      setStagedInputs((prev) => ({ ...prev, [slotName]: ref }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStagingBusy(false)
+    }
+  }, [])
 
   // --- GC-9 parameter-path derivation (deliverable B, fix1) -------------------
   // The advanced editor (raw JSON) becomes the source of truth ONLY once it
@@ -513,26 +665,29 @@ export function AnalysisPage() {
     setError(null)
     let parameters: Record<string, unknown> | undefined
     try { parameters = buildParameters() } catch { setError('Invalid parameters JSON'); setBusy(false); return }
+    // FAME-7 (W5d): the createRun body carries the BUILT declared-input refs
+    // (the Run-method card's staged bindings) — never a hardcoded `inputs: {}`.
     // (The `?gc=` run-sheet prefill was removed in fix-cycle-1 per the
     // architect ruling GC12-D3-answer (OPT-A): the run sheet creates the run
     // in place and lands /analysis?run=<id>, so /analysis's create form takes
-    // its inputs from the plain createRun path only — inputs: {} for a plain
-    // new run, the form's buildParameters for parameters.)
+    // its inputs from the plain createRun path: the declared-input staging
+    // built above, plus the form's buildParameters for parameters.)
     try {
       const res = await apiClient.createAnalysisRun({
         title: runTitle.trim() || 'run',
         revisionRef: { kind: 'record', id: selectedRevId, type: 'analysis-revision' },
-        inputs: {},
+        inputs: stagedInputsBody,
         ...(parameters ? { parameters } : {}),
       })
       setActiveRunId(res.recordId)
+      setStagedInputs({})
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [selectedRevId, runTitle, buildParameters, refresh])
+  }, [selectedRevId, runTitle, buildParameters, stagedInputsBody, refresh])
 
   const execute = useCallback(async (runId: string) => {
     setBusy(true)
@@ -698,6 +853,70 @@ export function AnalysisPage() {
           ))}
         </select>
         <input data-testid="analysis-run-title" value={runTitle} onChange={(e) => setRunTitle(e.target.value)} placeholder="Run title (optional)" />
+        {/* FAME-7 (W5c): one row per DECLARED input (zero declarations ⇒ zero
+            rows — no dead chrome). Each row: the declared name + required
+            marker + its dataKind/accepted names, a Bind…/Clear control, and —
+            before submit — the STAGED FROZEN IDENTITY (artifact/DREF id,
+            producer run + contentSha, the promoted DREF contentHash). */}
+        {declaredInputs.length > 0 ? (
+          <div className="analysis__declared-inputs" data-testid="analysis-declared-inputs">
+            <div className="analysis__params-preview-label">Declared inputs (bind before creating the run):</div>
+            {declaredInputs.map((slot) => {
+              const staged = stagedInputs[slot.name]
+              return (
+                <div key={slot.name} className="analysis__declared-input" data-testid={`analysis-declared-input-${slot.name}`}>
+                  <span className="analysis__declared-input-name">{slot.name}{slot.required ? ' *' : ''}</span>
+                  <span className="analysis__declared-input-meta">
+                    {slot.dataKind ? `dataKind: ${slot.dataKind} · ` : ''}
+                    {slot.acceptedArtifactNames && slot.acceptedArtifactNames.length > 0
+                      ? `accepts: ${slot.acceptedArtifactNames.join(', ')}`
+                      : 'accepts: any declared artifact name'}
+                  </span>
+                  {staged ? (
+                    <span className="analysis__declared-input-staged" data-testid={`analysis-declared-input-staged-${slot.name}`}>
+                      {staged.id} ({staged.type})
+                      {staged.dataReferenceId ? ` · DREF ${staged.dataReferenceId}` : ''}
+                      {staged.producerRunId ? ` · producer run ${staged.producerRunId}` : ''}
+                      {staged.producerContentSha ? ` · contentSha ${staged.producerContentSha.slice(0, 12)}…` : ''}
+                      {staged.contentHash ? ` · contentHash ${staged.contentHash.slice(0, 12)}…` : ''}
+                      <button type="button" onClick={() => setStagedInputs((prev) => { const next = { ...prev }; delete next[slot.name]; return next })} disabled={busy} data-testid={`analysis-declared-input-clear-${slot.name}`}>Clear</button>
+                    </span>
+                  ) : (
+                    <span className="analysis__declared-input-unbound" data-testid={`analysis-declared-input-unbound-${slot.name}`}>
+                      <input
+                        data-testid={`analysis-declared-input-id-${slot.name}`}
+                        placeholder="record id (AOUT-… or DREF-…)"
+                        defaultValue=""
+                        disabled={busy || stagingBusy}
+                      />
+                      <select
+                        data-testid={`analysis-declared-input-type-${slot.name}`}
+                        defaultValue="data-reference"
+                        disabled={busy || stagingBusy}
+                      >
+                        <option value="data-reference">data-reference</option>
+                        <option value="analysis-output-artifact">analysis-output-artifact</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          const row = e.currentTarget.parentElement as HTMLElement
+                          const id = (row.querySelector(`input[data-testid="analysis-declared-input-id-${slot.name}"]`) as HTMLInputElement | null)?.value ?? ''
+                          const type = (row.querySelector(`select[data-testid="analysis-declared-input-type-${slot.name}"]`) as HTMLSelectElement | null)?.value ?? 'data-reference'
+                          void bindInput(slot.name, id, type)
+                        }}
+                        disabled={busy || stagingBusy}
+                        data-testid={`analysis-declared-input-bind-${slot.name}`}
+                      >
+                        Bind…
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
         {/* GC-9 §B render rule: with a parameterSchema the labeled form is the
             mandatory path and raw JSON is demoted to a closed disclosure;
             without one the raw input stays the live path + honest notice. */}
@@ -741,7 +960,18 @@ export function AnalysisPage() {
         {selectedSchema && gate.blocked ? (
           <div className="analysis__error" data-testid="analysis-params-blocked">{gate.reason}</div>
         ) : null}
-        <button onClick={() => void createRun()} disabled={busy || !selectedRevId || gate.blocked} data-testid="analysis-run-create-btn">Create run</button>
+        {/* FAME-7 (W5d): the declared-input gate — a NAMED visible block line
+            per violated slot; the Create button is blocked while it fires
+            (no silent `inputs: {}` fallback — the body carries the built
+            declared refs or nothing is submitted). */}
+        {inputGateResult.blocked ? (
+          <div className="analysis__error" data-testid="analysis-inputs-blocked">
+            {inputGateResult.reasons.map((reason) => (
+              <div key={reason} data-testid="analysis-inputs-blocked-reason">{reason}</div>
+            ))}
+          </div>
+        ) : null}
+        <button onClick={() => void createRun()} disabled={busy || !selectedRevId || gate.blocked || inputGateResult.blocked} data-testid="analysis-run-create-btn">Create run</button>
       </div>
 
       <div className="analysis__section" data-testid="analysis-run-list">
@@ -853,6 +1083,9 @@ export function AnalysisPage() {
             </div>
           ))}
           {promoteResult && <div className="analysis__promote-result" data-testid="analysis-promote-result">{promoteResult}</div>}
+          {/* FAME-7 (W5e): the declared-input staging outcome (named line:
+              staged slot + frozen identity, or the 0/≥2-match naming). */}
+          {stagedPromote && <div className="analysis__promote-result" data-testid="analysis-staged-promote-result">{stagedPromote}</div>}
         </div>
       )}
     </div>
