@@ -35,21 +35,26 @@ describe('ViewRenderer compatibility arms (PB-CH-5 — preserved, not widened)',
     expect(getByText(/Missing artifact/)).toBeDefined()
   })
 
-  it('source-pin: ViewRenderer gains NO new renderer identifiers beyond the task-mandated GC-10 + GC-11 widening', () => {
+  it('source-pin: ViewRenderer gains NO new renderer identifiers beyond the task-mandated GC-10 + GC-11 + artifact-table widening', () => {
     const source = readFileSync('src/analysis/ViewRenderer.tsx', 'utf8')
     // The shipped closed set: table, signal, metric, model (+ the error arm).
     // No new renderer identifier may appear in the switch — EXCEPT the two
-    // GC-10 ids (chromatogram, trace-compare) and the GC-11 id
-    // (calibration-curve) that the task mandates adding (view-spec enum
-    // extended); the compatibility error arm still fires for everything else
-    // (quantum stays banned, so the closed-set behavior is preserved for
-    // unshipped renderers).
+    // GC-10 ids (chromatogram, trace-compare), the GC-11 id
+    // (calibration-curve) and the artifact-table id (the 2026-11-01 OQ-1
+    // ruling) that the task mandates adding (view-spec enum extended); the
+    // compatibility error arm still fires for everything else (quantum stays
+    // banned, so the closed-set behavior is preserved for unshipped
+    // renderers).
     for (const banned of ['quantum', 'heatmap', 'scatter', 'component-tree']) {
       expect(source).not.toContain(banned)
     }
-    // The GC-11 mandated id IS in the switch (the task :8412 view-spec
-    // renderer mandate) — assert the LITERAL (GC-10 D5 lesson: an iterating
-    // assertion over the implementation constant is tautological).
+    // The mandated artifact-table id IS in the switch (the 2026-11-01 OQ-1
+    // architect ruling ratifies the exact id string) — assert the LITERAL
+    // (GC-10 D5 lesson: an iterating assertion over the implementation
+    // constant is tautological).
+    expect(source).toContain('artifact-table')
+    // The GC-11 mandated id is still in the switch (the task :8412 view-spec
+    // renderer mandate).
     expect(source).toContain('calibration-curve')
     // The compatibility error arm still exists.
     expect(source).toContain('view-spec__error')
@@ -59,6 +64,17 @@ describe('ViewRenderer compatibility arms (PB-CH-5 — preserved, not widened)',
     // The LITERAL (not the implementation constant): the GC-11 id passes
     // through, unknown ids coerce to 'table' (the F3 silent-coercion rule).
     expect(resolveViewRenderer('calibration-curve')).toBe('calibration-curve')
+    expect(resolveViewRenderer('quantum')).toBe('table')
+    expect(resolveViewRenderer(undefined)).toBe('table')
+  })
+
+  it('resolveViewRenderer passes artifact-table through and still table-coerces unshipped renderers', () => {
+    // The LITERAL (not the implementation constant): the artifact-table id
+    // passes through, unknown ids coerce to 'table' (the F3 silent-coercion
+    // rule). 'table' itself keeps its raw-rows behaviour — two ids, two
+    // distinct behaviours, no collision (the 2026-11-01 OQ-1 ruling).
+    expect(resolveViewRenderer('artifact-table')).toBe('artifact-table')
+    expect(resolveViewRenderer('table')).toBe('table')
     expect(resolveViewRenderer('quantum')).toBe('table')
     expect(resolveViewRenderer(undefined)).toBe('table')
   })

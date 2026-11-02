@@ -26,7 +26,7 @@ export interface RenderableView {
   id: string
   title: string
   artifact: string
-  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'calibration-curve' | 'model' | 'binary'
+  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'chromatogram' | 'trace-compare' | 'calibration-curve' | 'artifact-table' | 'model' | 'binary'
   bindings?: Record<string, unknown>
   options?: Record<string, unknown>
 }
@@ -39,6 +39,12 @@ export interface RenderableView {
  *  GC-11 extends the set with `calibration-curve` (the calibration review
  *  composite — task :8412 "Calibration-curve view (view-spec renderer)"),
  *  also passing through, never table-coerced.
+ *  The generic artifact-report renderer task adds `artifact-table`
+ *  (the 2026-11-01 OQ-1 architect ruling ratifies the id): enum + union +
+ *  whitelist + dispatch + source-pin land in ONE commit (the GC-10/GC-11
+ *  shape). `table` keeps its raw-rows behaviour; `artifact-table` is a
+ *  DISTINCT id with the OQ-3 binding slots (columns / captionFrom /
+ *  warningsFrom / warningTextField) — two ids, two behaviours, no collision.
  *  Extracted as a pure function so the whitelist is unit-testable in isolation
  *  (the reviewer's "chromatogram is not table-coerced" leg). */
 export const VIEW_RENDERER_WHITELIST = [
@@ -49,6 +55,7 @@ export const VIEW_RENDERER_WHITELIST = [
   'chromatogram',
   'trace-compare',
   'calibration-curve',
+  'artifact-table',
 ] as const
 
 export type WhitelistedRenderer = (typeof VIEW_RENDERER_WHITELIST)[number]
@@ -101,6 +108,136 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
         })}
       </tbody>
     </table>
+  )
+}
+
+function isBlankString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim() === ''
+}
+
+/** Render a generic artifact-report table (the OQ-1 id `artifact-table`,
+ * ratified by the 2026-11-01 architect ruling).
+ *
+ * A superset of TableView's declared-{columns,rows} arm plus the OQ-3
+ * binding convention slots (canonical-shape comments live in
+ * schema/knowledge/view-spec.schema.yaml, minted in the same commit as the
+ * enum):
+ *  - `columns`: an ORDERED column-subset selector — bindings NAME the payload
+ *    field names to show; absent -> the payload's declared {columns} (the
+ *    TableView parity, :79-87), and if those are absent the union-of-keys.
+ *  - `captionFrom`: that payload field's string value renders as a visible
+ *    caption line ABOVE the table (denominator caption, basis note).
+ *  - `warningsFrom`: that payload field's array value; each entry renders as
+ *    a visible warning line BELOW the table.
+ *  - `warningTextField`: when the warning entries are records, the property
+ *    NAME whose string value renders; entries may be plain strings without it.
+ *
+ * Data-driven (R8 / bait #3b / bait #6): the bindings NAME fields, the
+ * payload carries the values, and this component renders the strings where
+ * the bindings say to. ZERO state-word comparisons — a state column renders
+ * whatever string the payload carries at that key (the readable-state
+ * guarantee); ZERO baked column lists (a `columns` binding or the payload's
+ * own declaration drives the columns — no DEFAULT_COLUMNS constant); ZERO
+ * normalization (no percent math, no per-compound formatting, no sorting).
+ * An unrequested slot is simply ABSENT (no placeholder, no disabled block);
+ * a binding naming an absent or blank payload field renders nothing; a
+ * missing/blank/empty-rows payload renders the NAMED empty arm (the
+ * TableView 'No rows' parity, :78) — never a silent blank.
+ */
+function ArtifactTable({ artifact, bindings }: { artifact: RenderableArtifact; bindings: Record<string, unknown> }) {
+  const value = artifact.inlineValue
+  const declared = isRecord(value) && Array.isArray(value.rows)
+  const rows = Array.isArray(value) ? value : declared ? (value.rows as unknown[]) : []
+
+  const captionKey = typeof bindings.captionFrom === 'string' ? (bindings.captionFrom as string) : undefined
+  const rawCaption = captionKey && declared ? value[captionKey] : undefined
+  const caption = typeof rawCaption === 'string' && !isBlankString(rawCaption) ? rawCaption : undefined
+
+  const warningsKey = typeof bindings.warningsFrom === 'string' ? (bindings.warningsFrom as string) : undefined
+  const warningTextField = typeof bindings.warningTextField === 'string' ? (bindings.warningTextField as string) : undefined
+  const rawWarnings = warningsKey && declared ? value[warningsKey] : undefined
+  const warnings: string[] = []
+  if (Array.isArray(rawWarnings)) {
+    for (const entry of rawWarnings) {
+      if (typeof entry === 'string') {
+        if (!isBlankString(entry)) warnings.push(entry)
+      } else if (isRecord(entry) && warningTextField !== undefined && typeof entry[warningTextField] === 'string') {
+        const w = entry[warningTextField]
+        if (!isBlankString(w)) warnings.push(w)
+      }
+    }
+  }
+
+  const columnKeys = Array.isArray(bindings.columns)
+    ? (bindings.columns as unknown[]).filter((c): c is string => typeof c === 'string')
+    : undefined
+
+  const warningsBlock =
+    warnings.length > 0 ? (
+      <div data-testid="view-spec-artifact-table-warnings">
+        {warnings.map((w, i) => (
+          <div key={i} className="view-spec__warning" data-testid="view-spec-artifact-table-warning">
+            {w}
+          </div>
+        ))}
+      </div>
+    ) : null
+
+  if (rows.length === 0) {
+    return (
+      <div data-testid="view-spec-artifact-table">
+        {caption !== undefined ? (
+          <div className="view-spec__caption" data-testid="view-spec-artifact-table-caption">
+            {caption}
+          </div>
+        ) : null}
+        <div className="view-spec__empty" data-testid="view-spec-artifact-table-empty">
+          No rows
+        </div>
+        {warningsBlock}
+      </div>
+    )
+  }
+
+  const declaredHeaders = declared && Array.isArray(value.columns) && value.columns.length > 0
+  const declaredLabels = declaredHeaders
+    ? (value.columns as unknown[]).map((c) => (typeof c === 'string' ? c : isRecord(c) && typeof c.name === 'string' ? c.name : null))
+    : null
+  const headers = new Set<string>()
+  for (const r of rows) {
+    if (isRecord(r)) for (const k of Object.keys(r)) headers.add(k)
+  }
+  const columns =
+    columnKeys && columnKeys.length > 0
+      ? columnKeys
+      : declaredLabels
+        ? (declaredLabels as string[]).filter((c): c is string => c !== null)
+        : [...headers]
+
+  return (
+    <div data-testid="view-spec-artifact-table">
+      {caption !== undefined ? (
+        <div className="view-spec__caption" data-testid="view-spec-artifact-table-caption">
+          {caption}
+        </div>
+      ) : null}
+      <table className="view-spec__table">
+        <thead>
+          <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((raw, i) => {
+            const r: Record<string, unknown> = isRecord(raw) ? raw : { value: raw }
+            return (
+              <tr key={i}>
+                {columns.map((c) => <td key={c}>{String(r[c] ?? '')}</td>)}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {warningsBlock}
+    </div>
   )
 }
 
@@ -368,6 +505,14 @@ export function ViewRenderer({
     case 'model':
     case 'binary':
       return <ModelView artifact={artifact} />
+    // The generic artifact-report renderer (the OQ-1 id `artifact-table`; the
+    // OQ-3 binding convention slots — columns / captionFrom / warningsFrom /
+    // warningTextField — are DATA: the bindings name payload fields, the
+    // payload carries the values). These land BEFORE `default:` so an unknown
+    // renderer still hits the visible compatibility error arm below (the
+    // closed-set error is preserved).
+    case 'artifact-table':
+      return <ArtifactTable artifact={artifact} bindings={view.bindings ?? {}} />
     default:
       return (
         <div className="view-spec__error" data-testid="view-spec-error">
