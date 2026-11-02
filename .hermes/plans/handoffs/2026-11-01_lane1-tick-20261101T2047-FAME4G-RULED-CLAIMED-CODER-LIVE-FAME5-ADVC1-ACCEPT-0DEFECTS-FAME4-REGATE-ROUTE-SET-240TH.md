@@ -98,3 +98,22 @@
 - OPEN: FAME-4 DONE blocked on FAME-4G merge + targeted re-gate obligations 1/2/5 accept.
 - OPEN: FAME-5 DONE blocked on its browser gate (preconditioned on FAME-4G merge+restart).
 - Carried: W7b honesty flags (FAME-3, informational), AS-L1T223-1 band note, intake pile above.
+
+## LATE-CLOSE ADDENDUM (21:05) — FAME-5 adv CLOSED + FAME-4G coder true identity
+1. FAME-5 ADVERSARIAL CYCLE-1 COMPLETED while this handoff was being written: exit rc=0
+   20:35:06, reviews/FAME5-adv1-l1t2010.md ends 'VERDICT: accept', zero defects, 2 non-gating
+   observations (O1 receipt-count off-by-one in MY brief, O2 informational). Orch artifact-only
+   acceptance stands (no merge — zero commits by design; product = lane records, live-verified).
+2. FAME-4G coder dispatch took THREE attempts (see task block dispatch_reconcile_240TH): q1
+   exit-3'd on a too-short 15-min worktree-wait; q2 fired LOCK-ACQUIRED 20:55:18 against a
+   HALF-COPIED NFS tree (package.json lands before git finishes the 6108-file checkout) — orch
+   stopped it ~3 min in (PID 710287, zero commits, tree proven clean); q3 fired 21:00:01 on the
+   completed tree (CHECKOUT rc=0 20:58:21) and is LIVE: slot pid FAME4G-718498-2026-11-01T21:00:01,
+   coder PID 718502, prompt verified in argv. Stagger bar: fleet fresh launches >= 22:00 while
+   it lives. Lesson recorded in the launcher-pattern skill (checkout-marker gate, PID-targeted
+   kills).
+3. NEXT TICK: FAME-4G DONE -> adv cycle-1 -> orch verify -> merge --no-ff -> RESTART stack ->
+   combined browser gate pass grading BOTH (a) FAME-4G's own leg (deep link ANR-000055 resolves
+   out-of-page + newest-first list + truthful total) and (b) the FAME-4 targeted re-gate
+   (obligations 1/2/5 on ANR-000055/056; expectations verbatim in the ruling §1a) with SEPARATE
+   verdicts -> then FAME-5 browser gate -> close FAME-4 + FAME-5. Vision slot is FREE now.
