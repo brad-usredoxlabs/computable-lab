@@ -284,34 +284,36 @@ export function AnalysisPage() {
     [selectRun, refresh],
   )
 
-  // GC-11 D3: the `?run=` deep-link consumer (the /analysis?run=<id> seam,
-  // OQ-1; SequencesPage's one-shot deepLinkRef precedent). On mount WITH the
-  // param present, the SHARED landing (selectRun) fires ONCE — it fetches
-  // the run's payload and seeds manifest + artifactRefs CLIENT-SIDE from the
-  // ALREADY-FETCHED payload.outputManifest (the CompareTraces :103-104
-  // channel) — NO execute call, NO extra fetch — then the param is stripped.
-  // When the param is absent this effect does nothing (the no-execute suite
-  // stays green unmodified — that IS the mount-accounting proof).
+  // GC-11 D3 (reachability amended): the `?run=` deep-link consumer. The param
+  // resolves by FETCHING the run by id (the SHARED landing — selectRun,
+  // FIX2 M1: one fetch via GET /api/analysis-runs/:id + the client-side
+  // manifest seed from the fetched payload.outputManifest), independent of
+  // whether the run sits in the loaded list page (runs beyond the list page
+  // used to silently no-op here). Fires ONCE on mount WITH the param present
+  // (one-shot deepLinkDoneRef, SequencesPage precedent) — it no longer waits
+  // on the list load — then the param is stripped. When the param is absent
+  // this effect does nothing (the no-execute suite stays green unmodified —
+  // that IS the mount-accounting proof).
   const [searchParams, setSearchParams] = useSearchParams()
   const deepLinkDoneRef = useRef(false)
   const deepLinkRun = searchParams.get('run')
   useEffect(() => {
-    if (deepLinkDoneRef.current || !deepLinkRun || runs.length === 0) return
-    if (!runs.some((r) => r.recordId === deepLinkRun)) return
+    if (deepLinkDoneRef.current || !deepLinkRun) return
     deepLinkDoneRef.current = true
     void (async () => {
-      // FIX2 M1: the deep link REUSES the shared landing (selectRun) — one
-      // fetch, the client-side manifest seed included (the CompareTraces
-      // :103-104 channel, zero execute calls). The param strip is unchanged.
+      // The deep link REUSES the shared landing (selectRun) — one fetch, the
+      // client-side manifest seed included. The fetch IS the resolution:
+      // the run is reachable by id even when it is not in the list page
+      // (the reachability obligation). The param strip is unchanged.
       await selectRun(deepLinkRun)
       const next = new URLSearchParams(searchParams)
       next.delete('run')
       setSearchParams(next, { replace: true })
     })()
-    // The deepLinkDoneRef guard + the `runs` length gate make this fire exactly
-    // once (the one-shot rule); searchParams/setSearchParams are stable refs.
+    // The deepLinkDoneRef guard makes this fire exactly once (the one-shot
+    // rule); searchParams/setSearchParams are stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLinkRun, runs])
+  }, [deepLinkRun])
 
   // FAME-3 D1 (OQ-4 OPT-A step 7): derive the gc-method record id the active
   // run's peaks are assigned to — the chat's edit-record arm NAMED target.
