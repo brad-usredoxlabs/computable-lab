@@ -37,7 +37,9 @@ vi.mock('../../../shared/taptab/slashMenu/resolvers', () => ({
   resolveMaterial: (q: string, ctx: unknown) => resolveMaterial(q, ctx),
   resolveLabware: (q: string, ctx: unknown) => resolveLabware(q, ctx),
   resolveEquipment: (q: string, ctx: unknown) => resolveEquipment(q, ctx),
-  mintLocalTermLabel: (q: string) => `Create local term "${q}"`,
+  // L2-CLARIFY-CARD-1 (P5): the stub now spells the PRODUCT one-source
+  // sentence (copy in sync; behaviour pins untouched).
+  mintLocalTermLabel: (q: string) => `Create material record "${q}" in the lab (new record)`,
 }))
 const mintLocalTerm = vi.fn()
 vi.mock('../../../shared/api/client', () => ({

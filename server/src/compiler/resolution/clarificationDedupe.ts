@@ -25,6 +25,11 @@
  * floor: no YAML unless D1-persistence lands.)
  */
 import type { AgentClarificationRequest } from '../../ai/types.js';
+// advc-c1 D3 (fix1): the unknown-noun code is named from the engine's OWN
+// stable constant (its single shared source) — never a re-declared literal.
+// (The dedupe module is a pure leaf; the engine imports no dedupe symbol, so
+// this edge is acyclic.)
+import { UNKNOWN_NOUN_REASON } from './resolutionEngine.js';
 
 /** Most specific first. A producer bar names the exact structural gap
  *  (the blob must be materialized, the well label has no consumer, the
@@ -43,7 +48,7 @@ export const REASON_SPECIFICITY_ORDER: readonly string[] = [
   'composition-fraction-sum',
   'composition-role-gap',
   'ambiguous-noun',
-  'unknown-noun',
+  UNKNOWN_NOUN_REASON,
   'resolution-lookup-failed',
   'unknown-address',
 ];

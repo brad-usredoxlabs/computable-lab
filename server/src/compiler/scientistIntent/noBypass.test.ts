@@ -67,6 +67,14 @@ describe('W2-7 T7 no-bypass closure (AC5, §6)', () => {
       // compiler or a bypass. It imports no compileScientistIntent symbol; it
       // matches this grep on the doc-comment naming its registration seam.
       join('compiler', 'scientistIntent', 'resolveWellsetsPass.ts'),
+      // L2-CLARIFY-CARD-1 A2 (sanctioned): the slot-coverage gate predicate.
+      // A PURE helper the compiler's non-bar path CALLS (compileScientistIntent
+      // imports it); it imports no compileScientistIntent symbol and adds no
+      // down-route — it reads the parsed intent + the pass's own output and
+      // returns the unbound declared slots. Matches this grep on the doc-comment
+      // naming its call seam (compileScientistIntent.ts), same as the
+      // resolveWellsetsPass.ts precedent above.
+      join('compiler', 'resolution', 'nounCoverage.ts'),
     ]);
     const unexpected = rel.filter((f) => !known.has(f));
     expect(unexpected).toEqual([]);

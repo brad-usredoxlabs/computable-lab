@@ -60,7 +60,9 @@ vi.mock('../shared/taptab/slashMenu/resolvers', () => ({
   resolveMaterial: (q: string, c: unknown) => resolveMaterial(q, c),
   resolveLabware: (q: string, c: unknown) => resolveLabware(q, c),
   resolveEquipment: (q: string, c: unknown) => resolveEquipment(q, c),
-  mintLocalTermLabel: (q: string) => `Create local term "${q}"`,
+  // L2-CLARIFY-CARD-1 (P5): the stub now spells the PRODUCT one-source
+  // sentence (copy in sync; behaviour pins untouched).
+  mintLocalTermLabel: (q: string) => `Create material record "${q}" in the lab (new record)`,
 }))
 const groundMaterialRef = vi.fn()
 vi.mock('../event-editor/lib/groundMaterialRef', () => ({

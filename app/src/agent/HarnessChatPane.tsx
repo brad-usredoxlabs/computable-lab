@@ -373,6 +373,16 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
         onClarificationPick={(answerText, answer) => {
           chat.sendPrompt(answerText, undefined, { clarificationAnswers: [answer] })
         }}
+        // L2-CLARIFY-CARD-1 (P4): the grouped card (a sentence with MULTIPLE
+        // unresolved facts) answers the WHOLE sentence in ONE turn — the batch
+        // answer sentence + the slot-ordered array ride the SAME turn, and the
+        // server folds the array in one turn with zero model calls
+        // (AgentOrchestrator.ts clarificationAnswers array fold). One batch
+        // submit = one user message = one `Answered:` row (ChatLog
+        // isClarificationAnswered — no predicate change).
+        onClarificationSubmit={(answerText, answers) => {
+          chat.sendPrompt(answerText, undefined, { clarificationAnswers: answers })
+        }}
       />
     </div>
   )

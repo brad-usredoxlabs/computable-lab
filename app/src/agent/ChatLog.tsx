@@ -17,6 +17,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+import { ChatClarificationCard } from './ChatClarificationCard'
 import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
@@ -42,6 +43,24 @@ export interface ChatLogProps {
     answerText: string,
     answer: AiClarificationAnswer,
     request: AiClarificationRequest,
+  ) => void
+  /**
+   * L2-CLARIFY-CARD-1 (P4) — answer a WHOLE sentence (a message with MULTIPLE
+   * unresolved facts) in ONE turn. The first argument is the batch answer
+   * sentence (the card builds it from the already-exported
+   * clarificationAnswersPrompt — one source), the second the slot-ordered
+   * structured answers, the third the requests they answer. The host forwards
+   * the array to the turn ({ clarificationAnswers: answers }) and the server
+   * folds the batch in ONE turn with zero model calls (AgentOrchestrator.ts
+   * clarificationAnswers array fold). Rendered ONLY for
+   * `clarificationRequests.length > 1` (the grouped card); the single-request
+   * and legacy arms keep the immediate one-click path (onClarificationPick).
+   * Absent -> no grouped card is offered (the single-arm regression lock).
+   */
+  onClarificationSubmit?: (
+    answerText: string,
+    answers: AiClarificationAnswer[],
+    requests: AiClarificationRequest[],
   ) => void
 }
 
@@ -118,7 +137,7 @@ export function clarificationBubbleText(content: string): string {
   return clarificationAnsweredText(content)
 }
 
-export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick }: ChatLogProps) {
+export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
@@ -351,7 +370,23 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           ) : (
             <>
               {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
-              {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request, shownPrompts))}
+              {message.clarificationRequests && message.clarificationRequests.length > 1 && onClarificationSubmit ? (
+                // L2-CLARIFY-CARD-1 (P4): ONE card per sentence (one slot per
+                // fact, one Submit, one answered row). The single-request and
+                // legacy arms below keep the immediate one-click path
+                // (regression lock: ChatLog.test.tsx:131 toHaveBeenCalledTimes(1)
+                // and 20+ single-slot pins — the map stays for length === 1 and
+                // for hosts that offer no batch submit).
+                <ChatClarificationCard
+                  key={`card-${message.id}`}
+                  requests={message.clarificationRequests}
+                  turnKey={`${message.id}:${message.clarificationRequests.map((r) => r.id).join('|')}`}
+                  shownPrompts={shownPrompts}
+                  onClarificationSubmit={onClarificationSubmit}
+                />
+              ) : (
+                message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request, shownPrompts))
+              )}
             </>
           )}
         </div>

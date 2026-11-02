@@ -165,3 +165,82 @@
   top: calc(100% + 4px);
   bottom: auto;
 }
+
+/* L2-CLARIFY-CARD-1 (P4) — the grouped clarification card for the chat host
+ * (one card per sentence, one slot per fact, one Submit). Reuses the deck
+ * panel's pl-held-clarification-* look (same border/radius/surface variables
+ * — protocolTabPanel.css:429-439), no new design language. */
+.chat-clarification-card {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  padding: 8px;
+  margin: 6px 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.chat-clarification-card__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+.chat-clarification-card__slot {
+  border-top: 1px solid var(--cl-border);
+  padding: 6px 0;
+}
+.chat-clarification-card__slot:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+.chat-clarification-card__slot-identity {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--cl-accent);
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 45%, var(--cl-border));
+  border-radius: 4px;
+  padding: 3px 5px;
+  margin-right: 6px;
+}
+.chat-clarification-card__prompt {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.chat-clarification-card__options {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.chat-clarification-card__option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: 2px 0;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+.chat-clarification-card__option:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+}
+.chat-clarification-card__submit {
+  margin-top: 6px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: var(--cl-text-on-accent, #fff);
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.chat-clarification-card__submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-muted, var(--cl-text));
+  border-color: var(--cl-border);
+}
