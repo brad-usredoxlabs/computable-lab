@@ -142,8 +142,12 @@ async function drefLinkedArtifactName(
   try {
     envs = await store.list({ kind: ARTIFACT_KIND });
   } catch {
-    // A list failure means the link cannot be proven — treat as
-    // unresolvable (the named INPUT_UNRESOLVABLE path), never as a pass.
+    // A list failure means the link cannot be proven — folded into the same
+    // null return as "listed fine, no artifact links this dref". The single
+    // consumer (the artifact-name gate, step (vi) below) turns null into the
+    // NAMED INPUT_LINK_UNPROVABLE rejection (404); it is never a pass. This is
+    // NOT the INPUT_UNRESOLVABLE path — that token is reserved for a ref id
+    // that store.get cannot resolve (D15, fix run 2).
     return null;
   }
   for (const env of envs) {
