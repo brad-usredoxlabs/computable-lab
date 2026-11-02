@@ -41,7 +41,10 @@ vi.mock('../../../shared/taptab/slashMenu/resolvers', () => ({
   resolveMaterial: (q: string, ctx: unknown) => resolveMaterial(q, ctx),
   resolveLabware: (q: string, ctx: unknown) => resolveLabware(q, ctx),
   resolveEquipment: (q: string, ctx: unknown) => resolveEquipment(q, ctx),
-  mintLocalTermLabel: (q: string) => `Create local term "${q}"`,
+  // L2-CLARIFY-CARD-1 (P5): the stub now spells the PRODUCT's one-source
+  // sentence (the row previews it; the popover floor says the same). Behaviour
+  // pins below are untouched — copy only.
+  mintLocalTermLabel: (q: string) => `Create material record "${q}" in the lab (new record)`,
 }))
 
 // The API client: the mint floor's path. Settled mock so the async chain
@@ -89,23 +92,34 @@ describe('ClarificationPicker — L2-SUITE-A-uifix2 FIX2 [D5]: the visible creat
 
     const row = screen.getByTestId('clarification-mint-row')
     expect(row).toBeTruthy()
-    expect(screen.getByText('Create local term "DMSO"')).toBeTruthy()
+    // L2-CLARIFY-CARD-1 (P5): the row PREVIEWs the exact one-source label
+    // sentence (the seeded noun — the copy now states the write).
+    expect(screen.getByText('Create material record "DMSO" in the lab (new record)')).toBeTruthy()
+    // The preview label is editable in the row's OWN label input (the only
+    // edit surface) — seeded from the prompt's noun.
+    expect((screen.getByTestId('clarification-mint-label') as HTMLInputElement).value).toBe('DMSO')
     // The popover is NOT open (closed card) — the affordance is on the card.
     expect(screen.queryByTestId('clarification-popover')).toBeNull()
   })
 
-  it('clicking the row mints the seeded term via apiClient.mintLocalTerm and routes the answer through onPick (ref {kind:"record", type:"material"})', async () => {
+  it('clicking the create button mints the PREVIEWED label via apiClient.mintLocalTerm and routes the answer through onPick (ref {kind:"record", type:"material"})', async () => {
     resolveMaterial.mockResolvedValue([])
     mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-dms-001', label: 'DMSO', iri: 'urn:cl:local:MAT-dms-001' })
     const onPick = vi.fn()
     render(<ClarificationPicker request={dmsRequest} onPick={onPick} />)
 
-    fireEvent.click(screen.getByTestId('clarification-mint-row'))
+    // L2-CLARIFY-CARD-1 (W7): the row is now a container; the Create button
+    // mints EXACTLY the previewed label (the row's own label state — the
+    // seeded noun). The filter box no longer feeds the mint.
+    fireEvent.click(screen.getByTestId('clarification-mint-create'))
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1))
 
     expect(mintLocalTerm).toHaveBeenCalledTimes(1)
     expect(mintLocalTerm.mock.calls[0]?.[0]).toBe('material')
     expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('DMSO')
+    // W7 single-string: the label is the previewed noun — never the filter,
+    // never a seed+filter concatenation.
+    expect(mintLocalTerm.mock.calls[0]?.[2]).toBeUndefined()
     // Same path as the resolver's mint floor: the answer is the MINTED
     // record's mention.
     expect(onPick.mock.calls[0]?.[0]).toEqual({

@@ -136,6 +136,17 @@ function safeMentionPart(value: string): string {
   return value.replace(/[\]\n\r]/g, '').trim()
 }
 
+/**
+ * L2-CLARIFY-CARD-1 (W14/P5) — the mint label is the PROMPT's noun, not the
+ * live filter box. `request.query` (the noun the fact names; the server sets it
+ * at the bar, shorthandChat.ts:902) is the seed; the user's typed text is used
+ * ONLY when the fact named no noun (the empty-seed "of what?" fact). This is
+ * the W14 root cause in one expression: the label never tracks the filter.
+ */
+export function mintLabelFor(request: AiClarificationRequest, query: string): string {
+  return (request.query ?? '').trim() || query.trim()
+}
+
 /** Append `more` to `base`, dedupe by key, keep `pinBottom` rows last. */
 function merge(base: SlashSuggestion[], more: SlashSuggestion[]): SlashSuggestion[] {
   const seen = new Set(base.map((s) => s.key))
@@ -239,6 +250,12 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   const { open, openPicker, closePicker } = useClarificationPickerOpen(request.id)
   const containerRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState(request.query ?? '')
+  // L2-CLARIFY-CARD-1 (P5): the mint row's OWN label — seeded from the
+  // prompt's noun (mintLabelFor), NOT the live filter box. It is the ONLY
+  // edit surface: typing in the SEARCH box no longer changes what is minted;
+  // editing THIS input does, and the preview (the one-source sentence)
+  // follows before the click.
+  const [mintLabel, setMintLabel] = useState(() => mintLabelFor(request, request.query ?? ''))
 
   // L2-SUITE-A-uifix2 [C]: release the single-open key on unmount. If THIS
   // picker is the open one and its card is removed (collapse, re-bar, page
@@ -304,6 +321,10 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     setQuery(request.query ?? '')
     setItems([])
     setTopCandidates([])
+    // L2-CLARIFY-CARD-1 (P5): a NEW question re-seeds the mint label from the
+    // prompt's noun (the SAME request.id reset law as the query) — a new fact
+    // must never inherit the previous one's minted name.
+    setMintLabel(mintLabelFor(request, request.query ?? ''))
   }, [request.id, request.query])
 
   const command = useCallback(
@@ -516,6 +537,28 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     return () => window.removeEventListener('scroll', onScroll, true)
   }, [open])
 
+  // Minting is only ever offered by the MATERIAL resolver: the `mint:<q>` floor
+  // row (resolvers.ts:67-92) is emitted inside resolveMaterial and nowhere else
+  // (resolveLabware/resolveEquipment emit none). So the copy must key on the
+  // resolver, not just the layer — otherwise a '/l' or '/e' card with no hits
+  // tells the scientist to "keep typing to mint" on a card with no mint floor
+  // (advc-ANSWERSURFACE1-c1 D1: dead-end affordance copy).
+  const canMint = resolver === resolveMaterial
+    && (!request.materialLayer || request.materialLayer === 'material')
+
+  // L2-CLARIFY-CARD-1 (W9): ONE predicate drives the row's existence AND the
+  // search box's copy — they are one expression, so copy and affordance cannot
+  // disagree again. The old `query.trim().length > 0` arm is GONE: the label
+  // is seeded from the prompt's noun (mintLabelFor) and the row's label input
+  // is the only edit surface — a second query-length check anywhere is the W9
+  // bug returning.
+  const mintAvailable =
+    canMint
+    && request.allowCreateLocal === true
+    && !open
+    && (request.options?.length ?? 0) === 0
+    && mintLabelFor(request, query).length > 0
+
   // The question's own layer decides the wording; only an unscoped menu (or a
   // concept question) invites minting, because a mint creates a concept — which
   // is never a valid answer to "which aliquot?".
@@ -525,15 +568,11 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       ? 'Search labware…'
       : resolver === resolveEquipment
         ? 'Search equipment…'
-        : 'Search materials or mint a local term…')
-  // Minting is only ever offered by the MATERIAL resolver: the `mint:<q>` floor
-  // row (resolvers.ts:67-92) is emitted inside resolveMaterial and nowhere else
-  // (resolveLabware/resolveEquipment emit none). So the copy must key on the
-  // resolver, not just the layer — otherwise a '/l' or '/e' card with no hits
-  // tells the scientist to "keep typing to mint" on a card with no mint floor
-  // (advc-ANSWERSURFACE1-c1 D1: dead-end affordance copy).
-  const canMint = resolver === resolveMaterial
-    && (!request.materialLayer || request.materialLayer === 'material')
+        // L2-CLARIFY-CARD-1 (W9): the material branch's copy derives from the
+        // SAME mintAvailable boolean as the row's existence. The empty-seed
+        // card (request.query absent — the "of what?" fact) therefore promises
+        // search only, and shows no mint row.
+        : mintAvailable ? 'Search materials or create a material record…' : 'Search materials…')
 
   // L2-SUITE-A-uifix2 FIX2 [D5]: the VISIBLE create-local (mint) row. The
   // gate's DMSO card (rows: [], allowCreateLocal: true) promised "or create
@@ -556,27 +595,32 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // dead chrome on it (and the duplicate-mint temptation the criterion
   // exists to prevent); pre-fix the check was absent (allowCreateLocal +
   // seeded query + two options still rendered the row).
-  const showMintRow =
-    canMint
-    && request.allowCreateLocal === true
-    && query.trim().length > 0
-    && !open
-    && (request.options?.length ?? 0) === 0
+  // L2-CLARIFY-CARD-1 (W9): the row's existence is now the mintAvailable
+  // predicate above (one expression with the placeholder copy) — the old
+  // query-length showMintRow is gone; the row's label input is the only edit
+  // surface (see mintLabel state + the row render below).
 
   // Badge colours are per-badge semantics (tokens.ts badgeStyles) — the SAME
   // inline mechanism the popover's mint floor row uses.
   const mintBadge = badgeStyles(VOCABULARY_BADGE.mint)
 
   const handleMintRow = () => {
-    if (busy || !showMintRow) return
-    const q = query.trim()
+    if (busy || !mintAvailable) return
+    // L2-CLARIFY-CARD-1 (W7): mint EXACTLY the previewed label — the row's OWN
+    // label state (seeded from the prompt's noun, editable only in the row's
+    // label input). The filter box no longer feeds the mint: it is never joined
+    // to the seed (the W7 red case — `${seed}${query}` / `${query}${seed}`) and
+    // it is never passed as the label. The row's rendered preview
+    // (mintLocalTermLabel(label)) is the SAME string this call mints.
+    const label = mintLabel.trim()
+    if (!label) return
     setBusy(true)
     void (async () => {
       try {
         // The resolver's mint floor (resolvers.ts `mint:<q>`) does exactly
         // this: mint a draft material record server-side, then answer with
         // the minted record's mention (ref {kind:'record', type:'material'}).
-        const res = await apiClient.mintLocalTerm('material', q, q)
+        const res = await apiClient.mintLocalTerm('material', label)
         const mention: SlashMention = {
           type: 'material',
           entityKind: 'material',
@@ -639,13 +683,10 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           if (listRef.current?.onKeyDown(e.nativeEvent)) e.preventDefault()
         }}
       />
-      {showMintRow ? (
-        <button
-          type="button"
+      {mintAvailable ? (
+        <div
           className="message-log__clarification-mint"
           data-testid="clarification-mint-row"
-          disabled={busy}
-          onClick={handleMintRow}
         >
           <span
             className="message-log__clarification-mint__badge"
@@ -657,8 +698,31 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           >
             {VOCABULARY_BADGE.mint}
           </span>
-          <span className="message-log__clarification-mint__label">{mintLocalTermLabel(query.trim())}</span>
-        </button>
+          {/* L2-CLARIFY-CARD-1 (P5/W14): the row PREVIEWs the exact label and
+              states the write — the inline label input (the ONLY edit surface;
+              typing in the SEARCH box no longer changes what is minted) + the
+              one-source sentence (mintLocalTermLabel(label)) that is the SAME
+              string the create button mints. */}
+          <input
+            type="text"
+            className="message-log__clarification-mint__label"
+            data-testid="clarification-mint-label"
+            value={mintLabel}
+            disabled={busy}
+            onChange={(e) => setMintLabel(e.target.value)}
+            aria-label="Material record name"
+          />
+          <span className="message-log__clarification-mint__preview">{mintLocalTermLabel(mintLabel.trim())}</span>
+          <button
+            type="button"
+            className="message-log__clarification-mint__create"
+            data-testid="clarification-mint-create"
+            disabled={busy || mintLabel.trim().length === 0}
+            onClick={handleMintRow}
+          >
+            Create
+          </button>
+        </div>
       ) : null}
       {/* L2-CLARIFY-PICKER-1 (P3): the top THREE ranked candidates, one click
           each (they are the same ranked list Change 1 produces — composition

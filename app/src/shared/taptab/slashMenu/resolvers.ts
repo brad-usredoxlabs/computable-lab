@@ -47,9 +47,15 @@ import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE, menuLabelKey }
  * resolver floor (below) and the ClarificationPicker's VISIBLE card row both
  * render this — the copy is data (the creation-entry-points funnel floor),
  * never re-spelled per surface.
+ *
+ * L2-CLARIFY-CARD-1 (P5/W7): the copy now STATES the consequence — the mint is
+ * a NEW material record in the lab's local namespace (a durable write of the
+ * named noun), not a bare "local term" (that word survives ONLY in the server
+ * wire label and MINT_OFFER_PREFIX, spec Reviewer bait 6). The popover's mint
+ * floor row and the picker card's mint row say the SAME thing (one source).
  */
 export function mintLocalTermLabel(query: string): string {
-  return `Create local term "${query}"`
+  return `Create material record "${query}" in the lab (new record)`
 }
 
 const PAGE = 8
