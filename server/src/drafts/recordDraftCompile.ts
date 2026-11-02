@@ -554,17 +554,17 @@ async function compileEditRecordIntent(
   });
   if (!merged.ok) return merged;
 
-  const card = merged.card as { targetTitle?: string; resolvedTerm?: { label?: string }; expectedRtMin?: number; assignmentState?: string };
+  const card = merged.card as { targetTitle?: string; resolvedTerm?: { id?: string; label?: string }; expectedRtMin?: number; assignmentState?: string };
   const rtMin = typeof card?.expectedRtMin === 'number' ? card.expectedRtMin : undefined;
   const stateValue = card?.assignmentState;
   return {
     ok: true,
     result: {
       recordId: merged.target.recordId,
-      summary: `Proposed an edit to "${card?.targetTitle}" (${merged.target.recordId}) — appends one assignment for "${card?.resolvedTerm?.label}". Review the fields; nothing is written until you accept.`,
+      summary: `Proposed an edit to "${card?.targetTitle}" (${merged.target.recordId}) — appends one assignment for "${card?.resolvedTerm?.label}" (${card?.resolvedTerm?.id}). Review the fields; nothing is written until you accept.`,
       recordFields: [
         { label: 'Target record', value: merged.target.recordId },
-        { label: 'Compound term', value: String(card?.resolvedTerm?.label ?? '') },
+        { label: 'Compound term', value: `${String(card?.resolvedTerm?.label ?? '')} (${card?.resolvedTerm?.id})` },
         ...(typeof rtMin === 'number' ? [{ label: 'Expected RT (min)', value: String(rtMin) }] : []),
         ...(typeof stateValue === 'string' ? [{ label: 'Assignment state', value: stateValue }] : []),
         { label: 'Entries before/after', value: `${merged.entryCountBefore} / ${merged.entryCountAfter}` },

@@ -1533,3 +1533,98 @@ body { user-select: auto; }
 /* ── Rail machinery (resizer, drag, persist) retired with REG-6: the
    registry was its only railResizable consumer. The plain rail below
    stays for RawRecordEditor / SlideOverEditor / LabwareFocus. ──────── */
+
+/* ── Object widget edit mode (GATE-FIX-1 D3, gate-l1t1520) ─────────── */
+/*
+ * The ObjectWidget's EDIT mode (taptab-object-*) previously had ZERO
+ * declared rules: labels ran inline into their values, the help text
+ * overflowed the column, and the controls were unstyled (the dead-chrome
+ * class). This section gives the editor the same document-first posture
+ * as the rest of the shell — label stacked ABOVE its value control,
+ * controls filling (never overflowing) the column, help text wrapped and
+ * contained to the field.
+ */
+.taptab-object-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.375rem 0;
+}
+
+/* One sub-field: a vertical stack (label on its own line above the
+   value control) — never an inline label/value collision. */
+.taptab-object-field {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.taptab-object-field-label {
+  display: block;
+  margin-bottom: 0.125rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--shell-text-secondary);
+}
+
+.taptab-object-required {
+  color: var(--shell-danger);
+  margin-left: 0.125rem;
+}
+
+.taptab-object-field-input,
+.taptab-object-field-select {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--shell-text-primary);
+  background: var(--shell-surface, #fff);
+  border: 1px solid var(--shell-border);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.taptab-object-field-input:focus,
+.taptab-object-field-select:focus {
+  outline: none;
+  border-color: var(--shell-accent);
+}
+
+/* Help line: a contained block that wraps within the field width — it
+   must never run into the next field or past the panel edge. */
+.taptab-object-field-help {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--shell-text-secondary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* A nested ObjectWidget inside a field stacks the same way. */
+.taptab-object-field > .taptab-object-editor {
+  margin-top: 0.125rem;
+}
+
+.taptab-object-done {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.375rem 0.75rem;
+  color: var(--shell-accent);
+  background: transparent;
+  border: 1px solid var(--shell-accent);
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.taptab-object-done:hover {
+  background: color-mix(in srgb, var(--shell-accent, #2563eb) 10%, transparent);
+}

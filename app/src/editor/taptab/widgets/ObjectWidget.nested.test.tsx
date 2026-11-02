@@ -207,6 +207,19 @@ function inputsByLabel(root: HTMLElement, label: string): HTMLInputElement[] {
   ) as HTMLInputElement[]
 }
 
+/** `.taptab-object-field-select` elements whose field label contains
+ *  `label` (GATE-FIX-1 D2: a sub-field whose hint declares `widget: select`
+ *  + options renders a native <select>; labels come from the hint data). */
+function selectsByLabel(root: HTMLElement, label: string): HTMLSelectElement[] {
+  return Array.from(root.querySelectorAll('.taptab-object-field-select')).filter((el) =>
+    (
+      el.closest('.taptab-object-field')
+        ?.querySelector('.taptab-object-field-label')
+        ?.textContent ?? ''
+    ).includes(label),
+  ) as HTMLSelectElement[]
+}
+
 /** The last array-level commit (every sub-field commit funnels through
  *  the item's onCommit → the array's onCommit, so the last call IS the
  *  current committed array). */
@@ -262,16 +275,16 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
     act(() => {
       fireEvent.click(nestedSpans[0] as HTMLElement)
     })
-    let kindInputs = inputsByLabel(view.container, 'Kind (ref discriminator — schema-required)')
-    expect(kindInputs, 'the open nested editor must expose its kind sub-field input').toHaveLength(1)
+    let kindInputs = selectsByLabel(view.container, 'Kind (ref discriminator — schema-required)')
+    expect(kindInputs, 'the open nested editor must expose its kind sub-field select (declared widget: select)').toHaveLength(1)
     act(() => {
       fireEvent.change(kindInputs[0], { target: { value: 'record' } })
     })
     sync()
-    // The input re-renders with the LIVE committed value (a nested input
+    // The select re-renders with the LIVE committed value (a nested select
     // that never updates would pin an authoring path that writes dead
     // values).
-    expect(inputsByLabel(view.container, 'Kind (ref discriminator — schema-required)')[0].value).toBe('record')
+    expect(selectsByLabel(view.container, 'Kind (ref discriminator — schema-required)')[0].value).toBe('record')
     let roleType = inputsByLabel(view.container, 'Record type (context-role)')
     expect(roleType).toHaveLength(1)
     act(() => {
@@ -292,8 +305,8 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
     act(() => {
       fireEvent.click(ctxSpan[0] as HTMLElement)
     })
-    kindInputs = inputsByLabel(view.container, 'Kind (ref discriminator — schema-required)')
-    expect(kindInputs, 'both nested editors now open → two kind inputs').toHaveLength(2)
+    kindInputs = selectsByLabel(view.container, 'Kind (ref discriminator — schema-required)')
+    expect(kindInputs, 'both nested editors now open → two kind selects').toHaveLength(2)
     act(() => {
       fireEvent.change(kindInputs[1], { target: { value: 'record' } })
     })
@@ -377,7 +390,9 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
     expect(display.container.textContent).toContain('A1')
     expect(display.container.textContent).toContain('Beta:')
     expect(display.container.textContent).toContain('two')
-    // Edit mode: one flat text input per property (NO nesting — the
+    // Edit mode: the declared-widget dispatch (GATE-FIX-1 D2): `alpha`
+    // (text) renders a text input; `beta` (select with options) renders a
+    // native <select> with exactly its declared options (NO nesting — the
     // branch is on non-empty `fields`, and these properties have none).
     act(() => {
       fireEvent.click(display.container.querySelector('.taptab-object-value') as HTMLElement)
@@ -385,19 +400,40 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
     const inputs = display.container.querySelectorAll('.taptab-object-field-input')
     expect(
       inputs,
-      'flat properties must render the flat input path (one text input each)',
-    ).toHaveLength(2)
-    expect(
-      display.container.querySelectorAll('.taptab-object-editor'),
-      'no nested object editor may appear for flat properties',
+      'the options-less text sub-field must render its flat input path',
     ).toHaveLength(1)
+    const selects = Array.from(display.container.querySelectorAll('.taptab-object-field-select')) as HTMLSelectElement[]
+    expect(
+      selects,
+      'the declared select sub-field must render a <select> with exactly its declared options',
+    ).toHaveLength(1)
+    expect(Array.from(selects[0]!.options).map((o) => o.value)).toEqual(['one', 'two'])
+    expect(display.container.querySelectorAll('.taptab-object-editor')).toHaveLength(1)
     // A sub-field edit commits the WHOLE object with the changed value
-    // (the pre-change handleFieldChange contract, untouched).
+    // (the pre-change handleFieldChange contract, untouched) — driven
+    // through BOTH control kinds.
     act(() => {
       fireEvent.change(inputs[0] as HTMLInputElement, { target: { value: 'A2' } })
     })
     expect(onCommit).toHaveBeenCalledTimes(1)
     expect(onCommit.mock.calls[0][0]).toEqual({ alpha: 'A2', beta: 'two' })
+    // Re-render with the committed value (the controlled prop — the other
+    // legs' sync() convention) before the second commit.
+    const alphaFirst = onCommit.mock.calls[0][0] as Record<string, unknown>
+    display.rerender(
+      <ObjectWidget
+        value={alphaFirst}
+        widget="object"
+        properties={properties}
+        readOnly={false}
+        onCommit={onCommit}
+      />,
+    )
+    act(() => {
+      fireEvent.change((Array.from(display.container.querySelectorAll('.taptab-object-field-select')) as HTMLSelectElement[])[0]!, { target: { value: 'one' } })
+    })
+    expect(onCommit).toHaveBeenCalledTimes(2)
+    expect(onCommit.mock.calls[1][0]).toEqual({ alpha: 'A2', beta: 'one' })
   })
 
   it('(c) the item editor Done button (.taptab-object-done) carries type="button" and does NOT submit the enclosing form (D4)', () => {
@@ -487,20 +523,20 @@ describe('ObjectWidget nested-object authoring (WIDGET-R1 fix-run 2, D2 + D4)', 
       view.container.querySelectorAll('.taptab-object-editor'),
       'level 1 (item) + level 2 (nested) editors',
     ).toHaveLength(2)
-    const kindInputs = inputsByLabel(view.container, 'Discriminator')
-    expect(kindInputs).toHaveLength(1)
+    const kindSelects = selectsByLabel(view.container, 'Discriminator')
+    expect(kindSelects).toHaveLength(1)
     const sync = () => {
       view.rerender(
         <ArrayWidget value={lastArrayCommit(onCommit)} widget="array" readOnly={false} onCommit={onCommit} itemHint={itemHint} />,
       )
     }
     act(() => {
-      fireEvent.change(kindInputs[0], { target: { value: 'record' } })
+      fireEvent.change(kindSelects[0], { target: { value: 'record' } })
     })
     sync()
     expect(
-      inputsByLabel(view.container, 'Discriminator')[0].value,
-      'the level-2 input must re-render with the live value',
+      selectsByLabel(view.container, 'Discriminator')[0].value,
+      'the level-2 select must re-render with the live value',
     ).toBe('record')
     const inner = inputsByLabel(view.container, 'Inner value')
     expect(inner).toHaveLength(1)

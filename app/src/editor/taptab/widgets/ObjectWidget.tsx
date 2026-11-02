@@ -161,6 +161,18 @@ export function ObjectWidget({
           // (isDisplayOnlyRefValue) is the TRUE empty for a ref position and
           // commits null (normalizeRefFieldValue) — never a stored ''.
           const isRefSubField = !hasNestedFields && isRefWidget(prop.widget);
+          // GATE-FIX-1 D2 (gate-l1t1520): a FLAT sub-field whose DECLARED
+          // widget is `select` with NON-EMPTY `options` data renders a native
+          // <select> offering exactly those options — the same data-driven
+          // dispatch discipline as the ref/fields branches above (the branch
+          // is on the declared widget + options members, never on field names
+          // or option values). A select WITHOUT options falls through to the
+          // text input, exactly as before.
+          const isSelectSubField =
+            !hasNestedFields &&
+            prop.widget === 'select' &&
+            Array.isArray(prop.options) &&
+            prop.options.length > 0;
           return (
             <div key={prop.name} className="taptab-object-field">
               <label className="taptab-object-field-label">
@@ -205,6 +217,54 @@ export function ObjectWidget({
                     onCancel={() => undefined}
                   />
                 )
+              ) : isSelectSubField ? (
+                (() => {
+                  // The current value as a declared option's VALUE (the stored
+                  // value is a flat token; an object-shaped value falls back to
+                  // its label/id — the same display derivation the ref pickers
+                  // use).
+                  const raw = propValue;
+                  const current =
+                    typeof raw === 'string'
+                      ? raw
+                      : raw !== null && typeof raw === 'object'
+                        ? (typeof (raw as Record<string, unknown>).label === 'string'
+                            ? String((raw as Record<string, unknown>).label)
+                            : typeof (raw as Record<string, unknown>).id === 'string'
+                              ? String((raw as Record<string, unknown>).id)
+                              : '')
+                        : '';
+                  const matched = prop.options!.find((o) => o.value === current);
+                  // GATE-FIX-2 N1 (adv-l1t1730): a stored value that names NO
+                  // declared option (absent / '' / an unrecognized token)
+                  // renders the control in an explicit UNSET state — a
+                  // selectable empty placeholder option (value "") FIRST —
+                  // instead of coercing to options[0] (the editor must not
+                  // display a value the record does not hold; absent =
+                  // unknown, never a default). The matching case keeps the
+                  // exactly-the-declared-options render with that option
+                  // selected (the D2 contract). The placeholder TEXT is the
+                  // field's own declared label (data-derived, never a
+                  // hardcoded string).
+                  const isUnset = matched === undefined;
+                  return (
+                    <select
+                      className="taptab-object-field-select"
+                      value={matched ? matched.value : ''}
+                      onChange={(e) => handleFieldChange(prop.name, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {isUnset && (
+                        <option value="">{prop.label}</option>
+                      )}
+                      {prop.options!.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()
               ) : (
                 <input
                   type="text"
