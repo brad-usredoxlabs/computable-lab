@@ -47,6 +47,16 @@ async function nextId(ctx: AppContext, kind: 'analysis-revision' | 'analysis-run
   return `${prefix}${String(max + 1).padStart(6, '0')}`;
 }
 
+/**
+ * Numeric suffix of a minted record id (nextId: PREFIX + zero-padded
+ * counter) — the creation-order key for newest-first ordering. Non-minted
+ * ids (no trailing digits) sort to the end (oldest side).
+ */
+function idSuffix(recordId: string): number {
+  const m = /(\d+)$/.exec(recordId);
+  return m ? Number.parseInt(m[1] ?? '0', 10) : -1;
+}
+
 export interface CreateRevisionInput {
   title: string;
   description?: string;
@@ -239,6 +249,20 @@ export class AnalysisService {
 
   async list(kind: 'analysis-revision' | 'analysis-run', limit = 50): Promise<RecordEnvelope[]> {
     return this.ctx.store.list({ kind, limit });
+  }
+
+  /**
+   * List runs reachable + honest: fetch the WHOLE kind (the store truncates
+   * in scan order when a limit is set, so a limited fetch would silently drop
+   * the newest records), sort NEWEST-FIRST by the numeric id suffix (nextId
+   * mints max+1 monotonically — the suffix IS creation order), and report the
+   * TRUE total (all matches), never the page length.
+   */
+  async listRuns(limit = 50, offset = 0): Promise<{ runs: RecordEnvelope[]; total: number }> {
+    const all = await this.ctx.store.list({ kind: 'analysis-run' });
+    const newestFirst = [...all].sort((a, b) => idSuffix(b.recordId) - idSuffix(a.recordId));
+    const runs = newestFirst.slice(offset, offset + limit);
+    return { runs, total: all.length };
   }
 
   async setRunStatus(recordId: string, status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'): Promise<void> {
