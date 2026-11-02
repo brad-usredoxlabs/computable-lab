@@ -20,14 +20,28 @@
  *
  * The `composition` pseudo-family (aggregateComponentTokens(label).length > 1,
  * the L2-TERM-1 UC-D4 structural signal) OVERRIDES the row's category family —
- * a composition is a Composition under any ontology. Its `can_be_default` is
- * false in the data, so a composition row can NEVER hold the focused default
- * (the W1 bug). Enforcement is against the data flag, never label shape.
+ * a composition is a Composition under any ontology. Whether a composition
+ * row can hold the focused default is decided ONLY by the data flag: the
+ * registry declares `can_be_default: false` for the composition family, so a
+ * composition row is never the focused default (the W1 bug). Enforcement is
+ * against the data flag, never label shape — the label shape only CLASSES the
+ * row's family (the comparator's sanctioned algorithm); it never decides
+ * defaultability. (A data flag of `true` — or an ABSENT declaration — makes
+ * the row defaultable; the protection lives in the YAML, not in TS.)
  *
  * ABSENT policy (the registry declares no candidate_ranking) => NO ranking at
  * all: the rows keep their resolver-emitted order (backend relevance). There
  * is no fallback table, ever — no rank integer survives in this file.
+ *
+ * ABSENT family (a row's family is not in the declared table — e.g. a new
+ * MaterialSearchItem['category'] the YAML does not name) => NO rank for that
+ * family: the row keeps the comparator's INPUT order (stable sort, no
+ * fabricated rank). Declared families keep their declared rank relative to
+ * it. This convention is declared in the YAML `candidate_ranking` comment —
+ * no magic integer in TS (the deleted `?? 10` sent the unknown to the bottom;
+ * the interim `?? 0` sent it to the top; both were silent policy in TS).
  */
+import { ANSWER_KIND_WORD, KIND_WORD, menuLabelKey } from './tokens'
 
 /** The comparator's input row (a material search hit or formulation summary). */
 export interface MaterialCandidateItem {
@@ -75,10 +89,12 @@ export interface RankedCandidateRow {
   /** The row's resolved family key (category, or `composition` when aggregate). */
   family: string
   /**
-   * Whether the row may hold the focused default (the data flag). ABSENT when
+   * Whether the row may hold the focused default (the DATA flag). ABSENT when
    * no ranking is declared (byte-stability: the row carries no new fields at
-   * all in that case) or when the family is defaultable; `false` ONLY for the
-   * composition pseudo-family (the never-default rule, regardless of rank).
+   * all in that case) or when the data says the family is defaultable;
+   * `false` ONLY when the data declares `can_be_default: false` for the
+   * row's family (the composition protection lives in the YAML declaration,
+   * never in a TS backstop — advc-c1 DEFECT 1).
    */
   canBeDefault?: boolean
   /**
@@ -134,21 +150,19 @@ function mentionKindOf(kind: string): MaterialCandidateKind {
  * generated from the row's own record (no new chrome). Reuses the row's own
  * id/kind (the existing `detail` payload already carries them). A row that IS
  * a composition states `composition of N components` (N = its structural token
- * count); otherwise the row's own kind word. No new vocabulary: the kind words
- * are the existing ontology terms (concept / material-spec / instance /
- * aliquot / vendor-product).
+ * count). The kind words come from the ONE shared vocabulary in ./tokens
+ * (`ANSWER_KIND_WORD` / `KIND_WORD` — the same words the answered-row sentence
+ * uses, so a row reads identically on screen in both places; advc-c1 DEFECT 3
+ * killed the second vocabulary that spelled the raw mention kind).
  */
 export function consequenceFor(item: MaterialCandidateItem): string {
   const kind = mentionKindOf(item.kind)
+  const kindWord = ANSWER_KIND_WORD[kind] ?? kind
   const compositionTokens = aggregateComponentTokens(item.title)
   if (compositionTokens.length > 1) {
-    return `binds ${kind} ${item.recordId} (composition of ${compositionTokens.length} components)`
+    return `binds ${kindWord} ${item.recordId} (composition of ${compositionTokens.length} components)`
   }
-  const kindWord =
-    kind === 'material' ? 'material record'
-    : kind === 'material-instance' ? 'instance'
-    : kind
-  return `binds ${kindWord} ${item.recordId} "${item.title}" (${kind})`
+  return `binds ${kindWord} ${item.recordId} "${item.title}" (${KIND_WORD[kind] ?? kind})`
 }
 
 /**
@@ -161,8 +175,14 @@ function familyOf(item: MaterialCandidateItem): string {
 
 /**
  * The comparator (PURE). Reorders `items` for the query `noun` under the
- * data-declared `policy`. Returns a new array (input order is preserved when
- * `policy` is null — the ABSENT-declaration => no-ranking rule).
+ * data-declared `policy`. ALWAYS derives the per-row P2 fields (the
+ * `canBeDefault` data flag + the `consequence` line) when a policy is
+ * declared — the comparator decides the row's bind, so it derives it.
+ * WHETHER those fields reach the RENDERED suggestion is the resolver's
+ * decision (the `pickerRows` flag in materialSuggestions, advc-c1 DEFECT 8:
+ * the doc-editor /m stays chrome-free; only picker-constructed rows attach
+ * them). Returns a new array (input order is preserved when `policy` is null
+ * — the ABSENT-declaration => no-ranking rule).
  */
 export function materialCandidates(
   items: MaterialCandidateItem[],
@@ -189,18 +209,21 @@ export function materialCandidates(
   }
 
   const nounLower = noun.trim().toLowerCase()
-  const rankOf = (family: string): number => policy.families[family]?.rank ?? 0
-  // The never-default rule is a STRUCTURAL invariant of the composition
-  // pseudo-family (spec: "a composition row can NEVER hold the focused default
-  // REGARDLESS of rank values — enforcement is against the data flag"). It
-  // holds even when the family table omits the composition key: the flag is
-  // read from the data when present, and the pseudo-family's own false when
-  // absent. Every other family is defaultable (data says so; an absent key
-  // means the platform never declared it non-defaultable).
-  const defaultableOf = (family: string): boolean => {
-    if (family === 'composition') return false
-    return policy.families[family]?.canBeDefault ?? true
-  }
+  // ABSENT family (not in the declared table) => NO rank: the row keeps the
+  // comparator's INPUT order (the stable-sort convention — the index IS the
+  // rank), so a family the YAML does not name can never silently sort to the
+  // top or the bottom. Declared families keep their declared rank relative to
+  // it (the convention is stated in the YAML comment; no magic integer here).
+  const rankOf = (family: string, inputIndex: number): number =>
+    policy.families[family]?.rank ?? inputIndex
+  // The defaultability decision comes ONLY from the data flag — never label
+  // shape, never a TS backstop (advc-c1 DEFECT 1 / orch ruling). The label
+  // shape (familyOf) only CLASSES the row's family; the declaration decides
+  // defaultability: `can_be_default: false` in the YAML makes the row
+  // non-defaultable; a flag of `true` — or an ABSENT declaration for the
+  // family — makes it defaultable.
+  const defaultableOf = (family: string): boolean =>
+    policy.families[family]?.canBeDefault ?? true
 
   const rows: RankedCandidateRow[] = []
   const buildRow = (item: MaterialCandidateItem, sectionLabel?: string): RankedCandidateRow => {
@@ -212,24 +235,46 @@ export function materialCandidates(
       mentionKind: kind,
       recordId: item.recordId,
       family,
-      canBeDefault: defaultableOf(family),
-      consequence: consequenceFor(item),
     }
+    // P2 fields are always DERIVED here (the row's own bind). The resolver
+    // decides whether they ATTACH to the rendered suggestion (pickerRows —
+    // advc-c1 DEFECT 8); the eOPT conditional spread lives there.
+    // `canBeDefault` mirrors the DATA flag (true for a defaultable family,
+    // false for a non-defaultable one) — the label shape only CLASSES the
+    // family, it never decides defaultability (advc-c1 DEFECT 1).
+    row.canBeDefault = defaultableOf(family)
+    row.consequence = consequenceFor(item)
     if (sectionLabel !== undefined) row.sectionLabel = sectionLabel
     return row
   }
 
-  const equality: MaterialCandidateItem[] = []
-  const contains: MaterialCandidateItem[] = []
-  const below: MaterialCandidateItem[] = []
-  for (const item of items) {
-    const titleLower = item.title.trim().toLowerCase()
-    if (nounLower && titleLower === nounLower) equality.push(item)
-    else if (nounLower && titleLower.includes(nounLower)) contains.push(item)
-    else below.push(item)
+  const indexed = items.map((item, index) => ({ item, index }))
+  const equality: { item: MaterialCandidateItem; index: number }[] = []
+  const contains: { item: MaterialCandidateItem; index: number }[] = []
+  const below: { item: MaterialCandidateItem; index: number }[] = []
+  for (const entry of indexed) {
+    const titleLower = entry.item.title.trim().toLowerCase()
+    if (nounLower && titleLower === nounLower) equality.push(entry)
+    else if (nounLower && titleLower.includes(nounLower)) contains.push(entry)
+    else below.push(entry)
   }
 
-  const containsCount = contains.length
+  // advc-c1 DEFECT 8b: the contains-section count is the number of rows that
+  // ACTUALLY RENDER in the contains band — computed on the SAME display-label
+  // key the downstream dedupe uses (one source, ./tokens.menuLabelKey), not
+  // the raw pre-dedupe band length. The section label rides the FIRST
+  // surviving contains row.
+  const dedupeContains = (band: { item: MaterialCandidateItem; index: number }[]) => {
+    const seen = new Set<string>()
+    return band.filter((entry) => {
+      const key = menuLabelKey(mentionKindOf(entry.item.kind), entry.item.title)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+  const containsRendered = dedupeContains(contains)
+  const containsCount = containsRendered.length
   const sectionLabel =
     containsCount > 0
       ? policy.containsSectionLabel
@@ -239,43 +284,62 @@ export function materialCandidates(
 
   // Band order: equality, then the contains section, then the non-matching
   // rows (declared-rank order) below it. Within a band: family rank, then
-  // localeCompare (today's tie-break, preserved).
-  const compare = (a: MaterialCandidateItem, b: MaterialCandidateItem): number => {
-    const fa = familyOf(a)
-    const fb = familyOf(b)
-    const ra = rankOf(fa)
-    const rb = rankOf(fb)
+  // localeCompare (today's tie-break, preserved). The stable sort keeps the
+  // INPUT order between equal ranks — which is how the undeclared family keeps
+  // its input order (rankOf => inputIndex).
+  const compare = (
+    a: { item: MaterialCandidateItem; index: number },
+    b: { item: MaterialCandidateItem; index: number },
+  ): number => {
+    const fa = familyOf(a.item)
+    const fb = familyOf(b.item)
+    const ra = rankOf(fa, a.index)
+    const rb = rankOf(fb, b.index)
     if (ra !== rb) return ra - rb
-    return a.title.localeCompare(b.title)
+    return a.item.title.localeCompare(b.item.title)
   }
 
   equality.sort(compare)
   contains.sort(compare)
   below.sort(compare)
 
-  for (let i = 0; i < equality.length; i++) rows.push(buildRow(equality[i]))
-  for (let i = 0; i < contains.length; i++) {
-    // The section label rides the FIRST contains row only (the presentation).
-    rows.push(buildRow(contains[i], i === 0 ? sectionLabel : undefined))
+  for (const entry of equality) rows.push(buildRow(entry.item))
+  // The section label rides the FIRST row that ACTUALLY RENDERS in the
+  // contains band (survives the display-label dedupe — the same key the
+  // resolver's downstream dedupe uses); a duplicate row carries none.
+  const renderedIndices = new Set(containsRendered.map((entry) => entry.index))
+  let sectionPlaced = false
+  for (const entry of contains) {
+    if (renderedIndices.has(entry.index)) {
+      rows.push(buildRow(entry.item, sectionPlaced ? undefined : sectionLabel))
+      sectionPlaced = true
+    } else {
+      rows.push(buildRow(entry.item))
+    }
   }
-  for (const item of below) rows.push(buildRow(item))
+  for (const entry of below) rows.push(buildRow(entry.item))
 
   return rows
 }
 
 /**
  * P1 focus-default rule: the FIRST row index that may hold the focused
- * (keyboard) default — the first row whose `canBeDefault !== false`. A
- * composition row (can_be_default false in the data) is ALWAYS skipped,
- * regardless of rank value or label shape. When every row is defaultable (the
- * slash editor, no ranking, or no composition), this is 0 — byte-stable.
+ * (keyboard) default — the first row whose `canBeDefault !== false`. The flag
+ * is DATA (the registry's `can_be_default` for the row's family; absent
+ * declaration => defaultable), so a composition row is skipped exactly when
+ * the data says so — never by a label-shape backstop. When every row is
+ * defaultable (the slash editor, no ranking, or no composition), this is 0 —
+ * byte-stable. THIS is the single live rule: `SlashSuggestionList` calls it
+ * (advc-c1 DEFECT 6 killed the duplicated closure).
  *
  * Returns 0 when no row is defaultable (a safe no-op; the list stays empty of
  * a default rather than auto-selecting a composition).
  */
-export function firstDefaultFocusIndex(rows: RankedCandidateRow[]): number {
+export function firstDefaultFocusIndex(
+  rows: ReadonlyArray<{ canBeDefault?: boolean }>,
+): number {
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i].canBeDefault !== false) return i
+    if (rows[i]!.canBeDefault !== false) return i
   }
   return 0
 }

@@ -17,6 +17,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
 export interface ChatLogProps {
@@ -91,13 +92,10 @@ function clarificationQuestion(message: ChatMessage): string | undefined {
  * answer (no token) renders exactly as written.
  */
 const MENTION_TOKEN_RE = /\[\[([A-Za-z][\w-]*):([^\][|]*)(?:\|([^\]]*))?\]\]/g
-const ANSWER_KIND_WORD: Record<string, string> = {
-  material: 'material record',
-  'material-spec': 'formulation',
-  'material-instance': 'instance',
-  aliquot: 'aliquot',
-  'vendor-product': 'vendor product',
-}
+// L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 3): the kind-word table is the ONE
+// shared vocabulary in ./tokens (ANSWER_KIND_WORD) — the answered row and the
+// per-row consequence line both read from it, so a row's id/kind never gets a
+// second human rendering. (No local copy: that was the duplicate vocabulary.)
 
 export function clarificationAnsweredText(content: string): string {
   if (!content.includes('[[')) return content
@@ -105,6 +103,19 @@ export function clarificationAnsweredText(content: string): string {
     const name = (label ?? id).trim() || id
     return `${name} (${ANSWER_KIND_WORD[type] ?? type} ${id})`
   })
+}
+
+/**
+ * L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 4) — the human-facing BUBBLE text.
+ * The picker's answer turn is stored verbatim as the user message (the wire
+ * prompt `Use [[material:…|…]] for material.` is byte-stable for the AGENT —
+ * clarificationAnswerPrompt.ts + server/src/ai untouched), but the TRANSCRIPT
+ * bubble must never show the scientist their own raw wiki-markup. Format the
+ * mention tokens with the SAME readable-token helper as the answered row
+ * (`[[type:id|label]]` -> `label (kind-word id)`); token-free text is a no-op.
+ */
+export function clarificationBubbleText(content: string): string {
+  return clarificationAnsweredText(content)
 }
 
 export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick }: ChatLogProps) {
@@ -313,7 +324,12 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               <pre className="chat-log-intent-card__body" data-testid="chat-log-intent-card-body">{message.shorthand}</pre>
             </div>
           )}
-          <p>{message.content}</p>
+          {/* L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 4): the bubble renders the
+              mention tokens as the SAME readable-token sentence as the
+              answered row — the raw `[[material:…]]` wiki-markup the picker
+              sends to the agent (byte-stable wire) never shows the scientist
+              their own turn. Token-free content passes through unchanged. */}
+          <p>{clarificationBubbleText(message.content)}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
               When the typed requests ride the message (the universal done

@@ -164,6 +164,15 @@ export interface SlashResolverContext {
    * them to do the data modelling.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+  /**
+   * L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): this resolver pass is a
+   * PICKER-constructed one (the clarification card's bounded mount pass + the
+   * open popover), not the doc-editor `/m` menu. Only picker passes attach the
+   * per-row commit-consequence line + the focus-default flag (the W1
+   * never-default row is a PICKER concern); the editor's `/m` stays
+   * chrome-free and byte-stable (bait 6). Absent for editor invocations.
+   */
+  pickerRows?: boolean
 }
 
 /**

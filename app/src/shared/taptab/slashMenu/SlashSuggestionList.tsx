@@ -9,6 +9,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { firstDefaultFocusIndex } from './clarifyPickerRanking'
 import type { SlashSuggestion, SlashSuggestionDetail } from './types'
 import { badgeStyles, detailOntologyFieldLabel } from './tokens'
 import './SlashSuggestionList.css'
@@ -30,19 +31,15 @@ export const SlashSuggestionList = forwardRef<
 >(({ items, loading, emptyLabel, command }, ref) => {
   // L2-CLARIFY-PICKER-1 (P1): the focused (keyboard) default starts at the
   // FIRST row whose canBeDefault !== false (the data-declared never-default
-  // flag — a composition row is never the default REGARDLESS of rank; the
+  // flag — a composition row is never the default when the data says so; the
   // W1 wrong-material commit). When no row carries canBeDefault: false this
-  // is 0 — the slash editor's byte-stable default (bait 6). Arrows may move
-  // the highlight over a non-defaultable row (the list stays fully navigable)
-  // but Enter/Tab commits the highlighted row ONLY when it is defaultable —
-  // a non-defaultable row can never be Enter-committed (W1).
-  const firstDefaultable = () => {
-    for (let i = 0; i < items.length; i++) {
-      if (items[i]!.canBeDefault !== false) return i
-    }
-    return 0
-  }
-  const [selected, setSelected] = useState(firstDefaultable)
+  // is 0 — the slash editor's byte-stable default (bait 6). The rule lives in
+  // ONE place: the exported firstDefaultFocusIndex (advc-c1 DEFECT 6 deleted
+  // the duplicated closure). Arrows may move the highlight over a
+  // non-defaultable row (the list stays fully navigable) but Enter/Tab
+  // commits the highlighted row ONLY when it is defaultable — a non-defaultable
+  // row can never be Enter-committed (W1).
+  const [selected, setSelected] = useState(() => firstDefaultFocusIndex(items))
   const listRef = useRef<HTMLDivElement | null>(null)
   // Hover tooltip: which row is hovered + where its button sits on screen.
   // Rendered through a portal because the list scrolls internally and would
@@ -66,7 +63,7 @@ export const SlashSuggestionList = forwardRef<
   }
 
   useEffect(() => {
-    setSelected(firstDefaultable())
+    setSelected(firstDefaultFocusIndex(items))
     clearHover()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])

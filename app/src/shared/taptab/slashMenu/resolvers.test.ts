@@ -737,9 +737,9 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
   }
 
-  async function runMenu(query: string) {
+  async function runMenu(query: string, ctxOverrides: Partial<SlashResolverContext> = {}) {
     const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
-    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more) }))
+    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more), ...ctxOverrides }))
     // Let the below-first-paint stream (component expansion + ontology tiers) settle.
     await new Promise((r) => setTimeout(r, 0))
     return { out, additions }
@@ -977,18 +977,58 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     // P1: the row the prompt NAMED (exact label match) is first — not the
     // composition. (RED: today out[0] is the `DMEM + FBS` composition, rank 0.)
     expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
-    // The focused-default rule: the concept row is defaultable; a composition
-    // row is NEVER defaultable (the data flag, enforced regardless of rank).
-    expect(out[0]?.canBeDefault).toBe(true)
+    // advc-c1 DEFECT 8: the DOC-EDITOR /m path (pickerRows absent) carries NO
+    // P2 chrome — the consequence line + focus-default flag are PICKER-
+    // constructed rows only (the editor stays byte-stable; bait 6). The
+    // comparison still reorders (equality-band concept first).
+    expect(out[0]?.consequence).toBeUndefined()
+    expect(out[0]?.canBeDefault).toBeUndefined()
     const firstComposition = out.find((r) => r.badge === 'Composition')
     expect(firstComposition).toBeTruthy()
-    expect(firstComposition!.canBeDefault).toBe(false)
-    // A composition can never BE the first row.
+    // …and the composition row is STILL not the first row (the comparator is
+    // applied; only the chrome is absent).
     expect(out.findIndex((r) => r.badge === 'Composition')).toBeGreaterThan(0)
-    // P2: the composition row carries its commit-consequence line — what
-    // picking it binds (a composition of N components), generated from the
-    // row's own record (no new chrome).
+  })
+
+  it('L2-CLARIFY-PICKER-1 (advc-c1 DEFECT 8): a picker-constructed pass (pickerRows:true) carries the P2 chrome — consequence + the data-flag focus-default', async () => {
+    // The clarification picker's resolver pass sets ctx.pickerRows:true. ONLY
+    // then do the per-row P2 fields attach (advc-c1 DEFECT 8: the consequence
+    // must NOT leak into the doc-editor /m). The data flag drives
+    // canBeDefault (composition => false, the never-default row); consequence
+    // is generated from the row's own record.
+    __setCandidateRankingPolicy(DECLARED)
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM', { pickerRows: true })
+
+    // The concept row (the one the prompt named) is first and carries its
+    // commit-consequence line.
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    expect(out[0]?.consequence).toBe('binds material record MAT-dmem-ykg0 "DMEM" (concept)')
+    expect(out[0]?.canBeDefault).toBe(true) // defaultable => the data flag (true)
+    // The composition row carries the composition consequence + the
+    // never-default flag (the data flag: composition can_be_default: false).
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
     expect(firstComposition!.consequence).toMatch(/composition of \d+ components/)
+    expect(firstComposition!.canBeDefault).toBe(false)
   })
 });
 

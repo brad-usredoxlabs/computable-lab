@@ -551,6 +551,18 @@
   overflow-y: auto;
 }
 
+/* L2-CLARIFY-PICKER-1 (Change 4 / advc-c1 DEFECT 9): the popover's inline
+   `max-height` (distance to the viewport bottom) is the SINGLE governing
+   height cap — the list below it must NOT impose its own `min(280px,40vh)`
+   (the shared SlashSuggestionList cap) or the viewport-distance cap is inert
+   and the box renders ~280px on a phone. Inside the portal the list fills
+   the portal; the portal's OWN overflow-y scroll (above) reaches every row.
+   The editor's inline list (no portal wrapper) keeps its `min(280px,40vh)`
+   cap unchanged. */
+.message-log__clarification-popover--portal .slash-suggestion-list {
+  max-height: none;
+}
+
 .message-log__clarification-search {
   width: 100%;
   appearance: none;

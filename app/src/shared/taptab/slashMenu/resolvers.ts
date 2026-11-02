@@ -40,7 +40,7 @@ import { getCandidateRankingPolicy } from './policy'
 // L2-TERM-1 (UC-D4): the badge/vocabulary tier words live in ONE declarative
 // table (tokens.ts) — every surface reads them from there, never re-spells
 // them as scattered string branches.
-import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE } from './tokens'
+import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE, menuLabelKey } from './tokens'
 
 /**
  * The mint floor row's label, one source (L2-SUITE-A-uifix2 FIX2 [D5]): the
@@ -108,7 +108,14 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // table). The PURE comparator applies it; a null policy keeps the
   // resolver-emitted order (byte-stable).
   const policy = await getCandidateRankingPolicy()
-  const workspace = materialSuggestions(materialRes.items, formulations, menuSeenLabels, policy, q)
+  const workspace = materialSuggestions(
+    materialRes.items,
+    formulations,
+    menuSeenLabels,
+    policy,
+    q,
+    ctx.pickerRows === true,
+  )
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
 
@@ -209,7 +216,7 @@ async function resolveFormulationLayer(
   // L2-CLARIFY-PICKER-1 (P1): the data-declared ranking applies to the scoped
   // /m layer too (the ClarificationPicker cards set materialLayer).
   const policy = await getCandidateRankingPolicy()
-  return materialSuggestions([], formulations, undefined, policy, query.trim())
+  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 /**
@@ -232,7 +239,7 @@ async function resolveInstanceLayer(
     subtitle: layer === 'aliquot' ? 'a specific aliquot in the lab' : 'a specific preparation in the lab',
   }))
   const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim())
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 /** "Which catalog item?" — vendor products ONLY (a catalog identity is its own layer). */
@@ -251,7 +258,7 @@ async function resolveVendorLayer(
     subtitle: [hit.vendor, hit.catalogNumber].filter(Boolean).join(' '),
   }))
   const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim())
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 function appendOntologyHits(
@@ -268,12 +275,11 @@ function appendOntologyHits(
   if (additions.length > 0) onUpdate(additions)
 }
 
-/** MENU-CANDIDATES-1 Fix A: the display-label dedup key (OQ2 ruling:
- * entityKind + normalized title). Normalization is whitespace/case only —
- * titles are compared as the biologist reads them, not as search needles. */
-function menuLabelKey(entityKind: MaterialMentionKind, title: string): string {
-  return `${entityKind}::${title.trim().toLowerCase().replace(/\s+/g, ' ')}`
-}
+// MENU-CANDIDATES-1 Fix A: the display-label dedupe key — the ONE canonical
+// shape lives in ./tokens (menuLabelKey) so the resolver and the comparator's
+// contains-section count (advc-c1 DEFECT 8b) compute on the SAME key. The
+// normalization is whitespace/case only (OQ2 ruling: entityKind + normalized
+// title) — titles compared as the biologist reads them, not as search needles.
 
 /**
  * MENU-CANDIDATES-1 Fix B: per-component search for an aggregate query.
@@ -312,7 +318,7 @@ function appendComponentHits(
       // screen from repeating. Each token's page is ranked against its OWN
       // component noun (the data-declared policy; null keeps emitted order).
       const tokenNoun = tokens[i] ?? ''
-      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun)) {
+      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true)) {
         if (seenKeys.has(s.key)) continue
         seenKeys.add(s.key)
         merged.push(s)
@@ -731,6 +737,7 @@ function materialSuggestions(
   seenLabels?: Set<string>,
   policy: CandidateRankingPolicy | null = null,
   noun = '',
+  pickerRows = false,
 ): SlashSuggestion[] {
   const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
     recordId: summary.outputSpec.id,
@@ -822,15 +829,18 @@ function materialSuggestions(
         ],
       },
       mention,
-      // L2-CLARIFY-PICKER-1 (P1/P2): the per-row fields attach ONLY when a
-      // ranking is declared — the byte-stability pin (a no-policy query) must
-      // serialize its rows identically to the pre-fix resolver, so these are
+      // L2-CLARIFY-PICKER-1 (P1/P2): the per-row P2 fields attach ONLY to
+      // PICKER-constructed rows (the `pickerRows` flag — advc-c1 DEFECT 8:
+      // the doc-editor /m path must NOT gain consequence chrome; bait 6 keeps
+      // the editor byte-stable). The comparator derives them whenever a
+      // ranking is declared; the resolver gates the ATTACHMENT. eOPT:
       // conditionally spread, never `: undefined`. `canBeDefault` is `false`
-      // ONLY for the composition pseudo-family (the never-default rule); a
-      // defaultable family omits it. `consequence` is the P2 commit line.
-      ...(row.canBeDefault !== undefined ? { canBeDefault: row.canBeDefault } : {}),
-      ...(row.consequence ? { consequence: row.consequence } : {}),
-      ...(row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
+      // ONLY when the data says the family is non-defaultable (the
+      // composition protection lives in the YAML); `consequence` is the P2
+      // commit line.
+      ...(pickerRows && row.canBeDefault !== undefined ? { canBeDefault: row.canBeDefault } : {}),
+      ...(pickerRows && row.consequence ? { consequence: row.consequence } : {}),
+      ...(pickerRows && row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
     }
     rows.push(suggestion)
   }

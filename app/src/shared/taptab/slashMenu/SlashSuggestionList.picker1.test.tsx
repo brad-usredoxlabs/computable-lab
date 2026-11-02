@@ -20,6 +20,7 @@ import { createRef } from 'react'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlashSuggestionList, type SlashSuggestionListHandle } from './SlashSuggestionList'
+import { consequenceFor } from './clarifyPickerRanking'
 import type { SlashSuggestion } from './types'
 
 // jsdom implements no layout: the list's scroll-into-view effect (pre-existing)
@@ -41,14 +42,22 @@ const D = (n: number) =>
   document.querySelectorAll(`[data-slash-row="${n}"]`)
 
 describe('SlashSuggestionList — L2-CLARIFY-PICKER-1 P2: the per-row consequence line', () => {
+  // advc-c1 DEFECT 5: the fixture is BUILT THROUGH consequenceFor (the
+  // production generator), not hand-typed literals — so a wording drift in the
+  // generator (the `(material)`/`(material-spec)` second vocabulary) FAILS
+  // this test instead of the fixture merely echoing whatever it was written
+  // with. The list still only proves the line RENDERS under the label.
   it('renders the consequence line under the label (the row says what committing it binds)', () => {
+    const concept = { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' }
+    const composition = { recordId: 'MSP-1', kind: 'material-spec', title: 'DMEM + FBS', category: 'saved-stock' }
     const items = [
-      row({ key: 'material:MAT-dmem-ykg0', label: 'DMEM', consequence: 'binds material record MAT-dmem-ykg0 "DMEM" (concept)' }),
-      row({ key: 'material-spec:MSP-1', label: 'DMEM + FBS', badge: 'Composition', consequence: 'binds material-spec MSP-1 (composition of 2 components)' }),
+      row({ key: 'material:MAT-dmem-ykg0', label: 'DMEM', consequence: consequenceFor(concept) }),
+      row({ key: 'material-spec:MSP-1', label: 'DMEM + FBS', badge: 'Composition', consequence: consequenceFor(composition) }),
     ]
     render(<SlashSuggestionList items={items} loading={false} command={vi.fn()} />)
+    // The SPEC kind words (concept / formulation), not the raw mention kind.
     expect(screen.getByText('binds material record MAT-dmem-ykg0 "DMEM" (concept)')).toBeTruthy()
-    expect(screen.getByText('binds material-spec MSP-1 (composition of 2 components)')).toBeTruthy()
+    expect(screen.getByText('binds formulation MSP-1 (composition of 2 components)')).toBeTruthy()
   })
 
   it('renders the contains-section label on the FIRST row of a contains band only (the data-declared presentation)', () => {

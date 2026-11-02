@@ -34,11 +34,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   materialCandidates,
+  consequenceFor,
   firstDefaultFocusIndex,
   type CandidateRankingPolicy,
   type MaterialCandidateItem,
 } from './clarifyPickerRanking'
-import { __setCandidateRankingPolicy } from './policy'
+import {
+  __setCandidateRankingPolicy,
+  getCandidateRankingPolicy,
+} from './policy'
 
 /**
  * The declared candidate-ranking policy — byte-mirrors the
@@ -165,10 +169,43 @@ describe('L2-CLARIFY-PICKER-1 — P1 intent-ranking comparator (18-row DMEM)', (
     expect(rows[focus]).toMatchObject({ key: 'material:MAT-fbs-2b2b', canBeDefault: true })
   })
 
-  it('a policy with no composition family still never-defaults a composition (the flag is the enforcement)', () => {
-    // Even if the data omits an explicit composition entry, a composition row's
-    // family resolves to the composition pseudo-family (can_be_default false) —
-    // the never-default rule is not lost by an absent key.
+  it('defaultability is the DATA flag only: the same composition label is defaultable when the data says can_be_default: true (advc-c1 DEFECT 1)', () => {
+    // The family CLASSIFICATION comes from label shape (the spec-sanctioned
+    // comparator algorithm — a multi-part aggregate is a composition under any
+    // ontology). The DEFAULTABILITY decision must come ONLY from the data flag:
+    // the reviewer probe set composition {rank:0, canBeDefault:TRUE} and the
+    // row still came back canBeDefault:false from a hardcoded TS branch. With
+    // the flag the data says true, the composition row IS defaultable — no TS
+    // backstop may override the data. The composition protection lives in the
+    // YAML declaration (can_be_default: false), not in TS.
+    const dataTrue: CandidateRankingPolicy = {
+      containsSectionLabel: 'contains "{label}" ({count})',
+      families: {
+        'saved-stock': { rank: 1, canBeDefault: true },
+        'concept-only': { rank: 2, canBeDefault: true },
+        composition: { rank: 0, canBeDefault: true },
+      },
+    }
+    const rows = materialCandidates(
+      [
+        { recordId: 'MSP-comp-1', kind: 'material-spec', title: 'DMEM + FBS', category: 'saved-stock' },
+        { recordId: 'MAT-fbs-2b2b', kind: 'material', title: 'FBS', category: 'concept-only' },
+      ],
+      'DMEM + FBS',
+      dataTrue,
+    )
+    const compositionRow = rows.find((r) => r.family === 'composition')
+    expect(compositionRow).toMatchObject({ key: 'material-spec:MSP-comp-1' })
+    // DATA says true => the row carries canBeDefault:true.
+    expect(compositionRow!.canBeDefault).toBe(true)
+    expect(firstDefaultFocusIndex(rows)).toBe(0)
+  })
+
+  it('a flag ABSENT for a family means defaultable (never a TS fallback) (advc-c1 DEFECT 1, orch ruling)', () => {
+    // The composition pseudo-family is classified from label shape; the data
+    // OMITS the composition key entirely. Ruling: absent declaration =>
+    // defaultable. The composition protection lives in the YAML declaration
+    // (can_be_default: false), never in a TS backstop.
     const noComp: CandidateRankingPolicy = {
       containsSectionLabel: 'contains "{label}" ({count})',
       families: {
@@ -185,17 +222,86 @@ describe('L2-CLARIFY-PICKER-1 — P1 intent-ranking comparator (18-row DMEM)', (
       noComp,
     )
     expect(rows[0]).toMatchObject({ key: 'material:MAT-a', canBeDefault: true })
-    expect(firstDefaultFocusIndex(rows)).toBe(0)
+    // A + B resolves to the composition pseudo-family; the flag is ABSENT =>
+    // defaultable.
+    const compositionRow = rows.find((r) => r.family === 'composition')
+    expect(compositionRow).toMatchObject({ key: 'material-spec:MSP-c' })
+    expect(compositionRow!.canBeDefault).toBe(true)
+  })
+
+  it('an UNDECLARED family gets NO rank: it keeps input order; declared families keep the declared rank (advc-c1 DEFECT 2)', () => {
+    // A new MaterialSearchItem['category'] the YAML does not name must not
+    // silently sort to the TOP (the deleted table sent it to the BOTTOM via
+    // `?? 10`; the prior fix sent it to the top via `?? 0`). Convention: the
+    // undeclared family keeps the comparator's INPUT order, and every declared
+    // family keeps its declared rank relative to it — stated in the YAML
+    // comment, no magic integer in TS.
+    const policy: CandidateRankingPolicy = {
+      containsSectionLabel: 'contains "{label}" ({count})',
+      families: { 'concept-only': { rank: 4, canBeDefault: true } },
+    }
+    const rows = materialCandidates(
+      [
+        // undeclared family, first in the input.
+        { recordId: 'MAT-x1', kind: 'material', title: 'X one', category: 'future-category' },
+        // declared family (rank 4).
+        { recordId: 'MAT-c1', kind: 'material', title: 'C one', category: 'concept-only' },
+        // undeclared family, second in the input.
+        { recordId: 'MAT-x2', kind: 'material', title: 'X two', category: 'future-category' },
+      ],
+      'zzz',
+      policy,
+    )
+    // All non-matching (band 4). The two undeclared rows keep their INPUT
+    // relative order (X one before X two); the declared row keeps its
+    // declared rank. No magic 0/10 reorders the undeclared rows relative to
+    // each other or fabricates a rank for them.
+    expect(rows.map((r) => r.label).join('|')).toContain('X one')
+    const undeclared = rows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => r.family === 'future-category')
+      .map(({ i }) => i)
+    expect(undeclared).toHaveLength(2)
+    expect(undeclared[0]).toBeLessThan(undeclared[1])
+  })
+})
+
+describe('L2-CLARIFY-PICKER-1 — P2 consequence wording (one kind-word vocabulary, advc-c1 DEFECT 3)', () => {
+  it('emits the SPEC kind words: `(concept)` for a material record, `(formulation)` for a material-spec', () => {
+    // The reviewer probe found `(material)` / `(material-spec)` — the raw
+    // mention kind, which is not one of the sanctioned ontology terms and a
+    // SECOND vocabulary against the answered-row helper. The consequence line
+    // and the answered row share ONE kind-word table (tokens.ts).
+    expect(
+      consequenceFor({ recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' }),
+    ).toBe('binds material record MAT-dmem-ykg0 "DMEM" (concept)')
+    expect(
+      consequenceFor({ recordId: 'MSP-9', kind: 'material-spec', title: 'DMEM low glucose', category: 'saved-stock' }),
+    ).toBe('binds formulation MSP-9 "DMEM low glucose" (formulation)')
+  })
+
+  it('a composition row states `binds {kind word} {id} (composition of N components)`', () => {
+    expect(
+      consequenceFor({ recordId: 'MSP-1', kind: 'material-spec', title: 'DMEM + FBS', category: 'saved-stock' }),
+    ).toBe('binds formulation MSP-1 (composition of 2 components)')
+    expect(
+      consequenceFor({ recordId: 'MAT-9z', kind: 'material', title: 'DMEM, FBS, glutamine', category: 'concept-only' }),
+    ).toBe('binds material record MAT-9z (composition of 3 components)')
   })
 })
 
 describe('L2-CLARIFY-PICKER-1 — policy cache seam (resolver path is deterministic)', () => {
-  it('the module cache seeds the declared policy (the resolver reads it once)', () => {
+  // advc-c1 DEFECT 7: the prior test asserted a local literal against itself
+  // (`DECLARED.families.composition` — no code path exercised). This test
+  // EXERCISES the seam: seed the cache, then read it back through
+  // getCandidateRankingPolicy() — the exact function resolveMaterial awaits.
+  it('the resolver reads the seeded declaration once through getCandidateRankingPolicy()', async () => {
     __setCandidateRankingPolicy(DECLARED)
-    // After the build, resolveMaterial reads this cache on first paint; the
-    // comparator under test is the pure materialCandidates above. This test
-    // only locks the seam: setting the cache does not throw and the declared
-    // policy round-trips (the policy.ts __reset/__set pair).
-    expect(DECLARED.families.composition).toMatchObject({ rank: 4, canBeDefault: false })
+    const first = await getCandidateRankingPolicy()
+    const second = await getCandidateRankingPolicy()
+    expect(first).not.toBeNull()
+    expect(first!.families.composition).toEqual({ rank: 4, canBeDefault: false })
+    // Cache, not re-fetch: the second read returns the same object.
+    expect(second).toBe(first)
   })
 })

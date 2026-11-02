@@ -71,6 +71,17 @@ clarification:
   # NO ranking at all (the resolver keeps its emitted order) — there is no
   # fallback table. Wording is data too: the section label is a TEMPLATE, so
   # changing it here moves the on-screen section without a code change.
+  #
+  # ABSENT family convention (advc-c1 DEFECT 2): a row whose family is NOT in
+  # `families` (e.g. a new MaterialSearchItem['category'] added later) gets NO
+  # rank — it keeps the comparator's INPUT order (the backend's relevance
+  # order), and every declared family keeps its declared rank relative to it.
+  # This convention lives HERE (data), not as a magic integer in TS: the
+  # deleted table sent the unknown to the bottom (`?? 10`), and a TS `?? 0`
+  # would send it to the top — both silent policy decisions. Likewise an
+  # ABSENT `can_be_default` for a family means the family is defaultable; the
+  # only non-defaultable family is one this table declares `can_be_default:
+  # false` (today: `composition`).
   candidate_ranking:
     contains_section_label: 'contains "{label}" ({count})'
     families:

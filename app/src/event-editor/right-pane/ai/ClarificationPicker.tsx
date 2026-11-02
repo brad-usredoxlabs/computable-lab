@@ -351,6 +351,10 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         const initial = await resolver(request.query!, {
           selection: null,
           signal: controller.signal,
+          // L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): PICKER-constructed pass —
+          // the resolver attaches the per-row consequence + focus-default flag
+          // (the doc-editor /m stays chrome-free; it never sets this).
+          pickerRows: true,
           ...(request.materialLayer ? { materialLayer: request.materialLayer } : {}),
         })
         if (!active) return
@@ -413,6 +417,10 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       resolver(query, {
         selection: null,
         signal: controller.signal,
+        // L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): PICKER-constructed pass —
+        // the open popover's rows carry the per-row consequence + focus-default
+        // flag (the doc-editor /m never sets this; it stays chrome-free).
+        pickerRows: true,
         // Scope the menu to the layer the QUESTION is about: a "which prepared
         // solution?" question must not offer a bare compound. Absent for the
         // general /m menu (there the biologist browses everything on purpose).
@@ -480,15 +488,32 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       const el = searchAnchorRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      // Clamp the available height (jsdom reports 0x0 rects; a 1px+ listbox
+      // Clamp the available height (jsdom reports 0x0 rects; a 48px+ listbox
       // keeps the portal renderable in tests, and the live value is the real
       // distance to the viewport bottom).
       const maxHeight = Math.max(48, window.innerHeight - (rect.bottom + 6))
-      setPopoverRect({ top: rect.bottom + 6, left: rect.left, width: Math.max(rect.width, 0), maxHeight })
+      const next = { top: rect.bottom + 6, left: rect.left, width: Math.max(rect.width, 0), maxHeight }
+      // Re-render ONLY when the geometry actually changed (advc-c1 DEFECT 9):
+      // a fresh object every tick re-renders the whole portal; identical
+      // geometry keeps the prior state (no re-render).
+      setPopoverRect((prev) => {
+        if (prev && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.maxHeight === next.maxHeight) return prev
+        return next
+      })
+    }
+    const onScroll = (event: Event) => {
+      // Ignore scroll events originating INSIDE the portal node (advc-c1
+      // DEFECT 9): scrolling the popover's OWN list moves the list, not the
+      // field, so it must not trigger a re-measure. Only page/field scroll
+      // (the field moves under the fixed portal) re-measures.
+      const portal = popoverNodeRef.current
+      const target = event.target
+      if (portal && target instanceof Node && portal.contains(target)) return
+      measure()
     }
     measure()
-    window.addEventListener('scroll', measure, true)
-    return () => window.removeEventListener('scroll', measure, true)
+    window.addEventListener('scroll', onScroll, true)
+    return () => window.removeEventListener('scroll', onScroll, true)
   }, [open])
 
   // The question's own layer decides the wording; only an unscoped menu (or a

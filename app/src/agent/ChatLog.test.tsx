@@ -399,4 +399,28 @@ describe('L2-CLARIFY-PICKER-1 (P2) — answered-row sentence (W5 wiki-markup lea
     expect(row).toHaveTextContent('Use the DMEM from the stock fridge for material.')
     expect(row.textContent).not.toMatch(/\[\[/)
   })
+
+  // advc-c1 DEFECT 4: the raw `[[material:…]]` token was still ON SCREEN in
+  // the scientist's OWN turn — the user bubble renders message.content
+  // verbatim, so the transcript showed `Use [[material:…|…]] for material.`
+  // one bubble above the (now-correct) answered row. The WIRE prompt stays
+  // byte-stable (clarificationAnswerPrompt.ts + server/src/ai untouched);
+  // the BUBBLE renders the token through the same readable-token helper as
+  // the answered row. Assert the WHOLE rendered log (not just the answered
+  // row) carries NO raw wiki-markup — the review's `/<p>\[\[material:/`
+  // probe must now be empty.
+  it('the USER BUBBLE renders the mention token as the readable sentence — NO [[material:]] markup anywhere in the transcript', () => {
+    const view = render(<ChatLog {...props} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [materialRequest] },
+      message('answer', 'user', 'Use [[material:MAT-dmem-ykg0|DMEM]] for material.'),
+    ]} />)
+    // The user bubble shows the sentence, not the raw token.
+    expect(view.baseElement.textContent).toContain('Use DMEM (material record MAT-dmem-ykg0) for material.')
+    // NO raw wiki-markup anywhere in the rendered conversation (bubble OR
+    // answered row).
+    expect(view.baseElement.textContent).not.toMatch(/\[\[material:/)
+    // The answered-row sentence too.
+    expect(screen.getByTestId('chat-log-clarification-answered')).toHaveTextContent('DMEM (material record MAT-dmem-ykg0)')
+  })
 })
