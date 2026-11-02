@@ -42,9 +42,16 @@ export class MaterialProfileHandlers {
   ) {}
 
   async listProfiles(_request: FastifyRequest, _reply: FastifyReply) {
+    const doc = this.registry.toJSON();
+    // L2-CLARIFY-PICKER-1 OQ1: the client comparator reads the declared
+    // candidate-ranking policy from this response (one cached GET). eOPT:
+    // ABSENT when the registry declares none — never `undefined`, never
+    // synthesized.
+    const candidateRanking = this.registry.candidateRanking();
     return {
-      version: this.registry.toJSON().version,
+      version: doc.version,
       profiles: this.registry.list(),
+      ...(candidateRanking ? { candidateRanking } : {}),
     };
   }
 

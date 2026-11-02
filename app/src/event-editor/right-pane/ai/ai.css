@@ -540,6 +540,29 @@
   bottom: calc(100% + 4px);
 }
 
+/* L2-CLARIFY-PICKER-1 (Change 4, W3 geometry — amendment (b)): the popover
+   portals to document.body, anchored at the field. `fixed` is what makes the
+   inline top/left/width/maxHeight (the field's viewport rect, measured on
+   open + scroll) place it correctly; its own overflow-y makes every row
+   reachable — no `--above` flip, so no clipped upward overflow. */
+.message-log__clarification-popover--portal {
+  position: fixed;
+  right: auto;
+  overflow-y: auto;
+}
+
+/* L2-CLARIFY-PICKER-1 (Change 4 / advc-c1 DEFECT 9): the popover's inline
+   `max-height` (distance to the viewport bottom) is the SINGLE governing
+   height cap — the list below it must NOT impose its own `min(280px,40vh)`
+   (the shared SlashSuggestionList cap) or the viewport-distance cap is inert
+   and the box renders ~280px on a phone. Inside the portal the list fills
+   the portal; the portal's OWN overflow-y scroll (above) reaches every row.
+   The editor's inline list (no portal wrapper) keeps its `min(280px,40vh)`
+   cap unchanged. */
+.message-log__clarification-popover--portal .slash-suggestion-list {
+  max-height: none;
+}
+
 .message-log__clarification-search {
   width: 100%;
   appearance: none;
@@ -601,6 +624,84 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+/* L2-CLARIFY-PICKER-1 (P3): the top-THREE ranked candidates as inline buttons
+   under the question (one click answers the card) + the search escape hatch
+   (opens the existing popover — pulldown + mint are the escape hatches).
+   Compact rows: badge + label; the consequence line is on the popover's rows
+   (P2) — the buttons are the fast path, the popover is the full ranked list. */
+.message-log__clarification-top3 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.message-log__clarification-top3__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-log__clarification-top3__row:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+}
+
+.message-log__clarification-top3__row:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.message-log__clarification-top3__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.message-log__clarification-top3__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The escape hatch: distinct from the candidate rows (dashed, dimmer) — it
+   opens the full ranked popover, it is not itself a candidate. */
+.message-log__clarification-top3__search {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px dashed var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-log__clarification-top3__search:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+  color: var(--cl-text);
+}
+
+.message-log__clarification-top3__search:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 /* ── Term panel ────────────────────────────────────────────────────────────────

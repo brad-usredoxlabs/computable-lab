@@ -72,6 +72,42 @@ export function detailOntologyFieldLabel(value: string): string {
   return ONTOLOGY_FIELD_LABEL[value] ?? 'Ontology'
 }
 
+/**
+ * The KIND WORDS a material mention kind reads as in human-facing text — the
+ * ONE shared vocabulary (L2-CLARIFY-PICKER-1 P2, advc-c1 DEFECT 3). The
+ * per-row consequence line and the answered-row sentence both use these words
+ * for the same row: never a second vocabulary, and `material` alone is not a
+ * sanctioned word (the ontology terms are concept / formulation / instance /
+ * aliquot / vendor-product — spec:50). Keyed by the material mention kind
+ * (`material`, `material-spec`, …) the wire token carries.
+ */
+export const ANSWER_KIND_WORD: Record<string, string> = {
+  material: 'material record',
+  'material-spec': 'formulation',
+  'material-instance': 'instance',
+  aliquot: 'aliquot',
+  'vendor-product': 'vendor product',
+}
+
+/** The short KIND WORD in parentheses on a consequence / answered row:
+ *  `material` => `concept`, `material-spec` => `formulation`, … (the
+ *  ontology term for the layer, NOT the raw mention kind). */
+export const KIND_WORD: Record<string, string> = {
+  material: 'concept',
+  'material-spec': 'formulation',
+  'material-instance': 'instance',
+  aliquot: 'aliquot',
+  'vendor-product': 'vendor product',
+}
+
+/** The menu's display-label dedupe key (MENU-CANDIDATES-1 Fix A) — the
+ *  canonical shape so the contains-section count can be computed on the SAME
+ *  key the downstream dedupe uses (one source; the resolver and the
+ *  comparator must not each invent their own normalization). */
+export function menuLabelKey(entityKind: string, title: string): string {
+  return `${entityKind}::${title.trim().toLowerCase().replace(/\s+/g, ' ')}`
+}
+
 /** Badge label shown by the UI for a given mention. Centralised so the
  *  suggestion list and the inline pill agree. */
 export function mentionBadge(mention: SlashMention): string {

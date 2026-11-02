@@ -25,10 +25,22 @@ import type {
 } from './types'
 import { filterTubePresets } from '../../../types/tubeSizes'
 import { exaVendorEnabled } from '../../lib/integrationFlags'
+// L2-CLARIFY-PICKER-1 (P1): the intent-ranking comparator is structural
+// imperative code; its policy (family ranks, can-be-default flags, the
+// contains-section label) is DATA served by the registry and cached in
+// ./policy. The composition pseudo-family's structural signal and the
+// per-row consequence line live in ./clarifyPickerRanking (one source).
+import {
+  aggregateComponentTokens,
+  isCompositionLabel,
+  materialCandidates,
+  type CandidateRankingPolicy,
+} from './clarifyPickerRanking'
+import { getCandidateRankingPolicy } from './policy'
 // L2-TERM-1 (UC-D4): the badge/vocabulary tier words live in ONE declarative
 // table (tokens.ts) — every surface reads them from there, never re-spells
 // them as scattered string branches.
-import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE } from './tokens'
+import { LOCAL_VOCABULARY, VOCABULARY_BADGE, VOCABULARY_SUBTITLE, menuLabelKey } from './tokens'
 
 /**
  * The mint floor row's label, one source (L2-SUITE-A-uifix2 FIX2 [D5]): the
@@ -44,43 +56,19 @@ const PAGE = 8
 const MATERIAL_PAGE = 12
 
 /**
- * MENU-CANDIDATES-1 Fix B: the structural aggregate joiners the PLATFORM
- * itself writes into material labels — `componentLabels.join(' + ')` for
- * per-accept draft specs (server AddMaterialSupport), comma-joined
- * fraction-sum/role-gap aggregate labels, and slash-joined media names
- * (e.g. 'DMEM/F-12'). These three literals ONLY. This is a search-shape
- * list, not a label-shape heuristic: it never keys on a fact's reason, never
- * suppresses the mint row, and a query containing none of them behaves
- * byte-identically to before (no component search fires).
- */
-const AGGREGATE_JOINERS = [' + ', ',', '/']
-
-/**
- * Split an aggregate query into its component tokens so each component can be
- * searched on its own. A record titled 'Thermo DMEM' can never match the
- * aggregate needle 'Thermo trypsin-EDTA + Thermo DMEM + …' by substring, so
- * without this the per-component records are filtered out server-side before
- * any menu logic sees them.
+ * L2-CLARIFY-PICKER-1: the structural aggregate joiners and the component-token
+ * splitter live in ./clarifyPickerRanking (ONE source — the composition
+ * pseudo-family's signal and the search-shape list are the same sanctioned
+ * literals). resolvers.ts imports them; the local copies are deleted.
  *
- * Returns [] for any query that is not an aggregate (no joiner, or nothing
- * left after splitting) — the byte-stability guarantee for delimiter-free
- * queries like 'tris' or 'dmem'.
+ * MENU-CANDIDATES-1 Fix B (why the splitter exists): a record titled
+ * 'Thermo DMEM' can never match the aggregate needle
+ * 'Thermo trypsin-EDTA + Thermo DMEM + …' by substring, so without this the
+ * per-component records are filtered out server-side before any menu logic
+ * sees them. `aggregateComponentTokens` (imported) returns [] for any query
+ * that is not an aggregate (no joiner, or nothing left after splitting) — the
+ * byte-stability guarantee for delimiter-free queries like 'tris' or 'dmem'.
  */
-function aggregateComponentTokens(query: string): string[] {
-  if (!AGGREGATE_JOINERS.some((joiner) => query.includes(joiner))) return []
-  let parts = [query]
-  for (const joiner of AGGREGATE_JOINERS) {
-    parts = parts.flatMap((part) => part.split(joiner))
-  }
-  const tokens: string[] = []
-  for (const part of parts) {
-    const token = part.trim()
-    if (!token || tokens.includes(token)) continue
-    tokens.push(token)
-  }
-  // A single surviving token is not an aggregate — nothing to expand.
-  return tokens.length > 1 ? tokens : []
-}
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
@@ -115,7 +103,19 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   ])
   abortIfNeeded(ctx)
 
-  const workspace = materialSuggestions(materialRes.items, formulations, menuSeenLabels)
+  // L2-CLARIFY-PICKER-1 (P1): the data-declared candidate-ranking policy, read
+  // once (module cache; null when the registry declares none — no fallback
+  // table). The PURE comparator applies it; a null policy keeps the
+  // resolver-emitted order (byte-stable).
+  const policy = await getCandidateRankingPolicy()
+  const workspace = materialSuggestions(
+    materialRes.items,
+    formulations,
+    menuSeenLabels,
+    policy,
+    q,
+    ctx.pickerRows === true,
+  )
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
 
@@ -162,7 +162,7 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
     // fact label) fires one extra search per component token so the store's
     // per-component records surface. Delimiter-free queries get an empty token
     // list and behave byte-identically to before.
-    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx)
+    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx, policy)
     void (async () => {
       try {
         const localRes = await apiClient.resolve({
@@ -213,7 +213,10 @@ async function resolveFormulationLayer(
     limit: MATERIAL_PAGE,
   })
   abortIfNeeded(ctx)
-  return materialSuggestions([], formulations)
+  // L2-CLARIFY-PICKER-1 (P1): the data-declared ranking applies to the scoped
+  // /m layer too (the ClarificationPicker cards set materialLayer).
+  const policy = await getCandidateRankingPolicy()
+  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 /**
@@ -235,7 +238,8 @@ async function resolveInstanceLayer(
     category: layer === 'aliquot' ? 'prepared-material' : 'saved-stock',
     subtitle: layer === 'aliquot' ? 'a specific aliquot in the lab' : 'a specific preparation in the lab',
   }))
-  return materialSuggestions(items, [])
+  const policy = await getCandidateRankingPolicy()
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 /** "Which catalog item?" — vendor products ONLY (a catalog identity is its own layer). */
@@ -253,7 +257,8 @@ async function resolveVendorLayer(
     category: 'vendor-reagent',
     subtitle: [hit.vendor, hit.catalogNumber].filter(Boolean).join(' '),
   }))
-  return materialSuggestions(items, [])
+  const policy = await getCandidateRankingPolicy()
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
 }
 
 function appendOntologyHits(
@@ -270,12 +275,11 @@ function appendOntologyHits(
   if (additions.length > 0) onUpdate(additions)
 }
 
-/** MENU-CANDIDATES-1 Fix A: the display-label dedup key (OQ2 ruling:
- * entityKind + normalized title). Normalization is whitespace/case only —
- * titles are compared as the biologist reads them, not as search needles. */
-function menuLabelKey(entityKind: MaterialMentionKind, title: string): string {
-  return `${entityKind}::${title.trim().toLowerCase().replace(/\s+/g, ' ')}`
-}
+// MENU-CANDIDATES-1 Fix A: the display-label dedupe key — the ONE canonical
+// shape lives in ./tokens (menuLabelKey) so the resolver and the comparator's
+// contains-section count (advc-c1 DEFECT 8b) compute on the SAME key. The
+// normalization is whitespace/case only (OQ2 ruling: entityKind + normalized
+// title) — titles compared as the biologist reads them, not as search needles.
 
 /**
  * MENU-CANDIDATES-1 Fix B: per-component search for an aggregate query.
@@ -294,6 +298,7 @@ function appendComponentHits(
   seenKeys: Set<string>,
   seenLabels: Set<string>,
   ctx: SlashResolverContext,
+  policy: CandidateRankingPolicy | null,
 ): void {
   const onUpdate = ctx.onUpdate
   if (!onUpdate) return
@@ -307,11 +312,13 @@ function appendComponentHits(
   ).then((perToken) => {
     if (ctx.signal.aborted) return
     const merged: SlashSuggestion[] = []
-    for (const items of perToken) {
+    for (const [i, items] of perToken.entries()) {
       // Same dedup as the first paint: the shared seenLabels ledger collapses
       // re-surfaced same-titled rows, and seenKeys keeps rows already on
-      // screen from repeating.
-      for (const s of materialSuggestions(items, [], seenLabels)) {
+      // screen from repeating. Each token's page is ranked against its OWN
+      // component noun (the data-declared policy; null keeps emitted order).
+      const tokenNoun = tokens[i] ?? ''
+      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true)) {
         if (seenKeys.has(s.key)) continue
         seenKeys.add(s.key)
         merged.push(s)
@@ -703,18 +710,34 @@ function formatSelectionLabel(
 
 type MaterialMentionKind = Extract<SlashMention, { type: 'material' }>['entityKind']
 
-const MATERIAL_CATEGORY_RANK: Record<MaterialSearchItem['category'], number> = {
-  'saved-stock': 0,
-  'vendor-reagent': 1,
-  'prepared-material': 2,
-  'biological-derived': 3,
-  'concept-only': 4,
-}
+// L2-CLARIFY-PICKER-1 (P1): the old hardcoded per-category rank table is
+// DELETED. The comparator's rank table, the can-be-default flags, and the
+// contains-section label are DATA — declared on the registry `candidate_ranking`
+// block (OQ2), served by the server (OQ1), read once through ./policy, and
+// applied by the PURE comparator in ./clarifyPickerRanking. Absent declaration
+// => NO ranking at all: the rows keep their resolver-emitted order (backend
+// relevance). There is no fallback table, ever — no rank integer survives in
+// resolvers.ts (grep-clean asserted in resolvers.test.ts).
 
+/**
+ * Build the material candidate rows for one /m first-paint (or a scoped layer).
+ *
+ * `policy` is the data-declared candidate-ranking declaration (null when the
+ * registry declares none — the ABSENT-declaration => no-ranking rule) and `noun`
+ * is the query the ranking orders against (the resolver's trimmed query). The
+ * PURE comparator (clarifyPickerRanking.materialCandidates) reorders; this
+ * function builds the SlashSuggestion shape (badge/subtitle/detail/mention) and
+ * runs the downstream dedupe — which stays DOWNSTREAM of the comparator so the
+ * survivor of a byte-identical pair is still "the first in the comparator's
+ * order" (the MENU-CANDIDATES-1 Fix A pin).
+ */
 function materialSuggestions(
   items: MaterialSearchItem[],
   formulations: FormulationSummary[],
   seenLabels?: Set<string>,
+  policy: CandidateRankingPolicy | null = null,
+  noun = '',
+  pickerRows = false,
 ): SlashSuggestion[] {
   const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
     recordId: summary.outputSpec.id,
@@ -729,102 +752,111 @@ function materialSuggestions(
     ].filter(Boolean).join(' ') || 'Saved stock or formulation',
   }))
 
-  const seen = new Set<string>()
-  // MENU-CANDIDATES-1 Fix A: display-label dedup. Distinct records that render
-  // byte-identically (the per-accept MSP-DRAFT specs + prior-drive aggregate
-  // mints all share one title) used to fill the whole page with rows a
-  // biologist could not tell apart. Collapse rows sharing
-  // (entityKind, normalized title) AFTER the rank sort so the survivor is the
-  // first in rank order, and BEFORE the caller's slice(0, MATERIAL_PAGE) so
-  // the collapsed rows free page slots for real candidates.
-  //
-  // Presentation only: the key stays `entityKind:recordId` and the surviving
-  // row keeps its real recordId — selection is still a real record, never an
-  // invented term for "the aggregate". Different entityKinds are different
-  // layers and both legitimately answer an unscoped '/m' card, so the key
-  // includes the kind.
+  // L2-CLARIFY-PICKER-1: dedup by recordId UPSTREAM of the comparator (the old
+  // `seen` filter) — a record that surfaces in both the formulation summary and
+  // the search page is one candidate, and the FIRST occurrence wins. Then the
+  // PURE comparator orders the unique rows. No local rank table here — the data
+  // is the authority. The row's DETAIL/SUBTITLE are built from the ORIGINAL
+  // item (category + subtitle are search facts, never the comparator's resolved
+  // family) so the no-policy byte-stability pin serializes identically to the
+  // pre-fix resolver.
+  const seenRecordIds = new Set<string>()
+  const allItems: MaterialSearchItem[] = []
+  const itemById = new Map<string, MaterialSearchItem>()
+  for (const item of [...formulationItems, ...items]) {
+    if (seenRecordIds.has(item.recordId)) continue
+    seenRecordIds.add(item.recordId)
+    allItems.push(item)
+    itemById.set(item.recordId, item)
+  }
+  const ranked = materialCandidates(allItems, noun, policy)
+
   const labelKeys = seenLabels ?? new Set<string>()
-  const rows = [...formulationItems, ...items]
-    .filter((item) => {
-      if (seen.has(item.recordId)) return false
-      seen.add(item.recordId)
-      return true
-    })
-    .sort((a, b) => {
-      const ar = MATERIAL_CATEGORY_RANK[a.category] ?? 10
-      const br = MATERIAL_CATEGORY_RANK[b.category] ?? 10
-      return ar === br ? a.title.localeCompare(b.title) : ar - br
-    })
-    .filter((item) => {
-      const labelKey = menuLabelKey(materialMentionKind(item.kind), item.title)
-      if (labelKeys.has(labelKey)) return false
-      labelKeys.add(labelKey)
-      return true
-    })
-    .map((item) => {
-      const entityKind = materialMentionKind(item.kind)
-      const mention: Extract<SlashMention, { type: 'material' }> = {
-        type: 'material',
-        entityKind,
-        id: item.recordId,
-        label: item.title,
-      }
-      // L2-TERM-1 (UC-D4): the row's OWN structural signal (a multi-part
-      // composite title — the aggregate joiner the platform writes, nothing
-      // name-specific) reads the row as a composition. A composition is not
-      // a term under any ontology: it badges Composition, never the kind's
-      // local tier.
-      const isComposition = aggregateComponentTokens(item.title).length > 1
-      const badge = isComposition ? VOCABULARY_BADGE.composition : materialBadge(entityKind)
-      // L2-SUITE-A-uifix2 [D]: the composition row's SUBTITLE must not re-spell
-      // its own badge word. It used to be the 'Composition' tier word (identical
-      // to the badge), so every composition row rendered `Composition <label>
-      // Composition` — the badge text twice (re-gate DEFECT 4). The subtitle
-      // now carries the LAYER the row is: a local record reads the honest
-      // local-record word, a formulation reads its layer word. Two layers that
-      // share a title then render DISTINCTLY (the layer is the differentiator
-      // the badge dropped), and the badge renders exactly once per row.
-      const subtitle = isComposition
-        ? entityKind === 'material'
-          ? VOCABULARY_SUBTITLE.local
-          : materialBadge(entityKind)
-        : entityKind === 'material'
-          ? VOCABULARY_SUBTITLE.local
-          : (item.subtitle || item.recordId)
-      return {
-        key: `${entityKind}:${item.recordId}`,
-        label: item.title,
-        badge,
-        subtitle,
-        detail: {
-          source: 'Workspace record (this lab)',
-          ontology: LOCAL_VOCABULARY,
-          id: item.recordId,
-          ...(item.subtitle && entityKind !== 'material' ? { definition: item.subtitle } : {}),
-          extra: [
-            { label: 'Kind', value: item.kind },
-            { label: 'Category', value: item.category },
-          ],
-        },
-        mention,
-      }
-    })
+  const rows: SlashSuggestion[] = []
+  for (const row of ranked) {
+    const item = itemById.get(row.recordId)
+    // MENU-CANDIDATES-1 Fix A: display-label dedup, kept DOWNSTREAM of the
+    // comparator so the survivor is the first in the comparator's order (the
+    // byte-identical per-accept MSP-DRAFT specs + prior-drive aggregate mints
+    // all share one title; collapsing them frees page slots). Presentation
+    // only: the key stays `entityKind:recordId` and the surviving row keeps its
+    // real recordId — selection is still a real record, never an invented term
+    // for "the aggregate".
+    const labelKey = menuLabelKey(row.mentionKind, row.label)
+    if (labelKeys.has(labelKey)) continue
+    labelKeys.add(labelKey)
+
+    const entityKind = row.mentionKind
+    const mention: Extract<SlashMention, { type: 'material' }> = {
+      type: 'material',
+      entityKind,
+      id: row.recordId,
+      label: row.label,
+    }
+    // L2-TERM-1 (UC-D4): the row's OWN structural signal (a multi-part
+    // composite title — the aggregate joiner the platform writes, nothing
+    // name-specific) reads the row as a composition. A composition is not a
+    // term under any ontology: it badges Composition, never the kind's local
+    // tier.
+    const isComposition = isCompositionLabel(row.label)
+    const badge = isComposition ? VOCABULARY_BADGE.composition : materialBadge(entityKind)
+    // L2-SUITE-A-uifix2 [D]: the composition row's SUBTITLE must not re-spell
+    // its own badge word (re-gate DEFECT 4). It carries the LAYER the row is:
+    // a local record reads the honest local-record word, a formulation reads
+    // its layer word. Two layers that share a title then render DISTINCTLY
+    // (the layer is the differentiator the badge dropped), and the badge
+    // renders exactly once per row.
+    const subtitle = isComposition
+      ? entityKind === 'material'
+        ? VOCABULARY_SUBTITLE.local
+        : materialBadge(entityKind)
+      : entityKind === 'material'
+        ? VOCABULARY_SUBTITLE.local
+        : (item?.subtitle || item?.recordId)
+    const suggestion: SlashSuggestion = {
+      key: row.key,
+      label: row.label,
+      badge,
+      subtitle,
+      detail: {
+        source: 'Workspace record (this lab)',
+        ontology: LOCAL_VOCABULARY,
+        id: row.recordId,
+        ...(item?.subtitle && entityKind !== 'material' ? { definition: item.subtitle } : {}),
+        extra: [
+          { label: 'Kind', value: item?.kind ?? entityKind },
+          { label: 'Category', value: item?.category ?? row.family },
+        ],
+      },
+      mention,
+      // L2-CLARIFY-PICKER-1 (P1/P2): the per-row P2 fields attach ONLY to
+      // PICKER-constructed rows (the `pickerRows` flag — advc-c1 DEFECT 8:
+      // the doc-editor /m path must NOT gain consequence chrome; bait 6 keeps
+      // the editor byte-stable). The comparator derives them whenever a
+      // ranking is declared; the resolver gates the ATTACHMENT. eOPT:
+      // conditionally spread, never `: undefined`. `canBeDefault` is `false`
+      // ONLY when the data says the family is non-defaultable (the
+      // composition protection lives in the YAML); `consequence` is the P2
+      // commit line.
+      ...(pickerRows && row.canBeDefault !== undefined ? { canBeDefault: row.canBeDefault } : {}),
+      ...(pickerRows && row.consequence ? { consequence: row.consequence } : {}),
+      ...(pickerRows && row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
+    }
+    rows.push(suggestion)
+  }
+
   // L2-SUITE-A-uifix2 [D]: dedupe rows by their RENDERED identity (badge +
-  // label + subtitle) — a row that would render byte-identically to an
-  // earlier row is duplicative chrome (the dead-chrome rule). The survivor
-  // is the first in rank order, keeping its real recordId (presentation
-  // only: selection still lands a real record, never an invented term).
-  // Idempotent (a second pass changes nothing).
+  // label + subtitle) — a row that would render byte-identically to an earlier
+  // row is duplicative chrome (the dead-chrome rule). The survivor is the first
+  // in the comparator's order, keeping its real recordId (presentation only:
+  // selection still lands a real record, never an invented term). Idempotent.
   return dedupeSuggestionRows(rows)
 }
 
-function materialMentionKind(kind: string): MaterialMentionKind {
-  if (kind === 'material-spec') return 'material-spec'
-  if (kind === 'material-instance') return 'material-instance'
-  if (kind === 'aliquot') return 'aliquot'
-  if (kind === 'vendor-product') return 'vendor-product'
-  return 'material'
-}
+// The material mention kind (the entityKind a candidate binds) is derived by
+// the comparator's `mentionKindOf` (./clarifyPickerRanking) — the resolver no
+// longer re-derives it (one source). `MaterialMentionKind` (below) remains the
+// shared type for the badge/vocabulary table.
 
 /**
  * L2-SUITE-A-uifix2 [D] (re-gate DEFECT 4, MINOR dead-chrome rule): collapse

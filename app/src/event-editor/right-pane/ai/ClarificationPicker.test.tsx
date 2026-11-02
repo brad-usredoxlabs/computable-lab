@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClarificationPicker, answerFromMention } from './ClarificationPicker'
 import type { AiClarificationRequest } from '../../../types/ai'
 import type { SlashSuggestion } from '../../../shared/taptab/slashMenu/types'
@@ -111,12 +111,21 @@ describe('ClarificationPicker', () => {
 
     // seeded query
     expect((screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement).value).toBe('CHO')
-    // open-on-request: the resolver runs when the picker is opened (not on mount).
+    // open-on-request: the popover pass runs when the picker is opened. The
+    // OQ3 mount pass (bounded, popover-closed) already ran with the seeded
+    // query on mount — the POPOVER pass is the last call, still seeded.
     openPickerFor(container)
     await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
-    expect(resolveMaterial.mock.calls[0][0]).toBe('CHO')
+    const calls = resolveMaterial.mock.calls
+    expect(calls[calls.length - 1][0]).toBe('CHO')
 
-    const row = await screen.findByText('CHO cells')
+    // The POPOVER row (scoped — the top-3 button above it carries the same
+    // label; this test is about the open listbox, not the buttons).
+    const row = await new Promise<HTMLElement>((resolve) => {
+      void waitFor(async () => {
+        resolve(within(screen.getByTestId('clarification-popover')).getByText('CHO cells'))
+      })
+    })
     fireEvent.mouseDown(row)
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1))
     expect(onPick.mock.calls[0][0]).toMatchObject({
@@ -139,7 +148,13 @@ describe('ClarificationPicker', () => {
     const { container } = render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
     openPickerFor(container)
 
-    const row = await screen.findByText("Dulbecco's Modified Eagle's Medium")
+    // The POPOVER row (scoped — the top-3 button carries the same label, and
+    // it is a click affordance, not the popover row under test).
+    const row = await new Promise<HTMLElement>((resolve) => {
+      void waitFor(async () => {
+        resolve(within(screen.getByTestId('clarification-popover')).getByText("Dulbecco's Modified Eagle's Medium"))
+      })
+    })
     fireEvent.mouseDown(row)
     await waitFor(() => expect(onPick).toHaveBeenCalled())
     expect(groundMaterialRef).toHaveBeenCalledWith({ kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: "Dulbecco's Modified Eagle's Medium" })
@@ -404,5 +419,103 @@ describe('a material question with no words does not show another material', () 
     }
     render(<ClarificationPicker request={request} onPick={vi.fn()} />)
     expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+  })
+})
+
+/**
+ * L2-CLARIFY-PICKER-1 (P3) RED — the top-three ranked candidates render as
+ * inline buttons under the question (one click answers the card), the
+ * `None of these — search…` escape hatch opens the EXISTING popover (the
+ * single-open store is untouched), and the mount pass is BOUNDED +
+ * POPOVER-CLOSED (spec OQ3 ruling: it fetches candidates for the buttons only;
+ * it must NOT open the picker — the uifix2 single-open pins above stay green).
+ */
+const top3Request: AiClarificationRequest = {
+  id: 'clar-t3',
+  kind: 'material',
+  prompt: 'The draft names "DMEM" — which record? (ambiguous-noun)',
+  menuProvider: '/m',
+  query: 'DMEM',
+  options: [],
+}
+
+describe('ClarificationPicker — L2-CLARIFY-PICKER-1 P3: top-3 inline buttons (RED)', () => {
+  const hits: SlashSuggestion[] = [
+    {
+      key: 'material:MAT-dmem-ykg0', label: 'DMEM', badge: 'Concept',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-dmem-ykg0', label: 'DMEM' },
+    },
+    {
+      key: 'material-spec:MSP-DRAFT-EVG_CELLROX-01', label: 'DMEM + FBS', badge: 'Composition',
+      mention: { type: 'material', entityKind: 'material-spec', id: 'MSP-DRAFT-EVG_CELLROX-01', label: 'DMEM + FBS' },
+    },
+    {
+      key: 'material:MAT-thermo-dmem-1vq1', label: 'Thermo DMEM', badge: 'Concept',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-dmem-1vq1', label: 'Thermo DMEM' },
+    },
+    {
+      key: 'material:MAT-dmemhepg2-1a2b', label: 'DMEMHepG2', badge: 'Concept',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-dmemhepg2-1a2b', label: 'DMEMHepG2' },
+    },
+  ]
+
+  it('renders ≤3 inline candidate buttons under the question + the search escape hatch; the popover stays CLOSED on mount', async () => {
+    resolveMaterial.mockResolvedValue(hits)
+    const { container } = render(<ClarificationPicker request={top3Request} onPick={vi.fn()} />)
+    // One click answers the card: the top THREE ranked candidates as buttons
+    // (the row's accessible name carries its badge word, so the LABEL span is
+    // asserted inside each row).
+    const rows = await screen.findAllByTestId('clarification-top3-row')
+    expect(rows).toHaveLength(3)
+    expect(within(rows[0]!).getByText('DMEM')).toBeTruthy()
+    expect(within(rows[1]!).getByText('DMEM + FBS')).toBeTruthy()
+    expect(within(rows[2]!).getByText('Thermo DMEM')).toBeTruthy()
+    // The FOURTH candidate is not inlined (top-three only).
+    expect(screen.queryByText('DMEMHepG2')).toBeNull()
+    // Escape hatch: the existing popover, still open-on-request.
+    expect(screen.getByTestId('clarification-top3-search')).toBeTruthy()
+    expect(screen.getByText('None of these — search…')).toBeTruthy()
+    // The mount pass must NOT have opened the picker (single-open invariant:
+    // the popover is open-on-request only — the uifix2 stacking defect).
+    expect(container.querySelector('[role="listbox"]')).toBeNull()
+    expect(screen.queryByTestId('clarification-popover')).toBeNull()
+  })
+
+  it('a top-3 button answers the card through onPick with the candidate\'s mention (one click, no popover)', async () => {
+    resolveMaterial.mockResolvedValue(hits)
+    const onPick = vi.fn()
+    const { container } = render(<ClarificationPicker request={top3Request} onPick={onPick} />)
+    const rows = await screen.findAllByTestId('clarification-top3-row')
+    fireEvent.click(rows[0]!)
+    await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1))
+    const answer = onPick.mock.calls[0][0] as { mentionToken?: string; ref?: unknown }
+    expect(answer.mentionToken).toBe('[[material:MAT-dmem-ykg0|DMEM]]')
+    expect(answer.ref).toEqual({ kind: 'record', id: 'MAT-dmem-ykg0', type: 'material', label: 'DMEM' })
+    // The popover was never involved.
+    expect(container.querySelector('[role="listbox"]')).toBeNull()
+  })
+
+  it('the mount pass is a SINGLE bounded, non-UI resolver call (no onUpdate) with an AbortSignal aborted on unmount (OQ3)', async () => {
+    let passCtx: { signal?: AbortSignal; onUpdate?: unknown } = {}
+    // Never settles: the pass is still in flight when the card unmounts, so
+    // the abort is observable.
+    resolveMaterial.mockImplementation((_q: string, c: unknown) => {
+      passCtx = c as typeof passCtx
+      return new Promise<SlashSuggestion[]>(() => {})
+    })
+    const view = render(<ClarificationPicker request={top3Request} onPick={vi.fn()} />)
+    // Exactly ONE resolver pass on mount (the OQ3 top-3 source), seeded noun.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(resolveMaterial).toHaveBeenCalledTimes(1)
+    expect(resolveMaterial.mock.calls[0][0]).toBe('DMEM')
+    // NON-UI: the pass carries no streaming onUpdate (it feeds buttons only)
+    // and carries an AbortSignal (a card that unmounts mid-fetch drops it).
+    expect(passCtx.onUpdate).toBeUndefined()
+    expect(passCtx.signal).toBeInstanceOf(AbortSignal)
+    expect(passCtx.signal!.aborted).toBe(false)
+    view.unmount()
+    expect(passCtx.signal!.aborted).toBe(true)
+    // …and still no open popover (the mount pass is non-UI).
+    expect(document.querySelectorAll('[role="listbox"]').length).toBe(0)
   })
 })

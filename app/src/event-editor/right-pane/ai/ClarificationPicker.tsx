@@ -13,7 +13,8 @@
  * `handleClarificationAnswer` round-trips it into the next agent turn.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 import { resolveMaterial, resolveLabware, resolveEquipment } from '../../../shared/taptab/slashMenu/resolvers'
 import { SlashSuggestionList } from '../../../shared/taptab/slashMenu/SlashSuggestionList'
@@ -83,12 +84,16 @@ export function openClarificationPicker(id: string): void {
 
 /**
  * Open state for one picker. The input renders ALWAYS (the answer affordance);
- * only the popover/listbox is gated on `open`, and the resolver runs only when
- * open (no auto-search on mount). `open` is the single-open store key === this
- * picker's question id: opening this one moves the key (closing every sibling);
- * dismissal — picking a row (onPick), an outside mousedown, or Escape — clears
- * it; a fresh mount (page load) sees storeKey=null, so reloads restore NO open
- * pickers.
+ * only the popover/listbox is gated on `open`. TWO resolver passes exist:
+ * (1) the popover pass runs only when open (no auto-search on mount); and
+ * (2) L2-CLARIFY-PICKER-1 (P3, OQ3 ruling) a BOUNDED, popover-closed, non-UI
+ * pass on the seeded noun at card mount — it fetches candidates for the
+ * top-three inline buttons ONLY. It must NOT open the picker: the single-open
+ * store and the open-on-request semantics are exactly as pinned (uifix2 [C]).
+ * `open` is the single-open store key === this picker's question id: opening
+ * this one moves the key (closing every sibling); dismissal — picking a row
+ * (onPick), an outside mousedown, or Escape — clears it; a fresh mount (page
+ * load) sees storeKey=null, so reloads restore NO open pickers.
  */
 function useClarificationPickerOpen(key: string) {
   const storeKey = useSyncExternalStore(
@@ -249,19 +254,44 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       }
     }
   }, [request.id])
-  // The suggestion popover is anchored under the field; near the bottom of a
-  // phone viewport it must flip ABOVE the field instead of hanging off-screen.
-  const [listAbove, setListAbove] = useState(false)
-  const anchorRef = useRef<HTMLDivElement>(null)
+  // L2-CLARIFY-PICKER-1 (Change 4, W3 geometry — amendment (b)): the in-flow
+  // `--above` FLIP is GONE. Upward overflow of an absolutely-positioned
+  // descendant is NOT scroll-recoverable (ChatLog.css:153-167 — the re-override
+  // exists for a documented reason and STAYS); the flip put the listbox at
+  // y=198 against a scrollport top of 255 and clipped the first row forever.
+  // The popover now renders via createPortal to document.body anchored at the
+  // field (fixed positioning: the field's rect, measured on open + on scroll),
+  // with max-height = distance to the viewport bottom and its OWN overflow-y
+  // scrollbar — every row is reachable via the list's own scroll, nothing is
+  // clipped, and the `--above` modifier is never re-enabled. The portal keeps
+  // the dismissal listeners (outside-mousedown / Escape, below) working: the
+  // picker root is no longer the popover's DOM ancestor, so the outside test
+  // also ignores the portal node.
+  const [popoverRect, setPopoverRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   // L2-SUITE-A-uifix3 D5 (regate-5): the seeded search field — see the
-  // onFocus select() on the input below.
-  const searchRef = useRef<HTMLInputElement>(null)
+  // onFocus select() on the input below. Change 4 (W3, portal): the field is
+  // also the portal ANCHOR (its rect positions the document.body popover);
+  // declared here (not after the `!resolver` early return) — hook order.
+  const searchAnchorRef = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<SlashSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const listRef = useRef<{ onKeyDown(e: KeyboardEvent): boolean } | null>(null)
 
   const resolver = resolverFor(request)
+
+  // L2-CLARIFY-PICKER-1 (P3): the top THREE ranked candidates as inline buttons
+  // (one click answers the card). Filled by the bounded, popover-closed mount
+  // pass below (OQ3) AND by the open popover's own results (they are the same
+  // ranked list — the escape hatch re-runs the same resolver pass). Mint/
+  // floor rows (resolveMention) and disabled rows are NOT inlined: only
+  // concrete candidates. A card with zero candidates behaves exactly as today
+  // (bait 8: mint/preconditions path untouched) — the buttons + hatch simply
+  // do not render.
+  const [topCandidates, setTopCandidates] = useState<SlashSuggestion[]>([])
+  const topRef = useRef<SlashSuggestion[]>([])
+  topRef.current = topCandidates
+  const busyRef = useRef(false)
 
   /**
    * A NEW question must never inherit the previous one's search. The questions
@@ -273,7 +303,90 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   useEffect(() => {
     setQuery(request.query ?? '')
     setItems([])
+    setTopCandidates([])
   }, [request.id, request.query])
+
+  const command = useCallback(
+    (item: SlashSuggestion) => {
+      if (item.disabled || busyRef.current) return
+      busyRef.current = true
+      setBusy(true)
+      void (async () => {
+        try {
+          // Mint affordance produces its mention async; everything else is inline.
+          const mention = item.resolveMention ? await item.resolveMention() : item.mention
+          if (!mention) return
+          const answer = await groundedAnswerFromMention(request, mention)
+          if (answer) {
+            onPick(answer, request)
+            // Dismiss-on-select: a pick answers the question, so the picker
+            // closes (no open picker lingering beside the answered card).
+            closePicker()
+          }
+        } finally {
+          busyRef.current = false
+          setBusy(false)
+        }
+      })()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [request, onPick],
+  )
+
+  // L2-CLARIFY-PICKER-1 (P3, OQ3 ruling): the BOUNDED, popover-closed, non-UI
+  // resolver pass on the seeded noun at card mount. It feeds the top-three
+  // inline buttons ONLY — it must NOT open any picker (the single-open store
+  // and the open-on-request semantics are untouched: the popover stays
+  // open-on-request, the uifix2 [C] pins above). Bounds: MATERIAL_PAGE (the
+  // same page the open popover's first paint shows) + the question's layer
+  // scope; AbortSignal on unmount (a card that scrolls away mid-fetch drops
+  // the pass). The popover pass below remains the open-path source of truth;
+  // when it settles it refreshes the buttons from the SAME ranked list.
+  useEffect(() => {
+    if (!resolver || !request.query || request.query.trim().length === 0) return
+    const controller = new AbortController()
+    let active = true
+    void (async () => {
+      try {
+        const initial = await resolver(request.query!, {
+          selection: null,
+          signal: controller.signal,
+          // L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): PICKER-constructed pass —
+          // the resolver attaches the per-row consequence + focus-default flag
+          // (the doc-editor /m stays chrome-free; it never sets this).
+          pickerRows: true,
+          ...(request.materialLayer ? { materialLayer: request.materialLayer } : {}),
+        })
+        if (!active) return
+        setTopCandidates(
+          initial.filter((s) => !s.resolveMention && !s.disabled && !s.pinBottom).slice(0, 3),
+        )
+      } catch {
+        // A mount-pass failure leaves the card honest: no buttons, the
+        // popover path is untouched (never fabricate candidates).
+      }
+    })()
+    return () => {
+      active = false
+      controller.abort()
+    }
+    // `request.id` matters: a new question re-runs the pass with its own noun.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request.id, request.query, request.materialLayer])
+
+  // The open popover's results are the SAME ranked list the buttons show —
+  // refresh the buttons exactly ONCE when the popover pass SETTLES (the
+  // initial results). A ref (not state): no extra render; `settled` flips in
+  // the popover pass's .then and resets when the pass re-runs (query/open
+  // change — the effect cleanup below), so streaming additions and a fresh
+  // noun's pass each settle exactly once.
+  const popoverSettled = useRef(false)
+  useEffect(() => {
+    if (!open || loading || !popoverSettled.current) return
+    setTopCandidates(
+      items.filter((s) => !s.resolveMention && !s.disabled && !s.pinBottom).slice(0, 3),
+    )
+  }, [items, open, loading])
 
   useEffect(() => {
     // L2-SUITE-A-uifix2 [C]: gated on `open` — the resolver runs only when the
@@ -297,12 +410,17 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     }
     const controller = new AbortController()
     let active = true
+    popoverSettled.current = false
     setLoading(true)
     // Debounce so each keystroke doesn't fire a fresh resolver/abort storm.
     const timer = setTimeout(() => {
       resolver(query, {
         selection: null,
         signal: controller.signal,
+        // L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): PICKER-constructed pass —
+        // the open popover's rows carry the per-row consequence + focus-default
+        // flag (the doc-editor /m never sets this; it stays chrome-free).
+        pickerRows: true,
         // Scope the menu to the layer the QUESTION is about: a "which prepared
         // solution?" question must not offer a bare compound. Absent for the
         // general /m menu (there the biologist browses everything on purpose).
@@ -315,6 +433,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           if (!active) return
           setItems(merge([], initial))
           setLoading(false)
+          popoverSettled.current = true
         })
         .catch(() => {
           if (active) setLoading(false)
@@ -334,14 +453,19 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // picker (anywhere in the transcript) closes it. The gate's pickers stacked
   // because nothing ever dismissed them; the outside click is the standard
   // popover dismissal. (The single-open store also closes a sibling when the
-  // user opens another card's picker.)
+  // user opens another card's picker.) Change 4 (portal): the popover lives
+  // in document.body (a portal), so the "outside" test must also ignore the
+  // portal node — a click INSIDE the open list is not an outside click.
+  const popoverNodeRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (!open) return
     const handler = (event: MouseEvent) => {
       const node = containerRef.current
-      if (node && event.target instanceof Node && !node.contains(event.target)) {
-        closePicker()
-      }
+      const portal = popoverNodeRef.current
+      if (!(event.target instanceof Node)) return
+      if (node && node.contains(event.target)) return
+      if (portal && portal.contains(event.target)) return
+      closePicker()
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -349,40 +473,48 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
 
   if (!resolver) return null
 
-  const command = (item: SlashSuggestion) => {
-    if (item.disabled || busy) return
-    setBusy(true)
-    void (async () => {
-      try {
-        // Mint affordance produces its mention async; everything else is inline.
-        const mention = item.resolveMention ? await item.resolveMention() : item.mention
-        if (!mention) return
-        const answer = await groundedAnswerFromMention(request, mention)
-        if (answer) {
-          onPick(answer, request)
-          // Dismiss-on-select: a pick answers the question, so the picker
-          // closes (no open picker lingering beside the answered card).
-          closePicker()
-        }
-      } finally {
-        setBusy(false)
-      }
-    })()
-  }
-
-
-  // Keep the popover inside the viewport: flip above the field when there is
-  // not enough room below (a 390x844 phone put the rows ~360px below the fold).
+  // Keep the popover inside the viewport — Change 4 (W3, amendment (b)): no
+  // `--above` flip. The popover portals to document.body at the field's
+  // position (fixed); max-height = distance to the viewport bottom, so the
+  // list never hangs off-screen and its OWN overflow-y scroll reaches every
+  // row (scroll-recoverable by construction — there is no upward overflow).
+  // Measured on open and on window scroll (the field moves under the portal).
   useEffect(() => {
-    const el = anchorRef.current
-    if (!el || items.length === 0) {
-      setListAbove(false)
+    if (!open) {
+      setPopoverRect(null)
       return
     }
-    const rect = el.getBoundingClientRect()
-    const listHeight = Math.min(280, window.innerHeight * 0.4)
-    setListAbove(rect.bottom + 6 + listHeight > window.innerHeight && rect.top > listHeight + 6)
-  }, [items.length, query])
+    const measure = () => {
+      const el = searchAnchorRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      // Clamp the available height (jsdom reports 0x0 rects; a 48px+ listbox
+      // keeps the portal renderable in tests, and the live value is the real
+      // distance to the viewport bottom).
+      const maxHeight = Math.max(48, window.innerHeight - (rect.bottom + 6))
+      const next = { top: rect.bottom + 6, left: rect.left, width: Math.max(rect.width, 0), maxHeight }
+      // Re-render ONLY when the geometry actually changed (advc-c1 DEFECT 9):
+      // a fresh object every tick re-renders the whole portal; identical
+      // geometry keeps the prior state (no re-render).
+      setPopoverRect((prev) => {
+        if (prev && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.maxHeight === next.maxHeight) return prev
+        return next
+      })
+    }
+    const onScroll = (event: Event) => {
+      // Ignore scroll events originating INSIDE the portal node (advc-c1
+      // DEFECT 9): scrolling the popover's OWN list moves the list, not the
+      // field, so it must not trigger a re-measure. Only page/field scroll
+      // (the field moves under the fixed portal) re-measures.
+      const portal = popoverNodeRef.current
+      const target = event.target
+      if (portal && target instanceof Node && portal.contains(target)) return
+      measure()
+    }
+    measure()
+    window.addEventListener('scroll', onScroll, true)
+    return () => window.removeEventListener('scroll', onScroll, true)
+  }, [open])
 
   // The question's own layer decides the wording; only an unscoped menu (or a
   // concept question) invites minting, because a mint creates a concept — which
@@ -468,11 +600,12 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   }
 
   return (
-    <div className="message-log__clarification-picker" ref={containerRef}>
-      <input
-        type="text"
-        className="message-log__clarification-search"
-        ref={searchRef}
+    <>
+      <div className="message-log__clarification-picker" ref={containerRef}>
+        <input
+          type="text"
+          className="message-log__clarification-search"
+          ref={searchAnchorRef}
         value={query}
         placeholder={placeholder}
         autoComplete="off"
@@ -488,7 +621,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           // keystroke, so the gate's "golden bead plate" + typed "bead"
           // dead-ended at "golden bead platebead" → No matches. Selecting the
           // whole seed on focus makes the first keystroke REPLACE the seed.
-          searchRef.current?.select()
+          searchAnchorRef.current?.select()
         }}
         onChange={(e) => {
           // Typing into a closed field opens it (open-on-request); typing
@@ -527,25 +660,77 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           <span className="message-log__clarification-mint__label">{mintLocalTermLabel(query.trim())}</span>
         </button>
       ) : null}
-      {open ? (
-        <div
-          ref={anchorRef}
-          className={
-            listAbove
-              ? 'message-log__clarification-popover message-log__clarification-popover--above'
-              : 'message-log__clarification-popover'
-          }
-          data-testid="clarification-popover"
-        >
-          <SlashSuggestionList
-            ref={listRef}
-            items={items}
-            loading={loading}
-            emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
-            command={command}
-          />
+      {/* L2-CLARIFY-PICKER-1 (P3): the top THREE ranked candidates, one click
+          each (they are the same ranked list Change 1 produces — composition
+          rows may appear in the three but can never be the focused default).
+          The `None of these — search…` escape hatch opens the EXISTING
+          popover (open-on-request, single-open store untouched). Rendered
+          only when the bounded mount pass found candidates (bait 8: a
+          zero-candidate card behaves exactly as today — mint/preconditions
+          path untouched). */}
+      {topCandidates.length > 0 ? (
+        <div className="message-log__clarification-top3" data-testid="clarification-top3">
+          {topCandidates.map((candidate) => (
+            <button
+              key={candidate.key}
+              type="button"
+              className="message-log__clarification-top3__row"
+              data-testid="clarification-top3-row"
+              disabled={busy}
+              onClick={() => command(candidate)}
+            >
+              <span
+                className="message-log__clarification-top3__badge"
+                style={{
+                  color: badgeStyles(candidate.badge).color,
+                  background: badgeStyles(candidate.badge).background,
+                  border: `1px solid ${badgeStyles(candidate.badge).border}`,
+                }}
+              >
+                {candidate.badge}
+              </span>
+              <span className="message-log__clarification-top3__label">{candidate.label}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className="message-log__clarification-top3__search"
+            data-testid="clarification-top3-search"
+            disabled={busy}
+            onClick={() => {
+              openPicker()
+              searchAnchorRef.current?.focus()
+            }}
+          >
+            None of these — search…
+          </button>
         </div>
       ) : null}
-    </div>
+      </div>
+      {open &&
+        popoverRect &&
+        createPortal(
+          <div
+            ref={popoverNodeRef}
+            data-testid="clarification-popover"
+            className="message-log__clarification-popover message-log__clarification-popover--portal"
+            style={{
+              top: popoverRect.top,
+              left: popoverRect.left,
+              width: popoverRect.width,
+              maxHeight: popoverRect.maxHeight,
+            }}
+          >
+            <SlashSuggestionList
+              ref={listRef}
+              items={items}
+              loading={loading}
+              emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
+              command={command}
+            />
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }

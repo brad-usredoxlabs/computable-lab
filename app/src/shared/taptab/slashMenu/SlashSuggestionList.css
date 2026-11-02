@@ -58,6 +58,28 @@
   overflow-wrap: anywhere;
 }
 
+/* L2-CLARIFY-PICKER-1 (P1/P2): the contains-section presentation label (the
+   data-declared template, e.g. `contains "DMEM" (9)`) rides the FIRST row of
+   a contains band — a small caps header line, not a candidate of its own. */
+.slash-suggestion-list__section {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+  color: var(--cl-text-faint, #94a3b8);
+}
+
+/* L2-CLARIFY-PICKER-1 (P2): the per-row commit-consequence line — what
+   committing the row binds, generated from the row's own record. Dimmer than
+   the subtitle: it is the "if you press Enter" fact, read second. */
+.slash-suggestion-list__consequence {
+  font-size: 0.72rem;
+  margin-top: 2px;
+  color: var(--cl-text-faint, #94a3b8);
+  overflow-wrap: anywhere;
+}
+
 .slash-suggestion-list__badge {
   flex-shrink: 0;
   font-size: 0.68rem;

@@ -17,6 +17,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
 export interface ChatLogProps {
@@ -78,6 +79,43 @@ function isClarificationAnswered(messages: ChatMessage[], index: number): boolea
 /** The question's prompt for the compact row (typed arm first — canonical). */
 function clarificationQuestion(message: ChatMessage): string | undefined {
   return message.clarificationRequests?.[0]?.prompt ?? message.clarification?.prompt
+}
+
+/**
+ * L2-CLARIFY-PICKER-1 (P2, W5) — the human-facing ANSWER sentence. The picker
+ * sends the agent `Use [[material:…|…]] for material.` (byte-stable wire
+ * contract — clarificationAnswerPrompt.ts is untouched), but the TRANSCRIPT
+ * row must never leak that wiki-markup to the scientist. Each mention token
+ * `[[type:id|label]]` reads as `label (kind-word id)`, the kind word being the
+ * existing ontology term for the mention kind (concept / formulation /
+ * instance / aliquot / vendor-product — no new vocabulary). A plain-text
+ * answer (no token) renders exactly as written.
+ */
+const MENTION_TOKEN_RE = /\[\[([A-Za-z][\w-]*):([^\][|]*)(?:\|([^\]]*))?\]\]/g
+// L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 3): the kind-word table is the ONE
+// shared vocabulary in ./tokens (ANSWER_KIND_WORD) — the answered row and the
+// per-row consequence line both read from it, so a row's id/kind never gets a
+// second human rendering. (No local copy: that was the duplicate vocabulary.)
+
+export function clarificationAnsweredText(content: string): string {
+  if (!content.includes('[[')) return content
+  return content.replace(MENTION_TOKEN_RE, (_m, type: string, id: string, label?: string) => {
+    const name = (label ?? id).trim() || id
+    return `${name} (${ANSWER_KIND_WORD[type] ?? type} ${id})`
+  })
+}
+
+/**
+ * L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 4) — the human-facing BUBBLE text.
+ * The picker's answer turn is stored verbatim as the user message (the wire
+ * prompt `Use [[material:…|…]] for material.` is byte-stable for the AGENT —
+ * clarificationAnswerPrompt.ts + server/src/ai untouched), but the TRANSCRIPT
+ * bubble must never show the scientist their own raw wiki-markup. Format the
+ * mention tokens with the SAME readable-token helper as the answered row
+ * (`[[type:id|label]]` -> `label (kind-word id)`); token-free text is a no-op.
+ */
+export function clarificationBubbleText(content: string): string {
+  return clarificationAnsweredText(content)
 }
 
 export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick }: ChatLogProps) {
@@ -286,7 +324,12 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               <pre className="chat-log-intent-card__body" data-testid="chat-log-intent-card-body">{message.shorthand}</pre>
             </div>
           )}
-          <p>{message.content}</p>
+          {/* L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 4): the bubble renders the
+              mention tokens as the SAME readable-token sentence as the
+              answered row — the raw `[[material:…]]` wiki-markup the picker
+              sends to the agent (byte-stable wire) never shows the scientist
+              their own turn. Token-free content passes through unchanged. */}
+          <p>{clarificationBubbleText(message.content)}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
               When the typed requests ride the message (the universal done
@@ -303,7 +346,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               ABSENT from the DOM, not hidden). */}
           {answered ? (
             <div className="chat-log-clarification-answered" data-testid="chat-log-clarification-answered">
-              Answered: {answerMessage?.content} — {clarificationQuestion(message)}
+              Answered: {answerMessage ? clarificationAnsweredText(answerMessage.content) : ''} — {clarificationQuestion(message)}
             </div>
           ) : (
             <>

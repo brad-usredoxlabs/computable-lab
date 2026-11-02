@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveEquipment,
@@ -8,6 +9,8 @@ import {
   resolveTarget,
 } from './resolvers'
 import type { SlashResolverContext } from './types'
+import { __resetCandidateRankingPolicy, __setCandidateRankingPolicy } from './policy'
+import type { CandidateRankingPolicy } from './clarifyPickerRanking'
 
 // SHORTHAND-CORPUS WS6 D1: the vendor Exa tier is a DECLARED capability
 // (integrations.exa), not a default. Stub the flag seam so each test declares
@@ -30,9 +33,34 @@ function ctx(
 
 const fetchSpy = vi.fn()
 
+/**
+ * L2-CLARIFY-PICKER-1: the declared candidate-ranking policy, byte-mirroring the
+ * `schema/lab/material-profile.registry.yaml` `candidate_ranking` block (OQ2).
+ * The resolver reads this from the module cache (./policy); seeding it in
+ * beforeEach makes the resolver path deterministic and — critically — means
+ * `getCandidateRankingPolicy` NEVER fires a fetch (no extra request pollutes
+ * the mock queue, so the byte-stability + request-shape pins hold).
+ */
+const DECLARED: CandidateRankingPolicy = {
+  containsSectionLabel: 'contains "{label}" ({count})',
+  families: {
+    'saved-stock': { rank: 0, canBeDefault: true },
+    'vendor-reagent': { rank: 1, canBeDefault: true },
+    'prepared-material': { rank: 2, canBeDefault: true },
+    'biological-derived': { rank: 3, canBeDefault: true },
+    'concept-only': { rank: 4, canBeDefault: true },
+    composition: { rank: 4, canBeDefault: false },
+  },
+}
+
 beforeEach(() => {
   fetchSpy.mockReset()
   vi.stubGlobal('fetch', fetchSpy)
+  // L2-CLARIFY-PICKER-1: default to NO declared ranking (byte-stable, no fetch)
+  // so the pre-existing request-shape / byte-stability pins are untouched. The
+  // P1 ranking tests seed DECLARED explicitly.
+  __resetCandidateRankingPolicy()
+  __setCandidateRankingPolicy(null)
   // Default declared capability: Exa ON (the server default when the config
   // carries no `enabled: false`). The D1 tests below flip it explicitly.
   flags.exaVendorEnabled.mockReset()
@@ -709,9 +737,9 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
   }
 
-  async function runMenu(query: string) {
+  async function runMenu(query: string, ctxOverrides: Partial<SlashResolverContext> = {}) {
     const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
-    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more) }))
+    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more), ...ctxOverrides }))
     // Let the below-first-paint stream (component expansion + ontology tiers) settle.
     await new Promise((r) => setTimeout(r, 0))
     return { out, additions }
@@ -908,4 +936,116 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
       .filter((u) => u.includes('/materials/search')).length
     expect(searchCalls).toBe(2)
   })
+
+  it('L2-CLARIFY-PICKER-1 (RED): the exact-match concept DMEM is the first + defaultable workspace row, NOT the W1 row-0 composition', async () => {
+    // The 18-row DMEM card's WORKSPACE page (formulations + material search):
+    // today (pre-item) the /m comparator sorted by the hardcoded per-category
+    // rank table, so the
+    // COMPOSITION formulation `DMEM + FBS` (saved-stock, rank 0) is the
+    // keyboard default and the plain `DMEM` the prompt named is buried.
+    // The new intent-ranking comparator (data-declared candidate_ranking)
+    // puts the equality-band concept first and never-defaults a composition.
+    __setCandidateRankingPolicy(DECLARED)
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-dmemhepg2-1a2b', kind: 'material', title: 'DMEMHepG2', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+          { recordId: 'MAT-trypan-blue-7f2a', kind: 'material', title: 'Trypan blue', category: 'vendor-reagent' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+        {
+          recipeId: 'REC-AGGR', recipeName: 'aggregate', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-02', name: 'Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM')
+
+    // P1: the row the prompt NAMED (exact label match) is first — not the
+    // composition. (RED: today out[0] is the `DMEM + FBS` composition, rank 0.)
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    // advc-c1 DEFECT 8: the DOC-EDITOR /m path (pickerRows absent) carries NO
+    // P2 chrome — the consequence line + focus-default flag are PICKER-
+    // constructed rows only (the editor stays byte-stable; bait 6). The
+    // comparison still reorders (equality-band concept first).
+    expect(out[0]?.consequence).toBeUndefined()
+    expect(out[0]?.canBeDefault).toBeUndefined()
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
+    // …and the composition row is STILL not the first row (the comparator is
+    // applied; only the chrome is absent).
+    expect(out.findIndex((r) => r.badge === 'Composition')).toBeGreaterThan(0)
+  })
+
+  it('L2-CLARIFY-PICKER-1 (advc-c1 DEFECT 8): a picker-constructed pass (pickerRows:true) carries the P2 chrome — consequence + the data-flag focus-default', async () => {
+    // The clarification picker's resolver pass sets ctx.pickerRows:true. ONLY
+    // then do the per-row P2 fields attach (advc-c1 DEFECT 8: the consequence
+    // must NOT leak into the doc-editor /m). The data flag drives
+    // canBeDefault (composition => false, the never-default row); consequence
+    // is generated from the row's own record.
+    __setCandidateRankingPolicy(DECLARED)
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM', { pickerRows: true })
+
+    // The concept row (the one the prompt named) is first and carries its
+    // commit-consequence line.
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    expect(out[0]?.consequence).toBe('binds material record MAT-dmem-ykg0 "DMEM" (concept)')
+    expect(out[0]?.canBeDefault).toBe(true) // defaultable => the data flag (true)
+    // The composition row carries the composition consequence + the
+    // never-default flag (the data flag: composition can_be_default: false).
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
+    expect(firstComposition!.consequence).toMatch(/composition of \d+ components/)
+    expect(firstComposition!.canBeDefault).toBe(false)
+  })
 });
+
+/**
+ * L2-CLARIFY-PICKER-1 — P1 source-pin (spec RED-plan item 3; the idiom
+ * precedent is receivingMintPin.test.ts:134 — readFileSync the source and
+ * pin the DELETION). The old hardcoded per-category rank table is gone from
+ * resolvers.ts: no rank integer survives in TS (the data is the authority —
+ * the registry `candidate_ranking` block). The pattern is split so this
+ * assertion file itself never carries the full identifier (the spec's
+ * `git grep` gate for the deleted table must come back empty).
+ */
+describe('L2-CLARIFY-PICKER-1 — P1 source-pin: the hardcoded rank table is deleted (grep-clean)', () => {
+  const resolversSrc = readFileSync('src/shared/taptab/slashMenu/resolvers.ts', 'utf8')
+  const DELETED = ['MATERIAL', 'CATEGORY', 'RANK'].join('_')
+
+  it('resolvers.ts carries no copy of the deleted hardcoded rank table', () => {
+    expect(resolversSrc).not.toContain(DELETED)
+  })
+})
