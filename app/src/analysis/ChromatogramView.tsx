@@ -20,6 +20,14 @@
  *  - Interaction state (zoom domain, selection, hover, active peak) is
  *    component-local view state — never written back to any record.
  *
+ * B1/B2/B3 — optional view-spec bindings (free-form per
+ * view-spec.schema.yaml; documented here, not in the schema — no schema
+ * edit): `markerSaturationFlags` — a TOKEN LIST (string[], DATA) of
+ * saturation flag codes. A marker row is saturated only when its boolean
+ * field (markerSaturatedField) is true OR one of the DECLARED tokens appears
+ * in its flags column; without the declaration, flags never mark saturation
+ * (never guessed from arbitrary flags; zero amplitude comparisons anywhere).
+ *
  * Gesture model (documented; the spec names "drag-select" zoom + "no-modifier"
  * pan as two distinct drags, so a modifier disambiguates):
  *   - plain left-drag  = ZOOM drag-select (rubber-band -> set x-domain)
@@ -49,6 +57,14 @@ export interface ChromatogramBindings {
   markerLabelField?: string
   markerSaturatedField?: string
   markerFlagsField?: string
+  /** B3: the DECLARED saturation flag tokens (the view-spec binding;
+   *  a string[] token list — the revision sets it as DATA).
+   *  A marker row is saturated only when its boolean field is true OR one
+   *  of these declared tokens appears in its flags column. Absent (or empty)
+   *  ⇒ flags never mark saturation (never guessed from arbitrary flags).
+   *  Free-form per view-spec.schema.yaml (bindings are free objects); this
+   *  key is documented here, not in the schema (no schema edit). */
+  markerSaturationFlags?: string[]
 }
 
 interface Domain {
@@ -209,6 +225,20 @@ export function ChromatogramView({
     [b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField],
   )
 
+  // B3: the DECLARED saturation flag tokens (the optional view-spec binding
+  // `markerSaturationFlags` — a string[] token list the revision sets as
+  // DATA; absent when the binding is not declared). A row
+  // is saturated ONLY when its boolean field is true OR one of the DECLARED
+  // tokens appears in its flags column — never computed, never guessed from
+  // undeclared flags (zero amplitude comparisons; the token list is data,
+  // not a TS default).
+  const markerSaturationFlags = useMemo(() => {
+    const raw = b.markerSaturationFlags
+    if (!Array.isArray(raw)) return undefined
+    const tokens = raw.filter((t): t is string => typeof t === 'string' && t.length > 0)
+    return tokens.length > 0 ? tokens : undefined
+  }, [b.markerSaturationFlags])
+
   const markers = useMemo<MarkerRow[]>(() => {
     const ma = resolvedMarkerArtifact
     if (!ma) return []
@@ -219,8 +249,9 @@ export function ChromatogramView({
       label: markerFields.label,
       saturated: markerFields.saturated,
       flags: markerFields.flags,
+      ...(markerSaturationFlags ? { saturationFlags: markerSaturationFlags } : {}),
     })
-  }, [resolvedMarkerArtifact, markerFields])
+  }, [resolvedMarkerArtifact, markerFields, markerSaturationFlags])
 
   const skippedNoRt = markers.filter((m) => m.rt === null).length
 
@@ -364,6 +395,15 @@ export function ChromatogramView({
                 <text x={px + 3} y={PAD_T + 10} className="chromatogram__markerlabel">
                   {m.label}
                 </text>
+                {/* B3: the VISIBLE saturation indicator — a word on the
+                    trace (never colour alone; readable with CSS disabled /
+                    greyscale). The word is the data-carried field name of
+                    the boolean field (the markerSaturatedField data). */}
+                {m.saturated ? (
+                  <text x={px + 3} y={PAD_T + 21} className="chromatogram__markersat" data-testid={`chromatogram-marker-saturated-${m.peakId}`}>
+                    {markerFields.saturated}
+                  </text>
+                ) : null}
               </g>
             )
           })}
@@ -381,6 +421,15 @@ export function ChromatogramView({
           <rect x={Math.min(sel.a, sel.b)} y={PAD_T} width={Math.abs(sel.b - sel.a)} height={PLOT_H} className="chromatogram__sel" data-testid="chromatogram-selection" />
         )}
       </svg>
+
+      {/* B3: the legend — a TEXTUAL line naming the visible saturation
+          indicator (rendered only when at least one marker is marked; no
+          dead chrome). The word is the data-carried saturated field name. */}
+      {markers.some((m) => m.saturated) ? (
+        <div className="chromatogram__legend" data-testid="chromatogram-saturation-legend">
+          {markerFields.saturated}: the marker is marked on the trace (word + colour) and its row is flagged below
+        </div>
+      ) : null}
 
       {/* peak-table micro-table with row <-> trace sync.
           B2: the table carries a <thead> — the column names are
@@ -414,7 +463,7 @@ export function ChromatogramView({
                 >
                   <td className="chromatogram__rowlabel">{m.label}</td>
                   <td>{m.rt === null ? '—' : fmt(m.rt)}</td>
-                  <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? 'saturated' : ''}</td>
+                  <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? markerFields.saturated : ''}</td>
                   <td className="chromatogram__rowflags">{m.flags}</td>
                 </tr>
               ))}

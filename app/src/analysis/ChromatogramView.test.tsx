@@ -382,6 +382,64 @@ describe('ChromatogramView — B2 unit ownership: units on the axis title only, 
   })
 })
 
+describe('ChromatogramView — B3 saturation declared, never computed (spec §5 B3)', () => {
+  const satTrueRow = { peak: 'P1', rt_min: 1.0, saturated: true, flags: [] }
+  const flagOnlySatRow = { peak: 'P2', rt_min: 3.0, saturated: false, flags: ['UNRECOVERABLE_SATURATED'] }
+  const flagOnlyOverlapRow = { peak: 'P3', rt_min: 4.0, saturated: false, flags: ['OVERLAP_SHARED_BASELINE'] }
+
+  function peakTable(rows: Array<Record<string, unknown>>) {
+    return { id: 'AOUT-000002', name: 'peak_table', dataKind: 'table', inlineValue: { rows } }
+  }
+
+  function saturatedTraceIds() {
+    const el = root()
+    return Array.from(el.querySelectorAll('[data-testid^="chromatogram-marker-"]'))
+      .filter((g) => (g.getAttribute('class') ?? '').includes('chromatogram__marker--saturated'))
+      .map((g) => g.getAttribute('data-testid'))
+  }
+
+  it('boolean true marks the trace marker with a VISIBLE word (the colour-only class is no longer the whole indicator)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTable([satTrueRow, flagOnlyOverlapRow])]}
+      />,
+    )
+    const marked = saturatedTraceIds()
+    expect(marked).toEqual(['chromatogram-marker-0'])
+    // The marker group carries the textual indicator (visible with the CSS
+    // disabled / greyscale — a word, not colour alone): the data-carried
+    // saturated field value rendered verbatim.
+    expect(screen.getByTestId('chromatogram-marker-0').textContent).toContain('saturated')
+    // The legend line names the indicator (text).
+    expect(screen.getByTestId('chromatogram-saturation-legend').textContent).toContain('saturated')
+  })
+
+  it('flags-only + declared token (markerSaturationFlags) marks the row; an UNDECLARED token (OVERLAP_SHARED_BASELINE) does not', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={{ ...MARKER_BINDINGS, markerSaturationFlags: ['UNRECOVERABLE_SATURATED'] }}
+        siblings={[peakTable([flagOnlySatRow, flagOnlyOverlapRow])]}
+      />,
+    )
+    expect(saturatedTraceIds()).toEqual(['chromatogram-marker-0'])
+  })
+
+  it('flags-only + NO declaration is NOT marked (never guessed from arbitrary flags)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTable([flagOnlySatRow])]}
+      />,
+    )
+    expect(saturatedTraceIds()).toEqual([])
+    expect(screen.queryByTestId('chromatogram-saturation-legend')).toBeNull()
+  })
+})
+
 describe('ChromatogramView hardcode boundary (bait #7 source-pin)', () => {
   it('prod ChromatogramView.tsx carries zero unit/domain literals (beyond the sanctioned field-name const)', () => {
     const source = readFileSync('src/analysis/ChromatogramView.tsx', 'utf8')

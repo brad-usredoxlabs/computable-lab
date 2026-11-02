@@ -170,9 +170,12 @@
 .chromatogram__marker--saturated .chromatogram__markerlabel { fill: #e8590c; }
 .chromatogram__marker--active .chromatogram__markerline { stroke: #1971c2; stroke-width: 2; }
 .chromatogram__marker--active .chromatogram__markerlabel { fill: #1971c2; }
+.chromatogram__markersat { fill: #e8590c; font-size: 9px; font-weight: 700; }
+.chromatogram__legend { color: #e8590c; font-size: .75rem; font-weight: 600; }
 .chromatogram__tablewrap { display: flex; flex-direction: column; gap: .3rem; }
 .chromatogram__skipnote { color: #6b7280; font-size: .75rem; }
 .chromatogram__table { border-collapse: collapse; width: 100%; font-size: .8rem; }
+.chromatogram__table th { border: 1px solid #e5e7eb; padding: .25rem .5rem; text-align: left; color: #374151; font-weight: 600; background: #f9fafb; }
 .chromatogram__table td { border: 1px solid #e5e7eb; padding: .25rem .5rem; }
 .chromatogram__table tr { cursor: pointer; }
 .chromatogram__table tr:hover { background: #f9fafb; }

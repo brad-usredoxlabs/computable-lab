@@ -304,10 +304,17 @@ export interface MarkerRow {
  * bindings (or the shipped default names held in DEFAULT_MARKER_FIELDS); the
  * row VALUES are data. Rows with a null/absent RT are returned with rt:null —
  * the component SKIPS them visibly (counted, never silently dropped).
+ *
+ * B3 (item 250TH-8): saturation is DECLARED, never computed. A row is
+ * saturated when its boolean field (named by `fields.saturated`) is true, OR
+ * when `fields.saturationFlags` (the DECLARED token list, from the view-spec
+ * binding) names a token that appears in the row's flags. No declared token
+ * list ⇒ flags never mark saturation (OVERLAP_SHARED_BASELINE and friends are
+ * not guessed to be saturation). Zero amplitude/height comparisons.
  */
 export function parseMarkerRows(
   rows: unknown,
-  fields: { rt: string; label: string; saturated?: string; flags?: string },
+  fields: { rt: string; label: string; saturated?: string; flags?: string; saturationFlags?: string[] },
 ): MarkerRow[] {
   if (!Array.isArray(rows)) return []
   return rows.map((raw, i) => {
@@ -318,12 +325,15 @@ export function parseMarkerRows(
     const label = typeof labelVal === 'string' && labelVal.length > 0 ? labelVal : String(i + 1)
     const satVal = fields.saturated ? r[fields.saturated] : undefined
     const flagVal = fields.flags ? r[fields.flags] : undefined
+    const flagList = Array.isArray(flagVal) ? flagVal : []
+    const declaredSat = fields.saturationFlags ?? []
+    const saturatedByFlag = declaredSat.length > 0 && flagList.some((f) => typeof f === 'string' && declaredSat.includes(f))
     return {
       peakId: String(i),
       rt,
       label,
-      saturated: satVal === true || (typeof satVal === 'string' && satVal.toLowerCase() === 'true'),
-      flags: typeof flagVal === 'string' ? flagVal : Array.isArray(flagVal) ? flagVal.join(', ') : '',
+      saturated: satVal === true || (typeof satVal === 'string' && satVal.toLowerCase() === 'true') || saturatedByFlag,
+      flags: typeof flagVal === 'string' ? flagVal : flagList.join(', '),
     }
   })
 }
@@ -459,6 +469,9 @@ export interface ChromatogramBindingsParsed {
   markerLabelField?: string
   markerSaturatedField?: string
   markerFlagsField?: string
+  /** B3: the DECLARED saturation flag tokens (a string[] — DATA from the
+   *  view-spec binding; absent when the binding is not declared). */
+  markerSaturationFlags?: string[]
   baselineFrom?: string
   baselineField?: string
   /** Unknown keys (forward-compat — listed, not rejected). */
@@ -471,13 +484,18 @@ const CHROMATOGRAM_KNOWN_KEYS = [
   'markerLabelField',
   'markerSaturatedField',
   'markerFlagsField',
+  'markerSaturationFlags',
   'baselineFrom',
   'baselineField',
 ] as const
 
+/** The array-typed known binding keys (B3: the declared token list). */
+const CHROMATOGRAM_ARRAY_KEYS = ['markerSaturationFlags'] as const
+
 /**
  * Parse a `chromatogram` view's `bindings` free object. Known keys must be
- * strings when present (named error otherwise); unknown keys are KEPT (the
+ * strings when present (named error otherwise); the array-typed known keys
+ * (B3 `markerSaturationFlags`) must be string[]s; unknown keys are KEPT (the
  * schema's own additionalProperties stance) and listed in `audit`.
  */
 export function parseChromatogramBindings(
@@ -485,12 +503,22 @@ export function parseChromatogramBindings(
 ): { ok: true; value: ChromatogramBindingsParsed } | { ok: false; error: BindingsGuardError } {
   const out: ChromatogramBindingsParsed = { audit: [] }
   for (const [k, v] of Object.entries(bindings ?? {})) {
+    if ((CHROMATOGRAM_ARRAY_KEYS as readonly string[]).includes(k)) {
+      const arr = v as unknown
+      if (!Array.isArray(arr) || !arr.every((t) => typeof t === 'string')) {
+        return { ok: false, error: { path: `bindings.${k}`, message: `bindings.${k} must be a string[] token list — refusing to guess` } }
+      }
+      out.markerSaturationFlags = arr as string[]
+      continue
+    }
     const key = k as (typeof CHROMATOGRAM_KNOWN_KEYS)[number]
     if ((CHROMATOGRAM_KNOWN_KEYS as readonly string[]).includes(k)) {
       if (typeof v !== 'string') {
         return { ok: false, error: { path: `bindings.${k}`, message: `bindings.${k} must be a string — refusing to guess` } }
       }
-      out[key] = v
+      // The array-typed key was handled above (and continued), so every key
+      // reaching here is a string-typed binding.
+      out[key as 'markersFrom' | 'markerRtField' | 'markerLabelField' | 'markerSaturatedField' | 'markerFlagsField' | 'baselineFrom' | 'baselineField'] = v
     } else {
       out.audit.push(k)
     }
