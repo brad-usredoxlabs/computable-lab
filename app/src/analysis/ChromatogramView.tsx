@@ -80,7 +80,16 @@ interface Domain {
 // unmeasured container (jsdom / zero rect — the pre-B1 geometry).
 const FALLBACK_W = 720
 const H = 280
-const PAD_L = 52
+// PAD_L (gate-fix 1 / B1-crowding): widened 52 -> 72 so the ROTATED
+// y-unit label (a short mark at the plot's vertical center) does not crowd
+// the widest y-tick label at the 9 px monospace tick font. The tick labels
+// are right-anchored at PAD_L-8; the widest measured tick ("7.80e+4",
+// 7 chars) is ~37.8 px, so the 52 px margin left the unit (x=12) OVERLAPPING
+// the tick (both spanned x~6..44). 72 px clears it with headroom for longer
+// numeric ticks (the margin is a fixed left inset, so the fix holds at every
+// measured pane width). The pane-fit viewBox logic (W = measured width) and
+// wrapRefCb are UNTOUCHED — only the left inset changes.
+const PAD_L = 72
 const PAD_R = 14
 const PAD_T = 14
 const PAD_B = 30
