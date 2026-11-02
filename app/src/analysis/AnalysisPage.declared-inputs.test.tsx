@@ -251,6 +251,38 @@ describe('D2 — Bind… stages the FROZEN IDENTITY before submit; the createRun
     }, { timeout: 4000 })
     expect((screen.getByTestId('analysis-run-create-btn') as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('refuses (named line, nothing staged) when a data-reference bind resolves to a NON-data-reference record kind', async () => {
+    // FAME-8 GATEFIX1 (A8/D2): bind-time kind gate — a record whose own
+    // declared `kind` (a record fact from getRecord, NOT an id-pattern
+    // heuristic) is not 'data-reference' must show a named refusal and NOT
+    // stage: never a silent "(data-reference)" substitution that fails only
+    // at submit. TEST-scoped id (generic, per this file's fixture rule).
+    vi.mocked(apiClient.getRecord).mockResolvedValue({
+      recordId: 'ACQP-TEST-3',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/acquisition-package.schema.yaml',
+      payload: { kind: 'acquisition-package', id: 'ACQP-TEST-3', title: 'TEST package record' },
+    } as never)
+    render(wrap(<AnalysisPage />))
+    await waitFor(() => expect(screen.queryByTestId('analysis-run-rev')).not.toBeNull(), { timeout: 4000 })
+    fireEvent.change(screen.getByTestId('analysis-run-rev'), { target: { value: 'ANREV-TEST-D-1' } })
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-left_table')).not.toBeNull(), { timeout: 4000 })
+
+    // left_table admits ONLY data-reference; the type select defaults to it.
+    // Type the PACKAGE id (declared kind: acquisition-package) and Bind.
+    fireEvent.change(screen.getByTestId('analysis-declared-input-id-left_table'), { target: { value: 'ACQP-TEST-3' } })
+    fireEvent.click(screen.getByTestId('analysis-declared-input-bind-left_table'))
+
+    // The named refusal is visible (names the record + its real declared kind).
+    await waitFor(() => {
+      const err = screen.queryByTestId('analysis-error')
+      expect(err?.textContent).toContain('ACQP-TEST-3')
+      expect(err?.textContent).toContain('acquisition-package')
+    }, { timeout: 4000 })
+    // Nothing was staged — the row stays unbound (never a silent substitution).
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-left_table')).toBeNull(), { timeout: 4000 })
+    expect(screen.getByTestId('analysis-declared-input-unbound-left_table')).toBeDefined()
+  })
 })
 
 // --- D3 — "Use result downstream" routes to the same staging path -----------
