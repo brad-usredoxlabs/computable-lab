@@ -213,17 +213,20 @@ def chat_host_axis():
     try:
         with open(man_path) as fh:
             manifest = _yaml.safe_load(fh) or {}
-        sg_ok, sg_removed = sg.shrink_guard(inventory, manifest)
+        sg_ok, sg_removed, sg_reason, _sg_auth = sg.shrink_guard(
+            inventory, manifest, os.path.join(_repo_root()))
     except Exception as exc:
         print("BLOCKER: the Change 3 shrink-guard failed to run (%s) — FAIL "
               "CLOSED" % exc)
         print("GATE-VERDICT env-error")
         return 2
     if not sg_ok:
-        print("BLOCKER: the chat-host inventory SHRANK without a spec citing it "
-              "— blessed host(s) %s are missing (Change 3: a deletion is "
-              "allowed ONLY with a re-bless + a spec path in the bless note)"
-              % sg_removed)
+        print("BLOCKER: the chat-host inventory changed without an authorized "
+              "re-bless (Change 3: a deletion is allowed ONLY with a "
+              "re-blessed blessed_sha256 whose id record reproduces it) — "
+              "cause: %s" % (sg_reason or "unauthorized"))
+        if sg_removed:
+            print("  removed/changed host(s): %s" % sg_removed)
         print("GATE-VERDICT blocking")
         return 1
     if not ok:

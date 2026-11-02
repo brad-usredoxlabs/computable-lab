@@ -895,25 +895,50 @@ def main():
                             and dropped in p.stdout,
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # (7f) Change 3 shrink-guard (PURE): the current inventory vs the
-        # blessed manifest is green; a SHRUNKEN inventory (drop a host) is
-        # RED and names the removed host; pure GROWTH is allowed (not a shrink).
+        # blessed manifest is green; a SHRUNKEN inventory is RED + names the
+        # host; pure GROWTH is allowed. The guard returns a 4-tuple
+        # (ok, removed, reason, authorized) and asserts the manifest invariant
+        # canonical_sha(blessed_ids) == blessed_sha256 (fix1 D1).
         try:
             with open(man_path) as fh:
                 manifest = yaml.safe_load(fh) or {}
-            sg_ok0, sg_rm0 = sgm.shrink_guard(inv_ids, manifest)
+            sg_ok0, sg_rm0, sg_reason0, sg_auth0 = sgm.shrink_guard(
+                inv_ids, manifest)
             results.append(("CHATHOST shrink-guard: current inventory matches the blessed manifest -> green",
-                            sg_ok0 and not sg_rm0,
-                            ["ok=%r removed=%r" % (sg_ok0, sg_rm0)]))
+                            sg_ok0 and not sg_rm0 and sg_reason0 is None,
+                            ["ok=%r removed=%r reason=%r" % (sg_ok0, sg_rm0, sg_reason0)]))
             shrunk = [h for h in inv_ids if h != dropped]
-            sg_ok1, sg_rm1 = sgm.shrink_guard(shrunk, manifest)
+            sg_ok1, sg_rm1, sg_reason1, _a1 = sgm.shrink_guard(shrunk, manifest)
             results.append(("CHATHOST shrink-guard: a SHRUNKEN inventory (dropped %r) -> RED, names the host" % dropped,
                             (not sg_ok1) and dropped in sg_rm1,
-                            ["ok=%r removed=%r" % (sg_ok1, sg_rm1)]))
+                            ["ok=%r removed=%r reason=%r" % (sg_ok1, sg_rm1, sg_reason1)]))
             grown = list(inv_ids) + ["NEW-HOST"]
-            sg_ok2, sg_rm2 = sgm.shrink_guard(grown, manifest)
+            sg_ok2, sg_rm2, sg_reason2, _a2 = sgm.shrink_guard(grown, manifest)
             results.append(("CHATHOST shrink-guard: pure GROWTH (new host) is allowed (not a shrink)",
                             sg_ok2 and not sg_rm2,
-                            ["ok=%r removed=%r" % (sg_ok2, sg_rm2)]))
+                            ["ok=%r removed=%r reason=%r" % (sg_ok2, sg_rm2, sg_reason2)]))
+            # (7f-d1) fix1 D1: shrink + TRIMMED blessed_ids (sha UNCHANGED) is
+            # RED via the manifest invariant — the removed-set is derived from
+            # the hashed payload, never a mutable blessed_ids. This is exactly
+            # the reviewer's /tmp drain case (RED-before-fix on a /tmp copy).
+            trimmed_manifest = dict(manifest,
+                                    blessed_ids=[h for h in manifest.get(
+                                        "blessed_ids", []) if h != dropped])
+            sg_ok3, sg_rm3, sg_reason3, _a3 = sgm.shrink_guard(
+                shrunk, trimmed_manifest)
+            results.append(("CHATHOST shrink-guard: shrink + TRIMMED blessed_ids, sha UNCHANGED -> RED via invariant (fix1 D1)",
+                            (not sg_ok3) and sg_reason3 == "invariant",
+                            ["ok=%r removed=%r reason=%r"
+                             % (sg_ok3, sg_rm3, sg_reason3)]))
+            # (7f-d1b) fix1 D1: the FULL DRAIN (hosts:[] + blessed_ids:[]) with
+            # the sha left at the 6-host value breaks the invariant -> RED.
+            drain_manifest = dict(manifest, blessed_ids=[])
+            sg_ok4, sg_rm4, sg_reason4, _a4 = sgm.shrink_guard(
+                [], drain_manifest)
+            results.append(("CHATHOST shrink-guard: a FULL DRAIN (hosts:[] + blessed_ids:[]) -> RED via invariant (fix1 D1)",
+                            (not sg_ok4) and sg_reason4 == "invariant",
+                            ["ok=%r removed=%r reason=%r"
+                             % (sg_ok4, sg_rm4, sg_reason4)]))
             # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
             # full 6-host blessed sha) is RED even when driven through the gate.
             with tempfile.TemporaryDirectory() as td_sh:
@@ -935,10 +960,11 @@ def main():
                 p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
                                     "--chat-hosts"], capture_output=True, text=True,
                                    env=env_sh)
-                results.append(("CHATHOST shrink-guard: an un-blessed SHRINK blocks the gate even with a complete sweep table",
-                                p.returncode == 1 and "SHRANK" in p.stdout
+                results.append(("CHATHOST shrink-guard: an un-re-blessed SHRINK blocks the gate even with a complete sweep table",
+                                p.returncode == 1
+                                and "authorized re-bless" in p.stdout
                                 and dropped in p.stdout,
-                                ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+                                ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:220])]))
         except Exception as _e:
             results.append(("CHATHOST shrink-guard: manifest load (Change 3)",
                             False, ["err=%s" % _e]))
