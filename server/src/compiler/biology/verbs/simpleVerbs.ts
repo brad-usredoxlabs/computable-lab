@@ -536,10 +536,25 @@ export const addMaterialExpander: BiologyVerbExpander = {
     // DECLARED kind:wells arg is a symbolic label and routes to the spine
     // (normalizeScientistIntent); a range string on an undeclared key is a
     // literal address range and routes here. No second range parser.
+    // L2-LABSTATE-CONTENTS-1 fix run 3 (ruling l2t1050 Q-A; Brad card (A)
+    // 2026-11-02): the ARRAY form — the lowered `targetWells: [A1:H1]`
+    // shorthand carrier — must pass the SAME one parser as the scalar form,
+    // element by element. Left unexpanded, a range string inside the array
+    // would ship as ONE non-address well key and key the lab_state contents
+    // ledger by a RANGE string (wellCount wrong, column-aligned channel
+    // shape dead). expandWellTokens is idempotent on concrete wells and
+    // dedupes, so a purely concrete array is byte-unchanged. Non-string
+    // elements (outside the declared string[] contract) ride through
+    // unexpanded, as before — mirroring expandArrayField's own string[]
+    // guard (wellRange.ts:74).
     const rawWells = params.wells as string[] | string | undefined;
-    const wells = typeof rawWells === 'string' && rawWells.trim()
-      ? expandWellTokens([rawWells])
-      : rawWells;
+    const wells = Array.isArray(rawWells)
+      ? rawWells.every((w) => typeof w === 'string')
+        ? expandWellTokens(rawWells)
+        : rawWells
+      : typeof rawWells === 'string' && rawWells.trim()
+        ? expandWellTokens([rawWells])
+        : rawWells;
     const materialKind = params.materialKind as string | undefined;
     const volumeUl =
       typeof params.volume_uL === 'number'
