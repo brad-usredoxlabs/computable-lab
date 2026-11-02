@@ -498,3 +498,21 @@ OQ2 RULED — APPROVED as recommended. The provenance exemption lives at CARD-1'
 OQ3 RULED — APPROVED as recommended: transcript mention-token route, no server change, no new wire field; honest no-id rendering when the label does not match. The additive `resolvedMaterialRefs` fallback is a SEPARATE reviewed hunk, only on browser-gate evidence that a legitimately-answered row lacks its id.
 
 SEQUENCING (restated): base tip >= CARD-1 merge (CARD-1 not yet dispatched — TARGET-1 stays behind it). Re-pin every cite at the actual base tip before building; the draft's pins are at 504d22bb, pre-PICKER-1-merge.
+
+---
+## AMENDMENT l2t0920 — W11 volume refuse-or-ask gate folded in VERBATIM (architect ruling decisions/CARD1-W11-volume-boundary-l2t0747-ruling.md, Q1)
+
+The ruling defers CARD-1 change 3b (W11 volume gate, V1+V2, as a unit) to TARGET-1.
+TARGET-1's acceptance criteria carry, verbatim in substance, routing amendment (6)
+(CLARIFY-WEIRD-routing-l2t1915-ruling.md:75-79): "a prompt naming no volume must fire a
+card or refuse, per L2-CLARIFY-TARGET-1's data-declared assumed-value chip — never
+silently stage an invented number." TARGET-1's gate must show, on the live surface:
+  (i) V1 leg — a document omitting add_material volume produces a
+      missing-required-argument card (the required-flag flip, YAML not TS);
+  (ii) V2 leg — the T7 shape ("Add DMEM to A1", no volume in the prompt) yields a card
+      or the declared assumed-value chip — never a silent staged volumeUl: 100 (the
+      frozen-example copying origin, submitSuggestionTool.ts:635-647, stays frozen);
+  (iii) the foldNullArms.test.ts:516 expectation updated as part of the flip's declared
+      blast radius, plus the golden enumeration.
+`add_material.volumeUl.required` is false on trunk as a fact of record at CARD-1 merge;
+the flip lands HERE. TARGET-1 owns the ENTIRE W11 volume gate (V1 + V2 + the chip).
