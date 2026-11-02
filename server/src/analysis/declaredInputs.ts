@@ -128,9 +128,11 @@ function gateKindsFor(slot: DeclaredInput): string[] {
  * (artifactPromotion.ts:102-106). Reverse lookup = list the
  * analysis-output-artifact kind and match the link's id — record-type name,
  * not a domain literal (R8). Returns null when the link is unresolvable
- * (no artifact lists it): the caller then applies the existing
- * INPUT_UNRESOLVABLE token (a name-gated slot that cannot be proven is
- * rejected, never silently passed).
+ * (no artifact lists it): the caller then applies the NAMED
+ * INPUT_LINK_UNPROVABLE token (D15, fix run 2 — the record RESOLVES; it is
+ * the producer ARTIFACT LINK that cannot be proven, so the slot is rejected,
+ * never silently passed). INPUT_UNRESOLVABLE is reserved for the ref id
+ * itself not resolving.
  */
 async function drefLinkedArtifactName(
   store: Pick<RecordStore, 'get' | 'list'>,
@@ -180,7 +182,33 @@ export function declaredInputsOf(revisionPayload: Record<string, unknown>): Decl
  *   INPUT_REQUIRED_MISSING      — declared required:true slot absent;
  *   INPUT_NOT_RECORD_REF        — ref.kind !== 'record';
  *   INPUT_KIND_NOT_ACCEPTED     — ref.type not in the slot's gate;
- *   INPUT_UNRESOLVABLE          — the ref does not resolve (404);
+ *   INPUT_UNRESOLVABLE          — the ref does not resolve (404). STRICT: a
+ *                                  record id that store.get cannot find. A
+ *                                  resolvable record whose producer link is
+ *                                  unprovable is INPUT_LINK_UNPROVABLE, NOT
+ *                                  this (D15, fix run 2 — the 404 must not
+ *                                  imply the record itself is missing);
+ *   INPUT_LINK_UNPROVABLE       — a data-reference ref that RESOLVES but no
+ *                                  analysis-output-artifact links it, into a
+ *                                  name-gated slot (404): the producer
+ *                                  artifact NAME cannot be proven via the
+ *                                  one-way dataReferenceRef link, so the slot
+ *                                  cannot be satisfied. Named separately from
+ *                                  INPUT_UNRESOLVABLE (the record IS there)
+ *                                  and from INPUT_ARTIFACT_NAME_MISMATCH (the
+ *                                  link IS proven and the name is wrong).
+ *                                  RATIFIED by the FAME-7 fix-run-2 dispatch
+ *                                  (orch ruling R4, 2026-11-02): the R4
+ *                                  preferred token — the message can honestly
+ *                                  say the name cannot be PROVEN via a link —
+ *                                  over reusing INPUT_ARTIFACT_NAME_MISMATCH,
+ *                                  which would claim a name the gate never
+ *                                  read. 404 (not 400) because the missing
+ *                                  thing is the link's resolution target, not
+ *                                  a malformed request (D10-style: the token,
+ *                                  its boundary, and its status are ratified
+ *                                  in this comment; the pinned tests are the
+ *                                  second leg).
  *   INPUT_ARTIFACT_NAME_MISMATCH— resolved artifact name not accepted
  *                                  (artifact-typed ref: its own `name`;
  *                                  data-reference ref: the name of the
@@ -264,16 +292,19 @@ export async function validateDeclaredInputs(
     const payload = env.payload as Record<string, unknown>;
     // (vi) artifact-name gate (declared ⇒ enforced). A data-reference ref
     // resolves to the producer artifact it links (D3 — the DREF carries no
-    // name of its own); an unresolvable link is the NAMED INPUT_UNRESOLVABLE
-    // path (never a silent pass).
+    // name of its own); an unprovable link is the NAMED INPUT_LINK_UNPROVABLE
+    // path (D15: the record resolves — store.get found it — but no artifact
+    // links it, so the name CANNOT be proven; never a silent pass). The
+    // unresolvable-REF case (the id itself missing) is INPUT_UNRESOLVABLE
+    // from (v) above and does not reach this branch.
     if (slot.acceptedArtifactNames && slot.acceptedArtifactNames.length > 0) {
       let name: unknown = payload.name;
       if (ref.type !== ARTIFACT_KIND) {
         const linkedName = await drefLinkedArtifactName(store, ref.id);
         if (linkedName === null) {
           throw new AnalysisServiceError(
-            'INPUT_UNRESOLVABLE',
-            `input '${key}' binds ${ref.id} (${ref.type}) into a name-gated slot but no producer artifact links that reference — the slot accepts only: ${slot.acceptedArtifactNames.join(', ')}; the link cannot be proven, so it is rejected, not silently passed`,
+            'INPUT_LINK_UNPROVABLE',
+            `input '${key}' binds ${ref.id} (${ref.type}) into a name-gated slot but the reference DOES RESOLVE while no producer artifact links it — the producer artifact name cannot be proven via the dataReferenceRef link, so the slot accepts only: ${slot.acceptedArtifactNames.join(', ')}; the link cannot be proven, so it is rejected, not silently passed (INPUT_UNRESOLVABLE is reserved for a ref id that does not resolve)`,
             404,
           );
         }

@@ -126,8 +126,13 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
     })).resolves.toBeUndefined();
   });
 
-  it('a data-reference ref into a name-gated slot with NO resolvable producer artifact is INPUT_UNRESOLVABLE (D3: unprovable link is the named path, never a silent pass)', async () => {
-    // The DREF resolves (get finds it) but no listed artifact links it.
+  it('a data-reference ref into a name-gated slot that RESOLVES but NO artifact links it is INPUT_LINK_UNPROVABLE (D15 fix run 2: the record resolves — it is the LINK that is unprovable; INPUT_UNRESOLVABLE is reserved for a ref id that does not resolve)', async () => {
+    // The DREF resolves (get finds it) but no listed artifact links it. The
+    // pre-fix code reported this as INPUT_UNRESOLVABLE (404) — misleading, a
+    // 404 for a record that DOES resolve. The fix names the distinct failure:
+    // the producer artifact NAME cannot be proven via the dataReferenceRef
+    // link (INPUT_LINK_UNPROVABLE, 404 — ratified by orch ruling R4 / the
+    // module comment; the pinned test is the second leg).
     const store = storeWith({
       'DREF-TEST-4': { kind: 'data-reference', id: 'DREF-TEST-4', dataKind: 'table' },
     });
@@ -137,6 +142,21 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
     };
     const err = await validateDeclaredInputs(store, payload, {
       left_table: DREF('DREF-TEST-4'),
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'INPUT_LINK_UNPROVABLE', statusCode: 404 });
+  });
+
+  it('a name-gated slot bound by an UNRESOLVABLE ref id is INPUT_UNRESOLVABLE, NOT INPUT_LINK_UNPROVABLE (D15: the strict boundary — the ref itself must not resolve for that token)', async () => {
+    // The id does not resolve at all (store.get null) — the (v) leg fires
+    // before the name gate can be reached: INPUT_UNRESOLVABLE (404). This
+    // pins that the D15 rename did not bleed into the genuinely-missing case.
+    const store = storeWith({});
+    const payload = {
+      kind: 'analysis-revision', id: 'ANREV-TEST-D',
+      inputs: [{ name: 'left_table', dataKind: 'table', required: true, acceptedArtifactNames: ['right_summary'] }],
+    };
+    const err = await validateDeclaredInputs(store, payload, {
+      left_table: DREF('DREF-BOGUS-404'),
     }).catch((e: unknown) => e);
     expect(err).toMatchObject({ code: 'INPUT_UNRESOLVABLE', statusCode: 404 });
   });

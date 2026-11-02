@@ -352,5 +352,49 @@ describe('AnalysisService CRUD (integration)', () => {
       })).rejects.toMatchObject({ code: 'INPUT_UNDECLARED', statusCode: 400 });
       expect((await service.list('analysis-run')).length).toBe(runsBefore);
     });
+
+    it('D14 (fix run 2): createRevision PRESERVES `inputs: []` — the OQ-3 absent-vs-empty-array distinction survives the create path (the pre-fix `length > 0` guard collapsed an empty array to ABSENT, making the validator\'s empty-array branch unreachable via createRevision)', async () => {
+      const service = new AnalysisService(ctx);
+      // (a) the SERVICE path writes `inputs: []` (the contract marker is the
+      //     KEY, not the array\'s length) — the pre-fix code dropped the key.
+      const created = await service.createRevision({
+        title: 'f7 d14 empty-inputs method',
+        entryScript: 'def run(ctx):\n    return ctx',
+        sdkVersion: '0.4.0',
+        inputs: [],
+      });
+      const env = await ctx.store.get(created.recordId);
+      expect(env!.payload).toHaveProperty('inputs', []);
+      // (b) the SERVICE path integration leg (R3: validator-direct tests do
+      //     not count for this leg): a run body that names an input is
+      //     INPUT_UNDECLARED against the preserved empty array — the contract
+      //     IS "no inputs" — and the ABSENT-key revision still skips (the
+      //     existing "keeps the legacy no-inputs flow" leg pins the skip side).
+      const runsBefore = (await service.list('analysis-run')).length;
+      await expect(service.createRun({
+        title: 'f7 d14 empty-array undeclared',
+        revisionRef: { kind: 'record', id: created.recordId, type: 'analysis-revision' },
+        inputs: { anything: { kind: 'record', id: 'DREF-F7-1', type: 'data-reference' } },
+      })).rejects.toMatchObject({ code: 'INPUT_UNDECLARED', statusCode: 400 });
+      expect((await service.list('analysis-run')).length).toBe(runsBefore);
+      // (c) the empty body PASSES against the empty array (the contract IS no
+      //     inputs) — a run IS minted.
+      const minted = await service.createRun({
+        title: 'f7 d14 empty-array empty-body',
+        revisionRef: { kind: 'record', id: created.recordId, type: 'analysis-revision' },
+        inputs: {},
+      });
+      expect(minted.recordId).toMatch(/^ANR-/);
+      expect((minted.payload as { inputs: unknown }).inputs).toEqual({});
+      // (d) boundary: an ABSENT `inputs` (no key at all) is STILL absent in
+      //     the payload — the legacy skip is unchanged by the D14 fix.
+      const legacy = await service.createRevision({
+        title: 'f7 d14 absent-inputs method',
+        entryScript: 'def run(ctx):\n    return ctx',
+        sdkVersion: '0.4.0',
+      });
+      const legacyEnv = await ctx.store.get(legacy.recordId);
+      expect(legacyEnv!.payload).not.toHaveProperty('inputs');
+    });
   });
 });

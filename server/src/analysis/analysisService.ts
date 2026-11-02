@@ -223,7 +223,17 @@ export class AnalysisService {
       entryScript: input.entryScript,
       sdkVersion: input.sdkVersion.trim(),
       ...(input.methodNotes?.trim() ? { methodNotes: input.methodNotes.trim() } : {}),
-      ...(input.inputs && input.inputs.length > 0 ? { inputs: input.inputs } : {}),
+      // D14 (fix run 2): preserve `inputs: []` through createRevision — the
+      // OQ-3 binding semantics say ABSENT vs EMPTY-ARRAY is a real semantic
+      // distinction in the record (absent ⇒ no contract, the named skip;
+      // empty PRESENT ⇒ the contract IS "no inputs", any body input is
+      // INPUT_UNDECLARED). The pre-fix `length > 0` guard collapsed an empty
+      // array to ABSENT at create time, making the validator's empty-array
+      // branch unreachable through the create path. Conditional spread on
+      // `!== undefined` (exactOptionalPropertyTypes): a declared EMPTY array
+      // is written as `inputs: []` (the contract marker is the KEY), an
+      // ABSENT key is still absent (legacy revisions byte-identical).
+      ...(input.inputs !== undefined ? { inputs: input.inputs } : {}),
       ...(input.parameterSchema ? { parameterSchema: input.parameterSchema } : {}),
       ...(input.engineRef ? { engineRef: input.engineRef } : {}),
       ...(input.requiredCapabilities && input.requiredCapabilities.length > 0 ? { requiredCapabilities: input.requiredCapabilities } : {}),
