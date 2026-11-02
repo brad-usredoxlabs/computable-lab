@@ -681,6 +681,24 @@ export function AnalysisPage() {
         setStagingBusy(false)
         return
       }
+      // FAME-8 GATEFIX1 (A8/D2): a data-reference bind must name a record that
+      // IS a data-reference. The kind is resolved from the FETCHED record's own
+      // `kind` (a record fact from getRecord — never an id-pattern heuristic
+      // like "starts with DREF", which would be a hardcoded policy). A record
+      // of any other declared kind (e.g. an acquisition package) is a NAMED
+      // bind-time refusal: it is not staged, so the scientist is never shown a
+      // silent "(data-reference)" substitution that fails only at submit.
+      // Belt-and-braces: the submit-side INPUT_LINK_UNPROVABLE 404 still stands.
+      const recordKind = typeof payload.kind === 'string' && payload.kind !== '' ? payload.kind : null
+      if (resolvedType === 'data-reference' && recordKind !== 'data-reference') {
+        setError(
+          `input '${slotName}': record ${id} is not a data-reference — its declared kind is ` +
+          `${recordKind ?? 'unknown'} — a data-reference bind stages a data-reference only; ` +
+          'nothing was staged (bind a DREF, or a data-reference-linked artifact via Use result downstream)',
+        )
+        setStagingBusy(false)
+        return
+      }
       const identity: InputIdentity = {
         ...(typeof payload.dataKind === 'string' ? { dataKind: payload.dataKind } : {}),
       }

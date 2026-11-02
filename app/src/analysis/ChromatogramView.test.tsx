@@ -16,10 +16,13 @@ import { ChromatogramView } from './ChromatogramView'
 vi.mock('../shared/api/client', () => ({ apiClient: { getAnalysisArtifactContent: vi.fn() } }))
 
 // Test-local geometry (mirrors the component's fixed viewBox — data, not a
-// production coupling): W=720, PAD_L=52, PLOT_W=654.
+// production coupling): W=720, PAD_L=72 (FAME-8 GATEFIX1 B1-crowding: the left
+// inset widened 52->72 so the rotated y-unit clears the widest y-tick; the
+// component's PAD_L is the single source of truth and these constants track
+// it), PLOT_W=634 (= 720 - 72 - 14).
 const W = 720
-const PAD_L = 52
-const PLOT_W = 654
+const PAD_L = 72
+const PLOT_W = 634
 
 // jsdom has no ResizeObserver: a minimal spy whose stored callback the tests
 // fire (synchronously, inside React act) to simulate a measured pane width.
@@ -368,6 +371,46 @@ describe('ChromatogramView — B1 pane-fit: renders at 1:1 CSS px per SVG unit (
     // The cleanup still disconnects (the observer's teardown runs on unmount).
     unmount()
     expect(roDisconnects).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('ChromatogramView — B1-crowding (FAME-8 GATEFIX1): the rotated y-unit clears the widest y-tick', () => {
+  it('the rotated y-unit label strip does not overlap the widest y-tick label (the pA/7.80e+4 crowding)', () => {
+    // jsdom has no font metrics (getBBox is unreliable), so this guard is
+    // GEOMETRIC on the rendered x-attributes + one declared constant: the 9px
+    // MONOSPACE tick font (chromatogram__ticklabel, AnalysisPage.css) advances
+    // 0.6em == 5.4px per char, and the 10px monospace unit advances ~6px
+    // (these are font declarations in CSS — data, not production coupling).
+    // The y-tick labels are right-anchored at x=PAD_L-8; the rotated y-unit
+    // sits at x=12 (a short strip at the plot's vertical center). The widest
+    // 7-char tick ("7.80e+4") must not reach the unit's strip.
+    const MONO_ADVANCE_9PX = 5.4
+    // A wide y-range so the widest tick is a 7-char exponential (the live
+    // "7.80e+4" case the gate measured).
+    const axis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    const values = [1, 1, 1, 40000, 78000, 40000, 1, 1, 1, 1]
+    render(<ChromatogramView artifact={sigArtifact({ axis, values, axis_units: 'min', value_units: 'pA' })} />)
+    const svg = screen.getByTestId('chromatogram-svg')
+    const yTicks = [...svg.querySelectorAll('text.chromatogram__ticklabel')].filter(
+      (t) => t.getAttribute('text-anchor') === 'end',
+    )
+    expect(yTicks.length).toBeGreaterThanOrEqual(4)
+    // The unit label is the one axislabel that carries a rotate transform.
+    const unit = [...svg.querySelectorAll('text.chromatogram__axislabel')].find(
+      (t) => (t.getAttribute('transform') ?? '').startsWith('rotate('),
+    )
+    expect(unit, 'the rotated y-unit label must render').toBeDefined()
+    const unitX = Number(unit!.getAttribute('x'))
+    const unitStrip = { left: unitX - 6.5, right: unitX + 6.5 } // ~13px-wide rotated strip
+    // The widest tick label (by char count == by width in a monospace font).
+    let widest = yTicks[0]
+    for (const t of yTicks) if ((t.textContent ?? '').length > (widest.textContent ?? '').length) widest = t
+    const widestChars = (widest.textContent ?? '').length
+    expect(widestChars).toBeGreaterThanOrEqual(7) // a 7.80e+4-style tick
+    const tickRight = Number(widest.getAttribute('x')) // right-anchored
+    const tickLeft = tickRight - widestChars * MONO_ADVANCE_9PX
+    // The crowding guard: the tick's left edge must not reach the unit strip.
+    expect(tickLeft, `widest tick "${widest.textContent}" (left=${tickLeft.toFixed(1)}) must clear the y-unit strip [${unitStrip.left}, ${unitStrip.right}]`).toBeGreaterThan(unitStrip.right)
   })
 })
 
