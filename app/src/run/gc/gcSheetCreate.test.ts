@@ -154,4 +154,48 @@ describe('buildGcSampleAdd (sample-add to an existing sheet)', () => {
     const sampleId = res.steps.find((s) => s.schemaId.includes('sample.schema.yaml'))!.recordId
     expect(entry.payload.sampleName).not.toBe(sampleId)
   })
+
+  // FAME-8 fix1 D5 (spec §5 B4: "a minLength: 1 violation can never be
+  // constructed from the form path"). The form gate is what blocks the empty
+  // label (GcSectionChrome.tsx:145-151: `!label || !vial || !method` ⇒ NAMED
+  // reason + return — the builders are never reached; the sheet-create front
+  // door has the same gate, RunCollectionView.tsx:202-207; the component-level
+  // pin — named reason, createRecord NOT called — sits at
+  // GcSectionChrome.test.tsx:261-272, outside this suite). This is the
+  // BUILDER-LEVEL invariant that the gate defends: an empty label can never
+  // construct a VALID entry through the builder path —
+  //   (a) the builders stamp the label AS TYPED (no `|| sampleId` fallback
+  //       fabricating a label);
+  //   (b) the stamped value FAILS the schema-declared `minLength: 1` on
+  //       sampleName (instrument-sequence-entry.schema.yaml:133-137) — i.e.
+  //       the entry is un-constructible as valid data;
+  //   (c) the gate is upstream, so an empty label never MINTS anything.
+  // Honest note: this pin is GREEN at base (the run-1 builders already stamp
+  // the empty string with no fallback) — it guards a FUTURE fallback, not a
+  // run-1 defect; there is no RED for it.
+  it('an empty sampleLabel can never produce a valid entry (the minLength:1 pin, both builders)', () => {
+    // (a)+(b) sheet create: the stamp is the empty label as typed, and the
+    // empty string fails the schema's minLength: 1 — no valid entry.
+    const chain = buildGcSheetCreateChain({ ...INPUT, sampleLabel: '' })
+    const entry = chain.find((s) => s.schemaId.includes('instrument-sequence-entry'))!
+    expect(entry.payload.sampleName).toBe('')
+    expect((entry.payload.sampleName as string).length >= 1).toBe(false)
+    // (c) no id-derived fallback fabricates a label out of the empty label:
+    const sampleId = chain.find((s) => s.schemaId.includes('sample.schema.yaml'))!.recordId
+    expect(entry.payload.sampleName).not.toBe(sampleId)
+
+    // The sample-add path honours the SAME invariant.
+    const res = buildGcSampleAdd({
+      runId: 'RUN-EX',
+      gcMethodId: INPUT.gcMethodId,
+      vial: '104',
+      sampleLabel: '',
+      rand: 'XX7',
+    })
+    const addEntry = res.steps.find((s) => s.schemaId.includes('instrument-sequence-entry'))!
+    expect(addEntry.payload.sampleName).toBe('')
+    expect((addEntry.payload.sampleName as string).length >= 1).toBe(false)
+    const addSampleId = res.steps.find((s) => s.schemaId.includes('sample.schema.yaml'))!.recordId
+    expect(addEntry.payload.sampleName).not.toBe(addSampleId)
+  })
 })
