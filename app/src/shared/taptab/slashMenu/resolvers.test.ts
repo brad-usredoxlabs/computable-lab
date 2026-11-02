@@ -8,6 +8,8 @@ import {
   resolveTarget,
 } from './resolvers'
 import type { SlashResolverContext } from './types'
+import { __resetCandidateRankingPolicy, __setCandidateRankingPolicy } from './policy'
+import type { CandidateRankingPolicy } from './clarifyPickerRanking'
 
 // SHORTHAND-CORPUS WS6 D1: the vendor Exa tier is a DECLARED capability
 // (integrations.exa), not a default. Stub the flag seam so each test declares
@@ -30,9 +32,34 @@ function ctx(
 
 const fetchSpy = vi.fn()
 
+/**
+ * L2-CLARIFY-PICKER-1: the declared candidate-ranking policy, byte-mirroring the
+ * `schema/lab/material-profile.registry.yaml` `candidate_ranking` block (OQ2).
+ * The resolver reads this from the module cache (./policy); seeding it in
+ * beforeEach makes the resolver path deterministic and — critically — means
+ * `getCandidateRankingPolicy` NEVER fires a fetch (no extra request pollutes
+ * the mock queue, so the byte-stability + request-shape pins hold).
+ */
+const DECLARED: CandidateRankingPolicy = {
+  containsSectionLabel: 'contains "{label}" ({count})',
+  families: {
+    'saved-stock': { rank: 0, canBeDefault: true },
+    'vendor-reagent': { rank: 1, canBeDefault: true },
+    'prepared-material': { rank: 2, canBeDefault: true },
+    'biological-derived': { rank: 3, canBeDefault: true },
+    'concept-only': { rank: 4, canBeDefault: true },
+    composition: { rank: 4, canBeDefault: false },
+  },
+}
+
 beforeEach(() => {
   fetchSpy.mockReset()
   vi.stubGlobal('fetch', fetchSpy)
+  // L2-CLARIFY-PICKER-1: default to NO declared ranking (byte-stable, no fetch)
+  // so the pre-existing request-shape / byte-stability pins are untouched. The
+  // P1 ranking tests seed DECLARED explicitly.
+  __resetCandidateRankingPolicy()
+  __setCandidateRankingPolicy(null)
   // Default declared capability: Exa ON (the server default when the config
   // carries no `enabled: false`). The D1 tests below flip it explicitly.
   flags.exaVendorEnabled.mockReset()
@@ -916,6 +943,7 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     // keyboard default and the plain `DMEM` the prompt named is buried.
     // The new intent-ranking comparator (data-declared candidate_ranking)
     // puts the equality-band concept first and never-defaults a composition.
+    __setCandidateRankingPolicy(DECLARED)
     mockMenuFetch({
       search: new Map<string, FixtureRow[]>([
         ['DMEM', [

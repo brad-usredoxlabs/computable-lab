@@ -130,35 +130,39 @@ describe('L2-CLARIFY-PICKER-1 — P1 intent-ranking comparator (18-row DMEM)', (
     expect(order.indexOf('Thermo DMEM')).toBeGreaterThan(0)
   })
 
-  it('never-default red case: a composition ranked 0 with an equality label is still skipped by firstDefaultFocusIndex', () => {
-    // Inject composition rank to 0 AND a composition label equal to the noun —
-    // the worst case for the focus default. `firstDefaultFocusIndex` must still
-    // skip the composition row (enforced against the `canBeDefault` data flag,
-    // not label shape or rank value).
+  it('never-default red case: a composition ranked 0 is still skipped by firstDefaultFocusIndex', () => {
+    // Inject the composition pseudo-family rank to 0 (the data would never say
+    // this, but the rule must hold REGARDLESS of rank values). `firstDefault-
+    // FocusIndex` must still skip the composition row — enforcement is against
+    // the `canBeDefault` data flag, never the rank value or label shape.
     const injected: CandidateRankingPolicy = {
       containsSectionLabel: 'contains "{label}" ({count})',
       families: {
         'saved-stock': { rank: 1, canBeDefault: true },
         'concept-only': { rank: 2, canBeDefault: true },
-        // composition pinned to rank 0 (the data would never say this, but the
-        // rule must hold REGARDLESS of rank values).
+        // composition pinned to rank 0.
         composition: { rank: 0, canBeDefault: false },
       },
     }
     const items: MaterialCandidateItem[] = [
-      // a composition whose label EQUALS the noun, injected to rank 0.
-      { recordId: 'MSP-comp-0', kind: 'material-spec', title: 'DMEM', category: 'saved-stock' },
+      // a COMPOSITION (multi-part aggregate — the pseudo-family signal) whose
+      // label EQUALS the noun and whose family is injected to rank 0.
+      { recordId: 'MSP-comp-0', kind: 'material-spec', title: 'DMEM + FBS', category: 'saved-stock' },
       // a plain concept (rank 2) that IS defaultable.
-      { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+      { recordId: 'MAT-fbs-2b2b', kind: 'material', title: 'FBS', category: 'concept-only' },
     ]
-    const rows = materialCandidates(items, 'DMEM', injected)
-    // The composition (`MSP-comp-0`) is first in band order (rank 0, equality)
-    // — but it is the ONLY non-defaultable row.
-    expect(rows[0]).toMatchObject({ key: 'material-spec:MSP-comp-0', canBeDefault: false })
+    const rows = materialCandidates(items, 'DMEM + FBS', injected)
+    // The composition is FIRST (equality band + injected rank 0) — but it is
+    // the ONLY non-defaultable row.
+    expect(rows[0]).toMatchObject({
+      key: 'material-spec:MSP-comp-0',
+      canBeDefault: false,
+      family: 'composition',
+    })
     // firstDefaultFocusIndex skips it and lands on the first defaultable row.
     const focus = firstDefaultFocusIndex(rows)
     expect(focus).toBe(1)
-    expect(rows[focus]).toMatchObject({ key: 'material:MAT-dmem-ykg0', canBeDefault: true })
+    expect(rows[focus]).toMatchObject({ key: 'material:MAT-fbs-2b2b', canBeDefault: true })
   })
 
   it('a policy with no composition family still never-defaults a composition (the flag is the enforcement)', () => {

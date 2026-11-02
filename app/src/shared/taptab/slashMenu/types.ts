@@ -61,6 +61,32 @@ export interface SlashSuggestion {
    * resort, never the default).
    */
   pinBottom?: boolean
+  /**
+   * L2-CLARIFY-PICKER-1 P1: whether this row may hold the FOCUSED (keyboard)
+   * default. Derived from the data-declared candidate_ranking `can_be_default`
+   * flag for the row's family — a composition row is NEVER defaultable
+   * (the W1 bug: Enter on the opened list committed a composition). The focus
+   * default is enforced against THIS flag, never label shape. Absent (no
+   * ranking declared) or `true` = defaultable; `false` = the first-defaultable
+   * focus skips it.
+   */
+  canBeDefault?: boolean
+  /**
+   * L2-CLARIFY-PICKER-1 P2: the per-row commit-consequence line — what picking
+   * this row BINDS, generated from the row's own record (no new chrome). e.g.
+   * `binds material record MAT-dmem-ykg0 "DMEM" (concept)` vs
+   * `binds material-spec MSP-… (composition of 6 components)`. Rendered inline
+   * so the W3 hover-card unreachability stops mattering. Absent when the row
+   * carries no bindable record (e.g. the mint floor).
+   */
+  consequence?: string
+  /**
+   * L2-CLARIFY-PICKER-1 P1: the presentation label of the CONTAINS section this
+   * row collapsed under (the data-declared `contains_section_label` template,
+   * e.g. `contains "DMEM" (9)`). Present ONLY on the first row of a contains
+   * band; a row in the equality band or the below-contains band carries none.
+   */
+  sectionLabel?: string
 }
 
 /**
