@@ -291,3 +291,62 @@ describe('view-spec schema', () => {
     }).valid).toBe(true);
   });
 });
+
+describe('analysis-revision FAME-7 (OQ-3) input-item keys', () => {
+  it('accepts a revision whose input slot declares acceptsKinds + acceptedArtifactNames', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000020',
+      title: 'declared inputs',
+      entryScript: 'def run(ctx):\n    t = ctx.input("left_table")\n    return t',
+      sdkVersion: '0.1.0',
+      inputs: [
+        { name: 'left_table', dataKind: 'table', required: true, acceptsKinds: ['data-reference'] },
+        { name: 'right_table', dataKind: 'table', required: true, acceptedArtifactNames: ['right_summary'] },
+      ],
+    }).valid).toBe(true);
+  });
+
+  it('still accepts a LEGACY revision (no FAME-7 keys on the slot) — zero backfill (OQ-3 named skip)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000021',
+      title: 'legacy',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      inputs: [{ name: 'trace', dataKind: 'signal', required: true }],
+    }).valid).toBe(true);
+  });
+
+  it('still accepts a revision with NO inputs declaration (legacy, key absent)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000022',
+      title: 'no inputs',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+    }).valid).toBe(true);
+  });
+
+  it('still accepts an EMPTY inputs array (absent vs empty-array is semantic; both valid)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000023',
+      title: 'empty inputs',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      inputs: [],
+    }).valid).toBe(true);
+  });
+
+  it('rejects an input slot with an undeclared extra key (additionalProperties: false)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000024',
+      title: 'bad slot key',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      inputs: [{ name: 'x', dataKind: 'table', bogusKey: true }],
+    }).valid).toBe(false);
+  });
+});

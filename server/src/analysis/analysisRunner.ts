@@ -89,8 +89,36 @@ interface InputSpec {
    * when the DREF declares one). The reader rides these for channel identity +
    * hash provenance — no re-hash (GC-5's execute-time re-hash leg is
    * untouched). Conditional spread only — exactOptionalPropertyTypes (F20).
+   *
+   * FAME-7 fix run 2 (R1 / D11 leg b) — the bound REF identity + the LINKING
+   * ARTIFACT's own provenance echo, additive on the same meta (same comment
+   * discipline as the GC-6 block above):
+   *  - recordRefId — the bound input ref's own record id (the DREF id on the
+   *    data-reference branch; the artifact id on the artifact branch);
+   *  - artifactRecordId — the linking artifact's record id (data-reference
+   *    branch: the artifact whose one-way dataReferenceRef link points at the
+   *    DREF — the same reverse lookup the declared-inputs name gate uses;
+   *    artifact branch: the artifact itself). ABSENT when no artifact links
+   *    the DREF (honestly — never invented);
+   *  - producerRunId — the producer run id the linking artifact's OWN record
+   *    declares (its runRef, runner-stamped at its production). ABSENT when
+   *    the artifact declares no runRef.
+   * Additive only: every arm provisions and hands to the SDK exactly what it
+   * did before (same path, same inline value, same dataKind); the meta keys
+   * are additive pass-through (exactOptionalPropertyTypes conditional
+   * spreads — absent when unresolvable, never invented). The existing inline
+   * CONSUMPTION path is unchanged (what a script reads via ctx.input().inline
+   * / the provisioned file is byte-identical); the inline arm simply rides
+   * the artifact's own provenance echo in meta where it surfaced NOTHING
+   * before. No hardcoded policy values (record-type names only, R8).
    */
-  meta?: { sourcePath: string; contentHash?: string };
+  meta?: {
+    sourcePath: string;
+    contentHash?: string;
+    recordRefId?: string;
+    artifactRecordId?: string;
+    producerRunId?: string;
+  };
 }
 
 export interface RunInputs {
@@ -163,10 +191,21 @@ export class AnalysisRunner {
       // provision re-hashes the streamed bytes and a drift is a NAMED declared
       // failure (DATA_HASH_MISMATCH 409) — closes the submit→execute window.
       let declaredContentHash: string | undefined;
+      // FAME-7 fix run 2 (R1 / D11 leg b): the linking artifact's own provenance
+      // echo, resolved PER INPUT (never a process cache, one list per input —
+      // the same reverse lookup the declared-inputs name gate uses; record-type
+      // name, not a domain literal, R8). Set in the data-reference branch
+      // (the artifact whose one-way dataReferenceRef link points at the DREF);
+      // the artifact branch surfaces the artifact itself.
+      let linkingArtifactRecordId: string | undefined;
+      let linkingProducerRunId: string | undefined;
       // GC-6 (D5): per-input provenance for the data-reference branch only —
       // the DREF's pinned values handed to the SDK (the reader's meta.source /
       // channel identity + hash provenance). Absent for the artifact branch.
-      let inputMeta: { sourcePath: string; contentHash?: string } | undefined;
+      // FAME-7 fix run 2 (R1 / D11 leg b): additive bound-ref + linking-
+      // artifact provenance echo (recordRefId / artifactRecordId /
+      // producerRunId — the InputSpec.meta shape above).
+      let inputMeta: InputSpec['meta'] | undefined;
 
       if (ref.type === 'analysis-output-artifact') {
         // Resolve the artifact → its data-reference (or inline) for provisioning.
@@ -174,8 +213,17 @@ export class AnalysisRunner {
         if (!artEnv) {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact not found: ${ref.id}`, 404);
         }
-        const art = artEnv.payload as { dataReferenceRef?: { id?: string }; inlineValue?: unknown; dataKind?: string };
+        const art = artEnv.payload as { dataReferenceRef?: { id?: string }; inlineValue?: unknown; dataKind?: string; runRef?: { id?: string } };
         dataKind = dataKind ?? art.dataKind;
+        // FAME-7 fix run 2 (R1 / D11 leg b) — the artifact-typed branch
+        // surfaces the ARTIFACT'S OWN provenance echo instead of nothing: the
+        // pre-fix artifact branch passed NO meta at all (the D11 defect's
+        // artifact arm). artifactRecordId = the bound artifact itself;
+        // producerRunId = the producer run the artifact's OWN record declares
+        // (its runRef, runner-stamped at its production) — absent when the
+        // record declares no runRef (honestly, never invented).
+        linkingArtifactRecordId = ref.id;
+        linkingProducerRunId = typeof art.runRef?.id === 'string' ? art.runRef.id : undefined;
         if (art.dataReferenceRef?.id) {
           const refId = art.dataReferenceRef.id;
           const drefEnv = await this.ctx.store.get(refId);
@@ -190,9 +238,33 @@ export class AnalysisRunner {
           path = dp.path;
           dataKind = dataKind ?? dp.dataKind;
           declaredContentHash = typeof dp.contentHash === 'string' ? dp.contentHash : undefined;
+          // FAME-7 fix run 2 (R1 / D11 leg b): the artifact-typed DREF arm now
+          // surfaces the artifact's OWN provenance echo (it previously passed
+          // NO meta at all). recordRefId/artifactRecordId = the bound artifact
+          // itself (the run bound the artifact, not the DREF); producerRunId =
+          // the artifact's own runRef (absent when the record declares none).
+          inputMeta = {
+            sourcePath: dp.path,
+            ...(declaredContentHash ? { contentHash: declaredContentHash } : {}),
+            recordRefId: ref.id,
+            artifactRecordId: ref.id,
+            ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+          };
         } else if (art.inlineValue !== undefined) {
           // inline artifact (small table/metric) → hand to the SDK as inline data
-          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: `${inputDir}/${name}.inline`, inline: art.inlineValue };
+          const inlinePath = `${inputDir}/${name}.inline`;
+          // FAME-7 fix run 2 (R1 / D11 leg b): the inline arm surfaces the
+          // artifact's own provenance echo in meta (it previously surfaced
+          // NOTHING). sourcePath = the inline provision path (honest — that is
+          // where the SDK reads it); recordRefId/artifactRecordId = the bound
+          // artifact; producerRunId = the artifact's own runRef.
+          const inlineMeta: InputSpec['meta'] = {
+            sourcePath: inlinePath,
+            recordRefId: ref.id,
+            artifactRecordId: ref.id,
+            ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+          };
+          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: inlinePath, inline: art.inlineValue, meta: inlineMeta };
           continue;
         } else {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact has no dataReferenceRef or inlineValue`, 400);
@@ -228,10 +300,47 @@ export class AnalysisRunner {
         path = payload.path;
         dataKind = dataKind ?? payload.dataKind;
         declaredContentHash = typeof payload.contentHash === 'string' ? payload.contentHash : undefined;
+        // FAME-7 fix run 2 (R1 / D11 leg b): the DREF CARRIES no producer
+        // identity of its own — the linking artifact does (the one that
+        // declares `dataReferenceRef: {id: <this DREF>}` — artifactPromotion's
+        // additive link). Resolve it via the SAME reverse lookup the
+        // declared-inputs name gate uses (one list per input, no cache): its
+        // record id + its OWN runRef (the producer run, runner-stamped at its
+        // production) become the bound input's provenance echo. Absent when no
+        // artifact links the DREF — honestly, never invented (a DREF the name
+        // gate cannot prove is a declared rejection there; here the runner
+        // simply passes nothing it cannot prove).
+        {
+          try {
+            const artifacts = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
+            const linking = artifacts.find((e) => {
+              const p = e.payload as { dataReferenceRef?: { id?: unknown } } | null | undefined;
+              return p?.dataReferenceRef?.id === ref.id;
+            });
+            if (linking) {
+              linkingArtifactRecordId = linking.recordId;
+              const lr = (linking.payload as { runRef?: { id?: unknown } } | null)?.runRef;
+              linkingProducerRunId = typeof lr?.id === 'string' ? lr.id : undefined;
+            }
+          } catch {
+            // A list failure means the link cannot be proven — pass nothing
+            // (the named rejection lives in the declared-inputs gate, not the
+            // execute path; the runner never invents a producer id).
+          }
+        }
         // GC-6 (D5): pass the DREF's pinned provenance through to the SDK —
         // ~4 additive lines (OQ2 ruling: KEEP the touch). Conditional spread:
         // contentHash only when the DREF declares one (exactOptionalPropertyTypes).
-        inputMeta = { sourcePath: path, ...(declaredContentHash ? { contentHash: declaredContentHash } : {}) };
+        // FAME-7 fix2 (R1): + the bound ref id + the linking artifact's provenance
+        // echo (recordRefId = the DREF id; artifactRecordId / producerRunId when
+        // a linking artifact is resolvable — absent otherwise, never invented).
+        inputMeta = {
+          sourcePath: path,
+          ...(declaredContentHash ? { contentHash: declaredContentHash } : {}),
+          recordRefId: ref.id,
+          ...(linkingArtifactRecordId ? { artifactRecordId: linkingArtifactRecordId } : {}),
+          ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+        };
       } else {
         throw new AnalysisServiceError('BAD_INPUT', `input ${name} must be a data-reference or analysis-output-artifact`, 400);
       }
