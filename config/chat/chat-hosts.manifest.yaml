@@ -1,0 +1,72 @@
+# CHATHOST-SWEEP-1 Change 3 — the blessed MANIFEST for the chat-host inventory
+# shrink-guard (the "vocabulary golden MANIFEST bless" convention, applied to the
+# chat-host set).
+#
+# The guard: a tick-time check (harness/l2-trunk-journeys/chat-hosts-shrink-guard.py,
+# importable by check-gate.py) FAILS when the inventory's host-id set SHRINKS without
+# a spec citing it. A host may be DELETED only with a re-bless (a new sha256 here) AND
+# a spec path named in `bless_note`; a host that was never listed is never "allowed to
+# shrink" — it simply is not part of this manifest.
+#
+# The blessed sha256 is over the CANONICAL form: the inventory's host ids, sorted
+# ascending, one per line, a single trailing newline. Recomputed from
+# config/chat/chat-hosts.yaml by
+#   python3 .hermes/plans/harness/l2-trunk-journeys/chat-hosts-shrink-guard.py --recompute
+# and blessed here EXACTLY ONCE (the golden-MANIFEST bless discipline: comment the
+# BEFORE/AFTER, bless once).
+#
+# blessed_sha256 = sha256("artifact-host\nevent-editor\nproject-deck-tab\nrecord-
+#                    host\nregistry-host\nrun-workspace\n")
+blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+
+# FROZEN FIRST-BLESS ANCHOR (fix2 D2): the sha of the ORIGINAL (first) bless,
+# carried as DATA in the manifest (not a guard constant). It is itself
+# FROZEN — the immutable reference the guard compares the TOP-LEVEL
+# blessed_sha256 against. ANY deviation of blessed_sha256 from this anchor
+# (including a CONSISTENT top-level rewrite: trimmed blessed_ids + re-set
+# blessed_sha256, so the invariant below holds) is a blessed-set change and
+# is authorized ONLY via a blessed_records entry whose bless_note cites a
+# spec that EXISTS in the repo — the top-level bless_note is prose and is
+# NEVER read as authorization. A manifest without this field fails closed.
+first_blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+
+# The host ids this manifest blesses. The TOP-LEVEL blessed_sha256/blessed_ids
+# is the ORIGINAL (first) bless and is FROZEN: the guard ASSERTS the manifest
+# invariant canonical_sha(blessed_ids) == blessed_sha256 (the HASHED PAYLOAD
+# is the authority — fix1 D1: the guard derives the removed-set from the
+# frozen id set that reproduces the sha, NEVER from a mutable blessed_ids that
+# does not reproduce it; trimming blessed_ids while blessed_sha256 stays
+# breaks the invariant and the guard goes RED, fail-closed). In addition,
+# fix2 D2: the guard COMPARES blessed_sha256 against the frozen
+# first_blessed_sha256 anchor — a CONSISTENT top-level rewrite (trimmed
+# blessed_ids + re-set blessed_sha256, invariant intact) is a blessed-set
+# change and is authorized ONLY by a blessed_records entry citing an
+# existing spec (the top-level bless_note is prose, never authorization).
+# A re-bless does
+# NOT overwrite these fields; it APPENDS a blessed_records entry below.
+blessed_ids:
+  - run-workspace
+  - event-editor
+  - project-deck-tab
+  - record-host
+  - artifact-host
+  - registry-host
+
+# A deletion is allowed ONLY when a re-bless is APPENDED to blessed_records AND
+# the spec that authorized the deletion is cited (fix1 D1+D2). The guard
+# authorizes a shrink ONLY via such a record whose blessed_sha256 EQUALS the
+# current inventory sha, whose blessed_ids reproduce that sha (hashes
+# consistently), and whose bless_note cites a spec path that EXISTS in the
+# repo (a missing spec file keeps the RED — D2). Any inventory-sha mismatch
+# that is a shrink without such a record is RED; pure growth (no host removed)
+# is allowed and re-blessed by the item that added the host.
+# blessed_records:            # appended on an authorized re-bless (none yet)
+#   - blessed_sha256: <sha256 of the NEW id set == the current inventory sha>
+#     blessed_ids: [ ...the NEW set... ]
+#     bless_note: "Deleted <host>; authorized by <spec path that exists>."
+#     blessed_at: <ts>
+#   before: dcf32649...75156b (6 hosts — this first bless, 2026-11-02)
+#   spec:   .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md
+bless_note: "First bless (L2-CHATHOST-SWEEP-1 Change 3): 6 universal-chat hosts enumerated from the registrar/bridge wiring at trunk 4bea98a5. Spec .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md. A future host deletion must APPEND a blessed_records entry whose blessed_sha256 equals the new inventory sha, whose blessed_ids reproduce it, and whose bless_note cites the authorizing spec (existing file)."
+blessed_at: "20261102T145032Z"
+base_sha: "4bea98a56752a4e69b6cca3b922d1cfd03c39121"

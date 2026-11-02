@@ -804,6 +804,311 @@ def main():
                     and log_x["journey_block"] is None and log_x["turn"] == 1,
                     ["log=%r" % log_x]))
 
+    # ---- (7) CHATHOST-SWEEP-1: the chat-host sweep grades against the
+    # DATA inventory; a strict-subset verdict table (a dropped host) is RED.
+    # Proves the sweep scope axis non-vacuously against the REAL inventory
+    # (config/chat/chat-hosts.yaml), the same way the N5/D2/D1 arms drive the
+    # gate against synthetic run-metas. The RED case is a PIN, not a live
+    # drive: drop one host from the verdict fixture -> the checker exits
+    # non-zero (the spec's "non-vacuous pin").
+    import importlib.util as _ilu
+    _spec_cg = _ilu.spec_from_file_location(
+        "check_gate", os.path.join(HERE, "check-gate.py"))
+    if _spec_cg is None or _spec_cg.loader is None:
+        raise SystemExit("SELFCHECK: cannot load check-gate.py by path")
+    cg = _ilu.module_from_spec(_spec_cg)
+    _spec_cg.loader.exec_module(cg)
+    _spec_sg = _ilu.spec_from_file_location(
+        "chat_hosts_shrink_guard",
+        os.path.join(HERE, "chat-hosts-shrink-guard.py"))
+    if _spec_sg is None or _spec_sg.loader is None:
+        raise SystemExit("SELFCHECK: cannot load chat-hosts-shrink-guard.py")
+    sgm = _ilu.module_from_spec(_spec_sg)
+    _spec_sg.loader.exec_module(sgm)
+    # Load the REAL inventory + blessed manifest (tracked in the repo). A
+    # missing/malformed inventory is a RED pin, not a crash (fail closed).
+    inv_path = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yaml")
+    man_path = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.manifest.yaml")
+    try:
+        inv_ids, inv_surfaces = cg.load_chat_host_inventory(inv_path)
+        inv_ok = bool(inv_ids)
+    except Exception as _e:
+        inv_ids, inv_surfaces, inv_ok = [], [], False
+        _inv_err = str(_e)
+    else:
+        _inv_err = ""
+    results.append(("CHATHOST inventory: config/chat/chat-hosts.yaml parses to >=1 host (non-vacuous)",
+                    inv_ok, ["inventory=%r err=%s" % (inv_ids, _inv_err if not inv_ok else "")]))
+    if inv_ids:
+        # fix1 D7: an ACCEPT verdict is an OBJECT with a per-host receipt
+        # reference — a bare string alone is not-accept.
+        def _acc(host):
+            return {"verdict": "accept", "receipts": "receipts/%s.json" % host}
+        full_accept = {h: _acc(h) for h in inv_ids}
+        dropped = inv_ids[0]                 # drop the FIRST host (deterministic)
+        subset = {h: _acc(h) for h in inv_ids if h != dropped}
+        # (7a) the FULL inventory, every host an accept OBJECT -> the pure
+        # grader is ok.
+        ok_a, miss_a, na_a, und_a = cg.grade_chat_host_sweep(
+            full_accept, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: the FULL inventory all-accept objects -> ok (non-vacuous)",
+                        ok_a and not miss_a and not na_a and not und_a,
+                        ["ok=%r miss=%r na=%r und=%r" % (ok_a, miss_a, na_a, und_a)]))
+        # (7b) THE RED CASE: a STRICT SUBSET (one host dropped) -> NOT ok,
+        # names the missing host. This is the spec's pinned non-vacuous RED.
+        ok_b, miss_b, na_b, und_b = cg.grade_chat_host_sweep(
+            subset, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: a STRICT-SUBSET table (dropped %r) -> RED, names the host" % dropped,
+                        (not ok_b) and miss_b == [dropped],
+                        ["ok=%r miss=%r" % (ok_b, miss_b)]))
+        # (7c) fix1 D7: a self-declared BARE STRING ("accept", no receipt) is
+        # NOT accept -> the host is not-accept and the table is RED.
+        na_str = dict(full_accept, **{dropped: "accept"})
+        ok_c, miss_c, na_c, und_c = cg.grade_chat_host_sweep(
+            na_str, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: a bare 'accept' STRING (no receipt) -> not-accept, RED (fix1 D7)",
+                        (not ok_c) and na_c == [dropped],
+                        ["ok=%r na=%r" % (ok_c, na_c)]))
+        # (7c2) fix1 D7: a verdict object with NO receipts path is not-accept.
+        na_norx = dict(full_accept, **{dropped: {"verdict": "accept"}})
+        ok_c2, miss_c2, na_c2, und_c2 = cg.grade_chat_host_sweep(
+            na_norx, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: an accept object with NO receipts path -> not-accept, RED (fix1 D7)",
+                        (not ok_c2) and na_c2 == [dropped],
+                        ["ok=%r na=%r" % (ok_c2, na_c2)]))
+        # (7d) an UNDECLARED host in the table (tamper evidence) -> NOT ok.
+        und_verdicts = dict(full_accept, **{"BOGUS-HOST": _acc("BOGUS-HOST")})
+        ok_d, miss_d, na_d, und_d = cg.grade_chat_host_sweep(
+            und_verdicts, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: an UNDECLARED host -> RED (N5 exact-set)",
+                        (not ok_d) and und_d == ["BOGUS-HOST"],
+                        ["ok=%r und=%r" % (ok_d, und_d)]))
+        # (7h) fix1 D3: the four-way 'analysis' surface collision is NOT an
+        # alias (one key cannot stand for four hosts). A verdict table keyed
+        # by DISTINCT surface values is therefore a strict subset (missing the
+        # analysis hosts) + undeclared 'analysis' -> RED. Unique surface
+        # values ARE aliases (a table keyed by a unique surface resolves).
+        amap = cg.alias_map(inv_ids, inv_surfaces)
+        analysis_hosts = sorted(h for h, s in zip(inv_ids, inv_surfaces)
+                                if s == "analysis")
+        amb = [s for s in set(inv_surfaces)
+               if sum(1 for x in inv_surfaces if x == s) > 1 and s not in amap]
+        distinct_surfs = sorted(set(inv_surfaces))
+        surf_keyed = {s: _acc(s) for s in distinct_surfs}
+        ok_s, miss_s, na_s, und_s = cg.grade_chat_host_sweep(
+            surf_keyed, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: a table keyed by DISTINCT surface values (the four-way 'analysis' collision) -> RED, fail-closed (fix1 D3)",
+                        (not ok_s) and miss_s == analysis_hosts
+                        and "analysis" in und_s and "analysis" not in amap
+                        and amb == ["analysis"],
+                        ["ok=%r miss=%r und=%r amb=%r"
+                         % (ok_s, miss_s, und_s, amb)]))
+        # (7e) Drive THE ACTUAL gate (check-gate.py --chat-hosts): the full
+        # table (accept OBJECTS + EXISTING receipt files, trunk app_base)
+        # exits 0; the dropped-host table exits non-zero and names the host.
+        with tempfile.TemporaryDirectory() as td_ch:
+            run_dir = os.path.join(td_ch, "20261102T000000Z")
+            os.makedirs(run_dir)
+            rx_dir = os.path.join(run_dir, "receipts")
+            os.makedirs(rx_dir)
+            for h in inv_ids:                 # the receipt FILES must exist (D7)
+                with open(os.path.join(rx_dir, "%s.json" % h), "w") as rfh:
+                    json.dump({"host": h, "body": {"surface": "x"}}, rfh)
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": full_accept}, fh)
+            os.symlink(run_dir, os.path.join(td_ch, "latest"))
+            env_ch = dict(os.environ, CL_RECEIPTS=td_ch,
+                          CL_CHAT_HOSTS=inv_path, CL_CHAT_HOSTS_MANIFEST=man_path)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: a FULL-inventory sweep run (accept objects + existing receipts) exits 0 (green)",
+                            p.returncode == 0 and "GATE-VERDICT green" in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # THE RED pin: drop one host from the verdict fixture -> exit != 0.
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": subset}, fh)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: a DROPPED-HOST (strict-subset) verdict exits non-zero + names the host",
+                            p.returncode == 1 and "STRICT SUBSET" in p.stdout
+                            and dropped in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # (7e-n1) fix1 D6: the N1 trunk rule applies to the chat axis — a
+            # sweep run targeted at a NON-TRUNK app_base (a scratch vite) may
+            # never clear the gate, full accept table or not.
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5195",
+                           "chat_host_verdicts": full_accept}, fh)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: a NON-TRUNK app_base (scratch FE) sweep is RED (fix1 D6 / N1)",
+                            p.returncode == 1 and "NON-TRUNK" in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # (7e-d7) fix1 D7: an accept OBJECT whose receipt FILE does not
+            # exist is not-accept (the gate does not trust a self-declared
+            # verdict without a request-body receipt artefact).
+            dangling = {h: {"verdict": "accept",
+                            "receipts": "receipts/does-not-exist-%s.json" % h}
+                        for h in inv_ids}
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": dangling}, fh)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: an accept verdict whose receipt FILE is missing is RED (fix1 D7)",
+                            p.returncode == 1 and "does not exist" in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+        # (7f) Change 3 shrink-guard (PURE): the current inventory vs the
+        # blessed manifest is green; a SHRUNKEN inventory is RED + names the
+        # host; pure GROWTH is allowed. The guard returns a 4-tuple
+        # (ok, removed, reason, authorized) and asserts the manifest invariant
+        # canonical_sha(blessed_ids) == blessed_sha256 (fix1 D1).
+        try:
+            with open(man_path) as fh:
+                manifest = yaml.safe_load(fh) or {}
+            sg_ok0, sg_rm0, sg_reason0, sg_auth0 = sgm.shrink_guard(
+                inv_ids, manifest)
+            results.append(("CHATHOST shrink-guard: current inventory matches the blessed manifest -> green",
+                            sg_ok0 and not sg_rm0 and sg_reason0 is None,
+                            ["ok=%r removed=%r reason=%r" % (sg_ok0, sg_rm0, sg_reason0)]))
+            shrunk = [h for h in inv_ids if h != dropped]
+            sg_ok1, sg_rm1, sg_reason1, _a1 = sgm.shrink_guard(shrunk, manifest)
+            results.append(("CHATHOST shrink-guard: a SHRUNKEN inventory (dropped %r) -> RED, names the host" % dropped,
+                            (not sg_ok1) and dropped in sg_rm1,
+                            ["ok=%r removed=%r reason=%r" % (sg_ok1, sg_rm1, sg_reason1)]))
+            grown = list(inv_ids) + ["NEW-HOST"]
+            sg_ok2, sg_rm2, sg_reason2, _a2 = sgm.shrink_guard(grown, manifest)
+            results.append(("CHATHOST shrink-guard: pure GROWTH (new host) is allowed (not a shrink)",
+                            sg_ok2 and not sg_rm2,
+                            ["ok=%r removed=%r reason=%r" % (sg_ok2, sg_rm2, sg_reason2)]))
+            # (7f-d1) fix1 D1: shrink + TRIMMED blessed_ids (sha UNCHANGED) is
+            # RED via the manifest invariant — the removed-set is derived from
+            # the hashed payload, never a mutable blessed_ids. This is exactly
+            # the reviewer's /tmp drain case (RED-before-fix on a /tmp copy).
+            trimmed_manifest = dict(manifest,
+                                    blessed_ids=[h for h in manifest.get(
+                                        "blessed_ids", []) if h != dropped])
+            sg_ok3, sg_rm3, sg_reason3, _a3 = sgm.shrink_guard(
+                shrunk, trimmed_manifest)
+            results.append(("CHATHOST shrink-guard: shrink + TRIMMED blessed_ids, sha UNCHANGED -> RED via invariant (fix1 D1)",
+                            (not sg_ok3) and sg_reason3 == "invariant",
+                            ["ok=%r removed=%r reason=%r"
+                             % (sg_ok3, sg_rm3, sg_reason3)]))
+            # (7f-d1b) fix1 D1: the FULL DRAIN (hosts:[] + blessed_ids:[]) with
+            # the sha left at the 6-host value breaks the invariant -> RED.
+            drain_manifest = dict(manifest, blessed_ids=[])
+            sg_ok4, sg_rm4, sg_reason4, _a4 = sgm.shrink_guard(
+                [], drain_manifest)
+            results.append(("CHATHOST shrink-guard: a FULL DRAIN (hosts:[] + blessed_ids:[]) -> RED via invariant (fix1 D1)",
+                            (not sg_ok4) and sg_reason4 == "invariant",
+                            ["ok=%r removed=%r reason=%r"
+                             % (sg_ok4, sg_rm4, sg_reason4)]))
+            # (7f-d2) fix1 D2: on a blessed-sha CHANGE (a re-bless record whose
+            # sha == the current inventory sha + consistent blessed_ids) the
+            # bless_note MUST cite an existing spec, else RED. Control: the
+            # SAME record WITH an existing spec path is authorized (GREEN).
+            shrunk_sha = sgm.canonical_sha(shrunk)
+            good_spec = ".hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md"
+            rec_no_spec = {"blessed_sha256": shrunk_sha, "blessed_ids": shrunk,
+                           "bless_note": "nope, no spec cited here",
+                           "blessed_at": "20261102T999999Z"}
+            d2_red = dict(manifest, blessed_records=[rec_no_spec])
+            sg_ok5, sg_rm5, sg_reason5, sg_auth5 = sgm.shrink_guard(
+                shrunk, d2_red)
+            results.append(("CHATHOST shrink-guard: a re-bless whose bless_note cites NO existing spec -> RED (fix1 D2)",
+                            (not sg_ok5) and sg_reason5 == "no-consistent-record"
+                            and sg_auth5 is None,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok5, sg_rm5, sg_reason5, sg_auth5)]))
+            rec_spec = {"blessed_sha256": shrunk_sha, "blessed_ids": shrunk,
+                        "bless_note": "Deleted %s; authorized by %s."
+                                       % (dropped, good_spec),
+                        "blessed_at": "20261102T999999Z"}
+            d2_green = dict(manifest, blessed_records=[rec_spec])
+            sg_ok6, sg_rm6, sg_reason6, sg_auth6 = sgm.shrink_guard(
+                shrunk, d2_green)
+            results.append(("CHATHOST shrink-guard: a re-bless whose bless_note cites an EXISTING spec -> authorized GREEN (fix1 D2)",
+                            sg_ok6 and sg_rm6 == [dropped]
+                            and sg_reason6 is None and sg_auth6 == good_spec,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok6, sg_rm6, sg_reason6, sg_auth6)]))
+            # (7f-fix2) fix2 D2: a CONSISTENT top-level REWRITE — blessed_ids
+            # trimmed + blessed_sha256 re-set to the new set's sha (invariant
+            # holds) + current inventory equal to the rewritten set — is a
+            # blessed-set change, NOT a no-change: it is authorized ONLY via a
+            # blessed_records entry citing an existing spec. The top-level
+            # bless_note is prose and is NEVER read as authorization. RED
+            # before the fix (the old guard returned (True, [], None, None)
+            # here — the cycle-2 reviewer's evidence case).
+            rewrite = dict(manifest,
+                           blessed_sha256=shrunk_sha,
+                           blessed_ids=shrunk,
+                           bless_note="deleted %s, no spec cited here"
+                                      % dropped)
+            sg_ok7, sg_rm7, sg_reason7, sg_auth7 = sgm.shrink_guard(
+                shrunk, rewrite)
+            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless (rewritten blessed_ids+blessed_sha256) whose bless_note cites NO existing spec -> RED (fix2 D2)",
+                            (not sg_ok7) and sg_auth7 is None,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok7, sg_rm7, sg_reason7, sg_auth7)]))
+            rewrite_cited = dict(rewrite, blessed_records=[rec_spec])
+            sg_ok8, sg_rm8, sg_reason8, sg_auth8 = sgm.shrink_guard(
+                shrunk, rewrite_cited)
+            # Note: with a consistent top-level rewrite the top level already
+            # FORGETS the dropped host, so removed (derived from the
+            # rewritten top-level set) is legitimately [] — the point of this
+            # arm is that the spec-cited blessed_records entry AUTHORIZES the
+            # rewritten state (RED without it, per the arm above).
+            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless + a blessed_records entry citing an EXISTING spec -> authorized GREEN (fix2 D2)",
+                            sg_ok8 and sg_rm8 == []
+                            and sg_reason8 is None and sg_auth8 == good_spec,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok8, sg_rm8, sg_reason8, sg_auth8)]))
+            # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
+            # full 6-host blessed sha) is RED even when driven through the
+            # gate. The shrunk inventory carries the `surface` field (D3) and
+            # the sweep table is complete accept-objects, so ONLY the
+            # shrink-guard can turn this red — proves the guard is the
+            # authority, not the verdict table.
+            with tempfile.TemporaryDirectory() as td_sh:
+                shrunk_inv = os.path.join(td_sh, "shrunk.yaml")
+                sh_hosts = [{"id": h, "surface": inv_surfaces[inv_ids.index(h)]}
+                            for h in shrunk]
+                with open(shrunk_inv, "w") as fh:
+                    yaml.safe_dump({"hosts": sh_hosts}, fh)
+                run_dir2 = os.path.join(td_sh, "20261102T000001Z")
+                os.makedirs(run_dir2)
+                rx2 = os.path.join(run_dir2, "receipts")
+                os.makedirs(rx2)
+                for h in shrunk:                # receipt files must exist (D7)
+                    with open(os.path.join(rx2, "%s.json" % h), "w") as rfh:
+                        json.dump({"host": h, "body": {}}, rfh)
+                with open(os.path.join(run_dir2, "run-meta.json"), "w") as fh:
+                    json.dump({"app_base": "http://localhost:5193",
+                               "chat_host_verdicts": {h: _acc(h) for h in shrunk}},
+                              fh)
+                os.symlink(run_dir2, os.path.join(td_sh, "latest"))
+                env_sh = dict(os.environ, CL_RECEIPTS=td_sh,
+                              CL_CHAT_HOSTS=shrunk_inv,
+                              CL_CHAT_HOSTS_MANIFEST=man_path)
+                p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                    "--chat-hosts"], capture_output=True, text=True,
+                                   env=env_sh)
+                results.append(("CHATHOST shrink-guard: an un-re-blessed SHRINK blocks the gate even with a complete sweep table",
+                                p.returncode == 1
+                                and "authorized re-bless" in p.stdout
+                                and dropped in p.stdout,
+                                ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:220])]))
+        except Exception as _e:
+            results.append(("CHATHOST shrink-guard: manifest load (Change 3)",
+                            False, ["err=%s" % _e]))
+
     ok = True
     for name, passed, notes in results:
         print("%-64s %s" % (name, "OK" if passed else "RED"))
