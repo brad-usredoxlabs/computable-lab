@@ -1,0 +1,43 @@
+# Handoff — lane 2 · 2026-11-02T01:30 EDT (l2t0110 — PICKER-1 fix-run-1 DONE 484c8cab → advc c2 VERDICT: fix (8/9 closed, 1 MEDIUM + 3 LOW) → fix-run-2 LIVE slot-0)
+
+## Reconcile (all first-hand; digest cl-reconcile.sh 2 @ 2026-11-02T01:10)
+- Trunk 9a1bb0fb; frontend :5193 http=200; backend :3093 root serves (/health 404 = route absent, same as prior ticks). exa tripwire OK (present, consistent lane1/lane2/canonical). Queue lock FREE, lane not paused.
+- Task counts at open: todo 5 / in-progress 3 (LABSTATE-CONTENTS-1, WELLSET-TOKEN-EMIT-1, CLARIFY-PICKER-1) / done 128. No live workers at open; slot-0 pidfile holder (fix-run-1 launcher) still ALIVE and working — the digest's "holder=alive" was correct and the 00:50 handoff's checkpoint was accurate.
+- Newest handoff read first-hand: 2026-11-02_0050 (fix-run-1 live; TARGET-1 spec ratified; queue order PICKER → CARD → TARGET → REGATE).
+
+## PICKER-1 — fix-run-1 DONE, advc cycle-2 FIX, fix-run-2 dispatched
+- FIX RUN 1 exited rc=0 01:12:28 with marker `L2-CLARIFY-PICKER-1 FIX1 DONE 484c8cab879c432f5008125c35ee98f395c4c53f`. Launcher 1200567 + child 1200575 confirmed dead; worktree wt/L2-CLARIFY-PICKER-1-lane2-l2t2110 clean at 484c8cab; branch delta trunk...HEAD = 22 files, +2228/-244. Report "## FIX RUN 1" section present with defect-by-defect changes + gates + honest deviations (canBeDefault true-pinned for defaultable rows to preserve existing byte-stability pins; D8 chose post-dedupe count; D8a explicit pickerRows flag threaded).
+- ADVERSARIAL CYCLE 2 (background unit pid 1280427, OpenRouter, EXITED rc=0 01:21:11): reviews/L2-CLARIFY-PICKER-1-advc-c2-l2t0115.md VERDICT: fix. Reviewer ran all gates itself: app slashMenu+ChatLog+right-pane/ai 43 files/363 tests PASS; server materials+handlers 10/78 PASS; app tsc 11 baseline none-touched; server tsc 25 baseline zero-new; MATERIAL_CATEGORY_RANK grep empty; wire byte-stability diff empty; tree clean. 8/9 cycle-1 defects verified CLOSED at file:line with mutant probes. Scope-2 full-delta sweep found no additional hardcoded policy.
+- REMAINING 4: (1) MEDIUM clarifyPickerRanking.ts:217-218 `?? inputIndex` still fabricates a rank for undeclared families — the "keeps INPUT order" comment is contradicted by probe (undeclared at index 0 sorts ABOVE a rank-4 declared row); violates spec bait-4 ("ANY rank integer surviving in TS is a hard stop"). (2) LOW clarifyPickerRanking.test.ts:232-286 passes identically under the deleted `?? 0` (mutant-proven) — non-discriminating. (3) LOW post-dedupe contains count has no discriminating test (regex-only assertion). (4) LOW types.ts:67/:78 contract comments contradict the data-flag rule and the shared kind-word vocabulary.
+- Classified PRODUCT BEHAVIOUR (ranking behavior itself) → CODER fix run, not paperwork-fixer.
+- FIX RUN 2 dispatched 01:23:28 slot-0 as terminal-background launcher 1293949 (hermes child 1294011) — then MIGRATED 01:32-01:36: the launcher was a CHILD OF THE TICK PROCESS (1267702) and would die at tick exit (AS-TICKCHILD-LAUNCH-TRAP). Killed the chain at ~7 min in (uncommitted 4-file scratch diff discarded via git checkout -- ., zero committed loss, worktree clean at 484c8cab, slot-0 flock released) and re-launched the SAME launcher script via `systemd-run --user --collect --unit=cl-l2-coder-picker1-fix2-m1-l2t0110`. LIVE unit is active; flock 1316664 → inner 1316665 → hermes cl-coder child 1316669; pid file CLARIFYPICKER1-FIX2-1316665-2026-11-02T01:35:51-05:00; log logs/coder-CLARIFYPICKER1-fix2-l2t0115.log (MIGRATE line in-log); prompt prompts/coder-CLARIFYPICKER1-fix2-l2t0115.txt; SAME worktree/branch; report target = deliverables/L2-CLARIFY-PICKER-1-report.resume-l2t2310.md "## FIX RUN 2" section; marker `L2-CLARIFY-PICKER-1 FIX2 DONE <sha>`. Stagger honored (prior coder exited 01:12, 11 min before launch).
+- ORCH RULING embedded in the fix-2 prompt (AS-PICKER1-FIX2-UNDECLARED-NONRANKED): undeclared families are NON-RANKED — comparator partitions declared vs undeclared; undeclared keep relative input order AFTER all declared rows; zero fabricated integers; convention stated once in the registry YAML comment. Plus RED-first demands: inversion fixture asserting the FULL ordered label list, mutant check (revert to `?? inputIndex` in a /tmp copy → the new test must fail), post-dedupe count pin with duplicate display labels, types.ts comment corrections.
+- This is fix cycle 2 of the advc loop. If c3 returns fix again with no improvement → route to architect with both defect lists (cycle cap).
+
+## Cards / humans
+- Sweep 01:15: LABSTATE-CONTENTS1-tokendata-fixrun2 = 74692e8b (unchanged), LEG-G = b13139b7 (unchanged), WELLSET-RESOLVER-1 = 4ce9b89d (unchanged). Only empty "BRAD'S ANSWER" sections; no brad-answer content anywhere; nothing consumed; nothing re-asked.
+- Blocked-on-human unchanged: LABSTATE-CONTENTS-1 (FIXRUN3 boundary card), WELLSET-TOKEN-EMIT-1 (tokensite card), LEG-G (approval card).
+
+## Queue state
+- Queue order unchanged: PICKER-1 fix-run-2 (LIVE) → advc c3 → ACCEPT → orch self-verify → merge --no-ff → RESTART (registry YAML comment changes!) → browser gate ROUND-TRIP per spec → done → CARD-1 dispatch due-gate (spec promoted at .hermes/plans/2026-11-01_2330-L2-CLARIFY-CARD-1-spec.md, base >= PICKER-1 merge) → TARGET-1 behind CARD-1 (spec at .hermes/plans/2026-11-02_0050-L2-CLARIFY-TARGET-1-spec.md).
+- REGATE-1 stays todo until GHOST-1 AND PICKER-1 merged (GHOST-1 met).
+- CHATHOST-SWEEP-1 + LEG-G pending Brad on the same card — not claimable.
+
+## Corpus loop
+- corpus-state.md unchanged: prompt-1 BUILDING (GHOST-1 merged+gated; PICKER-1 in fix cycle 2; REGATE-1 needs both merged). Prompts 2-8 LOCKED. No state-machine move this tick — no recon landed, no re-gate due.
+
+## assumptions (open evidence debt carried forward)
+- AS-PICKER1-FIX2-UNDECLARED-NONRANKED (NEW, RULED): see assumptions.md — evidence debt OPEN until fix-run-2's report carries the discriminating inversion test + mutant-check failure output.
+- AS-PICKER1-D1-NO-TS-BACKSTOP (carried): composition never-default lives ONLY in the YAML can_be_default flag; advc c2 confirmed the TS backstop is gone — debt partially cleared, closes fully at acceptance (a catalog-label misclassification of a plain reagent as composition remains an architect call).
+- AS-PICKER1-RESUME-ADOPTED-UNCOMMITTED: advc c2 carried the full-delta obligation explicitly (scope 2 swept trunk...HEAD author-blind-capable); result: no additional BLOCKER/MEDIUM beyond defect 1. Consider this substantially cleared at c2, subject to acceptance.
+- AS-TARGET1-OQ1-CONTRACTBLOCK-DATA-DELTA, AS-TARGET1-OQ3-NO-ID-UNTIL-MATCHED, AS-TARGET1-VOLUME-100-PROMPT-EXAMPLE-ORIGIN, AS-TARGET1-SPEC-PINS-PREMERGE-TIP unchanged (TARGET-1 not yet dispatched).
+- AS-GHOST1-ACCEPT-NO-LABWAREID-STAMP, AS-PICKER1-OQ2-LAYER-VOCAB-READ, AS-B9B998CD-TRUNK-DIRECTFIX, AS-INTENTID-CMDLINE-PROMPT-CHECK-FIELD, AS-FIX4-STAGGER-VIA-AGE-NOT-EXIT, AS-PROMPT1GHOST-SPEC-NOPATH-STAMP unchanged.
+- AS-FLEETSLOT-PIDFILE-STALE reconfirmed at open (slot-1/bg slots held DEAD pids; flock is truth).
+- AS-COMPOSER-DRAFT-NOT-VERIFIED: screening-tier caveat only, per prior tick's orch call.
+
+## NEXT TICK (resume condition)
+1. Poll logs/coder-CLARIFYPICKER1-fix2-l2t0115.log for `L2-CLARIFY-PICKER-1 FIX2 DONE <40sha>` or BLOCKED. Reconcile by marker + flock/launcher liveness (launcher chain 1293949/1294011); do NOT re-dispatch while alive. On DONE: advc c3 (unique report path, verify the inversion-fixture test + mutant-check + the 4 defect closures + full gates) → ACCEPT → orch self-verify (run the named suites yourself, tsc zero-new, grep-clean, wire zero-diff, read the fix-2 report's mutant-check evidence) → merge --no-ff → RESTART stack (registry YAML comment changed) → browser gate ROUND-TRIP per spec (receipts /home/brad/.hermes/cl/receipts/L2-CLARIFY-PICKER-1/<ts>/) → done. Second fix verdict with no improvement = cycle cap → architect with both defect lists.
+2. LAUNCH RULE REAFFIRMED (cost 7 coder-minutes this tick): never launch coder dispatches from the tick's own terminal-background tool — they are tick children and die with the tick. ALWAYS `systemd-run --user --collect --unit=cl-l2-<item>-... <launcher.sh>`. Same applies to adv/spec-composer survivors.
+3. After PICKER-1 merges: CARD-1 coder dispatch due-gate opens (spec .hermes/plans/2026-11-01_2330-L2-CLARIFY-CARD-1-spec.md; base >= PICKER-1 merge; one AgentOrchestrator hunk per OQ2, stop→BLOCKED beyond it).
+4. Cards md5 sweep (74692e8b / 4ce9b89d / b13139b7); consume any real brad-answer text.
+5. Health-check backend + exa tripwire each tick. REGATE-1 stays todo until PICKER-1 merges.
