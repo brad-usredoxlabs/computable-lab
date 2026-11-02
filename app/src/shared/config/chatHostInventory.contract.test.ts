@@ -1,8 +1,7 @@
 /**
  * CONTRACT (L2-CHATHOST-SWEEP-1) — the shorthand-drafting SURFACE list is a
  * SUBSET of the chat-host INVENTORY (YAML-vs-YAML), and every inventory
- * host names its machine `surface:` field (the machine surface id the
- * server reads — fix1 D3).
+ * `surface:` field is a member of the app's AiSurface union.
  *
  * The existing shorthandDraftingSurfaces.contract.test.ts pins the policy's
  * surfaces against the app's AiSurface UNION (TS). This test crosses the other
@@ -14,6 +13,12 @@
  * list must remain a SUBSET of the inventory's host ids (the
  * drafting⊆inventory pin, fix1 D4: this pin STAYS).
  *
+ * The `surface:` field (fix1 D3) is the machine surface id the server reads
+ * off every /api/ai/** request (AiContext.surface). It is the ONLY field this
+ * test pins against the AiSurface union — host `id`s are a DIFFERENT
+ * vocabulary (4 of the 6 host ids are deliberately NOT AiSurface members:
+ * hosts and surfaces are different vocabularies, per the fix1 D4 ruling; the
+ * hosts are NOT forced into the union).
  *
  * Both inventory sides are read from the DATA files (never a TS copy) so
  * neither can drift the way `workspace.deck` drifted (the fixture and the
@@ -31,6 +36,7 @@ import { describe, expect, it } from 'vitest'
 // root the way the sibling contract test does (cwd === app/).
 const inventoryPath = join(process.cwd(), '..', 'config', 'chat', 'chat-hosts.yaml')
 const policyPath = join(process.cwd(), '..', 'config', 'drafting', 'shorthand-drafting.yaml')
+const surfaceTypePath = join(process.cwd(), 'src', 'types', 'aiContext.ts')
 
 interface InventoryHost {
   id?: string
@@ -80,6 +86,25 @@ function policySurfaces(): string[] {
     .filter((entry) => entry.length > 0)
 }
 
+/**
+ * The string literals of the app's `AiSurface` union, read from the type
+ * declaration itself (the sibling contract test's ONE-parser discipline) — a
+ * runtime copy of the list would be a second authority and could drift exactly
+ * the way the policy did.
+ */
+function declaredSurfaces(): Set<string> {
+  const source = readFileSync(surfaceTypePath, 'utf8')
+  const start = source.indexOf('export type AiSurface')
+  expect(start, 'AiSurface union not found in types/aiContext.ts').toBeGreaterThanOrEqual(0)
+  // The declaration is unterminated by a semicolon and its comments contain
+  // them, so anchor on the NEXT top-level `export` instead.
+  const end = source.indexOf('\nexport ', start + 'export type AiSurface'.length)
+  const block = source.slice(start, end === -1 ? source.length : end)
+  const literals = new Set<string>()
+  for (const match of block.matchAll(/'([^']+)'/g)) literals.add(match[1]!)
+  return literals
+}
+
 describe('shorthand-drafting surfaces vs the chat-host inventory (YAML-vs-YAML)', () => {
   it('every drafting surface is a named inventory host (subset — the drafting⊆inventory pin)', () => {
     const ids = inventoryHostIds()
@@ -96,6 +121,18 @@ describe('shorthand-drafting surfaces vs the chat-host inventory (YAML-vs-YAML)'
 
   it('every inventory host names its machine surface id (fix1 D3)', () => {
     expect(inventorySurfaces().length).toBe(inventoryHostIds().length)
+  })
+
+  it('every inventory `surface` is a member of the app AiSurface union (the true pin)', () => {
+    const declared = declaredSurfaces()
+    const unknown = inventorySurfaces().filter((s) => !declared.has(s))
+    expect(
+      unknown,
+      `chat-hosts.yaml declares surface(s) the app cannot post (NOT members of ` +
+        `the AiSurface union, app/src/types/aiContext.ts): ${unknown.join(', ')} — ` +
+        `the server would read a surface no client sends (the workspace.deck ` +
+        `defect class, crossed onto the inventory).`,
+    ).toEqual([])
   })
 
   it('the inventory is not empty (an empty inventory makes the subset vacuous)', () => {

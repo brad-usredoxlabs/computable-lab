@@ -43,8 +43,14 @@
 #
 # The `id`s below are the SWEEP KEY. The contract test
 # (app/src/shared/config/chatHostInventory.contract.test.ts) pins that the
-# shorthand-drafting surface list is a SUBSET of these ids (YAML-vs-YAML) and that
-# every id is a surface the app can actually post (member of the AiSurface union).
+# shorthand-drafting surface list is a SUBSET of these ids (YAML-vs-YAML; the
+# drafting⊆inventory pin) and that every `surface:` field is a member of the
+# app's AiSurface union (read from types/aiContext.ts — the true pin). It does
+# NOT pin `id` membership in the AiSurface union: 4 of the 6 host ids
+# (record-host, artifact-host, registry-host, project-deck-tab) are NOT
+# AiSurface members by design — host id ≠ surface id (fix1 D4: the prior
+# "every id is a member of the AiSurface union" claim was FALSE and is
+# corrected here and in the report; the hosts are NOT forced into the union).
 #
 # =============================================================================
 # EXCLUDED by the grep (verified, NOT in this set) — so a future sweep does not
