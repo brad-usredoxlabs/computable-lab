@@ -91,6 +91,36 @@
   report owed reviews/L2-PROMPT1-GHOST-1-advc-c2-l2t2110.md, log
   logs/advc-PROMPT1GHOST-c2-l2t2110.log ending ADVC EXITED rc.
 
+## LATE-TICK UPDATE 2 (orch, ~22:05 — GHOST-1 MERGED, browser gate LIVE)
+- ADVC CYCLE-2 ACCEPT (reviews/L2-PROMPT1-GHOST-1-advc-c2-l2t2110.md, rc=0 21:47):
+  all 5 duties reproduced by reviewer incl. /tmp-scratch RED re-probe (1 failed pre-fix)
+  and the blank-labwareId pre-existing observation (charged to run-1, not this delta;
+  flagged, non-defect). ORCH SELF-VERIFY first-hand: worktree clean @ ee0579bb,
+  addMaterialAttribution 9/9 re-run by orch in the worktree (21:50).
+- MERGED --no-ff -> trunk 15bf5f7e (10 files +472/-33, app-only, two new files
+  eventGraph.addMaterialAttribution.test.ts + placedVesselAttribution.ts).
+- Stack RESTARTED (lane-stack script's 60s readiness probe false-fails on the 404-at-
+  /root health URL; confirmed serving via /api/schemas 200 + :5193 200; AS: the script's
+  readiness check needs the right URL — lane-ops nit, not a product defect).
+- Scout drivers RE-RUN UNCHANGED vs the merged tree by orch: legB2 rc=0 (cardSeen
+  true, settled true, accept preview '1 event ... Accept') + legC rc=0 — 96 wells,
+  A2:A5/B2:B5 filled rgba(78,151,188,.22) = the GHOST projection now WORKS live
+  (pre-fix: empty grid). Receipts updated in place at 20261101T163744 + fresh orch run.
+- BROWSER GATE LIVE (mandatory ROUND-TRIP): unit cl-l2-bgate-ghost1-l2t2110, tier-1
+  cl-browser-reviewer, prompt prompts/bgate-GHOST1-l2t2110.txt (4 criteria verbatim:
+  real Accept turn + request-body artifact paired w/ rendered answer; fills on focus
+  grid + tooltips; UNAFFECTED-well negative case = the fix-2 blocker; cold-reload
+  persistence). Receipts /home/brad/.hermes/cl/receipts/L2-PROMPT1-GHOST-1/20261101T220158/.
+  ~30 min expected (2x ~22:30, 3x ~23:00 -> tier-2 ladder). Task stays in-progress
+  until VERDICT: accept on trail+screenshots.
+- CARD-1 spec draft LANDED rc=0 21:46 (42,941 B, ends OQ discussion incl.
+  compileScientistIntent.ts:300-330 / shorthandChat cites; recommends V1-only on the
+  W11-volume leg — declared-required already converts silent-stage -> card; leaves
+  invented-number to TARGET-1). AUDIT + PROMOTE + LINK owed next tick.
+- PICKER-1 CODER LIVE: launcher unit cl-l2-coder-picker1-l2t2110 (pid 824903) waiting
+  on NFS checkout marker (cl-l2-picker1-wt-l2t2110, ~10 min), then takes slot-0,
+  expected run 30-60 min. Expected DONE ~23:00. Do NOT re-dispatch while alive.
+
 ## NEXT TICK (resume condition)
 1. Check queue log coder-PROMPT1GHOST-fix2-l2t2110.log: did it LOCK-ACQUIRE? Poll for
    FIX2 DONE sha -> advc cycle-2 (unique path) -> ACCEPT -> orch self-verify
