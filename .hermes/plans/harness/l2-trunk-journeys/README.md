@@ -180,8 +180,11 @@ universal-chat host: `id`, `surface`, `mount`, `route`, `note` — `surface` is
 the machine surface id the server reads; the four-way `analysis` collision is
 documented in-file) with a blessed manifest at
 `config/chat/chat-hosts.manifest.yaml` (the Change 3 shrink-guard anchor; the
-top-level blessed_sha256/blessed_ids is the FROZEN first bless, and a
-re-bless APPENDS a `blessed_records` entry). `check-gate.py` gains a SECOND
+top-level blessed_sha256/blessed_ids is the FROZEN first bless, the guard
+pins it against the frozen `first_blessed_sha256` DATA anchor — any deviation
+of the top-level sha, INCLUDING a consistent rewrite, requires a spec-cited
+blessed_records entry; the top-level bless_note is prose, never
+authorization — and a re-bless APPENDS a `blessed_records` entry). `check-gate.py` gains a SECOND
 scope axis — `--chat-hosts` (the no-flag journey gate is byte-for-byte
 unchanged; no parallel harness):
 
@@ -204,7 +207,8 @@ a consistent re-bless record whose bless_note cites an existing spec). A
 (fix1 D3); the four-way `analysis` collision is never an alias. The RED cases
 are pinned non-vacuously by the self-check's CHATHOST arms (drop one host from
 a synthetic verdict fixture -> the gate exits non-zero and names the host; the
-full table exits zero; plus the D1 invariant/drain, D2 no-spec, D3
+full table exits zero; plus the D1 invariant/drain, D2 no-spec, the fix2
+consistent top-level re-bless (RED uncited / GREEN spec-cited), D3
 collision, D6 non-trunk, and D7 receipt arms). The live sweep run on :5193 is
 ORCH-OWNED post-merge (the browser gate), not this harness's.
 

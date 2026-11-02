@@ -19,7 +19,13 @@ before trusting ANY part of the manifest, and derives the removed-set from
 that invariant-checked set — never from a mutable blessed_ids that does not
 reproduce its sha (trimming blessed_ids while the sha stays, or the full
 drain hosts:[]/blessed_ids:[] with a stale sha, breaks the invariant -> RED,
-fail closed). A re-bless does NOT overwrite the top-level; it APPENDS a
+fail closed). FIX2 D2: the guard ALSO compares the top-level blessed_sha256
+against the FROZEN `first_blessed_sha256` anchor carried as DATA in the
+manifest — ANY deviation (including a CONSISTENT top-level rewrite: trimmed
+blessed_ids + re-set blessed_sha256, invariant intact) is a blessed-set
+change and is authorized ONLY by a blessed_records entry citing a spec that
+exists; the top-level bless_note is prose and is NEVER read as
+authorization. A re-bless does NOT overwrite the top-level; it APPENDS a
 blessed_records entry. Any inventory-sha mismatch that is a SHRINK is RED
 unless the manifest carries a NEWER consistent bless record: a blessed_records
 entry whose blessed_sha256 EQUALS the current inventory sha (the new sha) and
@@ -37,9 +43,10 @@ tick-runnable:
 
 Exit 0 = the inventory did not shrink past the blessed set (or the shrink is
 authorized by a consistent re-bless record with a spec that exists).
-Exit 1 = a blessed host is missing WITHOUT an authorizing re-bless record
-(includes: invariant failure, mismatch without a consistent newer record, and
-a re-bless record whose cited spec does not exist).
+Exit 1 = a blessed host is missing / the blessed set changed WITHOUT an
+authorizing re-bless record (includes: invariant failure, missing first-bless
+anchor, mismatch without a consistent newer record, and a re-bless record
+whose cited spec does not exist — including a CONSISTENT top-level rewrite).
 Exit 2 = env error (inventory / manifest unreadable — fail closed).
 """
 import argparse
@@ -142,15 +149,24 @@ def shrink_guard(current_ids, manifest, repo_root=None):
     and derives the removed-set from that invariant-checked set — NEVER from a
     mutable blessed_ids that does not reproduce its sha (trimming blessed_ids
     while the sha stays breaks the invariant -> RED; the full drain
-    hosts:[]/blessed_ids:[] with a stale sha breaks it too). A re-bless does
-    NOT overwrite the top-level; it appends a blessed_records entry. Any
-    inventory-sha mismatch (the current inventory differs from the frozen
-    bless) that is a SHRINK is RED unless a NEWER consistent bless record
-    authorizes it: a blessed_records entry whose blessed_sha256 is the "new
-    sha" (== the current inventory sha), whose blessed_ids reproduce that sha
-    ("hashes consistently"), and whose bless_note cites a spec path that
-    EXISTS in the repo (D2: no citation -> no deletion). Pure growth (no host
-    removed) is allowed and is re-blessed by the item that added the host.
+    hosts:[]/blessed_ids:[] with a stale sha breaks it too). FIX2 D2: the
+    guard ALSO compares the top-level blessed_sha256 against the FROZEN
+    first_blessed_sha256 anchor (DATA in the manifest; a missing anchor fails
+    closed, reason "no-anchor"). Any DEVIATION of blessed_sha256 from that
+    anchor — including a CONSISTENT top-level rewrite (trimmed blessed_ids +
+    re-set blessed_sha256, invariant intact, current inventory equal to the
+    rewritten set) — is a blessed-set change and is authorized ONLY via the
+    blessed_records path below; the top-level bless_note is prose and is
+    NEVER read as authorization. A re-bless does NOT overwrite the top-level;
+    it appends a blessed_records entry. Any inventory-sha mismatch (the
+    current inventory differs from the blessed set) that is a SHRINK is RED
+    unless a NEWER consistent bless record authorizes it: a blessed_records
+    entry whose blessed_sha256 is the "new sha" (== the current inventory
+    sha), whose blessed_ids reproduce that sha ("hashes consistently"), and
+    whose bless_note cites a spec path that EXISTS in the repo (D2: no
+    citation -> no deletion). Pure growth (no host removed) off the FROZEN
+    first bless (blessed_sha256 == the anchor) is allowed and is re-blessed
+    by the item that added the host.
     """
     if repo_root is None:
         repo_root = _repo_root()
@@ -167,7 +183,7 @@ def shrink_guard(current_ids, manifest, repo_root=None):
         # payload -> fail closed (cannot prove no host was dropped).
         return False, ["<blessed set unreadable — re-bless the manifest>"], \
             "invariant", None
-    # MANIFEST INVARIANT (fix1, D1): the sha is the authority. The frozen
+    # MANIFEST INVARIANT (fix1, D1): the sha is the authority. The top-level
     # blessed_ids record MUST reproduce blessed_sha256. If it does not —
     # trimmed/edited while the sha stays, or a drained list with a stale sha —
     # the manifest is untrusted and the guard fails closed BEFORE trusting any
@@ -177,17 +193,37 @@ def shrink_guard(current_ids, manifest, repo_root=None):
                        "canonical_sha(blessed_ids)>"], "invariant", None
     blessed = set(blessed_ids)
     removed = sorted(blessed - set(cur))     # derived from the hashed payload
-    if cur_sha == blessed_sha:
-        # The current inventory IS the frozen blessed set (invariant-checked
-        # above). No change -> green.
-        return True, [], None, None
-    # sha mismatch: the current inventory differs from the frozen bless.
-    if not removed:
-        # Pure GROWTH (current strictly contains the blessed set): not a
-        # shrink. Allowed (the item that added the host re-blesses).
-        return True, [], None, None
-    # A SHRINK (frozen-blessed hosts missing from the current inventory).
-    # RED unless a NEWER consistent bless record authorizes the CURRENT set:
+    # FIX2 D2: the FROZEN FIRST-BLESS ANCHOR. The top-level blessed_sha256
+    # MUST still be the sha of the ORIGINAL first bless — carried as DATA in
+    # the manifest (first_blessed_sha256), not a guard constant; a missing
+    # anchor fails closed (the invariant alone cannot pin the FIRST bless).
+    # Any DEVIATION of blessed_sha256 from that anchor — including a
+    # CONSISTENT top-level rewrite (trimmed blessed_ids + re-set
+    # blessed_sha256, invariant intact, current inventory equal to the
+    # rewritten set) — is a blessed-set change and falls through to the
+    # blessed_records authorization path below. The TOP-LEVEL bless_note is
+    # prose and is NEVER read as authorization.
+    anchor = manifest.get("first_blessed_sha256")
+    if not isinstance(anchor, str) or not anchor:
+        return False, ["<first-bless anchor missing: no frozen "
+                       "first_blessed_sha256 to pin the top-level bless>"], \
+            "no-anchor", None
+    if blessed_sha == anchor:
+        if cur_sha == anchor:
+            # The current inventory IS the frozen first-bless set
+            # (invariant-checked above). No change -> green.
+            return True, [], None, None
+        if not removed:
+            # Pure GROWTH off the FROZEN first bless (the top-level is
+            # untouched): not a shrink. Allowed (the item that added the
+            # host re-blesses).
+            return True, [], None, None
+    # HERE (and ONLY here): the blessed set changed — the top-level
+    # blessed_sha256 deviates from the frozen first-bless anchor, and/or the
+    # current inventory differs from the top-level blessed set (a SHRINK:
+    # blessed hosts missing, or a CONSISTENT top-level rewrite the inventory
+    # now matches). RED unless a NEWER consistent bless record authorizes the
+    # CURRENT set:
     #   blessed_records entry whose blessed_sha256 is the "new sha" == the
     #   current inventory sha, whose blessed_ids reproduce that sha (hashes
     #   consistently), and whose bless_note cites a spec path that EXISTS in
@@ -242,6 +278,9 @@ def main(argv=None):
                          "hashed payload is the authority and the id record "
                          "does not reproduce it)",
             "un-blessed": "the manifest is un-blessed (no blessed_sha256)",
+            "no-anchor": "the manifest carries no FROZEN first-bless anchor "
+                         "(first_blessed_sha256) — the top-level bless cannot "
+                         "be pinned to the original first bless",
             "no-consistent-record": "no NEWER consistent re-bless record "
                          "(a blessed_records entry whose blessed_sha256 "
                          "equals the current inventory sha, whose blessed_ids "

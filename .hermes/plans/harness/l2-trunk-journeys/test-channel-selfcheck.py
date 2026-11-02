@@ -1038,6 +1038,38 @@ def main():
                             and sg_reason6 is None and sg_auth6 == good_spec,
                             ["ok=%r removed=%r reason=%r auth=%r"
                              % (sg_ok6, sg_rm6, sg_reason6, sg_auth6)]))
+            # (7f-fix2) fix2 D2: a CONSISTENT top-level REWRITE — blessed_ids
+            # trimmed + blessed_sha256 re-set to the new set's sha (invariant
+            # holds) + current inventory equal to the rewritten set — is a
+            # blessed-set change, NOT a no-change: it is authorized ONLY via a
+            # blessed_records entry citing an existing spec. The top-level
+            # bless_note is prose and is NEVER read as authorization. RED
+            # before the fix (the old guard returned (True, [], None, None)
+            # here — the cycle-2 reviewer's evidence case).
+            rewrite = dict(manifest,
+                           blessed_sha256=shrunk_sha,
+                           blessed_ids=shrunk,
+                           bless_note="deleted %s, no spec cited here"
+                                      % dropped)
+            sg_ok7, sg_rm7, sg_reason7, sg_auth7 = sgm.shrink_guard(
+                shrunk, rewrite)
+            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless (rewritten blessed_ids+blessed_sha256) whose bless_note cites NO existing spec -> RED (fix2 D2)",
+                            (not sg_ok7) and sg_auth7 is None,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok7, sg_rm7, sg_reason7, sg_auth7)]))
+            rewrite_cited = dict(rewrite, blessed_records=[rec_spec])
+            sg_ok8, sg_rm8, sg_reason8, sg_auth8 = sgm.shrink_guard(
+                shrunk, rewrite_cited)
+            # Note: with a consistent top-level rewrite the top level already
+            # FORGETS the dropped host, so removed (derived from the
+            # rewritten top-level set) is legitimately [] — the point of this
+            # arm is that the spec-cited blessed_records entry AUTHORIZES the
+            # rewritten state (RED without it, per the arm above).
+            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless + a blessed_records entry citing an EXISTING spec -> authorized GREEN (fix2 D2)",
+                            sg_ok8 and sg_rm8 == []
+                            and sg_reason8 is None and sg_auth8 == good_spec,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok8, sg_rm8, sg_reason8, sg_auth8)]))
             # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
             # full 6-host blessed sha) is RED even when driven through the
             # gate. The shrunk inventory carries the `surface` field (D3) and
