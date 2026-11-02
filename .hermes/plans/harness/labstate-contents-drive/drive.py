@@ -613,15 +613,56 @@ def main():
         and c.startswith("lab_state_unresolved")
     ] if tx_arm else []
     tx_diag_count = len(tx_diag_wire) + len(tx_diag_arm_codes)
+    # TWO-FORM honesty evaluation per ruling decisions/LABSTATE-CONTROLLEG-
+    # l2t1125-ruling.md (END-RULING; orch harness rider 2026-11-02 l2t1400).
+    # Honest outcomes: form N (no-op: after == prior) OR form C (create:
+    # a create_container event fired AND every PRE-EXISTING instance's
+    # well-map is byte-identical to its prior). Only a GUESS fails: a
+    # add_material onto a prior instance with no create, a mutated prior
+    # ledger, an empty arm_log (fold never ran), or zero unresolved
+    # diagnostics.
+    x_events = [
+        e for e in ((tx.get("done_frame") or {}).get("result") or {}).get("events") or []
+        if isinstance(e, dict)
+    ]
+    def _verb(e):
+        return str(e.get("event_type") or e.get("verb") or "")
+    created = [e for e in x_events if _verb(e) == "create_container"]
+    created_ids = sorted(
+        str((e.get("details") or {}).get("labwareInstanceId")
+            or (e.get("details") or {}).get("labwareId") or e.get("recordId") or "unknown")
+        for e in created
+    )
+    tx_prior_ids = set((tx_prior or {}).keys())
+    ledger_of_prior = {k: (tx_after or {}).get(k) for k in tx_prior_ids}
+    noop_form = tx_after == tx_prior
+    create_form = bool(created) and tx_after is not None and ledger_of_prior == tx_prior
+    ok_control = (
+        tx_diag_count >= 1 and bool(tx_arm)
+        and tx_prior is not None and tx_after is not None
+        and (noop_form or create_form)
+    )
+    control_form = "noop" if ok_control and noop_form else ("create" if ok_control else "fail")
     leg["control_never_guess"] = {
-        "ok": bool(tx_arm) and tx_prior is not None and tx_after is not None
-              and tx_after == tx_prior and tx_diag_count >= 1,
+        "ok": ok_control,
+        "control_form": control_form,
+        "created_instance_ids": created_ids,
+        "x_events_compact": [
+            {
+                "verb": _verb(e),
+                "labwareId": (e.get("details") or {}).get("labwareId"),
+                "labwareInstanceId": (e.get("details") or {}).get("labwareInstanceId"),
+                "well": (e.get("details") or {}).get("well"),
+                "material": (e.get("details") or {}).get("materialId") or (e.get("details") or {}).get("material"),
+            }
+            for e in x_events
+        ],
         "arm_log_lines": len(tx_arm),
         "arm_prior": tx_prior, "arm_after": tx_after,
         "unresolved_diag_wire": tx_diag_wire,
         "unresolved_diag_arm_codes": tx_diag_arm_codes,
         "pipeline_diagnostics_frames": tx.get("pipeline_diagnostics"),
-        "note": "unknown-plate control (NON-VACUOUS, D3): the lab_state fold provably ran (non-empty arm_log), no-op'd (after == prior, both captured) and surfaced a lab_state unresolved diagnostic in the captured payload/log (never-guess). A turn where the fold never executed cannot pass this leg.",
+        "note": "unknown-plate control (NON-VACUOUS, D3; two-form per ruling LABSTATE-CONTROLLEG-l2t1125): the lab_state fold provably ran (non-empty arm_log) AND EITHER no-op'd (form N: after == prior, both captured) OR created a NEW instance from the store record with the PRE-EXISTING ledger byte-identical (form C: create_container drafted + ledger_of(prior_ids) == prior) — and surfaced a lab_state unresolved diagnostic (never-guess). A GUESS (write onto a prior instance with no create, mutated prior ledger, empty arm_log, or zero diagnostics) fails. A turn where the fold never executed cannot pass this leg.",
     }
 
     report = {
