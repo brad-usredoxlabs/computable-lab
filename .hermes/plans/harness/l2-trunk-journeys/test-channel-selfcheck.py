@@ -840,54 +840,80 @@ def main():
     results.append(("CHATHOST inventory: config/chat/chat-hosts.yaml parses to >=1 host (non-vacuous)",
                     inv_ok, ["inventory=%r err=%s" % (inv_ids, _inv_err if not inv_ok else "")]))
     if inv_ids:
-        full_accept = {h: "accept" for h in inv_ids}
+        # fix1 D7: an ACCEPT verdict is an OBJECT with a per-host receipt
+        # reference — a bare string alone is not-accept.
+        def _acc(host):
+            return {"verdict": "accept", "receipts": "receipts/%s.json" % host}
+        full_accept = {h: _acc(h) for h in inv_ids}
         dropped = inv_ids[0]                 # drop the FIRST host (deterministic)
-        subset = {h: "accept" for h in inv_ids if h != dropped}
-        # (7a) the FULL inventory, every host accept -> the pure grader is ok.
-        ok_a, miss_a, na_a, und_a = cg.grade_chat_host_sweep(full_accept, inv_ids, inv_surfaces)
-        results.append(("CHATHOST grader: the FULL inventory all-accept -> ok (non-vacuous)",
+        subset = {h: _acc(h) for h in inv_ids if h != dropped}
+        # (7a) the FULL inventory, every host an accept OBJECT -> the pure
+        # grader is ok.
+        ok_a, miss_a, na_a, und_a = cg.grade_chat_host_sweep(
+            full_accept, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: the FULL inventory all-accept objects -> ok (non-vacuous)",
                         ok_a and not miss_a and not na_a and not und_a,
                         ["ok=%r miss=%r na=%r und=%r" % (ok_a, miss_a, na_a, und_a)]))
         # (7b) THE RED CASE: a STRICT SUBSET (one host dropped) -> NOT ok,
         # names the missing host. This is the spec's pinned non-vacuous RED.
-        ok_b, miss_b, na_b, und_b = cg.grade_chat_host_sweep(subset, inv_ids, inv_surfaces)
+        ok_b, miss_b, na_b, und_b = cg.grade_chat_host_sweep(
+            subset, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: a STRICT-SUBSET table (dropped %r) -> RED, names the host" % dropped,
                         (not ok_b) and miss_b == [dropped],
                         ["ok=%r miss=%r" % (ok_b, miss_b)]))
-        # (7c) a present-but-not-accept verdict -> NOT ok, names the host.
-        na_verdicts = dict(full_accept, **{dropped: "red"})
-        ok_c, miss_c, na_c, und_c = cg.grade_chat_host_sweep(na_verdicts, inv_ids, inv_surfaces)
-        results.append(("CHATHOST grader: a not-accept verdict -> RED, names the host",
+        # (7c) fix1 D7: a self-declared BARE STRING ("accept", no receipt) is
+        # NOT accept -> the host is not-accept and the table is RED.
+        na_str = dict(full_accept, **{dropped: "accept"})
+        ok_c, miss_c, na_c, und_c = cg.grade_chat_host_sweep(
+            na_str, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: a bare 'accept' STRING (no receipt) -> not-accept, RED (fix1 D7)",
                         (not ok_c) and na_c == [dropped],
                         ["ok=%r na=%r" % (ok_c, na_c)]))
+        # (7c2) fix1 D7: a verdict object with NO receipts path is not-accept.
+        na_norx = dict(full_accept, **{dropped: {"verdict": "accept"}})
+        ok_c2, miss_c2, na_c2, und_c2 = cg.grade_chat_host_sweep(
+            na_norx, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: an accept object with NO receipts path -> not-accept, RED (fix1 D7)",
+                        (not ok_c2) and na_c2 == [dropped],
+                        ["ok=%r na=%r" % (ok_c2, na_c2)]))
         # (7d) an UNDECLARED host in the table (tamper evidence) -> NOT ok.
-        und_verdicts = dict(full_accept, **{"BOGUS-HOST": "accept"})
-        ok_d, miss_d, na_d, und_d = cg.grade_chat_host_sweep(und_verdicts, inv_ids, inv_surfaces)
+        und_verdicts = dict(full_accept, **{"BOGUS-HOST": _acc("BOGUS-HOST")})
+        ok_d, miss_d, na_d, und_d = cg.grade_chat_host_sweep(
+            und_verdicts, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: an UNDECLARED host -> RED (N5 exact-set)",
                         (not ok_d) and und_d == ["BOGUS-HOST"],
                         ["ok=%r und=%r" % (ok_d, und_d)]))
         # (7h) fix1 D3: the four-way 'analysis' surface collision is NOT an
         # alias (one key cannot stand for four hosts). A verdict table keyed
         # by DISTINCT surface values is therefore a strict subset (missing the
-        # analysis hosts) + undeclared 'analysis' -> RED.
+        # analysis hosts) + undeclared 'analysis' -> RED. Unique surface
+        # values ARE aliases (a table keyed by a unique surface resolves).
         amap = cg.alias_map(inv_ids, inv_surfaces)
         analysis_hosts = sorted(h for h, s in zip(inv_ids, inv_surfaces)
                                 if s == "analysis")
+        amb = [s for s in set(inv_surfaces)
+               if sum(1 for x in inv_surfaces if x == s) > 1 and s not in amap]
         distinct_surfs = sorted(set(inv_surfaces))
-        surf_keyed = {s: "accept" for s in distinct_surfs}
+        surf_keyed = {s: _acc(s) for s in distinct_surfs}
         ok_s, miss_s, na_s, und_s = cg.grade_chat_host_sweep(
             surf_keyed, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: a table keyed by DISTINCT surface values (the four-way 'analysis' collision) -> RED, fail-closed (fix1 D3)",
                         (not ok_s) and miss_s == analysis_hosts
-                        and "analysis" in und_s and "analysis" not in amap,
-                        ["ok=%r miss=%r und=%r" % (ok_s, miss_s, und_s)]))
-        # (7e) Drive THE ACTUAL gate (check-gate.py --chat-hosts) against a
-        # synthetic sweep run: the full table exits 0, the dropped-host table
-        # exits non-zero and names the host. This is the "checker exits
-        # non-zero" pin (non-vacuous — real check-gate, real inventory).
+                        and "analysis" in und_s and "analysis" not in amap
+                        and amb == ["analysis"],
+                        ["ok=%r miss=%r und=%r amb=%r"
+                         % (ok_s, miss_s, und_s, amb)]))
+        # (7e) Drive THE ACTUAL gate (check-gate.py --chat-hosts): the full
+        # table (accept OBJECTS + EXISTING receipt files, trunk app_base)
+        # exits 0; the dropped-host table exits non-zero and names the host.
         with tempfile.TemporaryDirectory() as td_ch:
             run_dir = os.path.join(td_ch, "20261102T000000Z")
             os.makedirs(run_dir)
+            rx_dir = os.path.join(run_dir, "receipts")
+            os.makedirs(rx_dir)
+            for h in inv_ids:                 # the receipt FILES must exist (D7)
+                with open(os.path.join(rx_dir, "%s.json" % h), "w") as rfh:
+                    json.dump({"host": h, "body": {"surface": "x"}}, rfh)
             with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
                 json.dump({"app_base": "http://localhost:5193",
                            "chat_host_verdicts": full_accept}, fh)
@@ -897,7 +923,7 @@ def main():
             p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
                                 "--chat-hosts"], capture_output=True, text=True,
                                env=env_ch)
-            results.append(("CHATHOST gate: a FULL-inventory sweep run exits 0 (green)",
+            results.append(("CHATHOST gate: a FULL-inventory sweep run (accept objects + existing receipts) exits 0 (green)",
                             p.returncode == 0 and "GATE-VERDICT green" in p.stdout,
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
             # THE RED pin: drop one host from the verdict fixture -> exit != 0.
@@ -922,6 +948,21 @@ def main():
                                env=env_ch)
             results.append(("CHATHOST gate: a NON-TRUNK app_base (scratch FE) sweep is RED (fix1 D6 / N1)",
                             p.returncode == 1 and "NON-TRUNK" in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # (7e-d7) fix1 D7: an accept OBJECT whose receipt FILE does not
+            # exist is not-accept (the gate does not trust a self-declared
+            # verdict without a request-body receipt artefact).
+            dangling = {h: {"verdict": "accept",
+                            "receipts": "receipts/does-not-exist-%s.json" % h}
+                        for h in inv_ids}
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": dangling}, fh)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: an accept verdict whose receipt FILE is missing is RED (fix1 D7)",
+                            p.returncode == 1 and "does not exist" in p.stdout,
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # (7f) Change 3 shrink-guard (PURE): the current inventory vs the
         # blessed manifest is green; a SHRUNKEN inventory is RED + names the
@@ -999,9 +1040,10 @@ def main():
                              % (sg_ok6, sg_rm6, sg_reason6, sg_auth6)]))
             # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
             # full 6-host blessed sha) is RED even when driven through the
-            # gate. The shrunk inventory carries the `surface` field (D3), so
-            # ONLY the shrink-guard can turn this red — proves the guard is
-            # the authority, not the verdict table.
+            # gate. The shrunk inventory carries the `surface` field (D3) and
+            # the sweep table is complete accept-objects, so ONLY the
+            # shrink-guard can turn this red — proves the guard is the
+            # authority, not the verdict table.
             with tempfile.TemporaryDirectory() as td_sh:
                 shrunk_inv = os.path.join(td_sh, "shrunk.yaml")
                 sh_hosts = [{"id": h, "surface": inv_surfaces[inv_ids.index(h)]}
@@ -1010,12 +1052,15 @@ def main():
                     yaml.safe_dump({"hosts": sh_hosts}, fh)
                 run_dir2 = os.path.join(td_sh, "20261102T000001Z")
                 os.makedirs(run_dir2)
-                # the sweep table itself is complete for the (shrunk) set, so
-                # ONLY the shrink-guard can turn this red.
+                rx2 = os.path.join(run_dir2, "receipts")
+                os.makedirs(rx2)
+                for h in shrunk:                # receipt files must exist (D7)
+                    with open(os.path.join(rx2, "%s.json" % h), "w") as rfh:
+                        json.dump({"host": h, "body": {}}, rfh)
                 with open(os.path.join(run_dir2, "run-meta.json"), "w") as fh:
                     json.dump({"app_base": "http://localhost:5193",
-                               "chat_host_verdicts":
-                               {h: "accept" for h in shrunk}}, fh)
+                               "chat_host_verdicts": {h: _acc(h) for h in shrunk}},
+                              fh)
                 os.symlink(run_dir2, os.path.join(td_sh, "latest"))
                 env_sh = dict(os.environ, CL_RECEIPTS=td_sh,
                               CL_CHAT_HOSTS=shrunk_inv,

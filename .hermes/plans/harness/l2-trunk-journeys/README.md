@@ -176,21 +176,35 @@ the data-repo digest before/after is recorded and came back clean.
 ## CHATHOST-SWEEP-1 — the chat-host sweep scope axis (Change 2/3)
 
 The chat-host inventory is DATA: `config/chat/chat-hosts.yaml` (one entry per
-universal-chat host: `id`, `mount`, `route`, `note`) with a blessed manifest at
-`config/chat/chat-hosts.manifest.yaml` (the Change 3 shrink-guard anchor). `check-gate.py`
-gains a SECOND scope axis — `--chat-hosts` (the no-flag journey gate is
-byte-for-byte unchanged; no parallel harness):
+universal-chat host: `id`, `surface`, `mount`, `route`, `note` — `surface` is
+the machine surface id the server reads; the four-way `analysis` collision is
+documented in-file) with a blessed manifest at
+`config/chat/chat-hosts.manifest.yaml` (the Change 3 shrink-guard anchor; the
+top-level blessed_sha256/blessed_ids is the FROZEN first bless, and a
+re-bless APPENDS a `blessed_records` entry). `check-gate.py` gains a SECOND
+scope axis — `--chat-hosts` (the no-flag journey gate is byte-for-byte
+unchanged; no parallel harness):
 
     CL_RECEIPTS=<sweep receipts> python3 check-gate.py --chat-hosts
 
 A sweep run's `run-meta.json` carries a `chat_host_verdicts` table
-({host id: accept|green|red}); the axis grades it against the inventory:
-a STRICT-SUBSET table (an inventory host never swept) is RED (the spec's RED
-case), as are not-accept verdicts, undeclared hosts (N5 exact-set discipline),
-and an un-blessed inventory shrink (the Change 3 guard, run from the SAME
-function the standalone tick script uses). The RED case is pinned non-vacuously
-by the self-check's CHATHOST arms (drop one host from a synthetic verdict
-fixture -> the gate exits non-zero and names the host; the full table exits
-zero). The live sweep run on :5193 is ORCH-OWNED post-merge (the browser
-gate), not this harness's.
+({host id: {"verdict": accept|green, "receipts": <path>}}) and its `app_base`;
+the axis grades it against the inventory: a STRICT-SUBSET table (an inventory
+host never swept) is RED (the spec's RED case), as are not-accept verdicts
+(fix1 D7: an accept is a VERDICT OBJECT carrying a per-host receipt reference
+whose FILE exists — a bare verdict string alone is not-accept), undeclared
+hosts (N5 exact-set discipline), a NON-TRUNK `app_base` (fix1 D6: the N1 trunk
+rule applies to the chat axis — a scratch-frontend sweep never clears the
+gate), and an unauthorized inventory change (the Change 3 guard, run from the
+SAME function the standalone tick script uses; the guard derives the
+removed-set from the HASHED payload — it asserts
+canonical_sha(blessed_ids) == blessed_sha256 and authorizes a shrink only via
+a consistent re-bless record whose bless_note cites an existing spec). A
+`surface:` value is an accepted ALIAS key only when it names exactly one host
+(fix1 D3); the four-way `analysis` collision is never an alias. The RED cases
+are pinned non-vacuously by the self-check's CHATHOST arms (drop one host from
+a synthetic verdict fixture -> the gate exits non-zero and names the host; the
+full table exits zero; plus the D1 invariant/drain, D2 no-spec, D3
+collision, D6 non-trunk, and D7 receipt arms). The live sweep run on :5193 is
+ORCH-OWNED post-merge (the browser gate), not this harness's.
 

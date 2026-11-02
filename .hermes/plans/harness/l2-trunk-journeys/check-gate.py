@@ -113,29 +113,45 @@ def alias_map(inventory_ids, surfaces):
             if len(hosts) == 1}
 
 
+def _verdict_ok(v):
+    """fix1 D7: an ACCEPT verdict is a VERDICT OBJECT carrying a per-host
+    receipt reference — not a bare string. Shape: {"verdict":
+    "accept"|"green", "receipts": "<non-empty path>"}; anything else (a
+    verdict string alone, a missing/empty receipts path, a non-accept
+    verdict) is not-accept. Pure (no I/O: the receipt FILE's existence is
+    verified by the axis, which has the run dir)."""
+    if isinstance(v, str):
+        return False          # a verdict string alone = not-accept (D7)
+    if not isinstance(v, dict):
+        return False
+    return (v.get("verdict") in ("accept", "green")
+            and isinstance(v.get("receipts"), str) and v.get("receipts"))
+
+
 def grade_chat_host_sweep(verdicts, inventory_ids, surfaces=None):
     """Grade a chat-host sweep verdict table against the inventory (Change 2,
-    fix1 D3). `verdicts` maps host id -> verdict; a UNIQUE surface value
+    fix1 D3+D7). `verdicts` maps host id -> verdict; a UNIQUE surface value
     (surfaces[i] naming exactly one host) is also accepted as an ALIAS key
     for that host id (fix1 D3 — ambiguous surface values, e.g. the four-way
-    'analysis' collision, are never aliases). Verdict 'accept'/'green' =
-    swept with a request-body receipt + rendered answer, anything else =
-    not-accept. Returns (ok, missing, not_accept, undeclared):
+    'analysis' collision, are never aliases). A verdict is accept ONLY as an
+    object with a non-empty `receipts` reference (fix1 D7: a verdict string
+    alone is not-accept — the gate no longer trusts a self-declared string).
+    Returns (ok, missing, not_accept, undeclared):
       missing    — inventory hosts with NO verdict (a strict-subset table, the
                    spec's RED case: a dropped host must go red);
-      not_accept — hosts present but whose verdict is not accept/green;
+      not_accept — hosts present but whose verdict is not an accept OBJECT
+                   (no receipt reference, or a non-accept verdict);
       undeclared — hosts in the table (after alias resolution) that are NOT
                    in the inventory (N5 exact-set discipline: tamper
                    evidence, not coverage).
     ok is True ONLY when all three are empty (the full inventory swept, every
-    host accept, no undeclared host)."""
+    host accept WITH a receipt reference, no undeclared host)."""
     inv = set(inventory_ids)
     alias = alias_map(inventory_ids, surfaces)
     norm = {alias.get(k, k): v for k, v in (verdicts or {}).items()}
     vkeys = set(norm.keys())
     missing = sorted(inv - vkeys)
-    not_accept = sorted(k for k in vkeys
-                        if norm.get(k) not in ("accept", "green"))
+    not_accept = sorted(k for k in vkeys if not _verdict_ok(norm.get(k)))
     undeclared = sorted(vkeys - inv)
     ok = not missing and not not_accept and not undeclared
     return ok, missing, not_accept, undeclared
@@ -171,15 +187,21 @@ def chat_host_axis():
     against the DATA inventory (and run the Change 3 shrink-guard). A SEPARATE
     scope axis from the journey tick gate (no flag = the journey gate,
     UNCHANGED).
-    Exit 0 = the full inventory is swept, every host accept (a UNIQUE surface
-             value is an accepted alias key, fix1 D3), no undeclared host, and
-             no un-blessed shrink.
-    Exit 1 = a strict-subset table (a dropped host), any not-accept, any
-             undeclared host (a four-way 'analysis' surface is never an alias),
-             a NON-TRUNK app_base (fix1 D6 / N1: a scratch-frontend sweep never
-             clears the chat gate), OR an un-blessed inventory shrink (BLOCKER).
+    Exit 0 = the full inventory is swept, every host accept WITH a per-host
+             receipt reference (fix1 D7) that exists, no undeclared host, the
+             run targeted the TRUNK FE (fix1 D6 / N1), and no un-authorized
+             inventory change (Change 3).
+    Exit 1 = a strict-subset table (a dropped host), any not-accept verdict
+             (a bare verdict string or a missing/empty receipts path — D7),
+             any undeclared host, a NON-TRUNK app_base (N1/D6), a receipt
+             reference that does not exist (D7), OR an un-authorized inventory
+             shrink (BLOCKER).
     Exit 2 = env error (inventory / run-meta / shrink-guard unreadable —
              fail closed).
+    Verdict keys: a host `id` is primary; a UNIQUE `surface:` value (one that
+    names exactly one host) is also accepted as an ALIAS key (fix1 D3).
+    Ambiguous surface values (the four-way 'analysis' collision) are NOT
+    aliases — a table keyed on them is still graded per host (fail closed).
     The run is read from CL_RECEIPTS/latest (or `--run <name>`); the inventory
     from CL_CHAT_HOSTS (default: the repo's config/chat/chat-hosts.yaml); the
     blessed manifest from CL_CHAT_HOSTS_MANIFEST (default: the repo's
@@ -240,13 +262,36 @@ def chat_host_axis():
               % meta.get("app_base"))
         print("GATE-VERDICT blocking")
         return 1
-
+    # fix1 D7: every ACCEPT verdict must be an OBJECT carrying a per-host
+    # receipt reference, and that receipt FILE must exist (under the run dir
+    # or the receipts root). A verdict string alone, or a receipts path that
+    # does not exist, is not-accept — the gate no longer trusts a
+    # self-declared verdict without a request-body receipt artefact.
+    for h in sorted(verdicts):
+        v = verdicts[h]
+        if isinstance(v, dict) and isinstance(v.get("receipts"), str):
+            rp = v["receipts"]
+            if rp and not (os.path.isfile(os.path.join(run_dir, rp))
+                           or os.path.isfile(rp)
+                           or os.path.isfile(os.path.join(
+                               RECEIPTS_ROOT, rp))):
+                print("BLOCKER: chat-host %s verdict references receipt %r "
+                      "that does not exist (fix1 D7: a verdict without a "
+                      "request-body receipt artefact is not-accept)"
+                      % (h, rp))
+                print("GATE-VERDICT blocking")
+                return 1
     ok, missing, not_accept, undeclared = grade_chat_host_sweep(verdicts,
                                                                 inventory,
                                                                 surfaces)
     print("chat-host sweep: %s (inventory = %d host(s))" % (run_dir, len(inventory)))
     for h in sorted(verdicts):
-        print("  %s: %s" % (h, verdicts[h]))
+        v = verdicts[h]
+        if isinstance(v, dict):
+            shown = "%s (receipts=%s)" % (v.get("verdict"), v.get("receipts"))
+        else:
+            shown = str(v)
+        print("  %s: %s" % (h, shown))
     for h in missing:
         print("  %s: MISSING (no verdict)" % h)
     # Change 3: the shrink-guard (the standalone tick-time script, imported by
@@ -273,8 +318,9 @@ def chat_host_axis():
         return 2
     if not sg_ok:
         print("BLOCKER: the chat-host inventory changed without an authorized "
-              "re-bless (Change 3: a deletion is allowed ONLY with a "
-              "re-blessed blessed_sha256 whose id record reproduces it) — "
+              "re-bless (Change 3: a deletion is allowed ONLY with a re-bless "
+              "whose blessed_ids reproduce blessed_sha256 AND a spec path in "
+              "the re-bless record's bless_note that exists in the repo) — "
               "cause: %s" % (sg_reason or "unauthorized"))
         if sg_removed:
             print("  removed/changed host(s): %s" % sg_removed)
