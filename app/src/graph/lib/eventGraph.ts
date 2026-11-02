@@ -27,6 +27,7 @@ import {
   type ConcentrationValue,
 } from '../../types/material'
 import { compileMacroProgram } from './macroPrograms'
+import { resolvePlacedVesselAttribution } from './placedVesselAttribution'
 
 export interface MaterialEntry {
   materialRef: string
@@ -836,8 +837,24 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
     if (eventType === 'transfer' || eventType === 'multi_dispense') {
       const transferDetails = details as TransferDetails
       const normalized = normalizeTransferDetails(transferDetails)
-      const sourceLabwareId = normalized.sourceLabwareId || labwareId
-      const destLabwareId = normalized.destLabwareId || labwareId
+      let sourceLabwareId = normalized.sourceLabwareId || labwareId
+      let destLabwareId = normalized.destLabwareId || labwareId
+      // L2-PROMPT1-GHOST-1: a transfer with NO resolvable side (reference-less,
+      // the real committed shape) attributes that side to the SOLE placed
+      // labware — the SAME shared single-placed-vessel rule (never guess:
+      // zero or multiple placed => stays unresolvable, exactly as today).
+      // An event WITH a resolvable side never consults the placed set (the
+      // helper forbids re-routing explicit references).
+      if (!labwareId && (!sourceLabwareId || !destLabwareId)) {
+        const vessel = resolvePlacedVesselAttribution(
+          [labwareId, normalized.sourceLabwareId, normalized.destLabwareId],
+          [...labwares.keys()],
+        )
+        if (vessel) {
+          sourceLabwareId ||= vessel
+          destLabwareId ||= vessel
+        }
+      }
       const transferEdges = buildTransferEdges(normalized)
       const sourceLabwareState = states.get(sourceLabwareId || '') || new Map()
       const destLabwareState = states.get(destLabwareId || '') || new Map()
@@ -895,8 +912,22 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
       // Whole-state move: the tube and its contents relocate; the source
       // position becomes empty. Works within a rack or between racks.
       const moveDetails = details as unknown as MoveTubeDetails
-      const srcLabwareId = moveDetails.source?.labwareId || labwareId
-      const tgtLabwareId = moveDetails.target?.labwareId || labwareId
+      let srcLabwareId = moveDetails.source?.labwareId || labwareId
+      let tgtLabwareId = moveDetails.target?.labwareId || labwareId
+      // L2-PROMPT1-GHOST-1: a move with NO resolvable side (reference-less)
+      // attributes that side to the SOLE placed labware — the SAME shared
+      // single-placed-vessel rule (never guess). A move between two racks
+      // with a resolvable source/dest never consults the placed set.
+      if (!labwareId && (!srcLabwareId || !tgtLabwareId)) {
+        const vessel = resolvePlacedVesselAttribution(
+          [labwareId, moveDetails.source?.labwareId, moveDetails.target?.labwareId],
+          [...labwares.keys()],
+        )
+        if (vessel) {
+          srcLabwareId ||= vessel
+          tgtLabwareId ||= vessel
+        }
+      }
       const srcWell = moveDetails.source?.well
       const tgtWell = moveDetails.target?.well
       const sameWell = srcLabwareId === tgtLabwareId && srcWell === tgtWell
@@ -917,11 +948,25 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
       continue
     }
 
-    if (!labwareId) continue
+    // L2-PROMPT1-GHOST-1: an event that carries wells but NO explicit
+    // labware reference (the REAL committed shape of an accepted AI
+    // add_material: details = { material, volumeUl, volume, wells } with no
+    // details.labwareId) previously fell off the grid here — computeLabware
+    // States skipped it, so the Labware-focus well grid rendered every well
+    // empty while the deck tile (eventWellIndex D2) showed the vessel. The
+    // SAME single-placed-vessel rule the deck tile applies (ONE shared
+    // helper, ONE vocabulary — placedVesselAttribution.ts) now attributes
+    // the event to the SOLE placed labware of the `labwares` map; ZERO or
+    // MULTIPLE placed labwares keep the skip exactly as today (never
+    // guess). An event WITH an explicit details.labwareId is never
+    // re-routed (the helper returns null on any explicit reference).
+    const effectiveLabwareId = labwareId
+      ?? resolvePlacedVesselAttribution([details.labwareId], [...labwares.keys()])
+    if (!effectiveLabwareId) continue
 
-    const labwareState = states.get(labwareId) || new Map()
+    const labwareState = states.get(effectiveLabwareId) || new Map()
     const wells = (details.wells as WellId[]) || []
-    const labware = labwares.get(labwareId)
+    const labware = labwares.get(effectiveLabwareId)
 
     for (const wellId of wells) {
       const currentState = labwareState.get(wellId) || createEmptyWellState()
@@ -964,7 +1009,7 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
       labwareState.set(wellId, newState)
     }
 
-    states.set(labwareId, labwareState)
+    states.set(effectiveLabwareId, labwareState)
   }
 
   return states
@@ -976,15 +1021,38 @@ export function getWellState(states: LabwareStates, labwareId: string, wellId: W
   return labwareState.get(wellId) || createEmptyWellState()
 }
 
-export function getWellEvents(events: PlateEvent[], labwareId: string, wellId: WellId): PlateEvent[] {
+/**
+ * L2-PROMPT1-GHOST-1: the same single-placed-vessel rule the FILL applies
+ * (computeLabwareStates) must apply to the HISTORY reader, or an attributed
+ * well would show fill but empty event-history. The optional `labwares` map
+ * is the bench's placed set — the SAME facts the fill consumes, so the two
+ * surfaces pick the SAME vessel for the SAME event set (history-vs-fill
+ * consistency). Callers WITHOUT the map keep the legacy strict
+ * reference-matching (no guess at the boundary — never-guess preserved).
+ */
+export function getWellEvents(events: PlateEvent[], labwareId: string, wellId: WellId, labwares?: Map<string, Labware>): PlateEvent[] {
+  const placedIds = labwares ? [...labwares.keys()] : []
   return events.filter((event) => {
     const details = event.details as Record<string, unknown>
 
     if (event.event_type === 'transfer' || event.event_type === 'multi_dispense') {
       const transferDetails = details as TransferDetails
       const normalized = normalizeTransferDetails(transferDetails)
-      const sourceLabwareId = normalized.sourceLabwareId || details.labwareId
-      const destLabwareId = normalized.destLabwareId || details.labwareId
+      let sourceLabwareId = normalized.sourceLabwareId || details.labwareId
+      let destLabwareId = normalized.destLabwareId || details.labwareId
+      // L2-PROMPT1-GHOST-1: the reference-less side attributes to the SOLE
+      // placed labware (the shared rule — never guess) so history agrees
+      // with the fill; an unresolvable side stays unresolvable (no match).
+      if (!details.labwareId && (!sourceLabwareId || !destLabwareId)) {
+        const vessel = resolvePlacedVesselAttribution(
+          [details.labwareId, normalized.sourceLabwareId, normalized.destLabwareId],
+          placedIds,
+        )
+        if (vessel) {
+          sourceLabwareId ||= vessel
+          destLabwareId ||= vessel
+        }
+      }
 
       if (sourceLabwareId === labwareId && normalized.sourceWells.includes(wellId)) return true
       if (destLabwareId === labwareId && normalized.destWells.includes(wellId)) return true
@@ -993,16 +1061,39 @@ export function getWellEvents(events: PlateEvent[], labwareId: string, wellId: W
 
     if (event.event_type === 'move_tube') {
       const moveDetails = details as unknown as MoveTubeDetails
-      const srcLabwareId = moveDetails.source?.labwareId || details.labwareId
-      const tgtLabwareId = moveDetails.target?.labwareId || details.labwareId
+      let srcLabwareId = moveDetails.source?.labwareId || details.labwareId
+      let tgtLabwareId = moveDetails.target?.labwareId || details.labwareId
+      // L2-PROMPT1-GHOST-1: same shared rule for the move's reference-less
+      // side (never guess; no match when unresolvable).
+      if (!details.labwareId && (!srcLabwareId || !tgtLabwareId)) {
+        const vessel = resolvePlacedVesselAttribution(
+          [details.labwareId, moveDetails.source?.labwareId, moveDetails.target?.labwareId],
+          placedIds,
+        )
+        if (vessel) {
+          srcLabwareId ||= vessel
+          tgtLabwareId ||= vessel
+        }
+      }
       if (srcLabwareId === labwareId && moveDetails.source?.well === wellId) return true
       if (tgtLabwareId === labwareId && moveDetails.target?.well === wellId) return true
       return false
     }
 
-    if (details.labwareId !== labwareId) return false
+    // L2-PROMPT1-GHOST-1: an explicit reference is never re-routed by the
+    // placed-vessel rule, but it still must match the WELLS it affected —
+    // the same `wells` membership the fill applies (computeLabwareStates),
+    // so history and fill agree on explicit-reference events too. A
+    // reference-less event matches its attributed vessel via the SAME shared
+    // single-placed-vessel rule the fill applies (null = no match, never
+    // guess; multiple placed => no match on any labware).
+    if (details.labwareId) {
+      return details.labwareId === labwareId && ((details.wells as WellId[]) || []).includes(wellId)
+    }
+    const attributed = resolvePlacedVesselAttribution([details.labwareId], placedIds)
+    if (!attributed) return false
     const wells = (details.wells as WellId[]) || []
-    return wells.includes(wellId)
+    return attributed === labwareId && wells.includes(wellId)
   })
 }
 
