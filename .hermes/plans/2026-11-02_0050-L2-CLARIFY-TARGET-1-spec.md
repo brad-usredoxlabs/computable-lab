@@ -1,4 +1,4 @@
-# L2-CLARIFY-TARGET-1 — implementation spec (DRAFT, l2t0015; orchestrator review pending)
+# L2-CLARIFY-TARGET-1 — spec (RATIFIED by orch l2t0015 2026-11-02T00:50; OQ rulings in the appendix below; pins at 504d22bb — coder re-pins at its own base tip)
 
 Goal: turn the two invisible assumptions of a clarification answer into facts the scientist
 approves — an editable, data-declared `volume: 100 uL (assumed)` chip and a well-target slot on the
