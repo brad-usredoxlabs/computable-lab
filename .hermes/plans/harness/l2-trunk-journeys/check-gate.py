@@ -176,7 +176,8 @@ def chat_host_axis():
              no un-blessed shrink.
     Exit 1 = a strict-subset table (a dropped host), any not-accept, any
              undeclared host (a four-way 'analysis' surface is never an alias),
-             OR an un-blessed inventory shrink (BLOCKER).
+             a NON-TRUNK app_base (fix1 D6 / N1: a scratch-frontend sweep never
+             clears the chat gate), OR an un-blessed inventory shrink (BLOCKER).
     Exit 2 = env error (inventory / run-meta / shrink-guard unreadable —
              fail closed).
     The run is read from CL_RECEIPTS/latest (or `--run <name>`); the inventory
@@ -226,6 +227,20 @@ def chat_host_axis():
               "(Change 2: fail closed)" % run_dir)
         print("GATE-VERDICT blocking")
         return 1
+    # N1 (fix1 D6): the chat axis applies the SAME trunk rule the journey
+    # gate uses — a sweep run targeted at a NON-TRUNK app_base (a scratch
+    # vite) may never clear the gate, full accept table or not. Re-derived
+    # from the run's recorded app_base (app_base_is_trunk), never from a
+    # flag: the exact "green gate over the wrong build" class the N1 arm
+    # exists to stop, now on the chat axis too.
+    if not app_base_is_trunk(meta.get("app_base")):
+        print("BLOCKER: the chat-host sweep run targeted a NON-TRUNK "
+              "app_base %r (N1: a scratch frontend sweep may not clear the "
+              "chat gate — re-derive the sweep against the trunk FE)"
+              % meta.get("app_base"))
+        print("GATE-VERDICT blocking")
+        return 1
+
     ok, missing, not_accept, undeclared = grade_chat_host_sweep(verdicts,
                                                                 inventory,
                                                                 surfaces)

@@ -889,7 +889,8 @@ def main():
             run_dir = os.path.join(td_ch, "20261102T000000Z")
             os.makedirs(run_dir)
             with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
-                json.dump({"chat_host_verdicts": full_accept}, fh)
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": full_accept}, fh)
             os.symlink(run_dir, os.path.join(td_ch, "latest"))
             env_ch = dict(os.environ, CL_RECEIPTS=td_ch,
                           CL_CHAT_HOSTS=inv_path, CL_CHAT_HOSTS_MANIFEST=man_path)
@@ -901,13 +902,26 @@ def main():
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
             # THE RED pin: drop one host from the verdict fixture -> exit != 0.
             with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
-                json.dump({"chat_host_verdicts": subset}, fh)
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": subset}, fh)
             p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
                                 "--chat-hosts"], capture_output=True, text=True,
                                env=env_ch)
             results.append(("CHATHOST gate: a DROPPED-HOST (strict-subset) verdict exits non-zero + names the host",
                             p.returncode == 1 and "STRICT SUBSET" in p.stdout
                             and dropped in p.stdout,
+                            ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # (7e-n1) fix1 D6: the N1 trunk rule applies to the chat axis — a
+            # sweep run targeted at a NON-TRUNK app_base (a scratch vite) may
+            # never clear the gate, full accept table or not.
+            with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5195",
+                           "chat_host_verdicts": full_accept}, fh)
+            p = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                "--chat-hosts"], capture_output=True, text=True,
+                               env=env_ch)
+            results.append(("CHATHOST gate: a NON-TRUNK app_base (scratch FE) sweep is RED (fix1 D6 / N1)",
+                            p.returncode == 1 and "NON-TRUNK" in p.stdout,
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
         # (7f) Change 3 shrink-guard (PURE): the current inventory vs the
         # blessed manifest is green; a SHRUNKEN inventory is RED + names the
