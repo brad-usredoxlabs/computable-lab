@@ -78,6 +78,19 @@
 - Observation (carried, non-defect): deck placed-set vs grid placed-set count
   divergence if labwares holds non-placed instances — flag only if a gate surfaces it.
 
+## LATE-TICK UPDATE (same invocation, ~21:41)
+- FAME4G (lane-1) EXITED ~21:33 (launcher+coder PIDs dead, log closed). Queue fired at
+  21:35:43: LOCK-ACQUIRED slot-0, ran the fix-2 prompt (stagger bar short-circuited by
+  the holder's EXIT — gate honored age-OR-exit per SOUL). Coder genuinely ran: RED
+  7c08bfc3 21:36:57, FIX ee0579bb 21:37:16, DONE marker + rc=0 21:38:38. Report
+  claims: gate set 64/64 (63+1 new), tsc 11==base, diff 75a17dab..HEAD = 2 files
+  +35/-5 app-only zero YAML, companion arms :1047/:1069 checked-clean.
+- ADVC CYCLE-2 LIVE: unit cl-l2-advc-ghost-c2-l2t2110 (OpenRouter), prompt
+  prompts/advc-PROMPT1GHOST-c2-l2t2110.txt (delta 75a17dab...HEAD, 5 named
+  verification duties incl. the labwareId-without-wells silent-event-loss question),
+  report owed reviews/L2-PROMPT1-GHOST-1-advc-c2-l2t2110.md, log
+  logs/advc-PROMPT1GHOST-c2-l2t2110.log ending ADVC EXITED rc.
+
 ## NEXT TICK (resume condition)
 1. Check queue log coder-PROMPT1GHOST-fix2-l2t2110.log: did it LOCK-ACQUIRE? Poll for
    FIX2 DONE sha -> advc cycle-2 (unique path) -> ACCEPT -> orch self-verify
