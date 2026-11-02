@@ -1,9 +1,18 @@
+/* SHELL-PANE-SCROLL-1: this page's left pane is a react-resizable-panels Panel, whose
+   inline overflow:hidden clips the report column at the pane edge (measured 3625 px of
+   content in an 829 px pane at 1440x900 — the run list was unreachable). The pane cannot
+   scroll itself, so the page-owned content root does. Same door shape as .analysis-right
+   on the opposite pane. */
 .analysis {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 1.25rem 2rem;
   max-width: 720px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
 }
 
 .analysis__header h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
