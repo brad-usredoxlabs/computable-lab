@@ -54,7 +54,22 @@
 
 .analysis__error { color: #c92a2a; font-size: .85rem; }
 
-.analysis-right { padding: 1rem 1.25rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
+/* FAME-LAYOUT-1 — the report pane's content is taller than the pane and (for any
+   view-spec table) wider than it. react-resizable-panels pins the Panel itself to
+   inline overflow:hidden, so the scroll door lives on the page-owned content root:
+   this element fills the pane box and scrolls both axes, which makes every bound
+   column and the report's last row user-reachable at the shipped viewport. Generic
+   by construction — no column, artifact or renderer knowledge here (R8). */
+.analysis-right {
+  padding: 1rem 1.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
 .analysis-right__title { font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 
 /* PB-CH-6 — Analysis-local chat column (compact, above the artifact area). */
