@@ -44,4 +44,34 @@ describe('vocabulary contract block', () => {
       expect(line).toBe(expectedArgs ? `- ${verb} — ${expectedArgs}` : `- ${verb}`);
     }
   });
+
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 4 (ruling LABSTATE-DRIVEBAR-l2t1125
+  // "PRODUCT DEFECTS" item 1): the producer-side container-carry teaching
+  // is DATA on add_material.labware (the live sampler's labware-less
+  // add_material drafting gap) and the GENERIC contractBlock render keys off
+  // the field's presence. Pin: the line is present, renders byte-identical
+  // to the declared data, and never re-lists a token literal (the
+  // meta-schema constraint, schema.yaml ~:187 — one authority for the
+  // token value).
+  it('FIX4: add_material.labware declares a teaching string that contractBlock renders (presence + byte-parity + no token re-list)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const args = vocab.argContracts('add_material');
+    const labware = args.find((a) => a.name === 'labware');
+    expect(labware, 'add_material declares the labware arg').toBeDefined();
+    expect(typeof labware!.teaching, 'add_material.labware declares teaching (the DATA home)').toBe('string');
+    const teaching = labware!.teaching!;
+    expect(teaching.length).toBeGreaterThan(0);
+    // The renderer composes `  <argName>: <teaching>` under the verb line.
+    const block = vocab.contractBlock();
+    const rendered = block
+      .split('\n')
+      .find((l) => l.startsWith('  ') && l.slice(2).startsWith('labware: '));
+    expect(rendered, 'the indented teaching line renders in contractBlock').toBe(`  labware: ${teaching}`);
+    // Meta-schema constraint honored at the data level: the teaching states
+    // the carry/omit contract only and never re-lists any declared token
+    // literal (the token value stays single-homed in wellsetValueTokens).
+    for (const token of vocab.wellsetValueTokens()) {
+      expect(teaching).not.toContain(token);
+    }
+  });
 });

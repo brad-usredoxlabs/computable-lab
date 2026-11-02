@@ -44,7 +44,15 @@ treeState:
   # again. No golden fixture/record moved; the delta is the LABSTATE
   # contents-phrase teaching DATA + comments. BEFORE: 0ce55142..,
   # AFTER: 15e5820dd22fb27c26b86e2720be6cc71c9022506f698ba842c708cd44d773eb.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 15e5820dd22fb27c26b86e2720be6cc71c9022506f698ba842c708cd44d773eb}
+  # LABSTATE-CONTENTS-1 FIX RUN 4 REBLESS (ruling LABSTATE-DRIVEBAR-l2t1125
+  # "PRODUCT DEFECTS" item 1, blessed ONCE, same discipline as b6bb2386): the
+  # add_material.labware arg gained the OPTIONAL `teaching:` string (the
+  # producer-side container-carry discipline the live-sampler labware-less
+  # drafting gap was missing) + a comment. No verb, arg kind, token,
+  # referentLevel, or policy value changed; no golden fixture/record moved.
+  # BEFORE: 15e5820d..,
+  # AFTER: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
