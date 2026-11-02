@@ -8,7 +8,7 @@
  * below).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { apiClient } from '../shared/api/client'
 import { ChromatogramView } from './ChromatogramView'
@@ -21,7 +21,23 @@ const W = 720
 const PAD_L = 52
 const PLOT_W = 654
 
+// jsdom has no ResizeObserver: a minimal spy whose stored callback the tests
+// fire (synchronously, inside React act) to simulate a measured pane width.
+// The callback receives the RESIZE-OBSERVER entry LIST (the component reads
+// entries[0].contentRect.width) — the stub mirrors that shape.
+type ROEntry = { contentRect: { width: number } }
+const resizeObservers: Array<(entries: ROEntry[]) => void> = []
+;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+  constructor(cb: (entries: ROEntry[]) => void) {
+    resizeObservers.push(cb)
+  }
+  observe() {}
+  disconnect() {}
+  unobserve() {}
+}
+
 beforeEach(() => {
+  resizeObservers.length = 0
   vi.clearAllMocks()
   // jsdom has no layout: stub the SVG rect so pointer math is deterministic.
   const svgProto = SVGElement.prototype as unknown as { getBoundingClientRect: () => unknown }
@@ -259,6 +275,46 @@ describe('ChromatogramView — dref-backed bytes via the ratified OQ-1(a) route'
     const err = await screen.findByTestId('chromatogram-error')
     expect(err.textContent).toContain('storage offline')
     expect(screen.queryByTestId('chromatogram-svg')).toBeNull()
+  })
+})
+
+describe('ChromatogramView — B1 pane-fit: renders at 1:1 CSS px per SVG unit (spec §5 B1)', () => {
+  function fireMeasuredWidth(px: number) {
+    act(() => {
+      for (const cb of resizeObservers) cb([{ contentRect: { width: px } }])
+    })
+  }
+
+  it('at the shipped pane width (534 px) the svg viewBox width is the MEASURED width and the scale factor is 1', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    // The 534 px pane is the FAME-LAYOUT-1 measured .analysis-right width at
+    // the shipped 1440x900 viewport — simulate the measurement (jsdom cannot
+    // layout): the pre-fix geometry would leave the viewBox at the fixed 720
+    // (scale 534/720 = 0.742 — the defect) and this assertion would fail.
+    fireMeasuredWidth(534)
+    const svg = screen.getByTestId('chromatogram-svg')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 534 280')
+    // ~1:1: viewBox width == the width the pane gives the svg (width="100%").
+    expect(Number(svg.getAttribute('viewBox')!.split(' ')[2])).toBe(534)
+    // The plot still occupies the pane width with the fixed H (280) and keeps
+    // the tick count: at least 4 x-tick labels render.
+    expect(svg.querySelectorAll('text.chromatogram__ticklabel').length).toBeGreaterThanOrEqual(4)
+    expect(root().getAttribute('data-width')).toBe('534')
+  })
+
+  it('unmeasured (jsdom zero-rect) falls back to the fixed 720 viewBox — the old behaviour, unchanged for tests without a measurement', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    const svg = screen.getByTestId('chromatogram-svg')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 720 280')
+    expect(root().getAttribute('data-width')).toBe('720')
+  })
+
+  it('a later pane resize re-derives the geometry (the width is live, not a mount-time constant)', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    fireMeasuredWidth(534)
+    expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 534 280')
+    fireMeasuredWidth(800)
+    expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 800 280')
   })
 })
 

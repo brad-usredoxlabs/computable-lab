@@ -56,15 +56,18 @@ interface Domain {
   x1: number
 }
 
-// Fixed viewBox geometry (handwritten SVG; no chart dependency).
-const W = 720
+// B1: the viewBox WIDTH follows the MEASURED pane width so the
+// SVG paints at ~1:1 CSS px per user unit — the CSS-declared type sizes are
+// the painted sizes (pre-fix: the whole fixed 720-unit canvas, 9 px tick
+// labels included, scaled by paneWidth/720 ≈ 0.742 at the shipped 534 px
+// pane). H stays fixed at 280; the fixed width is only the FALLBACK for an
+// unmeasured container (jsdom / zero rect — the pre-B1 geometry).
+const FALLBACK_W = 720
 const H = 280
 const PAD_L = 52
 const PAD_R = 14
 const PAD_T = 14
 const PAD_B = 30
-const PLOT_W = W - PAD_L - PAD_R
-const PLOT_H = H - PAD_T - PAD_B
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -83,6 +86,30 @@ export function ChromatogramView({
 }) {
   const b = (bindings ?? {}) as ChromatogramBindings
   const svgRef = useRef<SVGSVGElement | null>(null)
+
+  // ---- B1: the measured container width drives the viewBox
+  //      WIDTH (1:1 CSS px per user unit). The svg is width="100%", so the
+  //      measured pane width IS the viewBox width. The ResizeObserver lives
+  //      on the wrapping div (the .view-spec__chromatogram flex column) —
+  //      measuring the svg element itself would be circular (its CSS width
+  //      is the very thing derived from the viewBox). Unmeasured (jsdom /
+  //      zero rect) falls back to the pre-B1 fixed width — geometry only,
+  //      no data semantics. ----
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [measuredW, setMeasuredW] = useState(0)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (typeof w === 'number' && Number.isFinite(w) && w > 0) setMeasuredW(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const W = measuredW > 0 ? Math.round(measuredW) : FALLBACK_W
+  const PLOT_W = W - PAD_L - PAD_R
+  const PLOT_H = H - PAD_T - PAD_B
 
   // ---- Data: inline value OR the OQ-1(a) content route (dref-only) ----
   // `dataReferenceRef` only SIGNALS that this artifact is dref-backed (its
@@ -188,7 +215,7 @@ export function ChromatogramView({
   // ---- Visual-only decimation (SVG geometry only; readout uses raw points) ----
   const slice = useMemo(
     () => (parsed ? decimateForRender(parsed.axis, parsed.values, Math.max(1, Math.floor(PLOT_W))) : { indices: [], droppedCount: 0 }),
-    [parsed],
+    [parsed, PLOT_W],
   )
 
   const polyline = useMemo(() => {
@@ -241,9 +268,11 @@ export function ChromatogramView({
 
   return (
     <div
+      ref={wrapRef}
       className="view-spec__chromatogram"
       data-testid="view-spec-chromatogram"
       data-x-domain={domain ? `${domain.x0}:${domain.x1}` : undefined}
+      data-width={W}
     >
       <div className="chromatogram__toolbar">
         <button type="button" onClick={reset} data-testid="chromatogram-reset" className="chromatogram__reset">
