@@ -908,4 +908,56 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
       .filter((u) => u.includes('/materials/search')).length
     expect(searchCalls).toBe(2)
   })
+
+  it('L2-CLARIFY-PICKER-1 (RED): the exact-match concept DMEM is the first + defaultable workspace row, NOT the W1 row-0 composition', async () => {
+    // The 18-row DMEM card's WORKSPACE page (formulations + material search):
+    // today the /m comparator sorts by MATERIAL_CATEGORY_RANK, so the
+    // COMPOSITION formulation `DMEM + FBS` (saved-stock, rank 0) is the
+    // keyboard default and the plain `DMEM` the prompt named is buried.
+    // The new intent-ranking comparator (data-declared candidate_ranking)
+    // puts the equality-band concept first and never-defaults a composition.
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-dmemhepg2-1a2b', kind: 'material', title: 'DMEMHepG2', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+          { recordId: 'MAT-trypan-blue-7f2a', kind: 'material', title: 'Trypan blue', category: 'vendor-reagent' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+        {
+          recipeId: 'REC-AGGR', recipeName: 'aggregate', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-02', name: 'Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM')
+
+    // P1: the row the prompt NAMED (exact label match) is first — not the
+    // composition. (RED: today out[0] is the `DMEM + FBS` composition, rank 0.)
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    // The focused-default rule: the concept row is defaultable; a composition
+    // row is NEVER defaultable (the data flag, enforced regardless of rank).
+    expect(out[0]?.canBeDefault).toBe(true)
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
+    expect(firstComposition!.canBeDefault).toBe(false)
+    // A composition can never BE the first row.
+    expect(out.findIndex((r) => r.badge === 'Composition')).toBeGreaterThan(0)
+    // P2: the composition row carries its commit-consequence line — what
+    // picking it binds (a composition of N components), generated from the
+    // row's own record (no new chrome).
+    expect(firstComposition!.consequence).toMatch(/composition of \d+ components/)
+  })
 });
