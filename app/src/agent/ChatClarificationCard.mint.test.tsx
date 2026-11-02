@@ -146,7 +146,7 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     expect(container.querySelector(SEARCH)).toBeTruthy() // the search box is a no-op on the label
   })
 
-  it('W9 copy/affordance agreement, both directions (one predicate — copy and affordance cannot disagree): seed-less + empty filter shows NO mint row and a search-only placeholder; a seeded fact shows the row whenever the placeholder promises it', () => {
+  it('W9 copy/affordance agreement, both directions (one predicate — copy and affordance cannot disagree): seed-less + empty filter shows NO mint row and a search-only placeholder; a seeded fact shows the row whenever the placeholder promises it; an empty-seed fact with a TYPED filter shows NO row (D2 fix1)', async () => {
     // (a) The empty-seed card (request.query absent — the "of what?" fact) +
     // empty filter: no mint row AND the placeholder promises search only.
     const noSeed: AiClarificationRequest = {
@@ -178,6 +178,34 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     // The row's preview is the one-source sentence for the seeded noun.
     expect(screen.getByText(mintLocalTermLabel('DMSO'))).toBeTruthy()
     unmount2()
+
+    // (c) advc-c1 D2 (fix1), PROBE3 shape: the SAME empty-seed fixture with a
+    // TYPED filter (the user types `mystery` into the search box — the popover
+    // opens on the first keystroke — then Escape closes it). Pre-fix the
+    // predicate read the filter fallback (mintLabelFor(request, query)), so the
+    // row APPEARED off the live filter with an EMPTY label and a disabled
+    // Create while the placeholder promised creation ("row exists" but not
+    // "row is actionable"). Post-fix the predicate reads the PROMPT NOUN only:
+    // the filter is non-empty but the card names no noun, so there is NO mint
+    // row and the placeholder promises search only.
+    const typedFilter: AiClarificationRequest = { ...noSeed, id: 'req-typed' }
+    resolveMaterial.mockResolvedValue([])
+    const { container: container3, unmount: unmount3 } = render(<ClarificationPicker request={typedFilter} onPick={vi.fn()} />)
+    const search3 = container3.querySelector(SEARCH) as HTMLInputElement
+    fireEvent.change(search3, { target: { value: 'mystery' } })
+    await waitFor(() => expect(screen.getByTestId('clarification-popover')).toBeTruthy())
+    fireEvent.keyDown(search3, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('clarification-popover')).toBeNull())
+    // The filter IS typed (this is the typed-filter arm, not the empty-filter
+    // arm (a)) — yet the empty-seed card grows NO mint row and its copy still
+    // promises search only.
+    expect((container3.querySelector(SEARCH) as HTMLInputElement).value).toBe('mystery')
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+    expect(screen.queryByTestId('clarification-mint-create')).toBeNull()
+    const placeholderTyped = (screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement)
+    expect(placeholderTyped.placeholder).not.toMatch(/mint|create a material record/i)
+    expect(placeholderTyped.placeholder).toBe('Search materials…')
+    unmount3()
   })
 
   it('P5: after a successful mint the answered row names the new record id (the id reaches the transcript through the host answer sentence)', async () => {

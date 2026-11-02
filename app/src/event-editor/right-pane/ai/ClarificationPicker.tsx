@@ -552,12 +552,22 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // is seeded from the prompt's noun (mintLabelFor) and the row's label input
   // is the only edit surface — a second query-length check anywhere is the W9
   // bug returning.
+  // advc-c1 D2 (fix1): existence follows the PROMPT NOUN only
+  // (mintLabelFor(request, '') — the label STATE the row mints), NEVER the
+  // live filter box. The label state is seeded from `request.query` and, per
+  // W14, never tracks the filter — so a filter-derived existence would be the
+  // D2 dead-end: an empty-seed card (request.query absent) with a typed filter
+  // grew a mint row with an EMPTY label and a disabled Create while the
+  // placeholder promised creation ("row exists" ⇒ "row is actionable" was
+  // broken). With the noun-only predicate the empty-seed card shows NO row and
+  // search-only copy regardless of what is typed; a seeded card's row exists
+  // with the seed's label, so whenever the row exists the Create is enabled.
   const mintAvailable =
     canMint
     && request.allowCreateLocal === true
     && !open
     && (request.options?.length ?? 0) === 0
-    && mintLabelFor(request, query).length > 0
+    && mintLabelFor(request, '').length > 0
 
   // The question's own layer decides the wording; only an unscoped menu (or a
   // concept question) invites minting, because a mint creates a concept — which
@@ -571,7 +581,9 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         // L2-CLARIFY-CARD-1 (W9): the material branch's copy derives from the
         // SAME mintAvailable boolean as the row's existence. The empty-seed
         // card (request.query absent — the "of what?" fact) therefore promises
-        // search only, and shows no mint row.
+        // search only, and shows no mint row — and (advc-c1 D2, fix1) that
+        // holds for a TYPED filter too: the predicate reads the prompt noun
+        // only, so typed text never flips copy or row existence.
         : mintAvailable ? 'Search materials or create a material record…' : 'Search materials…')
 
   // L2-SUITE-A-uifix2 FIX2 [D5]: the VISIBLE create-local (mint) row. The
