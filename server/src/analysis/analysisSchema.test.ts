@@ -266,4 +266,28 @@ describe('view-spec schema', () => {
       bindings: { modelArtifact: 'calibration_model', outlierTopN: 1 },
     }).valid).toBe(true);
   });
+
+  // FAME-6 [E]: the generic artifact-report renderer's NEW enum id validates
+  // (task: "one new generic renderer id (GC-10 enum precedent)"; the
+  // architect OQ-1 ruling ratifies the exact id string, .hermes/plans/
+  // 2026-11-01_fame-6-oq1-oq2-oq3-decision.md). The OQ-3 binding slots
+  // (columns / captionFrom / warningsFrom / warningTextField) ride the free
+  // bindings object — documented as canonical-shape comments in
+  // view-spec.schema.yaml. The quantum rejection above stays — the
+  // closed-set error is preserved for unshipped renderers.
+  it('accepts an artifact-table view (FAME-6 new enum id, OQ-3 binding slots)', () => {
+    expect(validateFor(IDS.view)({
+      kind: 'view-spec',
+      id: 'VSPEC-000301',
+      title: 'artifact report',
+      artifactRef: { kind: 'record', id: 'AOUT-000001', type: 'analysis-output-artifact' },
+      renderer: 'artifact-table',
+      bindings: {
+        columns: ['label', 'state'],
+        captionFrom: 'basis',
+        warningsFrom: 'warnings',
+        warningTextField: 'reason',
+      },
+    }).valid).toBe(true);
+  });
 });
