@@ -48,13 +48,21 @@ async function nextId(ctx: AppContext, kind: 'analysis-revision' | 'analysis-run
 }
 
 /**
- * Numeric suffix of a minted record id (nextId: PREFIX + zero-padded
- * counter) — the creation-order key for newest-first ordering. Non-minted
- * ids (no trailing digits) sort to the end (oldest side).
+ * Minted id shape (nextId, :47): uppercase prefix + '-' + zero-padded
+ * 6-digit counter — the ONLY id shape whose trailing digits carry
+ * creation-order meaning.
  */
-function idSuffix(recordId: string): number {
-  const m = /(\d+)$/.exec(recordId);
-  return m ? Number.parseInt(m[1] ?? '0', 10) : -1;
+const MINTED_ID_RE = /^[A-Z]+-\d{6}$/;
+
+/**
+ * Numeric suffix of a MINTED record id, or null for any other id.
+ * A minted suffix is a creation-order certificate (nextId mints max+1
+ * monotonically); arbitrary trailing digits in a hand-made id are NOT —
+ * so non-minted ids must never compete on the minted counter (D1).
+ */
+function mintedSuffix(recordId: string): number | null {
+  if (!MINTED_ID_RE.test(recordId)) return null;
+  return Number.parseInt(recordId.slice(-6) ?? '0', 10);
 }
 
 export interface CreateRevisionInput {
@@ -254,13 +262,31 @@ export class AnalysisService {
   /**
    * List runs reachable + honest: fetch the WHOLE kind (the store truncates
    * in scan order when a limit is set, so a limited fetch would silently drop
-   * the newest records), sort NEWEST-FIRST by the numeric id suffix (nextId
-   * mints max+1 monotonically — the suffix IS creation order), and report the
-   * TRUE total (all matches), never the page length.
+   * the newest records), sort NEWEST-FIRST — minted ids (nextId: PREFIX +
+   * zero-padded 6-digit counter) by their numeric suffix desc (the suffix IS
+   * creation order); non-minted ids (hand-made ids whose arbitrary trailing
+   * digits carry no creation-order meaning, D1) sort BELOW all minted ids and
+   * among themselves by meta.createdAt desc when present, else stable scan
+   * order (oldest side) — and report the TRUE total (all matches), never the
+   * page length.
    */
   async listRuns(limit = 50, offset = 0): Promise<{ runs: RecordEnvelope[]; total: number }> {
     const all = await this.ctx.store.list({ kind: 'analysis-run' });
-    const newestFirst = [...all].sort((a, b) => idSuffix(b.recordId) - idSuffix(a.recordId));
+    const stamped = all.map((env, index) => ({ env, index }));
+    const newestFirst = stamped.sort((a, b) => {
+      const sa = mintedSuffix(a.env.recordId);
+      const sb = mintedSuffix(b.env.recordId);
+      if (sa !== null && sb !== null) return sb - sa;
+      if (sa !== null) return -1;
+      if (sb !== null) return 1;
+      // Both non-minted: createdAt desc when present, else stable scan order.
+      const ca = a.env.meta?.createdAt;
+      const cb = b.env.meta?.createdAt;
+      if (ca && cb) return ca < cb ? 1 : ca > cb ? -1 : a.index - b.index;
+      if (ca) return -1;
+      if (cb) return 1;
+      return a.index - b.index;
+    }).map((s) => s.env);
     const runs = newestFirst.slice(offset, offset + limit);
     return { runs, total: all.length };
   }

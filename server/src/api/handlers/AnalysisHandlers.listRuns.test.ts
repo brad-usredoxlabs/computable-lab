@@ -154,4 +154,27 @@ describe('GET /api/analysis-runs is reachable and honest', () => {
     expect(body.total).toBe(SEED_COUNT);
     await app.close();
   });
+
+  it('a non-minted id carrying big trailing digits never outranks a minted id', async () => {
+    // D1: a hand-made id whose trailing digits exceed the minted counter must
+    // sort on the OLDEST side, not the top of the page. Synthetic fixture
+    // (never a live id), created before the minted seeds.
+    const nonMinted = {
+      recordId: 'ANR-TEST-BIG-999999',
+      schemaId: RUN_SCHEMA,
+      payload: { kind: 'analysis-run', id: 'ANR-TEST-BIG-999999', title: 'old fixture run', status: 'succeeded' },
+      meta: { kind: 'analysis-run', createdAt: '2026-10-29T12:00:00.000Z' },
+    } as unknown as RecordEnvelope;
+    const app = await buildApp(makeSeededStore([...seeds, nonMinted]));
+    const res = await app.inject({ method: 'GET', url: '/api/analysis-runs?limit=60' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { runs: Array<{ recordId: string }>; total: number };
+    // The minted id sorts FIRST — the top of the page is the newest run.
+    expect(body.runs[0]?.recordId).toBe(seedId(SEED_COUNT));
+    // ...and the non-minted id sorts BELOW all minted ids (oldest side).
+    expect(body.runs[body.runs.length - 1]?.recordId).toBe('ANR-TEST-BIG-999999');
+    // Total stays truthful (the fixture is a real record, counted).
+    expect(body.total).toBe(SEED_COUNT + 1);
+    await app.close();
+  });
 });
