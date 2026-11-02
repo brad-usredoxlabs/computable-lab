@@ -1,0 +1,39 @@
+# CHATHOST-SWEEP-1 Change 3 — the blessed MANIFEST for the chat-host inventory
+# shrink-guard (the "vocabulary golden MANIFEST bless" convention, applied to the
+# chat-host set).
+#
+# The guard: a tick-time check (harness/l2-trunk-journeys/chat-hosts-shrink-guard.py,
+# importable by check-gate.py) FAILS when the inventory's host-id set SHRINKS without
+# a spec citing it. A host may be DELETED only with a re-bless (a new sha256 here) AND
+# a spec path named in `bless_note`; a host that was never listed is never "allowed to
+# shrink" — it simply is not part of this manifest.
+#
+# The blessed sha256 is over the CANONICAL form: the inventory's host ids, sorted
+# ascending, one per line, a single trailing newline. Recomputed from
+# config/chat/chat-hosts.yaml by
+#   python3 .hermes/plans/harness/l2-trunk-journeys/chat-hosts-shrink-guard.py --recompute
+# and blessed here EXACTLY ONCE (the golden-MANIFEST bless discipline: comment the
+# BEFORE/AFTER, bless once).
+#
+# blessed_sha256 = sha256("artifact-host\nevent-editor\nproject-deck-tab\nrecord-
+#                    host\nregistry-host\nrun-workspace\n")
+blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+
+# The host ids this manifest blesses (declared, for the audit trail — the guard
+# recomputes the sha from chat-hosts.yaml and compares; the list here is the human
+# record of WHAT was blessed, not a second authority the guard keys on).
+blessed_ids:
+  - run-workspace
+  - event-editor
+  - project-deck-tab
+  - record-host
+  - artifact-host
+  - registry-host
+
+# A deletion is allowed ONLY when a re-bless lands here AND the spec that authorized
+# the deletion is cited. Until then, any id missing from the inventory is a shrink.
+#   before: dcf32649...75156b (6 hosts — this first bless, 2026-11-02)
+#   spec:   .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md
+bless_note: "First bless (L2-CHATHOST-SWEEP-1 Change 3): 6 universal-chat hosts enumerated from the registrar/bridge wiring at trunk 4bea98a5. Spec .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md. A future host deletion must re-bless this sha and cite the authorizing spec here."
+blessed_at: "20261102T145032Z"
+base_sha: "4bea98a56752a4e69b6cca3b922d1cfd03c39121"

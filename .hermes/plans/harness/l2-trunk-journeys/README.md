@@ -165,7 +165,32 @@ the data-repo digest before/after is recorded and came back clean.
     run-journeys.py               # the ONE driver (python3; yaml is the only import)
     ui-drive.cjs                  # the browser executor (ZERO route handlers, by construction)
     check-gate.py                 # the tick-facing red-blocks-claims gate (literal trunk set)
-    test-channel-selfcheck.py     # the fails-closed self-check leg (incl. A2 + A4/N1 arms)
+    test-channel-selfcheck.py     # the fails-closed self-check leg (incl. A2 + A4/N1 + CHATHOST arms)
     fake-inference.py             # the A1 model-layer fake (openai-compatible, driver-managed)
     canned/completions.yaml       # A1 canned completions (DATA, keyed to journey + turn)
     journeys/J1.yaml J2.yaml J3.yaml   # the journeys (DATA: add a journey = add a file)
+    chat-hosts-shrink-guard.py    # CHATHOST-SWEEP-1 Change 3: the tick-time inventory
+                                  # shrink-guard (importable by check-gate; standalone:
+                                  #   python3 chat-hosts-shrink-guard.py [--recompute])
+
+## CHATHOST-SWEEP-1 — the chat-host sweep scope axis (Change 2/3)
+
+The chat-host inventory is DATA: `config/chat/chat-hosts.yaml` (one entry per
+universal-chat host: `id`, `mount`, `route`, `note`) with a blessed manifest at
+`config/chat/chat-hosts.manifest.yaml` (the Change 3 shrink-guard anchor). `check-gate.py`
+gains a SECOND scope axis — `--chat-hosts` (the no-flag journey gate is
+byte-for-byte unchanged; no parallel harness):
+
+    CL_RECEIPTS=<sweep receipts> python3 check-gate.py --chat-hosts
+
+A sweep run's `run-meta.json` carries a `chat_host_verdicts` table
+({host id: accept|green|red}); the axis grades it against the inventory:
+a STRICT-SUBSET table (an inventory host never swept) is RED (the spec's RED
+case), as are not-accept verdicts, undeclared hosts (N5 exact-set discipline),
+and an un-blessed inventory shrink (the Change 3 guard, run from the SAME
+function the standalone tick script uses). The RED case is pinned non-vacuously
+by the self-check's CHATHOST arms (drop one host from a synthetic verdict
+fixture -> the gate exits non-zero and names the host; the full table exits
+zero). The live sweep run on :5193 is ORCH-OWNED post-merge (the browser
+gate), not this harness's.
+

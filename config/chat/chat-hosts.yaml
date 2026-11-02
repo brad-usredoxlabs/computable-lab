@@ -1,0 +1,100 @@
+# CHATHOST-SWEEP-1 Change 1 — the chat-host inventory as DATA.
+#
+# A "chat host" is a ROUTED page that registers the universal chat pane
+# (useSurfaceChat -> useRegisterAiChat — the SurfaceChatBridge / DeckSurfaceChat /
+# RunSurfaceChatBridge pattern, "L2-CHAT-UI-1 LEG C: the universal-chat registrar").
+# Every chat browser gate from now on MUST sweep THIS set: per host, one live round
+# trip with a request-body receipt, or the verdict is not-accept (spec Change 2).
+#
+# DECLARATION ONLY — ZERO behaviour branching. No product tsx/ts reads this for
+# control flow; the lane gate machinery (harness/l2-trunk-journeys) and the contract
+# tests import it. A host is a declarable fact, not a grep memory.
+#
+# ENUMERATED 2026-11-02 by the coder from the registrar/bridge wiring (grep is
+# authority over the spec's screened 6-host starting list). The grep CONFIRMED the
+# spec's 6 hosts as the real, live, routed universal-chat host set.
+#
+#   id  — machine host id (the machine contract a browser gate keys its verdict on).
+#         For the deck/run hosts this matches the server-read AiContext.surface; for
+#         the analysis-context hosts it names the host (their AiContext.surface is the
+#         declared no-params 'analysis' surface, so several share it).
+#   mount — the registrar component + file:line that registers the chat.
+#   route — how a browser reaches it (App.tsx route, App.tsx:202-225).
+#   note — how its context reaches the AI request.
+#
+# The `id`s below are the SWEEP KEY. The contract test
+# (app/src/shared/config/chatHostInventory.contract.test.ts) pins that the
+# shorthand-drafting surface list is a SUBSET of these ids (YAML-vs-YAML) and that
+# every id is a surface the app can actually post (member of the AiSurface union).
+#
+# =============================================================================
+# EXCLUDED by the grep (verified, NOT in this set) — so a future sweep does not
+# "discover" them as hosts:
+#   - app/src/graph/RunWorkspacePage.tsx:69  useSurfaceChat — DEAD page: its own
+#     header says "imported by nothing (no route serves it; the /runs/:runId route
+#     lazy-imports run/RunWorkspacePage)". Not a host.
+#   - app/src/graph/LabwareEventEditor.tsx:1022  useSurfaceChat — reachable ONLY via
+#     the ?screen=labware-editor&fixture= fixture boot (main.tsx:11-31) + RunEditorRouter
+#     (itself unrouted). Not a normal app route -> not a host.
+#   - legacy useRegisterAiChat pages (literature/LiteratureBody, sequences/SequencesPage,
+#     protocol-ide/ProtocolIdePage, ingestion vendor-pdf ReviewAiPanel, analysis/
+#     AnalysisChatPanel, editor Formulations/Materials) — the PRE-universal-chat
+#     generation (AiTabPanel-era). The defect class + this item scope the sweep to the
+#     universal-chat host family. Surfaced here so the exclusion is a declared fact,
+#     never a silent grep miss.
+# =============================================================================
+
+hosts:
+  - id: run-workspace
+    mount: app/src/run/RunWorkspacePage.tsx:168 <RunSurfaceChatBridge> (app/src/run/RunSurfaceChatBridge.tsx:90 useSurfaceChat)
+    route: /runs/:runId  (App.tsx:202)
+    note: >-
+      AiContext.surface 'run-workspace' (RunWorkspacePage.tsx:101). The bridge mounts INSIDE
+      EventEditorProvider and threads context.selectedWells (the well selection) onto the
+      outgoing /api/ai/** request body (RunSurfaceChatBridge.tsx chatContext) — the J1
+      selectedWells channel. Event-drafting shorthand surface (config/drafting/shorthand-
+      drafting.yaml).
+
+  - id: event-editor
+    mount: app/src/shared/shell/DeckHostPage.tsx:139 <DeckSurfaceChat> (app/src/event-editor/deck/DeckSurfaceChat.tsx:198 useSurfaceChat)
+    route: /deck/:eventGraphId/:runId?  (App.tsx:212)
+    note: >-
+      AiContext.surface 'event-editor' (DeckSurfaceChat.tsx:97). The deck pane posts the
+      selectedWells/sourceSelection channels (J1/J2 journeys ride it). Event-drafting
+      shorthand surface (config/drafting/shorthand-drafting.yaml).
+
+  - id: project-deck-tab
+    mount: app/src/event-editor/projects/ProjectWorkspacePage.tsx:82 <ProjectSurfaceChat> (page-level, ABOVE EventEditorProvider); deck branch :280 <DeckSurfaceChat>
+    route: /project/:studyId  and  /project/:studyId/event-graph/:eventGraphId  (App.tsx:178-179)
+    note: >-
+      THE LEG-F SURVIVOR. ProjectSurfaceChat is mounted page-level, ABOVE EventEditorProvider
+      (ProjectWorkspacePage.tsx:101-131), so on a non-deck tab it can only send {studyId,
+      activeTabKind} — no labwares/events/selection; on a deck tab it stands down
+      (:129) and the deck's own DeckSurfaceChat registers from INSIDE the provider (:275-280).
+      AiContext.surface 'analysis' (ProjectWorkspacePage.tsx:107). This was the host LEG F's
+      gate was structurally blind to (green gate, dead UI) — it is in the inventory so no
+      future gate can repeat the miss.
+
+  - id: record-host
+    mount: app/src/shared/shell/RecordHostPage.tsx:195 <RecordSurfaceChat> (app/src/shared/shell/RecordHostPage.tsx:53 SurfaceChatBridge)
+    route: /record/:recordId  and  /record/new/:nodeType/:parentId?  (App.tsx:208-209)
+    note: >-
+      AiContext.surface 'analysis' (RecordHostPage.tsx:41). Thread-scoped on the recordId
+      (one conversation per record). Context = the record being created/edited + owning study.
+
+  - id: artifact-host
+    mount: app/src/shared/shell/ArtifactHostPage.tsx:49 <SurfaceChatBridge>
+    route: /artifact/:kind/:artifactId  (App.tsx:205)
+    note: >-
+      AiContext.surface 'analysis' (ArtifactHostPage.tsx:40). Thread-scoped on the artifactId.
+      Context = the artifact + its study.
+
+  - id: registry-host
+    mount: app/src/shared/shell/RegistryHostPage.tsx:77 <RegistrySurfaceChat> (app/src/shared/shell/RegistryHostPage.tsx:51 SurfaceChatBridge)
+    route: /registry  (App.tsx:225)
+    note: >-
+      AiContext.surface 'analysis' (RegistryHostPage.tsx:41). Not instance-scoped (rides the
+      scratch study) -> the server's reserved "_" thread scope. Context follows the live
+      record-selection pointer via WorkspaceContext (RecordRegistryPage re-targets the active
+      tab). This is the bridge's home surface (the '.' / '..' refusal pin lives in
+      RegistryHostPage.surfaceChat.test.tsx).

@@ -16,6 +16,13 @@ The lane tick runs this BEFORE claiming any new item:
     exit 2 = the receipt root itself is unreadable (env error, fail closed
              on claiming too: a broken receipts trail proves nothing green)
 
+CHATHOST-SWEEP-1 (Change 2) — a SECOND scope axis on the SAME script
+(`--chat-hosts`, a separate scope axis — no parallel harness): grade a
+chat-host sweep run's `chat_host_verdicts` table against the DATA inventory
+(config/chat/chat-hosts.yaml). A table that is a STRICT SUBSET of the
+inventory (an inventory host never swept) exits RED; so do not-accept
+verdicts, undeclared hosts, and an un-blessed inventory shrink (Change 3).
+
 Reads receipts-root `latest` -> run-meta.json `verdicts` (the machine table).
 """
 import json
@@ -40,6 +47,204 @@ def _hostport(u):
 
 def app_base_is_trunk(u):
     return _hostport(u) in TRUNK_PORTS
+
+
+# ---------------------------------------------------------------------------
+# CHATHOST-SWEEP-1 — the chat-host sweep scope axis (Change 2).
+# The inventory is DATA (config/chat/chat-hosts.yaml); a chat-host sweep
+# verdict table is graded AGAINST it. A verdict table that is a STRICT
+# SUBSET of the inventory (an inventory host was never swept) goes RED —
+# that is the spec's RED case (a dropped host must not clear the gate).
+# ALL PURE (no I/O) so test-channel-selfcheck.py can pin them non-vacuously.
+# ---------------------------------------------------------------------------
+
+def canonical_sha(host_ids):
+    """The blessed-MANIFEST canonical form of a host-id set (the same
+    convention the vocabulary golden MANIFEST bless uses): sorted ascending,
+    one per line, a single trailing newline -> sha256 hex."""
+    import hashlib
+    canon = "\n".join(sorted(host_ids)) + "\n"
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def load_chat_host_inventory(path):
+    """The host ids declared in the chat-host inventory YAML (hosts[].id),
+    sorted. Raises on an absent / malformed inventory (the caller fails
+    closed)."""
+    import yaml
+    with open(path) as fh:
+        doc = yaml.safe_load(fh)
+    hosts = (doc or {}).get("hosts") or []
+    ids = []
+    for h in hosts:
+        if not isinstance(h, dict) or not h.get("id"):
+            raise ValueError("chat-host inventory %s has a host entry with no id"
+                             % path)
+        ids.append(h["id"])
+    if len(ids) != len(set(ids)):
+        raise ValueError("chat-host inventory %s has duplicate host ids" % path)
+    return sorted(ids)
+
+
+def grade_chat_host_sweep(verdicts, inventory_ids):
+    """Grade a chat-host sweep verdict table against the inventory (Change 2).
+    `verdicts` is {host_id: verdict}; verdict 'accept'/'green' = swept with a
+    request-body receipt + rendered answer, anything else = not-accept.
+    Returns (ok, missing, not_accept, undeclared):
+      missing    — inventory hosts with NO verdict (a strict-subset table, the
+                   spec's RED case: a dropped host must go red);
+      not_accept — hosts present but whose verdict is not accept/green;
+      undeclared — hosts in the table that are NOT in the inventory (N5
+                   exact-set discipline: tamper evidence, not coverage).
+    ok is True ONLY when all three are empty (the full inventory swept, every
+    host accept, no undeclared host)."""
+    inv = set(inventory_ids)
+    vkeys = set((verdicts or {}).keys())
+    missing = sorted(inv - vkeys)
+    not_accept = sorted(k for k in vkeys
+                        if (verdicts or {}).get(k) not in ("accept", "green"))
+    undeclared = sorted(vkeys - inv)
+    ok = not missing and not not_accept and not undeclared
+    return ok, missing, not_accept, undeclared
+
+
+def _repo_root():
+    # .hermes/plans/harness/l2-trunk-journeys -> four levels up = repo root.
+    return os.path.abspath(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
+
+
+def _load_shrink_guard():
+    """Change 3: load the standalone tick-time shrink-guard script by path
+    (hyphenated name -> importlib, the same way test-channel-selfcheck loads
+    the driver). Returns the module, or None if it cannot be loaded (the
+    caller then fails closed rather than silently skipping the guard)."""
+    import importlib.util
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "chat-hosts-shrink-guard.py")
+    spec = importlib.util.spec_from_file_location("chat_hosts_shrink_guard", p)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        return None
+    return mod
+
+
+def chat_host_axis():
+    """CHATHOST-SWEEP-1 Change 2: grade a run's chat-host sweep verdict table
+    against the DATA inventory (and run the Change 3 shrink-guard). A SEPARATE
+    scope axis from the journey tick gate (no flag = the journey gate,
+    UNCHANGED).
+    Exit 0 = the full inventory is swept, every host accept, no undeclared
+             host, and no un-blessed shrink.
+    Exit 1 = a strict-subset table (a dropped host), any not-accept, any
+             undeclared host, OR an un-blessed inventory shrink (BLOCKER).
+    Exit 2 = env error (inventory / run-meta / shrink-guard unreadable —
+             fail closed).
+    The run is read from CL_RECEIPTS/latest (or `--run <name>`); the inventory
+    from CL_CHAT_HOSTS (default: the repo's config/chat/chat-hosts.yaml); the
+    blessed manifest from CL_CHAT_HOSTS_MANIFEST (default: the repo's
+    config/chat/chat-hosts.manifest.yaml)."""
+    inv_path = os.environ.get(
+        "CL_CHAT_HOSTS",
+        os.path.join(_repo_root(), "config", "chat", "chat-hosts.yaml"))
+    try:
+        inventory = load_chat_host_inventory(inv_path)
+    except Exception as exc:
+        print("BLOCKER: chat-host inventory unreadable (%s) — FAIL CLOSED "
+              "(Change 2)" % exc)
+        print("GATE-VERDICT env-error")
+        return 2
+    # locate the run to grade (CL_RECEIPTS/latest or --run <name>)
+    run_dir = None
+    if "--run" in sys.argv:
+        i = sys.argv.index("--run")
+        name = sys.argv[i + 1] if i + 1 < len(sys.argv) else ""
+        cand = os.path.join(RECEIPTS_ROOT, name)
+        if name and os.path.isdir(cand):
+            run_dir = cand
+    if run_dir is None:
+        link = os.path.join(RECEIPTS_ROOT, "latest")
+        if os.path.exists(link):
+            run_dir = os.path.realpath(link)
+    if run_dir is None:
+        print("BLOCKER: no chat-host sweep run to grade (CL_RECEIPTS=%s has no "
+              "run/latest)" % RECEIPTS_ROOT)
+        print("GATE-VERDICT env-error")
+        return 2
+    meta_path = os.path.join(run_dir, "run-meta.json")
+    try:
+        with open(meta_path) as fh:
+            meta = json.load(fh)
+    except Exception as exc:
+        print("BLOCKER: run-meta unreadable for the chat-host sweep (%s) — "
+              "FAIL CLOSED" % exc)
+        print("GATE-VERDICT env-error")
+        return 2
+    verdicts = meta.get("chat_host_verdicts")
+    if not isinstance(verdicts, dict) or not verdicts:
+        print("BLOCKER: run %s declares no chat_host_verdicts table — a "
+              "chat-host sweep run must be graded against the inventory "
+              "(Change 2: fail closed)" % run_dir)
+        print("GATE-VERDICT blocking")
+        return 1
+    ok, missing, not_accept, undeclared = grade_chat_host_sweep(verdicts,
+                                                                inventory)
+    print("chat-host sweep: %s (inventory = %d host(s))" % (run_dir, len(inventory)))
+    for h in sorted(verdicts):
+        print("  %s: %s" % (h, verdicts[h]))
+    for h in missing:
+        print("  %s: MISSING (no verdict)" % h)
+    # Change 3: the shrink-guard (the standalone tick-time script, imported by
+    # this axis so the SAME logic grades the tick).
+    import yaml as _yaml
+    man_path = os.environ.get(
+        "CL_CHAT_HOSTS_MANIFEST",
+        os.path.join(_repo_root(), "config", "chat", "chat-hosts.manifest.yaml"))
+    sg = _load_shrink_guard()
+    if sg is None:
+        print("BLOCKER: the Change 3 shrink-guard script could not be loaded — "
+              "FAIL CLOSED (an un-gradable shrink-guard may not clear the gate)")
+        print("GATE-VERDICT env-error")
+        return 2
+    try:
+        with open(man_path) as fh:
+            manifest = _yaml.safe_load(fh) or {}
+        sg_ok, sg_removed = sg.shrink_guard(inventory, manifest)
+    except Exception as exc:
+        print("BLOCKER: the Change 3 shrink-guard failed to run (%s) — FAIL "
+              "CLOSED" % exc)
+        print("GATE-VERDICT env-error")
+        return 2
+    if not sg_ok:
+        print("BLOCKER: the chat-host inventory SHRANK without a spec citing it "
+              "— blessed host(s) %s are missing (Change 3: a deletion is "
+              "allowed ONLY with a re-bless + a spec path in the bless note)"
+              % sg_removed)
+        print("GATE-VERDICT blocking")
+        return 1
+    if not ok:
+        if missing:
+            print("BLOCKER: the chat-host sweep is a STRICT SUBSET of the "
+                  "inventory — host(s) %s were never swept (Change 2: a "
+                  "dropped host is RED; every host needs one live round trip "
+                  "with a request-body receipt, or the verdict is not-accept)"
+                  % missing)
+        if not_accept:
+            print("BLOCKER: chat-host sweep verdict(s) not-accept for %s (no "
+                  "request-body receipt + rendered answer)" % not_accept)
+        if undeclared:
+            print("BLOCKER: the chat-host sweep names UNDECLARED host(s) %s "
+                  "(not in the inventory — N5 exact-set discipline: tamper "
+                  "evidence, not coverage)" % undeclared)
+        print("GATE-VERDICT blocking")
+        return 1
+    print("GATE-VERDICT green (chat-host sweep covers the full inventory; "
+          "shrink-guard clean)")
+    return 0
 
 
 def newest_restore_record(root):
@@ -232,4 +437,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # CHATHOST-SWEEP-1 Change 2: `--chat-hosts` grades a chat-host sweep run
+    # against the DATA inventory (the sweep scope axis). NO flag = the
+    # journey tick gate, byte-for-byte unchanged.
+    if "--chat-hosts" in sys.argv:
+        sys.exit(chat_host_axis())
     sys.exit(main())
