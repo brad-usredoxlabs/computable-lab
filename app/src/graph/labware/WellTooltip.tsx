@@ -6,6 +6,7 @@
 import { useMemo } from 'react'
 import type { WellId } from '../../types/plate'
 import type { PlateEvent } from '../../types/events'
+import type { Labware } from '../../types/labware'
 import { EVENT_TYPE_ICONS, EVENT_TYPE_LABELS } from '../../types/events'
 import {
   type LabwareStates,
@@ -31,6 +32,12 @@ interface WellTooltipProps {
     readouts?: string[]
     results?: string[]
   }
+  /** L2-PROMPT1-GHOST-1: the bench's placed set. When provided, the event
+   *  history applies the SAME single-placed-vessel rule the fill
+   *  (computedStates) applies, so an attributed reference-less event shows
+   *  in history alongside its fill (history-vs-fill consistency). Absent:
+   *  legacy strict reference-matching (never guess at the boundary). */
+  labwares?: Map<string, Labware>
 }
 
 export function WellTooltip({
@@ -40,6 +47,7 @@ export function WellTooltip({
   computedStates,
   maxVolume = 300,
   semanticInfo,
+  labwares,
 }: WellTooltipProps) {
   const state = useMemo(
     () => getWellState(computedStates, labwareId, wellId),
@@ -47,8 +55,8 @@ export function WellTooltip({
   )
 
   const wellEvents = useMemo(
-    () => getWellEvents(events, labwareId, wellId),
-    [events, labwareId, wellId]
+    () => getWellEvents(events, labwareId, wellId, labwares),
+    [events, labwareId, wellId, labwares]
   )
 
   const hasSemanticInfo = Boolean(

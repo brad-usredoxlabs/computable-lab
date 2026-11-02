@@ -23,6 +23,7 @@ import { getAffectedWells } from '../../types/events'
 import type { PlateEvent } from '../../types/events'
 import type { WellId } from '../../types/plate'
 import type { AiResolvedLabware } from '../../types/ai'
+import { resolvePlacedVesselAttribution } from '../../graph/lib/placedVesselAttribution'
 import type { EventEditorPreview } from '../EventEditorContext'
 
 /** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2, defect 2):
@@ -244,24 +245,30 @@ export function buildEventWellIndex(
       // L2-SUITE-A-uifix2 FIX2 (D2): the REAL committed shape — an accepted
       // add_material targeting an ALREADY-PLACED plate carries wells but NO
       // explicit labware reference AND no per-batch offer binding (the draft
-      // carried no resolvedLabware offer for the existing vessel). The deck's
-      // own tile list is the attribution source: a SINGLE placed vessel makes
-      // the target unambiguous (the plate the tile carries); multiple distinct
-      // placed vessels are genuinely ambiguous => attribute to NOTHING
-      // (never guess); zero placed vessels => nothing to attribute to.
+      // carried no resolvedLabware offer for the existing vessel). The
+      // attribution source is the bench's placed set — the SAME single
+      // placed-vessel rule the grid projection applies (ONE shared helper,
+      // ONE vocabulary — placedVesselAttribution.ts, L2-PROMPT1-GHOST-1):
+      // exactly ONE placed vessel makes the target unambiguous (the vessel
+      // the tile carries); multiple distinct placed vessels are genuinely
+      // ambiguous => attribute to NOTHING (never guess); zero placed
+      // vessels => nothing to attribute to. The event's own explicit
+      // references are empty here (unique.length === 0), so the shared
+      // helper's "explicit ref never re-routes" guard is satisfied by
+      // construction; behavior is byte-identical to the pre-extraction
+      // inline logic (the tests in this directory pin it).
       // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the fallback fires ONLY on
       // "no offer binding" — an AMBIGUOUS offer (the batch offered several
       // vessels) is exactly the case that attributes to NOTHING.
-      const placed = new Set(
-        (placedLabwareIds ?? [])
-          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      const vessel = resolvePlacedVesselAttribution(
+        [details.labwareId, details.source_labwareId, details.dest_labwareId, source?.labwareId, target?.labwareId],
+        placedLabwareIds ?? [],
       )
-      if (placed.size === 1) {
-        const [vesselId] = placed
-        let set = byLabware.get(vesselId)
+      if (vessel) {
+        let set = byLabware.get(vessel)
         if (!set) {
           set = new Set()
-          byLabware.set(vesselId, set)
+          byLabware.set(vessel, set)
         }
         for (const well of all) set.add(well)
       }
