@@ -830,10 +830,10 @@ def main():
     inv_path = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yaml")
     man_path = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.manifest.yaml")
     try:
-        inv_ids = cg.load_chat_host_inventory(inv_path)
+        inv_ids, inv_surfaces = cg.load_chat_host_inventory(inv_path)
         inv_ok = bool(inv_ids)
     except Exception as _e:
-        inv_ids, inv_ok = [], False
+        inv_ids, inv_surfaces, inv_ok = [], [], False
         _inv_err = str(_e)
     else:
         _inv_err = ""
@@ -844,28 +844,43 @@ def main():
         dropped = inv_ids[0]                 # drop the FIRST host (deterministic)
         subset = {h: "accept" for h in inv_ids if h != dropped}
         # (7a) the FULL inventory, every host accept -> the pure grader is ok.
-        ok_a, miss_a, na_a, und_a = cg.grade_chat_host_sweep(full_accept, inv_ids)
+        ok_a, miss_a, na_a, und_a = cg.grade_chat_host_sweep(full_accept, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: the FULL inventory all-accept -> ok (non-vacuous)",
                         ok_a and not miss_a and not na_a and not und_a,
                         ["ok=%r miss=%r na=%r und=%r" % (ok_a, miss_a, na_a, und_a)]))
         # (7b) THE RED CASE: a STRICT SUBSET (one host dropped) -> NOT ok,
         # names the missing host. This is the spec's pinned non-vacuous RED.
-        ok_b, miss_b, na_b, und_b = cg.grade_chat_host_sweep(subset, inv_ids)
+        ok_b, miss_b, na_b, und_b = cg.grade_chat_host_sweep(subset, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: a STRICT-SUBSET table (dropped %r) -> RED, names the host" % dropped,
                         (not ok_b) and miss_b == [dropped],
                         ["ok=%r miss=%r" % (ok_b, miss_b)]))
         # (7c) a present-but-not-accept verdict -> NOT ok, names the host.
         na_verdicts = dict(full_accept, **{dropped: "red"})
-        ok_c, miss_c, na_c, und_c = cg.grade_chat_host_sweep(na_verdicts, inv_ids)
+        ok_c, miss_c, na_c, und_c = cg.grade_chat_host_sweep(na_verdicts, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: a not-accept verdict -> RED, names the host",
                         (not ok_c) and na_c == [dropped],
                         ["ok=%r na=%r" % (ok_c, na_c)]))
         # (7d) an UNDECLARED host in the table (tamper evidence) -> NOT ok.
         und_verdicts = dict(full_accept, **{"BOGUS-HOST": "accept"})
-        ok_d, miss_d, na_d, und_d = cg.grade_chat_host_sweep(und_verdicts, inv_ids)
+        ok_d, miss_d, na_d, und_d = cg.grade_chat_host_sweep(und_verdicts, inv_ids, inv_surfaces)
         results.append(("CHATHOST grader: an UNDECLARED host -> RED (N5 exact-set)",
                         (not ok_d) and und_d == ["BOGUS-HOST"],
                         ["ok=%r und=%r" % (ok_d, und_d)]))
+        # (7h) fix1 D3: the four-way 'analysis' surface collision is NOT an
+        # alias (one key cannot stand for four hosts). A verdict table keyed
+        # by DISTINCT surface values is therefore a strict subset (missing the
+        # analysis hosts) + undeclared 'analysis' -> RED.
+        amap = cg.alias_map(inv_ids, inv_surfaces)
+        analysis_hosts = sorted(h for h, s in zip(inv_ids, inv_surfaces)
+                                if s == "analysis")
+        distinct_surfs = sorted(set(inv_surfaces))
+        surf_keyed = {s: "accept" for s in distinct_surfs}
+        ok_s, miss_s, na_s, und_s = cg.grade_chat_host_sweep(
+            surf_keyed, inv_ids, inv_surfaces)
+        results.append(("CHATHOST grader: a table keyed by DISTINCT surface values (the four-way 'analysis' collision) -> RED, fail-closed (fix1 D3)",
+                        (not ok_s) and miss_s == analysis_hosts
+                        and "analysis" in und_s and "analysis" not in amap,
+                        ["ok=%r miss=%r und=%r" % (ok_s, miss_s, und_s)]))
         # (7e) Drive THE ACTUAL gate (check-gate.py --chat-hosts) against a
         # synthetic sweep run: the full table exits 0, the dropped-host table
         # exits non-zero and names the host. This is the "checker exits
@@ -968,19 +983,24 @@ def main():
                             and sg_reason6 is None and sg_auth6 == good_spec,
                             ["ok=%r removed=%r reason=%r auth=%r"
                              % (sg_ok6, sg_rm6, sg_reason6, sg_auth6)]))
-            # (7g)            # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
-            # full 6-host blessed sha) is RED even when driven through the gate.
+            # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
+            # full 6-host blessed sha) is RED even when driven through the
+            # gate. The shrunk inventory carries the `surface` field (D3), so
+            # ONLY the shrink-guard can turn this red — proves the guard is
+            # the authority, not the verdict table.
             with tempfile.TemporaryDirectory() as td_sh:
                 shrunk_inv = os.path.join(td_sh, "shrunk.yaml")
+                sh_hosts = [{"id": h, "surface": inv_surfaces[inv_ids.index(h)]}
+                            for h in shrunk]
                 with open(shrunk_inv, "w") as fh:
-                    yaml.safe_dump({"hosts": [{"id": h} for h in shrunk]}, fh)
+                    yaml.safe_dump({"hosts": sh_hosts}, fh)
                 run_dir2 = os.path.join(td_sh, "20261102T000001Z")
                 os.makedirs(run_dir2)
                 # the sweep table itself is complete for the (shrunk) set, so
-                # ONLY the shrink-guard can turn this red — proves the guard is
-                # the authority, not the verdict table.
+                # ONLY the shrink-guard can turn this red.
                 with open(os.path.join(run_dir2, "run-meta.json"), "w") as fh:
-                    json.dump({"chat_host_verdicts":
+                    json.dump({"app_base": "http://localhost:5193",
+                               "chat_host_verdicts":
                                {h: "accept" for h in shrunk}}, fh)
                 os.symlink(run_dir2, os.path.join(td_sh, "latest"))
                 env_sh = dict(os.environ, CL_RECEIPTS=td_sh,

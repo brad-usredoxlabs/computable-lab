@@ -68,41 +68,74 @@ def canonical_sha(host_ids):
 
 
 def load_chat_host_inventory(path):
-    """The host ids declared in the chat-host inventory YAML (hosts[].id),
-    sorted. Raises on an absent / malformed inventory (the caller fails
-    closed)."""
+    """The chat-host inventory entries (config/chat/chat-hosts.yaml): returns
+    (ids, surfaces) IN FILE ORDER — ids[i] and surfaces[i] describe the SAME
+    host. `surface` is the machine surface id the server reads (fix1 D3:
+    every entry MUST name one; a missing/empty surface is a malformed
+    inventory, raise so the caller fails closed). Raises on an absent /
+    malformed inventory (no id, duplicate id, no surface)."""
     import yaml
     with open(path) as fh:
         doc = yaml.safe_load(fh)
     hosts = (doc or {}).get("hosts") or []
     ids = []
+    surfaces = []
     for h in hosts:
         if not isinstance(h, dict) or not h.get("id"):
             raise ValueError("chat-host inventory %s has a host entry with no id"
                              % path)
+        surface = h.get("surface")
+        if not isinstance(surface, str) or not surface:
+            raise ValueError("chat-host inventory %s host %r has no machine "
+                             "`surface` field (fix1 D3: the server-read "
+                             "surface id must be declared per entry)"
+                             % (path, h.get("id")))
         ids.append(h["id"])
+        surfaces.append(surface)
     if len(ids) != len(set(ids)):
         raise ValueError("chat-host inventory %s has duplicate host ids" % path)
-    return sorted(ids)
+    return ids, surfaces
 
 
-def grade_chat_host_sweep(verdicts, inventory_ids):
-    """Grade a chat-host sweep verdict table against the inventory (Change 2).
-    `verdicts` is {host_id: verdict}; verdict 'accept'/'green' = swept with a
-    request-body receipt + rendered answer, anything else = not-accept.
-    Returns (ok, missing, not_accept, undeclared):
+def alias_map(inventory_ids, surfaces):
+    """fix1 D3: the surface->host-id alias table. A surface value is an
+    accepted ALIAS for its host id ONLY when it names EXACTLY ONE host (a
+    unique surface). Ambiguous surface values — the four-way 'analysis'
+    collision (config/chat/chat-hosts.yaml: four hosts post `analysis`) — are
+    NOT aliases: one key cannot stand for four hosts, so a table keyed on
+    them is still graded per HOST (fail closed, unchanged). Pure (no I/O)."""
+    if surfaces is None:
+        return {}
+    by_surface = {}
+    for hid, s in zip(inventory_ids, surfaces):
+        by_surface.setdefault(s, set()).add(hid)
+    return {s: next(iter(hosts)) for s, hosts in by_surface.items()
+            if len(hosts) == 1}
+
+
+def grade_chat_host_sweep(verdicts, inventory_ids, surfaces=None):
+    """Grade a chat-host sweep verdict table against the inventory (Change 2,
+    fix1 D3). `verdicts` maps host id -> verdict; a UNIQUE surface value
+    (surfaces[i] naming exactly one host) is also accepted as an ALIAS key
+    for that host id (fix1 D3 — ambiguous surface values, e.g. the four-way
+    'analysis' collision, are never aliases). Verdict 'accept'/'green' =
+    swept with a request-body receipt + rendered answer, anything else =
+    not-accept. Returns (ok, missing, not_accept, undeclared):
       missing    — inventory hosts with NO verdict (a strict-subset table, the
                    spec's RED case: a dropped host must go red);
       not_accept — hosts present but whose verdict is not accept/green;
-      undeclared — hosts in the table that are NOT in the inventory (N5
-                   exact-set discipline: tamper evidence, not coverage).
+      undeclared — hosts in the table (after alias resolution) that are NOT
+                   in the inventory (N5 exact-set discipline: tamper
+                   evidence, not coverage).
     ok is True ONLY when all three are empty (the full inventory swept, every
     host accept, no undeclared host)."""
     inv = set(inventory_ids)
-    vkeys = set((verdicts or {}).keys())
+    alias = alias_map(inventory_ids, surfaces)
+    norm = {alias.get(k, k): v for k, v in (verdicts or {}).items()}
+    vkeys = set(norm.keys())
     missing = sorted(inv - vkeys)
     not_accept = sorted(k for k in vkeys
-                        if (verdicts or {}).get(k) not in ("accept", "green"))
+                        if norm.get(k) not in ("accept", "green"))
     undeclared = sorted(vkeys - inv)
     ok = not missing and not not_accept and not undeclared
     return ok, missing, not_accept, undeclared
@@ -138,10 +171,12 @@ def chat_host_axis():
     against the DATA inventory (and run the Change 3 shrink-guard). A SEPARATE
     scope axis from the journey tick gate (no flag = the journey gate,
     UNCHANGED).
-    Exit 0 = the full inventory is swept, every host accept, no undeclared
-             host, and no un-blessed shrink.
+    Exit 0 = the full inventory is swept, every host accept (a UNIQUE surface
+             value is an accepted alias key, fix1 D3), no undeclared host, and
+             no un-blessed shrink.
     Exit 1 = a strict-subset table (a dropped host), any not-accept, any
-             undeclared host, OR an un-blessed inventory shrink (BLOCKER).
+             undeclared host (a four-way 'analysis' surface is never an alias),
+             OR an un-blessed inventory shrink (BLOCKER).
     Exit 2 = env error (inventory / run-meta / shrink-guard unreadable —
              fail closed).
     The run is read from CL_RECEIPTS/latest (or `--run <name>`); the inventory
@@ -152,7 +187,7 @@ def chat_host_axis():
         "CL_CHAT_HOSTS",
         os.path.join(_repo_root(), "config", "chat", "chat-hosts.yaml"))
     try:
-        inventory = load_chat_host_inventory(inv_path)
+        inventory, surfaces = load_chat_host_inventory(inv_path)
     except Exception as exc:
         print("BLOCKER: chat-host inventory unreadable (%s) — FAIL CLOSED "
               "(Change 2)" % exc)
@@ -192,7 +227,8 @@ def chat_host_axis():
         print("GATE-VERDICT blocking")
         return 1
     ok, missing, not_accept, undeclared = grade_chat_host_sweep(verdicts,
-                                                                inventory)
+                                                                inventory,
+                                                                surfaces)
     print("chat-host sweep: %s (inventory = %d host(s))" % (run_dir, len(inventory)))
     for h in sorted(verdicts):
         print("  %s: %s" % (h, verdicts[h]))
@@ -222,15 +258,13 @@ def chat_host_axis():
         return 2
     if not sg_ok:
         print("BLOCKER: the chat-host inventory changed without an authorized "
-              "re-bless (Change 3: a deletion is allowed ONLY with a re-bless "
-              "whose blessed_ids reproduce blessed_sha256 AND a spec path in "
-              "the re-bless record's bless_note that exists in the repo) — "
+              "re-bless (Change 3: a deletion is allowed ONLY with a "
+              "re-blessed blessed_sha256 whose id record reproduces it) — "
               "cause: %s" % (sg_reason or "unauthorized"))
         if sg_removed:
             print("  removed/changed host(s): %s" % sg_removed)
         print("GATE-VERDICT blocking")
         return 1
-
     if not ok:
         if missing:
             print("BLOCKER: the chat-host sweep is a STRICT SUBSET of the "

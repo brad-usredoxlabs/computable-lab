@@ -14,10 +14,29 @@
 # authority over the spec's screened 6-host starting list). The grep CONFIRMED the
 # spec's 6 hosts as the real, live, routed universal-chat host set.
 #
-#   id  — machine host id (the machine contract a browser gate keys its verdict on).
-#         For the deck/run hosts this matches the server-read AiContext.surface; for
-#         the analysis-context hosts it names the host (their AiContext.surface is the
-#         declared no-params 'analysis' surface, so several share it).
+#   id  — machine HOST id (the machine contract a browser gate keys its verdict
+#         on; the SWEEP KEY the gate grades on — see the gate note below).
+#   surface — the machine SURFACE id this host posts as AiContext.surface
+#         (app/src/types/aiContext.ts: the union the server reads off every
+#         /api/ai/** request). This is the FOURTH field spec Change 1 names
+#         ("each entry names its surface id — the machine contract the server
+#         reads"); fix1 D3 adds it explicitly so the inventory and the server
+#         contract cannot drift apart. The gate ALSO accepts a `surface:`
+#         value as a verdict-table key (alias of `id`) — see check-gate.py.
+#
+#   THE FOUR-WAY 'analysis' COLLISION (documented, not fixed here): FOUR of
+#   the six hosts post the SAME surface id `analysis` (project-deck-tab,
+#   record-host, artifact-host, registry-host — see each entry's `surface:`
+#   below). `analysis` is the declared no-params AiContext surface: the server
+#   disambiguates those hosts by the record/artifact/registry-scoped thread
+#   scope (or the scratch-study "_" scope for registry-host), NOT by a unique
+#   surface id. The remaining two hosts post DISTINCT surfaces (run-workspace,
+#   event-editor). Hosts and surfaces are DIFFERENT vocabularies: a sweep must
+#   grade per HOST (the inventory id), because one surface can back many hosts.
+#   NO host id is forced into the AiSurface union (fix1 D4 ruling: hosts and
+#   surfaces are different vocabularies) — only the `surface:` field is a
+#   member of that union, pinned by the contract test (see below).
+#
 #   mount — the registrar component + file:line that registers the chat.
 #   route — how a browser reaches it (App.tsx route, App.tsx:202-225).
 #   note — how its context reaches the AI request.
@@ -46,6 +65,7 @@
 
 hosts:
   - id: run-workspace
+    surface: run-workspace
     mount: app/src/run/RunWorkspacePage.tsx:168 <RunSurfaceChatBridge> (app/src/run/RunSurfaceChatBridge.tsx:90 useSurfaceChat)
     route: /runs/:runId  (App.tsx:202)
     note: >-
@@ -56,6 +76,7 @@ hosts:
       drafting.yaml).
 
   - id: event-editor
+    surface: event-editor
     mount: app/src/shared/shell/DeckHostPage.tsx:139 <DeckSurfaceChat> (app/src/event-editor/deck/DeckSurfaceChat.tsx:198 useSurfaceChat)
     route: /deck/:eventGraphId/:runId?  (App.tsx:212)
     note: >-
@@ -64,6 +85,7 @@ hosts:
       shorthand surface (config/drafting/shorthand-drafting.yaml).
 
   - id: project-deck-tab
+    surface: analysis   # four-way collision: same surface as record/artifact/registry-host
     mount: app/src/event-editor/projects/ProjectWorkspacePage.tsx:82 <ProjectSurfaceChat> (page-level, ABOVE EventEditorProvider); deck branch :280 <DeckSurfaceChat>
     route: /project/:studyId  and  /project/:studyId/event-graph/:eventGraphId  (App.tsx:178-179)
     note: >-
@@ -76,6 +98,7 @@ hosts:
       future gate can repeat the miss.
 
   - id: record-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/artifact/registry-host
     mount: app/src/shared/shell/RecordHostPage.tsx:195 <RecordSurfaceChat> (app/src/shared/shell/RecordHostPage.tsx:53 SurfaceChatBridge)
     route: /record/:recordId  and  /record/new/:nodeType/:parentId?  (App.tsx:208-209)
     note: >-
@@ -83,6 +106,7 @@ hosts:
       (one conversation per record). Context = the record being created/edited + owning study.
 
   - id: artifact-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/record/registry-host
     mount: app/src/shared/shell/ArtifactHostPage.tsx:49 <SurfaceChatBridge>
     route: /artifact/:kind/:artifactId  (App.tsx:205)
     note: >-
@@ -90,6 +114,7 @@ hosts:
       Context = the artifact + its study.
 
   - id: registry-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/record/artifact-host
     mount: app/src/shared/shell/RegistryHostPage.tsx:77 <RegistrySurfaceChat> (app/src/shared/shell/RegistryHostPage.tsx:51 SurfaceChatBridge)
     route: /registry  (App.tsx:225)
     note: >-
