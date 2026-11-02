@@ -11,29 +11,34 @@
  * or artifact-specific literal (R8 — the domain string values live in the
  * revision YAML / payloads, never here).
  *
- * OQ-3 — the NAMED, documented, unit-tested skip (never a silent one):
- * A revision whose input slots declare NONE of the FAME-7 contract keys
- * (`acceptsKinds` / `acceptedArtifactNames`) carries no FAME-7 contract: it is
- * a LEGACY revision, and validating it would invent a contract history never
- * wrote. Such a revision SKIPS input validation entirely (any body accepted,
- * byte-identical to the pre-FAME-7 flow — the legacy `inputs: {}` run-creates
- * and the AI-drafting surface stay working with zero backfill). This covers
- * both the ABSENT `inputs` key and legacy `inputs` arrays (including a
- * `required: true` slot with no new keys — required-ness on legacy revisions
- * was never machine-enforced and stays a declaration-only signal).
- *
- * A revision that DECLARES the FAME-7 contract (≥1 slot carrying one of the
- * new keys) is validated fully: body key not declared ⇒ INPUT_UNDECLARED;
- * declared `required:true` slot absent ⇒ INPUT_REQUIRED_MISSING; and an EMPTY
- * slot array on a declaring revision means the contract IS "no inputs" — any
- * body input is INPUT_UNDECLARED. The OQ-3 "absent vs empty-array is
- * semantic" distinction is preserved: on a declaring revision the empty array
- * is enforced; on a legacy revision nothing is.
+ * OQ-3 — the EXACT binding semantics (2026-11-02_fame-7-oq1234-decision.md
+ * OQ-3 §2 — the ONE answer; a named, documented, unit-tested skip, never a
+ * silent one):
+ *   - `revision.payload.inputs` ABSENT (key not present) ⇒ SKIP input
+ *     validation entirely (any body accepted, byte-identical to the
+ *     pre-FAME-7 flow — the legacy `inputs: {}` run-creates and the
+ *     AI-drafting surface stay working with zero backfill). This is the ONLY
+ *     skip. A revision that declares NO inputs array carries no contract;
+ *     validating it would invent a contract history never wrote.
+ *   - `inputs` PRESENT — INCLUDING an EMPTY array AND legacy slot arrays that
+ *     lack the FAME-7 keys (`acceptsKinds` / `acceptedArtifactNames`) ⇒
+ *     validate FULLY: body key not declared ⇒ INPUT_UNDECLARED; declared
+ *     `required:true` slot absent from the body ⇒ INPUT_REQUIRED_MISSING.
+ *     The PRESENCE of the key, not the presence of the new keys, is the
+ *     contract marker: a legacy revision that declares slots (e.g. a
+ *     `required:true` slot with no new keys) still OWNS its declared contract,
+ *     and the undeclared/missing gates fire exactly as drafted.
+ *   - The "absent vs empty-array is semantic" distinction is preserved: an
+ *     empty PRESENT array means the contract IS "no inputs" — any body input
+ *     is INPUT_UNDECLARED — while an ABSENT key skips.
  *
  * Pinned by the tests `skips validation for a revision with no inputs
- * declaration (the OQ-3 named, documented, unit-tested skip)` and
+ * declaration (the OQ-3 named, documented, unit-tested skip)`,
  * `an EMPTY inputs array means "no inputs" — any body input is
- * INPUT_UNDECLARED (absent vs empty-array is semantic)`.
+ * INPUT_UNDECLARED (absent vs empty-array is semantic)`, and
+ * `a LEGACY revision with a NON-EMPTY inputs array (no FAME-7 keys) is
+ * validated FULLY (OQ-3: presence of the key, not the new keys, is the
+ * contract marker)`.
  *
  * OQ-4 — the GLOBAL admissible-kind set lives in
  * config/drafting/analysis-composition.yaml `inputKinds:` (the shipped policy
@@ -113,6 +118,42 @@ function gateKindsFor(slot: DeclaredInput): string[] {
   return loadInputKindsPolicy();
 }
 
+/**
+ * D3 (fix cycle 1): the artifact a data-reference ref names for the
+ * `acceptedArtifactNames` gate. A DREF record carries no producer `name` of
+ * its own (schema data-reference.schema.yaml — title/path/contentHash only),
+ * so the gate resolves the PRODUCER ARTIFACT the DREF links: the promoted
+ * artifact is the side that carries the one-way
+ * `dataReferenceRef: {kind:'record', id: <drefId>}` link
+ * (artifactPromotion.ts:102-106). Reverse lookup = list the
+ * analysis-output-artifact kind and match the link's id — record-type name,
+ * not a domain literal (R8). Returns null when the link is unresolvable
+ * (no artifact lists it): the caller then applies the existing
+ * INPUT_UNRESOLVABLE token (a name-gated slot that cannot be proven is
+ * rejected, never silently passed).
+ */
+async function drefLinkedArtifactName(
+  store: Pick<RecordStore, 'get' | 'list'>,
+  drefId: string,
+): Promise<string | null> {
+  let envs: readonly { payload: unknown }[];
+  try {
+    envs = await store.list({ kind: ARTIFACT_KIND });
+  } catch {
+    // A list failure means the link cannot be proven — treat as
+    // unresolvable (the named INPUT_UNRESOLVABLE path), never as a pass.
+    return null;
+  }
+  for (const env of envs) {
+    const p = env.payload as { dataReferenceRef?: { id?: unknown } } | null | undefined;
+    if (p && p.dataReferenceRef?.id === drefId) {
+      const name = (p as { name?: unknown }).name;
+      return typeof name === 'string' ? name : null;
+    }
+  }
+  return null;
+}
+
 const ARTIFACT_KIND = 'analysis-output-artifact';
 
 /** The revision's declared inputs (ABSENT ⇒ undefined ⇒ the OQ-3 skip). */
@@ -129,13 +170,6 @@ export function declaredInputsOf(revisionPayload: Record<string, unknown>): Decl
   return raw as DeclaredInput[];
 }
 
-/** True when ≥1 slot carries a FAME-7 contract key (`acceptsKinds` /
- *  `acceptedArtifactNames`). A non-empty inputs array with NO such keys is a
- *  LEGACY revision (pre-FAME-7) — the OQ-3 named skip. */
-export function declaresFame7Contract(slots: DeclaredInput[]): boolean {
-  return slots.some((s) => (s.acceptsKinds && s.acceptsKinds.length > 0) || (s.acceptedArtifactNames && s.acceptedArtifactNames.length > 0));
-}
-
 /**
  * Validates a run-create `inputs` body against the revision's declared-input
  * contract. Throws a NAMED AnalysisServiceError on the first violation;
@@ -147,28 +181,35 @@ export function declaresFame7Contract(slots: DeclaredInput[]): boolean {
  *   INPUT_NOT_RECORD_REF        — ref.kind !== 'record';
  *   INPUT_KIND_NOT_ACCEPTED     — ref.type not in the slot's gate;
  *   INPUT_UNRESOLVABLE          — the ref does not resolve (404);
- *   INPUT_ARTIFACT_NAME_MISMATCH— resolved artifact name not accepted;
+ *   INPUT_ARTIFACT_NAME_MISMATCH— resolved artifact name not accepted
+ *                                  (artifact-typed ref: its own `name`;
+ *                                  data-reference ref: the name of the
+ *                                  artifact it links — the DREF carries no
+ *                                  name of its own, so the gate resolves the
+ *                                  producer artifact the DREF references);
  *   INPUT_DATAKIND_INCOMPATIBLE — resolved dataKind conflicts with declared.
+ * `INPUT_CONTRACT_MALFORMED` (500) — `inputs` present but not an array: a
+ *   named 500-class contract-shape failure, NOT part of the W4 400 rejection
+ *   set; the FAME-7 fix-cycle-1 dispatch (cl-coder task prompt, 2026-11-02,
+ *   "D10 ruling ratification") RATIFIES this token as the named 500 for a
+ *   malformed `inputs` declaration (this prompt is the ratification record).
  * NO coercion, NO defaulting, NO best-effort: the rejection IS the behavior
  * (the GC-5 ENGINE_REF_UNRESOLVED precedent).
  */
 export async function validateDeclaredInputs(
-  store: Pick<RecordStore, 'get'>,
+  store: Pick<RecordStore, 'get' | 'list'>,
   revisionPayload: Record<string, unknown>,
   body: RunInputs,
 ): Promise<void> {
   const declared = declaredInputsOf(revisionPayload);
-  // OQ-3 NAMED skip (documented at module top + pinned by tests):
-  //   - `inputs` ABSENT (undefined)          → skip (no contract; legacy).
-  //   - `inputs` an EMPTY array              → validate FULLY (the contract IS
-  //     "no inputs": any body input is INPUT_UNDECLARED). OQ-3: absent vs
-  //     empty-array is a real semantic distinction; do NOT collapse it.
-  //   - `inputs` non-empty, NO FAME-7 keys   → skip (LEGACY pre-FAME-7
-  //     revision — required-ness was never machine-enforced; keeping the
-  //     legacy `inputs: {}` run-creates + AI-drafting surface byte-identical).
-  //   - `inputs` non-empty, ≥1 FAME-7 key    → validate FULLY.
+  // OQ-3 EXACT semantics (documented at module top + pinned by tests):
+  //   - `inputs` ABSENT (undefined)      → skip (no contract; the ONLY skip).
+  //   - `inputs` PRESENT — empty array,
+  //     non-empty, with or WITHOUT the FAME-7 keys → validate FULLY.
+  // The presence of the key is the contract marker; a legacy revision that
+  // declares slots (no new keys) still owns its declared contract
+  // (INPUT_UNDECLARED / INPUT_REQUIRED_MISSING fire for it).
   if (declared === undefined) return;
-  if (declared.length > 0 && !declaresFame7Contract(declared)) return;
 
   const byName = new Map<string, DeclaredInput>();
   for (const slot of declared) byName.set(slot.name, slot);
@@ -221,13 +262,27 @@ export async function validateDeclaredInputs(
       );
     }
     const payload = env.payload as Record<string, unknown>;
-    // (vi) artifact-name gate (artifact-typed refs only; declared ⇒ enforced).
-    if (slot.acceptedArtifactNames && slot.acceptedArtifactNames.length > 0 && ref.type === ARTIFACT_KIND) {
-      const name = payload.name;
+    // (vi) artifact-name gate (declared ⇒ enforced). A data-reference ref
+    // resolves to the producer artifact it links (D3 — the DREF carries no
+    // name of its own); an unresolvable link is the NAMED INPUT_UNRESOLVABLE
+    // path (never a silent pass).
+    if (slot.acceptedArtifactNames && slot.acceptedArtifactNames.length > 0) {
+      let name: unknown = payload.name;
+      if (ref.type !== ARTIFACT_KIND) {
+        const linkedName = await drefLinkedArtifactName(store, ref.id);
+        if (linkedName === null) {
+          throw new AnalysisServiceError(
+            'INPUT_UNRESOLVABLE',
+            `input '${key}' binds ${ref.id} (${ref.type}) into a name-gated slot but no producer artifact links that reference — the slot accepts only: ${slot.acceptedArtifactNames.join(', ')}; the link cannot be proven, so it is rejected, not silently passed`,
+            404,
+          );
+        }
+        name = linkedName;
+      }
       if (typeof name !== 'string' || !slot.acceptedArtifactNames.includes(name)) {
         throw new AnalysisServiceError(
           'INPUT_ARTIFACT_NAME_MISMATCH',
-          `input '${key}' is bound to artifact ${ref.id} whose name is ${JSON.stringify(name)} — the slot accepts only: ${slot.acceptedArtifactNames.join(', ')}`,
+          `input '${key}' is bound to ${ref.id} whose producer artifact name is ${JSON.stringify(name)} — the slot accepts only: ${slot.acceptedArtifactNames.join(', ')}`,
         );
       }
     }

@@ -50,11 +50,16 @@ describe('AnalysisService CRUD (integration)', () => {
 
   it('creates a revision and a run referencing it', async () => {
     const service = new AnalysisService(ctx);
+    // Pure CRUD round trip: the revision declares an OPTIONAL input so the
+    // run-creatable body (inputs: {}) is valid. The declared-INPUT rejection
+    // semantics (required-missing / undeclared / D8) are covered by the
+    // dedicated FAME-7 block below — this test is about the revision→run
+    // reference, not input validation.
     const { recordId: revId, payload: rev } = await service.createRevision({
       title: 'GC peak area',
       entryScript: 'def run(ctx):\n    return ctx',
       sdkVersion: '0.1.0',
-      inputs: [{ name: 'trace', dataKind: 'signal', required: true }],
+      inputs: [{ name: 'trace', dataKind: 'signal' }],
     });
     expect(revId).toMatch(/^ANREV-/);
     expect(rev.kind).toBe('analysis-revision');
@@ -79,10 +84,30 @@ describe('AnalysisService CRUD (integration)', () => {
   });
 
   it('transitions a run status', async () => {
+    // D8: a revisionRef must RESOLVE (a missing id is a named rejection
+    // before any mint) — so this status-transition test mints a real
+    // no-inputs revision to bind (the pre-fix 'ANREV-000099' hand-made id
+    // only "worked" because the missing-revision path silently skipped
+    // validation and still minted the run).
+    const statusRev = await ctx.store.create({
+      envelope: {
+        recordId: 'ANREV-F7-STATUS',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml',
+        payload: {
+          kind: 'analysis-revision',
+          id: 'ANREV-F7-STATUS',
+          title: 'FAME-7 fix1: status-transition revision (no inputs)',
+          sdkVersion: '0.1.0',
+          entryScript: 'def run(ctx):\n    return ctx',
+        },
+      },
+      message: 'FAME-7 fix1: status-transition revision',
+    });
+    if (!statusRev.success) throw new Error(`status revision create failed: ${statusRev.error}`);
     const service = new AnalysisService(ctx);
     const { recordId } = await service.createRun({
       title: 'run 2',
-      revisionRef: { kind: 'record', id: 'ANREV-000099', type: 'analysis-revision' },
+      revisionRef: { kind: 'record', id: 'ANREV-F7-STATUS', type: 'analysis-revision' },
       inputs: {},
     });
     await service.setRunStatus(recordId, 'failed');
@@ -90,17 +115,15 @@ describe('AnalysisService CRUD (integration)', () => {
     expect((env!.payload as { status: string }).status).toBe('failed');
   });
 
-  it('rejects a run created against a missing revision only if it fails store create (ref not enforced here)', async () => {
-    // The schema does not ref-check revisionRef existence; a run can be created
-    // referencing any id as long as it's a well-formed ref. This is intentional
-    // (lint rules may add refExists later) — just assert it creates.
+  it('D8: a run against a MISSING revision is a NAMED rejection before any mint (pre-fix this path silently skipped validation and still minted — the defect the test name admitted: "ref not enforced here")', async () => {
     const service = new AnalysisService(ctx);
-    const { recordId } = await service.createRun({
+    const runsBefore = (await service.list('analysis-run')).length;
+    await expect(service.createRun({
       title: 'run-loose',
       revisionRef: { kind: 'record', id: 'ANREV-999999', type: 'analysis-revision' },
       inputs: {},
-    });
-    expect(recordId).toMatch(/^ANR-/);
+    })).rejects.toMatchObject({ code: 'REVISION_REF_UNRESOLVED', statusCode: 400 });
+    expect((await service.list('analysis-run')).length).toBe(runsBefore);
   });
 
   describe('GC-5 engine gate at createRevision', () => {
@@ -290,6 +313,44 @@ describe('AnalysisService CRUD (integration)', () => {
       });
       expect(recordId).toMatch(/^ANR-/);
       expect(payload.inputs).toEqual({});
+    });
+
+    it('D8: a revisionRef that does NOT resolve is a NAMED rejection (REVISION_REF_UNRESOLVED) BEFORE any mint — no run is created', async () => {
+      const service = new AnalysisService(ctx);
+      const runsBefore = (await service.list('analysis-run')).length;
+      await expect(service.createRun({
+        title: 'f8 bogus-revision',
+        revisionRef: { kind: 'record', id: 'ANREV-F7-BOGUS', type: 'analysis-revision' },
+        inputs: {},
+      })).rejects.toMatchObject({ code: 'REVISION_REF_UNRESOLVED', statusCode: 400 });
+      expect((await service.list('analysis-run')).length).toBe(runsBefore);
+    });
+
+    it('D4: a LEGACY revision with a NON-EMPTY inputs array (no FAME-7 keys) is validated FULLY at createRun — an undeclared body key is INPUT_UNDECLARED and mints NO run (the OQ-3 binding semantics: key presence, not new-key presence, is the contract marker)', async () => {
+      const legacySlots = await ctx.store.create({
+        envelope: {
+          recordId: 'ANREV-F7-LEGACY-SLOTS',
+          schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml',
+          payload: {
+            kind: 'analysis-revision',
+            id: 'ANREV-F7-LEGACY-SLOTS',
+            title: 'FAME-7 legacy slots revision (no FAME-7 keys)',
+            sdkVersion: '0.1.0',
+            entryScript: 'def run(ctx):\n    return ctx',
+            inputs: [{ name: 'left_table', dataKind: 'table', required: true, description: 'legacy declared slot' }],
+          },
+        },
+        message: 'FAME-7 fix1: legacy non-empty inputs revision',
+      });
+      if (!legacySlots.success) throw new Error(`legacy-slots revision create failed: ${legacySlots.error}`);
+      const service = new AnalysisService(ctx);
+      const runsBefore = (await service.list('analysis-run')).length;
+      await expect(service.createRun({
+        title: 'f4 legacy-undeclared',
+        revisionRef: { kind: 'record', id: 'ANREV-F7-LEGACY-SLOTS', type: 'analysis-revision' },
+        inputs: { not_declared: { kind: 'record', id: 'DREF-F7-1', type: 'data-reference' } },
+      })).rejects.toMatchObject({ code: 'INPUT_UNDECLARED', statusCode: 400 });
+      expect((await service.list('analysis-run')).length).toBe(runsBefore);
     });
   });
 });

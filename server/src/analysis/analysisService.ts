@@ -246,7 +246,20 @@ export class AnalysisService {
     // GC-5 precedent). A revision with NO `inputs` declaration skips validation
     // entirely (OQ-3 named skip, documented in declaredInputs.ts).
     const revisionEnv = await this.ctx.store.get(input.revisionRef.id);
-    if (revisionEnv) {
+    if (!revisionEnv) {
+      // D8 (fix cycle 1): a revisionRef that does not resolve is a NAMED
+      // rejection BEFORE any mint — the pre-fix `if (revisionEnv)` guard
+      // silently skipped ALL validation and still minted a run (the silent-
+      // fallback class the spec bans). The ENGINE_REF_UNRESOLVED precedent
+      // (a pinned ref that does not resolve is rejected before mint, not
+      // stripped-and-created) applies to the run's own revisionRef.
+      throw new AnalysisServiceError(
+        'REVISION_REF_UNRESOLVED',
+        `revisionRef ${input.revisionRef.id} does not resolve (no analysis-revision record with that id) — the run is rejected before any record is minted`,
+        400,
+      );
+    }
+    {
       // `inputs` is REQUIRED on the wire type; a runtime body missing the key
       // is normalized to an EMPTY body so the NAMED behavior fires (INPUT_REQUIRED_MISSING
       // for a declaring revision, the OQ-3 skip for a legacy one) — never a
