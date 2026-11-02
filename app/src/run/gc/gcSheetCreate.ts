@@ -137,6 +137,11 @@ export function buildGcSheetCreateChain(input: GcSheetCreateInput): CreateChainS
       kind: 'instrument-sequence-entry',
       id: entryId,
       position: { vial: input.vial },
+      // FAME-8 B4: the TYPED run-table label (schema-declared `sampleName` —
+      // SAMPLE.XML <Name>). The form gate blocks an empty label, so the stamp
+      // is the label as typed (no id-derived fallback). GcRunTable renders it
+      // as a column; today the row shows only the SMP-/GCM- ids.
+      sampleName: input.sampleLabel,
       runRef: { kind: 'record', id: runId, type: 'run' },
       sampleRef: { kind: 'record', id: sampleId, type: 'sample' },
       gcMethodRef: { kind: 'record', id: input.gcMethodId, type: 'gc-method' },
@@ -236,6 +241,9 @@ export function buildGcSampleAdd(input: GcSampleAddInput): GcSampleAddResult {
         kind: 'instrument-sequence-entry',
         id: entryId,
         position: { vial: input.vial },
+        // FAME-8 B4: the typed run-table label (see the sheet-create entry —
+        // the same schema-declared field, stamped on the sample-add path too).
+        sampleName: input.sampleLabel,
         runRef: { kind: 'record', id: input.runId, type: 'run' },
         sampleRef: { kind: 'record', id: sampleId, type: 'sample' },
         gcMethodRef: { kind: 'record', id: input.gcMethodId, type: 'gc-method' },

@@ -8,7 +8,7 @@
  * (^PARTY- / ^REQ- / ^SMP- / ^ISEN- / ^ISEQ-; run is a free string).
  */
 import { describe, expect, it } from 'vitest'
-import { buildGcSheetCreateChain, gcSheetCreatedRunId, type CreateChainStep } from './gcSheetCreate'
+import { buildGcSampleAdd, buildGcSheetCreateChain, gcSheetCreatedRunId, type CreateChainStep } from './gcSheetCreate'
 
 const INPUT = {
   title: 'FAME batch 10/28',
@@ -103,5 +103,55 @@ describe('buildGcSheetCreateChain (the D2 mint chain, create-last)', () => {
     const runStep = chain.find((s) => s.schemaId.includes('run.schema.yaml'))!
     expect(runStep.recordId).toBe(runId)
     expect(runStep.payload.status).toBe('planned')
+  })
+
+  // FAME-8 B4 (run-sheet typed sample labels): the ENTRY payload stamps the
+  // typed label in the schema-declared `sampleName` field (the run-table
+  // label — SAMPLE.XML <Name>). GcRunTable renders declared columns
+  // generically, so today (pre-fix) the row shows the SMP-/GCM- ids instead
+  // of the typed label. No sampleLabel twin; no id-derived fabrication.
+  it('stamps sampleName = the typed label on the entry payload (sheet create)', () => {
+    const chain = buildGcSheetCreateChain(INPUT)
+    const entry = chain.find((s) => s.schemaId.includes('instrument-sequence-entry'))!
+    expect(entry.payload.sampleName).toBe('RES35077-4')
+    // The typed label is NOT re-derived from the sample record id.
+    const sampleId = stepId(chain, 'sample.schema.yaml')!
+    expect(entry.payload.sampleName).not.toBe(sampleId)
+  })
+})
+
+describe('buildGcSampleAdd (sample-add to an existing sheet)', () => {
+  it('stamps sampleName = the typed label on the new entry payload (sample add)', () => {
+    const res = buildGcSampleAdd({
+      runId: 'RUN-EX',
+      gcMethodId: INPUT.gcMethodId,
+      vial: '102',
+      sampleLabel: 'RES35077-5',
+      rand: 'ZZ9',
+    })
+    const entry = res.steps.find((s) => s.schemaId.includes('instrument-sequence-entry'))!
+    expect(entry.payload.sampleName).toBe('RES35077-5')
+    expect(entry.payload.position).toEqual({ vial: '102' })
+    expect(entry.recordId).toBe(res.entryRecordId)
+  })
+
+  // The empty-label path is blocked by the FORM gate (GcSectionChrome —
+  // pinned there: an empty label yields a named reason and mints nothing),
+  // so the builders never receive an empty label from the form. This pin
+  // documents the boundary: the stamp is the label AS TYPED, and there is no
+  // `|| sampleId` fallback that would fabricate a label past the gate.
+  it('carries the label as typed (no id-derived fallback fabricates a label)', () => {
+    const res = buildGcSampleAdd({
+      runId: 'RUN-EX',
+      gcMethodId: INPUT.gcMethodId,
+      vial: '103',
+      sampleLabel: 'COUNTRYSIDE-BUTTER',
+      rand: 'YY8',
+    })
+    const entry = res.steps.find((s) => s.schemaId.includes('instrument-sequence-entry'))!
+    expect(entry.payload.sampleName).toBe('COUNTRYSIDE-BUTTER')
+    // No fabricated fallback to the minted sample id:
+    const sampleId = res.steps.find((s) => s.schemaId.includes('sample.schema.yaml'))!.recordId
+    expect(entry.payload.sampleName).not.toBe(sampleId)
   })
 })
