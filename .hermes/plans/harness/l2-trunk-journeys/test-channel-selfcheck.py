@@ -939,7 +939,36 @@ def main():
                             (not sg_ok4) and sg_reason4 == "invariant",
                             ["ok=%r removed=%r reason=%r"
                              % (sg_ok4, sg_rm4, sg_reason4)]))
-            # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
+            # (7f-d2) fix1 D2: on a blessed-sha CHANGE (a re-bless record whose
+            # sha == the current inventory sha + consistent blessed_ids) the
+            # bless_note MUST cite an existing spec, else RED. Control: the
+            # SAME record WITH an existing spec path is authorized (GREEN).
+            shrunk_sha = sgm.canonical_sha(shrunk)
+            good_spec = ".hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md"
+            rec_no_spec = {"blessed_sha256": shrunk_sha, "blessed_ids": shrunk,
+                           "bless_note": "nope, no spec cited here",
+                           "blessed_at": "20261102T999999Z"}
+            d2_red = dict(manifest, blessed_records=[rec_no_spec])
+            sg_ok5, sg_rm5, sg_reason5, sg_auth5 = sgm.shrink_guard(
+                shrunk, d2_red)
+            results.append(("CHATHOST shrink-guard: a re-bless whose bless_note cites NO existing spec -> RED (fix1 D2)",
+                            (not sg_ok5) and sg_reason5 == "no-consistent-record"
+                            and sg_auth5 is None,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok5, sg_rm5, sg_reason5, sg_auth5)]))
+            rec_spec = {"blessed_sha256": shrunk_sha, "blessed_ids": shrunk,
+                        "bless_note": "Deleted %s; authorized by %s."
+                                       % (dropped, good_spec),
+                        "blessed_at": "20261102T999999Z"}
+            d2_green = dict(manifest, blessed_records=[rec_spec])
+            sg_ok6, sg_rm6, sg_reason6, sg_auth6 = sgm.shrink_guard(
+                shrunk, d2_green)
+            results.append(("CHATHOST shrink-guard: a re-bless whose bless_note cites an EXISTING spec -> authorized GREEN (fix1 D2)",
+                            sg_ok6 and sg_rm6 == [dropped]
+                            and sg_reason6 is None and sg_auth6 == good_spec,
+                            ["ok=%r removed=%r reason=%r auth=%r"
+                             % (sg_ok6, sg_rm6, sg_reason6, sg_auth6)]))
+            # (7g)            # (7g) a shrink WITHOUT a re-bless (the manifest still carries the
             # full 6-host blessed sha) is RED even when driven through the gate.
             with tempfile.TemporaryDirectory() as td_sh:
                 shrunk_inv = os.path.join(td_sh, "shrunk.yaml")

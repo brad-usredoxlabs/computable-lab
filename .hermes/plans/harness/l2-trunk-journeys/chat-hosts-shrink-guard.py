@@ -9,7 +9,7 @@ when the CURRENT inventory's host-id set is a strict subset of the blessed
 set — i.e. a blessed host disappeared without the re-bless + spec citation
 that authorizes it.
 
-THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1). The top-level
+THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1+D2). The top-level
 `blessed_sha256`/`blessed_ids` is the ORIGINAL bless and is FROZEN: the guard
 ASSERTS the manifest invariant
 
@@ -23,7 +23,9 @@ fail closed). A re-bless does NOT overwrite the top-level; it APPENDS a
 blessed_records entry. Any inventory-sha mismatch that is a SHRINK is RED
 unless the manifest carries a NEWER consistent bless record: a blessed_records
 entry whose blessed_sha256 EQUALS the current inventory sha (the new sha) and
-whose blessed_ids reproduce that sha (hashes consistently) AND whose blessed_ids reproduce that sha. Pure growth (no host removed) is allowed and is
+whose blessed_ids reproduce that sha (hashes consistently) AND whose bless_note
+cites a spec path that EXISTS in the repo (D2: a re-bless without an existing
+spec citation keeps the RED). Pure growth (no host removed) is allowed and is
 re-blessed by the item that added the host.
 
 Importable (check-gate.py's `--chat-hosts` axis imports `shrink_guard`) AND
@@ -37,7 +39,7 @@ Exit 0 = the inventory did not shrink past the blessed set (or the shrink is
 authorized by a consistent re-bless record with a spec that exists).
 Exit 1 = a blessed host is missing WITHOUT an authorizing re-bless record
 (includes: invariant failure, mismatch without a consistent newer record, and
-a re-bless record that does not hash consistently).
+a re-bless record whose cited spec does not exist).
 Exit 2 = env error (inventory / manifest unreadable — fail closed).
 """
 import argparse
@@ -90,6 +92,33 @@ def _bless_records(manifest):
     return [r for r in recs if isinstance(r, dict)]
 
 
+def spec_cited(bless_note, repo_root):
+    """A bless_note cites a spec when it names a path that EXISTS under
+    repo_root. Returns (cited, path-or-None):
+      - a path component of the note (the first token run that looks like a
+        repo-relative path, starting with '.'/'config'/'docs'/'specifications'
+        or ending in '.md' — the plan/spec layout) that exists on disk;
+      - a bare note names NO spec (the RED case, D2)."""
+    if not isinstance(bless_note, str):
+        return False, None
+    for tok in bless_note.split():
+        t = tok.rstrip(".,;:)]}'\u201d")   # trailing punctuation only — a
+                                           # leading '.' (e.g. .hermes/) is a
+                                           # path component, NOT punctuation
+        if not t or " " in t:
+            continue
+        looks_like_path = (t.endswith(".md") or t.startswith("./") or
+                           t.startswith("config/") or t.startswith("docs/")
+                           or t.startswith("specifications/")
+                           or t.startswith(".hermes/"))
+        if not looks_like_path:
+            continue
+        cand = t if os.path.isabs(t) else os.path.join(repo_root, t)
+        if os.path.isfile(cand):
+            return True, t
+    return False, None
+
+
 def shrink_guard(current_ids, manifest, repo_root=None):
     """PURE (no I/O beyond the spec-existence check, which takes an explicit
     repo_root so callers — check-gate's axis and the selfcheck — stay
@@ -104,7 +133,7 @@ def shrink_guard(current_ids, manifest, repo_root=None):
       authorized — the spec path cited by the authorizing re-bless record,
                    when one exists (ok, an authorized shrink); None otherwise.
 
-    THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1). The manifest's
+    THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1+D2). The manifest's
     TOP-LEVEL blessed_sha256/blessed_ids is the ORIGINAL (first) bless and is
     FROZEN: the guard ASSERTS the manifest invariant
 
@@ -172,7 +201,9 @@ def shrink_guard(current_ids, manifest, repo_root=None):
             continue          # the record's "new sha" must match the current set
         if canonical_sha(rec_ids) != rec_sha:
             continue          # record does not hash consistently
-        return True, removed, None, None  # a consistent newer bless authorizes the shrink
+        cited, path = spec_cited(rec.get("bless_note"), repo_root)
+        if cited:
+            return True, removed, None, path
     return False, removed, "no-consistent-record", None
 
 
@@ -213,21 +244,24 @@ def main(argv=None):
             "un-blessed": "the manifest is un-blessed (no blessed_sha256)",
             "no-consistent-record": "no NEWER consistent re-bless record "
                          "(a blessed_records entry whose blessed_sha256 "
-                         "equals the current inventory sha and whose "
-                         "blessed_ids reproduce that sha) authorizes this "
+                         "equals the current inventory sha, whose blessed_ids "
+                         "reproduce that sha, and whose bless_note cites a "
+                         "spec path that EXISTS in the repo) authorizes this "
                          "state",
         }.get(cause_key, cause_key)
         print("BLOCKER: the chat-host inventory changed without an authorized "
               "re-bless — %s (Change 3: a deletion is allowed ONLY with a "
-              "re-blessed blessed_sha256 whose id record reproduces it)" % cause)
+              "re-blessed blessed_sha256 whose id record reproduces it AND a "
+              "spec path in the re-bless record's bless_note that exists in "
+              "the repo)" % cause)
         if removed:
             print("  removed/changed host(s): %s" % removed)
         print("SHRINK-GUARD red")
         return 1
     if removed:
         print("SHRINK-GUARD green (current sha=%s; %d blessed host(s) removed "
-              "— authorized by a consistent re-bless record)"
-              % (canonical_sha(cur), len(removed)))
+              "— authorized by re-bless record citing spec %s)"
+              % (canonical_sha(cur), len(removed), authorized))
     else:
         print("SHRINK-GUARD green (current sha=%s; no blessed host dropped)"
               % canonical_sha(cur))

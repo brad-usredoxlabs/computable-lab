@@ -222,13 +222,15 @@ def chat_host_axis():
         return 2
     if not sg_ok:
         print("BLOCKER: the chat-host inventory changed without an authorized "
-              "re-bless (Change 3: a deletion is allowed ONLY with a "
-              "re-blessed blessed_sha256 whose id record reproduces it) — "
+              "re-bless (Change 3: a deletion is allowed ONLY with a re-bless "
+              "whose blessed_ids reproduce blessed_sha256 AND a spec path in "
+              "the re-bless record's bless_note that exists in the repo) — "
               "cause: %s" % (sg_reason or "unauthorized"))
         if sg_removed:
             print("  removed/changed host(s): %s" % sg_removed)
         print("GATE-VERDICT blocking")
         return 1
+
     if not ok:
         if missing:
             print("BLOCKER: the chat-host sweep is a STRICT SUBSET of the "
