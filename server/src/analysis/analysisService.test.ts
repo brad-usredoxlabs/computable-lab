@@ -206,4 +206,90 @@ describe('AnalysisService CRUD (integration)', () => {
     expect(revs.some((r) => (r.payload as { engineRef?: { revisionRef?: { id?: string } } }).engineRef?.revisionRef?.id === snapOfB)).toBe(false);
   });
   });
+
+  describe('FAME-7 declared-input gate at createRun (W4)', () => {
+    let declaringRevId: string;
+    let undeclaredRevId: string;
+
+    beforeAll(async () => {
+      // A revision that DECLARES a contract (the new OQ-3 keys ride the
+      // schema — the bundled schemaDir in this harness carries them).
+      const svc = new AnalysisService(ctx);
+      const created = await svc.createRevision({
+        title: 'FAME-7 declared-input test method',
+        entryScript: 'def run(ctx):\n    return ctx',
+        sdkVersion: '0.4.0',
+        inputs: [
+          {
+            name: 'left_table',
+            dataKind: 'table',
+            required: true,
+            acceptsKinds: ['data-reference'],
+            acceptedArtifactNames: ['right_summary'],
+          },
+        ],
+      });
+      declaringRevId = created.recordId;
+      // A LEGACY revision with NO inputs declaration (the OQ-3 named skip).
+      const legacy = await ctx.store.create({
+        envelope: {
+          recordId: 'ANREV-F7-LEGACY',
+          schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml',
+          payload: {
+            kind: 'analysis-revision',
+            id: 'ANREV-F7-LEGACY',
+            title: 'FAME-7 legacy no-inputs revision',
+            sdkVersion: '0.1.0',
+            entryScript: 'def run(ctx):\n    return ctx',
+          },
+        },
+        message: 'FAME-7 test: legacy revision (no inputs declaration)',
+      });
+      if (!legacy.success) throw new Error(`legacy revision create failed: ${legacy.error}`);
+      undeclaredRevId = 'ANREV-F7-LEGACY';
+    });
+
+    it('the schema admits the ratified declaration keys on revision create (acceptsKinds + acceptedArtifactNames round-trip)', async () => {
+      const env = await ctx.store.get(declaringRevId);
+      const inputs = (env!.payload as { inputs: Array<Record<string, unknown>> }).inputs;
+      expect(inputs[0]).toMatchObject({
+        name: 'left_table',
+        acceptsKinds: ['data-reference'],
+        acceptedArtifactNames: ['right_summary'],
+      });
+    });
+
+    it('declares INPUT_REQUIRED_MISSING (400) and mints NO run when the declared required slot is absent', async () => {
+      const service = new AnalysisService(ctx);
+      const runsBefore = (await service.list('analysis-run')).length;
+      await expect(service.createRun({
+        title: 'f7 missing-required',
+        revisionRef: { kind: 'record', id: declaringRevId, type: 'analysis-revision' },
+        inputs: {},
+      })).rejects.toMatchObject({ code: 'INPUT_REQUIRED_MISSING', statusCode: 400 });
+      expect((await service.list('analysis-run')).length).toBe(runsBefore);
+    });
+
+    it('declares INPUT_UNDECLARED (400) and mints NO run when the body names an undeclared input', async () => {
+      const service = new AnalysisService(ctx);
+      const runsBefore = (await service.list('analysis-run')).length;
+      await expect(service.createRun({
+        title: 'f7 undeclared',
+        revisionRef: { kind: 'record', id: declaringRevId, type: 'analysis-revision' },
+        inputs: { not_declared: { kind: 'record', id: 'DREF-F7-1', type: 'data-reference' } },
+      })).rejects.toMatchObject({ code: 'INPUT_UNDECLARED', statusCode: 400 });
+      expect((await service.list('analysis-run')).length).toBe(runsBefore);
+    });
+
+    it('keeps the legacy no-inputs flow byte-identical (the OQ-3 named skip — a run IS created with inputs: {})', async () => {
+      const service = new AnalysisService(ctx);
+      const { recordId, payload } = await service.createRun({
+        title: 'f7 legacy skip',
+        revisionRef: { kind: 'record', id: undeclaredRevId, type: 'analysis-revision' },
+        inputs: {},
+      });
+      expect(recordId).toMatch(/^ANR-/);
+      expect(payload.inputs).toEqual({});
+    });
+  });
 });

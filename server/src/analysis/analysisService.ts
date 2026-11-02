@@ -9,6 +9,7 @@
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import { RecordRevisionService } from '../revisions/RecordRevisionService.js';
+import { validateDeclaredInputs } from './declaredInputs.js';
 import type { EngineRecord } from './engineAdapters.js';
 
 const SCHEMAS = {
@@ -72,7 +73,19 @@ export interface CreateRevisionInput {
   entryScript: string;
   sdkVersion: string;
   methodNotes?: string;
-  inputs?: Array<{ name: string; description?: string; dataKind?: string; required?: boolean }>;
+  inputs?: Array<{
+    name: string;
+    description?: string;
+    dataKind?: string;
+    required?: boolean;
+    /** FAME-7 (OQ-3, ratified 2026-11-02_fame-7-oq1234-decision.md): the record
+     *  `type` strings this slot admits (analysis-revision.schema.yaml items).
+     *  Absent ⇒ the global config `inputKinds` gate (OQ-4). */
+    acceptsKinds?: string[];
+    /** FAME-7 (OQ-3): the producer artifact payload's own `name` values this
+     *  slot accepts. Absent ⇒ no name gate. */
+    acceptedArtifactNames?: string[];
+  }>;
   parameterSchema?: Record<string, unknown>;
   /**
    * GC-5: the pinned analysis-engine record. OPTIONAL in the schema (bait #2),
@@ -226,6 +239,24 @@ export class AnalysisService {
   async createRun(input: CreateRunInput): Promise<{ recordId: string; payload: Record<string, unknown> }> {
     if (!input.title?.trim() || !input.revisionRef?.id) {
       throw new AnalysisServiceError('BAD_REQUEST', 'title and revisionRef are required');
+    }
+    // FAME-7 (W4): declared-input validation — resolve the revision FIRST and
+    // validate the body against its declared contract BEFORE minting anything
+    // (a rejected run mints no record — the rejection IS the behavior, the
+    // GC-5 precedent). A revision with NO `inputs` declaration skips validation
+    // entirely (OQ-3 named skip, documented in declaredInputs.ts).
+    const revisionEnv = await this.ctx.store.get(input.revisionRef.id);
+    if (revisionEnv) {
+      // `inputs` is REQUIRED on the wire type; a runtime body missing the key
+      // is normalized to an EMPTY body so the NAMED behavior fires (INPUT_REQUIRED_MISSING
+      // for a declaring revision, the OQ-3 skip for a legacy one) — never a
+      // crash, never a silent pass.
+      const bodyInputs = input.inputs === undefined || input.inputs === null ? {} : input.inputs;
+      await validateDeclaredInputs(
+        this.ctx.store,
+        revisionEnv.payload as Record<string, unknown>,
+        bodyInputs,
+      );
     }
     const recordId = await nextId(this.ctx, 'analysis-run');
     const payload: Record<string, unknown> = {
