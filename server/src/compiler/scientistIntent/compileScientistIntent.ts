@@ -76,6 +76,7 @@ import type { TermLike } from '../../materials/termReconciliation.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from './types.js';
 import type { TerminalArtifacts, Gap, CompileOutcome } from '../pipeline/CompileContracts.js';
 import type { ScientistIntentNormalized } from './normalizeScientistIntent.js';
+import { unboundDeclaredSlots, UNBOUND_SLOT_REASON } from '../resolution/nounCoverage.js';
 
 const SCIENTIST_INTENT_PIPELINE_PATH = resolve(
   process.cwd(),
@@ -370,6 +371,51 @@ export async function compileScientistIntent(
   }
 
   const nounsOutput = result.outputs.get('resolve_nouns') as ResolveNounsOutput | undefined;
+
+  // L2-CLARIFY-CARD-1 A2 — the slot-coverage gate (the W12 silent-stage
+  // backstop). Placement (spec): immediately after the resolve_nouns output
+  // read, i.e. on the non-bar path only — the bar arm above already returned.
+  // This is the ONLY path where a document can compile past the engine
+  // UNPROVED: the engine's doc-door silently skips a resolvable slot whose
+  // value is not a string (resolutionEngine.ts:505-509) and silently skips a
+  // `many`-contract entry whose noun is absent/blank (resolutionEngine.ts:
+  // 489-502), so a slot can be PRESENT yet carry no binding AND no
+  // clarification — and the pipeline below would ship an event with the bare
+  // label (the W12 class). On the shipped (Ajv-validated, string-valued) path
+  // the engine always binds or clarifies, so this arm is inert there by
+  // construction; it is the deterministic backstop for a constructed/bypassed
+  // document. The predicate is PURE (declared contracts + the pass's own
+  // output); `nounsOutput === undefined` is "no proof of binding" (bar), never
+  // "nothing to check" (bait 6).
+  const unbound = unboundDeclaredSlots(compileIntent, vocabulary, nounsOutput);
+  if (unbound.length > 0) {
+    // The SAME atomic arm as the bar: ZERO events, one synthesized fact per
+    // leftover slot. `reason` = the engine's OWN stable unknown-noun code;
+    // `actionLocation` is fully known (actionIndex + action + argument come
+    // from the declared contract walk); `label` = the raw slot value.
+    const clarifications: ScientistIntentUnresolvedFact[] = unbound.map((slot) => ({
+      label: slot.value,
+      reason: UNBOUND_SLOT_REASON,
+      actionLocation: {
+        actionIndex: slot.actionIndex,
+        action: slot.action,
+        argument: slot.argument,
+      },
+    }));
+    const terminalArtifacts: TerminalArtifacts = {
+      events: [],
+      directives: [],
+      gaps: [],
+    };
+    if (normalized.protocolIntent) terminalArtifacts.protocolIntent = normalized.protocolIntent;
+    return {
+      terminalArtifacts,
+      normalized,
+      outcome: 'needs-clarification',
+      diagnostics: result.diagnostics,
+      clarifications,
+    };
+  }
 
   const eventOutput = (result.outputs.get('resolve_roles') as { events?: unknown[] } | undefined)?.events ?? [];
   const directiveOutput = (result.outputs.get('apply_directives') as { directives?: unknown[] } | undefined)?.directives ?? [];
