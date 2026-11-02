@@ -1080,11 +1080,16 @@ export function getWellEvents(events: PlateEvent[], labwareId: string, wellId: W
       return false
     }
 
-    // L2-PROMPT1-GHOST-1: an explicit reference always wins; a
-    // reference-less event matches its attributed vessel via the SAME
-    // shared single-placed-vessel rule the fill applies (null = no match,
-    // never guess; multiple placed => no match on any labware).
-    if (details.labwareId) return details.labwareId === labwareId
+    // L2-PROMPT1-GHOST-1: an explicit reference is never re-routed by the
+    // placed-vessel rule, but it still must match the WELLS it affected —
+    // the same `wells` membership the fill applies (computeLabwareStates),
+    // so history and fill agree on explicit-reference events too. A
+    // reference-less event matches its attributed vessel via the SAME shared
+    // single-placed-vessel rule the fill applies (null = no match, never
+    // guess; multiple placed => no match on any labware).
+    if (details.labwareId) {
+      return details.labwareId === labwareId && ((details.wells as WellId[]) || []).includes(wellId)
+    }
     const attributed = resolvePlacedVesselAttribution([details.labwareId], placedIds)
     if (!attributed) return false
     const wells = (details.wells as WellId[]) || []
