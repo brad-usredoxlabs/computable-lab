@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
- * FAME-8 GATEFIX2 D1 — mint the contested-claim-visibility SUCCESSOR revision and
- * replay ANR-000068's exact inputs + parameters against it (lane :3092).
+ * FAME-8 GATEFIX3 D1 (closes the GATEFIX2 review defects) — mint the SECOND
+ * contested-claim successor revision and replay ANR-000068's exact inputs +
+ * parameters against it (lane :3092). Supersedes the GATEFIX2 successor
+ * ANREV-000021 (unchanged, immutable — its entryScript predates the GATEFIX3
+ * contract change, so the entryScript must be re-minted to stay byte-identical
+ * to the tracked file).
  *
  * What this script does (tracked, replayable artifact — no product-code change):
  *   1. Reads the successor entryScript (assignment-contested-entry.py) from disk.
@@ -10,15 +14,19 @@
  *      methodNotes into the new revision (never hardcoded id-bearing fields; the
  *      only parent ref is ANREV-000016).
  *   3. POST /api/analysis-revisions (x-user-id: USR-BRAD) -> new revision id.
- *   4. Transitions the new revision draft->active via the lifecycle mechanism
- *      (the trunk-journeys reference: PUT /records/:id with the full stamped
- *      payload, only `state` changed — seed.ts transitionLifecycleState).
- *      ANALYSIS-REVISION IS NOT LIFECYCLE-MANAGED (not in registry-kinds.registry.yaml
- *      `kinds:`; its schema declares no state/lifecycleId; the source revision
- *      ANREV-000016 executes fine with state=None), so if the PUT is refused we
- *      verify the revision is usable AS-CREATED (state absent/None) and proceed —
- *      the execute path (analysisRunner.ts:765-834) gates ONLY the engine, never
- *      the revision state. We NEVER hand-forge records into the data dir.
+ *   4. DEFENSIVE NO-OP, stated plainly (GATEFIX3 Defect 1 honesty fix): the
+ *      GATEFIX2 version carried a draft->active "transition step" that COULD
+ *      NEVER be entered and whose catch was fail-open (it would have swallowed
+ *      the server's schema refusal and proceeded). analysis-revision declares
+ *      NO payload `state` — schema/knowledge/analysis-revision.schema.yaml:12
+ *      unevaluatedProperties:false, no state property; not in
+ *      registry-kinds.registry.yaml `kinds:`; the execute path gates ONLY the
+ *      engine (analysisRunner.ts), never a revision state — so a revision of
+ *      this kind as-created has NO state, and `payload.state === 'draft'` is
+ *      false BY CONSTRUCTION for this kind. There is no draft->active
+ *      transition to perform: this branch reads state, reports it, and if it
+ *      ever somehow were 'draft' it REFUSES to proceed (fail-closed) instead
+ *      of hand-forging a schema-invalid PUT or swallowing a refusal.
  *   5. Fetches ANR-000068 at runtime and POST /api/analysis-runs against the NEW
  *      revision with inputs + parameters COPIED VERBATIM from its payload
  *      (parameters.assignments carries BOTH claims — entry 0 verified + entry 1
@@ -41,9 +49,9 @@ const USER = process.env.CL_USER || 'USR-BRAD';
 const SOURCE_REVISION_ID = 'ANREV-000016';
 const SOURCE_RUN_ID = 'ANR-000068';
 const NEW_TITLE =
-  'FAME-8 gatefix — contested-claim visibility in assignment_results (successor of ANREV-000016)';
+  'FAME-8 gatefix — contested-claim visibility in assignment_results + enforced 3-field flag contract (successor of ANREV-000016; supersedes ANREV-000021)';
 const NEW_RUN_TITLE =
-  'FAME-8 GATEFIX2 D1 replay of ANR-000068 (contested-claim visibility) — verbatim inputs + parameters on the successor revision';
+  'FAME-8 GATEFIX3 D1 replay of ANR-000068 (contested-claim visibility, enforced flag contract) — verbatim inputs + parameters on the GATEFIX3 successor revision';
 const POLL_MS = 1500;
 const POLL_MAX_MS = 120000;
 
@@ -96,14 +104,19 @@ async function main() {
   const revisionBody = {
     title: NEW_TITLE,
     description:
-      'FAME-8 GATEFIX2 D1 (browser-gate defect fix): successor to ANREV-000016. ' +
+      'FAME-8 GATEFIX3 D1 (closes the GATEFIX2 adversarial-review defects; supersedes ANREV-000021): successor to ANREV-000016. ' +
       'The entryScript is ANREV-000016 verbatim EXCEPT: at the declared-order ' +
       'TARGET_WINDOW_OVERLAP claimant point, the losing claim is appended to the ' +
       'WINNER row\'s flags as a machine-readable CONTESTED_CLAIM:<label>|<compound_ref ' +
-      'id>|<assignment_state> flag (pipe-separated, one per losing claim). Winner ' +
-      'attribution, areas, percents, buckets, eligibility and every numeric output ' +
-      'are UNCHANGED; the TARGET_WINDOW_OVERLAP log is kept. No product-code change — ' +
-      'this is a data/record change to the entryScript.',
+      'id>|<assignment_state> flag (pipe-separated, one per losing claim), and the ' +
+      '3-field pipe contract is ENFORCED at the emission point (GATEFIX3 Defect 2): ' +
+      'a losing claim whose label / compound_ref id / assignment_state contains \'|\' ' +
+      'rejects the run with CODE_PARAM_INVALID naming the offending entry + field ' +
+      '(no silent escape or mutation); the contract is also declared in the ' +
+      'artifact\'s flags column definition. Winner attribution, areas, percents, ' +
+      'buckets, eligibility and every numeric output are UNCHANGED; the ' +
+      'TARGET_WINDOW_OVERLAP log is kept. No product-code change — this is a ' +
+      'data/record change to the entryScript.',
     parentRevisionRef: {
       kind: 'record',
       id: SOURCE_REVISION_ID,
@@ -127,24 +140,29 @@ async function main() {
   if (!recordId) throw new Error(`POST /api/analysis-revisions did not return a recordId: ${JSON.stringify(created)}`);
   log(`MINTED revision ${recordId}`);
 
-  // (4) lifecycle: draft -> active (trunk-journeys transitionLifecycleState reference).
+  // (4) DEFENSIVE NO-OP — stated plainly, fail-closed (GATEFIX3 Defect 1).
+  // analysis-revision declares NO payload `state` (schema/knowledge/
+  // analysis-revision.schema.yaml:12 unevaluatedProperties:false; not in
+  // registry-kinds.registry.yaml kinds; the execute path gates only the
+  // engine), so `before.state === 'draft'` is false BY CONSTRUCTION for this
+  // kind and no draft->active transition exists to perform. The GATEFIX2
+  // version's try/catch here was fail-open (a hypothetical PUT of a
+  // schema-invalid payload would have been swallowed and the script
+  // proceeded). GATEFIX3: the branch is a defensive no-op — if the kind ever
+  // DID carry state=draft, we throw (fail-closed) rather than PUT or
+  // hand-forge anything.
   const before = payloadOf((await apiCall(`/api/records/${recordId}`)).json);
-  log(`new revision state as-created: ${JSON.stringify(before.state ?? null)} lifecycleId=${JSON.stringify(before.lifecycleId ?? null)}`);
+  const asCreatedState = before.state === undefined ? null : before.state;
+  const asCreatedLifecycleId = before.lifecycleId === undefined ? null : before.lifecycleId;
+  log(`new revision state as-created: ${JSON.stringify(asCreatedState)} lifecycleId=${JSON.stringify(asCreatedLifecycleId)}`);
   let transitioned = false;
   let transitionNote = '';
   if (before.state === 'draft') {
-    const next = { ...before, state: 'active' };
-    try {
-      await apiCall(`/api/records/${recordId}`, { method: 'PUT', body: { payload: next, message: `FAME-8 GATEFIX2 D1: transition ${recordId} draft -> active` } });
-      const after = payloadOf((await apiCall(`/api/records/${recordId}`)).json);
-      if (after.state !== 'active') throw new Error(`read-back state is ${JSON.stringify(after.state)} after PUT (expected active)`);
-      transitioned = true;
-      transitionNote = 'PUT draft->active accepted + read-back proves state=active';
-    } catch (e) {
-      transitionNote = `PUT draft->active refused (${e.message})`;
-    }
+    throw new Error(
+      `unexpected: analysis-revision ${recordId} as-created payload.state === 'draft' — this kind declares no payload state (schema/knowledge/analysis-revision.schema.yaml:12); refusing to transition/hand-forge (fail-closed)`,
+    );
   } else {
-    transitionNote = `revision as-created state is ${JSON.stringify(before.state ?? null)} (analysis-revision is NOT lifecycle-managed — not in registry-kinds.registry.yaml kinds; source ANREV-000016 carries no state and executes fine; analysisRunner.ts execute gates only the engine) — no transition required`;
+    transitionNote = `no transition exists to perform: the transition arm was NOT entered (payload state as-created = ${JSON.stringify(asCreatedState)} — absent, because analysis-revision declares no payload 'state' (schema/knowledge/analysis-revision.schema.yaml:12 unevaluatedProperties:false, no state property; kind not in registry-kinds.registry.yaml kinds; the execute path gates only the engine, never a revision state)). The GATEFIX2 'transition step' was a defensive no-op that could never be entered for this kind; no PUT was sent and none is required — no hand-forged records, no schema-invalid payload`;
   }
   log(`transition: ${transitionNote}`);
 
@@ -206,6 +224,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error('FAME-8-GATEFIX2 BLOCKED ' + e.message);
+  console.error('FAME-8-GATEFIX3 BLOCKED ' + e.message);
   process.exit(1);
 });

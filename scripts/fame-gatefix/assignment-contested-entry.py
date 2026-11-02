@@ -80,8 +80,19 @@ FLAG_SATURATED = "UNRECOVERABLE_SATURATED"
 # e.g. CONTESTED_CLAIM:Methyl hexanoate (6:0 FAME) - FAME-2 standard peak 1 (tentative)|CHEBI:143577|provisional
 # Pure row data: it changes NO attribution / area / percent / bucket / eligibility
 # (the only flags-driven observables are FLAG_OVERLAP / FLAG_SATURATED, which this
-# flag never equals). The FAME-2 declared labels are pipe-free, so the three
-# pipe-separated fields parse unambiguously.
+# flag never equals).
+# CONTRACT (machine-readable, ENFORCED): exactly 3 pipe-separated fields,
+# positionally parseable — (1) losing label, (2) losing compound_ref id,
+# (3) losing assignment_state — and NO field may contain '|'. The label is FREE
+# operator text: the revision's parameterSchema declares only
+# {type: string, minLength: 1} for it (no pipe-free constraint), so the
+# precondition is ENFORCED at the emission point, not assumed — a losing claim
+# whose label, compound_ref id, or assignment_state contains '|' REJECTS the
+# run with CODE_PARAM_INVALID naming the offending entry + field (the same
+# declared failure class the script uses for invalid parameters). No silent
+# escape or mutation of the declared value is ever written into a flag.
+# (GATEFIX3 Defect 2: replaces the GATEFIX2 prose "the FAME-2 declared labels
+# are pipe-free" — an unvalidated assumption the parameterSchema did not back.)
 
 # Declared reason codes for the zero/compromised denominator non-result —
 # module-style REASON_* constants with UNDEFINED_* values, the shipped
@@ -333,16 +344,39 @@ def run(ctx) -> None:  # noqa: ANN001 — ctx is the SDK Context (ctx.py:223)
             if i in claimant:
                 earlier = claimant[i]
                 if earlier != ti:
-                    # FAME-8 GATEFIX2 D1: make the losing claim machine-readable ROW
-                    # DATA — append a CONTESTED_CLAIM flag (format: the FLAG_* block
-                    # above) to the WINNER row's flags, one per losing claim. Pure row
-                    # data: no attribution / area / percent / bucket / eligibility
+                    # FAME-8 GATEFIX2 D1 (+ GATEFIX3 Defect 2): make the losing
+                    # claim machine-readable ROW DATA — append a CONTESTED_CLAIM
+                    # flag (contract: the FLAG_* block above) to the WINNER
+                    # row's flags, one per losing claim. Pure row data: no
+                    # attribution / area / percent / bucket / eligibility
                     # changes (this flag != FLAG_OVERLAP / FLAG_SATURATED).
+                    # The 3-field pipe contract is ENFORCED HERE (not assumed):
+                    # the parameterSchema declares the label as free text
+                    # ({type: string, minLength: 1}), so a '|' in ANY field of
+                    # the losing claim would make the flag positionally
+                    # unparseable — reject the run naming the offender instead
+                    # of silently escaping/mutating the declared value.
+                    _loser = assignments[ti]
+                    for _field_name, _field_val in (
+                        ("label", _loser["label"]),
+                        ("compound_ref.id", _loser["compound_ref"]["id"]),
+                        ("assignment_state", _loser["assignment_state"]),
+                    ):
+                        if "|" in str(_field_val):
+                            raise EntryError(
+                                CODE_PARAM_INVALID,
+                                "assignment "
+                                f"{ti} ('{_loser['label']}') field '{_field_name}' "
+                                f"(value {str(_field_val)!r}) contains '|' — the CONTESTED_CLAIM flag "
+                                f"is a 3-field pipe-separated contract (label|compound_ref id|assignment_state) "
+                                f"and a pipe in any field would make it positionally unparseable "
+                                f"(peak row {peaks[i][0]} is contested between assignment {earlier} "
+                                f"and assignment {ti}); rewrite the declared entry value without a pipe",
+                            )
                     _winner_row = peaks[i][1]
                     _wf = _winner_row.get("flags")
                     _wf = _wf if isinstance(_wf, list) else []
                     _wf = list(_wf)  # fresh list — never alias the source row's flags
-                    _loser = assignments[ti]
                     _wf.append(
                         "CONTESTED_CLAIM:{}|{}|{}".format(
                             _loser["label"],
@@ -550,7 +584,7 @@ def run(ctx) -> None:  # noqa: ANN001 — ctx is the SDK Context (ctx.py:223)
                 _col("bucket", "string", None, ar_defs["bucket"]),
                 _col("area_pa_min", "number", "pA*min", ar_defs["area_pa_min"]),
                 _col("area_percent", "number", "% of eligible-set total", ar_defs["area_percent"]),
-                _col("flags", "string[]", None, "the row's flags as carried by the frozen peak_table (shipped reason codes) +, on a winner row under declared-order TARGET_WINDOW_OVERLAP precedence, one CONTESTED_CLAIM:<label>|<compound_ref id>|<assignment_state> flag per losing claim (FAME-8 GATEFIX2 D1: the previously-silent manual pick is now visible per-row)"),
+                _col("flags", "string[]", None, "the row's flags as carried by the frozen peak_table (shipped reason codes) +, on a winner row under declared-order TARGET_WINDOW_OVERLAP precedence, one CONTESTED_CLAIM:<label>|<compound_ref id>|<assignment_state> flag per losing claim (FAME-8 GATEFIX2 D1: the previously-silent manual pick is now visible per-row). CONTRACT (GATEFIX3 Defect 2): the CONTESTED_CLAIM flag is EXACTLY 3 pipe-separated fields — (1) losing label, (2) losing compound_ref id, (3) losing assignment_state — and NO field may contain '|'; the label is free operator text (the parameterSchema declares only {type: string, minLength: 1}), so the entry ENFORCES this at the emission point and rejects the run with CODE_PARAM_INVALID naming the offending entry + field rather than silently escaping or mutating a declared value"),
             ],
             "rows": result_rows,
         },
