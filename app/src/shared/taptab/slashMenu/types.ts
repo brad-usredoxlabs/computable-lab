@@ -63,19 +63,25 @@ export interface SlashSuggestion {
   pinBottom?: boolean
   /**
    * L2-CLARIFY-PICKER-1 P1: whether this row may hold the FOCUSED (keyboard)
-   * default. Derived from the data-declared candidate_ranking `can_be_default`
-   * flag for the row's family — a composition row is NEVER defaultable
-   * (the W1 bug: Enter on the opened list committed a composition). The focus
-   * default is enforced against THIS flag, never label shape. Absent (no
-   * ranking declared) or `true` = defaultable; `false` = the first-defaultable
-   * focus skips it.
+   * default. The defaultability decision is the DATA flag ONLY: it is the
+   * registry's `candidate_ranking.families.<family>.can_be_default` for the
+   * row's family (the label shape only CLASSES the family; it never decides
+   * defaultability). A composition row's never-default behavior comes from
+   * the data — the shipped YAML declares `can_be_default: false` for the
+   * `composition` family (the W1 bug: Enter on the opened list committed a
+   * composition); a family the data declares `can_be_default: true`, or a
+   * family whose flag is ABSENT, is defaultable. Absent (no ranking
+   * declared) or `true` = defaultable; `false` = the first-defaultable focus
+   * skips the row.
    */
   canBeDefault?: boolean
   /**
    * L2-CLARIFY-PICKER-1 P2: the per-row commit-consequence line — what picking
-   * this row BINDS, generated from the row's own record (no new chrome). e.g.
+   * this row BINDS, generated from the row's own record (no new chrome) by
+   * `consequenceFor` (./clarifyPickerRanking) using the ONE shared kind-word
+   * vocabulary (./tokens `ANSWER_KIND_WORD` / `KIND_WORD`). e.g.
    * `binds material record MAT-dmem-ykg0 "DMEM" (concept)` vs
-   * `binds material-spec MSP-… (composition of 6 components)`. Rendered inline
+   * `binds formulation MSP-… (composition of 6 components)`. Rendered inline
    * so the W3 hover-card unreachability stops mattering. Absent when the row
    * carries no bindable record (e.g. the mint floor).
    */

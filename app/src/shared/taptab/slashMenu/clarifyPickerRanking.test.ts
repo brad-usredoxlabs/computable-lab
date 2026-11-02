@@ -117,6 +117,42 @@ describe('L2-CLARIFY-PICKER-1 — P1 intent-ranking comparator (18-row DMEM)', (
     expect(section!.sectionLabel).toMatch(/^contains "DMEM" \(\d+\)$/)
   })
 
+  it('the contains count is the POST-DEDUPE rendered count: duplicate display labels do not inflate it (advc-c2 DEFECT 3)', () => {
+    // Three rows sit in the contains band; two carry the SAME display label
+    // (the downstream label dedupe — the same `menuLabelKey` the resolver
+    // uses — drops the second). The section count must be the number of
+    // rows that ACTUALLY RENDER in the band (2 unique display labels), not
+    // the pre-dedupe band length (3): the pre-dedupe mutant
+    // (`contains.length`) emits `contains "DMEM" (3)` and fails this pin.
+    const fixture: MaterialCandidateItem[] = [
+      { recordId: 'MAT-d-a', kind: 'material', title: 'DMEM', category: 'concept-only' },
+      { recordId: 'MAT-d-b', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+      { recordId: 'MAT-d-c', kind: 'material', title: 'Low-glucose DMEM', category: 'concept-only' },
+      // DUPLICATE display label of the row above (different record): dropped
+      // by the downstream dedupe — must not count in the section label.
+      { recordId: 'MAT-d-dup', kind: 'material', title: 'Low-glucose DMEM', category: 'concept-only' },
+    ]
+    const rows = materialCandidates(fixture, 'DMEM', DECLARED)
+    // Equality band: the exact 'DMEM' match leads.
+    expect(rows[0]?.label).toBe('DMEM')
+    const section = rows.find((r) => r.sectionLabel)
+    // Exactly ONE section row carries the label — the FIRST rendered
+    // contains row. Count = 2 (post-dedupe), not 3 (pre-dedupe band length).
+    expect(section!.sectionLabel).toBe('contains "DMEM" (2)')
+    expect(rows.filter((r) => r.sectionLabel !== undefined)).toHaveLength(1)
+    // Within the band all rows share the declared family (rank 4), so
+    // localeCompare orders them: 'Low-glucose DMEM' < 'Thermo DMEM'. The
+    // duplicate row still renders (dedupe is the RESOLVER's; the comparator
+    // never hides a candidate) — it carries NO section label and does not
+    // inflate the count.
+    expect(rows.map((r) => r.label)).toEqual([
+      'DMEM',
+      'Low-glucose DMEM',
+      'Low-glucose DMEM',
+      'Thermo DMEM',
+    ])
+  })
+
   it('orders equality > contains > family rank, with the localeCompare tie-break preserved', () => {
     const rows = materialCandidates(DMEM, 'DMEM', DECLARED)
     const order = rows.map((r) => r.label)
@@ -229,40 +265,49 @@ describe('L2-CLARIFY-PICKER-1 — P1 intent-ranking comparator (18-row DMEM)', (
     expect(compositionRow!.canBeDefault).toBe(true)
   })
 
-  it('an UNDECLARED family gets NO rank: it keeps input order; declared families keep the declared rank (advc-c1 DEFECT 2)', () => {
-    // A new MaterialSearchItem['category'] the YAML does not name must not
-    // silently sort to the TOP (the deleted table sent it to the BOTTOM via
-    // `?? 10`; the prior fix sent it to the top via `?? 0`). Convention: the
-    // undeclared family keeps the comparator's INPUT order, and every declared
-    // family keeps its declared rank relative to it — stated in the YAML
-    // comment, no magic integer in TS.
+  it('an UNDECLARED family is NON-RANKED: it lands AFTER all declared rows and keeps its RELATIVE INPUT ORDER (advc-c1 DEFECT 2 / orch ruling)', () => {
+    // A new MaterialSearchItem['category'] the YAML does not name is never
+    // given a rank. The comparator partitions the band: the declared rows
+    // sort by (family rank, title.localeCompare); the undeclared rows keep
+    // their RELATIVE INPUT ORDER and are placed AFTER all declared rows of
+    // the band. The fixture is the reviewer's inversion case — an undeclared
+    // family FIRST in the input, a declared family (rank 4) second — so the
+    // fabricated-rank fallbacks each produce a DISTINCT wrong output:
+    //   `?? 0`          => 'X one' at rank 0 sorts BEFORE rank 4  (X one first)
+    //   `?? inputIndex` => 'C one' (idx 1) before 'X two' (idx 2)  (X one, C one, X two)
+    //   non-ranked (correct) => 'C one' first, then 'X one', 'X two'
     const policy: CandidateRankingPolicy = {
       containsSectionLabel: 'contains "{label}" ({count})',
       families: { 'concept-only': { rank: 4, canBeDefault: true } },
     }
     const rows = materialCandidates(
       [
-        // undeclared family, first in the input.
+        // undeclared family, FIRST in the input (index 0 — the `?? inputIndex`
+        // top-sort probe: index 0 is the smallest rank it could fabricate).
         { recordId: 'MAT-x1', kind: 'material', title: 'X one', category: 'future-category' },
-        // declared family (rank 4).
+        // declared family (rank 4), second in the input.
         { recordId: 'MAT-c1', kind: 'material', title: 'C one', category: 'concept-only' },
-        // undeclared family, second in the input.
+        // undeclared family, third in the input.
         { recordId: 'MAT-x2', kind: 'material', title: 'X two', category: 'future-category' },
       ],
       'zzz',
       policy,
     )
-    // All non-matching (band 4). The two undeclared rows keep their INPUT
-    // relative order (X one before X two); the declared row keeps its
-    // declared rank. No magic 0/10 reorders the undeclared rows relative to
-    // each other or fabricates a rank for them.
-    expect(rows.map((r) => r.label).join('|')).toContain('X one')
-    const undeclared = rows
-      .map((r, i) => ({ r, i }))
-      .filter(({ r }) => r.family === 'future-category')
-      .map(({ i }) => i)
-    expect(undeclared).toHaveLength(2)
-    expect(undeclared[0]).toBeLessThan(undeclared[1])
+    // All three rows are non-matching (band 4: below the contains section).
+    // The FULL ordered label list is the assertion — the declared row sorts
+    // by its declared rank (rank 4 is the only declared rank, so it leads),
+    // then the undeclared rows in RELATIVE INPUT ORDER (X one before X two —
+    // the input order is the ONLY ordering they receive).
+    expect(rows.map((r) => r.label)).toEqual(['C one', 'X one', 'X two'])
+    // The undeclared rows land AFTER the declared row and keep their
+    // relative input order (pinned by the full list; the filter view is the
+    // explicit declared-vs-undeclared assertion).
+    const declared = rows.filter((r) => r.family === 'concept-only').map((r) => r.label)
+    const undeclared = rows.filter((r) => r.family === 'future-category').map((r) => r.label)
+    expect(declared).toEqual(['C one'])
+    expect(undeclared).toEqual(['X one', 'X two'])
+    expect(rows[declared.length + 0]?.label).toBe('X one')
+    expect(rows[declared.length + 1]?.label).toBe('X two')
   })
 })
 

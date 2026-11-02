@@ -34,12 +34,18 @@
  * is no fallback table, ever — no rank integer survives in this file.
  *
  * ABSENT family (a row's family is not in the declared table — e.g. a new
- * MaterialSearchItem['category'] the YAML does not name) => NO rank for that
- * family: the row keeps the comparator's INPUT order (stable sort, no
- * fabricated rank). Declared families keep their declared rank relative to
- * it. This convention is declared in the YAML `candidate_ranking` comment —
- * no magic integer in TS (the deleted `?? 10` sent the unknown to the bottom;
- * the interim `?? 0` sent it to the top; both were silent policy in TS).
+ * MaterialSearchItem['category'] the YAML does not name) => NON-RANKED: the
+ * comparator partitions each band into the DECLARED rows (family has a
+ * `policy.families` entry) and the UNDECLARED rows. The declared rows sort by
+ * the existing band comparator (equality band, contains band, family rank,
+ * `title.localeCompare`); the undeclared rows are NEVER ranked against them
+ * (no numeric rank is ever fabricated in TS for an undeclared family) — they
+ * keep their RELATIVE INPUT ORDER (stable sort) and are placed AFTER all
+ * declared rows of the band. This convention is declared in ONE YAML comment
+ * next to the `candidate_ranking` block — no magic integer in TS (the deleted
+ * `?? 10` sent the unknown to the bottom; the interim `?? 0` / `?? inputIndex`
+ * fabricated a rank it compared numerically against the declared 0-4; both
+ * were silent policy in TS).
  */
 import { ANSWER_KIND_WORD, KIND_WORD, menuLabelKey } from './tokens'
 
@@ -209,13 +215,20 @@ export function materialCandidates(
   }
 
   const nounLower = noun.trim().toLowerCase()
-  // ABSENT family (not in the declared table) => NO rank: the row keeps the
-  // comparator's INPUT order (the stable-sort convention — the index IS the
-  // rank), so a family the YAML does not name can never silently sort to the
-  // top or the bottom. Declared families keep their declared rank relative to
-  // it (the convention is stated in the YAML comment; no magic integer here).
-  const rankOf = (family: string, inputIndex: number): number =>
-    policy.families[family]?.rank ?? inputIndex
+  // NON-RANKED convention (advc-c1 DEFECT 2 / orch ruling): a family the
+  // declared table does NOT name is never ranked. The comparator partitions
+  // each band into the DECLARED rows (family has a `policy.families` entry)
+  // and the UNDECLARED rows; the declared rows sort by the band comparator
+  // (family rank, `title.localeCompare`) and the undeclared rows are placed
+  // AFTER all declared rows of the band, keeping their RELATIVE INPUT ORDER
+  // (stable sort). No numeric rank is ever fabricated in TS for an undeclared
+  // family — the deleted `?? 10` and the interim `?? 0` / `?? inputIndex`
+  // each invented one and compared it numerically against the declared 0-4.
+  // The convention is stated in ONE YAML comment next to the
+  // `candidate_ranking` block (schema/lab/material-profile.registry.yaml);
+  // no magic integer lives here.
+  const isDeclared = (family: string): boolean =>
+    policy.families[family] !== undefined
   // The defaultability decision comes ONLY from the data flag — never label
   // shape, never a TS backstop (advc-c1 DEFECT 1 / orch ruling). The label
   // shape (familyOf) only CLASSES the row's family; the declaration decides
@@ -283,18 +296,28 @@ export function materialCandidates(
       : undefined
 
   // Band order: equality, then the contains section, then the non-matching
-  // rows (declared-rank order) below it. Within a band: family rank, then
-  // localeCompare (today's tie-break, preserved). The stable sort keeps the
-  // INPUT order between equal ranks — which is how the undeclared family keeps
-  // its input order (rankOf => inputIndex).
+  // rows (declared-rank order) below it. Within a band: the declared rows sort
+  // by family rank, then localeCompare (today's tie-break, preserved); the
+  // undeclared rows are NON-RANKED — after every declared row of the band, in
+  // their RELATIVE INPUT ORDER (no numeric rank fabricated, see `isDeclared`
+  // above and the YAML `candidate_ranking` comment).
   const compare = (
     a: { item: MaterialCandidateItem; index: number },
     b: { item: MaterialCandidateItem; index: number },
   ): number => {
-    const fa = familyOf(a.item)
-    const fb = familyOf(b.item)
-    const ra = rankOf(fa, a.index)
-    const rb = rankOf(fb, b.index)
+    const da = isDeclared(familyOf(a.item))
+    const db = isDeclared(familyOf(b.item))
+    if (da !== db) return da ? -1 : 1
+    if (!da) {
+      // Two undeclared rows: NON-RANKED against each other — return 0 so the
+      // (guaranteed-stable) sort keeps their RELATIVE INPUT ORDER. No rank,
+      // no title reorder, no magic integer.
+      return 0
+    }
+    // Both declared: the declared family rank, then localeCompare (today's
+    // tie-break, preserved).
+    const ra = policy.families[familyOf(a.item)].rank
+    const rb = policy.families[familyOf(b.item)].rank
     if (ra !== rb) return ra - rb
     return a.item.title.localeCompare(b.item.title)
   }
