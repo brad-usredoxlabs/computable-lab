@@ -73,6 +73,33 @@ const DECLARING_REV = {
   },
 }
 
+/** D7: a slot that declares NO acceptsKinds (the Bind… kind options are
+ *  server-owned — the page must show no options beyond the placeholder). */
+const OPEN_KIND_REV = {
+  recordId: 'ANREV-TEST-OK-1',
+  payload: {
+    id: 'ANREV-TEST-OK-1',
+    title: 'TEST open-kind revision',
+    inputs: [
+      { name: 'open_table', dataKind: 'table', required: true },
+    ],
+  },
+}
+
+/** D9: TWO slots both accept the artifact name (one name-gated, one open) —
+ *  the "Use result downstream" stage must render the slot chooser. */
+const TWO_MATCH_REV = {
+  recordId: 'ANREV-TEST-2M-1',
+  payload: {
+    id: 'ANREV-TEST-2M-1',
+    title: 'TEST two-match revision',
+    inputs: [
+      { name: 'right_table', dataKind: 'table', required: true, acceptedArtifactNames: ['right_summary'] },
+      { name: 'open_table', dataKind: 'table', required: true },
+    ],
+  },
+}
+
 /** A legacy revision with NO inputs declaration (the OQ-3 skip — zero rows). */
 const LEGACY_REV = {
   recordId: 'ANREV-TEST-NS-1',
@@ -108,7 +135,7 @@ const DREF_RECORD = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(apiClient.listAnalysisRevisions).mockResolvedValue({ revisions: [DECLARING_REV, LEGACY_REV], total: 2 })
+  vi.mocked(apiClient.listAnalysisRevisions).mockResolvedValue({ revisions: [DECLARING_REV, LEGACY_REV, OPEN_KIND_REV, TWO_MATCH_REV], total: 4 })
   vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue({ runs: [], total: 0 })
   vi.mocked(apiClient.createAnalysisRun).mockResolvedValue({ success: true, recordId: 'ANR-TEST-NEW-1', run: {} })
 })
@@ -176,11 +203,12 @@ describe('D2 — Bind… stages the FROZEN IDENTITY before submit; the createRun
     fireEvent.change(screen.getByTestId('analysis-declared-input-type-right_table'), { target: { value: 'analysis-output-artifact' } })
     fireEvent.click(screen.getByTestId('analysis-declared-input-bind-right_table'))
 
-    // The STAGED FROZEN IDENTITY renders before submit (artifact + DREF +
-    // producer run + contentSha + contentHash).
+    // The STAGED FROZEN IDENTITY renders before submit (manual Bind keeps the
+    // TYPED artifact ref in the body — the DREF id, producer run and
+    // contentHash stay visible in the identity line).
     await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-right_table')).not.toBeNull(), { timeout: 4000 })
     const stagedText = screen.getByTestId('analysis-declared-input-staged-right_table').textContent ?? ''
-    expect(stagedText).toContain('AOUT-TEST-9')
+    expect(stagedText).toContain('AOUT-TEST-9 (analysis-output-artifact)')
     expect(stagedText).toContain('DREF DREF-TEST-7')
     expect(stagedText).toContain('producer run ANR-TEST-PROD')
     expect(stagedText).toContain('contentHash deadbeef')
@@ -192,7 +220,10 @@ describe('D2 — Bind… stages the FROZEN IDENTITY before submit; the createRun
     await waitFor(() => expect(screen.queryByTestId('analysis-inputs-blocked')).toBeNull(), { timeout: 4000 })
     expect((screen.getByTestId('analysis-run-create-btn') as HTMLButtonElement).disabled).toBe(false)
 
-    // Submit: the body CONTAINS the bound refs (the exact wire shape).
+    // Submit: the body CONTAINS the bound refs (the exact wire shape). The
+    // manual bind stages the TYPED ref — right_table binds the artifact id;
+    // the DREF-for-that-slot pin lives on the "Use result downstream" path
+    // (D1 fix cycle 1, below).
     fireEvent.click(screen.getByTestId('analysis-run-create-btn'))
     await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1), { timeout: 4000 })
     const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as { inputs: Record<string, { kind: string; id: string; type: string }> }
@@ -200,7 +231,6 @@ describe('D2 — Bind… stages the FROZEN IDENTITY before submit; the createRun
       left_table: { kind: 'record', id: 'DREF-TEST-7', type: 'data-reference' },
       right_table: { kind: 'record', id: 'AOUT-TEST-9', type: 'analysis-output-artifact' },
     })
-    expect(body.inputs.right_table.id).toBe('AOUT-TEST-9')
   })
 
   it('blocks the button (named line) when a staged ref type violates the slot acceptsKinds', async () => {
@@ -263,13 +293,31 @@ describe('D3 — "Use result downstream" promotes and stages into the accepting 
     // frozen identity renders on the card (no auto-submit — the user presses
     // Create run).
     await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-right_table')).not.toBeNull(), { timeout: 4000 })
+    // D1 fix cycle 1: the staged ref IS the DREF (the run body will contain
+    // it); the artifact id stays in the FROZEN-IDENTITY display.
     const stagedText = screen.getByTestId('analysis-declared-input-staged-right_table').textContent ?? ''
-    expect(stagedText).toContain('AOUT-TEST-9')
-    expect(stagedText).toContain('DREF DREF-TEST-7')
+    expect(stagedText).toContain('DREF-TEST-7 (data-reference)')
+    expect(stagedText).toContain('artifact AOUT-TEST-9')
+    expect(stagedText).toContain('producer run ANR-TEST-PROD')
+    expect(stagedText).toContain('contentHash deadbeef')
     const outcome = (await waitFor(() => screen.getByTestId('analysis-staged-promote-result'))) as HTMLElement
     expect(outcome.textContent).toContain("slot 'right_table'")
+    expect(outcome.textContent).toContain('DREF-TEST-7')
     expect(vi.mocked(apiClient.promoteAnalysisArtifact)).toHaveBeenCalledTimes(1)
-    expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+    // Bind the other required slot (left_table, admits data-reference) with
+    // the same DREF so the pre-submit gate clears — then the Create body must
+    // pin the DREF for the routed slot.
+    fireEvent.change(screen.getByTestId('analysis-declared-input-id-left_table'), { target: { value: 'DREF-TEST-7' } })
+    fireEvent.click(screen.getByTestId('analysis-declared-input-bind-left_table'))
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-left_table')).not.toBeNull(), { timeout: 4000 })
+    await waitFor(() => expect(screen.queryByTestId('analysis-inputs-blocked')).toBeNull(), { timeout: 4000 })
+    // The staged body (what Create run would send) binds the DREF, not the AOUT id.
+    fireEvent.click(screen.getByTestId('analysis-run-create-btn'))
+    await waitFor(() => expect(apiClient.createAnalysisRun).toHaveBeenCalledTimes(1), { timeout: 4000 })
+    const body = vi.mocked(apiClient.createAnalysisRun).mock.calls[0][0] as { inputs: Record<string, { id: string; type: string }> }
+    expect(body.inputs.right_table).toEqual({ kind: 'record', id: 'DREF-TEST-7', type: 'data-reference' })
+    expect(body.inputs.left_table).toEqual({ kind: 'record', id: 'DREF-TEST-7', type: 'data-reference' })
+    expect(JSON.stringify(body.inputs)).not.toContain('AOUT-TEST-9')
   })
 
   it('names the 0-match case when no declared slot accepts the artifact (no silent drop)', async () => {
@@ -307,5 +355,94 @@ describe('D3 — "Use result downstream" promotes and stages into the accepting 
     }, { timeout: 4000 })
     expect(screen.queryByTestId('analysis-declared-input-staged-right_table')).toBeNull()
     expect(apiClient.createAnalysisRun).not.toHaveBeenCalled()
+  })
+})
+
+// --- D7 — the Bind… kind select is DATA-DERIVED (server-owned policy) --------
+
+describe('D7 — Bind… kind options derive from the slot acceptsKinds (no page literals)', () => {
+  it('declares the kinds line per slot and renders no kind options beyond the declared set', async () => {
+    render(wrap(<AnalysisPage />))
+    await waitFor(() => expect(screen.queryByTestId('analysis-run-rev')).not.toBeNull(), { timeout: 4000 })
+    fireEvent.change(screen.getByTestId('analysis-run-rev'), { target: { value: 'ANREV-TEST-D-1' } })
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-left_table')).not.toBeNull(), { timeout: 4000 })
+    // The declared acceptsKinds line renders per row (OQ-4 #4): left_table
+    // declares data-reference; right_table declares nothing.
+    expect(screen.getByText(/kinds: data-reference/)).toBeDefined()
+    const rightRow = screen.getByTestId('analysis-declared-input-right_table')
+    expect(rightRow.textContent ?? '').not.toContain('kinds:')
+    // left_table's select offers ONLY the declared kind (a single option —
+    // not a hardcoded two-kind list).
+    const leftSelect = screen.getByTestId('analysis-declared-input-type-left_table') as HTMLSelectElement
+    expect(Array.from(leftSelect.options).map((o) => o.value)).toEqual(['data-reference'])
+  })
+
+  it('an undeclared slot offers no kind options (placeholder) and Bind infers the type from the record kind', async () => {
+    render(wrap(<AnalysisPage />))
+    await waitFor(() => expect(screen.queryByTestId('analysis-run-rev')).not.toBeNull(), { timeout: 4000 })
+    fireEvent.change(screen.getByTestId('analysis-run-rev'), { target: { value: 'ANREV-TEST-OK-1' } })
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-open_table')).not.toBeNull(), { timeout: 4000 })
+    // No acceptsKinds declared ⇒ the select shows only the placeholder
+    // option (no server-owned kinds beyond that).
+    const select = screen.getByTestId('analysis-declared-input-type-open_table') as HTMLSelectElement
+    expect(Array.from(select.options)).toHaveLength(1)
+    expect(Array.from(select.options)[0].value).toBe('')
+    // Bind with an empty select ⇒ the ref type is INFERRED from the record's
+    // own kind (DREF_RECORD declares kind: data-reference).
+    vi.mocked(apiClient.getRecord).mockResolvedValue(DREF_RECORD)
+    fireEvent.change(screen.getByTestId('analysis-declared-input-id-open_table'), { target: { value: 'DREF-TEST-7' } })
+    fireEvent.click(screen.getByTestId('analysis-declared-input-bind-open_table'))
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-open_table')).not.toBeNull(), { timeout: 4000 })
+    const staged = screen.getByTestId('analysis-declared-input-staged-open_table').textContent ?? ''
+    expect(staged).toContain('DREF-TEST-7 (data-reference)')
+  })
+})
+
+// --- D9 — the ≥2-match slot chooser (one button per matching slot) ----------
+
+describe('D9 — ≥2 matching slots render a per-slot chooser (the user picks)', () => {
+  it('renders a button per matching slot; picking one stages into that slot', async () => {
+    vi.mocked(apiClient.getAnalysisRun).mockResolvedValue({
+      record: {
+        recordId: 'ANR-TEST-LANDED',
+        payload: {
+          id: 'ANR-TEST-LANDED',
+          title: 'TEST landed run',
+          status: 'succeeded',
+          revisionRef: { id: 'ANREV-TEST-2M-1' },
+          inputs: {},
+          outputManifest: {
+            artifacts: [{ name: 'right_summary', dataKind: 'table', value: { columns: [], rows: [] } }],
+            views: [],
+            metrics: [],
+            artifactRefs: { right_summary: { artifactRecordId: 'AOUT-TEST-9' } },
+          },
+        },
+      },
+    } as never)
+    vi.mocked(apiClient.promoteAnalysisArtifact).mockResolvedValue({ success: true, artifactId: 'AOUT-TEST-9', dataReferenceId: 'DREF-TEST-7', created: true })
+    vi.mocked(apiClient.listAnalysisRuns).mockResolvedValue(landedRunList())
+    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => (id === 'AOUT-TEST-9' ? aoutRecord({ name: 'right_summary', dref: 'DREF-TEST-7' }) : DREF_RECORD))
+    render(wrap(<AnalysisPage />, '/analysis?run=ANR-TEST-LANDED'))
+    // Select the two-match revision (right_table names right_summary;
+    // open_table declares nothing — both accept the artifact).
+    await waitFor(() => expect(screen.queryByTestId('analysis-run-rev')).not.toBeNull(), { timeout: 4000 })
+    fireEvent.change(screen.getByTestId('analysis-run-rev'), { target: { value: 'ANREV-TEST-2M-1' } })
+    await waitFor(() => expect(screen.queryByTestId('analysis-promote-right_summary')).not.toBeNull(), { timeout: 4000 })
+    fireEvent.click(screen.getByTestId('analysis-promote-right_summary'))
+    // The chooser renders: the outcome line names the match + ONE BUTTON PER
+    // MATCHING SLOT (no auto-pick, no hand-typing).
+    await waitFor(() => expect(screen.queryByTestId('analysis-staged-chooser')).not.toBeNull(), { timeout: 4000 })
+    expect(screen.queryByTestId('analysis-staged-chooser-right_table')).not.toBeNull()
+    expect(screen.queryByTestId('analysis-staged-chooser-open_table')).not.toBeNull()
+    // Nothing is staged YET — the user must pick.
+    expect(screen.queryByTestId('analysis-declared-input-staged-right_table')).toBeNull()
+    expect(screen.queryByTestId('analysis-declared-input-staged-open_table')).toBeNull()
+    // Picking open_table stages there (open_table admits no kinds ⇒ the
+    // DREF ref binds; the body carries the DREF).
+    fireEvent.click(screen.getByTestId('analysis-staged-chooser-open_table'))
+    await waitFor(() => expect(screen.queryByTestId('analysis-declared-input-staged-open_table')).not.toBeNull(), { timeout: 4000 })
+    expect(screen.queryByTestId('analysis-declared-input-staged-right_table')).toBeNull()
+    expect(screen.queryByTestId('analysis-staged-chooser')).toBeNull()
   })
 })

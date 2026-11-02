@@ -32,9 +32,14 @@ export interface StagedInputRef {
   id: string
   type: string
   /** The promoted data-reference id, when the bound artifact is DREF-backed
-   *  (the frozen identity the page shows before submit — bait #9's answer). */
+   *  (the frozen identity the page shows before submit — bait #9's answer).
+   *  ABSENT when `id`/`type` already IS the DREF (the FAME-7 promote-route
+   *  stages the DREF ref itself — the run body then CONTAINS the DREF). */
   dataReferenceId?: string
-  /** Producer-run frozen identity shown before submit (artifact arm only). */
+  /** The producer ARTIFACT record id, when `id` is the promoted DREF (the
+   *  frozen identity keeps the artifact id visible before submit — D1). */
+  producerArtifactId?: string
+  /** Producer-run frozen identity shown before submit. */
   producerRunId?: string
   producerContentSha?: string
   /** The promoted artifact's DREF contentHash (the stored-bytes digest the

@@ -408,6 +408,8 @@ export function AnalysisPage() {
   const declaredInputs = useMemo(() => declaredInputsOf(selectedRev ? selectedRev.payload : undefined), [selectedRev])
   useEffect(() => {
     setStagedInputs({})
+    setPendingStage(null)
+    setStagedPromote(null)
   }, [selectedRevId])
   // The createRun body's `inputs` value (the W5d fix: the built object, never
   // a hardcoded `{}`) + the pre-submit gate (named block lines; the server's
@@ -473,16 +475,100 @@ export function AnalysisPage() {
   const [promoteResult, setPromoteResult] = useState<string | null>(null)
   // FAME-7 (W5e): the staged-binding outcome (a named visible line — success
   // names the STAGED slot + its frozen identity; the 0-match case names the
-  // artifact and that no declared slot accepts it; the ≥2 case names the slots
-  // to pick from). No silent drop, no auto-submit: the user still presses
-  // Create run with the frozen identity visible on the card.
+  // artifact and that no declared slot accepts it; the ≥2 case names the
+  // slots to pick from). No silent drop, no auto-submit: the user still
+  // presses Create run with the frozen identity visible on the card.
   const [stagedPromote, setStagedPromote] = useState<string | null>(null)
+  // D9 (fix cycle 1): a "Use result downstream" stage with ≥2 matching
+  // declared slots — the user picks via the rendered chooser (one button per
+  // matching slot). No auto-pick, no dead "hand-type Bind…" line.
+  const [pendingStage, setPendingStage] = useState<{
+    artifactRecordId: string
+    artifactName: string | undefined
+    matches: string[]
+  } | null>(null)
+
+  // FAME-7 (W5e): stage a promoted artifact into ONE named declared slot —
+  // the SAME staging state the manual Bind… uses (one createRun body).
+  //
+  // D1 (fix cycle 1): when the promoted artifact carries a DREF and the
+  // slot admits 'data-reference' (declared acceptsKinds, or no declared
+  // narrowing — the server's config inputKinds policy is the authority),
+  // the staged ref IS the DREF: {kind:'record', id:<DREF>, type:
+  // 'data-reference'} — the createRun body CONTAINS the DREF (OQ-1 #5 / the
+  // AC "request body CONTAINS the DREF"). The artifact id / producer run /
+  // contentSha stay in the FROZEN-IDENTITY display (not in the body ref).
+  // When the slot declares acceptsKinds WITHOUT data-reference, the
+  // artifact ref is staged instead and the DREF id stays display-only.
+  const stagePromotedInto = useCallback(async (artifactRecordId: string, slot: string) => {
+    setStagingBusy(true)
+    setError(null)
+    setPendingStage(null)
+    try {
+      const env = await apiClient.getRecord(artifactRecordId)
+      const payload = env.payload as {
+        name?: string
+        runRef?: { id?: string }
+        dataReferenceRef?: { id?: string }
+      }
+      const drefId = payload.dataReferenceRef?.id
+      const slotDecl = declaredInputs.find((d) => d.name === slot)
+      const admitsDref = !slotDecl?.acceptsKinds || slotDecl.acceptsKinds.length === 0
+        || slotDecl.acceptsKinds.includes('data-reference')
+      if (drefId && admitsDref) {
+        // The DREF ref is the binding; fetch the DREF's contentHash for the
+        // frozen-identity display (the immutability leg re-verifies it).
+        let contentHash: string | undefined
+        try {
+          const denv = await apiClient.getRecord(drefId)
+          const dh = denv.payload as { contentHash?: string }
+          if (typeof dh.contentHash === 'string') contentHash = dh.contentHash
+        } catch {
+          // the contentHash display is best-effort; the ref is still valid
+        }
+        const ref: StagedInputRef = {
+          kind: 'record',
+          id: drefId,
+          type: 'data-reference',
+          producerArtifactId: artifactRecordId,
+          ...(payload.runRef?.id ? { producerRunId: payload.runRef.id } : {}),
+          ...(env.meta?.contentSha ? { producerContentSha: env.meta.contentSha } : {}),
+          ...(contentHash ? { contentHash } : {}),
+        }
+        setStagedInputs((prev) => ({ ...prev, [slot]: ref }))
+        setStagedPromote(
+          `Staged DREF ${drefId} (artifact ${artifactRecordId}) into slot '${slot}' — ` +
+          'the run body binds the DREF; the frozen identity is shown on the Run method card; ' +
+          'press Create run.',
+        )
+        return
+      }
+      const ref: StagedInputRef = {
+        kind: 'record',
+        id: artifactRecordId,
+        type: 'analysis-output-artifact',
+        ...(drefId ? { dataReferenceId: drefId } : {}),
+        ...(payload.runRef?.id ? { producerRunId: payload.runRef.id } : {}),
+        ...(env.meta?.contentSha ? { producerContentSha: env.meta.contentSha } : {}),
+      }
+      setStagedInputs((prev) => ({ ...prev, [slot]: ref }))
+      setStagedPromote(
+        `Staged artifact '${payload.name ?? artifactRecordId}' into slot '${slot}'` +
+        (drefId ? ` (promoted as ${drefId} — the slot does not admit data-reference, so the body binds the artifact)` : '') +
+        ' — the frozen identity is shown on the Run method card; press Create run to bind it.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStagingBusy(false)
+    }
+  }, [declaredInputs])
 
   // FAME-7 (W5e): route a promoted artifact INTO the Run-method card's
-  // declared-input staging (the SAME path the manual Bind… uses — one staging
-  // state, one createRun body). Matching is DECLARED-DATA (the slot's
-  // acceptedArtifactNames ∋ the artifact's own `name` + the slot admits the
-  // artifact record kind) — never a hardcoded name.
+  // declared-input staging (the SAME path the manual Bind… uses — one
+  // staging state, one createRun body). Matching is DECLARED-DATA (the
+  // slot's acceptedArtifactNames ∋ the artifact's own `name` + the slot
+  // admits the artifact record kind) — never a hardcoded name.
   const stageInput = useCallback(async (artifactRecordId: string, artifactName: string | undefined, dataReferenceId: string | undefined) => {
     setStagingBusy(true)
     try {
@@ -505,31 +591,21 @@ export function AnalysisPage() {
         return
       }
       if (matches.length >= 2) {
+        // D9 (fix cycle 1): render the slot chooser — the user picks (W5e:
+        // "If ≥2 declared slots match, the user picks").
         setStagedPromote(
-          `Multiple declared slots accept artifact '${payload.name ?? artifactRecordId}': ${matches.join(', ')} — pick a slot on the Run method card (Bind… the artifact id, or use its staged name).`,
+          `Multiple declared slots accept artifact '${payload.name ?? artifactRecordId}': ${matches.join(', ')} — pick a slot below.`,
         )
+        setPendingStage({ artifactRecordId, artifactName, matches })
         return
       }
-      const slot = matches[0]
-      const ref: StagedInputRef = {
-        kind: 'record',
-        id: artifactRecordId,
-        type: 'analysis-output-artifact',
-        ...(drefId ? { dataReferenceId: drefId } : {}),
-        ...(payload.runRef?.id ? { producerRunId: payload.runRef.id } : {}),
-      }
-      setStagedInputs((prev) => ({ ...prev, [slot]: ref }))
-      setStagedPromote(
-        `Staged artifact '${payload.name ?? artifactRecordId}' into slot '${slot}'` +
-        (drefId ? ` (promoted as ${drefId})` : '') +
-        ' — the frozen identity is shown on the Run method card; press Create run to bind it.',
-      )
+      await stagePromotedInto(artifactRecordId, matches[0])
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setStagingBusy(false)
     }
-  }, [declaredInputs])
+  }, [declaredInputs, stagePromotedInto])
 
   const useResult = useCallback(async (name: string) => {
     const ref = artifactRefs[name]
@@ -563,15 +639,30 @@ export function AnalysisPage() {
       // getRecord returns the RecordEnvelope directly (client.ts L2398).
       const env = await apiClient.getRecord(id)
       const payload = env.payload as {
+        kind?: string
         runRef?: { id?: string }
         dataReferenceRef?: { id?: string }
         dataKind?: string
         contentHash?: string
       }
+      // D7 (fix cycle 1): a slot that declares NO acceptsKinds shows no kind
+      // options (the server's config policy is the gate, not a page literal)
+      // — the Bind… select then leaves the type EMPTY and the ref type is
+      // INFERRED from the bound record's own `kind` (a record fact). The
+      // server still validates the type against its config gate and names any
+      // inadmissible kind on rejection.
+      const resolvedType = refType !== ''
+        ? refType
+        : (typeof payload.kind === 'string' && payload.kind !== '' ? payload.kind : '')
+      if (resolvedType === '') {
+        setError(`input '${slotName}': record ${id} has no resolvable record kind to bind (the slot declares no accepted kinds and the record declares no kind) — bind a record whose kind the method admits`)
+        setStagingBusy(false)
+        return
+      }
       const identity: InputIdentity = {
         ...(typeof payload.dataKind === 'string' ? { dataKind: payload.dataKind } : {}),
       }
-      if (refType === 'analysis-output-artifact') {
+      if (resolvedType === 'analysis-output-artifact') {
         if (payload.runRef?.id) identity.producerRunId = payload.runRef.id
         if (env.meta?.contentSha) identity.producerContentSha = env.meta.contentSha
         if (payload.dataReferenceRef?.id) {
@@ -584,7 +675,7 @@ export function AnalysisPage() {
       } else if (typeof payload.contentHash === 'string') {
         identity.contentHash = payload.contentHash
       }
-      const ref: StagedInputRef = { kind: 'record', id, type: refType, ...identity }
+      const ref: StagedInputRef = { kind: 'record', id, type: resolvedType, ...identity }
       setStagedInputs((prev) => ({ ...prev, [slotName]: ref }))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -863,6 +954,15 @@ export function AnalysisPage() {
             <div className="analysis__params-preview-label">Declared inputs (bind before creating the run):</div>
             {declaredInputs.map((slot) => {
               const staged = stagedInputs[slot.name]
+              // D7 (fix cycle 1): the Bind… kind options come from the slot's
+              // DECLARED acceptsKinds (server-owned policy — OQ-4 #4: the page
+              // does not load the config and never re-embeds the global set as
+              // TS literals). An undeclared slot shows no kind options: the
+              // placeholder leaves the type empty and Bind… infers it from
+              // the bound record's own `kind` (a record fact, not a policy
+              // duplicate); the server's config gate still names any
+              // inadmissible kind on rejection.
+              const slotKinds = slot.acceptsKinds && slot.acceptsKinds.length > 0 ? slot.acceptsKinds : null
               return (
                 <div key={slot.name} className="analysis__declared-input" data-testid={`analysis-declared-input-${slot.name}`}>
                   <span className="analysis__declared-input-name">{slot.name}{slot.required ? ' *' : ''}</span>
@@ -871,10 +971,14 @@ export function AnalysisPage() {
                     {slot.acceptedArtifactNames && slot.acceptedArtifactNames.length > 0
                       ? `accepts: ${slot.acceptedArtifactNames.join(', ')}`
                       : 'accepts: any declared artifact name'}
+                    {slot.acceptsKinds && slot.acceptsKinds.length > 0
+                      ? ` · kinds: ${slot.acceptsKinds.join(', ')}`
+                      : ''}
                   </span>
                   {staged ? (
                     <span className="analysis__declared-input-staged" data-testid={`analysis-declared-input-staged-${slot.name}`}>
                       {staged.id} ({staged.type})
+                      {staged.producerArtifactId ? ` · artifact ${staged.producerArtifactId}` : ''}
                       {staged.dataReferenceId ? ` · DREF ${staged.dataReferenceId}` : ''}
                       {staged.producerRunId ? ` · producer run ${staged.producerRunId}` : ''}
                       {staged.producerContentSha ? ` · contentSha ${staged.producerContentSha.slice(0, 12)}…` : ''}
@@ -891,18 +995,21 @@ export function AnalysisPage() {
                       />
                       <select
                         data-testid={`analysis-declared-input-type-${slot.name}`}
-                        defaultValue="data-reference"
+                        defaultValue={slotKinds ? slotKinds[0] : ''}
                         disabled={busy || stagingBusy}
                       >
-                        <option value="data-reference">data-reference</option>
-                        <option value="analysis-output-artifact">analysis-output-artifact</option>
+                        {slotKinds
+                          ? slotKinds.map((k) => (
+                              <option key={k} value={k}>{k}</option>
+                            ))
+                          : <option value="">(inferred from the record)</option>}
                       </select>
                       <button
                         type="button"
                         onClick={(e) => {
                           const row = e.currentTarget.parentElement as HTMLElement
                           const id = (row.querySelector(`input[data-testid="analysis-declared-input-id-${slot.name}"]`) as HTMLInputElement | null)?.value ?? ''
-                          const type = (row.querySelector(`select[data-testid="analysis-declared-input-type-${slot.name}"]`) as HTMLSelectElement | null)?.value ?? 'data-reference'
+                          const type = (row.querySelector(`select[data-testid="analysis-declared-input-type-${slot.name}"]`) as HTMLSelectElement | null)?.value ?? ''
                           void bindInput(slot.name, id, type)
                         }}
                         disabled={busy || stagingBusy}
@@ -1085,7 +1192,31 @@ export function AnalysisPage() {
           {promoteResult && <div className="analysis__promote-result" data-testid="analysis-promote-result">{promoteResult}</div>}
           {/* FAME-7 (W5e): the declared-input staging outcome (named line:
               staged slot + frozen identity, or the 0/≥2-match naming). */}
-          {stagedPromote && <div className="analysis__promote-result" data-testid="analysis-staged-promote-result">{stagedPromote}</div>}
+          {stagedPromote && (
+            <>
+              <div className="analysis__promote-result" data-testid="analysis-staged-promote-result">{stagedPromote}</div>
+              {/* D9 (fix cycle 1): the ≥2-match slot chooser — one button per
+                  matching declared slot (W5e: "the user picks"). No auto-pick,
+                  no hand-typing; picking routes through the SAME staging path
+                  as the 1-match case (and as the manual Bind…). */}
+              {pendingStage && (
+                <div className="analysis__staged-chooser" data-testid="analysis-staged-chooser">
+                  <span className="analysis__params-preview-label">Pick a slot for this artifact:</span>
+                  {pendingStage.matches.map((slotName) => (
+                    <button
+                      key={slotName}
+                      type="button"
+                      onClick={() => void stagePromotedInto(pendingStage.artifactRecordId, slotName)}
+                      disabled={busy || stagingBusy}
+                      data-testid={`analysis-staged-chooser-${slotName}`}
+                    >
+                      {slotName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
