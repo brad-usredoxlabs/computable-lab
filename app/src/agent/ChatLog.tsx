@@ -80,6 +80,33 @@ function clarificationQuestion(message: ChatMessage): string | undefined {
   return message.clarificationRequests?.[0]?.prompt ?? message.clarification?.prompt
 }
 
+/**
+ * L2-CLARIFY-PICKER-1 (P2, W5) — the human-facing ANSWER sentence. The picker
+ * sends the agent `Use [[material:…|…]] for material.` (byte-stable wire
+ * contract — clarificationAnswerPrompt.ts is untouched), but the TRANSCRIPT
+ * row must never leak that wiki-markup to the scientist. Each mention token
+ * `[[type:id|label]]` reads as `label (kind-word id)`, the kind word being the
+ * existing ontology term for the mention kind (concept / formulation /
+ * instance / aliquot / vendor-product — no new vocabulary). A plain-text
+ * answer (no token) renders exactly as written.
+ */
+const MENTION_TOKEN_RE = /\[\[([A-Za-z][\w-]*):([^\][|]*)(?:\|([^\]]*))?\]\]/g
+const ANSWER_KIND_WORD: Record<string, string> = {
+  material: 'material record',
+  'material-spec': 'formulation',
+  'material-instance': 'instance',
+  aliquot: 'aliquot',
+  'vendor-product': 'vendor product',
+}
+
+export function clarificationAnsweredText(content: string): string {
+  if (!content.includes('[[')) return content
+  return content.replace(MENTION_TOKEN_RE, (_m, type: string, id: string, label?: string) => {
+    const name = (label ?? id).trim() || id
+    return `${name} (${ANSWER_KIND_WORD[type] ?? type} ${id})`
+  })
+}
+
 export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -303,7 +330,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               ABSENT from the DOM, not hidden). */}
           {answered ? (
             <div className="chat-log-clarification-answered" data-testid="chat-log-clarification-answered">
-              Answered: {answerMessage?.content} — {clarificationQuestion(message)}
+              Answered: {answerMessage ? clarificationAnsweredText(answerMessage.content) : ''} — {clarificationQuestion(message)}
             </div>
           ) : (
             <>

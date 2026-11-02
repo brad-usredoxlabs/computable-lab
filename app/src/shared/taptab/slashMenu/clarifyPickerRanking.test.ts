@@ -12,7 +12,7 @@
  * auto-answers, or hides a candidate. The ranking POLICY (family rank integers,
  * can-be-default flags, the contains-section label template) is DATA — declared
  * on the registry `candidate_ranking` block and never hardcoded here (the
- * grep-clean `MATERIAL_CATEGORY_RANK` assertion in resolvers.test.ts is the
+ * grep-clean source-pin assertion in resolvers.test.ts is the
  * source-pin).
  *
  * Bands (the algorithm is structural imperative code; the POLICY is data):

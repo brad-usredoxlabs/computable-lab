@@ -24,7 +24,7 @@
  * open on request first).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClarificationPicker } from './ClarificationPicker'
 import type { AiClarificationRequest } from '../../../types/ai'
 import type { SlashSuggestion } from '../../../shared/taptab/slashMenu/types'
@@ -78,15 +78,20 @@ function openPicker(container: HTMLElement): HTMLInputElement {
 }
 
 describe('ClarificationPicker — L2-SUITE-A-uifix2 C: open-on-request lifecycle (no auto-open, no stacking)', () => {
-  it('is CLOSED on mount: no [role=listbox], and the resolver does not auto-run', async () => {
+  it('is CLOSED on mount: no [role=listbox]; the OQ3 mount pass is BOUNDED + popover-closed (no auto-open)', async () => {
     resolveMaterial.mockResolvedValue([hit])
     const { container } = render(<ClarificationPicker request={materialRequest} onPick={vi.fn()} />)
     // The answer field is present (the affordance) but the popover is closed.
     expect(container.querySelector('input.message-log__clarification-search')).toBeTruthy()
     expect(openListboxCount()).toBe(0)
-    // Give the (now-gated) effect a beat: the resolver must NOT have auto-run.
+    // L2-CLARIFY-PICKER-1 (P3, OQ3 ruling amends this pin): the card MOUNT runs
+    // exactly ONE bounded, popover-closed candidates pass (the top-3 buttons'
+    // source). The uifix2 defect was auto-OPENING the popover en masse — the
+    // LISTBOX must stay closed; the non-UI fetch is the OQ3-amended behavior
+    // (extended, not loosened: still exactly one pass, still closed).
     await new Promise((r) => setTimeout(r, 250))
-    expect(resolveMaterial).not.toHaveBeenCalled()
+    expect(resolveMaterial).toHaveBeenCalledTimes(1)
+    expect(openListboxCount()).toBe(0)
   })
 
   it('OPENS ON REQUEST: clicking the answer field opens the popover and runs the resolver', async () => {
@@ -95,8 +100,16 @@ describe('ClarificationPicker — L2-SUITE-A-uifix2 C: open-on-request lifecycle
     openPicker(container)
     await waitFor(() => expect(openListboxCount()).toBe(1))
     await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
-    expect(resolveMaterial.mock.calls[0][0]).toBe('CHO')
-    expect(await screen.findByText('CHO cells')).toBeTruthy()
+    // The popover pass is the LAST call (the OQ3 mount pass ran first,
+    // bounded + popover-closed); it ran with the seeded query.
+    const calls = resolveMaterial.mock.calls
+    expect(calls[calls.length - 1][0]).toBe('CHO')
+    // The POPOVER row (scoped — the top-3 button above it carries the same
+    // label; this test is about the open listbox, not the buttons).
+    await waitFor(async () => {
+      const popover = screen.getByTestId('clarification-popover')
+      expect(within(popover).getByText('CHO cells')).toBeTruthy()
+    })
   })
 
   it('CLOSING: picking a row answers AND closes the picker (dismiss-on-select)', async () => {
@@ -104,7 +117,12 @@ describe('ClarificationPicker — L2-SUITE-A-uifix2 C: open-on-request lifecycle
     const onPick = vi.fn()
     const { container } = render(<ClarificationPicker request={materialRequest} onPick={onPick} />)
     openPicker(container)
-    const row = await screen.findByText('CHO cells')
+    // The POPOVER row (scoped — the top-3 button shares the label).
+    const row = await new Promise<HTMLElement>((resolve) => {
+      void waitFor(async () => {
+        resolve(within(screen.getByTestId('clarification-popover')).getByText('CHO cells'))
+      })
+    })
     fireEvent.mouseDown(row)
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1))
     // The pick dismissed the picker (no stacking after answering).
@@ -161,9 +179,34 @@ describe('ClarificationPicker — L2-SUITE-A-uifix2 C: open-on-request lifecycle
     const second = render(<ClarificationPicker request={materialRequest} onPick={vi.fn()} />)
     expect(openListboxCount()).toBe(0)
     expect(second.container.querySelector('[role="listbox"]')).toBeNull()
-    // And the resolver did not auto-run on the fresh (closed) mount.
+    // L2-CLARIFY-PICKER-1 (P3, OQ3 ruling amends this pin): the fresh (closed)
+    // mount runs its OWN bounded, popover-closed candidates pass (one per
+    // card) — total = 3 (first mount pass + the OPEN's popover pass + the
+    // fresh mount pass), still ZERO open pickers (the leak the re-gate
+    // observed stays dead).
     await new Promise((r) => setTimeout(r, 250))
-    expect(resolveMaterial).toHaveBeenCalledTimes(1)
+    expect(resolveMaterial).toHaveBeenCalledTimes(3)
+    expect(openListboxCount()).toBe(0)
     second.unmount()
+  })
+
+  // L2-CLARIFY-PICKER-1 (P3, OQ3): the mount pass is an extension of the
+  // single-open invariant, not a loosening of it — N coexisting cards each run
+  // their BOUNDED, popover-closed candidates fetch on mount (for the top-3
+  // buttons), and the count of OPEN pickers still stays 0 (the uifix2
+  // 10→16 stacking defect stays dead). Extend, don't loosen.
+  it('P3 mount pass (N coexisting cards): bounded popover-closed fetches, STILL zero open pickers', async () => {
+    const second: AiClarificationRequest = { ...materialRequest, id: 'clar-c2', query: 'DMEM' }
+    resolveMaterial.mockResolvedValue([hit])
+    render(
+      <div>
+        <ClarificationPicker request={materialRequest} onPick={vi.fn()} />
+        <ClarificationPicker request={second} onPick={vi.fn()} />
+      </div>,
+    )
+    // Both cards run their mount pass (each fetches its own candidates) —
+    // …and neither opens its popover (open-on-request is intact).
+    await waitFor(() => expect(resolveMaterial).toHaveBeenCalledTimes(2))
+    expect(openListboxCount()).toBe(0)
   })
 })

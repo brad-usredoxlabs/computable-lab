@@ -348,3 +348,55 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     expect(screen.getByRole('button', { name: '1. Clofibrate 1 mM' })).not.toBeNull()
   })
 })
+
+/**
+ * L2-CLARIFY-PICKER-1 (P2, W5) RED — the ANSWERED compact row is a human-facing
+ * SENTENCE, never the raw `[[material:…]]` mention markup the picker sends to
+ * the agent (the wire prompt `Use [[material:…|…]] for material.` is byte-
+ * stable for the AGENT — only the rendering changes). Fallback: strip the
+ * mention token to `label (id)`; the plain-text answer stays untouched.
+ */
+describe('L2-CLARIFY-PICKER-1 (P2) — answered-row sentence (W5 wiki-markup leak)', () => {
+  const question = 'The draft names "DMEM" — which record is meant?'
+  const materialRequest = {
+    id: 'req-dmem', kind: 'material' as const, prompt: question, entityType: 'material' as const,
+    menuProvider: '/m' as const, options: [] as { id: string; label: string }[],
+  }
+
+  it('a mention-token answer renders as `DMEM (material record MAT-dmem-ykg0)` — NO [[material:]] wiki-markup', () => {
+    render(<ChatLog {...props} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [materialRequest] },
+      message('answer', 'user', 'Use [[material:MAT-dmem-ykg0|DMEM]] for material.'),
+      message('after', 'assistant', 'Added 100 ul of DMEM to A1.'),
+    ]} />)
+    const row = screen.getByTestId('chat-log-clarification-answered')
+    expect(row.textContent).not.toMatch(/\[\[material:/)
+    expect(row).toHaveTextContent('DMEM (material record MAT-dmem-ykg0)')
+    expect(row).toHaveTextContent(question)
+  })
+
+  it('the same card for a composition answer keeps the sentence shape (label + record id), still no wiki-markup', () => {
+    render(<ChatLog {...props} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [materialRequest] },
+      message('answer', 'user', 'Use [[material-spec:MSP-DRAFT-EVG_CELLROX-01|DMEM + FBS]] for material.'),
+    ]} />)
+    const row = screen.getByTestId('chat-log-clarification-answered')
+    expect(row.textContent).not.toMatch(/\[\[material/)
+    // The mention type is material-spec => kind-word `formulation` (the
+    // existing ontology term for the material-spec layer — no new vocabulary).
+    expect(row).toHaveTextContent('DMEM + FBS (formulation MSP-DRAFT-EVG_CELLROX-01)')
+  })
+
+  it('a plain-text answer (no mention token) is rendered as written (no strip, no markup)', () => {
+    render(<ChatLog {...props} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar', 'assistant', question), clarificationRequests: [materialRequest] },
+      message('answer', 'user', 'Use the DMEM from the stock fridge for material.'),
+    ]} />)
+    const row = screen.getByTestId('chat-log-clarification-answered')
+    expect(row).toHaveTextContent('Use the DMEM from the stock fridge for material.')
+    expect(row.textContent).not.toMatch(/\[\[/)
+  })
+})

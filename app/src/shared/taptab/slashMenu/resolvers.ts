@@ -32,7 +32,6 @@ import { exaVendorEnabled } from '../../lib/integrationFlags'
 // per-row consequence line live in ./clarifyPickerRanking (one source).
 import {
   aggregateComponentTokens,
-  consequenceFor,
   isCompositionLabel,
   materialCandidates,
   type CandidateRankingPolicy,
@@ -705,14 +704,14 @@ function formatSelectionLabel(
 
 type MaterialMentionKind = Extract<SlashMention, { type: 'material' }>['entityKind']
 
-// L2-CLARIFY-PICKER-1 (P1): the old MATERIAL_CATEGORY_RANK table (a hardcoded
-// per-category rank integer) is DELETED. The comparator's rank table, the
-// can-be-default flags, and the contains-section label are DATA — declared on
-// the registry `candidate_ranking` block (OQ2), served by the server (OQ1),
-// read once through ./policy, and applied by the PURE comparator in
-// ./clarifyPickerRanking. Absent declaration => NO ranking at all: the rows
-// keep their resolver-emitted order (backend relevance). There is no fallback
-// table, ever — no rank integer survives in resolvers.ts (grep-clean asserted).
+// L2-CLARIFY-PICKER-1 (P1): the old hardcoded per-category rank table is
+// DELETED. The comparator's rank table, the can-be-default flags, and the
+// contains-section label are DATA — declared on the registry `candidate_ranking`
+// block (OQ2), served by the server (OQ1), read once through ./policy, and
+// applied by the PURE comparator in ./clarifyPickerRanking. Absent declaration
+// => NO ranking at all: the rows keep their resolver-emitted order (backend
+// relevance). There is no fallback table, ever — no rank integer survives in
+// resolvers.ts (grep-clean asserted in resolvers.test.ts).
 
 /**
  * Build the material candidate rows for one /m first-paint (or a scoped layer).

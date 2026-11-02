@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveEquipment,
@@ -938,7 +939,8 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
 
   it('L2-CLARIFY-PICKER-1 (RED): the exact-match concept DMEM is the first + defaultable workspace row, NOT the W1 row-0 composition', async () => {
     // The 18-row DMEM card's WORKSPACE page (formulations + material search):
-    // today the /m comparator sorts by MATERIAL_CATEGORY_RANK, so the
+    // today (pre-item) the /m comparator sorted by the hardcoded per-category
+    // rank table, so the
     // COMPOSITION formulation `DMEM + FBS` (saved-stock, rank 0) is the
     // keyboard default and the plain `DMEM` the prompt named is buried.
     // The new intent-ranking comparator (data-declared candidate_ranking)
@@ -989,3 +991,21 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     expect(firstComposition!.consequence).toMatch(/composition of \d+ components/)
   })
 });
+
+/**
+ * L2-CLARIFY-PICKER-1 — P1 source-pin (spec RED-plan item 3; the idiom
+ * precedent is receivingMintPin.test.ts:134 — readFileSync the source and
+ * pin the DELETION). The old hardcoded per-category rank table is gone from
+ * resolvers.ts: no rank integer survives in TS (the data is the authority —
+ * the registry `candidate_ranking` block). The pattern is split so this
+ * assertion file itself never carries the full identifier (the spec's
+ * `git grep` gate for the deleted table must come back empty).
+ */
+describe('L2-CLARIFY-PICKER-1 — P1 source-pin: the hardcoded rank table is deleted (grep-clean)', () => {
+  const resolversSrc = readFileSync('src/shared/taptab/slashMenu/resolvers.ts', 'utf8')
+  const DELETED = ['MATERIAL', 'CATEGORY', 'RANK'].join('_')
+
+  it('resolvers.ts carries no copy of the deleted hardcoded rank table', () => {
+    expect(resolversSrc).not.toContain(DELETED)
+  })
+})

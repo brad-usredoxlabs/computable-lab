@@ -28,7 +28,21 @@ export const SlashSuggestionList = forwardRef<
   SlashSuggestionListHandle,
   SlashSuggestionListProps
 >(({ items, loading, emptyLabel, command }, ref) => {
-  const [selected, setSelected] = useState(0)
+  // L2-CLARIFY-PICKER-1 (P1): the focused (keyboard) default starts at the
+  // FIRST row whose canBeDefault !== false (the data-declared never-default
+  // flag — a composition row is never the default REGARDLESS of rank; the
+  // W1 wrong-material commit). When no row carries canBeDefault: false this
+  // is 0 — the slash editor's byte-stable default (bait 6). Arrows may move
+  // the highlight over a non-defaultable row (the list stays fully navigable)
+  // but Enter/Tab commits the highlighted row ONLY when it is defaultable —
+  // a non-defaultable row can never be Enter-committed (W1).
+  const firstDefaultable = () => {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i]!.canBeDefault !== false) return i
+    }
+    return 0
+  }
+  const [selected, setSelected] = useState(firstDefaultable)
   const listRef = useRef<HTMLDivElement | null>(null)
   // Hover tooltip: which row is hovered + where its button sits on screen.
   // Rendered through a portal because the list scrolls internally and would
@@ -52,8 +66,9 @@ export const SlashSuggestionList = forwardRef<
   }
 
   useEffect(() => {
-    setSelected(0)
+    setSelected(firstDefaultable())
     clearHover()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])
 
   useEffect(() => () => {
@@ -85,7 +100,12 @@ export const SlashSuggestionList = forwardRef<
         event.preventDefault()
         event.stopPropagation()
         const item = items[selected]
-        if (item && !item.disabled) {
+        // L2-CLARIFY-PICKER-1 (P1): a non-defaultable row (canBeDefault: false
+        // — the data flag; a composition row regardless of rank) can NEVER be
+        // Enter-committed: the W1 wrong-material commit was Enter on the
+        // focused default landing a composition. Display may rest on it
+        // (navigable); committing requires the defaultable flag.
+        if (item && !item.disabled && item.canBeDefault !== false) {
           command(item)
           return true
         }
@@ -158,9 +178,24 @@ export const SlashSuggestionList = forwardRef<
               {item.badge}
             </span>
             <span className="slash-suggestion-list__body">
+              {item.sectionLabel && (
+                <div className="slash-suggestion-list__section">
+                  {item.sectionLabel}
+                </div>
+              )}
               <div className="slash-suggestion-list__label">{item.label}</div>
               {item.subtitle && (
                 <div className="slash-suggestion-list__subtitle">{item.subtitle}</div>
+              )}
+              {/* L2-CLARIFY-PICKER-1 (P2): the per-row commit-consequence line —
+                  what committing THIS row binds, generated from the row's own
+                  record (the resolver attaches it; the W3 hover-card
+                  unreachability stops mattering: the bind is on the row, not
+                  behind a hover). DetailTooltip + `detail` stay (kept, bait 2). */}
+              {item.consequence && (
+                <div className="slash-suggestion-list__consequence">
+                  {item.consequence}
+                </div>
               )}
             </span>
           </button>
