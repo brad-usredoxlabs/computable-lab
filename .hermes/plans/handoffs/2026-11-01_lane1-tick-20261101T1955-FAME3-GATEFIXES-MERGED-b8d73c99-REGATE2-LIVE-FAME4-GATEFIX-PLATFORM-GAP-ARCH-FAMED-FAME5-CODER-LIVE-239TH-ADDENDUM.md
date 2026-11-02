@@ -83,3 +83,12 @@
 - OPEN (new): full FAME-5 chain (coder -> adv -> orch verify -> browser gate on same wall as
   FAME-4 until FAME-4G lands — the ruling decides ordering).
 - Carried: W7b honesty flags, AS-L1T223-1 band note, intake pile (now incl. gate minors).
+
+## CLOSING NOTE (19:55) — FAME-3 DONE
+Re-gate cycle-2 rendered VERDICT: accept at 19:47 (receipts/FAME-3/regate2-l1t1945/: report.md,
+3 trails + supplement, 19 shots, data/roundtrips with stream+compile bodies — ROUND-TRIP-GATE-1
+pairs present; cite-check: all report-cited artifacts exist on disk). Orch receipt-audited
+(md5-identical shot pairs are self-declared by design; consoleErrors 0; no hand-edited DOM
+attested + reproduce commands present). All six obligations PASS on trunk b8d73c99, including the
+new N1 unset-select leg and the (e) refusal arm. FAME-3 MARKED DONE. Evidence-debt entry for
+FAME-3 closes. FAME-3 W7b honesty flags remain informational (Brad bench pass).
