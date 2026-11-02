@@ -44,12 +44,15 @@ import type { ResolveNounsOutput } from './resolveNounsPass.js';
  *  reads the module's OWN stable code (zero new reason literals). */
 import { NOT_STATED_REASON } from './declaredOptionalHedgeFold.js';
 
-/** The engine's OWN stable unknown-noun code (resolutionEngine.ts:402
- *  `clarificationFor(req, 'unknown-noun', mints)`; the same token the
+/** The engine's OWN stable unknown-noun code (resolutionEngine.ts
+ *  `clarificationFor(req, UNKNOWN_NOUN_REASON, mints)`; the same token the
  *  REASON_SPECIFICITY_ORDER precedence table names). The synthesized fact rides
  *  the SAME code the engine itself emits, so the card + fold handle it verbatim
- *  (spec A2: "reason = the engine's OWN stable 'unknown-noun' code"). */
-export const UNBOUND_SLOT_REASON = 'unknown-noun' as const;
+ *  (spec A2: "reason = the engine's OWN stable 'unknown-noun' code").
+ *  advc-c1 D3 (fix1): this is the engine's constant RE-EXPORTED under the
+ *  gate's name — the single shared source, not a third literal. The emitted
+ *  reason bytes are unchanged ('unknown-noun'). */
+export { UNKNOWN_NOUN_REASON as UNBOUND_SLOT_REASON } from './resolutionEngine.js';
 
 /** A slot value is PRESENT when the field carries a value the engine's doc-door
  *  would consider (string non-blank-and-not-the-sentinel, non-empty array, finite

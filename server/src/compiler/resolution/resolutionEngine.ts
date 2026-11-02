@@ -59,6 +59,15 @@ function mintAffordances(candidates: readonly RankedCandidate[]): RankedCandidat
   return candidates.filter((c) => c.tier === 5 || !c.curie);
 }
 
+/** The engine's OWN stable unknown-noun reason code — the single shared
+ *  source (advc-c1 D3, fix1). Emitted in resolveNoun's fall-through arm
+ *  below (`clarificationFor(req, UNKNOWN_NOUN_REASON, mints)`) and named in
+ *  the REASON_SPECIFICITY_ORDER precedence table (clarificationDedupe.ts);
+ *  the A2 slot-coverage gate (nounCoverage.ts) re-exports it as
+ *  UNBOUND_SLOT_REASON rather than declaring a third literal. The code's
+ *  BYTES are unchanged (`'unknown-noun'`). */
+export const UNKNOWN_NOUN_REASON = 'unknown-noun' as const;
+
 /** MINT-FLOOR-UI-1 — keyed collapse of IDENTICAL mint affordances. The two
  *  spine-gathering strategies (symbolic_label + ontology_resolution) each
  *  carry the spine's per-call tier-5 mint (ResolveSpine.ts:218), and
@@ -399,7 +408,7 @@ export async function resolveNoun(
   } else if (req.declared.kind === 'wells') {
     clarifications.push(clarificationFor(req, 'unknown-address', []));
   } else {
-    const clarification = clarificationFor(req, 'unknown-noun', mints);
+    const clarification = clarificationFor(req, UNKNOWN_NOUN_REASON, mints);
     if (deps.termsForSuggestions) {
       const suggestions = nearMissSuggestions(req.label, await deps.termsForSuggestions());
       if (suggestions.length > 0) {
