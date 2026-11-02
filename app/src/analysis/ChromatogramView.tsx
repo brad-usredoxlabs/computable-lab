@@ -20,13 +20,21 @@
  *  - Interaction state (zoom domain, selection, hover, active peak) is
  *    component-local view state — never written back to any record.
  *
+ * B1/B2/B3 — optional view-spec bindings (free-form per
+ * view-spec.schema.yaml; documented here, not in the schema — no schema
+ * edit): `markerSaturationFlags` — a TOKEN LIST (string[], DATA) of
+ * saturation flag codes. A marker row is saturated only when its boolean
+ * field (markerSaturatedField) is true OR one of the DECLARED tokens appears
+ * in its flags column; without the declaration, flags never mark saturation
+ * (never guessed from arbitrary flags; zero amplitude comparisons anywhere).
+ *
  * Gesture model (documented; the spec names "drag-select" zoom + "no-modifier"
  * pan as two distinct drags, so a modifier disambiguates):
  *   - plain left-drag  = ZOOM drag-select (rubber-band -> set x-domain)
  *   - Shift left-drag  = PAN (translate the x-domain)
  *   - Reset button     = restore the FULL data extent
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import type { RenderableArtifact } from './ViewRenderer'
 import {
@@ -49,6 +57,14 @@ export interface ChromatogramBindings {
   markerLabelField?: string
   markerSaturatedField?: string
   markerFlagsField?: string
+  /** B3: the DECLARED saturation flag tokens (the view-spec binding;
+   *  a string[] token list — the revision sets it as DATA).
+   *  A marker row is saturated only when its boolean field is true OR one
+   *  of these declared tokens appears in its flags column. Absent (or empty)
+   *  ⇒ flags never mark saturation (never guessed from arbitrary flags).
+   *  Free-form per view-spec.schema.yaml (bindings are free objects); this
+   *  key is documented here, not in the schema (no schema edit). */
+  markerSaturationFlags?: string[]
 }
 
 interface Domain {
@@ -56,15 +72,18 @@ interface Domain {
   x1: number
 }
 
-// Fixed viewBox geometry (handwritten SVG; no chart dependency).
-const W = 720
+// B1: the viewBox WIDTH follows the MEASURED pane width so the
+// SVG paints at ~1:1 CSS px per user unit — the CSS-declared type sizes are
+// the painted sizes (pre-fix: the whole fixed 720-unit canvas, 9 px tick
+// labels included, scaled by paneWidth/720 ≈ 0.742 at the shipped 534 px
+// pane). H stays fixed at 280; the fixed width is only the FALLBACK for an
+// unmeasured container (jsdom / zero rect — the pre-B1 geometry).
+const FALLBACK_W = 720
 const H = 280
 const PAD_L = 52
 const PAD_R = 14
 const PAD_T = 14
 const PAD_B = 30
-const PLOT_W = W - PAD_L - PAD_R
-const PLOT_H = H - PAD_T - PAD_B
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -83,6 +102,51 @@ export function ChromatogramView({
 }) {
   const b = (bindings ?? {}) as ChromatogramBindings
   const svgRef = useRef<SVGSVGElement | null>(null)
+
+  // ---- B1: the measured container width drives the viewBox
+  //      WIDTH (1:1 CSS px per user unit). The svg is width="100%", so the
+  //      measured pane width IS the viewBox width. The ResizeObserver lives
+  //      on the wrapping div (the .view-spec__chromatogram flex column) —
+  //      measuring the svg element itself would be circular (its CSS width
+  //      is the very thing derived from the viewBox). Unmeasured (jsdom /
+  //      zero rect) falls back to the pre-B1 fixed width — geometry only,
+  //      no data semantics. ----
+  // D1 (fix run 1): the observer MUST attach when the measured wrapper
+  // actually exists. The chart renders behind async branches — on any
+  // dref-backed artifact (every live chromatogram of the campaign is
+  // fetched through the content route) the FIRST commit is the "Loading
+  // trace…" / error / empty early-return div, which does NOT carry the
+  // wrapper ref. A mount-time `useEffect(..., [])` read the null ref,
+  // returned, and never re-ran when the fetch resolved and the chart div
+  // mounted — the pane-fit silently never engaged (viewBox stuck at the
+  // 720-unit canvas; scale 0.742 at the shipped 534 px pane). The ref
+  // callback below PUBLISHES the element when it mounts (and nulls it on
+  // unmount); the effect re-runs whenever the published element changes,
+  // so the observer installs the moment the wrapper exists and its
+  // cleanup disconnects on teardown.
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null)
+  const wrapRefCb = useCallback(
+    (el: HTMLDivElement | null) => {
+      wrapRef.current = el
+      setWrapEl(el)
+    },
+    [],
+  )
+  const [measuredW, setMeasuredW] = useState(0)
+  useEffect(() => {
+    const el = wrapEl
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (typeof w === 'number' && Number.isFinite(w) && w > 0) setMeasuredW(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [wrapEl])
+  const W = measuredW > 0 ? Math.round(measuredW) : FALLBACK_W
+  const PLOT_W = W - PAD_L - PAD_R
+  const PLOT_H = H - PAD_T - PAD_B
 
   // ---- Data: inline value OR the OQ-1(a) content route (dref-only) ----
   // `dataReferenceRef` only SIGNALS that this artifact is dref-backed (its
@@ -169,26 +233,53 @@ export function ChromatogramView({
     return siblings.find((a) => a.name === b.markersFrom)
   }, [markerArtifact, b.markersFrom, siblings])
 
+  // The resolved marker field names (DATA: the bindings, or the shipped
+  // default names held in DEFAULT_MARKER_FIELDS). The table header renders
+  // these names (B2: the column names are data-carried).
+  const markerFields = useMemo(
+    () => ({
+      rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
+      label: b.markerLabelField ?? DEFAULT_MARKER_FIELDS.label,
+      saturated: b.markerSaturatedField ?? DEFAULT_MARKER_FIELDS.saturated,
+      flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
+    }),
+    [b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField],
+  )
+
+  // B3: the DECLARED saturation flag tokens (the optional view-spec binding
+  // `markerSaturationFlags` — a string[] token list the revision sets as
+  // DATA; absent when the binding is not declared). A row
+  // is saturated ONLY when its boolean field is true OR one of the DECLARED
+  // tokens appears in its flags column — never computed, never guessed from
+  // undeclared flags (zero amplitude comparisons; the token list is data,
+  // not a TS default).
+  const markerSaturationFlags = useMemo(() => {
+    const raw = b.markerSaturationFlags
+    if (!Array.isArray(raw)) return undefined
+    const tokens = raw.filter((t): t is string => typeof t === 'string' && t.length > 0)
+    return tokens.length > 0 ? tokens : undefined
+  }, [b.markerSaturationFlags])
+
   const markers = useMemo<MarkerRow[]>(() => {
     const ma = resolvedMarkerArtifact
     if (!ma) return []
     const inline = isRecord(ma.inlineValue) ? ma.inlineValue : {}
     const rows = Array.isArray(inline.rows) ? inline.rows : []
-    const fields = {
-      rt: b.markerRtField ?? DEFAULT_MARKER_FIELDS.rt,
-      label: b.markerLabelField ?? DEFAULT_MARKER_FIELDS.label,
-      saturated: b.markerSaturatedField ?? DEFAULT_MARKER_FIELDS.saturated,
-      flags: b.markerFlagsField ?? DEFAULT_MARKER_FIELDS.flags,
-    }
-    return parseMarkerRows(rows, fields)
-  }, [resolvedMarkerArtifact, b.markerRtField, b.markerLabelField, b.markerSaturatedField, b.markerFlagsField])
+    return parseMarkerRows(rows, {
+      rt: markerFields.rt,
+      label: markerFields.label,
+      saturated: markerFields.saturated,
+      flags: markerFields.flags,
+      ...(markerSaturationFlags ? { saturationFlags: markerSaturationFlags } : {}),
+    })
+  }, [resolvedMarkerArtifact, markerFields, markerSaturationFlags])
 
   const skippedNoRt = markers.filter((m) => m.rt === null).length
 
   // ---- Visual-only decimation (SVG geometry only; readout uses raw points) ----
   const slice = useMemo(
     () => (parsed ? decimateForRender(parsed.axis, parsed.values, Math.max(1, Math.floor(PLOT_W))) : { indices: [], droppedCount: 0 }),
-    [parsed],
+    [parsed, PLOT_W],
   )
 
   const polyline = useMemo(() => {
@@ -241,9 +332,11 @@ export function ChromatogramView({
 
   return (
     <div
+      ref={wrapRefCb}
       className="view-spec__chromatogram"
       data-testid="view-spec-chromatogram"
       data-x-domain={domain ? `${domain.x0}:${domain.x1}` : undefined}
+      data-width={W}
     >
       <div className="chromatogram__toolbar">
         <button type="button" onClick={reset} data-testid="chromatogram-reset" className="chromatogram__reset">
@@ -323,6 +416,15 @@ export function ChromatogramView({
                 <text x={px + 3} y={PAD_T + 10} className="chromatogram__markerlabel">
                   {m.label}
                 </text>
+                {/* B3: the VISIBLE saturation indicator — a word on the
+                    trace (never colour alone; readable with CSS disabled /
+                    greyscale). The word is the data-carried field name of
+                    the boolean field (the markerSaturatedField data). */}
+                {m.saturated ? (
+                  <text x={px + 3} y={PAD_T + 21} className="chromatogram__markersat" data-testid={`chromatogram-marker-saturated-${m.peakId}`}>
+                    {markerFields.saturated}
+                  </text>
+                ) : null}
               </g>
             )
           })}
@@ -341,7 +443,21 @@ export function ChromatogramView({
         )}
       </svg>
 
-      {/* peak-table micro-table with row <-> trace sync */}
+      {/* B3: the legend — a TEXTUAL line naming the visible saturation
+          indicator (rendered only when at least one marker is marked; no
+          dead chrome). The word is the data-carried saturated field name. */}
+      {markers.some((m) => m.saturated) ? (
+        <div className="chromatogram__legend" data-testid="chromatogram-saturation-legend">
+          {markerFields.saturated}: the marker is marked on the trace (word + colour) and its row is flagged below
+        </div>
+      ) : null}
+
+      {/* peak-table micro-table with row <-> trace sync.
+          B2: the table carries a <thead> — the column names are
+          DATA-CARRIED (the resolved binding field names), and the RT header
+          carries the unit ONCE (from parsed.xUnit — data, never a literal;
+          absent unit ⇒ bare field name, nothing invented). The RT cells are
+          numeric-only (the per-cell unit append is removed). */}
       {markers.length > 0 && (
         <div className="chromatogram__tablewrap">
           {skippedNoRt > 0 && (
@@ -350,6 +466,14 @@ export function ChromatogramView({
             </div>
           )}
           <table className="chromatogram__table">
+            <thead>
+              <tr>
+                <th className="chromatogram__rowlabel">{markerFields.label}</th>
+                <th>{xUnit ? `RT (${xUnit})` : 'RT'}</th>
+                <th>{markerFields.saturated}</th>
+                <th>{markerFields.flags}</th>
+              </tr>
+            </thead>
             <tbody>
               {markers.map((m) => (
                 <tr
@@ -359,8 +483,8 @@ export function ChromatogramView({
                   onClick={() => setActivePeak(activePeak === m.peakId ? null : m.peakId)}
                 >
                   <td className="chromatogram__rowlabel">{m.label}</td>
-                  <td>{m.rt === null ? '—' : `${fmt(m.rt)}${xUnit ? ` ${xUnit}` : ''}`}</td>
-                  <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? 'saturated' : ''}</td>
+                  <td>{m.rt === null ? '—' : fmt(m.rt)}</td>
+                  <td className={m.saturated ? 'chromatogram__row-saturated' : ''}>{m.saturated ? markerFields.saturated : ''}</td>
                   <td className="chromatogram__rowflags">{m.flags}</td>
                 </tr>
               ))}

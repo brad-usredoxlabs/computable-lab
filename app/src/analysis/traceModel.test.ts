@@ -82,6 +82,32 @@ describe('traceModel.parseChromatogramBindings / parseCompareBindings (D6 named 
     }
   })
 
+  // B3 (item 250TH-8): the DECLARED saturation-flag token list is a known,
+  // ARRAY-typed binding key. It arrives as DATA (a string[]); a non-array or
+  // non-string-element value is a NAMED error (never a guessed token list).
+  it('markerSaturationFlags (the B3 declared token list) is accepted as a string[]', () => {
+    const res = parseChromatogramBindings({
+      markersFrom: 'peak_table',
+      markerSaturationFlags: ['UNRECOVERABLE_SATURATED'],
+    })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.value.markerSaturationFlags).toEqual(['UNRECOVERABLE_SATURATED'])
+      expect(res.value.audit).toEqual([])
+    }
+  })
+
+  it('markerSaturationFlags that is NOT a string[] is a NAMED error (no default token list)', () => {
+    const bad = parseChromatogramBindings({ markerSaturationFlags: 'UNRECOVERABLE_SATURATED' })
+    expect(bad.ok).toBe(false)
+    if (!bad.ok) {
+      expect(bad.error.path).toBe('bindings.markerSaturationFlags')
+      expect(bad.error.message).toContain('string[]')
+    }
+    const notStrings = parseChromatogramBindings({ markerSaturationFlags: [1, 2] })
+    expect(notStrings.ok).toBe(false)
+  })
+
   it('accepts well-formed compare bindings (traces + conversion + axisUnits)', () => {
     const res = parseCompareBindings({
       traces: [
@@ -404,6 +430,33 @@ describe('traceModel.parseMarkerRows (peak-table markers as DATA)', () => {
   it('non-array rows -> empty (a named empty state, never a throw)', () => {
     expect(parseMarkerRows(undefined, FIELDS)).toEqual([])
     expect(parseMarkerRows({ a: 1 }, FIELDS)).toEqual([])
+  })
+
+  // B3 (item 250TH-8): saturation is DECLARED, never computed. The token list
+  // arrives via the DECLARED binding (fields.saturationFlags — DATA, not a
+  // TS default); an UNDECLARED flag token never marks saturation.
+  it('flags-only row + DECLARED token list: the declared token marks the row saturated', () => {
+    const rows = [{ peak: 'P2', rt_min: 3.0, saturated: false, flags: ['UNRECOVERABLE_SATURATED'] }]
+    const markers = parseMarkerRows(rows, { ...FIELDS, saturationFlags: ['UNRECOVERABLE_SATURATED'] })
+    expect(markers[0]!.saturated).toBe(true)
+  })
+
+  it('flags-only row + an UNDECLARED token (OVERLAP_SHARED_BASELINE) is NOT marked (never guessed)', () => {
+    const rows = [{ peak: 'P3', rt_min: 4.0, saturated: false, flags: ['OVERLAP_SHARED_BASELINE'] }]
+    // No saturationFlags declaration at all:
+    expect(parseMarkerRows(rows, FIELDS)[0]!.saturated).toBe(false)
+    // A declared list that does not name this token:
+    const declared = parseMarkerRows(rows, { ...FIELDS, saturationFlags: ['UNRECOVERABLE_SATURATED'] })
+    expect(declared[0]!.saturated).toBe(false)
+  })
+
+  it('a multi-token flags list marks saturation when ANY declared token appears', () => {
+    const rows = [
+      { peak: 'P1', rt_min: 1.0, saturated: false, flags: ['UNDEFINED_SIBLING_AREA_NULL', 'UNRECOVERABLE_SATURATED'] },
+      { peak: 'P2', rt_min: 2.0, saturated: false, flags: ['UNDEFINED_SIBLING_AREA_NULL'] },
+    ]
+    const markers = parseMarkerRows(rows, { ...FIELDS, saturationFlags: ['UNRECOVERABLE_SATURATED'] })
+    expect(markers.map((m) => m.saturated)).toEqual([true, false])
   })
 })
 

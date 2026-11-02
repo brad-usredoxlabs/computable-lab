@@ -8,7 +8,7 @@
  * below).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { apiClient } from '../shared/api/client'
 import { ChromatogramView } from './ChromatogramView'
@@ -21,7 +21,28 @@ const W = 720
 const PAD_L = 52
 const PLOT_W = 654
 
+// jsdom has no ResizeObserver: a minimal spy whose stored callback the tests
+// fire (synchronously, inside React act) to simulate a measured pane width.
+// The callback receives the RESIZE-OBSERVER entry LIST (the component reads
+// entries[0].contentRect.width) — the stub mirrors that shape.
+type ROEntry = { contentRect: { width: number } }
+// `disconnected` counts teardowns (D1: the cleanup still disconnects).
+const resizeObservers: Array<(entries: ROEntry[]) => void> = []
+let roDisconnects = 0
+;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+  constructor(cb: (entries: ROEntry[]) => void) {
+    resizeObservers.push(cb)
+  }
+  observe() {}
+  disconnect() {
+    roDisconnects++
+  }
+  unobserve() {}
+}
+
 beforeEach(() => {
+  resizeObservers.length = 0
+  roDisconnects = 0
   vi.clearAllMocks()
   // jsdom has no layout: stub the SVG rect so pointer math is deterministic.
   const svgProto = SVGElement.prototype as unknown as { getBoundingClientRect: () => unknown }
@@ -259,6 +280,216 @@ describe('ChromatogramView — dref-backed bytes via the ratified OQ-1(a) route'
     const err = await screen.findByTestId('chromatogram-error')
     expect(err.textContent).toContain('storage offline')
     expect(screen.queryByTestId('chromatogram-svg')).toBeNull()
+  })
+})
+
+describe('ChromatogramView — B1 pane-fit: renders at 1:1 CSS px per SVG unit (spec §5 B1)', () => {
+  function fireMeasuredWidth(px: number) {
+    act(() => {
+      for (const cb of resizeObservers) cb([{ contentRect: { width: px } }])
+    })
+  }
+
+  it('at the shipped pane width (534 px) the svg viewBox width is the MEASURED width and the scale factor is 1', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    // The 534 px pane is the FAME-LAYOUT-1 measured .analysis-right width at
+    // the shipped 1440x900 viewport — simulate the measurement (jsdom cannot
+    // layout): the pre-fix geometry would leave the viewBox at the fixed 720
+    // (scale 534/720 = 0.742 — the defect) and this assertion would fail.
+    fireMeasuredWidth(534)
+    const svg = screen.getByTestId('chromatogram-svg')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 534 280')
+    // ~1:1: viewBox width == the width the pane gives the svg (width="100%").
+    expect(Number(svg.getAttribute('viewBox')!.split(' ')[2])).toBe(534)
+    // The plot still occupies the pane width with the fixed H (280) and keeps
+    // the tick count: at least 4 x-tick labels render.
+    expect(svg.querySelectorAll('text.chromatogram__ticklabel').length).toBeGreaterThanOrEqual(4)
+    expect(root().getAttribute('data-width')).toBe('534')
+  })
+
+  it('unmeasured (jsdom zero-rect) falls back to the fixed 720 viewBox — the old behaviour, unchanged for tests without a measurement', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    const svg = screen.getByTestId('chromatogram-svg')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 720 280')
+    expect(root().getAttribute('data-width')).toBe('720')
+  })
+
+  it('a later pane resize re-derives the geometry (the width is live, not a mount-time constant)', () => {
+    render(<ChromatogramView artifact={sigArtifact(sigValue())} />)
+    fireMeasuredWidth(534)
+    expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 534 280')
+    fireMeasuredWidth(800)
+    expect(screen.getByTestId('chromatogram-svg').getAttribute('viewBox')).toBe('0 0 800 280')
+  })
+
+  // D1 (fix run 1): the LIVE path. Every campaign chromatogram is dref-backed
+  // (ANR-000041 → signal_plus_baseline via dataReferenceRef), so the FIRST
+  // commit is the "Loading trace…" early-return div, which does NOT carry the
+  // wrapper ref. The pane-fit observer must engage WHEN the measured wrapper
+  // actually mounts (content arrived after the pending fetch) — a mount-time
+  // effect keyed on [] read the null ref and never re-ran (the reviewer probe:
+  // inline control = 1 observer, dref = 0, viewBox stuck at "0 0 720 280").
+  it('dref-backed path (fetch pending on mount, content arrives after): the observer installs at chart mount and the measured width drives the viewBox', async () => {
+    const value = sigValue()
+    let resolveContent!: (v: unknown) => void
+    const content = new Promise<unknown>((resolve) => {
+      resolveContent = resolve
+    })
+    vi.mocked(apiClient.getAnalysisArtifactContent).mockReturnValue(content)
+    const { unmount } = render(<ChromatogramView artifact={sigArtifact(undefined, { id: 'DREF-000001' })} />)
+    // First commit is the loading early-return (no chart, NO wrapper ref):
+    // nothing measurable yet and no observer installed.
+    expect(screen.getByTestId('chromatogram-empty').textContent).toContain('Loading trace')
+    expect(screen.queryByTestId('chromatogram-svg')).toBeNull()
+    expect(resizeObservers.length).toBe(0)
+
+    // Content arrives AFTER mount (the pending fetch resolves outside the
+    // first commit — exactly the live dref shape).
+    await act(async () => {
+      resolveContent(value)
+    })
+    const svg = await screen.findByTestId('chromatogram-svg')
+    const el = screen.getByTestId('view-spec-chromatogram')
+    // The wrapper div now exists and the ResizeObserver is INSTALLED on it —
+    // this is the load-bearing assertion: at base (mount-time [] effect over
+    // a null ref) resizeObservers.length is 0 here.
+    expect(resizeObservers.length).toBe(1)
+    // Unmeasured fallback holds until the pane reports a width: H stays 280.
+    expect(svg.getAttribute('viewBox')).toBe('0 0 720 280')
+    expect(el.getAttribute('data-width')).toBe('720')
+
+    // The pane reports its width (simulated; jsdom cannot layout) and the
+    // MEASURED width drives the viewBox — the pane engages post-mount.
+    fireMeasuredWidth(534)
+    expect(svg.getAttribute('viewBox')).toBe('0 0 534 280')
+    expect(el.getAttribute('data-width')).toBe('534')
+    expect(svg.querySelectorAll('text.chromatogram__ticklabel').length).toBeGreaterThanOrEqual(4)
+
+    // The cleanup still disconnects (the observer's teardown runs on unmount).
+    unmount()
+    expect(roDisconnects).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('ChromatogramView — B2 unit ownership: units on the axis title only, never per-cell (spec §5 B2)', () => {
+  it('the RT unit appears exactly ONCE in the table header; the tick labels and the RT cells carry no unit (xUnit = min)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const el = root()
+    // (i) container text carries the xUnit at most twice: the x-axis title +
+    // the RT header (the yUnit 'pA' is a different string).
+    const unitCount = (el.textContent ?? '').split('min').length - 1
+    expect(unitCount).toBe(2)
+    // (ii) no tick label contains the unit string.
+    const svg = screen.getByTestId('chromatogram-svg')
+    for (const t of svg.querySelectorAll('text.chromatogram__ticklabel')) {
+      expect(t.textContent).not.toContain('min')
+    }
+    // (iii) no RT cell (the 2nd td of every row) contains the unit — numeric
+    // only (the pre-fix per-cell `${fmt(m.rt)}${xUnit ? ` ${xUnit}` : ''}`
+    // append is gone).
+    const table = el.querySelector('table.chromatogram__table')!
+    for (const tr of table.querySelectorAll('tbody tr')) {
+      const rtCell = tr.querySelectorAll('td')[1]
+      expect(rtCell.textContent).not.toContain('min')
+    }
+  })
+
+  it('the table has a thead whose RT header carries the unit ONCE, derived from the passed-in unit string (data, not a literal)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const table = root().querySelector('table.chromatogram__table')!
+    const head = table.querySelector('thead')
+    expect(head).not.toBeNull()
+    // The RT column header is the fixed human label 'RT' with the unit once,
+    // derived from the passed-in unit string (data, not a literal).
+    const headers = Array.from(head!.querySelectorAll('th')).map((th) => th.textContent)
+    expect(headers).toContain('RT (min)')
+    // Exactly one header cell carries the unit.
+    expect(headers.filter((h) => h.includes('min')).length).toBe(1)
+  })
+
+  it('a second fixture with xUnit = s renders the unit from the DATA (not a literal): the header says RT (s)', () => {
+    const valueS = { axis: [0, 1, 2], values: [1, 3, 1], axis_units: 's', value_units: 'pA' }
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(valueS)}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTableArtifact]}
+      />,
+    )
+    const table = root().querySelector('table.chromatogram__table')!
+    const headers = Array.from(table.querySelectorAll('thead th')).map((th) => th.textContent)
+    expect(headers).toContain('RT (s)')
+    expect(headers).not.toContain('RT (min)')
+  })
+})
+
+describe('ChromatogramView — B3 saturation declared, never computed (spec §5 B3)', () => {
+  const satTrueRow = { peak: 'P1', rt_min: 1.0, saturated: true, flags: [] }
+  const flagOnlySatRow = { peak: 'P2', rt_min: 3.0, saturated: false, flags: ['UNRECOVERABLE_SATURATED'] }
+  const flagOnlyOverlapRow = { peak: 'P3', rt_min: 4.0, saturated: false, flags: ['OVERLAP_SHARED_BASELINE'] }
+
+  function peakTable(rows: Array<Record<string, unknown>>) {
+    return { id: 'AOUT-000002', name: 'peak_table', dataKind: 'table', inlineValue: { rows } }
+  }
+
+  function saturatedTraceIds() {
+    const el = root()
+    return Array.from(el.querySelectorAll('[data-testid^="chromatogram-marker-"]'))
+      .filter((g) => (g.getAttribute('class') ?? '').includes('chromatogram__marker--saturated'))
+      .map((g) => g.getAttribute('data-testid'))
+  }
+
+  it('boolean true marks the trace marker with a VISIBLE word (the colour-only class is no longer the whole indicator)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTable([satTrueRow, flagOnlyOverlapRow])]}
+      />,
+    )
+    const marked = saturatedTraceIds()
+    expect(marked).toEqual(['chromatogram-marker-0'])
+    // The marker group carries the textual indicator (visible with the CSS
+    // disabled / greyscale — a word, not colour alone): the data-carried
+    // saturated field value rendered verbatim.
+    expect(screen.getByTestId('chromatogram-marker-0').textContent).toContain('saturated')
+    // The legend line names the indicator (text).
+    expect(screen.getByTestId('chromatogram-saturation-legend').textContent).toContain('saturated')
+  })
+
+  it('flags-only + declared token (markerSaturationFlags) marks the row; an UNDECLARED token (OVERLAP_SHARED_BASELINE) does not', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={{ ...MARKER_BINDINGS, markerSaturationFlags: ['UNRECOVERABLE_SATURATED'] }}
+        siblings={[peakTable([flagOnlySatRow, flagOnlyOverlapRow])]}
+      />,
+    )
+    expect(saturatedTraceIds()).toEqual(['chromatogram-marker-0'])
+  })
+
+  it('flags-only + NO declaration is NOT marked (never guessed from arbitrary flags)', () => {
+    render(
+      <ChromatogramView
+        artifact={sigArtifact(sigValue())}
+        bindings={MARKER_BINDINGS}
+        siblings={[peakTable([flagOnlySatRow])]}
+      />,
+    )
+    expect(saturatedTraceIds()).toEqual([])
+    expect(screen.queryByTestId('chromatogram-saturation-legend')).toBeNull()
   })
 })
 
