@@ -46,6 +46,11 @@ export interface ChatClarificationCardProps {
    * shownPrompts). A section prints its prompt only when the bubble and no
    * earlier section have shown that exact sentence. Pass [] for a standalone
    * card (no bubble to dedupe against).
+   *
+   * READ-ONLY (advc-c1 D1, fix1): the card dedupes against a LOCAL copy
+   * seeded from this prop — it NEVER mutates the Set the parent owns.
+   * (Mutating it during render is what dropped every per-slot prompt on the
+   * mount effect's re-render — the BLOCKER.)
    */
   shownPrompts: Set<string>
   disabled?: boolean
@@ -82,6 +87,21 @@ export function ChatClarificationCard({
 
   if (requests.length === 0) return null
 
+  // BGATE-FIX D3 dedupe, derived from IMMUTABLE data only (advc-c1 D1,
+  // BLOCKER): the `shownPrompts` PROP is owned by the parent (ChatLog.tsx:334
+  // builds it per render and shares the SAME instance across card-local
+  // re-renders — the mount effect's setPicks({} at :79-81 fires one extra
+  // render right after mount, and every pick re-renders the card). The pre-fix
+  // code did `shownPrompts.add(request.prompt)` inside this render function;
+  // the very next render read the MUTATED Set (every prompt now "shown") and
+  // dropped every <p class="chat-clarification-card__prompt">. A render must
+  // never mutate a prop — so dedupe runs against a LOCAL copy seeded from the
+  // prop: the bubble's sentence (message.content) plus the requests' own
+  // wire-order first-occurrence reduction. Re-created on every render, so a
+  // card-local re-render re-derives the same membership from the same
+  // immutable inputs instead of remembering a mutation.
+  const promptShown = new Set<string>(shownPrompts)
+
   const record = (request: AiClarificationRequest, answer: AiClarificationAnswer) => {
     setPicks((prev) => ({ ...prev, [request.id]: answer }))
   }
@@ -110,12 +130,15 @@ export function ChatClarificationCard({
       {requests.map((request) => {
         const options = request.options ?? []
         const hasPicker = requestHasPicker(request)
-        // BGATE-FIX D3 (the single-request arm's rule, ChatLog.tsx shownPrompts):
-        // the bubble already printed message.content; a section prints its
-        // prompt only when the bubble and no earlier section have shown that
-        // exact sentence. The answer controls are never gated.
-        const promptAlreadyShown = shownPrompts.has(request.prompt)
-        if (!promptAlreadyShown) shownPrompts.add(request.prompt)
+        // BGATE-FIX D3 (the single-request arm's rule, ChatLog.tsx
+        // shownPrompts): the bubble already printed message.content; a section
+        // prints its prompt only when the bubble and no earlier section have
+        // shown that exact sentence. The answer controls are never gated.
+        // advc-c1 D1 (fix1): the check ADDS to the local `promptShown` copy,
+        // never to the prop (a render must not mutate its inputs — see the
+        // dedupe comment above).
+        const promptAlreadyShown = promptShown.has(request.prompt)
+        if (!promptAlreadyShown) promptShown.add(request.prompt)
         return (
           <section
             key={request.id}

@@ -108,6 +108,36 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
     expect(document.querySelector('.chat-log-clarification')).toBeNull()
   })
 
+  it('D1 (advc-c1 fix1): each slot prints its prompt ONCE — the bubble-printed prompt is deduped, the SECOND slot prompt is in the DOM after mount AND after a pick', () => {
+    const onSubmit = vi.fn()
+    const onPick = vi.fn()
+    const { container } = render(<ChatLog {...props} onClarificationSubmit={onSubmit} onClarificationPick={onPick} messages={[clarMessage]} />)
+
+    // The card prints a slot's prompt only when the BUBBLE has not already
+    // printed that exact sentence (message.content = req1.prompt, so the bubble
+    // shows req1's question). req2's prompt is the ONLY one the card must print.
+    // Pre-fix (advc-c1 D1, BLOCKER) the card MUTATED the shownPrompts prop
+    // during render (ChatClarificationCard.tsx:117-118); the mount effect's
+    // setPicks({} then re-renders the card against the SAME (now-mutated) Set
+    // instance, so EVERY prompt reads as "already shown" and every
+    // <p class=chat-clarification-card__prompt> is dropped — the second slot's
+    // question never reaches the DOM. This pin asserts slot 2's prompt text is
+    // present after mount AND survives a pick (a card-local re-render).
+    const promptTexts = () =>
+      Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
+
+    // After mount: exactly the second slot's prompt (the first is the bubble's).
+    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+
+    // After a pick (a card-local re-render): the prompt must SURVIVE.
+    fireEvent.click(screen.getByTestId('fake-pick-req-1'))
+    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+
+    // After the second pick: still there.
+    fireEvent.click(screen.getByTestId('fake-pick-req-2'))
+    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+  })
+
   it('keeps the submit disabled until BOTH slots are picked, then answers the sentence ONCE with the batch builder (never onClarificationPick)', () => {
     const onSubmit = vi.fn()
     const onPick = vi.fn()
