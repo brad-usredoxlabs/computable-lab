@@ -153,6 +153,31 @@ describe('L2-PROMPT1-GHOST-1 — getWellEvents history agrees with the fill (his
     expect(ids).toHaveLength(2)
   })
 
+  it('an explicit-labware event does NOT match a well of the labware it did not affect (well membership still enforced)', () => {
+    const { plates } = placedPlates(1)
+    const plate = plates[0]!
+    const explicit: PlateEvent = {
+      eventId: 'evt-explicit',
+      event_type: 'add_material',
+      details: { labwareId: plate.labwareId, wells: ['A2'], volume: { value: 100, unit: 'uL' } },
+    } as unknown as PlateEvent
+    // The event references the plate explicitly but only affects A2. B1 of the
+    // SAME plate never received it: history must stay empty there (RED pin —
+    // the generic arm returning `details.labwareId === labwareId` without the
+    // well-membership test lists it on every well of the labware).
+    expect(getWellEvents([explicit], plate.labwareId, 'B1')).toHaveLength(0)
+    // Same under the 4-arg reader the grid uses, and the fill must agree
+    // (history-vs-fill: B1 has no event in its state either).
+    const labwares = new Map(plates.map((p) => [p.labwareId, p]))
+    expect(getWellEvents([explicit], plate.labwareId, 'B1', labwares)).toHaveLength(0)
+    expect(getWellState(computeLabwareStates([explicit], labwares), plate.labwareId, 'B1').eventHistory)
+      .toHaveLength(0)
+    // The affected well still matches (control: the membership test is on the
+    // well, not the labware ref alone).
+    expect(getWellEvents([explicit], plate.labwareId, 'A2', labwares).map((e) => e.eventId))
+      .toEqual(['evt-explicit'])
+  })
+
   it('legacy call shape (no labwares arg) keeps strict reference matching', () => {
     const { plates } = placedPlates(1)
     const plate = plates[0]!
