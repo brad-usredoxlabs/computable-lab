@@ -138,4 +138,18 @@ describe('the ?run= deep link fetches the run by id (reachability)', () => {
     expect(apiClient.getAnalysisRun).not.toHaveBeenCalled()
     expect(apiClient.listAnalysisRuns).toHaveBeenCalledTimes(1)
   })
+
+  // FAME-8 B5: a ?run= landing seeds the Run-method select from the landed
+  // run's revisionRef (the shared selectRun door). The fixture run's revision
+  // (ANREV-000001) is ABSENT from the (empty) fetched revision list — the
+  // select must still show a selected option with the revision id, never
+  // "Select method…".
+  it('?run= landing seeds the method select with the run revision (B5 label retention)', async () => {
+    render(wrap(<AnalysisPage />, `/analysis?run=${DEEP_ID}`))
+    const select = (await screen.findByTestId('analysis-run-rev')) as HTMLSelectElement
+    await waitFor(() => expect(screen.getByText('Deep link run beyond the page')).toBeDefined(), { timeout: 10000 })
+    expect(select.value).toBe('ANREV-000001')
+    const options = Array.from(select.options).map((o) => ({ value: o.value, label: o.textContent }))
+    expect(options).toContainEqual({ value: 'ANREV-000001', label: 'ANREV-000001' })
+  })
 })

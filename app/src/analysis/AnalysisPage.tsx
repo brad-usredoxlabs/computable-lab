@@ -36,7 +36,11 @@ interface RunPayload {
   id: string
   title?: string
   status?: string
-  revisionRef?: { id?: string }
+  /** The revision that produced this run. `label` is the SCHEMA-DECLARED
+   *  revision title the server stamps at run creation (the analysis-run
+   *  schema's revisionRef.properties.label) — B5 displays it when the
+   *  revision is not in the fetched list. */
+  revisionRef?: { id?: string; label?: string }
   inputs?: Record<string, { id?: string; type?: string }>
   parameters?: Record<string, unknown>
   /** The persisted output manifest (a SUCCEEDED run carries it on the record:
@@ -313,6 +317,24 @@ export function AnalysisPage() {
     },
     [selectRun, refresh],
   )
+
+  // FAME-8 B5 (method-select label retention after binding/landing): EVERY
+  // landing path funnels through selectRun (list click, ?run= deep link,
+  // execute(), recalc-completion), so ONE effect on the landed run covers
+  // them all. It seeds selectedRevId from the landed run's revisionRef.id —
+  // the revision that PRODUCED the visible run is named on the form, never
+  // "Select method…". When the revision is not in the fetched list (cap /
+  // archived), the select renders an explicit extra option for it (label =
+  // the schema-declared revisionRef.label the server stamps on the run, else
+  // the revision id) and the value binding keeps it selected — the option
+  // list is never re-ordered or filtered in a way that drops the active
+  // selection. The revision TITLE is data: the list payload.title when
+  // listed, revisionRef.label when not — zero label fabrication.
+  const activeRevId = activeRun?.payload.revisionRef?.id ?? ''
+  useEffect(() => {
+    if (!activeRevId) return
+    setSelectedRevId(activeRevId)
+  }, [activeRevId])
 
   // GC-11 D3 (reachability amended): the `?run=` deep-link consumer. The param
   // resolves by FETCHING the run by id (the SHARED landing — selectRun,
@@ -942,6 +964,18 @@ export function AnalysisPage() {
           {revisions.map((r) => (
             <option key={r.recordId} value={r.recordId}>{r.payload.title ?? r.recordId}</option>
           ))}
+          {/* FAME-8 B5: the landed run's revision when it is NOT in the
+              fetched list (list cap / archived) — an explicit option so the
+              select displays the label the run declares instead of going
+              blank. Label = the schema-declared revisionRef.label the server
+              stamps on the run payload, else the revision id. Rendered ONLY
+              for the active run's revision and only when absent from the
+              list (no duplicate option, no re-ordering of the listed ones). */}
+          {activeRevId && !revisions.some((r) => r.recordId === activeRevId) ? (
+            <option key={activeRevId} value={activeRevId}>
+              {activeRun?.payload.revisionRef?.label ?? activeRevId}
+            </option>
+          ) : null}
         </select>
         <input data-testid="analysis-run-title" value={runTitle} onChange={(e) => setRunTitle(e.target.value)} placeholder="Run title (optional)" />
         {/* FAME-7 (W5c): one row per DECLARED input (zero declarations ⇒ zero
