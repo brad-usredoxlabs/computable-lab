@@ -53,6 +53,39 @@ describe('MaterialProfileHandlers', () => {
     ]);
   });
 
+  it('carries candidateRanking on listProfiles when the registry declares it (L2-CLARIFY-PICKER-1 OQ1)', async () => {
+    const handlers = createMaterialProfileHandlers(loadMaterialProfileRegistry(REGISTRY_PATH), new MemoryRecordStore());
+    const response = await handlers.listProfiles({} as never, reply());
+    // The declared policy is present on the response (the client comparator's
+    // one cached GET reads it). The composition pseudo-family is never-default.
+    expect(response).toHaveProperty('candidateRanking');
+    expect(response.candidateRanking?.families.composition).toEqual({ rank: 4, canBeDefault: false });
+    expect(response.candidateRanking?.containsSectionLabel).toBe('contains "{label}" ({count})');
+  });
+
+  it('listProfiles is ABSENT (eOPT, never undefined) when the registry declares no candidate_ranking', async () => {
+    const { loadMaterialProfileRegistry } = await import('../../materials/MaterialProfileRegistry.js');
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'material-profiles-'));
+    const file = join(dir, 'registry.yaml');
+    writeFileSync(file, `version: 1
+profiles:
+  chemical: { label: Chemical, applies_when: { domain: [chemical] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }
+  cell_line: { label: Cell, applies_when: { domain: [cell_line] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }
+  media_composition: { label: Media, applies_when: { domain: [media] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }
+  single_active_formulation: { label: Single, applies_when: { formulation_kind: [single_active] }, layers: [formulation], fields: [{ path: name, layer: formulation, label: Name, widget: text, control: free-text }], quick_add: [name] }
+  sample: { label: Sample, applies_when: { domain: [sample] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }
+  other: { label: Other, applies_when: { domain: [other] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }
+`);
+    const handlers = createMaterialProfileHandlers(loadMaterialProfileRegistry(file), new MemoryRecordStore());
+    const response = await handlers.listProfiles({} as never, reply());
+    // eOPT: the key is ABSENT (not present-with-undefined) when undeclared.
+    expect(response).not.toHaveProperty('candidateRanking');
+    expect(response.candidateRanking).toBeUndefined();
+  });
+
   it('grounds ontology refs by reusing existing material class refs', async () => {
     const store = new MemoryRecordStore([{
       recordId: 'MAT-HEPG2',
