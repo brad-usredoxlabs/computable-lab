@@ -91,3 +91,20 @@ All facts first-hand unless marked. No human present (automated tick).
 - OPEN: FAME-7 — no DONE/report yet; all claims pending advc + orch verify.
 - Carried: intake pile (O-1..O-5), W7b honesty flags, AS-L1T223-1 band note, AS-L1T238-4
   revision-lineage note, GCM-DEMO-AOAC-FAME informational shape.
+
+## CHECKPOINT ADDENDUM (~06:22, budget expiry — tick closes, nothing killed)
+1. Re-reconcile @06:17: FAME-7 coder 1744377 ALIVE, worktree active (11 entries), still zero
+   commits, no report file yet (~67 min in — within expectation for this item size; 2x motion
+   check lands ~06:55 NEXT tick by commits/report growth, 3x ~08:00). Keeper FAME7KEEP-1744377
+   verified as the live slot-0 holder (reconcile line reads holder=alive).
+2. FLEET CHANGE after handoff was written: slot-1's lane-2 holder LABSTATEFIX3RUN (launcher
+   1796487) is now DEAD per reconcile (flock FREE). Lane-2's bookkeeping, not mine. Consequence
+   for lane 1: the famelayout1 queue is targeted at slot-0 (FAME-7's keeper releases on coder
+   exit) — it will NOT grab slot-1; fleet capacity is correct either way, slot exclusivity is
+   flock-guaranteed. If lane-2 re-arms fix3run onto slot-1, the stagger trial keeps recording.
+3. famelayout1 checkout unit famelayout1-checkout-l1t0620 progressing normally (50% of 6121 NFS
+   files @06:17; expect CHECKOUT rc=0 marker ~06:25). Queue famelayout1-q-l1t0620 (direct
+   --inner 0) waits the marker with its 60-min window — no re-arm needed.
+4. Live state at exit: trunk 332b9aa4 (246TH docs); slot-0=FAME7 keeper-held, queue armed;
+   both lane-1 dispatches detached systemd units that survive this tick. Next tick: priority
+   list above stands verbatim.
