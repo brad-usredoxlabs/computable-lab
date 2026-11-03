@@ -94,26 +94,33 @@ export function expandWellAddressLiteral(value: string): string[] | null {
 }
 
 /**
- * L2-CLARIFY-TARGET-1 (fix run 4 / D2) — the SELECTION → ONE-grammar
- * range-scalar helper for the "use selected wells" affordance.
+ * L2-CLARIFY-TARGET-1 (fix run 4 / D2 CONFORM — ruling l2t0937, Q2 option (a))
+ * — the SELECTION → ONE-grammar range-literal helper for the "use selected
+ * wells" affordance.
  *
  * Given a set of individual well ids (the plate-selection context's
- * `selectedWells`), return the canonical rectangular-range scalar
- * (`A2:B3` — corners in top-left → bottom-right order) when and ONLY when the
- * selection is exactly ONE full rectangular range that the ONE grammar
- * (`expandWellAddressLiteral`) accepts; otherwise `null`. A `null` result
- * means the selection is not a single rectangular range — the affordance must
- * not render (it is never a silent no-op that fills an unsubmittable value the
- * slot's own gate rejects).
+ * `selectedWells`), return the literal the ONE grammar accepts for that
+ * selection:
+ *  - a multi-well full rectangle → the RANGE LITERAL `A2:B3` (corners in
+ *    top-left → bottom-right order over the sorted selection's bounding box);
+ *  - a SINGLE well (the degenerate 1×1 rectangle) → the bare address `B2`
+ *    (the ONE grammar's plain-well form — what the fill writes and what the
+ *    button label names);
+ *  - otherwise `null`: a non-rectangular selection (a hole / L-shape / gap)
+ *    or a selection with an unshaped member. A `null` result means the
+ *    selection is not one full rectangular range — the affordance renders
+ *    DISABLED with the visible reason (ruling Q2), never a silent no-op and
+ *    never a comma list the slot's own gate rejects.
  *
  * ONE grammar, no second client-side expansion: the helper derives the
  * bounding box from wells that are each well-shaped under the SAME parity
- * `WELL_ADDRESS_SHAPE_RE`, constructs ONE candidate range scalar, and
- * VALIDATES it through the ONE parser (`expandWellAddressLiteral`) — requiring
- * the parser's expansion to EXACTLY equal the selection. No comma-list
- * parsing, no `WELL_RE`/`rangeBetween` second vocabulary.
+ * `WELL_ADDRESS_SHAPE_RE`, constructs ONE candidate range literal, and
+ * VALIDATES it through the ONE parser (`expandWellAddressLiteral`) —
+ * requiring the parser's expansion to EXACTLY equal the selection. It never
+ * parses free text. No comma-list parsing, no `WELL_RE`/`rangeBetween` second
+ * vocabulary.
  */
-export function rectangularRangeScalar(wells: readonly string[]): string | null {
+export function rectangularRangeFromWells(wells: readonly WellId[]): string | null {
   if (wells.length === 0) return null
   // A clean rectangle has no duplicate wells.
   if (new Set(wells).size !== wells.length) return null
@@ -135,7 +142,16 @@ export function rectangularRangeScalar(wells: readonly string[]): string | null 
   // A full rectangle has exactly (rowSpan × colSpan) wells. A selection with
   // gaps (a missing corner) is NOT a full rectangle.
   if ((maxRow - minRow + 1) * (maxCol - minCol + 1) !== wells.length) return null
-  const candidate = `${indexToRowLabel(minRow)}${minCol}:${indexToRowLabel(maxRow)}${maxCol}`
+  // The candidate literal the ONE grammar accepts for this selection:
+  //  - a multi-well rectangle → the RANGE LITERAL `A2:B3` (corners sorted
+  //    top-left:bottom-right — the ruling's Q2 wording names exactly this);
+  //  - a SINGLE well (the degenerate 1×1 rectangle) → the bare address `B2`
+  //    (the ONE grammar's plain-well form — the fill writes `B2`, and the
+  //    button label names `B2`, never `B2:B2`).
+  const candidate =
+    wells.length === 1
+      ? (wells[0] as WellId)
+      : `${indexToRowLabel(minRow)}${minCol}:${indexToRowLabel(maxRow)}${maxCol}`
   // VALIDATE the candidate through the ONE grammar and require the parser's
   // expansion to EXACTLY equal the selection (the ONE parser's expansion is
   // the truth — no second expansion path).

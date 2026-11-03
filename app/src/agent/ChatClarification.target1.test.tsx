@@ -262,7 +262,7 @@ describe('D3: the "use selected wells" affordance leads to an ANSWER with the ON
     expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
   })
 
-  it('a rectangular selection ⇒ fill writes the canonical range scalar, approve ENABLED, answer = the scalar', () => {
+  it('a rectangular selection ⇒ the button names the literal that WILL be filled (A2:B3), enabled; fill → approve ENABLED; answer = the literal', () => {
     const onClarificationPick = vi.fn()
     const message: ChatMessage = {
       id: 'm1',
@@ -279,25 +279,30 @@ describe('D3: the "use selected wells" affordance leads to an ANSWER with the ON
       </WellSelectionProvider>,
     )
     const useSelected = screen.getByTestId('clarify-well-target-use-selected') as HTMLButtonElement
-    // the button names the selection (sorted — the base affordance's label):
-    expect(useSelected.textContent).toBe('Use selected wells (A2, A3, B2, B3)')
+    // fix run 4 / D2 CONFORM (ruling Q2 option (a)): the label names the
+    // RANGE LITERAL the fill will write — the sorted top-left:bottom-right
+    // corners of the selection's rectangle — never the selection itself:
+    expect(useSelected.textContent).toBe('Use selected wells (A2:B3)')
+    expect(useSelected.disabled).toBe(false) // ENABLED: the fill leads to an answer
+    // no reason line on a rectangular selection (the verbatim reason is the
+    // non-rectangular state's only chrome):
+    expect(screen.queryByTestId('clarify-well-target-use-selected-reason')).toBeNull()
     const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
     const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
     expect(approve.disabled).toBe(true) // empty input: never a silent default
-    // THE FILL: clicking fills the input with the CANONICAL RANGE SCALAR —
-    // the ONE grammar's own form (a rectangular range), not a comma list the
-    // slot's gate rejects:
+    // THE FILL: clicking fills the input with the ONE grammar's literal
+    // (a rectangular range), not a comma list the slot's gate rejects:
     fireEvent.click(useSelected)
     expect(input.value).toBe('A2:B3')
     // … and the fill did NOT answer: no callback fired (the answer is the
     // scientist's own approve of the address the fill wrote):
     expect(onClarificationPick).not.toHaveBeenCalled()
-    // THE ANSWER PATH: the filled scalar passes the slot's OWN gate, so
+    // THE ANSWER PATH: the filled literal passes the slot's OWN gate, so
     // approve becomes ENABLED (fix run 4 / D2: the fill leads to an answer):
     expect(approve.disabled).toBe(false)
-    // … and approving sends the canonical range scalar through the EXISTING
-    // onAnswer scalar path (label === value; the server's ONE parser expands
-    // it authoritatively):
+    // … and approving sends the literal through the EXISTING onAnswer
+    // scalar path (label === value; the server's ONE parser expands it
+    // authoritatively):
     fireEvent.click(approve)
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
     const [, answer] = onClarificationPick.mock.calls[0]!
@@ -305,7 +310,9 @@ describe('D3: the "use selected wells" affordance leads to an ANSWER with the ON
     expect((answer as { label: string }).label).toBe('A2:B3')
   })
 
-  it('a non-rectangular selection (L-shape) ⇒ NO fill button (never a silent no-op, never a comma list)', () => {
+  it('a single-well selection ⇒ the button names the bare address (B2), enabled; fill → approve ENABLED', () => {
+    // Ruling Q2 case 3 (the N×1 degenerate rectangle): label `Use selected
+    // wells (B2)`, the fill writes `B2` (never `B2:B2`), approve enabled.
     const onClarificationPick = vi.fn()
     const message: ChatMessage = {
       id: 'm1',
@@ -316,25 +323,69 @@ describe('D3: the "use selected wells" affordance leads to an ANSWER with the ON
     }
     render(
       <WellSelectionProvider plateConfig={PLATE_CONFIGS['96']}>
-        <SelectionSeeder wells={['A2', 'A3', 'B2']}>
+        <SelectionSeeder wells={['B2']}>
           <ChatLog {...baseProps} onClarificationPick={onClarificationPick} messages={[message]} />
         </SelectionSeeder>
       </WellSelectionProvider>,
     )
-    // The selection is NOT one full rectangular range (A2, A3, B2 — B3 is
-    // missing): the affordance must NOT render at all — not disabled, not
-    // rendered-but-dead. No comma list is ever written into the input:
-    expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
+    const useSelected = screen.getByTestId('clarify-well-target-use-selected') as HTMLButtonElement
+    expect(useSelected.textContent).toBe('Use selected wells (B2)')
+    expect(useSelected.disabled).toBe(false)
     const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
-    expect(input.value).toBe('')
-    // … and the slot is still never a silent default (approve disabled):
     const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
-    expect(approve.disabled).toBe(true)
-    expect(onClarificationPick).not.toHaveBeenCalled()
-    // the scientist's typed answer path is intact: a manual address enables
-    // approve exactly as before:
-    fireEvent.change(input, { target: { value: 'A2:B2' } })
+    fireEvent.click(useSelected)
+    expect(input.value).toBe('B2')
+    expect(onClarificationPick).not.toHaveBeenCalled() // fill, not answer
+    expect(approve.disabled).toBe(false) // the bare address passes the slot's OWN gate
+  })
+
+  it('a non-rectangular selection (L-shape) ⇒ the button renders DISABLED with the verbatim reason; a click never writes the input', () => {
+    // fix run 4 / D2 CONFORM (ruling Q2 option (a)): a non-rectangular
+    // selection does NOT hide the affordance — it renders it `disabled`,
+    // naming the selection, with the ruling's reason line VERBATIM. A
+    // disabled button can never be clicked, so a previously typed value can
+    // never be destroyed (the destruction half of the defect is eliminated
+    // by construction).
+    const onClarificationPick = vi.fn()
+    const message: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: wellsRequest.prompt,
+      clarificationRequests: [wellsRequest],
+      timestamp: 0,
+    }
+    render(
+      <WellSelectionProvider plateConfig={PLATE_CONFIGS['96']}>
+        <SelectionSeeder wells={['A2', 'A3', 'C1']}>
+          <ChatLog {...baseProps} onClarificationPick={onClarificationPick} messages={[message]} />
+        </SelectionSeeder>
+      </WellSelectionProvider>,
+    )
+    const useSelected = screen.getByTestId('clarify-well-target-use-selected') as HTMLButtonElement
+    // RENDERED (not hidden), naming the selection …
+    expect(useSelected).not.toBeNull()
+    expect(useSelected.textContent).toBe('Use selected wells (A2, A3, C1)')
+    // … and DISABLED (the selection is not one full rectangular range):
+    expect(useSelected.disabled).toBe(true)
+    // … and the ruling's reason line, VERBATIM (binding wording):
+    const reason = screen.getByTestId('clarify-well-target-use-selected-reason')
+    expect(reason.textContent).toBe(
+      "Selection isn't a rectangular range — type it as a well address or range (e.g. A2:B3).",
+    )
+    // The input is NOT written by the button. Pre-type `A2` and fire a click
+    // (testing-library fires on disabled elements): the value SURVIVES and
+    // approve STAYS enabled for the scientist's own typed value:
+    const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'A2' } })
+    expect(input.value).toBe('A2')
+    const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
     expect(approve.disabled).toBe(false)
+    fireEvent.click(useSelected)
+    expect(input.value).toBe('A2') // unchanged — never destroyed
+    expect(approve.disabled).toBe(false) // still enabled for the typed A2
+    expect(onClarificationPick).not.toHaveBeenCalled() // the affordance never answers
+    // No comma list is ever written into the input:
+    expect(input.value).not.toContain(',')
   })
 })
 

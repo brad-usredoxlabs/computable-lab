@@ -32,6 +32,15 @@
  * carry an `id`. A label mismatch (the answer said `DMEM` but the bound row is
  * `DMEM + FBS`) yields no id — correct.
  *
+ * L2-CLARIFY-TARGET-1 fix run 4 / D1 CONFORM (ruling l2t0937 Q3, shape (A) —
+ * COMPOSE): the formatter declares WHICH detail fields its fact carries in
+ * THIS ONE declaration and exposes them — the result is `{ text, carried }`
+ * (never a second branch table). `carried` names the `eventDetailLine` fields
+ * the fact already shows (`well`/`wells`, `volume`, `material`), so the
+ * caller's composed detail line is the RESIDUAL — one detail line per row, a
+ * field's text never TWICE on a row, and no field the record displayed is
+ * dropped.
+ *
  * The format is pure display — the event, the record id, and the map are the
  * data; nothing here decides what to write. D1 guardrail: this is the EXISTING
  * proposed-changes list; it does not become a second approval surface.
@@ -39,26 +48,48 @@
 import type { ChatMessage } from '../types/ai'
 import { parsePromptMentions } from '../shared/lib/aiPromptMentions'
 
-/** The P7 row fact: `A2 ← 100 uL DMEM (MAT-dmem-ykg0)` (record id optional). */
+/**
+ * L2-CLARIFY-TARGET-1 fix run 4 / D1 CONFORM (ruling l2t0937 Q3): the row fact
+ * PLUS the declared fields it carried. `carried` is the ONE declaration of the
+ * `eventDetailLine` field names the fact text already shows — the caller
+ * excludes them from the residual so a field's text never appears twice on a
+ * row. `null` stays the no-recognised-field result (dead chrome is not added).
+ */
+export interface ProposalRowFactResult {
+  /** The P7 row fact: `A2 ← 100 uL DMEM (MAT-dmem-ykg0)` (record id optional). */
+  text: string
+  /** The `eventDetailLine` detail fields the fact text already carries. */
+  carried: ReadonlySet<string>
+}
+
 export function proposalRowFact(
   event: { eventId: string; event_type?: string; stepId?: string; details?: unknown },
   recordIds?: ReadonlyMap<string, string>,
-): string | null {
+): ProposalRowFactResult | null {
   const details = event.details as Record<string, unknown> | undefined
   if (!details || typeof details !== 'object') return null
 
   const parts: string[] = []
+  // L2-CLARIFY-TARGET-1 fix run 4 / D1 CONFORM (ruling l2t0937 Q3): the ONE
+  // declaration of the detail fields the fact carries — populated by the arms
+  // that contribute to `parts`, exposed to the caller via the result. No
+  // second table, no policy literals.
+  const carried = new Set<string>()
 
   // well(s): details.well (string) else details.wells (array).
   const well = details.well
   const wells = details.wells
   if (typeof well === 'string' && well.trim().length > 0) {
     parts.push(well.trim())
+    carried.add('well')
   } else if (Array.isArray(wells)) {
     const wellList = wells
       .filter((w): w is string => typeof w === 'string' && w.trim().length > 0)
       .map((w) => w.trim())
-    if (wellList.length > 0) parts.push(wellList.join(', '))
+    if (wellList.length > 0) {
+      parts.push(wellList.join(', '))
+      carried.add('wells')
+    }
   }
 
   // volume: details.volumeUl else details.volume (number ⇒ `n uL`;
@@ -67,8 +98,10 @@ export function proposalRowFact(
   const volume = details.volume
   if (typeof volumeUl === 'number' && Number.isFinite(volumeUl)) {
     parts.push(`${volumeUl} uL`)
+    carried.add('volume')
   } else if (typeof volume === 'number' && Number.isFinite(volume)) {
     parts.push(`${volume} uL`)
+    carried.add('volume')
   } else if (
     (volume && typeof volume === 'object') ||
     (volumeUl && typeof volumeUl === 'object')
@@ -77,6 +110,7 @@ export function proposalRowFact(
     if (typeof obj.value === 'number' && Number.isFinite(obj.value)) {
       const unit = typeof obj.unit === 'string' && obj.unit.trim().length > 0 ? obj.unit.trim() : 'uL'
       parts.push(`${obj.value} ${unit}`)
+      carried.add('volume')
     }
   }
 
@@ -86,6 +120,7 @@ export function proposalRowFact(
   if (typeof material === 'string' && material.trim().length > 0) {
     materialLabel = material.trim()
     parts.push(materialLabel)
+    carried.add('material')
   }
 
   // No recognised field ⇒ null (the caller keeps the eventLabel +
@@ -105,14 +140,13 @@ export function proposalRowFact(
 
   // record id: recordIds.get(materialLabel) — only when present, absent
   // otherwise, never invented. It rides in parentheses after the material
-  // (the spec's own rendering).
-  if (recordIds && materialLabel) {
-    const recordId = recordIds.get(materialLabel)
-    if (recordId) {
-      return `${fact} (${recordId})`
-    }
-  }
-  return fact
+  // (the spec's own rendering). The id is TRANSCRIPT provenance, not a
+  // displayable detail field — it is not in `carried`.
+  const withId =
+    recordIds && materialLabel && recordIds.get(materialLabel)
+      ? `${fact} (${recordIds.get(materialLabel)})`
+      : fact
+  return { text: withId, carried }
 }
 
 /**

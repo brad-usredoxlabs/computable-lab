@@ -37,26 +37,34 @@
  * via `onAnswer` (the card's `record(request, answer)`).
  *
  * Optional affordance (spec :362-364, restored by fix2 per defect 3 — this run
- * had deleted the block and left `useOptionalWellSelection()` a dead export):
- * when `useOptionalWellSelection()` returns a non-empty selection that forms
- * ONE full rectangular range the ONE grammar accepts (`rectangularRangeScalar`),
- * a "Use selected wells (…)" button FILLS the input with the canonical range
- * scalar (`A2:B3`). It FILLS, it does NOT answer: `onAnswer` is never called
- * from it — the fill is an address the slot's OWN gate accepts, so the
- * scientist's own approve (the existing `onAnswer({requestId, label, value})`
- * scalar path) is a normal one-click finish. A selection that does NOT form one
- * rectangular range (gaps, an L-shape, anything the ONE grammar would not
- * accept as one literal) does NOT render the button at all — never a silent
- * no-op that fills an unsubmittable comma list, never a second client-side
- * expansion grammar. With no context (the run host) the button simply does not
- * render.
+ * had deleted the block and left `useOptionalWellSelection()` a dead export;
+ * CONFORMED by the architect ruling l2t0937 Q2 option (a)):
+ * when `useOptionalWellSelection()` returns a non-empty selection, a
+ * "Use selected wells (…)" button ALWAYS renders — visible, never hidden:
+ *  - when the selection is exactly ONE full rectangular range the ONE grammar
+ *    accepts, the button is ENABLED and its label names the literal that WILL
+ *    be filled — the range literal `A2:B3` (multi-well corners, sorted
+ *    top-left:bottom-right) or the bare address `B2` (the single-well
+ *    degenerate case) via `rectangularRangeFromWells`; clicking FILLS the
+ *    input with exactly that literal;
+ *  - otherwise the button renders `disabled` and its label names the
+ *    selection (`Use selected wells (A2, A3, C1)`), with the ruling's
+ *    reason line verbatim in the slot. A disabled button can never be
+ *    clicked, so a previously typed value can never be destroyed — the
+ *    destruction half of the defect is eliminated by construction.
+ * It FILLS, it does NOT answer: `onAnswer` is never called from it — the fill
+ * is an address the slot's OWN gate accepts, so the scientist's own approve
+ * (the existing `onAnswer({requestId, label, value})` scalar path) is a
+ * normal one-click finish. Never a comma list, never a second client-side
+ * expansion grammar. With no context (the run host) or an empty selection the
+ * button simply does not render.
  *
  * Same slot rules: unanswered until approve; one control per slot.
  */
 import { useState } from 'react'
 import type { AiClarificationAnswer } from '../types/ai'
 import { useOptionalWellSelection } from '../shared/context/WellSelectionContext'
-import { expandWellAddressLiteral, rectangularRangeScalar } from '../event-editor/lib/wellRange'
+import { expandWellAddressLiteral, rectangularRangeFromWells } from '../event-editor/lib/wellRange'
 
 export interface ClarifyWellTargetSlotProps {
   requestId: string
@@ -72,13 +80,15 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: Clarify
     optionalSelection && optionalSelection.state.selectedWells.size > 0
       ? Array.from(optionalSelection.state.selectedWells).sort()
       : []
-  // L2-CLARIFY-TARGET-1 fix run 4 / D2: the affordance's fill must lead to an
-  // ANSWER with the ONE grammar. The selection only earns the button when it
-  // is exactly ONE full rectangular range the shared ONE parser accepts; the
-  // canonical range scalar (`A2:B3`) is what the fill writes. A non-
-  // rectangular selection (gaps / L-shape) gets NO button — never a silent
-  // no-op, never a comma list the slot's own gate rejects.
-  const selectedRange = rectangularRangeScalar(selected)
+  // L2-CLARIFY-TARGET-1 fix run 4 / D2 CONFORM (ruling l2t0937 Q2 option (a)):
+  // the affordance FILLS ONLY a value the ONE grammar accepts. The selection
+  // earns an ENABLED button when it is exactly ONE full rectangular range —
+  // `rectangularRangeFromWells` returns the literal the fill will write (the
+  // range literal `A2:B3` for a multi-well rectangle, the bare address `B2`
+  // for a single well). A non-rectangular selection (gaps / L-shape) keeps the
+  // button VISIBLE but `disabled` with the ruling's reason line — never a
+  // silent no-op, never a comma list, never a hidden control.
+  const selectedRange = rectangularRangeFromWells(selected)
 
   // ONE grammar: a non-empty scalar that the shared ONE parser + parity-pinned
   // bounds accept is an address literal (a single well or a range). Anything
@@ -126,16 +136,36 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: Clarify
       >
         Use wells
       </button>
-      {selected.length > 0 && selectedRange ? (
-        <button
-          type="button"
-          className="clarify-well-target-slot__use-selected"
-          data-testid="clarify-well-target-use-selected"
-          disabled={disabled}
-          onClick={useSelected}
-        >
-          Use selected wells ({selected.join(', ')})
-        </button>
+      {selected.length > 0 ? (
+        <>
+          {/* L2-CLARIFY-TARGET-1 fix run 4 / D2 CONFORM (ruling l2t0937 Q2):
+              the button renders for EVERY non-empty selection (visible, never
+              hidden). ENABLED and naming the literal that WILL be filled only
+              when the selection is one full rectangular range (the range
+              literal `A2:B3`, or the bare address `B2` for a single well);
+              otherwise `disabled` and naming the selection — a disabled
+              button can never be clicked, so a typed value is never
+              destroyed. */}
+          <button
+            type="button"
+            className="clarify-well-target-slot__use-selected"
+            data-testid="clarify-well-target-use-selected"
+            disabled={disabled || !selectedRange}
+            onClick={useSelected}
+          >
+            Use selected wells ({selectedRange ?? selected.join(', ')})
+          </button>
+          {/* Ruling Q2 — the reason line, VERBATIM (binding wording): */}
+          {!selectedRange ? (
+            <p
+              className="clarify-well-target-slot__reason"
+              data-testid="clarify-well-target-use-selected-reason"
+            >
+              Selection isn&apos;t a rectangular range — type it as a well
+              address or range (e.g. A2:B3).
+            </p>
+          ) : null}
+        </>
       ) : null}
     </div>
   )

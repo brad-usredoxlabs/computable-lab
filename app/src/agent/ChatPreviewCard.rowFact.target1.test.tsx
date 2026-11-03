@@ -154,7 +154,7 @@ describe('P7: the four add_material rows become four DISTINCT checkable facts', 
     expect(buttons[0]?.getAttribute('aria-label')).toBe('Discard A2 ← 100 uL DMEM')
   })
 
-  it('the row fact COMPOSES with the detail line: fact line + FULL descriptor, fact first (fix run 4 / D1)', () => {
+  it('the row renders ONE detail line: fact + RESIDUAL descriptor, no double line (fix run 4 / D1 CONFORM, ruling Q3 shape (A))', () => {
     const chat = stubChat({
       hasPreview: true,
       messages: [answerMessage(ANSWER_WITH_MENTION)],
@@ -170,25 +170,26 @@ describe('P7: the four add_material rows become four DISTINCT checkable facts', 
     })
     const { container } = renderCard(chat)
     // The row-fact formatter reads the event's own volume field → a fact
-    // EXISTS for this event: the fact line renders …
+    // EXISTS for this event. The row renders ONE detail line = the fact
+    // (`75 uL`) followed by the RESIDUAL of `eventDetailLine` (the fields the
+    // fact did NOT carry — `3 cycles`), joined with ` · `, rendered inside
+    // the EXISTING `chat-preview__event-details` element, which KEEPS
+    // `data-testid="chat-preview-row-fact"` (ruling Q3 shape (A) — COMPOSE,
+    // NOT REPLACE):
     const factLine = container.querySelector('[data-testid="chat-preview-row-fact"]')
-    expect(factLine?.textContent).toBe('75 uL')
-    // … AND the descriptor line is NOT replaced by it (fix run 4 / D1:
-    // compose, never drop displayable fields). The FULL `eventDetailLine` —
-    // every displayable field the record carries, in the record's order —
-    // stays on the face: the fact does NOT carry `cycles`, so the descriptor
-    // still shows `75 uL · 3 cycles`. Stated order: fact line first,
-    // descriptor line second (DOM order).
-    const detailLine = container.querySelector('[data-testid="chat-preview-event-details"]')
-    expect(detailLine?.textContent).toBe('75 uL · 3 cycles')
+    expect(factLine?.textContent).toBe('75 uL · 3 cycles')
     expect(factLine).not.toBeNull()
-    expect(detailLine).not.toBeNull()
-    expect(factLine!.compareDocumentPosition(detailLine!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The fact is the row's primary checkable line; the descriptor stays the
-    // dim secondary detail (distinct classes, not one shared line):
-    expect(factLine?.classList.contains('chat-preview__row-fact')).toBe(true)
-    expect(detailLine?.classList.contains('chat-preview__event-details')).toBe(true)
-    expect(factLine?.classList.contains('chat-preview__event-details')).toBe(false)
+    // ONE detail line per row: the no-fact fallback element
+    // (`chat-preview-event-details`) is NOT a second line on this row — the
+    // no-double-line guard survives:
+    expect(container.querySelector('[data-testid="chat-preview-event-details"]')).toBeNull()
+    // … and the composed line IS the existing event-details element (the
+    // row's primary checkable identity):
+    expect(factLine?.classList.contains('chat-preview__event-details')).toBe(true)
+    // No field text TWICE on a row: the fact's volume renders exactly ONCE
+    // (excluded from the residual), and `3 cycles` exactly once:
+    expect(factLine?.textContent?.match(/75 uL/g)?.length).toBe(1)
+    expect(factLine?.textContent?.match(/3 cycles/g)?.length).toBe(1)
     // And the record's number the fact does not carry (3 cycles) is on the
     // face — the trust regression the adversarial gate measured:
     expect(container.querySelector('[data-testid="chat-preview"]')?.textContent).toContain('3 cycles')
