@@ -137,3 +137,22 @@ Lesson recorded in `assumptions.md`: never range-replace inside a contiguous com
    `git -c core.fileMode=false merge --no-ff` → `L1-CELLRENDER-1` also needs the browser gate (§5).
 5. If no slot frees again: prefer another no-slot task (evidence-debt audit, the `peak_integration.py`
    mismatch diagnosis) over an idle spin, then `no-work.log`.
+
+## Addendum (01:02) — generator-mismatch follow-up CANDIDATE, bounded probe result (negative)
+
+The ruling (and my request) called the `params` column's declared `type: string`, "canonical JSON"
+vs its dict value a `peak_integration.py` mismatch. I spent a bounded look on it before closing and
+**could not confirm that attribution** — recording the negative so no later tick inherits it as fact:
+- `server/python-executor-service/src/computable_lab_analysis/peak_integration.py:1109-1124` publishes
+  `effective_parameters` as a FLAT DICT with keys `parameters`, `params_digest` (+ optional
+  `method_label` / `method_revision_ref` / `source_content_sha256` / `reader`).
+- The STORED records (`ANR-000056` frozen from `ANREV-000016`, and `ANR-000071`) instead carry
+  `{columns: [params, params_digest, consumed_input, consumed_artifact_ref], rows: [{params: {...}}]}`
+  — a DIFFERENT key set (`params`, `consumed_input`) than that code publishes.
+- `ctx.publish()` (`ctx.py:264-276`) stores `value = data` verbatim — it does no dict→table coercion.
+⇒ The 4-column table shape and its `type: string` column declaration come from another emitter/path
+or an earlier engine version; naming it needs its own bounded recon. The renderer fix stands on its
+own (the value really is an object and really renders `[object Object]`), so `L1-CELLRENDER-1` is
+unaffected — but the follow-up item must start from the stored manifests, NOT from a
+`peak_integration.py` line, and its first step is to find the emitter (my earlier phrasing in this
+handoff's "evidence debt" section over-named the file; this addendum supersedes it).
