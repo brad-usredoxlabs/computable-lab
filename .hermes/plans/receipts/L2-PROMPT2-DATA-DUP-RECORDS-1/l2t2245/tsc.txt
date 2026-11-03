@@ -1,0 +1,11 @@
+TYPECHECK (npx tsc --noEmit) — raw count + touched-file check
+raw error lines: base=25 after=25 (all pre-existing TS2307 missing-untracked-module debt in the fresh worktree; identical sets)
+== AFTER raw tail ==
+src/api/routes/run-execution.ts(18,38): error TS2307: Cannot find module '../../readiness/RunStartGateService.js' or its corresponding type declarations.
+src/api/routes/run-execution.ts(308,63): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/compiler/resolution/eligibility/facts.ts(23,33): error TS2307: Cannot find module '../../../ai/materialRefFields.js' or its corresponding type declarations.
+src/compiler/resolution/resolutionEngine.ts(19,51): error TS2307: Cannot find module '../../ai/materialRefFields.js' or its corresponding type declarations.
+src/protocol-intake/ProtocolIntakeService.ts(41,44): error TS2307: Cannot find module './materializeBranchCandidate.js' or its corresponding type declarations.
+src/store/RecordStoreImpl.ts(35,8): error TS2307: Cannot find module '../lifecycle/BypassAudit.js' or its corresponding type declarations.
+
+== touched files in AFTER output: none (grep 'vocabulary.ts|vocabularyIdentityCollapse' -> zero hits) ==
