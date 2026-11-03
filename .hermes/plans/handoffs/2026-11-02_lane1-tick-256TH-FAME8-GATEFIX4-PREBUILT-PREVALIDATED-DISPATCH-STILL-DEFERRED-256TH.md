@@ -70,6 +70,29 @@ Every claim below is the orchestrator's first-hand observation unless marked wor
 - No coder launch → **no stagger-trial launch line**; no advc verdict → no advc line. No thunderbeast
   slot used. Brad's `:5174`/`:3001` untouched. No stack restart needed (no YAML change).
 
+## Late-tick change in slot truth (19:08–19:11, recorded before exit)
+At 19:07:57 lane-2's slot-1 coder `TARGET1` EXITED `rc=0` with
+`API call failed after 3 retries: inference request expired while waiting for admission`
+(33m49s into its session; its launcher log records LOCK-ACQUIRED 18:34:08 → CODER_EXITED 19:07:57).
+Verified by hand: `flock -n` on `appliance2-coder-slot-1.lock` **succeeds** (slot-1 genuinely FREE,
+holder dead); slot-0's `CARD1-FIXBROWSER` is still alive (PID 3305342 + hermes 3305346, 53 min).
+
+Consequence for lane 1 — still NO dispatch:
+- Lane 2 has dispatchable work and will need that slot itself (a coder death in TARGET-1 means lane 2
+  must re-dispatch or recover it before anything else). The BRAD-BINDING corpus priority therefore
+  still bars a lane-1 claim on the free slot. Taking it would be exactly the starvation of corpus work
+  the header forbids, on the tick where lane 2 lost its coder.
+- DEATH CLASS: this is a `request_queue_timeout`-class death, so per the stagger-trial rule the
+  fresh-launch window **REVERTS to 60 minutes effective this tick** and no coder is launched by this
+  tick. Recorded in `/home/brad/.hermes/cl/stagger-trial.log` (new last line). Honest caveat for the
+  architect/Brad: the death happened 33 minutes INTO a session, not at prefill, so the 60-min window
+  is not an obviously causal remedy — but the rule is mechanical and is applied as written, and the
+  revert also costs lane 1 nothing this tick since priority already bars a launch.
+- Worktree checkout completed cleanly and is verified: marker ends
+  `CHECKOUT rc=0 head=29ec4be3c6195d20d6e727a8560a4f8c219f3e44`; the GATEFIX4 worktree is ready.
+- `exa-key-tripwire.sh` run per tick: `OK: exa apiKey present and consistent across
+  lane1/lane2/canonical`.
+
 ## Why no dispatch (blocker re-stated with fresh evidence)
 Both fleet coder slots live-held by lane 2 (PIDs 3305342 / 3335333, verified alive 19:00–19:05) and
 lane 2 has 4 dispatchable todo items ⇒ corpus priority bars lane 1. This is the **2nd consecutive
