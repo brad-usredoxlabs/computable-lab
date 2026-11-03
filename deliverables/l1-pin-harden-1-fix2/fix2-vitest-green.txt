@@ -1,0 +1,184 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app
+
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/calibrationModel.test.ts  (51 tests) 10ms
+ ✓ src/analysis/traceModel.test.ts  (44 tests) 35ms
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/declaredInputs.test.ts  (12 tests) 4ms
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/ViewRenderer.compat.test.tsx  (5 tests) 39ms
+ ✓ src/analysis/ViewRenderer.signal.test.tsx  (13 tests) 82ms
+ ✓ src/analysis/ParameterForm.test.tsx  (14 tests) 146ms
+ ✓ src/analysis/ViewRenderer.test.tsx  (15 tests) 312ms
+ ✓ src/analysis/ChromatogramView.test.tsx  (22 tests) 346ms
+ ✓ src/analysis/ViewRenderer.cellrender.test.tsx  (23 tests) 356ms
+ ✓ src/analysis/CompareTraces.test.tsx  (11 tests) 454ms
+stderr | src/analysis/AnalysisChatPanel.recordDraftProposal.test.tsx > AnalysisChatPanel — record_draft_proposal reaches the flow (FAME-3 W5) > a record_draft_proposal frame calls flow.proposeWorkstate with adapter "record-drafting" and the verbatim intent (the named bubble disappears into a card)
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/CalibrationCurveView.test.tsx > D4 — changes spawn a NEW run; completed models are never mutated > submit calls createAnalysisRun ONCE with the diffed parameters + the FROZEN inputs verbatim, then executeAnalysisRun on the NEW id only
+Warning: An update to CalibrationCurveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CalibrationCurveView (/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app/src/analysis/CalibrationCurveView.tsx:72:11)
+
+ ✓ src/analysis/AnalysisChatPanel.analysisProposal.test.tsx  (1 test) 67ms
+ ✓ src/analysis/AnalysisChatPanel.recordDraftProposal.test.tsx  (3 tests) 124ms
+stderr | src/analysis/AnalysisPage.chat.test.tsx > AnalysisPage chat mount (PB-CH-6) > mount fires ONLY listAnalysisRevisions + listAnalysisRuns — no assist/compile/execute/promote
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/CalibrationCurveView.test.tsx > D4 — changes spawn a NEW run; completed models are never mutated > the source run payload is byte-identical before/after the recalc (never mutated)
+Warning: An update to CalibrationCurveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CalibrationCurveView (/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app/src/analysis/CalibrationCurveView.tsx:72:11)
+
+stderr | src/analysis/CalibrationCurveView.test.tsx > D4 recalc — FIX1 D1: the revision is the source run FROZEN revisionRef, never revisions[0] > submit carries the SOURCE RUN revisionRef (revisions[0] is never consulted)
+Warning: An update to CalibrationCurveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CalibrationCurveView (/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app/src/analysis/CalibrationCurveView.tsx:72:11)
+
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/analysis/CalibrationCurveView.test.tsx > D7 — FIX2 M2: the recalc gate over the REAL shipped parameterSchema (raw-JSON override door) > (ii) with the raw-JSON override ACTIVE the submit POSTs the OVERRIDE parameters (the real-shape recalc becomes reachable)
+Warning: An update to CalibrationCurveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CalibrationCurveView (/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app/src/analysis/CalibrationCurveView.tsx:72:11)
+
+ ✓ src/analysis/AnalysisPage.chat.test.tsx  (5 tests) 382ms
+ ✓ src/analysis/CalibrationCurveView.test.tsx  (56 tests) 1312ms
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/analysis/analysisChat.health.test.tsx > AnalysisChatPanel — missing-capability arms > AI unhealthy (aiAvailable false): disabled input + NAMED reason line; a send attempt fires ZERO stream calls
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/analysisChat.health.test.tsx  (2 tests) 161ms
+stderr | src/analysis/AnalysisPage.test.tsx > AnalysisPage > renders the analysis surface with create + run sections
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.deep-link.test.tsx > the ?run= deep link fetches the run by id (reachability) > ?run= an id ABSENT from the list page still lands: ONE getAnalysisRun(id), title renders, param stripped
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.reanalyze.test.tsx > D2 — the re-Analyze door mounts on the analysis surface for a peak-table manifest > a landed peak-table run (no calibration pair anywhere) shows the re-Analyze door + the pre-filled threshold control
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.no-execute.test.tsx > AnalysisPage — mount is read-only (no execute, no promote) > mount fires exactly listAnalysisRevisions + listAnalysisRuns and NOTHING else (execute/promote are click-only)
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.compare.test.tsx > AnalysisPage — the prominent Compare traces action (spec §D4) > is visible and ENABLED with 2 succeeded runs (no reason text)
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.parameter-form.test.tsx > AnalysisPage — parameter-form wiring (GC-9 B/C/D/E) > W1: submit builds parameters from the form — untouched optionals OMITTED, existing keys untouched
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/analysis/AnalysisPage.declared-inputs.test.tsx > D1 — declared-input rows render per declaration; unbound required blocks Create with a named line > renders one row per declared input (name + required marker + accepted names) and blocks Create until bound
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/AnalysisPage.no-execute.test.tsx  (2 tests) 326ms
+ ✓ src/analysis/AnalysisPage.test.tsx  (5 tests) 361ms
+ ✓ src/analysis/ViewRenderer.artifact-table.test.tsx  (13 tests) 237ms
+ ✓ src/analysis/AnalysisPage.deep-link.test.tsx  (4 tests) 435ms
+ ✓ src/analysis/AnalysisPage.reanalyze.test.tsx  (6 tests) 620ms
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/AnalysisPage.declared-inputs.test.tsx  (10 tests) 849ms
+ ✓ src/analysis/AnalysisPage.compare.test.tsx  (8 tests) 885ms
+stderr | src/analysis/AnalysisPage.calibration.test.tsx > GC-11 D3 — the ?run= deep-link consumer (one-shot, client-side manifest seed) > ?run= present: ONE getAnalysisRun, the manifest seeds CLIENT-SIDE from payload.outputManifest, zero execute, param stripped
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/AnalysisPage.parameter-form.test.tsx  (16 tests) 1189ms
+ ✓ src/analysis/AnalysisPage.calibration.test.tsx  (12 tests) 628ms
+(node:657435) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/cssRuleScan.test.ts  (19 tests) 10ms
+
+ Test Files  25 passed (25)
+      Tests  372 passed (372)
+   Start at  06:14:18
+   Duration  16.78s (transform 3.18s, setup 28.95s, collect 47.06s, tests 9.37s, environment 197.09s, prepare 15.44s)
+
