@@ -293,7 +293,7 @@ verbs:
         required: false
       - name: volumeUl
         kind: quantity
-        required: false
+        required: true
       - name: volume
         kind: quantity
         required: false
@@ -303,6 +303,15 @@ verbs:
         domain: material
         cardinality: many
         itemNounField: material
+      # L2-CLARIFY-TARGET-1 (Change 4): add_material is defined by WHICH wells it
+      # fills — the address argument is declared required (data), making the
+      # MISSING_REQUIRED_ARGUMENT_REASON sweep route-reachable so an absent
+      # targetWells bars the compile (the §5.2 sweep) instead of silently
+      # staging events with no target. Same declaration shape as the aliquot
+      # targetWells precedent (SPINE-7, :556-561). No TS predicate, no verb name.
+      - name: targetWells
+        kind: wells
+        required: true
   - name: create_container
     class: simple
     policyRef: hint-authority
