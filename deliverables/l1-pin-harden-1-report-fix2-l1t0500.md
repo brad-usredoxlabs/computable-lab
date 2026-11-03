@@ -214,3 +214,99 @@ puts the class on a DIV inside the td, never on the td itself. Pinned
 explicitly so the behaviour is owned, not accidental:
     CONFORMING_FLOOR + .view-spec__table td.view-spec__cell-item { overflow-wrap: anywhere; }    -> [ANYWHERE_VIOLATION]
 with the reason in the test comment.
+
+--------------------------------------------------------------------------------
+## 6. The four verification commands — REAL output (final tip)
+
+1) `cd app && npx vitest run src/analysis/`  (transcript
+   `deliverables/l1-pin-harden-1-fix2/fix2-vitest-green.txt`):
+
+       Test Files  25 passed (25)
+            Tests  372 passed (372)
+
+   New it-block count this run: cellrender 18 -> 23 (+5: 3 D1 relaxed-nesting
+   blocks, 2 D3 both-direction blocks), cssRuleScan.test 16 -> 19 (+3 parser
+   composition/invariant blocks). +8 it-blocks, 369 -> 372 tests green
+   (369 was the mid-run count before the parser-contract blocks landed).
+   No `.skip`/`.todo`/`.only`/`xit(`/`xdescribe` in the three files (grep,
+   zero hits).
+
+2) `cd app && npx tsc --noEmit`  (transcript `fix2-tsc-after.txt`):
+
+       12 'error TS' lines
+       0 in src/analysis
+       diff vs fix1-tsc-after.txt (sorted error sets): EMPTY -> SET_MATCHES_FIX1_BASELINE
+
+   = the documented 12-line worktree baseline, no new error line, none in
+   src/analysis. (A transient 13th line — TS2550 `replaceAll` in my own new
+   code — was caught here and fixed in 8a62aad9 before final; that is why
+   this command is load-bearing.)
+
+3) `git -c core.fileMode=false diff --stat 1a443259..HEAD` — app paths only:
+
+       app/src/analysis/ViewRenderer.cellrender.test.tsx
+       app/src/analysis/cssRuleScan.test.ts
+       app/src/analysis/cssRuleScan.ts
+       23 files changed, 2657 insertions(+), 60 deletions(-)  (rest = deliverables/)
+
+   Only the three permitted app files; everything else is under
+   deliverables/. No package.json touched (no new dependency).
+
+4) `git rev-parse 1a443259:app/src/analysis/AnalysisPage.css HEAD:app/src/analysis/AnalysisPage.css`:
+
+       c6930c66eabf3918ececb2df3a0f682b7e94c4da
+       c6930c66eabf3918ececb2df3a0f682b7e94c4da   (identical — AC4 holds)
+
+5) `node deliverables/l1-pin-harden-1-fix2/fix2-red-probe.mts .. WORKTREE`
+   (from `app/`) — full case-by-case output in §3 and in
+   `fix2-red-probe-postfix.txt`; `RED (evasion accepted): 0/11`, controls
+   FLAG, guards [], shipped `AnalysisPage.css -> []`. The same probe against
+   the start commit (`.. b2b59fdf`) re-prints §2's RED transcript from the
+   committed history at any time.
+
+--------------------------------------------------------------------------------
+## 7. Observations — NOT acted on (for the orchestrator to file)
+
+O-a (product-behaviour question, NOT in D1-D3): `overflow-wrap` is an
+INHERITED property, so `.view-spec__table { overflow-wrap: anywhere }` —
+written flat at top level or nested via a bare `&` block — visibly affects
+cell rendering even though no selector names `td`/`th`. The pin's documented
+cell-family scope (review D2 deviation, accepted since GATEFIX5) has always
+let the flat form through; the fix did not change that. Closing it means
+widening the ban to rules scoped to `.view-spec__table` without a cell token
+— a product-intent change (it would also have to say what happens to
+`@container` blocks over the table), not a boundary of this item.
+
+O-b (evidence-trail): fix run 1's battery (fix1-battery.mts, 20 cases)
+contains no bare-head nested shape, which is why it passed 20/20 both pre-
+and post-D1-fix (§4). Adding bare-head cases to THAT battery would blur the
+fix1/fix2 evidence split; the D1 coverage lives in the fix2 probe + vitest.
+If the orchestrator wants a single all-family battery, file a follow-up.
+
+O-c (carve-out boundary, recorded in §5): the reviewer's capture-group regex
+also refuses to exempt a glued `td.view-spec__cell-item` (over-flag side).
+Measured the lookaround variant behaves identically there; no sane regex
+exempts the glued compound without re-opening the fail-open. Left as the
+decision's exact pattern.
+
+O-d: fix1 transcripts `fix1-battery-prefix.txt`/`fix1-battery-postfix.txt`
+still carry the OLD wrong banner (they are committed history; append-only —
+the corrected re-runs are the fix2 files, §4).
+
+## 8. Correction to the previous report's §8.1 (append-only)
+
+report-l1t0020.md §8.1 ("non-`&` selector is kept verbatim (conservative:
+only makes MORE text visible to the ban, never less)") is FALSE and is
+superseded: keeping a bare nested head verbatim DROPS the parent scope,
+which HIDES text from the ban — that was exactly advc2's BLOCKER. Correct
+statement (now the scanner docstring): a selector WITHOUT `&` composes
+against the parent as an implicit descendant; composition distributes over
+the parent's selector list; resolution may only WIDEN scope, never drop it.
+The historical report is left unedited per append-only; this section is the
+correction of record.
+
+--------------------------------------------------------------------------------
+STATUS: D1, D2, D3 closed; fixtures + transcripts committed; AC1-AC5
+re-verified (§6). Not marked done — orchestrator gate owns that.
+
+L1-PIN-HARDEN-1 FIX2 DONE (see END MARKER sha in final message)
