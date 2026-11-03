@@ -57,10 +57,20 @@ journeys:
             labware: "96-well plate"
             volumeUl: 100
             targetWells: [A2:H6]
-            composition:
-              - { material: "Trypsin-EDTA", role: other, fraction: "50%" }
-              - { material: "DMEM", role: buffer_component, fraction: "50%" }
-              - { material: "FBS", role: additive, fraction: "10%" }
+            # SWEEP-CALIB U2: the composition MUST ride the canonical
+            # `params.composition` form (the taught grammar; the live model's
+            # green-baseline shorthand 20261101T225814Z used exactly this).
+            # A top-level `composition:` sibling is NON-canonical: the
+            # deterministic compiler then fires the per-component material
+            # ambiguous-noun bars (3) IN ADDITION to composition-fraction-sum
+            # (1) => 4 requests => ChatLog renders the GROUPED card
+            # (chat-clarification-*, not chat-log-request-*) and J2's pinned
+            # single-card selector never matches (the post-CARD-1 fake-red).
+            params:
+              composition:
+                - { material: "Trypsin-EDTA", role: other, fraction: "50%" }
+                - { material: "DMEM", role: buffer_component, fraction: "50%" }
+                - { material: "FBS", role: additive, fraction: "10%" }
     turn2:
       intent: event_shorthand
       shorthand: |
@@ -71,10 +81,15 @@ journeys:
             labware: "96-well plate"
             volumeUl: 100
             targetWells: [A2:H6]
-            composition:
-              - { material: "Trypsin-EDTA", role: other, fraction: "45%" }
-              - { material: "DMEM", role: buffer_component, fraction: "45%" }
-              - { material: "FBS", role: additive, fraction: "10%" }
+            # SWEEP-CALIB U2: canonical `params.composition` (same seam as
+            # turn1). Fractions sum to 100 so the composition-fraction-sum
+            # bar does not fire; the canonical form also avoids the
+            # non-canonical top-level `composition:` multi-request trap.
+            params:
+              composition:
+                - { material: "Trypsin-EDTA", role: other, fraction: "45%" }
+                - { material: "DMEM", role: buffer_component, fraction: "45%" }
+                - { material: "FBS", role: additive, fraction: "10%" }
 
   # J3 — protocol-edit via chat. step-lyse exists on the scratch copy
   # (XDR-JOURNEYS-3, a copy of XDR-w28-gate0001). The op sets the step's label

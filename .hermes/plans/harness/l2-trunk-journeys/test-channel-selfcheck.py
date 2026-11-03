@@ -1187,6 +1187,99 @@ def main():
                             and _needle in rj.CHATHOST_SWEEP_PROMPT,
                             ["block_present=%r needle=%r" % (isinstance(_sweep_block, dict), _needle)]))
 
+    # ---- (U1b) CHATHOST-CONSOLIDATE-1 negative control (pure — no browser,
+    # no stack). The open_ai_tab step was made to DETECT THE PANE FIRST (the
+    # composer 'Message' locator the ask step already uses) and click the
+    # right-pane-tab-ai tab ONLY when it exists — tolerating the surface's
+    # honest shape (run-workspace mounts the chat pane already open, with no
+    # tab element). The assertion must stay intact: a host that GENUINELY
+    # lacks the chat pane yields no rendered assistant answer, and the
+    # probe's OWN assert.rendered must score that evidence RED (not a step
+    # skip). Feed the driver's pure grader the evidence ui-drive records:
+    #   pane-absent  -> 0 assistant turns (RED on the probe's own assertion);
+    #   pane-present -> 1 non-empty answer (GREEN, i.e. the fix is not
+    #                   over-strict). The assert.rendered block is the
+    # probe's real one (built from the real inventory route DATA).
+    try:
+        _u1_probe = rj.build_chat_host_probe(
+            "chathost-sweep-negative-control", "x", "/x")
+        _u1_assert_rendered = _u1_probe["assert"]["rendered"]
+        _u1_ev_absent = {"assistant_turns": 0,
+                         "last_assistant_text_nonempty": False,
+                         "turns_completed": 0, "error_frames": 0}
+        _u1_ev_present = {"assistant_turns": 1,
+                          "last_assistant_text_nonempty": True,
+                          "turns_completed": 1, "error_frames": 0}
+        _u1_v_absent = rj.check_rendered_assertions(
+            _u1_ev_absent, _u1_assert_rendered)
+        _u1_v_present = rj.check_rendered_assertions(
+            _u1_ev_present, _u1_assert_rendered)
+        results.append(("U1b: the probe assert.rendered DEMANDS a visible assistant answer",
+                        any("assistant_answer_visible" in a for a in _u1_assert_rendered),
+                        ["assert.rendered=%r" % (_u1_assert_rendered,)]))
+        results.append(("U1b negative control: pane-ABSENT evidence is RED on the probe's own assert.rendered",
+                        bool(_u1_v_absent)
+                        and any("assistant" in v for v in _u1_v_absent),
+                        ["violations=%r" % (_u1_v_absent,)]))
+        results.append(("U1b control: pane-present non-empty evidence is GREEN (fix not over-strict)",
+                        not _u1_v_present,
+                        ["violations=%r" % (_u1_v_present,)]))
+        # ONE shared step implementation (no per-host branch): detect the
+        # pane FIRST (composer 'Message'), click the tab only when present,
+        # fail closed when neither is present.
+        _u1_src = open(os.path.join(HERE, "ui-drive.cjs")).read()
+        results.append(("U1b: open_ai_tab detects the pane FIRST (tab + composer locators) and fails closed",
+                        '[data-testid="right-pane-tab-ai"]' in _u1_src
+                        and "getByLabel('Message', { exact: true })" in _u1_src
+                        and "throw new Error('open_ai_tab: neither" in _u1_src,
+                        []))
+        results.append(("U1b: the probe step sequence keeps open_ai_tab as step 2",
+                        _u1_probe["steps"][1] == {"step": "open_ai_tab"},
+                        ["steps=%r" % (_u1_probe["steps"],)]))
+        # (U1a) the artifact-host probe materialises its REAL record via the
+        # standard seed.record / teardown.delete_record machinery (recordId
+        # from the route's :artifactId token); the other hosts stay seedless
+        # (no per-host special-casing). Checked on the REAL inventory DATA.
+        _u1_inv = yaml.safe_load(open(rj.CHAT_HOSTS_INVENTORY)) or {}
+        _u1_hosts = _u1_inv.get("hosts") or []
+        _u1_ah = next((h for h in _u1_hosts if h.get("id") == "artifact-host"), None)
+        _u1_ahp = (rj.build_chat_host_probe(_u1_ah["id"], _u1_ah["surface"],
+                                            _u1_ah["route"])
+                   if _u1_ah else None)
+        _u1_seedrec = ((_u1_ahp or {}).get("seed") or {}).get("record") or {}
+        results.append(("U1a: artifact-host probe seeds a REAL record (recordId from the route's :artifactId token)",
+                        bool(_u1_ahp)
+                        and _u1_seedrec.get("recordId") == "CHATHOST-PROBE"
+                        and _u1_seedrec.get("payload", {}).get("kind") == "artifact",
+                        ["seed.record=%r" % (_u1_seedrec,)]))
+        results.append(("U1a: the seeded artifact record carries schemaId + a schema-valid payload (kind/studyId/recordId)",
+                        bool(_u1_ahp)
+                        and "schemaId" in _u1_seedrec
+                        and _u1_seedrec.get("payload", {}).get("studyId", "").startswith("STU-")
+                        and _u1_seedrec.get("payload", {}).get("recordId") == _u1_seedrec.get("recordId"),
+                        ["schemaId=%r" % (_u1_seedrec.get("schemaId"),)]))
+        results.append(("U1a: artifact-host probe tears down the seeded record (delete_record)",
+                        (_u1_ahp or {}).get("teardown") == {"delete_record": "CHATHOST-PROBE"},
+                        ["teardown=%r" % ((_u1_ahp or {}).get("teardown"),)]))
+        _u1_rw = next((h for h in _u1_hosts if h.get("id") == "run-workspace"), None)
+        _u1_rwp = (rj.build_chat_host_probe(_u1_rw["id"], _u1_rw["surface"],
+                                            _u1_rw["route"])
+                   if _u1_rw else None)
+        results.append(("U1a: run-workspace probe stays seedless (its /runs/:id route mounts no artifact record)",
+                        bool(_u1_rwp)
+                        and (_u1_rwp.get("seed") in ({}, None)),
+                        ["run-workspace seed=%r" % ((_u1_rwp or {}).get("seed"),)]))
+        results.append(("U1a: ONLY the artifact route materialises a record (no per-host special-casing)",
+                        sum(1 for h in _u1_hosts
+                            if h.get("id") != "artifact-host"
+                            and (rj.build_chat_host_probe(
+                                h["id"], h.get("surface"), h.get("route") or "").get("seed") or {})
+                            .get("record")) == 0,
+                        ["non-artifact seed count (expect 0)"]))
+    except Exception as _e:
+        results.append(("U1a/U1b: self-check (probe seed + open_ai_tab negative control)",
+                        False, ["err=%s" % _e]))
+
     ok = True
     for name, passed, notes in results:
         print("%-64s %s" % (name, "OK" if passed else "RED"))

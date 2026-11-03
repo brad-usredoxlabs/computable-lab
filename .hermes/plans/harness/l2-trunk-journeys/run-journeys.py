@@ -83,6 +83,41 @@ CHAT_HOSTS_INVENTORY = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yam
 # prompt_contains serves all hosts; no per-host prompt strings in code).
 CHATHOST_SWEEP_PROMPT = "CHATHOST-SWEEP probe round trip"
 
+# The artifact record schema (the schemaId the artifact-host probe's REAL
+# record materialises against, via the standard seed.record machinery). The
+# id is the schema's own $id (schema/studies/artifact.schema.yaml).
+ARTIFACT_SCHEMA = ("https://computable-lab.com/schema/computable-lab/"
+                   "artifact.schema.yaml")
+
+
+def _artifact_probe_seed(rid):
+    """The payload for the REAL artifact record an artifact-host probe mounts.
+
+    recordId == the probe's :artifactId token, so the page's
+    getRecord(artifactId) resolves it. artifactKind: writeup + a minimal
+    TipTap `body` (the document-viewer arm — the probe kind token is not
+    'pdf'). studyId is a STU-shaped probe token (ProjectWorkspacePage
+    validates /STU-.../; the WorkspaceProvider renders a graceful default
+    for a missing study, so no study record is required). This is seed DATA
+    materialised through the SAME seed/teardown machinery every journey
+    uses (seed.record / teardown.delete_record) — not a special case and
+    not a stubbed API."""
+    return {
+        "kind": "artifact",
+        "recordId": rid,
+        "id": rid,
+        "title": "L2 chat-host sweep probe artifact",
+        "studyId": "STU-%s" % rid,
+        "artifactKind": "writeup",
+        "state": "draft",
+        "body": {"type": "doc", "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text",
+                 "text": "Probe artifact body for the L2 chat-host sweep "
+                          "(harness seed data)."}]},
+        ]},
+    }
+
 
 def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
     """The chat-host inventory entries (config/chat/chat-hosts.yaml): returns
@@ -145,17 +180,40 @@ def build_chat_host_probe(host_id, surface, route):
     inventory). Reuses the existing step vocabulary (goto -> open_ai_tab ->
     ask -> screenshot) — the universal HarnessChatPane composer/affordances
     are host-generic, so there is NO per-host code and NO per-host prompt
-    string. `seed`/`teardown` are empty (no record is materialised; the
-    probe is a read-only round trip)."""
+    string.
+
+    Seed: hosts whose route mounts a record-by-id page materialise a REAL
+    record through the SAME seed.record / teardown.delete_record machinery
+    every journey uses — DATA, not a special case, not a stubbed API. The
+    route-shape rule (not a host-name comparison) is: an artifact route
+    (/artifact/:kind/:artifactId) fetches its record by artifactId on mount,
+    so the probe must mount the REAL host page with a REAL artifact record.
+    recordId == the probe's :artifactId token (the same token the nav path
+    carries), so getRecord(artifactId) resolves it. Every other host rides
+    an honest fallback/empty state for a probe token and needs no record
+    (seed stays {} for those)."""
+    nav = probe_nav_path(route)
+    seed = {}
+    teardown = {}
+    if re.match(r"^/artifact/", nav):
+        # recordId == the :artifactId token (last path segment) the page
+        # fetches by. Derived from the nav path the product declared — the
+        # same token goto navigates to — so the read resolves. recordId
+        # rides TOP-LEVEL (the seed.record contract: seed_journey reads
+        # rec["recordId"]), exactly as every journey seed does (J1.yaml).
+        rid = nav.rsplit("/", 1)[-1]
+        seed = {"record": {"recordId": rid, "schemaId": ARTIFACT_SCHEMA,
+                           "payload": _artifact_probe_seed(rid)}}
+        teardown = {"delete_record": rid}
     return {
         "id": host_id,
         "title": "chat-host sweep probe: %s (%s)" % (host_id, surface),
         "file": "probe-%s.yaml" % host_id,
         "timeout_s": 300,
-        "seed": {},
-        "teardown": {},
+        "seed": seed,
+        "teardown": teardown,
         "steps": [
-            {"step": "goto", "path": probe_nav_path(route)},
+            {"step": "goto", "path": nav},
             {"step": "open_ai_tab"},
             {"step": "ask", "text": CHATHOST_SWEEP_PROMPT},
             {"step": "screenshot", "tag": "rendered-answer"},

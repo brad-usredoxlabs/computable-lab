@@ -301,9 +301,38 @@ function shaShort(s) {
           await page.evaluate((u) => window.localStorage.setItem('cl.currentUserId', u),
                               step.user_id || 'USR-BRAD');
           break;
-        case 'open_ai_tab':
-          await page.locator('[data-testid="right-pane-tab-ai"]').first().click();
+        case 'open_ai_tab': {
+          // Detect the pane FIRST, tolerating the surface's honest shape. Some
+          // hosts mount the universal chat pane ALREADY OPEN (run-workspace
+          // renders HarnessChatPane directly as its rightPane — no RightPane
+          // tab strip, so no right-pane-tab-ai element exists there). Other
+          // hosts use the RightPane tab strip and the AI pane opens on a click.
+          // The chat composer is the 'Message' input — the SAME locator the
+          // ask step uses to find the input, so "the pane is present" is "the
+          // composer the next step needs is present". Bounded poll (up to T)
+          // for EITHER the tab or the already-open composer, then act:
+          const tab = page.locator('[data-testid="right-pane-tab-ai"]').first();
+          const pane = page.getByLabel('Message', { exact: true }).first();
+          let nTab = await tab.count(), nPane = await pane.count();
+          const deadline = Date.now() + T;
+          while (nTab === 0 && nPane === 0 && Date.now() < deadline) {
+            await page.waitForTimeout(250);
+            nTab = await tab.count();
+            nPane = await pane.count();
+          }
+          if (nTab > 0) {
+            await tab.click();                     // tab-strip host: open the AI pane
+          } else if (nPane > 0) {
+            await pane.waitFor({ state: 'visible', timeout: T });  // already open
+          } else {
+            // Fail closed: a host that genuinely lacks the chat (neither tab
+            // nor pane) must go RED, never silently skip the step.
+            throw new Error('open_ai_tab: neither the right-pane-tab-ai tab '
+              + 'nor the chat pane (composer "Message") is present — the host '
+              + 'lacks the chat pane');
+          }
           break;
+        }
         case 'new_thread':
           // D3 determinism: the deck chat thread PERSISTS across runs (the
           // thread list carried yesterday's unanswered cards into this run,
