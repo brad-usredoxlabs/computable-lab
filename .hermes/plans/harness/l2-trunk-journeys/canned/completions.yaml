@@ -87,3 +87,25 @@ journeys:
         - op: step_update
           stepId: step-lyse
           label: "Lyse the sample (journeys J3)"
+
+  # CHATHOST-SWEEP — §6 LEG-C6-SWEEP-DEBT: the ONE block that serves ALL six
+  # inventory chat hosts. The driver's sweep probe asks the single shared
+  # prompt CHATHOST_SWEEP_PROMPT (run-journeys.py) on every host; this block
+  # is keyed by that prompt (prompt_contains), so there is no per-host code
+  # and no per-host prompt string anywhere. The completion is the minimal
+  # host-agnostic agent_intent — one symbolic mix action over a symbolic
+  # wellset token, the same live-proven shape as J1 — so the deterministic
+  # compiler renders a clean, user-visible answer (an intent card) on ANY
+  # host's universal chat pane without fabricating events or assuming
+  # host-specific context (no create_container, no material, no attached
+  # protocol). One turn only: pick_completion falls back to turn1 on the
+  # answer turn, so a block with turn1 is complete.
+  CHATHOST-SWEEP:
+    prompt_contains: "CHATHOST-SWEEP probe"
+    turn1:
+      intent: event_shorthand
+      shorthand: |
+        intentId: chathost-sweep-probe
+        actions:
+          - action: mix
+            wells: all-wells

@@ -1112,6 +1112,81 @@ def main():
             results.append(("CHATHOST shrink-guard: manifest load (Change 3)",
                             False, ["err=%s" % _e]))
 
+        # ---- (T4) §8.2 T-4 / §6 LEG-C6-SWEEP-DEBT: the DRIVER's EMMITTER
+        # (run-journeys.py emit_chat_host_verdicts) over a SYNTHETIC sweep
+        # fixture. The arms drive THE SAME function the driver runs when it
+        # writes chat_host_verdicts (no helper divergence), so a broken or
+        # fabricated emitter makes the arm RED (non-vacuous). The emitter
+        # maps each per-host receipt that EXISTS in the run dir to an accept
+        # OBJECT; a host whose receipt was never written is OMITTED, which is
+        # exactly what the gate's strict-subset check names.
+        with tempfile.TemporaryDirectory() as td_t4:
+            run_dir_t4 = os.path.join(td_t4, "20261103T000000Z")
+            os.makedirs(run_dir_t4)
+            for h in inv_ids:                    # one green receipt per host
+                with open(os.path.join(run_dir_t4, "%s.json" % h), "w") as rfh:
+                    json.dump({"journey": h, "verdict": "green",
+                               "ai_request_bodies": [{"endpoint": "/api/ai/**",
+                                   "body": {"prompt": rj.CHATHOST_SWEEP_PROMPT}}],
+                               "screenshots": ["rendered-answer.png"]}, rfh)
+            # (T4a) the EMITTER over a FULL synthetic sweep -> a table keyed by
+            # every inventory id, each an accept OBJECT with a per-host receipt.
+            t4_table = rj.emit_chat_host_verdicts(run_dir_t4, inv_ids)
+            results.append(("§6 T-4: the DRIVER emitter over a FULL synthetic sweep -> all six ids accept (non-vacuous)",
+                            sorted(t4_table) == sorted(inv_ids)
+                            and all(t4_table[h]["verdict"] == "accept" for h in inv_ids)
+                            and all(t4_table[h]["receipts"] == "%s.json" % h for h in inv_ids),
+                            ["table_keys=%r" % (sorted(t4_table),)]))
+            # the emitter's FULL table drives the REAL gate -> GREEN (rc 0)
+            with open(os.path.join(run_dir_t4, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": t4_table}, fh)
+            os.symlink(run_dir_t4, os.path.join(td_t4, "latest"))
+            env_t4 = dict(os.environ, CL_RECEIPTS=td_t4,
+                          CL_CHAT_HOSTS=inv_path, CL_CHAT_HOSTS_MANIFEST=man_path)
+            p_t4 = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                   "--chat-hosts"], capture_output=True, text=True,
+                                  env=env_t4)
+            results.append(("§6 T-4: the emitter's FULL-inventory table drives the REAL gate GREEN (rc 0)",
+                            p_t4.returncode == 0 and "GATE-VERDICT green" in p_t4.stdout,
+                            ["rc=%d out=%s" % (p_t4.returncode, p_t4.stdout.strip()[:160])]))
+            # (T4b) THE RED CASE: the SAME emitter with FIVE hosts (one host's
+            # receipt was never written) -> the table is a STRICT SUBSET and the
+            # REAL gate exits 1 NAMING the missing host. Non-vacuous: an emitter
+            # that fabricates the dropped host's accept (or always emits all six)
+            # makes missing5 != [dropped] and this arm fails.
+            os.remove(os.path.join(run_dir_t4, "%s.json" % dropped))
+            t4_table5 = rj.emit_chat_host_verdicts(run_dir_t4, inv_ids)
+            with open(os.path.join(run_dir_t4, "run-meta.json"), "w") as fh:
+                json.dump({"app_base": "http://localhost:5193",
+                           "chat_host_verdicts": t4_table5}, fh)
+            p_t4b = subprocess.run([sys.executable, os.path.join(HERE, "check-gate.py"),
+                                    "--chat-hosts"], capture_output=True, text=True,
+                                   env=env_t4)
+            missing5 = [h for h in inv_ids if h not in t4_table5]
+            results.append(("§6 T-4: the emitter with FIVE hosts (dropped %r) -> the REAL gate exits 1 + names the host" % dropped,
+                            missing5 == [dropped]
+                            and p_t4b.returncode == 1
+                            and "STRICT SUBSET" in p_t4b.stdout
+                            and dropped in p_t4b.stdout,
+                            ["missing=%r rc=%d out=%s"
+                             % (missing5, p_t4b.returncode, p_t4b.stdout.strip()[:160])]))
+            # (T4c) non-vacuity of the DATA tie: the ONE shared probe prompt must
+            # be the substring the single CHATHOST-SWEEP canned block matches on
+            # (prompt_contains), so the fake serves the sweep prompt with a real
+            # rendered answer — one block serves all six hosts. Break the prompt
+            # <-> block tie (or drop the block) and this arm fails, i.e. the
+            # sweep would ride no canned completion.
+            with open(os.path.join(HERE, "canned", "completions.yaml")) as fh:
+                _cand = yaml.safe_load(fh) or {}
+            _sweep_block = (_cand.get("journeys") or {}).get("CHATHOST-SWEEP")
+            _needle = (_sweep_block or {}).get("prompt_contains")
+            results.append(("§6 T-4: the probe prompt is matched by the ONE CHATHOST-SWEEP canned block (non-vacuous)",
+                            isinstance(_sweep_block, dict)
+                            and isinstance(_needle, str) and _needle
+                            and _needle in rj.CHATHOST_SWEEP_PROMPT,
+                            ["block_present=%r needle=%r" % (isinstance(_sweep_block, dict), _needle)]))
+
     ok = True
     for name, passed, notes in results:
         print("%-64s %s" % (name, "OK" if passed else "RED"))
