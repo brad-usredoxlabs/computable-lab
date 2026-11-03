@@ -130,3 +130,23 @@ array arm, so there is **no user-visible consequence**, unlike the `params` dict
 Docs-only: this handoff + a `# 284TH` note under `L1-PARAMS-EMITTER-RIDER` in the task list. No
 product file, no schema, no data-store write, no merge, no dispatch. Queue counts unchanged:
 todo 2, blocked 1, in-progress 0, done 107.
+
+## Closing addendum (11:09, after the reconcile above)
+
+While this tick was running, lane 2's slot-1 coder **`L2-CLARIFY-TARGET-1` exited rc=0**
+(`coder-launches.jsonl`: `exit` … `returncode: 0`, 4th pass `fix4-conform`, started 15:33Z,
+ended ~16:07Z). At close: **slot-0 HELD** (`L2-CHATHOST-CONSOLIDATE-1`, pid 1101760/1101762,
+live, 1h27m) and **slot-1 FREE** (flock-verified, not pidfile-read).
+
+This changes nothing for lane 1 and is recorded so the next tick does not inherit a stale
+"both slots held":
+
+- The free slot is **lane 2's first refusal** under CORPUS PRIORITY (Brad 2026-11-02T17:05), and
+  lane 2 still carries 4 todo + 3 in-progress corpus items + an active `corpus-state.md`. Lane 1
+  claiming it would be the capacity violation the priority rule exists to prevent.
+- Lane 1 still has **nothing dispatchable** regardless: pin Brad-frozen, backfill Brad-held, rider
+  untriggered. A free slot does not create lane-1 work — that is the whole point of
+  AS-L1T284-3, and this tick's evidence is cleaner than the last three because the two reasons are
+  now *observably* independent (a slot genuinely freed and lane 1 still had to stand down).
+- Lane 2's re-dispatch is its own orchestrator's call; I did not touch it (no launch, no lock
+  claimed, no lane-2 file read beyond the queue counts needed for the priority test).
