@@ -83,6 +83,17 @@ export function foldSameNounCards(cards: readonly AgentClarificationRequest[]): 
       // No noun key — never fold (never guess).
       return;
     }
+    // L2-CLARIFY-TARGET-1 (RE-PIN NOTE S4): a card carrying an assumed-value
+    // control is a DISTINCT slot the scientist must approve (the answer fold
+    // keys off its fact's actionLocation). Two quantity slots with the same
+    // noun label (e.g. two add_material actions both missing volumeUl) share
+    // a (query, actionSignature) and would otherwise collapse to one card —
+    // losing a slot. The ONE narrow guard: never fold a clarifyControl-bearing
+    // card (it passes through untouched, at its own position). The RED
+    // (shorthandChat.sameNounDedupe.target1.test.ts) proved the collapse.
+    if ('clarifyControl' in card && card.clarifyControl !== undefined) {
+      return;
+    }
     const signature = actionSignature(card);
     let bySignature = groups.get(query);
     if (!bySignature) {

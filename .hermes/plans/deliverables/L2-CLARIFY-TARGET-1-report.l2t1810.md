@@ -489,3 +489,55 @@ Remaining work:
   - Entire APP side: Changes 2 chip, 4 slot, 5 rows + all app tests +
     useOptionalWellSelection + ChatLog/ChatClarificationCard insertions.
   - Evidence: server typecheck + app tsc (zero new in touched files).
+
+STEP 6 — 3 missing server RED test files WRITTEN + GREEN (11/11)
+================================================================
+
+The spec's 3 server RED pins (RED-first unit test plan items 2, 3, 5) were
+missing (the dead run never wrote them). Written + GREEN at tip:
+
+- `server/src/ai/shorthandChat.assumedValue.target1.test.ts` (6 tests, GREEN):
+  - missing-required-argument volumeUl fact stamps the DATA quantity control
+    (`{kind, label, value, unit, source, question}` — the 6 declared wire
+    fields; `question` = the RAW DATA template) + the DATA question RENDERED
+    as the `prompt` (not the noun template); entityType = the declared arg.
+  - a not-stated volumeUl fact stamps the SAME control (the arm keys on the
+    declared KIND, not the reason).
+  - a no-declaration fact emits NO `clarifyControl` key (eOPT: key absent).
+  - fold: `{label:'250 uL', ref:{kind:'quantity',value:250,unit:'uL'}}`
+    splices 250 (number) + consumes the fact; unit mismatch (mL) returns null.
+  - LOOP PIN: a volume-less add_material doc bars; approving the assumed 100
+    folds 100 + the REAL-pipeline recompile SETTLES complete, the event's
+    `details` carries volumeUl:100 + volume:{value:100,unit:uL}, and NO
+    volumeUl re-ask (the loop closes by the VALUE being written).
+
+- `server/src/ai/shorthandChat.wellTarget.target1.test.ts` (4 tests, GREEN):
+  - add_material with NO targetWells => exactly one targetWells
+    missing-required fact; outcome needs-clarification; events [].
+  - targetWells: [A1] => no targetWells fact (array satisfies + invisible to
+    the doc-door).
+  - absent targetWells fact stamps the DATA wells control
+    (`{kind:'wells', question}` + the declared question as prompt;
+    entityType targetWells).
+  - fold: answer `{label:'A2:B3'}` splices `targetWells: [A2,A3,B2,B3]`
+    (ARRAY, expanded — never the string).
+
+- `server/src/ai/shorthandChat.sameNounDedupe.target1.test.ts` (1 test,
+  GREEN — the RED pin): two add_material actions both missing volumeUl
+  yielded a COLLAPSE (foldSameNounCards reduced 2 quantity cards to 1 — the
+  RED proved the collapse), so the ONE narrow guard from RE-PIN NOTE S4 was
+  implemented in `server/src/compiler/resolution/clarificationDedupe.ts`:
+  never fold a `clarifyControl`-bearing card (it passes through untouched, at
+  its own position). Both distinct slots now survive (pinned by actionIndex).
+
+TWO implementation corrections the RED pins forced (both data-driven, no
+literals):
+  1. `shorthandChat.ts` stamp: `{kind:'quantity', ...entry}` was leaking the
+     entry's `verb`+`argument` join keys onto the wire object — 8 fields where
+     the spec's wire type declares 6. Projected the 6 declared fields
+     (label/value/unit/source/question). No consumer depended on the phantoms
+     (grep proof: only the dedupe existence-check + the app mirror type).
+  2. `clarificationDedupe.ts` S4 guard (above).
+
+Test result raw (server): 3 files, 11/11 pass (assumedValue 6, wellTarget 4,
+sameNounDedupe 1).

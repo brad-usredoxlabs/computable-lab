@@ -919,7 +919,23 @@ export function clarificationsFromUnresolvedFacts(
     if (slotKind === 'quantity' && loc?.action && typeof loc.argument === 'string') {
       const entry = assumedQuantityFor(loc.action, loc.argument, assumedValues);
       if (entry) {
-        clarifyControl = { kind: 'quantity', ...entry };
+        // Project the DECLARED control fields — the wire type
+        // (AgentClarificationRequest.clarifyControl) declares EXACTLY these:
+        // label/value/unit/source/question. The entry ALSO carries its join
+        // keys (verb/argument); projecting keeps the wire object byte-equal to
+        // the declared shape (no phantom fields the app mirror type does not
+        // declare). `question` is the RAW DATA template (the client renders
+        // the server's declared sentence, not invented copy); the card's
+        // `prompt` is the RENDERED form (below). Data-driven: every value
+        // comes from the assumed-value DATA, no verb/argument/value literals.
+        clarifyControl = {
+          kind: 'quantity',
+          label: entry.label,
+          value: entry.value,
+          unit: entry.unit,
+          source: entry.source,
+          question: entry.question,
+        };
         assumedPrompt = renderAssumedQuestion(entry.question, {
           label: entry.label, value: entry.value, unit: entry.unit, verb: loc.action,
         });
