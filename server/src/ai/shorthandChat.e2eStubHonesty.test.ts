@@ -42,11 +42,21 @@ import {
 } from './shorthandChat.js';
 
 const NOTE = 'Draft compiled deterministically from the scientist-intent shorthand.';
+// WHY (L2-CLARIFY-TARGET-1 flip): post-flip add_material declares targetWells
+// kind:wells required, so a STRING compact range ("A1:H12") is a symbolic label
+// the doc-door spine-routes (resolutionEngine.ts:490/516) -> unknown-address, and
+// the normalizer drops it (it carries only the ARRAY form,
+// normalizeScientistIntent.ts:633/654). The spec's canonical form is the ARRAY
+// (RED item 3: "targetWells: [A1] yields none"; shorthandChat.ts:1468); the
+// lowering (addMaterialExpander simpleVerbs.ts:550-557) expands [A1:H12] to the
+// SAME 96 per-well events. Both local docs convert to the array form; the
+// app/e2e stubs (extracted below) are re-captured to the array-form real output
+// so the honesty contract (canned stub === real payload) holds.
 const GHOST_DOC = `intentId: live-plain-dmem
 actions:
   - action: add_material
     labwareHint: ghost plate
-    targetWells: A1:H12
+    targetWells: [A1:H12]
     volume: { value: 50, unit: uL }
     material: DMEM
 `;
@@ -56,7 +66,7 @@ actions:
     labware: plate
     material: 50:50 Trypsin-EDTA/DMEM
     volume: { value: 50, unit: uL }
-    targetWells: A1:H12
+    targetWells: [A1:H12]
 `;
 
 // The deck the spec seeds via the honest record-PUT path (an existing plate

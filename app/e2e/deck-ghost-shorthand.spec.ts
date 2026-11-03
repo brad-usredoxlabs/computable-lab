@@ -63,6 +63,16 @@ test.describe.configure({ mode: 'serial' })
  *  unrealized-mixture-blob-material(blob)], the legacy clarification head is
  *  the FIRST request (the labware bar, menuProvider '/l'), shorthand verbatim,
  *  notes ABSENT). */
+// WHY (L2-CLARIFY-TARGET-1 flip, re-pinned): both stubs' `shorthand` doc now
+// carries `targetWells: [A1:H12]` (ARRAY — the spec's canonical post-flip form;
+// shorthandChat.e2eStubHonesty.test.ts:51-62) instead of the legacy STRING
+// range. Post-flip add_material declares targetWells kind:wells required, so a
+// string is a symbolic label the doc-door spine-routes (-> unknown-address)
+// and the normalizer drops; the array is invisible to the door and the
+// lowering (addMaterialExpander simpleVerbs.ts:550-557) expands it to the SAME
+// 96 per-well events. The stubs' event payloads are UNCHANGED by this flip —
+// only the doc echo moved (string -> array). Re-pin recorded in
+// L2-CLARIFY-TARGET-1-report.l2t1810.md (CONT l2t2245).
 function blobClarificationResult() {
   return {
     success: true,
@@ -135,7 +145,7 @@ function blobClarificationResult() {
       query: 'plate',
       allowCreateLocal: true,
     },
-    shorthand: 'intentId: live-canonical-blob\nactions:\n  - action: add_material\n    labware: plate\n    material: 50:50 Trypsin-EDTA/DMEM\n    volume: { value: 50, unit: uL }\n    targetWells: A1:H12\n',
+    shorthand: 'intentId: live-canonical-blob\nactions:\n  - action: add_material\n    labware: plate\n    material: 50:50 Trypsin-EDTA/DMEM\n    volume: { value: 50, unit: uL }\n    targetWells: [A1:H12]\n',
   }
 }
 
@@ -174,7 +184,7 @@ function fixedShorthandResult() {
   return {
     success: true,
     events,
-    shorthand: 'intentId: live-plain-dmem\nactions:\n  - action: add_material\n    labwareHint: ghost plate\n    targetWells: A1:H12\n    volume: { value: 50, unit: uL }\n    material: DMEM\n',
+    shorthand: 'intentId: live-plain-dmem\nactions:\n  - action: add_material\n    labwareHint: ghost plate\n    targetWells: [A1:H12]\n    volume: { value: 50, unit: uL }\n    material: DMEM\n',
     notes: ['Draft compiled deterministically from the scientist-intent shorthand.'],
   }
 }
