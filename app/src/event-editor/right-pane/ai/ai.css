@@ -626,6 +626,31 @@
   line-height: 1.4;
 }
 
+/* L2-CLARIFY-CARD-1 (browser-gate fix2, D-3): the mint row's Create button
+   clipped its own verb to "Crea/te" (shots/c1-prompt-and-card.png) — the row
+   is a full-width flex line whose children all default to `flex: 0 1 auto`
+   (shrinkable), so the button was the one that collapsed and wrapped. Give
+   the button the width its verb needs (flex: none + nowrap) and let the
+   flexible siblings (the label input, the one-source preview sentence)
+   absorb the shrinkage instead (min-width:0 so they can). */
+.message-log__clarification-mint__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.message-log__clarification-mint__preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-log__clarification-mint__create {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* L2-CLARIFY-PICKER-1 (P3): the top-THREE ranked candidates as inline buttons
    under the question (one click answers the card) + the search escape hatch
    (opens the existing popover — pulldown + mint are the escape hatches).

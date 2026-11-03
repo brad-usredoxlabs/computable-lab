@@ -332,6 +332,27 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           // a prompt only when it is NOT already on screen (render-side
           // dedupe — see renderTypedClarification).
           const shownPrompts = new Set<string>([message.content])
+          // L2-CLARIFY-CARD-1 (browser-gate fix2, D-1 + D-4): the GROUPED card's
+          // dedupe must be stable across the bubble's wording. The bubble shows
+          // the PLAIN question on a first ask but the clarification_loop
+          // escalation on a repeat ask (the server flips message.content), so
+          // seeding the card from message.content makes the card's visible
+          // prompts — and its hash — FLIP between wordings for an IDENTICAL
+          // slot set (2 distinct hashes per 10 draws), and re-prints the first
+          // slot's question once the bubble stops carrying its exact text
+          // (the double-print). The grouped card owns its OWN first slot (the
+          // first request is the one the bubble's plain question / the loop
+          // escalation corresponds to), so its dedupe is seeded from the
+          // request set's identity (the first request's prompt), never from
+          // the bubble content: the same slot set renders byte-identically no
+          // matter what wording the bubble carries. The single-request and
+          // legacy arms keep the message.content seed above (the D3 pin —
+          // ChatLog.test.tsx "the prompt prints ONCE" — is untouched).
+          const groupedFirstPrompt = message.clarificationRequests?.[0]?.prompt
+          const groupedShownPrompts =
+            (message.clarificationRequests?.length ?? 0) > 1 && groupedFirstPrompt
+              ? new Set<string>([groupedFirstPrompt])
+              : shownPrompts
           return <div key={message.id} className={bubbleClass}>
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           {message.shorthand !== undefined && (
@@ -381,7 +402,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
                   key={`card-${message.id}`}
                   requests={message.clarificationRequests}
                   turnKey={`${message.id}:${message.clarificationRequests.map((r) => r.id).join('|')}`}
-                  shownPrompts={shownPrompts}
+                  shownPrompts={groupedShownPrompts}
                   onClarificationSubmit={onClarificationSubmit}
                 />
               ) : (

@@ -179,6 +179,45 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
     expect(screen.queryByTestId('chat-clarification-card')).toBeNull()
   })
 
+  it('D-1/D-4 (browser-gate fix2): the grouped card is IDENTICAL across the first-ask and loop-escalation bubble wording — the per-slot prompt dedupe is IDENTITY-driven (the first request), never the bubble message.content', () => {
+    // The browser gate measured 2 distinct hashes per 10 identical draws: the
+    // card's dedupe seeded from message.content flips when the bubble wording
+    // flips (first-ask = the plain question; repeat-ask = the clarification_loop
+    // escalation). Same slot set, two bubble wordings -> the visible prompts
+    // must be the SAME (D-1 determinism) and the first request's question must
+    // NOT be re-printed in the card (D-4 — the bubble/loop already names it).
+    const visiblePrompts = (messages: ChatMessage[]): string[] => {
+      const { container, unmount } = render(
+        <ChatLog {...props} onClarificationSubmit={vi.fn()} onClarificationPick={vi.fn()} messages={messages} />,
+      )
+      const texts = Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
+      unmount()
+      return texts
+    }
+    // First-ask: the bubble carries the PLAIN question (the first request's prompt).
+    const firstAsk: ChatMessage = { id: 'm1', role: 'assistant', content: req1.prompt, clarificationRequests: [req1, req2], timestamp: 0 }
+    // Repeat-ask: the bubble carries the clarification_loop escalation (a DIFFERENT sentence).
+    const repeatAsk: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: 'clarification_loop: the draft names "clofibrate" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help.',
+      clarificationRequests: [req1, req2],
+      timestamp: 0,
+    }
+    const first = visiblePrompts([firstAsk])
+    const repeat = visiblePrompts([repeatAsk])
+    // D-1: the card is byte-identical across the two bubble wordings.
+    expect(repeat).toEqual(first)
+    // D-4: the first request's question is NOT re-printed in the card in EITHER
+    // wording (the bubble's plain question / the loop escalation already names
+    // it) — so it is never printed twice on screen.
+    expect(first).not.toContain(req1.prompt)
+    expect(repeat).not.toContain(req1.prompt)
+    // No over-suppression: the SECOND slot's prompt is printed in both.
+    expect(first).toContain(req2.prompt)
+    expect(repeat).toContain(req2.prompt)
+  })
+
   it('regression lock: a SINGLE request keeps the immediate one-click path and renders NO grouped card / NO submit', () => {
     const onSubmit = vi.fn()
     const onPick = vi.fn()

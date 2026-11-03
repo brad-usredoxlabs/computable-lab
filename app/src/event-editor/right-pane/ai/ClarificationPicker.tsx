@@ -142,9 +142,75 @@ function safeMentionPart(value: string): string {
  * at the bar, shorthandChat.ts:902) is the seed; the user's typed text is used
  * ONLY when the fact named no noun (the empty-seed "of what?" fact). This is
  * the W14 root cause in one expression: the label never tracks the filter.
+ *
+ * L2-CLARIFY-CARD-1 (browser-gate fix2, D-2 — mint honesty): `request.query`
+ * can arrive as the model's MINT-INTENT shape rather than a bare noun —
+ * `{mint:{label,domain}}` (the grounding DSL the drafting contract tells the
+ * model to emit, AgentOrchestrator.ts:570). Observed live (gate
+ * 2026-11-02_1530-tier1, shots/02-draw-02.png): the card seeded the mint
+ * LABEL from that blob verbatim, so `[data-testid="clarification-mint-label"]`
+ * and the honest preview read the raw JSON (`Create material record
+ * "{mint:{…}}" in the lab (new record)`) and the Create button offered to
+ * write a durable material record named after raw JSON. The unwrap below is
+ * the ONE seeding point that recovers the prompt's noun from that shape (the
+ * `mint.label` the DSL carries), generic over the value's type — it handles
+ * the structured `{mint:{label}}` object AND the JSON-string form the wire
+ * actually delivered (a `value` attribute cannot hold an object), and is
+ * shape-driven (never a free-text / substring sniff). A bare noun passes
+ * through byte-unchanged, so every existing pin is untouched.
  */
+/**
+ * The prompt's noun out of a `request.query` value, whatever shape it arrived
+ * in. A bare string is the prompt's noun verbatim (byte-unchanged). The
+ * mint-intent DSL — a structured `{mint:{label|name,…}}` object, or the JSON
+ * text of one — carries the noun under `mint.label` (or `mint.name`); that is
+ * what the row must name and what the Create button must mint. Anything else
+ * (a number, null, a string that is not that shape) returns '' — the
+ * empty-seed "of what?" fact, so the row's predicate (mintAvailable) keeps
+ * hiding the mint affordance rather than minting a non-noun.
+ */
+function mintNounFromQuery(query: unknown): string {
+  // (1) The structured mint-intent object (the shape the drafting contract emits).
+  if (query && typeof query === 'object' && !Array.isArray(query)) {
+    const q = query as Record<string, unknown>
+    const mint = q.mint
+    if (mint && typeof mint === 'object' && !Array.isArray(mint)) {
+      const m = mint as Record<string, unknown>
+      if (typeof m.label === 'string' && m.label.trim()) return m.label.trim()
+      if (typeof m.name === 'string' && m.name.trim()) return m.name.trim()
+    }
+    // A plain (non-mint) object has no mintable noun — the row must not mint
+    // a serialized object.
+    return ''
+  }
+  if (typeof query !== 'string') return ''
+  const trimmed = query.trim()
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return trimmed // a bare noun — byte-unchanged
+  // (2) Well-formed JSON -> recurse into the (1) object shape.
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    return mintNounFromQuery(parsed)
+  } catch {
+    // Not JSON — the wire delivered the DSL as a JS-OBJECT-LITERAL string
+    // (unquoted keys, e.g. {mint:{label:"frobnicate",domain:"chemical"}}).
+    // (3) Parse the DECLARED DSL shape: the `mint` block's own `label`/`name`
+    //     field. Shape-driven (anchored on the DSL's property names) — this is
+    //     parsing a fixed contract structure, never a free-text / prompt
+    //     substring sniff. A string that is not that shape is NOT a noun.
+    const mintBlock = trimmed.match(/mint\s*:\s*\{([\s\S]*?)\}/)
+    if (mintBlock) {
+      const block = mintBlock[1]
+      const label = block.match(/label\s*:\s*["']([^"']*)["']/)
+      if (label && label[1].trim()) return label[1].trim()
+      const name = block.match(/name\s*:\s*["']([^"']*)["']/)
+      if (name && name[1].trim()) return name[1].trim()
+    }
+    return ''
+  }
+}
+
 export function mintLabelFor(request: AiClarificationRequest, query: string): string {
-  return (request.query ?? '').trim() || query.trim()
+  return mintNounFromQuery(request.query) || query.trim()
 }
 
 /** Append `more` to `base`, dedupe by key, keep `pinBottom` rows last. */
@@ -249,13 +315,21 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // when open (no auto-open on mount, no stacking, no open pickers on reload).
   const { open, openPicker, closePicker } = useClarificationPickerOpen(request.id)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [query, setQuery] = useState(request.query ?? '')
+  // L2-CLARIFY-CARD-1 (browser-gate fix2, D-2): the SEED noun for this fact —
+  // one unwrap (mintNounFromQuery) that recovers the prompt's noun from a
+  // bare string OR the model's mint-intent `{mint:{label,domain}}` shape (the
+  // live wire delivered it as a JSON string). Every seeded surface below —
+  // the search box, the mint label, the bounded mount-pass resolver — reads
+  // the SAME value, so a mint-intent fact seeds the noun ("frobnicate"),
+  // never the raw blob.
+  const seedNoun = mintNounFromQuery(request.query)
+  const [query, setQuery] = useState(seedNoun)
   // L2-CLARIFY-CARD-1 (P5): the mint row's OWN label — seeded from the
   // prompt's noun (mintLabelFor), NOT the live filter box. It is the ONLY
   // edit surface: typing in the SEARCH box no longer changes what is minted;
   // editing THIS input does, and the preview (the one-source sentence)
   // follows before the click.
-  const [mintLabel, setMintLabel] = useState(() => mintLabelFor(request, request.query ?? ''))
+  const [mintLabel, setMintLabel] = useState(() => mintLabelFor(request, seedNoun))
 
   // L2-SUITE-A-uifix2 [C]: release the single-open key on unmount. If THIS
   // picker is the open one and its card is removed (collapse, re-bar, page
@@ -318,13 +392,14 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
    * answered with clofibrate options.
    */
   useEffect(() => {
-    setQuery(request.query ?? '')
+    setQuery(seedNoun)
     setItems([])
     setTopCandidates([])
     // L2-CLARIFY-CARD-1 (P5): a NEW question re-seeds the mint label from the
     // prompt's noun (the SAME request.id reset law as the query) — a new fact
     // must never inherit the previous one's minted name.
-    setMintLabel(mintLabelFor(request, request.query ?? ''))
+    setMintLabel(mintLabelFor(request, seedNoun))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request.id, request.query])
 
   const command = useCallback(
@@ -364,12 +439,15 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
   // the pass). The popover pass below remains the open-path source of truth;
   // when it settles it refreshes the buttons from the SAME ranked list.
   useEffect(() => {
-    if (!resolver || !request.query || request.query.trim().length === 0) return
+    // L2-CLARIFY-CARD-1 (browser-gate fix2, D-2): the mount pass resolves the
+    // SEED noun (the unwrap), never a mint-intent blob — the blob is not a
+    // material to search for.
+    if (!resolver || seedNoun.length === 0) return
     const controller = new AbortController()
     let active = true
     void (async () => {
       try {
-        const initial = await resolver(request.query!, {
+        const initial = await resolver(seedNoun, {
           selection: null,
           signal: controller.signal,
           // L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): PICKER-constructed pass —
