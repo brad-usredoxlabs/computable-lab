@@ -95,10 +95,31 @@ death at 01:11:52, and corpus priority Brad 2026-11-02T17:05 still governs — s
 
 ```
 cd app && npx vitest run src/analysis/            # all green, N new it-blocks reported
-cd app && npx tsc --noEmit -p tsconfig.json       # must stay 21 `error TS` lines / exit 2 (266TH
-                                                  # baseline at dfb6dfe4), ZERO in src/analysis/
+                                                  # PRE-DISPATCH BASELINE measured by the 267TH tick at
+                                                  # 1a443259 in the pre-built l1-cellrender-1-lane1
+                                                  # worktree: `npx vitest run src/analysis/ViewRenderer`
+                                                  # -> 5 files / 54 tests PASSED
+                                                  # (compat 5, signal 13, artifact-table 13,
+                                                  #  cellrender 8, ViewRenderer 15). Those 54 are the
+                                                  # floor: the 6 new arms come ON TOP, none may go red.
+cd app && npx tsc --noEmit -p tsconfig.json       # zero NEW lines vs the CODER'S OWN start-commit
+                                                  # baseline in the same worktree, and ZERO in src/analysis/
 git diff --stat                                   # only the 3 permitted files (+ tests)
 ```
+
+BASELINE CORRECTION (267TH tick 2026-11-03T01:55, measured first-hand at base `1a443259`): the two
+tsc totals are NOT interchangeable and the earlier "must stay 21" wording was wrong for a coder
+worktree. Trunk `/mnt/vast/home/brad/git/cl-integration-1/app` = exit 2 with **21** `error TS` lines
+(0 in `src/analysis/`); a fresh coder worktree of the same commit and command — measured in the
+pre-built `/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app`; the `l1-cellrender-1-lane1`
+worktree is identical by construction — exits 2 with **12** lines (0 in `src/analysis/`). Cause: a
+fresh `git worktree` has no `app/node_modules` package
+graph, so tsc resolves app-level packages through the
+`/mnt/vast/home/brad/git/wt/node_modules` symlink to the live tree's root, and the error SETS differ
+(the 6 `src/shared/hooks/useAiChat.surfaceContext.test.ts` lines exist only in the trunk layout).
+So: **the coder's bar is "no NEW lines vs its own start-commit measurement, and 0 in
+`src/analysis/`"; a total of 21 in the worktree would be a REGRESSION, and 12 is neither good nor
+bad.** The 21-line trunk number is what the orchestrator checks after merging.
 plus: re-read `cellContent` in the final diff (the fallback arm must be unconditional), grep that
 `String(` no longer takes a non-scalar in the cell path, and the browser gate verdict.
 

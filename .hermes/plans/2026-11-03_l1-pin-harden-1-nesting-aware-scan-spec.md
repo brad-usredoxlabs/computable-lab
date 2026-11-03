@@ -75,15 +75,26 @@ any other CSS, any component, any server file, any YAML.
 ## Acceptance criteria (orchestrator verifies first-hand)
 
 1. `npx vitest run src/analysis/ViewRenderer.cellrender.test.tsx` in `app/` — all tests pass, and
-   the new fixture count is non-zero (state the number of new `it` blocks).
+   the new fixture count is non-zero (state the number of new `it` blocks). PRE-DISPATCH BASELINE
+   measured by the 267TH tick at `1a443259` in the pre-built
+   `/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1` worktree: **8 tests passed (RUN v1.6.1, exit 0)**
+   — the six new fixtures come ON TOP of those 8 and none of the 8 may go red.
 2. `node -e` reproduction of the O1 fixture through the exported scanner shows ONE rule with
    `atContext: ['@media (max-width: 900px)']` and `sourceViolations` returning
    `[ANYWHERE_VIOLATION]` (the pre-fix run returning `[]` is recorded in the report as the RED
    evidence, with the command used).
-3. `npx tsc --noEmit` in `app/`: zero NEW error lines versus the trunk baseline at dispatch time
-   (**measured by the 266TH tick at trunk `dfb6dfe4`: 21 `error TS` lines, exit 2, and ZERO of them in
-   `src/analysis/`** — that is the number the coder must not exceed, and `src/analysis/` must stay at
-   zero; the 12-line figure was the 262nd-tick *server* baseline and is a different workspace).
+3. `npx tsc --noEmit` in `app/`: zero NEW error lines versus the coder's OWN start-commit baseline
+   in the SAME worktree, and `src/analysis/` stays at zero. MEASURED FIRST-HAND at base `1a443259`
+   by the 267TH tick (2026-11-03T01:55), and the two numbers are NOT interchangeable:
+     - trunk `/mnt/vast/home/brad/git/cl-integration-1/app` → exit 2, **21** `error TS` lines, 0 in `src/analysis/`;
+     - the coder worktree `/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app` → exit 2, **12** `error TS` lines, 0 in `src/analysis/`.
+   Cause (verified): a fresh `git worktree` carries no `app/node_modules` package graph, so tsc
+   resolves app-level packages through the `/mnt/vast/home/brad/git/wt/node_modules` symlink (the
+   live tree's root) instead of the trunk's own `app/node_modules`; the error SETS differ (e.g. the
+   6 `src/shared/hooks/useAiChat.surfaceContext.test.ts` lines appear only in the trunk layout).
+   **The bar is therefore per-worktree: 12 is this worktree's baseline and the coder must not exceed
+   it; a reported total of 21 would be a REGRESSION in the worktree, and 12 is simply this worktree's
+   baseline — neither good nor bad. Trunk-layout 21 remains what the orchestrator must see after merging.
 4. `git diff --stat <base>..HEAD` touches ONLY the permitted file(s); `AnalysisPage.css` and every
    other product file byte-identical.
 5. Report states, with the command and its output, that the O1 evasion no longer reproduces.
