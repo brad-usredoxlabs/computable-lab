@@ -32,7 +32,14 @@
  * never canonicalized — see the scope-lock pin in shorthandChat).
  */
 export function canonicalLabelKey(label: string): string {
-  return label.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase('en');
+  // ASCII-fold after NFKC. `toLocaleLowerCase('en')` is the locale-argumented
+  // case fold the ruling's `toLowerCase('en')` names (the locale-independent
+  // `toLowerCase()` takes no args — the 'en' locale lives on
+  // toLocaleLowerCase). For the ASCII scientific-label domain the fold is
+  // byte-identical to a plain lowercase (locale-invariant over ASCII), so the
+  // identity digests are stable; the 'en' locale is honored for the
+  // non-ASCII tail.
+  return label.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en');
 }
 
 /** Stable djb2 hash → 4 base-36 chars. Case/whitespace-insensitive so
