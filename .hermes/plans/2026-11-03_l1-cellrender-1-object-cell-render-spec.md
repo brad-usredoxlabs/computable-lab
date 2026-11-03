@@ -95,7 +95,8 @@ death at 01:11:52, and corpus priority Brad 2026-11-02T17:05 still governs — s
 
 ```
 cd app && npx vitest run src/analysis/            # all green, N new it-blocks reported
-cd app && npx tsc --noEmit -p tsconfig.json       # zero NEW errors vs the dispatch baseline
+cd app && npx tsc --noEmit -p tsconfig.json       # must stay 21 `error TS` lines / exit 2 (266TH
+                                                  # baseline at dfb6dfe4), ZERO in src/analysis/
 git diff --stat                                   # only the 3 permitted files (+ tests)
 ```
 plus: re-read `cellContent` in the final diff (the fallback arm must be unconditional), grep that

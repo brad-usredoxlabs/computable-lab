@@ -81,8 +81,9 @@ any other CSS, any component, any server file, any YAML.
    `[ANYWHERE_VIOLATION]` (the pre-fix run returning `[]` is recorded in the report as the RED
    evidence, with the command used).
 3. `npx tsc --noEmit` in `app/`: zero NEW error lines versus the trunk baseline at dispatch time
-   (baseline recorded in the report; 12 `error TS` lines was the 262nd-tick server baseline,
-   app-side baseline to be measured, not assumed).
+   (**measured by the 266TH tick at trunk `dfb6dfe4`: 21 `error TS` lines, exit 2, and ZERO of them in
+   `src/analysis/`** — that is the number the coder must not exceed, and `src/analysis/` must stay at
+   zero; the 12-line figure was the 262nd-tick *server* baseline and is a different workspace).
 4. `git diff --stat <base>..HEAD` touches ONLY the permitted file(s); `AnalysisPage.css` and every
    other product file byte-identical.
 5. Report states, with the command and its output, that the O1 evasion no longer reproduces.

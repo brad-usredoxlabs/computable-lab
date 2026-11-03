@@ -154,3 +154,19 @@ Every claim below is the orchestrator's first-hand observation unless marked oth
    `:5192`/`:3092` using the PINNED legs AOUT-000100 / AOUT-000136 plus the `analyte_summary` regression.
 6. If no slot frees again: another no-slot task over an idle spin, then `no-work.log`.
    `L1-PARAMS-EMITTER-RIDER` must NOT be dispatched on its own.
+
+## Addendum (01:24-01:40) — mechanical baselines MEASURED so the next dispatch cannot argue about them
+
+Both dispatch-ready specs said "zero NEW errors vs the dispatch baseline" without a number. I ran the
+two baselines myself at trunk `dfb6dfe4` and wrote the numbers into both specs (docs-only):
+
+1. `app/ npx vitest run src/analysis/ViewRenderer.cellrender.test.tsx` → **8 tests passed (1 file),
+   exit 0** (RUN v1.6.0; duration 20.09s, tests 105ms). This is the "before" count for
+   `L1-PIN-HARDEN-1`: the coder must end with its six new it-blocks ON TOP of these 8, all green.
+2. `app/ npx tsc --noEmit -p tsconfig.json` → **exit 2 with 21 `error TS` lines, and ZERO of them in
+   `src/analysis/`**. Both specs now name 21 as the ceiling and `src/analysis/` = 0 as the invariant.
+   The old "12 lines" figure in the PIN-HARDEN spec was the 262nd-tick *server* baseline and belongs
+   to a different workspace — corrected in place so a coder cannot inherit the wrong number.
+
+Neither measurement touched a file: they are read-only compiles, and `git status` on the trunk still
+shows only the pre-existing untracked plan drafts.
