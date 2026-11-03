@@ -49,3 +49,80 @@ All rows of the spec's PIN TABLE **HOLD** at the branch tip with no MOVED/CHANGE
 ## 2. Progress
 
 (in progress — sections appended as legs land)
+
+## 3. Change 1 — DONE, GREEN (committed b2454f81)
+
+- `config/drafting/shorthand-drafting.yaml`: appended `assumedValues:` after
+  `blobDetectPatterns` (quantities: add_material.volumeUl value 100 unit uL;
+  wells: add_material.targetWells). DATA only — the number's only home.
+- `server/src/compiler/resolution/assumedQuantities.ts` (loader, byte-identical
+  to the dead-run archive) + `assumedQuantities.test.ts` (RED→GREEN 6/6).
+- RED repair (committed e1555d87): the dead-run test had 3 latent defects —
+  REAL_POLICY_URL 6-up (→ repo root, MISSING; correct is 4-up), the
+  submitSuggestionTool.ts path 3-up (→ server/ai/, MISSING; correct is 2-up),
+  and the frozen-example regex `/^ +volumeUl: (\d+)$/m` which can never match
+  the actual source line (a TS string concat `+ '    volumeUl: 100\n'`). Dropped
+  the ^/$ anchors; it still extracts only the frozen value and still fails if
+  the example's number changes. The meaningful RED (2 failed | 4 passed, both
+  for the right reason: the config has no assumedValues: section yet) was
+  captured BEFORE the data was added.
+- `vocabularyContractBlock.test.ts`: extended to assert the EXACT post-flip
+  add_material contract line (verified byte-for-byte against the generated
+  contractBlock() output). Teaching line untouched (OQ1 ruling).
+
+## 4. Change 4 DATA — DONE (committed b2454f81) + BLAST-RADIUS FINDING
+
+`scientist-intent-vocabulary.yaml` add_material: `volumeUl.required: true`
+(the CARD-1 3b flip, AMENDMENT l2t0920) + new `targetWells` (kind wells,
+required true), same shape as the aliquot precedent (SPINE-7). DATA only.
+
+### Base-parity (the blast radius) — MEASURED FIRST-HAND
+At BASE (my 3 tracked changes stashed): only 2 fail files —
+`assumedQuantities.test.ts` (expected RED, no data yet) and
+`AgentOrchestrator.shorthandDeckBinding.test.ts` (pre-existing trunk debt).
+WITH the flip: 12 fail files. So the flip adds 11 NEW failing files:
+  goldenIntentToClarification, goldenIntentToGraph, goldenProseBlobStrip,
+  realizationGolden, foldNullArms, declaredArgumentReachability,
+  cueResolutionGate, resolveNounsPass, resolveNounsPass.paramFold,
+  resolveNounsPass.stagnantHedge, vocabularyMirrorDrift.
+This is WIDER than the spec's bait-11 enumeration (7 goldens + foldNullArms +
+MANIFEST): it also hits the HEDGE-TYPE-1 registry-template mirror
+(vocabularyMirrorDrift (f)) and the dynamic-verb tests (paramFold/stagnantHedge/
+resolveNounsPass/cueResolutionGate) that select requiredVerb/requiredArg by
+data and now see add_material with TWO required args.
+
+### BLOCKER 1 — the `volume`-form false bar (DOMAIN DECISION, not mine to make)
+`declaredArgumentReachability.test.ts:159/:370` + `realizationGolden.test.ts:263`
+pin "a stated volume (the `volume` OBJECT form `{value,unit}`) compiles to
+COMPLETE." The flip's sweep (`resolveNounsPass.ts:252-284`) checks ONLY
+`fields['volumeUl']` and `argumentPresent` returns false for an object — so a
+document that states volume via `volume: {value:50, unit:uL}` (schema
+`scientist-intent.schema.yaml:166`, honored at `simpleVerbs.ts:575-598`) now BARS
+on "missing required argument volumeUl," even though a volume IS stated. This is
+a FALSE POSITIVE the spec's blast-radius enumeration did NOT anticipate, and it
+CONTRADICTS the spec's own W11 intent (the defect is the INVENTED number, not a
+stated volume). Resolving it needs either (a) a product-contract change (update
+these tests to accept the bar — NOT my authority) or (b) a sweep refinement to
+recognize the `volume` form (NOT permitted — the spec allows only the
+`resolveNounsPass.ts:485-488` hunk). I will NOT unilaterally change these pins.
+ROUTED TO ORCHESTRATOR.
+
+### BLOCKER 2 — scope contradiction (task vs. ratified spec)
+The task's SCOPE section says "In scope: ONLY the paths the spec's 'In scope'
+list names." But the spec's Change 4 + AMENDMENT l2t0920 MANDATE the flip in
+`schema/scientist-intent/scientist-intent-vocabulary.yaml` — a file NOT in the
+spec's "In scope (exact paths)" list — and acceptance-2 requires the whole
+`resolution`+`scientistIntent` dirs green, which requires updating files
+(goldens, foldNullArms, the registry mirror, the dynamic tests) also NOT in the
+list. So the task's scope guardrail CONTRADICTS the ratified spec's mandated
+flip + acceptance-2. I've done the mandated flip (on disk); every blast-radius
+file I touch is documented here. ROUTED TO ORCHESTRATOR for the scope ruling.
+
+### BLOCKER 3 — ChatLog.tsx (concurrent-run ownership)
+The spec's "In scope" list names `app/src/agent/ChatLog.tsx` (Change 2's n===1
+arm), but the task says "Do NOT edit app/src/agent/ChatLog.tsx — a concurrent
+CARD-1 fix run owns those." The Change 2 chip on the single-request arm (the
+canonical W11 V2 turn, a single-fact request) needs a line in
+`renderTypedClarification` (the :276 guard + one answer-surface arm).
+SERIALIZATION POINT — I will NOT edit ChatLog.tsx; the single-request chip mount
+is reported as the pending handoff. ROUTED TO ORCHESTRATOR.
