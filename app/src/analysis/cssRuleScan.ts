@@ -130,8 +130,18 @@ export function parseCssRules(css: string): CssRule[] {
 /**
  * Resolve a nested rule's selector against its parent (CSS Nesting `&`
  * semantics, desugared per the spec's `:is()` equivalence). Returns every
- * composed selector — a head with no `&` distributes over a parent
- * selector list, so the result can hold more than one selector:
+ * composed selector. Resolution NEVER drops the parent chain — every
+ * emitted selector is ONE selector part composed under ONE parent part, so
+ * the pin's top-level comma split can never re-split an emission into a
+ * scope-less part:
+ *  - a nested head ALWAYS composes under its parent chain;
+ *  - a head that is itself a selector list is distributed PART-BY-PART —
+ *    the cartesian product parentParts x headParts — over the parent list,
+ *    never parent x the joined head string. Prefixing the whole head made
+ *    every head part after the first escape the parent chain (`.view-
+ *    spec__table { .wrap, td { … } }` emitted `.view-spec__table .wrap,
+ *    td`; the re-split `td` part carried no scope at all) — the advc3
+ *    blocker;
  *  - a bare `&` IS the parent selector itself;
  *  - `&` followed by whitespace (or end of input) descends from the parent
  *    (`& td` -> `parent td`);
@@ -140,43 +150,63 @@ export function parseCssRules(css: string): CssRule[] {
  *  - a selector WITHOUT `&` composes against the parent as an implicit
  *    descendant (`parent head`). This is the relaxed CSS-Nesting behaviour
  *    shipped by current engines and by Vite as-is: `.view-spec__table { td
- *    { … } }` means `.view-spec__table { & td { … } }`. Composition
- *    distributes over the parent's selector list. Resolution can only
- *    WIDEN a rule's visible scope — a nested rule never escapes its parent
- *    chain — which is the fail-closed direction for this pin. Dropping the
+ *    { … } }` means `.view-spec__table { & td { … } }`. Dropping the
  *    parent would hide text from the ban and is exactly what this branch
  *    must not do;
- *  - an `&` in an AMBIGUOUS position (not the leading token, e.g.
- *    `:is(&) td`, `td &`): every `&` is replaced by the parent per the
- *    `:is()` equivalence, and the head is additionally composed as an
- *    implicit descendant. The composed forms may be over-broad —
- *    over-flagging is acceptable for this pin; a emitted selector that
- *    escapes its parent chain is not.
- * Composition applies ONLY when the parent is a style rule — this function
- * is called from `scanDecls` (a style-rule body) and never for top-level
- * heads or heads written directly inside at-rules (those keep their head
- * unmodified with the at-rule prelude in `atContext`).
+ *  - an `&` in an AMBIGUOUS position (not the leading token of the part,
+ *    e.g. `:is(&) td`, `td &`): every `&` in THAT head part is replaced by
+ *    the parent per the `:is()` equivalence, and the part is additionally
+ *    composed as an implicit descendant — the substitution operates on the
+ *    split part, never on the joined head string (that collapsed the head
+ *    list into one emission). The composed forms may be over-broad —
+ *    over-flagging is acceptable for this pin; an emitted selector part
+ *    that escapes its parent chain is not.
+ * Empty head-list parts (e.g. a trailing comma) are filtered — a bare
+ * parent or a blank tail is never emitted. Product duplicates are possible
+ * and harmless for the pin. Composition applies ONLY when the parent is a
+ * style rule — this function is called from `scanDecls` (a style-rule
+ * body) and never for top-level heads or heads written directly inside
+ * at-rules (those keep their head unmodified with the at-rule prelude in
+ * `atContext`).
  */
 function resolveNestedSelectors(head: string, parent: string): string[] {
   if (head === '&') return [parent]
-  if (head.startsWith('&')) {
-    const rest = head.slice(1)
-    if (/^[\s]/.test(rest)) return [`${parent} ${rest.trimStart()}`]
-    return [`${parent}${rest}`]
+  const parentParts = splitSelectorParts(parent).filter((p) => p.length > 0)
+  const headParts = splitSelectorParts(head).filter((h) => h.length > 0)
+  const out: string[] = []
+  // Cartesian product parentParts x headParts: each head part is resolved
+  // against each parent part on its own, so every emitted selector keeps
+  // the full parent chain (no joined-head emissions, no empty parts).
+  for (const p of parentParts) {
+    for (const part of headParts) {
+      if (part === '&') {
+        // A bare `&` inside a head list IS that parent part itself.
+        out.push(p)
+      } else if (part.startsWith('&')) {
+        // `&` followed by whitespace descends from the parent (`& td` ->
+        // `parent td`); `&` glued to a compound suffix compounds
+        // (`&.x` -> `parent.x`).
+        const rest = part.slice(1)
+        if (/^[\s]/.test(rest)) {
+          out.push(`${p} ${rest.trimStart()}`)
+        } else {
+          out.push(`${p}${rest}`)
+        }
+      } else if (part.includes('&')) {
+        // Ambiguous `&` placement in this part: substitute per the
+        // `:is()` equivalence AND compose as an implicit descendant. Both
+        // forms retain the parent part. (Function replacement so a `$` in
+        // the parent text stays literal; `replace(/&/g, …)` instead of
+        // `replaceAll` — the project's tsc lib target predates ES2021.)
+        out.push(part.replace(/&/g, () => p))
+        out.push(`${p} ${part}`)
+      } else {
+        // No `&` in this part: relaxed nesting — implicit descendant.
+        out.push(`${p} ${part}`)
+      }
+    }
   }
-  const parentParts = splitSelectorParts(parent)
-  if (head.includes('&')) {
-    // Ambiguous `&` placement: substitute per the `:is()` equivalence AND
-    // compose as an implicit descendant. Both forms retain the parent.
-    // (Function replacement so a `$` in the parent text stays literal;
-    //  `replace(/&/g, …)` instead of `replaceAll` — the project's tsc
-    //  lib target predates ES2021.)
-    const substituted = head.replace(/&/g, () => parentParts.join(', '))
-    return [substituted, ...parentParts.map((p) => `${p} ${head}`)]
-  }
-  // No `&`: relaxed nesting — implicit descendant, distributed over the
-  // parent's selector list.
-  return parentParts.map((p) => `${p} ${head}`)
+  return out
 }
 
 /**
