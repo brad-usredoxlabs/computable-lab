@@ -78,6 +78,14 @@ properties:
   #         a visible warning line BELOW the table
   #     warningTextField: "<field NAME>"           # OPTIONAL: when warnings entries are records,
   #         the property whose string value renders; entries may be plain strings without this key
+  #   columnFields (L1-CELLRENDER-1, shared by `table` AND `artifact-table`):
+  #     columnFields: { "<column NAME>": "<path>" }  # OPTIONAL: reduces an OBJECT-valued column to
+  #         one value per resolved path. Path grammar: dot-separated object segments; `[*]` maps
+  #         over that array (one resolved value per line); `[<n>]` indexes it, e.g.
+  #         `{ params: "assignments[*].compound_ref.label" }`. A path missing/unresolvable mid-way,
+  #         or whose resolved value is non-scalar, falls back to honest compact JSON of the cell
+  #         (full text on a title attribute) — never `[object Object]`, never blank.
+  #         Resolution is a hand-written segment walker (no eval/dynamic execution).
   #   (The composition-check block is just ANOTHER artifact-table view over a
   #   re-echoed {columns,rows} payload — one row per labeled reading; the
   #   outcome words arrive as payload strings, never re-declared in TS.)
