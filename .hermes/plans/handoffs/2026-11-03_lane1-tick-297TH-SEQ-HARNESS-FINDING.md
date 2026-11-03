@@ -41,6 +41,9 @@ Measured:
   **1 turn that silently emitted `target {kind:"sequence-tab", tab:"Editor"}`** (a question navigated the user).
 - Every turn ended `done {success:true}`; gap turns show the raw Ajv text as the answer, target-less turns
   show `"Action sent — see the workspace."`
+- Breadth (2 extra probes, total 17): the same question on `surface:"analysis"` → 2/2 target-less
+  `open-surface` actions, **zero `text` frames**, note `"Opened analysis — nothing was written."` ⇒
+  no-answer is harness-wide, not sequences-only.
 
 Root of it, first-hand: `AgentOrchestrator.ts:1635` pins `tool_choice` to `agent_intent` on `sequences`
 (no prose path), `:1204/:1213` supplies tab guidance the live model ignores, `compileWorkspaceAction.test.ts:306`
