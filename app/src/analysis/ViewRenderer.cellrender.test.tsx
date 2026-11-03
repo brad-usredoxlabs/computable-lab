@@ -100,8 +100,13 @@ function sourceViolations(css: string): string[] {
   const cellItem = rules.find((r) => /(^|,)\s*\.view-spec__cell-item\s*(,|$)/.test(r.selector))
   if (!cellItem) {
     violations.push('no .view-spec__cell-item rule exists')
-  } else if (!/min-width\s*:/.test(cellItem.decls)) {
-    violations.push('.view-spec__cell-item declares no min-width floor')
+  } else {
+    if (!/min-width\s*:/.test(cellItem.decls)) {
+      violations.push('.view-spec__cell-item declares no min-width floor')
+    }
+    if (!/overflow-wrap\s*:\s*anywhere/.test(cellItem.decls)) {
+      violations.push('.view-spec__cell-item no longer declares overflow-wrap: anywhere')
+    }
   }
   const door = rules.find((r) => /(^|,)\s*\.analysis-right\s*(,|$)/.test(r.selector))
   if (!door || !/overflow\s*:\s*auto/.test(door.decls)) {
@@ -175,6 +180,16 @@ describe('FAME-8 GATEFIX5 — AnalysisPage.css cell-render floor (source pin)', 
       'no .view-spec__table th/td rule declares overflow-wrap: break-word',
       'no .view-spec__cell-item rule exists',
       '.analysis-right no longer declares overflow: auto (FAME-LAYOUT-1 door regressed)',
+    ])
+    // Positive array-cell claim (review O2): deleting the `anywhere`
+    // declaration from .view-spec__cell-item must be caught, not stay green.
+    const cellItemWithoutAnywhere = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { min-width: 12ch; }
+`
+    expect(sourceViolations(cellItemWithoutAnywhere)).toEqual([
+      '.view-spec__cell-item no longer declares overflow-wrap: anywhere',
     ])
   })
 })
