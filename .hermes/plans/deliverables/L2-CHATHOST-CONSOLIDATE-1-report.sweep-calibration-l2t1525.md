@@ -129,3 +129,119 @@ path GREEN and deterministic. A live-mode J2 is advisory and not gate-graded
 (`fake_mode=False` → `GREEN-NOT-GATING`, per the D2 rule in `run-journeys.py`).
 
 ---
+
+## U1 — the two host probes were vacuous: made honest + non-vacuous (Lane 2)
+
+Run 1's sweep left `artifact-host` and `run-workspace` RED for HARNESS reasons,
+and both greens (had they been green) would have been VACUOUS: the probe never
+actually exercised a real chat round trip on those hosts. This run fixes both,
+one commit per host. Both are now GREEN against the live lane stack (`:5193` →
+`:3093`) with the full non-vacuous evidence chain.
+
+### U1a — artifact-host (commit `522d2403`)
+
+**Cause:** HARNESS data fault. The probe navigated to
+`/artifact/CHATHOST-PROBE/CHATHOST-PROBE` but no record existed there, so
+`ArtifactHostPage` early-returned "Failed to load artifact: NOT_FOUND" → no right
+pane → no AI tab → `open_ai_tab` waited 30 s and hung. The host could never
+render a chat, so any verdict was vacuous.
+
+**Fix (harness DATA, not a special case):** `build_chat_host_probe` now materialises
+a REAL artifact record through the SAME `seed.record` / `teardown.delete_record`
+machinery every journey uses. When the probe nav path is an artifact route
+(`re.match ^/artifact/`), it seeds a schema-valid artifact record whose `recordId`
+is the route's `:artifactId` token (derived from the nav path the product declared,
+not a host-name comparison). The route-shape rule is the only branch; policy stays
+in YAML; the other five hosts stay seedless. Teardown deletes the record.
+
+**Commands + raw results (counts, not dumps):**
+- `python3 _u1_rerun_probes.py` (fake model, live stack) →
+  `VERDICT artifact-host=GREEN`, `RESTORE_OK=True`.
+- Receipt dir `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/`:
+  `artifact-host.json` `verdict=green`, `n_ai_request_bodies=3`, request body carries
+  the sweep prompt; `artifact-host-ui.json` `assistant_turns=1 turns_completed=1
+  last_assistant_text_nonempty=True error_frames=0`; screenshots
+  `artifact-host-rendered-answer.png` + `artifact-host-outcome.png`.
+- Teardown proof: `curl GET :3093/api/records/CHATHOST-PROBE` → `HTTP 404` (deleted).
+
+**Still needs an orchestrator/browser gate:** none beyond the standard independent
+browser reviewer confirming the rendered answer screenshot is a genuine assistant
+turn (the driver already graded `assert.rendered` green from the live page text).
+
+### U1b — run-workspace (commit `ef0ebde5`)
+
+**Cause:** HARNESS step fault. `RunWorkspacePage` mounts the universal chat pane
+ALREADY OPEN (it renders `HarnessChatPane` directly as its `rightPane` — no
+`RightPane` tab strip, so no `right-pane-tab-ai` element exists there). The probe's
+mandatory tab click hung 30 s on that host.
+
+**Fix (ONE shared step implementation, no per-host branch):** `open_ai_tab`
+(ui-drive.cjs) now detects the pane FIRST via the `Message` composer (the SAME
+locator the `ask` step uses), polls bounded (up to `T`) for EITHER the tab or the
+already-open composer, then acts — clicks the tab only when it exists, waits on the
+pane when already open, and throws (fail closed) when neither is present so a host
+that genuinely lacks the chat goes RED instead of silently skipping.
+
+**Assertion NOT weakened:** the probe still demands a rendered non-empty assistant
+answer + a request-body receipt, and a genuinely chat-less host yields no rendered
+answer. Proven by a negative control in `test-channel-selfcheck.py` (pure, no
+browser/stack): the probe's own `assert.rendered` scores a pane-absent fixture
+(0 assistant turns) RED and a pane-present fixture (1 non-empty answer) GREEN.
+
+**Commands + raw results (counts, not dumps):**
+- `python3 test-channel-selfcheck.py` → `SELFCHECK: PASS` (9 new U1a/U1b arms OK,
+  including the pane-absent→RED negative control).
+- `python3 _u1_rerun_probes.py` (fake model, live stack) →
+  `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`.
+- Same receipt dir: `run-workspace.json` `verdict=green`, `n_ai_request_bodies=3`,
+  request body carries the sweep prompt; `run-workspace-ui.json`
+  `assistant_turns=1 turns_completed=1 last_assistant_text_nonempty=True
+  error_frames=0`; screenshots `run-workspace-rendered-answer.png` +
+  `run-workspace-outcome.png`.
+
+**Still needs an orchestrator/browser gate:** same as U1a — the independent browser
+reviewer confirms the rendered answer is a genuine assistant turn.
+
+### U3 — the three reds: cause, classification, receipts validity
+
+| Red | Cause | HARNESS vs PRODUCT | Now |
+|-----|-------|--------------------|-----|
+| artifact-host | no record → page early-return → no pane/tab → hang | **HARNESS** (data) | GREEN (U1a) |
+| run-workspace | pane already open, no tab element → mandatory click hangs | **HARNESS** (step) | GREEN (U1b) |
+| J2 | canned shorthand non-canonical (`composition:` top-level) → compiler multi-request → grouped card → single-card testid absent | **HARNESS** (canned data) | GREEN (U2, `92a83c4a`) |
+
+All three reds were **HARNESS** faults (none touched a CARD-1 product file). No
+product regression was found; nothing lands in another coder's worktree.
+
+**Do the four prior accept receipts remain valid?** YES. This run changed only
+harness files (`run-journeys.py`, `ui-drive.cjs`, `test-channel-selfcheck.py`,
+`canned/completions.yaml`) plus this report. It did NOT change `config/chat/
+chat-hosts.yaml` ids/surfaces, the shrink-guard anchor, the blessed id set, or any
+product code. The four prior accept receipts grade the same inventory + gate, so
+they stand unchanged. (The sweep table they feed is re-emitted each run from the
+receipts that exist; the id/surface set is untouched.)
+
+**VERIFY (raw, once):**
+- `python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py` →
+  `SELFCHECK: PASS` (+ 9 new U1a/U1b arms).
+- Two changed probes re-run against the live lane stack (`:5193` → `:3093`):
+  `VERDICT artifact-host=GREEN`, `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`;
+  receipt dir `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/`.
+- `git -c core.fileMode=false diff --stat fbbca785..HEAD` → 5 files changed,
+  341 insertions(+), 15 deletions(-) (report 131+, completions.yaml 31±,
+  run-journeys.py 68+, test-channel-selfcheck.py 93+, ui-drive.cjs 33+).
+- `git -c core.fileMode=false status --porcelain` → clean (only the untracked
+  `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` dir remains, which is never
+  committed).
+
+### OPEN OBLIGATION (not a fix; do not widen scope into it)
+
+The **live (non-fake) J2 path is still unproven**: the live model sometimes emits
+the non-canonical top-level `composition:` form, which makes the compiler emit
+multiple requests → a grouped card → the pinned single-card testid absent → a live
+J2 can go RED. The sweep grades the **deterministic fake path only** (`--all
+--fake --chat-hosts`); a live-mode J2 is advisory and not gate-graded
+(`fake_mode=False` → `GREEN-NOT-GATING`). Fixing the live-model emission is a
+model/teach concern owned elsewhere — out of scope for this calibration. No
+product/teach fix is attempted here.
+
