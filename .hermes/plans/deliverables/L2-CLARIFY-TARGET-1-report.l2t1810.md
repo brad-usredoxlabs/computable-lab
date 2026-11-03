@@ -374,3 +374,17 @@ STEP 2 CRITICAL FINDING — DEFINITIVE (empirically proven, DOORPROBE at HEAD, p
   BLOCKED rather than guessing"), I ROUTE these rather than unilaterally changing resolutionEngine.ts or the 3 named pins.
   I continue the INDEPENDENT, DECIDABLE blast-radius work (the 6 pure required-arg-count deltas: paramFold V2e/FS5,
   stagnantHedge SH7, comp4x2, shqa1) which are safe and do not depend on the doc-door ruling.
+
+STEP 3 (decidable blast-radius, BLOCKER-2 ruling) — 6 required-arg-count deltas FIXED + VERIFIED:
+  Root cause (all 6): add_material now declares TWO required args (volumeUl + targetWells), so a bare
+  add_material action fires 2 §5.2 sweep facts where these tests asserted 1. requiredVerb=add_material
+  (first verb with a required arg; CONFIRMED: no required:true line before add_material's block), requiredArg=volumeUl.
+  Fix (meaning-preserving, NOT a weakening): supply the newly-required targetWells (ARRAY form `['A1']` — the DOORPROBE
+  proved the array satisfies the sweep AND is invisible to the doc-door's scalar arm) in each test's minimal fixture so
+  each test keeps isolating its ORIGINAL subject (the one arg under test). WHY comment on every pin. The array form is
+  canonical per the spec's own RED test item 3 ("a doc carrying targetWells: [A1] yields none").
+  Files:
+    - resolveNounsPass.paramFold.test.ts: V2e (2 fixtures: the runPass intent + presentAction guard), FS5 (action).
+    - resolveNounsPass.stagnantHedge.test.ts: SH7 (sweepIntent, part b).
+    - resolveNounsPass.test.ts: comp4 mixtureAction (both comp4 tests share it), shqa1 'bound slot' fixture.
+  RESULT (raw /tmp/t21-reso-afterfix.txt): `npm run test:run -w server -- src/compiler/resolution` = Test Files 19 passed (19), Tests 170 passed (170). exit 0. THE RESOLUTION DIR IS FULLY GREEN.

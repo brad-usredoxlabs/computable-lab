@@ -514,9 +514,17 @@ describe('spine4.resolve-nouns-pass', () => {
 // ---------------------------------------------------------------------------
 
 describe('comp4.many-cardinality at the pass seam', () => {
+  // WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required
+  // args (volumeUl + targetWells). This describe isolates the composition
+  // many-cardinality door (per-entry component resolution); supplying
+  // volumeUl + targetWells keeps the §5.2 required-arg sweep SILENT so the
+  // only clarification is the unbindable COMPONENT (Equine Serum) — the
+  // original single-fact subject (no weakening of the per-entry assertion).
   const mixtureAction = {
     action: 'add_material' as const,
     labware: 'plate',
+    volumeUl: 10,
+    targetWells: ['A1'],
     composition: [
       { material: 'trypsin-EDTA', role: 'solvent' },
       { material: 'Equine Serum', role: 'additive' },
@@ -612,8 +620,13 @@ describe('shqa1.gate — resolution-aware firing gate (channel owner)', () => {
   };
 
   it('a bound slot suppresses the gated fact: ok:true, clarifications [], blocked false', async () => {
+    // WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required
+    // args (volumeUl + targetWells). This pin isolates the gated-slot
+    // suppression subject (the material slot binds and the gated fact is
+    // dropped); supplying targetWells keeps the §5.2 sweep silent so the
+    // outcome stays ok:true with zero clarifications (the original subject).
     const result = await createResolveNounsPass({
-      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10 }]),
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10, targetWells: ['A1'] }]),
       vocabulary: shippedVocab(),
       spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }),
       resolutionGatedClarifications: [gatedBlob],
