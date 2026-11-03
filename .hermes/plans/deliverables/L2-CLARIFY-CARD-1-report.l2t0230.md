@@ -450,3 +450,81 @@ STEP 0: status clean, fast-forward merge cl/integration-2 -> 31353115 (TARGET-1 
 - `git -c core.fileMode=false status --porcelain` — only this report increment is modified (code edits reverted to a clean tree before committing them).
 
 CARD1-FIX4 BLOCKED D3 needs a canonical-case source for the UNBOUND acceptance entity (clofibrate mixture blob has no spine candidates and no declared-material label in the receipt, so BOUND/RESOLVED-noun and declared-label sources are both empty); D3 candidate-anchored canonicalizer is being implemented + verified now, and D2/D5 follow one defect per turn.
+
+## FIX RUN 5 (l2t1455)
+
+The FIX4 BLOCKED D3 gap ("no canonical-case source for the UNBOUND acceptance
+entity") was RULED by the architect (`CARD1-D3-canonical-source-l2t1430-ruling.md`).
+This run IMPLEMENTS the ruling verbatim (does not re-decide it), one unit per
+commit. Worked only in this worktree; TARGET-1's files, D1, and the W12/3b
+volume gate untouched.
+
+### D3 (BLOCKING) — canonical label per ruling §2/§3 — IMPLEMENTED, 5 commits
+
+1. **Unit 1 — `canonicalLabelKey(label)`** (`server/src/materials/termId.ts`):
+   NFKC -> trim -> collapse inner whitespace -> `toLocaleLowerCase('en')`
+   (TS-legal form of the ruling's `('en')`; punctuation verbatim).
+   `labelHash`/`labelSlug`/`localMaterialIdForLabel` redefined off it (no
+   divergence). commit `c5399da2`. 9/9 termId pins green.
+2. **Unit 1 type fix**: `toLowerCase('en')` -> `toLocaleLowerCase('en')`
+   (defect shipped in Unit 1; V8 ignored the extra arg at runtime, vitest
+   transpiles without typecheck). ASCII labels byte-identical -> digests
+   unchanged, no re-pin. commit `34c08872`.
+3. **Unit 2 — IDENTITY + DROP** (`shorthandChat.ts`): `factRequestId` hashes
+   `canonicalLabelKey(fact.label)` (shape stays `unresolved-c-<sha1-10hex>`);
+   `dropSatisfiedFacts` compares `canonicalLabelKey(...)` (non-string arm
+   keeps return-true). Digest re-pinned `unresolved-c-11c1711f72` ->
+   `unresolved-c-272e97981e` (recomputed independently in node). commit
+   `d9ef8df5`.
+4. **Unit 3 — POLICY (data, not code)**: one `canonicalLabel:` block under the
+   material domain in `schema/scientist-intent/scientist-intent-vocabulary.yaml`
+   (`preMintDisplay: identity-case`, `mintedDisplay: record-title`,
+   `titleAdoption: scientist-phrasing-when-key-equal`) + declared in the
+   meta-schema root `properties` + a PER-CALL fail-loud loader
+   (`server/src/compiler/resolution/canonicalLabelPolicy.ts`, mirrors
+   nounShape/assumedValues discipline; NOT the process-cached singleton;
+   absent/malformed block THROWS, never a hardcoded fallback). commit
+   `e5324baf`. 5 loader pins + 58 vocabulary/scientistIntent regression green;
+   drift/ripOut/identityCollapse/T7d green.
+5. **Unit 4 — RENDER (read-only store seam)**: `clarificationsFromUnresolvedFacts`
+   now renders the ONE label token via the canonical label — the record TITLE
+   when GROUNDED (STAGE A, resolved upstream by the read-only store GET) else
+   the IDENTITY FORM (STAGE B, `canonicalLabelKey`); `nounPrompt` + `query`
+   ride it, the `unresolvedFact` mirror keeps the RAW label (provenance). New
+   exported `canonicalLabelsForFacts(facts, store)` = the read-only seam
+   (`localMaterialIdForLabel` -> `store.get` -> `payload.name`, per-call,
+   tolerant of read failures, never cached). `shorthandResultFromCompile`
+   stays SYNC (takes an optional precomputed `canonicalLabels` map, forwards
+   to both internal call sites) so TARGET-1's sync test call sites stay
+   untouched; both AgentOrchestrator call sites (fold arm ~1553, shorthand arm
+   ~3083, both inside `async run`) build the STAGE A map from `deps.store` and
+   pass it. Test re-pins (legitimate re-derivations, ruling §5 pin #4 — the
+   10-identical-fresh-draws guarantee): nounShape P1/P1c, readingCard mintable
+   prompt, uifix3 x3 (query pins), e2eStubHonesty D3 bridge (applies the
+   shipped STAGE B render to the extracted app/e2e stub; the canned stub stays
+   byte-unchanged — the no-app-edits line holds). commit `63afcf57` (6 files).
+6. **Unit 5 — SCOPE LOCK (ruling §7)**: source-grep pin
+   (`server/src/materials/termId.scopeLock.test.ts`) — zero occurrences under
+   `app/` (and under `app/src/` asserted on its own), and the closed set of
+   mentioners === the ruling allow-list (termId definition+derivation, the
+   three named shorthandChat sites, the policy loader that documents it, the
+   pinning tests, and this pin itself). Any new mentioner (esp. a new app/
+   file) fails the pin. commit `d0c9be7c`.
+
+**Verification (D3 units):**
+- `cd server && npx vitest run <new/edited pins>` — all green (termId 9/9;
+  policy loader 5/5; scope lock 3/3; e2eStubHonesty 7/7; nounShape/readingCard/
+  uifix3 re-pins green).
+- Whole `server/src/ai` suite: failure set BYTE-IDENTICAL to the pristine
+  `e5324baf` baseline (29 pre-existing failures, ZERO new) — proved by
+  stash-and-run diff. Pre-existing failures named: `shorthandChat.cueCascade`
+  T6/T7 (`expected 2 to be 1`, proven identical at pristine `10062725`) + the
+  27 other pre-existing suite-A failures.
+- `npx tsc --noEmit -p server`: 0 error lines (branch baseline 0; none in
+  files touched).
+- TARGET-1's three server-side test files untouched (verified they pin only
+  `clarifyControl`/`entityType`/`actionLocation`/fold behaviour, never raw
+  `query`/noun-prompt — so STAGE B render does not break them).
+
+### D5 (MEDIUM) — exact-string pins — IN PROGRESS
+[append as the unit lands]
