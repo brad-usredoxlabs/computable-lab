@@ -538,3 +538,5 @@ All receipts now live under
 The /tmp captures (/tmp/red-run-l1pin.txt, /tmp/tsc-base-l1pin.txt,
 /tmp/tsc-after-l1pin.txt, /tmp/tsc-verify-l1pin.txt) remain cited as
 supplementary only.
+
+L1-PIN-HARDEN-1 FIX1 DONE 4bf0303f549623f063c4b929bc2d1579e25f0b2e
