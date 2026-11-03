@@ -78,6 +78,22 @@ number below is the CURRENT shape and may move under the merge — re-verify, do
 - `server/src/compiler/scientistIntent/vocabularyContractBlock.test.ts` / `quantityWireContract.test.ts`
   — extend for the new required flag (these pin the contract block).
 
+### ORCH AMENDMENT 1 (l2t1955, 2026-11-02) — `ai.css` is IN SCOPE (closes advc-c3 D5)
+
+- `app/src/event-editor/right-pane/ai/ai.css` — the mint row's own declaration block. The advc-c3
+  review flagged that the fix run edited this file while the in-scope list did not name it; the
+  rules added are the `.message-log__clarification-mint*` selectors that already live in this
+  stylesheet, and the file owns the picker's chrome. Ownership acknowledged by the orchestrator;
+  no code change is required to close D5.
+
+### ORCH RULING 2 (l2t1955) — single-request arm seed MAY change (supersedes "byte-identical" for that one expression)
+
+The line above that keeps the single-request arm byte-identical governs the GROUPING work (it must
+not be turned into the grouped card). It is NOT a bar to the browser-gate D-1/D-4 determinism fix:
+advc-c3 D1 proves the single arm's `shownPrompts` seed (`new Set([message.content])`) still flips
+the card hash with bubble wording on 9 of 10 gate draws. Changing ONLY that seed derivation to an
+identity-derived seed is authorized; nothing else in the single arm may change.
+
 ## Explicitly OUT of scope
 
 - **PICKER-1's merged surface**: row ranking/comparator/focus default, top-3 inline buttons,
