@@ -24,6 +24,7 @@ import { evaluateCandidateEligibility, type CandidateEligibility } from './eligi
 import type { MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
+import { isWellAddressLiteral } from '../scientistIntent/normalizeScientistIntent.js';
 import type {
   BoundNoun,
   Clarification,
@@ -514,6 +515,21 @@ export async function resolveScientistIntentNouns(
       // Scalar arm (byte-identical behavior to pre-Stage-B): non-string values
       // of a non-many arg stay invisible to the door.
       if (typeof raw !== 'string' || raw.trim().length === 0) continue;
+
+      // TARGET-1 WELLS DOOR (ruling l2t2310, option (i) SHAPE-GATED): a
+      // kind:'wells' scalar that IS a well-ADDRESS literal is not a noun to be
+      // resolved — the address rides verbatim to the lowering, which expands it
+      // through the ONE parser (expandWellTokens) into per-well events. Spine-
+      // routing it would bar a real address as `unknown-address`: a false bar
+      // with no fix the user can give, and NOT a silent drop (the value still
+      // reaches the lowering). The gate is shape-based only
+      // (isWellAddressLiteral = expandWellTokens + WELL_ADDRESS_SHAPE_RE, the
+      // SAME test the (b) arm uses): SYMBOLIC labels (control_well, bogus_role)
+      // still ride the door's role-address arm and still bar `unknown-address`
+      // on a miss; a BOGUS address (A1:ZZ99) is not address-shaped, so it still
+      // enters the door and bars — the bar for genuinely bogus addresses
+      // survives. Zero field names, zero verb names, zero new policy literals.
+      if (contract.kind === 'wells' && isWellAddressLiteral(raw.trim())) continue;
 
       const outcome = await resolveNoun(requestFor(verb, index, contract, fields, raw.trim(), deps), vocab, deps);
       bindings.push(...outcome.bindings);
