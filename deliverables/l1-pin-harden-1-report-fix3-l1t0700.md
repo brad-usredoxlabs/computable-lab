@@ -215,3 +215,10 @@ Same command as §1.1; full transcript `deliverables/fix3/fix3-green-probe.txt`.
 - Independent browser reviewer still owns acceptance (not run by this lane).
 - Orchestrator: no YAML changed, so no lane-stack reload needed for live verification; the pinned artefact and its blob are untouched.
 - Residual known-over-broad (accepted, fail-closed): the ambiguous-`&` descendant form (`.view-spec__table :is(&) .x`) over-flags relative to strict `:is()` semantics; over-flagging is acceptable per the decision, escaping the parent chain is not — and nothing escapes anymore (per-part invariant).
+
+--------------------------------------------------------------------------------
+STATUS: RED recorded (62c81894, six shapes returning []); fix committed
+(755b9afeb88f0be98e68cc523b410b572f9602fb); all bars green (§3). Not marked
+done — orchestrator gate owns that.
+
+L1-PIN-HARDEN-1 FIX3 DONE 755b9afeb88f0be98e68cc523b410b572f9602fb
