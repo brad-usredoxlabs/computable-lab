@@ -379,6 +379,13 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
       const row = document.querySelector('.chat-log-msg--assistant') as HTMLElement
       return [...row.querySelectorAll('p')].filter((p) => p.textContent === question).length
     }
+    // advc-c4 D3 (fix run 3): the exact-<p> count scores 0 for a prompt
+    // re-printed inside a LONGER paragraph — the substring count over the row
+    // text is the backstop (it must agree with the exact count in both arms).
+    const totalPromptSubstring = () => {
+      const row = document.querySelector('.chat-log-msg--assistant') as HTMLElement
+      return (row.textContent ?? '').split(question).length - 1
+    }
     // First-ask (the live done shape, useAiChat.ts:1543): the bubble content IS
     // the question. The card OWNS the prompt <p>; the bubble is suppressed (it
     // would double-print).
@@ -390,6 +397,7 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     const firstTotal = totalPromptCount()
     expect(firstCard).toBe(1)
     expect(firstTotal).toBe(1)
+    expect(totalPromptSubstring()).toBe(1)
     cleanup()
     // Repeat-ask: the bubble is the clarification_loop escalation (the live
     // server text does NOT carry the question sentence). The card still prints
@@ -403,6 +411,7 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     const repeatTotal = totalPromptCount()
     expect(repeatCard).toBe(1)
     expect(repeatTotal).toBe(1)
+    expect(totalPromptSubstring()).toBe(1)
     // D1: the card is identical across the two bubble wordings (no flip).
     expect(repeatCard).toBe(firstCard)
     // The answer controls are never gated by the dedupe.

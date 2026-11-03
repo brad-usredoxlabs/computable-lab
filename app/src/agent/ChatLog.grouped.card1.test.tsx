@@ -133,6 +133,13 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
       Array.from(container.querySelectorAll('p')).filter((p) => p.textContent === text).length
     expect(countOnScreen(req1.prompt)).toBe(1)
     expect(countOnScreen(req2.prompt)).toBe(1)
+    // advc-c4 D3 (fix run 3): the exact-<p> count scores 0 for a prompt
+    // re-printed INSIDE a longer paragraph — the substring count over the
+    // whole container is the backstop (a double-print embedded in a prose
+    // preface would still count here).
+    const substringCount = (text: string) => (container.textContent ?? '').split(text).length - 1
+    expect(substringCount(req1.prompt)).toBe(1)
+    expect(substringCount(req2.prompt)).toBe(1)
 
     // After a pick (a card-local re-render): the prompts must SURVIVE.
     fireEvent.click(screen.getByTestId('fake-pick-req-1'))
@@ -204,11 +211,26 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
       const cardPrompts = Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
       const onScreen = (text: string) =>
         Array.from(container.querySelectorAll('p')).filter((p) => p.textContent === text).length
+      // advc-c4 D3 (fix run 3): substring occurrences over the row text —
+      // the backstop for a prompt re-printed inside a LONGER paragraph (the
+      // exact-<p> count scores 0 for that).
+      const rowEl = container.querySelector('.chat-log-msg--assistant') as HTMLElement
+      const onScreenSubstring = (text: string) => (rowEl.textContent ?? '').split(text).length - 1
+      // advc-c4 D3: POSITIVE assertion on the bubble paragraph — capture
+      // presence explicitly, never a `?? ''` fallback that passes vacuously
+      // when no non-card <p> exists. The bubble <p> is a DIRECT CHILD of the
+      // row (the card's own <p>s — title and slots — are nested deeper, so
+      // `p:not(.chat-clarification-card__prompt)` wrongly matched the card
+      // title and the presence test was a false positive).
+      const bubble = rowEl.querySelector(':scope > p')
       const result = {
         cardPrompts,
-        bubbleContent: (container.querySelector('.chat-log-msg--assistant') as HTMLElement).querySelector('p:not(.chat-clarification-card__prompt)')?.textContent ?? '',
+        bubbleExists: bubble !== null,
+        bubbleContent: bubble?.textContent ?? '',
         count1: onScreen(req1.prompt),
         count2: onScreen(req2.prompt),
+        count1Substring: onScreenSubstring(req1.prompt),
+        count2Substring: onScreenSubstring(req2.prompt),
       }
       unmount()
       return result
@@ -235,14 +257,22 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
     expect(first.cardPrompts).toEqual([req1.prompt, req2.prompt])
     // Exactly once on screen in BOTH wordings — the first-ask bubble is
     // stripped (it carried req1.prompt verbatim, so it would double-print),
-    // and the loop-text bubble does not suppress the card.
+    // and the loop-text bubble does not suppress the card. The exact-<p>
+    // counts AND the substring backstops agree (advc-c4 D3).
     expect(first.count1).toBe(1)
     expect(first.count2).toBe(1)
     expect(repeat.count1).toBe(1)
     expect(repeat.count2).toBe(1)
-    // The first-ask bubble no longer prints req1.prompt (the card owns it) —
-    // but the loop-ask bubble is the server's escalation text, verbatim.
-    expect(first.bubbleContent).not.toBe(req1.prompt)
+    expect(first.count1Substring).toBe(1)
+    expect(first.count2Substring).toBe(1)
+    expect(repeat.count1Substring).toBe(1)
+    expect(repeat.count2Substring).toBe(1)
+    // advc-c4 D3: the bubble paragraph's PRESENCE is asserted positively —
+    // the first-ask bubble is ABSENT (the card owns the print; the `?? ''`
+    // fallback used to pass vacuously when no non-card <p> existed), and the
+    // loop-ask bubble is PRESENT and is the server's escalation text.
+    expect(first.bubbleExists).toBe(false)
+    expect(repeat.bubbleExists).toBe(true)
     expect(repeat.bubbleContent).toContain('clarification_loop:')
   })
 
