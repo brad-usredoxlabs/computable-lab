@@ -96,7 +96,7 @@ describe('chatDoorRegistry — the ONE door registry (config/chat/chat-hosts.yam
     }
   })
 
-  it('pin 3: every slices[].publisher file exists (the path before :line)', () => {
+  it('pin 3: every slices[].publisher line names its truth (the path before :line exists; a published slice shows a usePublishSurfaceSlice( call; a NOT-PUBLISHED slice has none in app/src)', () => {
     for (const slice of registry.slices ?? []) {
       const filePath = slice.publisher.split(':')[0]!
       const abs = resolve(repoRoot(), filePath)
@@ -104,6 +104,20 @@ describe('chatDoorRegistry — the ONE door registry (config/chat/chat-hosts.yam
         existsSync(abs),
         `slice ${slice.id} publisher ${slice.publisher} — file ${filePath} does not exist`,
       ).toBe(true)
+      const fileText = readFileSync(abs, 'utf8')
+      if (/NOT PUBLISHED/.test(slice.publisher)) {
+        // Honest non-publisher: no call site anywhere in app/src may contradict it.
+        const callSites = callSitesOf(slice.id)
+        expect(
+          callSites,
+          `slice ${slice.id} is declared NOT PUBLISHED but usePublishSurfaceSlice('${slice.id}', ...) exists at: ${callSites.join(', ')}`,
+        ).toEqual([])
+      } else {
+        expect(
+          fileText.includes('usePublishSurfaceSlice('),
+          `slice ${slice.id} publisher ${slice.publisher} — ${filePath} contains no usePublishSurfaceSlice( call`,
+        ).toBe(true)
+      }
     }
   })
 
@@ -141,6 +155,45 @@ describe('chatDoorRegistry — the ONE door registry (config/chat/chat-hosts.yam
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+/** Real call sites of usePublishSurfaceSlice('<sliceId>', …) in app/src source (the grep a NOT-PUBLISHED truth rests on). */
+function callSitesOf(sliceId: string): string[] {
+  const root = srcRoot()
+  const prefix = repoRoot() + '/'
+  const out: string[] = []
+  // Plain-string needles, no escape sequences (robust across transform
+  // layers): a hook call is the name, a paren, optional space, a quoted
+  // slice id. Test files are excluded: this pin's own failure messages
+  // name the call form, and a self-match is not a call site (same idiom
+  // as collectHostLiterals below).
+  const name = 'usePublishSurfaceSlice'
+  const q1 = String.fromCharCode(39) // single quote
+  const q2 = String.fromCharCode(34) // double quote
+  const needles = [
+    name + '(' + q1 + sliceId + q1,
+    name + '(' + q2 + sliceId + q2,
+    name + ' (' + q1 + sliceId + q1,
+    name + ' (' + q2 + sliceId + q2,
+  ]
+  const walk = (dir: string) => {
+    for (const fname of readdirSync(dir)) {
+      const full = join(dir, fname)
+      const st = statSync(full)
+      if (st.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.(tsx|ts)$/.test(fname)) continue
+      if (/\.test\.(tsx|ts)$/.test(fname)) continue
+      const text = readFileSync(full, 'utf8')
+      if (needles.some((nd) => text.includes(nd))) {
+        out.push(full.startsWith(prefix) ? full.slice(prefix.length) : full)
+      }
+    }
+  }
+  walk(root)
+  return out
+}
 
 function repoRoot(): string {
   // This test lives at app/src/shared/config/. The repo root is four up.

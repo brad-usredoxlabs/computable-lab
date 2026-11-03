@@ -174,19 +174,23 @@ hosts:
 # `protocol-selection` are consumed by the collector when published. A slice is
 # a declared fact about a provider's published state, not a host and not a route.
 #   id        — the slice id.
-#   publisher — file:line of the provider that writes the slice into the store.
+#   publisher — the file:line of the slice's usePublishSurfaceSlice call (the truth
+#     pin 3 reads). When a slice is deliberately NOT PUBLISHED (spec §8.4: the
+#     collector does not consume it) the value names the owning provider and carries a
+#     NOT PUBLISHED marker; pin 3 greps app/src for contradicting call sites, so a
+#     pointer can no longer name a file that publishes nothing.
 #   carries   — what the bundle carries (prose, not a schema).
 # =============================================================================
 slices:
   - id: deck
-    publisher: app/src/event-editor/EventEditorContext.tsx:1372   # EventEditorProvider
+    publisher: "app/src/event-editor/deck/DeckChatSlice.tsx:238 — usePublishSurfaceSlice('deck', bundle); the only publisher of this slice in app/src (the EventEditorProvider it reads, EventEditorContext.tsx, publishes nothing itself)"
     carries: >-
       event graph, labwares, placements, well selection, staged preview, deck scope
   - id: workspace
-    publisher: app/src/event-editor/workspace/WorkspaceContext.tsx:89
+    publisher: "app/src/event-editor/workspace/WorkspaceContext.tsx:89 — NOT PUBLISHED — no usePublishSurfaceSlice('workspace') call exists in app/src (spec §8.4: a slice the collector does not consume need not be published — the collector's CollectorSlices carries no workspace slice, collectSurfaceContext.ts:86-89). The named provider owns the state the slice carries; it publishes nothing today. The entry stays declared so the id remains a declared fact."
     carries: >-
       studyId, active tab (kind, recordId, artifactId, eventGraphId)
   - id: protocol-selection
-    publisher: app/src/event-editor/protocol/ProtocolSelectionContext.tsx:160
+    publisher: "app/src/event-editor/protocol/ProtocolSelectionContext.tsx:160 — NOT PUBLISHED — no usePublishSurfaceSlice('protocol-selection') call exists in app/src (the registrar reads the focused step directly from this provider, SurfaceChatBridge.tsx:200; §8.4 forbids publishing a slice the collector does not consume). The named provider owns the state the slice carries; it publishes nothing today. The entry stays declared so the id remains a declared fact."
     carries: >-
       focused step (ordinal, label) — the pane's working-focus box only
