@@ -245,3 +245,5 @@ J2 can go RED. The sweep grades the **deterministic fake path only** (`--all
 model/teach concern owned elsewhere — out of scope for this calibration. No
 product/teach fix is attempted here.
 
+
+CHATHOST-CALIB DONE 34cbac7bb39da2de07f071c0389d3bf408bc76c7
