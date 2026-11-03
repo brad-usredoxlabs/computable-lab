@@ -132,3 +132,23 @@ on a free slot: corpus priority (Brad 2026-11-02T17:05) was satisfied, not overr
 5. Then `L1-CELLRENDER-1` (worktree pre-built, 54-test floor, pins re-audited 2026-11-03 03:26); it DOES need the
    browser gate on `:5192`/`:3092` with AOUT-000100 / AOUT-000136 plus the `analyte_summary` regression leg.
 6. `L1-PARAMS-EMITTER-RIDER` must NOT be dispatched on its own; `FAME-1B-BACKFILL` stays Brad-held.
+
+## ADDENDUM (04:07, written after the checkpoint above)
+
+The fix run committed its product work while I was checkpointing: **`4bf0303f` "lane1 L1-PIN-HARDEN-1 FIX RUN 1:
+close the CSS-Nesting evasions (adv review advc1)"** (coder still alive, final verification in progress — this is NOT
+an acceptance and the gate has not run).
+
+I probed that commit's scanner first-hand (same method as the pre-fix RED: `git show 4bf0303f:app/src/analysis/cssRuleScan.ts`
+under node v26.8.1 type-stripping; receipt `~/.hermes/cl/lanes/1/orch-evidence/pinh1-postfix-probe-4bf0303f-l1t0345.txt`):
+
+  nested-atrule-in-style-rule    hits=1     amp-nesting        hits=1
+  three-deep (at-rule/style/at-rule) hits=1  amp-hover-th       hits=1
+  brace-in-string                hits=1     brace-in-comment    hits=1
+  unbalanced braces              hits=1 (no throw — fails closed)
+  benign-media                   hits=0     conditional-only-plain  hits=1
+
+So the two shapes that evaded at `e2d18589` are now flagged, the deeper shapes are flagged, and the benign case is
+still clean. That raises my confidence in the fix; it does **not** substitute for the adversarial cycle-2 gate, which
+must still run and still decides. The real-file pin (`AnalysisPage.css` → `[]`) and the full test/tsc bars are the
+gate's job, not this probe's.
