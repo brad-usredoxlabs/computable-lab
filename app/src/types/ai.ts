@@ -285,6 +285,16 @@ export interface AiClarificationRequest {
    * to it (see SlashResolverContext.materialLayer). Set by the server's gate.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+  /**
+   * L2-CLARIFY-TARGET-1 (Change 2) — the assumed-value control the CARD /
+   * preview bar renders for a declared quantity/wells slot, mirrored from the
+   * server's AgentClarificationRequest. The app holds NO policy: it renders
+   * the DATA-sourced value and the approved number the scientist enters.
+   * Absent when the server stamps none (no declaration).
+   */
+  clarifyControl?:
+    | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
+    | { kind: 'wells'; question: string }
 }
 
 export interface AiClarificationAnswer {

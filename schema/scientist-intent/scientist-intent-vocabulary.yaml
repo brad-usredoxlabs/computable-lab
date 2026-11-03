@@ -293,7 +293,13 @@ verbs:
         required: false
       - name: volumeUl
         kind: quantity
-        required: false
+        required: true
+        # L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a)):
+        # a volume STATED via the `volume` quantity-object form {value, unit}
+        # (declared :297, honored at simpleVerbs.ts lowering) SATISFIES this
+        # required contract — the §5.2 sweep's present-check reads this alias
+        # list generically (no name literal in TS). NO other verb gets the slot.
+        satisfiedBy: [volume]
       - name: volume
         kind: quantity
         required: false
@@ -303,6 +309,15 @@ verbs:
         domain: material
         cardinality: many
         itemNounField: material
+      # L2-CLARIFY-TARGET-1 (Change 4): add_material is defined by WHICH wells it
+      # fills — the address argument is declared required (data), making the
+      # MISSING_REQUIRED_ARGUMENT_REASON sweep route-reachable so an absent
+      # targetWells bars the compile (the §5.2 sweep) instead of silently
+      # staging events with no target. Same declaration shape as the aliquot
+      # targetWells precedent (SPINE-7, :556-561). No TS predicate, no verb name.
+      - name: targetWells
+        kind: wells
+        required: true
   - name: create_container
     class: simple
     policyRef: hint-authority

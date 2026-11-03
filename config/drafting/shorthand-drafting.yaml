@@ -86,3 +86,22 @@ nounShape:
   blobDetectPatterns:
     - "\\d+\\s*%|\\d+\\s*[:/xX×]\\s*\\d+"
     - "\\s(?:with|containing|including)\\s"
+
+# L2-CLARIFY-TARGET-1: the ASSUMED-VALUE policy. When the scientist's prompt states no quantity for
+# a declared quantity argument, the card offers THIS value as a visible assumption the scientist
+# approves or edits. Nothing is staged on an assumption. `source` is shown on the chip (title/
+# aria) — the value is never bare. `question` is the slot's wording (wording is data too, the
+# material-profile registration's own doctrine); placeholders: {label} {value} {unit} {verb}.
+assumedValues:
+  quantities:
+    - verb: add_material
+      argument: volumeUl
+      label: volume
+      value: 100
+      unit: uL
+      source: 'shorthand drafting example (server/src/ai/submitSuggestionTool.ts:645)'
+      question: 'How much {label}? The prompt states none — {value} {unit} is assumed; approve it or enter the amount.'
+  wells:
+    - verb: add_material
+      argument: targetWells
+      question: 'Which wells? Name a range (A2:B3) or pick wells on the deck.'

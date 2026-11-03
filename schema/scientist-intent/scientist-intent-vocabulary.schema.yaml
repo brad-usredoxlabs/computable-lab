@@ -186,6 +186,24 @@ properties:
                   declared token list from wellsetValueTokens DATA into the
                   line, so the teaching text must NEVER re-list token
                   literals (one authority for the token value).
+              satisfiedBy:
+                type: array
+                items:
+                  type: string
+                  pattern: "^[a-z][a-zA-Z0-9_]*$"
+                description: >-
+                  L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING
+                  (a)) DECLARATION SLOT — a list of ALTERNATIVE argument names
+                  whose presence satisfies this contract. The resolve_nouns
+                  pass's §5.2 required-argument sweep treats the contract as
+                  PRESENT when argumentPresent(fields[contract.name]) OR any
+                  name in this list passes argumentPresent (e.g. a declared
+                  quantity satisfied by a stated quantity-OBJECT alias). The
+                  list names OTHER declared args of the SAME verb (no dangling
+                  aliases — pinned by the satisfiedBy-alias test, the in-tree
+                  pattern for cross-sibling membership the lint DSL cannot
+                  express). Interpreted generically — no consumer branches on a
+                  verb or arg NAME.
 
   wellsetValueTokens:
     type: array

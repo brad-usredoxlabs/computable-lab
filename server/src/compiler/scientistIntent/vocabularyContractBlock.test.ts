@@ -15,6 +15,13 @@ describe('vocabulary contract block', () => {
     for (const verb of vocab.verbs()) expect(block).toContain(`- ${verb}`);
     expect(block).toContain('add_material — source?');
     expect(block).toContain('volumeUl?:quantity');
+    // L2-CLARIFY-TARGET-1 (Change 4): the add_material line is the EXACT post-flip
+    // string — volumeUl is now required (no `?`) and targetWells:wells is appended
+    // after composition. One line changed; the teaching line is untouched (OQ1
+    // ruling: data-driven contract-block delta). Any OTHER diff is a defect.
+    expect(block).toContain(
+      '- add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl:quantity, volume?:quantity, composition?:resolvable(material), targetWells:wells',
+    );
     // The block is generated, so it can never disagree with the enum the parser injects.
     expect(vocab.toolActionEnum().every((v) => block.includes(`- ${v}`))).toBe(true);
   });

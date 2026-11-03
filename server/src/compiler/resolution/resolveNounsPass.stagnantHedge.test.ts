@@ -402,10 +402,14 @@ describe('staghedge-1.model-hedge label-divergence consume (resolve_nouns)', () 
     // (b) Sweep-untouched: the §5.2 sweep fact on the declared-REQUIRED slot
     // (absent -> the vocabulary's own demand) survives even though the answer
     // map carries an entry keyed with the sweep fact's own label; the model
-    // twin on the same key merges into it (existing reconcile behavior —
-    // engine wins), so exactly ONE clarification rides: the sweep fact.
+    // twin on the same key merges into it (existing reconcile behavior — engine
+    // wins), so exactly ONE clarification rides: the sweep fact.
+    // WHY (L2-CLARIFY-TARGET-1 flip): requiredVerb (add_material) now declares
+    // TWO required args (volumeUl + targetWells). Supplying targetWells in the
+    // sweep action keeps the sweep to the ONE arg under test (requiredArg=
+    // volumeUl), preserving the single-fact subject the pin isolates.
     const sweepIntent = intentOf(
-      [{ action: requiredVerb } as ScientistIntent['actions'][number]],
+      [{ action: requiredVerb, targetWells: ['A1'] } as ScientistIntent['actions'][number]],
       [hedge(requiredArg.name, requiredVerb, 0)],
     );
     const sweepRun = await runPass(sweepIntent, {

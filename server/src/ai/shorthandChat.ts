@@ -47,6 +47,11 @@ import type {
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import {
+  assumedQuantityFor,
+  assumedWellsFor,
+  loadAssumedQuantities,
+} from '../compiler/resolution/assumedQuantities.js';
 import { foldSameNounCards } from '../compiler/resolution/clarificationDedupe.js';
 import {
   formatFractionString,
@@ -858,6 +863,11 @@ export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
+  // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE policy, loaded PER call
+  // (the nounShape discipline — never process-cached, so a data edit needs no
+  // stack restart). The stamp reads whatever the DATA declares — zero
+  // verb/argument/value literals here.
+  const assumedValues = loadAssumedQuantities();
   // SH-QA-3 (fix 2, OQ3 ruling): the mint affordance is gated by the
   // noun-shape DATA (config/drafting/shorthand-drafting.yaml `nounShape:`,
   // loaded PER call). A card whose label is a prose sentence REFUSES the
@@ -889,15 +899,68 @@ export function clarificationsFromUnresolvedFacts(
       ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
       : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
     const message = factMessage(fact);
+    // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE control for a DECLARED
+    // slot — keyed on the vocabulary's declared KIND (data, one source) + an
+    // exact (verb, argument) join in the assumed-value DATA. A fact whose slot
+    // has NO declaration gets NO `clarifyControl` key (conditional spread below;
+    // exactOptionalPropertyTypes — never `undefined`). The quantity arm's prompt
+    // is the DATA `question` rendered with {label}{value}{unit}{verb}; the
+    // noun template is NOT used (it would name the argument as if it were
+    // an unbound NOUN).
+    // `entityType` is the declared argument name so the answer sentence reads
+    // `Use <n> <unit> for <argument>.` (the sentence SHAPE is untouched — only
+    // the `target` token differs, and only for request families that did not
+    // exist before).
+    const slotKind = loc?.action && typeof loc.argument === 'string'
+      ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.kind
+      : undefined;
+    let clarifyControl: AgentClarificationRequest['clarifyControl'];
+    let assumedPrompt: string | undefined;
+    if (slotKind === 'quantity' && loc?.action && typeof loc.argument === 'string') {
+      const entry = assumedQuantityFor(loc.action, loc.argument, assumedValues);
+      if (entry) {
+        // Project the DECLARED control fields — the wire type
+        // (AgentClarificationRequest.clarifyControl) declares EXACTLY these:
+        // label/value/unit/source/question. The entry ALSO carries its join
+        // keys (verb/argument); projecting keeps the wire object byte-equal to
+        // the declared shape (no phantom fields the app mirror type does not
+        // declare). `question` is the RAW DATA template (the client renders
+        // the server's declared sentence, not invented copy); the card's
+        // `prompt` is the RENDERED form (below). Data-driven: every value
+        // comes from the assumed-value DATA, no verb/argument/value literals.
+        clarifyControl = {
+          kind: 'quantity',
+          label: entry.label,
+          value: entry.value,
+          unit: entry.unit,
+          source: entry.source,
+          question: entry.question,
+        };
+        assumedPrompt = renderAssumedQuestion(entry.question, {
+          label: entry.label, value: entry.value, unit: entry.unit, verb: loc.action,
+        });
+      }
+    } else if (slotKind === 'wells' && loc?.action && typeof loc.argument === 'string') {
+      const entry = assumedWellsFor(loc.action, loc.argument, assumedValues);
+      if (entry) {
+        clarifyControl = { kind: 'wells', question: entry.question };
+        assumedPrompt = entry.question;
+      }
+    }
     return {
       id: factRequestId(fact),
       kind,
       // The READING arm's prompt is the bar's OWN data-derived message (the
       // message is consulted ONLY on this arm — a fact without readings keeps
       // the noun template byte-identically, whatever else it carries).
-      prompt: readings && message ? message : nounPrompt,
+      // The assumed-value arm (clarifyControl present) uses the DATA question
+      // instead of the noun template (it would say `The draft names "volumeUl"…`).
+      prompt: assumedPrompt ?? (readings && message ? message : nounPrompt),
       origin: 'harness',
-      entityType: kind,
+      // The assumed-value arms key off the DECLARED argument name so the
+      // answer sentence reads `Use 100 uL for volumeUl.`; every other fact
+      // keeps the domain-map `kind` byte-identically.
+      entityType: clarifyControl ? loc!.argument! : kind,
       menuProvider,
       query: fact.label,
       // Forced-draft mode offers NO model-authored options; the live /m or /l
@@ -912,8 +975,26 @@ export function clarificationsFromUnresolvedFacts(
       })),
       allowCreateLocal,
       unresolvedFact: fact,
+      ...(clarifyControl !== undefined ? { clarifyControl } : {}),
     };
   });
+}
+
+/** L2-CLARIFY-TARGET-1 (Change 2): render the DATA-declared question template
+ *  for a slot by substituting the declared placeholders. The template and the
+ *  value/unit/label it names all come from the `assumedValues:` DATA — the TS
+ *  carries no wording, no number, no unit. An absent placeholder is left as
+ *  is (the loader already validates the quantity `question` carries `{value}`
+ *  and `{unit}`). */
+function renderAssumedQuestion(
+  template: string,
+  vars: Record<string, string | number>,
+): string {
+  let out = template;
+  for (const [key, value] of Object.entries(vars)) {
+    out = out.split(`{${key}}`).join(String(value));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -971,6 +1052,13 @@ export function foldAnswersIntoShorthand(
 ): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[]; bindings: AcceptedShorthandBinding[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
+  // L2-CLARIFY-TARGET-1 (Change 3): the DECLARED-kind splice arm needs the
+  // vocabulary (the declared KIND decides the arm — data, one source) and the
+  // assumed-value DATA (the quantity arm's unit check reads the DECLARATION's
+  // own unit — no `'uL'` literal). Per-call loaders, zero verb/argument
+  // literals.
+  const foldVocabulary = defaultScientistIntentVocabulary();
+  const foldAssumedValues = loadAssumedQuantities();
   // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
   // over the held bar's facts (exact match wins). A fact-order shift between
   // compiles cannot mis-fold anymore (the live iteration-2 hazard).
@@ -1011,6 +1099,56 @@ export function foldAnswersIntoShorthand(
     if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return null;
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return null;
+    // L2-CLARIFY-TARGET-1 (Change 3): the DECLARED-kind splice arm. A `quantity`
+    // or `wells` slot cannot reach the string/array splice below (a numeric or
+    // ABSENT slot returns null at the `else` arm) — so a card answer for a
+    // numeric or absent slot could never fold (the RED this item fixes). The
+    // arm is keyed on the DECLARED KIND (data, one source — zero verb/argument
+    // literals):
+    //   `quantity` — the value comes from the answer's OWN `ref`
+    //     {kind:'quantity', value, unit} (PREFERRED — the APPROVED number,
+    //     never the assumed one). The unit must equal the DECLARATION's own
+    //     unit (assumedQuantityFor — no `'uL'` literal); ANY mismatch or a
+    //     missing ref/declaration ⇒ null (never guess — no ad-hoc label
+    //     parsing; the existing quantity parser is sentence-oriented, not a
+    //     slot-value parser). The NUMBER is written into action[argument]
+    //     (scientist-intent.schema.yaml types volumeUl as number).
+    //   `wells` — the answer's LABEL is expanded with the ONE parser
+    //     expandWellTokens and the ARRAY is written (a range STRING in a
+    //     declared `kind: wells` slot is a symbolic well LABEL to the engine
+    //     (SPINE-7) and would bar again — never write the string).
+    // Both arms: the answered fact is dropped exactly as the existing arms do;
+    // NO record bindings are recorded (the ref carries no `id`).
+    const declaredKind = typeof loc.action === 'string'
+      ? foldVocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.kind
+      : undefined;
+    if (declaredKind === 'quantity' || declaredKind === 'wells') {
+      if (declaredKind === 'quantity') {
+        const declared = typeof loc.action === 'string'
+          ? assumedQuantityFor(loc.action, loc.argument, foldAssumedValues)
+          : null;
+        const ref = (answer.ref ?? undefined) as
+          | { kind?: unknown; value?: unknown; unit?: unknown }
+          | undefined;
+        const refValue = ref && typeof ref.value === 'number' && Number.isFinite(ref.value)
+          ? ref.value
+          : null;
+        // No declaration for the arg ⇒ null (unchanged behaviour — the string/
+        // array arms already returned null for a numeric/absent slot). No ref,
+        // wrong ref kind, or unit mismatch ⇒ null (never guess).
+        if (!declared || refValue === null || ref?.kind !== 'quantity' || ref.unit !== declared.unit) {
+          return null;
+        }
+        action[loc.argument] = refValue;
+      } else {
+        const wells = expandWellTokens([label]);
+        if (wells.length === 0) return null;
+        action[loc.argument] = wells;
+      }
+      answered.add(fact);
+      answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
+      continue;
+    }
     // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
     // 'slot-not-string' — slotType=array (action-level composition) AND
     // slotType=undefined (composition nested under `params`; the schema

@@ -166,7 +166,11 @@ describe('SHORTHAND-CHAT deck binding (plate1 false-bar)', () => {
   });
 
   it('a store-resolvable labware hint is unaffected: deck composition never shadows store evidence', async () => {
-    const model = stubModel([{ toolCalls: [shorthandCall(`intentId: store-hint-leg\nactions:\n  - action: add_material\n    material: DMEM\n    volume: 50\n    labware: plate\n`)] }]);
+    const model = stubModel([{ toolCalls: [shorthandCall(`intentId: store-hint-leg\nactions:\n  - action: add_material\n    material: DMEM\n    volume: 50\n    labware: plate\n    targetWells: [A1]\n`)] }]);
+    // WHY (L2-CLARIFY-TARGET-1 flip): add_material now REQUIRES targetWells (volume
+    // is satisfied via the satisfiedBy object arm). Supplying it keeps the subject
+    // the COMPLETE store-hint binding leg (labwareId LAB-plate-1), not a
+    // required-arg bar.
     const orchestrator = createAgentOrchestrator(
       model.client,
       { getToolDefinitions: () => [], executeTool: vi.fn() },

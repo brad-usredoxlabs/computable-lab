@@ -116,7 +116,10 @@ describe('ChatPreviewCard — L2-SUITE-A-uifix2 B: the mix volume/cycles are hum
     renderCard(chat)
     const card = screen.getByTestId('chat-preview')
     expect(card).toHaveTextContent('add_material')
-    expect(card.querySelector('.chat-preview__event-details')?.textContent).toBe('100 uL')
+    // fix run 4 / D1 CONFORM (ruling l2t0937 Q3, shape (A) — COMPOSE): the
+    // row fact carries well(s) + volume (`B1, B2 ← 100 uL`), so the residual
+    // is empty — the ONE detail line IS the fact, exactly.
+    expect(card.querySelector('.chat-preview__event-details')?.textContent).toBe('B1, B2 ← 100 uL')
   })
 
   it('an event with no displayable detail shows no detail line (no dead chrome)', () => {

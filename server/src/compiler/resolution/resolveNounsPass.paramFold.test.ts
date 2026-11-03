@@ -184,8 +184,14 @@ describe('param-fold-1.declared-optional-absence fold (resolve_nouns)', () => {
   });
 
   it('V2e NEVER-folded: the declared-required sweep fact survives the fold untouched (the vocabulary\'s own demand bars)', async () => {
+    // WHY (L2-CLARIFY-TARGET-1 flip): requiredVerb (add_material) now declares
+    // TWO required args (volumeUl + targetWells). This test isolates the
+    // REQUIRED-arg fold (requiredArg=volumeUl); supplying targetWells in the
+    // fixture keeps the §5.2 sweep to exactly the one arg under test, preserving
+    // the original single-fact subject (no weakening — the new second required
+    // arg is a separate contract, not this fold's concern).
     const result = await runPass(
-      intentOf([{ action: requiredVerb }], [hedge(requiredArg.name, NOT_STATED, requiredVerb)]),
+      intentOf([{ action: requiredVerb, targetWells: ['A1'] } as ScientistIntent['actions'][number]], [hedge(requiredArg.name, NOT_STATED, requiredVerb)]),
     );
     const output = result.output as ResolveNounsOutput;
 
@@ -207,9 +213,13 @@ describe('param-fold-1.declared-optional-absence fold (resolve_nouns)', () => {
     // Guard (3) pinned cleanly: a not-stated hedge on a REQUIRED argument
     // that IS PRESENT in the action (no sweep fact to merge with) is KEPT —
     // the fold never touches a required contract, present or absent.
+    // WHY (L2-CLARIFY-TARGET-1 flip): targetWells supplied so the §5.2 sweep is
+    // silent here too (the present-arg guard isolates the hedge, not the second
+    // required contract).
     const presentAction = {
       action: requiredVerb,
       [requiredArg.name]: 'a stated value',
+      targetWells: ['A1'],
     } as ScientistIntent['actions'][number];
     const present = await runPass(
       intentOf([presentAction], [hedge(requiredArg.name, NOT_STATED, requiredVerb)]),
@@ -360,9 +370,15 @@ describe('param-fold-1 sentinel-in-slot (W28-FOLDSENT-1)', () => {
   });
 
   it('FS5 guard (3) precedence: a REQUIRED slot holding the sentinel is still KEPT (guard 3 fires before guard 4 — required-sentinel is a different class, out of scope)', async () => {
+    // WHY (L2-CLARIFY-TARGET-1 flip): requiredVerb (add_material) now declares
+    // TWO required args (volumeUl + targetWells). This test isolates the
+    // REQUIRED-slot sentinel guard (requiredArg=volumeUl); supplying targetWells
+    // keeps the §5.2 sweep from adding a second fact, preserving the original
+    // single-fact subject (the sentinel-vs-required class, not the second contract).
     const action = {
       action: requiredVerb,
       [requiredArg.name]: NOT_STATED,
+      targetWells: ['A1'],
     } as ScientistIntent['actions'][number];
     const result = await runPass(
       intentOf([action], [hedge(requiredArg.name, NOT_STATED, requiredVerb)]),

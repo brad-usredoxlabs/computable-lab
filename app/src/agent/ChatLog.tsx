@@ -17,6 +17,12 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+// L2-CLARIFY-TARGET-1 (Change 2 + 4, RE-PIN NOTE S3): the declared-slot answer
+// surfaces mount in the TYPED arm too (the n===1 single-fact turn goes through
+// renderTypedClarification, not the grouped card). Same components as the card;
+// the answer rides the existing onClarificationPick sink (clarificationAnswerPrompt).
+import { ClarifyAssumedChip } from './ClarifyAssumedChip'
+import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
 import { ChatClarificationCard } from './ChatClarificationCard'
 import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
@@ -125,6 +131,28 @@ function clarificationQuestion(message: ChatMessage): string | undefined {
  */
 function requestRendersPrompt(request: AiClarificationRequest): boolean {
   return (request.options ?? []).length > 0 || requestHasPicker(request)
+}
+
+/**
+ * L2-CLARIFY-TARGET-1 (fix1/D2, adversarial l2t0230) — THE ONE extended
+ * render decision, used by BOTH the single-request render guard AND the
+ * bubble-suppression arm. A request renders an OWNED prompt when it either
+ * has the shared options/picker surface (`requestRendersPrompt`) OR a
+ * DECLARED `clarifyControl` slot (kind 'quantity' / 'wells') — the single
+ * n===1 gap: a `clarifyControl` request has NO options and NO picker, so the
+ * base `requestRendersPrompt` alone would (a) drop the single-fact turn as
+ * unanswerable (the render guard) and (b) leave the bubble UN-suppressed even
+ * though the card renders the prompt → the question printed TWICE (the
+ * reviewer's probe: EXACT PROMPT NODE COUNT = 2 for one assistant message +
+ * one `clarifyControl` request with `options: []`). Deriving BOTH the guard
+ * and the bubble-suppression from this ONE predicate restores the CARD-1
+ * invariant ("never twice, never zero") for the new surface with ONE copy of
+ * the rule. For a request WITHOUT `clarifyControl` (every legacy
+ * options/picker shape) this reduces to `requestRendersPrompt` — byte-identical
+ * behaviour, so the CARD-1 pins are untouched.
+ */
+function requestRendersOwnedPrompt(request: AiClarificationRequest): boolean {
+  return request.clarifyControl != null || requestRendersPrompt(request)
 }
 
 /**
@@ -299,15 +327,39 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     shownPrompts: Set<string>,
   ) {
     const options = request.options ?? []
-    // advc-c4 D1 (fix run 3): the render decision is the SHARED
-    // requestRendersPrompt predicate — the bubble-suppression arm keys on
-    // the SAME rule (no second copy of the options/picker check).
-    if (!requestRendersPrompt(request)) return null
+    // L2-CLARIFY-TARGET-1 (RE-PIN NOTE S3): the n===1 gap. A request that
+    // carries a `clarifyControl` (kind 'quantity' / 'wells') renders its OWN
+    // declared answer surface (the chip / the target-well slot) — it has NO
+    // options and NO picker, so the shared requestRendersPrompt predicate
+    // (the bubble-suppression arm keys on the SAME rule) would otherwise DROP
+    // it here and leave the single-fact V2 turn unanswerable. The guard is
+    // EXTENDED to allow `clarifyControl != null`; the predicate itself is
+    // UNCHANGED (the bubble-suppression arm must keep working), so the prompt
+    // still renders once (shownPrompts) and the bubble-suppression decision is
+    // untouched. One additive answer-surface arm is added below.
+    const hasDeclaredSlot = request.clarifyControl != null
+    // advc-c4 D1 (fix run 3) + fix1/D2: the render decision is the SHARED
+    // requestRendersOwnedPrompt predicate — the SAME extended rule the
+    // bubble-suppression arm keys on (ONE copy: `clarifyControl != null ||
+    // options/picker`). No second copy of the options/picker check.
+    if (!requestRendersOwnedPrompt(request)) return null
     const hasPicker = requestHasPicker(request)
     const promptAlreadyShown = shownPrompts.has(request.prompt)
     if (!promptAlreadyShown) shownPrompts.add(request.prompt)
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
       {!promptAlreadyShown && <p>{request.prompt}</p>}
+      {hasDeclaredSlot && onClarificationPick && request.clarifyControl?.kind === 'quantity' ? (
+        <ClarifyAssumedChip
+          requestId={request.id}
+          control={request.clarifyControl}
+          onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
+        />
+      ) : hasDeclaredSlot && onClarificationPick && request.clarifyControl?.kind === 'wells' ? (
+        <ClarifyWellTargetSlot
+          requestId={request.id}
+          onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
+        />
+      ) : null}
       {options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
           {options.map((option, optionIndex) => {
@@ -420,7 +472,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
             && onClarificationSubmit !== undefined
           const typedCardRendersOwnedPrompt = !answered
             && (message.clarificationRequests ?? []).some(
-              (r) => r.prompt === message.content && (rendersGroupedCard || requestRendersPrompt(r)),
+              (r) => r.prompt === message.content && (rendersGroupedCard || requestRendersOwnedPrompt(r)),
             )
           const bubbleIsOwnedPrompt = typedCardRendersOwnedPrompt
           return <div key={message.id} className={bubbleClass}>

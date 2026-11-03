@@ -29,6 +29,14 @@ import type { AiClarificationAnswer, AiClarificationRequest } from '../types/ai'
 import { clarificationAnswersPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
 import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAnswerInput'
+// L2-CLARIFY-TARGET-1 (Change 2 + 4, RE-PIN NOTE S2): the two declared-slot
+// answer surfaces — the ASSUMED-VALUE quantity chip and the TARGET-WELL slot.
+// They mount as the FIRST arms of the per-slot control ternary (the declared
+// kind wins over the generic picker/options/typed fallback) and ride the
+// card's existing `record(request, answer)` sink — no new state, no new
+// Submit, no change to `allAnswered`.
+import { ClarifyAssumedChip } from './ClarifyAssumedChip'
+import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
 
 export interface ChatClarificationCardProps {
   /** The unresolved facts for ONE sentence (the message), in wire order. */
@@ -150,6 +158,14 @@ export function ChatClarificationCard({
         // not mutate its inputs — see the dedupe comment above).
         const promptAlreadyShown = promptShown.has(request.prompt)
         if (!promptAlreadyShown) promptShown.add(request.prompt)
+        // L2-CLARIFY-TARGET-1 (RE-PIN NOTE S2): the DECLARED-slot answer
+        // surfaces ride the card's existing `record(request, answer)` sink and
+        // sit as the FIRST arms of the per-slot control ternary — a request
+        // with a `clarifyControl` (kind 'quantity' / 'wells') uses ITS declared
+        // surface, not the generic picker/options/typed fallback. No new
+        // state, no new Submit, `allAnswered` unchanged.
+        const controlKind = request.clarifyControl?.kind
+        const declaredAnswer = (answer: AiClarificationAnswer) => record(request, answer)
         return (
           <section
             key={request.id}
@@ -165,10 +181,25 @@ export function ChatClarificationCard({
             {!promptAlreadyShown ? (
               <p className="chat-clarification-card__prompt">{request.prompt}</p>
             ) : null}
-            {/* Exactly ONE answer surface per slot (spec item 2): the picker
+            {/* Exactly ONE answer surface per slot (spec item 2): the DECLARED
+                slot control first (TARGET-1: the assumed-value quantity chip /
+                the target-well slot, both riding `record`), then the picker
                 (the same per-slot picker identity law the panel documents),
                 else the numbered options, else the typed parameter box. */}
-            {hasPicker ? (
+            {controlKind === 'quantity' && request.clarifyControl ? (
+              <ClarifyAssumedChip
+                requestId={request.id}
+                control={request.clarifyControl}
+                onAnswer={declaredAnswer}
+                disabled={disabled}
+              />
+            ) : controlKind === 'wells' && request.clarifyControl ? (
+              <ClarifyWellTargetSlot
+                requestId={request.id}
+                onAnswer={declaredAnswer}
+                disabled={disabled}
+              />
+            ) : hasPicker ? (
               <ClarificationPicker
                 key={request.id}
                 request={request}
