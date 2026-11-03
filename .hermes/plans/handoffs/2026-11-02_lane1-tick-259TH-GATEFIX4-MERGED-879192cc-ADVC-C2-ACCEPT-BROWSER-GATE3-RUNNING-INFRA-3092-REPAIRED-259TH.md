@@ -68,7 +68,7 @@ infrastructure defect for a follow-up item (`cl-lane-stack.sh` must kill the tsx
 group). Lane 2 holds ~53 stale watchers of its own — reported, never touched (not my lane's authority).
 
 ## OPEN (gating) — browser re-gate cycle 3
-Dispatched 21:41:0x as unit `cl-l1-browregate-fame8-c3-l1t2141` (tier-1 `cl-browser-reviewer`,
+Dispatched 21:36:44 as unit `cl-l1-browregate-fame8-c3-l1t2141` (tier-1 `cl-browser-reviewer`,
 computable qwen35-4b-vision — endpoint verified live first), brief
 `lanes/1/prompts/fame8-browregate3-l1t2140.txt`, log `lanes/1/logs/browregate-fame8-gate3-l1t2141.log`,
 receipts dir **`~/.hermes/cl/receipts/FAME-8/gate3-2115/`** (trail.json + report.md + shots), pinned to
