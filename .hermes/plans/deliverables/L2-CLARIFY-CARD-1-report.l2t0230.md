@@ -390,3 +390,28 @@ volume gate's own semantics are untouched.
 - Worktree CLEAN at the end of this run.
 - NOT live :5193 (orchestrator-owned; this run does not claim live browser
   verification).
+
+## FIX RUN 4 (l2t0230) — IN PROGRESS (armed; dispatch after TARGET-1 merge)
+
+STEP 0: status clean, fast-forward merge cl/integration-2 -> 31353115 (TARGET-1 in-tree). No conflicts.
+
+### Confirmed root causes (wire + code, measured against receipt 2026-11-02_2225-tier1)
+
+- D2 (HIGH): dual mechanism.
+  1. SERVER: ask turn persisted metadata.clarification.id = unresolved-c-d0e9c7d900 (fact id on wire), but the USER answer message was posted with metadata:{} (only the mention-token in content). So the thread carries NO persisted answered-state, and the server follow-up re-derives the same fact under a NEW id (unresolved-c-c9830ef36c) -> mounts a 2nd card. deriveContextCacheKey folds eventGraphId (systemPrompt.ts:650); answer turn eventGraphId flips null->real (receipt: ask EVG-cellrox.../answer null then EVG...), so the held-intent fold key changes and takeHeldShorthandIntent returns null -> re-extract.
+  2. CLIENT: useAiChat re-keys the thread on scope change (scope derives from eventGraphId, null->real); cold reload loads the post-flip thread (2 msgs: answer sentence + re-ask) and the Answered row (derived from transcript adjacency) vanishes (count 1->0).
+  Pin plan: (i) unit two-turn fixture, second turn re-derives same fact -> no 2nd card, one Answered row; (ii) render rehydrate from persisted shape (fresh mount, no in-memory carry). KEY ON fact identity/requestId already on wire, not prose/regex. Zero new schema if the store already carries it.
+
+- D3 (BLOCKING): 10 draws -> 2 hashes. delta = ONE char of case in server clarification text (query 1 mM clofibrate in DMSO / id unresolved-c-d0e9c7d900 vs 1 mM Clofibrate in DMSO / unresolved-c-c9830ef36c). Case originates in model extraction, echoed into label/prompt/fact-id. The fold 1:1 join (shorthandChat.ts ~960-1050) uses EXACT label match so case flip also defeats identity. Fix: ONE canonical label per entity, derived deterministically from the BOUND/RESOLVED noun (or declared material label); Answered row + record label follow the same canonical string. Never lowercase arbitrary prose.
+  Pin plan: ten-draw unit at server boundary -> byte-identical clarification text; answered row/label uses same canonical string.
+
+- D4 (MEDIUM): mint row overflows card (card box x981 w520 right1501; mint row right1651 = +150px; Create x1584 w57 right1642 = 42px beyond 1600 viewport; preview scrollW388>clientW379, renders "...in the lab (new rec..."). Card .chat-log-clarification has NO overflow containment; bubble capped 85% but intrinsic mint-row content forces overflow. Fix: CSS/layout only in the card stylesheet/component; mint row inside content box 1280-1920, Create never clipped, preview wraps/ellipsises. Pin: repo CSS/source-pin idiom (comments stripped) + rendered-DOM assert preview declares wrap/ellipsis contract.
+
+- D5 (MEDIUM): [Local] candidate row (data-testid clarification-top3-row, badge Local) label = seed+noun concat 1 mM clofibrate1 mM Clofibrate in DMSO (dom/answer-before-answer.json legacyDetail[0].rows[2]; W7/r3-14 ${seed}${noun} shape). seed=1 mM clofibrate, noun=1 mM Clofibrate in DMSO. Picking commits a durable name built from it. Fix: one entity one label; if seed and noun denote same entity render ONE, not concat. Generic (no noun special-case). Pin: unit exact-string assert on rendered row label + minted name, RED against pre-fix builder.
+
+### D4 — DONE (commit 6b0d9786)
+- Mechanism: `.message-log__clarification-picker` (ai.css) is `display:grid` with NO column constraint => the single implicit track is max-content sized; the nowrap Create verb + seeded label force the track (and the mint row's `width:100%`) 150 px wider than the card; Create button 42 px off a 1600 px viewport.
+- Fix (CSS-only, card's own stylesheet ai.css): `grid-template-columns: minmax(0, 1fr)` (min 0 lets the nowrap children shrink instead of growing the track) + `max-width: 100%`. Preview keeps the deliberate ellipsis contract; Create verb stays `flex:none`+nowrap (never clips). No horizontal overflow at any width.
+- Pin: new source-pin describe in `ChatClarificationCard.mint.test.tsx` ("fix4 D4"), ruleOf idiom (jsdom cannot measure layout; live visual proof is the orchestrator's browser gate).
+- RED (pre-fix): `1 failed | 8 passed (9)` — AssertionError: expected picker rule to contain `grid-template-columns: minmax(0, 1fr)`.
+- GREEN (post-fix): `Test Files 1 passed (1)  Tests 9 passed (9)`.
