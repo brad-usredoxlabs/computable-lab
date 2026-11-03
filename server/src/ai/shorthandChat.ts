@@ -46,6 +46,7 @@ import type {
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import {
   assumedQuantityFor,
@@ -691,6 +692,15 @@ export function clearHeldShorthandIntent(key: string): boolean {
  * AgentClarificationRequest.id (the app echoes it verbatim; no wire SHAPE
  * change). The legacy `unresolved-<n>` positional mint is retired here and
  * kept ONLY as the fold's pinned back-compat fallback (OQ2 ruling).
+ *
+ * CARD1-D3 (ruling §3(ii), l2t1430): the `label` rides the key as the
+ * CANONICAL identity — `canonicalLabelKey(fact.label)` (NFKC -> trim ->
+ * collapse inner whitespace -> toLowerCase("en")) — so a case / extra-space /
+ * NFKC variant of the SAME term mints the SAME id (`1 mM Clofibrate  in DMSO`
+ * === `1 mM clofibrate in DMSO` -> one id). The OTHER key components
+ * (actionIndex, action, argument, reason) are UNCHANGED verbatim (reason is
+ * prose, never canonicalized — ruling §3(i)). Everything else about the
+ * `unresolved-c-<sha1-10hex>` shape is preserved.
  */
 export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
   const key = JSON.stringify([
@@ -698,7 +708,7 @@ export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
     fact.actionLocation?.action ?? null,
     fact.actionLocation?.argument ?? null,
     fact.reason,
-    fact.label,
+    canonicalLabelKey(fact.label),
   ]);
   const digest = createHash('sha1').update(key).digest('hex').slice(0, 10);
   return `unresolved-c-${digest}`;
@@ -1389,7 +1399,16 @@ export function dropSatisfiedFacts(
     const entry = bySlot.get(`slot:${loc.actionIndex}:${loc.argument}`);
     if (!entry) return true;
     const value = (doc.actions[entry.actionIndex] as Record<string, unknown> | undefined)?.[entry.argument];
-    return value !== entry.label;
+    // CARD1-D3 (ruling §3(iii)): the slot is satisfied by the CANONICAL label,
+    // not the raw string — a case / extra-space / NFKC variant of the answered
+    // label still satisfies the slot (a fact re-derived under a drifted casing
+    // of an already-answered value must be dropped, not re-asked). The
+    // NON-STRING slot value keeps the existing "return true" arm (a non-string
+    // can never equal the answered string label; the old `value !==
+    // entry.label` arm returned true for it). The string comparison now rides
+    // the canonical key both sides.
+    if (typeof value !== 'string') return true;
+    return canonicalLabelKey(String(value ?? '')) !== canonicalLabelKey(entry.label);
   });
 }
 
