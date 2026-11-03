@@ -353,6 +353,25 @@ properties:
             type: string
             description: >-
               Strategy id this policy arm delegates to (lint: member of strategyOrder).
+          identityCollapse:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required: [key, survivor]
+            properties:
+              key:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: { type: string, enum: [normalized_label, candidate_level] }
+              survivor:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: { type: string, enum: [declared_substance, stable_order] }
+            description: >-
+              Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
+              no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
       hintAuthority:
         type: object
         additionalProperties: false

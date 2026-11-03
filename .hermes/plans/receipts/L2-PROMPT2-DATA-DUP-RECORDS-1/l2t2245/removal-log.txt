@@ -1,0 +1,112 @@
+REMOVAL RUN — via DELETE /api/records/:id on :3093 (lane-2 store)
+started: 2026-11-03T05:34:03Z
+actor header: x-user-id: USR-BRAD (shells' createdBy; spec §3.3)
+order: aliquots(7) -> shells(7) -> MAT-TEST-DMSO (AS-ORDER)
+format: id | http_status | response_body
+---
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7, got bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 | RETRY-with-got | sha=bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 | 200 | {"success":true,"commit":{"sha":"bc4c692ee3be736d4f604ddf053965bf0049591e","message":"Delete ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7","timestamp":"2026-11-03T05:34:03.987Z"}} HTTP=200
+bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2 | 404 | {"error":"NOT_FOUND","message":"Record not found: bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9, got 66202e7545ba65fcdf2350072640f2ead14da30c"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 | RETRY-with-got | sha=66202e7545ba65fcdf2350072640f2ead14da30c
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 | 200 | {"success":true,"commit":{"sha":"b54edecd170265c2928847cf8ce28d24d5f1df19","message":"Delete ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9","timestamp":"2026-11-03T05:34:08.561Z"}} HTTP=200
+66202e7545ba65fcdf2350072640f2ead14da30c | 404 | {"error":"NOT_FOUND","message":"Record not found: 66202e7545ba65fcdf2350072640f2ead14da30c"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB, got 2352ebe96538e9e3e946e7b953855db1312f2a09"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB | RETRY-with-got | sha=2352ebe96538e9e3e946e7b953855db1312f2a09
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB | 200 | {"success":true,"commit":{"sha":"b1ef4dbeaafd7d821bb5d029160f57bfda6cdcf4","message":"Delete ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB","timestamp":"2026-11-03T05:34:10.616Z"}} HTTP=200
+2352ebe96538e9e3e946e7b953855db1312f2a09 | 404 | {"error":"NOT_FOUND","message":"Record not found: 2352ebe96538e9e3e946e7b953855db1312f2a09"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18, got 2713aa66e769a93cce8de2c2c4ce99f0d7fb86da"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 | RETRY-with-got | sha=2713aa66e769a93cce8de2c2c4ce99f0d7fb86da
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 | 200 | {"success":true,"commit":{"sha":"a77dd2113bd3fd9a9dd743f2f08bb3572b4454be","message":"Delete ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18","timestamp":"2026-11-03T05:34:12.293Z"}} HTTP=200
+2713aa66e769a93cce8de2c2c4ce99f0d7fb86da | 404 | {"error":"NOT_FOUND","message":"Record not found: 2713aa66e769a93cce8de2c2c4ce99f0d7fb86da"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR, got dae2bd9e12b89819fc739cf34db4e55ab2d58e5f"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR | RETRY-with-got | sha=dae2bd9e12b89819fc739cf34db4e55ab2d58e5f
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR | 200 | {"success":true,"commit":{"sha":"20aad60b5fa038f3ab156d4a425e7d30a301b432","message":"Delete ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR","timestamp":"2026-11-03T05:34:13.993Z"}} HTTP=200
+dae2bd9e12b89819fc739cf34db4e55ab2d58e5f | 404 | {"error":"NOT_FOUND","message":"Record not found: dae2bd9e12b89819fc739cf34db4e55ab2d58e5f"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1, got e207860f8cb5c4b601c713803cb80d8d33aff0bb"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 | RETRY-with-got | sha=e207860f8cb5c4b601c713803cb80d8d33aff0bb
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 | 200 | {"success":true,"commit":{"sha":"eef726c16307caba3d5c26cc39b2ce83a3d3718e","message":"Delete ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1","timestamp":"2026-11-03T05:34:15.425Z"}} HTTP=200
+e207860f8cb5c4b601c713803cb80d8d33aff0bb | 404 | {"error":"NOT_FOUND","message":"Record not found: e207860f8cb5c4b601c713803cb80d8d33aff0bb"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O | 409 | {"success":false,"error":"SHA mismatch: expected ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O, got 63e899ceeb395366431ce711a5d1498d10241204"}
+HTTP=409
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O | RETRY-with-got | sha=63e899ceeb395366431ce711a5d1498d10241204
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O | 200 | {"success":true,"commit":{"sha":"798ba6e9889f84a39a588e40e4a3c397e51b78fb","message":"Delete ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O","timestamp":"2026-11-03T05:34:16.887Z"}} HTTP=200
+63e899ceeb395366431ce711a5d1498d10241204 | 404 | {"error":"NOT_FOUND","message":"Record not found: 63e899ceeb395366431ce711a5d1498d10241204"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7"}
+HTTP=404
+bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2 | 404 | {"error":"NOT_FOUND","message":"Record not found: bfa4e3cfdbfd9cc6f8acaa574a5a18f867f6dba2"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9"}
+HTTP=404
+66202e7545ba65fcdf2350072640f2ead14da30c | 404 | {"error":"NOT_FOUND","message":"Record not found: 66202e7545ba65fcdf2350072640f2ead14da30c"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB"}
+HTTP=404
+2352ebe96538e9e3e946e7b953855db1312f2a09 | 404 | {"error":"NOT_FOUND","message":"Record not found: 2352ebe96538e9e3e946e7b953855db1312f2a09"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18"}
+HTTP=404
+2713aa66e769a93cce8de2c2c4ce99f0d7fb86da | 404 | {"error":"NOT_FOUND","message":"Record not found: 2713aa66e769a93cce8de2c2c4ce99f0d7fb86da"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR"}
+HTTP=404
+dae2bd9e12b89819fc739cf34db4e55ab2d58e5f | 404 | {"error":"NOT_FOUND","message":"Record not found: dae2bd9e12b89819fc739cf34db4e55ab2d58e5f"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1"}
+HTTP=404
+e207860f8cb5c4b601c713803cb80d8d33aff0bb | 404 | {"error":"NOT_FOUND","message":"Record not found: e207860f8cb5c4b601c713803cb80d8d33aff0bb"}
+HTTP=404
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O | 404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O"}
+HTTP=404
+63e899ceeb395366431ce711a5d1498d10241204 | 404 | {"error":"NOT_FOUND","message":"Record not found: 63e899ceeb395366431ce711a5d1498d10241204"}
+HTTP=404
+--- shells + MAT-TEST-DMSO (tab-safe loop) ---
+MSP-API-mu50x5z7 | first=CODE | {"success":true,"commit":{"sha":"80f1bacca92acf13b761508a7ba6e3f83164e910","message":"Delete MSP-API-mu50x5z7","timestamp":"2026-11-03T05:36:38.202Z"}}
+HTTP=CODE
+MSP-API-mu50yjk9 | first=CODE | {"success":true,"commit":{"sha":"92c617fb5dfca8062b50e40919779836c99ee4cf","message":"Delete MSP-API-mu50yjk9","timestamp":"2026-11-03T05:36:40.254Z"}}
+HTTP=CODE
+MSP-API-mu50yysb | first=CODE | {"success":true,"commit":{"sha":"d1ce44a7e19c19d8f346b482ef84e6f7ebbab7f6","message":"Delete MSP-API-mu50yysb","timestamp":"2026-11-03T05:36:41.478Z"}}
+HTTP=CODE
+MSP-API-mu7uyw18 | first=CODE | {"success":true,"commit":{"sha":"34aa406ca3169bc7cbefd3f044cea507154a3b4d","message":"Delete MSP-API-mu7uyw18","timestamp":"2026-11-03T05:36:42.765Z"}}
+HTTP=CODE
+MSP-API-mu7uzgnr | first=CODE | {"success":true,"commit":{"sha":"b6d17972a52e2cb9308ce4eaf0b72e39f2976b14","message":"Delete MSP-API-mu7uzgnr","timestamp":"2026-11-03T05:36:43.993Z"}}
+HTTP=CODE
+MSP-API-mu7v07f1 | first=CODE | {"success":true,"commit":{"sha":"ebb88f8646f7479bd801399394bfdc54d6a1fa3e","message":"Delete MSP-API-mu7v07f1","timestamp":"2026-11-03T05:36:45.233Z"}}
+HTTP=CODE
+MSP-API-mujsue6o | first=CODE | {"success":true,"commit":{"sha":"a7faaad454cc3ef351c506340a726e9ffbfbebc4","message":"Delete MSP-API-mujsue6o","timestamp":"2026-11-03T05:36:46.436Z"}}
+HTTP=CODE
+MAT-TEST-DMSO | first=CODE | {"success":true,"commit":{"sha":"0442b918812d3161ed92bac3c71bd408de351d05","message":"Delete MAT-TEST-DMSO","timestamp":"2026-11-03T05:36:47.748Z"}}
+HTTP=CODE
+--- POST-REMOVAL 404 VERIFICATION (GET /api/records/:id, expect 404 NOT_FOUND for all 15) ---
+when: 2026-11-03T05:37:19Z
+id<TAB>contentSha | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: id<TAB>contentSha"}
+MSP-API-mu50x5z7 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50x5z7"}
+MSP-API-mu50yjk9 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50yjk9"}
+MSP-API-mu50yysb | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50yysb"}
+MSP-API-mu7uyw18 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7uyw18"}
+MSP-API-mu7uzgnr | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7uzgnr"}
+MSP-API-mu7v07f1 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7v07f1"}
+MSP-API-mujsue6o | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MSP-API-mujsue6o"}
+MAT-TEST-DMSO | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: MAT-TEST-DMSO"}
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7"}
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9"}
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB"}
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18"}
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR"}
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1"}
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O | GET-after=404 | {"error":"NOT_FOUND","message":"Record not found: ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O"}
+MAT-1-mm-clofibrate1-mm-clof-l84l | GET-after=200 | {"record":{"recordId":"MAT-1-mm-clofibrate1-mm-clof-l84l","schemaId":"https://computable-lab.com/schema/computable-lab/material.schema.yaml","payload":{"kind":"

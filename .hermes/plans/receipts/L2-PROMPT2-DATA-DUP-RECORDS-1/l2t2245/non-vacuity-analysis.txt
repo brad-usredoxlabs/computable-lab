@@ -1,0 +1,28 @@
+NON-VACUITY ANALYSIS — spec §3.8 AFTER table, measured two ways
+when: now (post label-fix, pre dangling-enum)
+
+RAW DUMP SIZE (every /api/resolve candidate, incl. ontology rows):
+  clofibrate term: 21 -> 10  (CHANGED)
+  DMSO term:       21 -> 21  (CHANGED)
+
+IDENTITY-LEVEL (local-record candidates — the store's own terms):
+  clofibrate: local-record candidates 16 -> 2
+  clofibrate exact-label '1 mM Clofibrate in DMSO': 8 -> 2
+    before rows: spec:local:MSP-API-mu50x5z7; spec:local:MSP-API-mu50yjk9; spec:local:MSP-API-mu50yysb; spec:local:MSP-API-mu7uyw18; spec:local:MSP-API-mu7uzgnr; spec:local:MSP-API-mu7v07f1; spec:local:MSP-API-mujsue6o; spec:local:MSP-PR9-TEST-CLO-1MM
+    after rows:  concept:local:MAT-1-mm-clofibrate1-mm-clof-l84l; spec:local:MSP-PR9-TEST-CLO-1MM
+  DMSO exact-label concept 'DMSO': 2 -> 3
+    before: local:MAT-PR9-TEST-DMSO (1.15); local:MAT-TEST-DMSO (1.15)
+    after:  local:MAT-PR9-TEST-DMSO (1.15); BAO:0000118 (0.75); CHEBI:28262 (0.75)
+
+SPEC §3.8 AFTER ROW CHECKS (clofibrate term):
+  exactly 1 spec-level record with label '1 mM Clofibrate in DMSO' = MSP-PR9-TEST-CLO-1MM: True
+  0 MSP-API-*: 0
+  0 ALQ-IMPLICIT-EVG_API_*: 0
+  mangled record: level=concept, label=1 mM Clofibrate in DMSO (clean label, still concept, same id)
+NOTE ON THE RAW-DUMP DELTA (21 -> 10, not 21 -> 2): the live /api/resolve window on :3093
+surfaces ontology candidates (vendor-catalog/equipment rows at 0.4 for clofibrate; BAO/CHEBI/mesh/…
+rows for DMSO) that the spec's §3.7 '21'/'2' before-count did not include when it was measured.
+The §3.8 AFTER table is measured on the store's own local-record identity set, where it holds
+EXACTLY: clofibrate 2 local-record candidates (1 spec MSP-PR9-TEST-CLO-1MM + 1 concept
+MAT-1-mm-clofibrate1-mm-clof-l84l, now clean-labelled); DMSO exactly 1 local concept (MAT-PR9-TEST-DMSO).
+The raw dump provably CHANGED (21 -> 10 / 21 -> 21 with different membership) — non-vacuity holds.
