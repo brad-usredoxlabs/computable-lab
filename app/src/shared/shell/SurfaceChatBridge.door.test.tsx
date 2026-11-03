@@ -5,9 +5,9 @@
  * host="run-workspace" and NO deck slice published -> it must THROW
  * ChatDoorMisconfiguredError whose message names `run-workspace` AND `deck`
  * (never a silent empty pane). Then publish the deck slice -> the registered
- * chat's AiContext carries the deck fields (parity with the retargeted
- * DeckSurfaceChat.test.tsx pins: labwares, events, selectedWells object form,
- * the deck fields).
+ * chat's AiContext carries the deck fields (parity with the retargeted deck
+ * parity pins: labwares, events, `selectedWells` object form, the deck
+ * fields).
  *
  * Written against the one registrar's CONTRACT; RED until the STEP-3 product
  * (SurfaceSliceStore + collectSurfaceContext + the registrar rewrite) lands.
@@ -73,7 +73,7 @@ function baseRunContext(): AiContext {
 }
 
 // A deck-slice bundle with the deck PARITY fields (labwares/events/selectedWells/
-// deck fields) — the same shape the retargeted DeckSurfaceChat.test.tsx pins.
+// deck fields) — the same shape the retargeted deck parity pins assert.
 function deckSliceFixture(): DeckSliceBundle {
   return {
     endpoint: 'event-editor',
@@ -137,7 +137,7 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     expect(surfaceChatCalls.length).toBeGreaterThan(0)
     const opts = surfaceChatCalls[0]!
     const ctx = opts.aiContext.surfaceContext
-    // The deck PARITY fields (the retargeted DeckSurfaceChat.test.tsx pin shape).
+    // The deck PARITY fields (the retargeted deck parity pin shape).
     expect(ctx.labwares).toEqual([])
     expect(Array.isArray(ctx.events)).toBe(true)
     expect(ctx.selectedWells).toEqual({ labwareId: 'LWI-1', wells: ['A1', 'A2'] })

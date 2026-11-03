@@ -5,7 +5,7 @@
  *
  * Why a STORE, not a React context (§2.4 / bait #3): the defect class this item
  * kills is POSITIONAL — a bridge mounted one provider too high is silently
- * deaf (proven live on ProjectSurfaceChat). React context only flows DOWN, so a
+ * deaf (proven live on the project page's local door). React context only flows DOWN, so a
  * "well-known context slot" implemented as another context reproduces the
  * defect. A store (write + subscribe) makes mount position irrelevant: a
  * registrar ABOVE the deck's EventEditorProvider still sees a deck slice

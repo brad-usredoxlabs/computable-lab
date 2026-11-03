@@ -111,11 +111,12 @@ export function RunWorkspacePage() {
     editorMode: mode,
   }), [runId, resolvedStudyId, runTitle, mode, resolvedEventGraphId])
 
-  // L2-CHAT-1: the universal chat is registered by RunSurfaceChatBridge
-  // INSIDE the EventEditorProvider below (the page's top-level call used to
-  // sit above the provider and therefore could never wire onAcceptEvent or
-  // the ghost seam — the spec §1 defect). The pane consumes the chat through
-  // the app-level AiPanelContext, so the call's position in the tree does not
+  // CHATHOST-CONSOLIDATE-1: the universal chat is registered by the ONE
+  // registrar (host="run-workspace") INSIDE the EventEditorProvider below
+  // (the page's top-level call used to sit above the provider and therefore
+  // could never wire onAcceptEvent or the ghost seam — the spec §1 defect).
+  // The pane consumes the chat through the app-level AiPanelContext, so the
+  // call's position in the tree does not
   // change what the pane sees.
 
   if (!runId) {

@@ -5,14 +5,14 @@
  * the `deck` slice bundle into the SurfaceSliceStore (usePublishSurfaceSlice) —
  * the ONE collector (collectSurfaceContext) and the ONE registrar
  * (SurfaceChatBridge) then consume it. It replaces the two old per-host deck
- * bridges (DeckSurfaceChat and RunSurfaceChatBridge), whose useSurfaceChat call
+ * per-host deck bridges (the retired deck bridge + the retired run bridge), whose useSurfaceChat call
  * is now the registrar's single call.
  *
- * The bundle carries exactly what the old DeckSurfaceChat put on the wire
+ * The bundle carries exactly what the retired deck bridge put on the wire
  * (the buildAcceptedEventGraphProjection + the deck fields the prompt builder
  * reads) plus the ghost/adoption/deck-layout handler closures — so a deck door
  * (event-editor) and a deck-backed door (run-workspace, which was the old
- * RunSurfaceChatBridge) get ONE shared deck context + ONE shared event/ghost
+ * the run door) get ONE shared deck context + ONE shared event/ghost
  * path, per the spec's "one context collector, one registrar".
  *
  * Defensive against sparse editor state (the T-3 retarget pins mock
@@ -73,7 +73,7 @@ export function DeckChatSlice() {
       ? placements.find((p) => p.placementId === state.focusPlacementId) ?? null
       : null
 
-    // The SAME projection the old DeckSurfaceChat put on the wire (the
+    // The SAME projection the retired deck bridge put on the wire (the
     // server's own vocabulary — field names, selection shape, well-state
     // snapshot). Guarded: the publisher must not throw on a sparse mock.
     const projection = buildAcceptedEventGraphProjection({
@@ -146,11 +146,11 @@ export function DeckChatSlice() {
       surface: DECK_SURFACE,
       summary: `Deck ${state.eventGraphId ?? '(unsaved)'} — ${state.platformId} / ${state.variantId}`,
       // The editor mode the deck posts (top-level AiContext field the server's
-      // systemPrompt reads) — the old DeckSurfaceChat posted 'deck'.
+      // systemPrompt reads) — the retired deck bridge posted 'deck'.
       editorMode: 'deck',
       ...(state.eventGraphId ? { scope: state.eventGraphId } : {}),
       // The deck's working focus (the pane's SurfaceFocusHeader box) — the
-      // SAME derivation the old DeckSurfaceChat published: label =
+      // SAME derivation the retired deck bridge published: label =
       // `Deck <eventGraphId>`, detail = `platform · variant · N wells` (the
       // deck's layout/selection, NOT the run door's protocol step). The
       // registrar publishes this ONLY for the deck door (the collector's
@@ -212,7 +212,7 @@ export function DeckChatSlice() {
       },
     }
     // The bundle is recreated when any editor field the context/handlers read
-    // changes (the same deps the old DeckSurfaceChat memoized on), so the
+    // changes (the same deps the retired deck bridge memoized on), so the
     // registrar re-renders (the slice version bumps) and re-wires fresh handlers.
   }, [
     state.eventGraphId,

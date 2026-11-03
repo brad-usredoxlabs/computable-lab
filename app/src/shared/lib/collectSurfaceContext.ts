@@ -142,7 +142,7 @@ export function collectSurfaceContext(args: {
     // The posted editor mode: the deck slice's ('deck') when the base is the
     // generic no-params door (the deck door), else the base's (the run door's
     // 'plan'). editorMode is a top-level AiContext field the server reads —
-    // the old DeckSurfaceChat posted 'deck'; the run door posted 'plan'.
+    // the retired deck bridge posted 'deck'; the run door posted its mode.
     const editorMode = generic ? deck.editorMode : base.context.editorMode
     const aiContext: AiContext = {
       surface: (generic ? deck.surface : base.context.surface) as AiContext['surface'],

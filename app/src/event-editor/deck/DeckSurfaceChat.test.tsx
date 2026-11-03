@@ -4,7 +4,7 @@
  * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * The tier-2 gate found every /deck chat turn crashing server-side:
- * DeckSurfaceChat's surfaceContext omitted `labwares`, `eventSummary`, and
+ * the retired deck bridge's surfaceContext omitted `labwares`, `eventSummary`, and
  * `availableVerbs`, so the prompt builder died on the first read. This test
  * pins the shape parity with graph/hooks/useLabwareAiContext (via
  * acceptedEventGraphProjection): the three fields present, shaped like the
@@ -90,7 +90,7 @@ function capturedAiContext(): { surfaceContext: Record<string, unknown> } {
   return { surfaceContext: options.aiContext.surfaceContext }
 }
 
-describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
+describe('deck door AI context — parity core fields (D1; T-3 retarget)', () => {
   it('sends labwares / eventSummary / availableVerbs alongside the deck fields', () => {
     const state = makeState()
     useEventEditorMock.mockReturnValue({ state, actions: state })

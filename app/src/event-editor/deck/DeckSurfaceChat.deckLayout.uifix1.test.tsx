@@ -13,7 +13,7 @@
  * switch the deck — `actions.setPlatform` + `actions.setVariant`
  * (EventEditorContext.tsx:1102-1103; variant `manual_freeform` =
  * "Manual Bench (freeform)", defaultManifests.ts:71-72) — into the universal
- * deck path through the DeckSurfaceChat seam (smallest correct seam: the
+ * deck path through the deck door seam (smallest correct seam: the
  * same ref-callback family as onProposalDrafted).
  *
  * RED pins (shaped on the gate trail's P1 read):
@@ -201,7 +201,7 @@ async function awaitTurnComplete(deck: ReturnType<typeof renderDeckChat>, timeou
   }
 }
 
-describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches the deck', () => {
+describe('deck door — L2-SUITE-A-uifix1 D1: a deck_layout done switches the deck (T-3 retarget)', () => {
   it('applies the delivered variant through the native editor action (setPlatform+setVariant) and skips the false empty-success bubble', async () => {
     frames(
       { type: 'status', message: 'working' },

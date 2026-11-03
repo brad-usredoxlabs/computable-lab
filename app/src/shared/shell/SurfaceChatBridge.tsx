@@ -1,8 +1,8 @@
 /**
  * SurfaceChatBridge — CHATHOST-CONSOLIDATE-1: the ONE universal-chat registrar.
  *
- * It replaces the four handwritten per-host bridges (DeckSurfaceChat,
- * RunSurfaceChatBridge, ProjectSurfaceChat, and this file's old
+ * It replaces the four handwritten per-host bridges (the retired deck bridge,
+ * the retired run bridge, the project page's local door, and this file's old
  * aiContext-prop form). It takes `host` (a door-registry id — the door naming
  * itself, NOT a host list) plus an optional `base` (the page-local context +
  * scope record/artifact/registry/project build today) and:
@@ -184,14 +184,14 @@ function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
   // no host-name comparison (V-8): the collector's `deckSurfaceWins` signal (the
   // deck slice won the posted surface — the deck door) selects the deck slice's
   // working focus (label `Deck <eventGraphId>`, detail `platform · variant ·
-  // N wells` — the old DeckSurfaceChat's focus). Every other door (the run
+  // N wells` — the retired deck bridge's focus). Every other door (the run
   // door, the page-level `analysis` doors) publishes the POSTED summary as the
   // label plus the protocol-selection focused step as the detail (the run
   // door's "Step N: label" — absent when no step is focused OR no
   // ProtocolSelectionProvider: the conditional spread keeps the detail key
   // ABSENT, never `undefined`). The focused step is read from the
   // protocol-selection context DIRECTLY (the same truth the deleted
-  // ChatContextHeader + the old RunSurfaceChatBridge read): §8.4 forbids
+  // ChatContextHeader + the retired run bridge read): §8.4 forbids
   // publishing the protocol-selection SLICE unless the collector consumes it,
   // and the collector does not — the focus concern is the registrar's, and the
   // slice store cannot reach a provider mounted ABOVE the registrar (the run

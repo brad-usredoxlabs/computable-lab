@@ -1,5 +1,5 @@
 /**
- * L2-CHAT-1 — RED-first: the /deck route's universal chat (DeckSurfaceChat +
+ * L2-CHAT-1 — RED-first: the /deck route's universal chat (the deck door +
  * HarnessChatPane) must own the GHOST MOUNT of event-bearing proposals:
  * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
@@ -111,7 +111,7 @@ vi.mock('../../shared/api/aiClient', () => ({
   getAiHealth: vi.fn().mockResolvedValue({ available: true }),
 }))
 
-// Thread persistence: DeckSurfaceChat registers the chat with endpoint
+// Thread persistence: the deck door (the ONE registrar) registers the chat with endpoint
 // 'event-editor' — the thread hydrate/append effects would hit the LIVE
 // stack's /api/ai/threads. Stub them: the ghost lock asserts the mount path,
 // not persistence, and this test must never write to a running thread.
@@ -247,7 +247,7 @@ async function sendThroughPane(text: string, deck: ReturnType<typeof renderDeckC
   return awaitPreviewCard(deck)
 }
 
-describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1)', () => {
+describe('deck door + HarnessChatPane — universal ghost mount (L2-CHAT-1; T-3 retarget)', () => {
   it('an event-bearing proposal mounts deck ghosts (setPreview) and the pane Apply applies them (appendEvent)', async () => {
     frames(
       { type: 'status', message: 'working' },
