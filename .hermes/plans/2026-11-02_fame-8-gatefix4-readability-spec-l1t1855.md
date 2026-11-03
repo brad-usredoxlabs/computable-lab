@@ -141,3 +141,44 @@ held by live lane-2 coders, and the lane-2 corpus campaign has fleet priority pe
 BRAD-BINDING 2026-11-02T17:05). Dispatch deferred to the next tick when a slot frees. Do NOT
 dispatch this spec against a stale base: re-verify `cl/integration-1` tip and re-pin the base sha in
 the launcher.
+
+## Pre-validation — orchestrator-measured at the served candidate (ADDED 256TH tick, 2026-11-03T00:0xZ)
+
+The orchestrator ran a deterministic Playwright probe against the SERVED lane frontend (http://localhost:5192,
+worktree `/mnt/vast/home/brad/git/cl-integration-1` at `29ec4be3`; :3092/api/health 200), 1440x900, route
+`/analysis` -> run `GATEFIX3 D1 replay` -> `.view-spec[assignment_results_view]`, DEFAULT pane, no resize, no
+scroll. Script: `/home/brad/.hermes/cl/lanes/1/scripts/fame8-gatefix4-prerecon2-l1t1915.js`
+Artifacts: `/home/brad/.hermes/cl/receipts/fame-8-gatefix4-prerecon-l1t1900/` (measure.json, 00-baseline.png,
+01-<variant>.png, 02-variantN-fullpage.png). These are ORCHESTRATOR measurements, not gate receipts — they
+validate the fix direction; they do NOT substitute for your own before/after measurement.
+
+Measured BASELINE (independently reproduces the gate's D1 numbers exactly): pane clientWidth 574,
+pane scrollWidth 1743, table width 1723, table height 1120, flags td index 9 at x 1878..2609 (730 px),
+`clientWidth 729 == scrollWidth 729` (no truncation), fullyInsidePane FALSE. Peak-1 cell text begins
+`UNDEFINED_SIBLING_AREA_NULL,CONTESTED_CLAIM:Methyl hexanoate (6:0 FAME) - FAME-2 standard ...`.
+
+Candidate mechanisms injected as a probe `<style>` (CSS only; no product change):
+
+| variant | CSS | tableW | tableH | pane scrollW | flags cell | inside pane |
+|---|---|---|---|---|---|---|
+| A | `th, td { overflow-wrap: anywhere; white-space: normal }` | 534 | 4089 | 574 | 141 px @1279..1420 | **TRUE** |
+| B | `th, td { overflow-wrap: break-word; word-wrap: break-word }` | 1723 | 1120 | 1743 | 730 px @1878..2609 | FALSE |
+| C | `table-layout: fixed` + anywhere | 534 | 6373 | 574 | **53 px** @1366..1420 | TRUE |
+| D | anywhere on `td` ONLY (headers untouched) | 830 | 7267 | 944 | 49 px @1667..1715 | FALSE |
+| E | anywhere + `max-width: 26em` | 534 | 4165 | 574 | 86 px @1333..1420 | TRUE |
+| F | anywhere + `max-width: 18em` | 534 | 4451 | 574 | 74 px @1346..1420 | TRUE |
+
+Conclusions you may rely on (measured, not hypothesised):
+1. **Variant A alone is sufficient** for the gating criterion: table min-content collapses to 534 px, the pane
+   needs no horizontal scroll (scrollWidth == clientWidth == 574) and the flags cell sits fully inside the pane.
+2. **`overflow-wrap: break-word` provably does not help** (B is byte-equal to baseline) — confirms the spec's
+   min-content analysis. Do not ship mechanism "word-wrap: break-word".
+3. **Header tokens must break too**: td-only (D) leaves the table 830 px wide and the flags cell outside the pane.
+4. **Bare `table-layout: fixed` is actively harmful** (C: 53 px flags column) unless column widths are declared.
+5. Cost of A: table height 1120 -> 4089 px (≈132 px/row over 31 rows) because every column wraps. That is
+   *reachable and legible* but materially taller. You MAY reduce the cost (e.g. a narrower `max-width` on cells,
+   a two-line array-cell branch, or a declared width for the wide columns) provided the criterion above still
+   holds — but you MUST measure and REPORT the table height in your before/after JSON so the orchestrator can
+   judge the trade-off rather than discover it at the gate.
+
+The row height metric is therefore a REQUIRED part of your evidence: report `tableH` before and after.
