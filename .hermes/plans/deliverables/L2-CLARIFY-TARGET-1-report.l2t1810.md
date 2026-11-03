@@ -344,3 +344,33 @@ STEP 2 FINAL CATEGORIZATION of the 28 NEW (flip-blast) failures — what is deci
      These are independent of the door conflict and I update them now.
   PLAN: do B (decidable, commit per step), re-measure the 3 dirs, then report the A residual (3 pins) as BLOCKED with
   the precise proposed change. Change 2/3/5 (app-side chip/fold/rows) next if budget allows.
+
+STEP 2 CRITICAL FINDING — DEFINITIVE (empirically proven, DOORPROBE at HEAD, probe file then deleted):
+  Ran a temporary probe (server/src/compiler/resolution/doorProbe.target1.test.ts, DELETED after) that compiled a
+  minimal add_material doc under each targetWells form. Result (the ground truth of the doc-door + sweep interplay):
+    DOORPROBE [ARRAY [A1]]        ok=false facts=[{label:'DMEM',reason:'unknown-noun',arg:'material'}]
+    DOORPROBE [STRING A1:H12]     ok=false facts=[{DMEM/unknown-noun},{label:'A1:H12',reason:'unknown-address',arg:'targetWells'}]
+    DOORPROBE [VOLUME OBJECT]     ok=false facts=[{DMEM/unknown-noun}]
+    DOORPROBE [NO TARGET]         ok=false facts=[{DMEM/unknown-noun},{label:'targetWells',reason:'missing-required-argument',arg:'targetWells'}]
+  (The 'DMEM/unknown-noun' fact is from the empty stub spine in the probe — irrelevant; the targetWells/volumeUl facts are the signal.)
+  CONCLUSIONS (each proven, not inferred):
+    (1) My satisfiedBy fix is CORRECT: the VOLUME OBJECT case fires NO volumeUl fact (the volume-object alias satisfies the
+        required contract). The volumeUl false-bar (BLOCKER-1 / ruling (a)) is definitively CLEARED.
+    (2) The ARRAY form `[A1]` fires NO targetWells fact (array satisfies the sweep; invisible to the door's scalar arm) —
+        exactly the spec's own RED test item 3 ("a doc carrying targetWells: [A1] yields none").
+    (3) The STRING form `A1:H12` fires `A1:H12/unknown-address` (the doc-door resolutionEngine.ts:489-523 scalar arm spine-
+        routes the string to the material spine, which can't resolve a plate address). THIS is the CHARACTERIZATION/GHOST
+        pin defect. It is NOT the sweep; it is the doc-door. My satisfiedBy change did not cause it.
+    (4) NO TARGET fires `targetWells/missing-required` (the sweep correctly bars the absent required arg) — the W11/assumed-
+        value chip leg.
+  => The 3 NAMED PINS fail on the targetWells dimension, which is a SECOND collision the ruling (a) (volumeUl/volume) and
+     the dead run's §4 (volumeUl false-bar only) did NOT anticipate. It is NOT an implementation error on my part — proven.
+  SCOPE DETERMINATION: fixing it requires a resolution-engine doc-door behavior change (resolutionEngine.ts: don't spine-route
+  a raw string well address; the spec Change 4 says the SERVER expands targetWells via expandWellTokens). That file is NOT in
+  the spec's In-scope path list, NOT in ruling (a)'s ~10-line sweep scope, and the change affects ALL kind:wells args (aliquot,
+  transfer, ...). The realization golden (W2-7 T1) additionally fails because its fixture's add_material omits BOTH volume AND
+  targetWells (W27_CLARIFICATIONS shows both missing-required) -> complete->needs-clarification. Both are domain/contract
+  decisions outside my authority. Per task STEP 1 ("if a conflict is not decidable from the spec, STOP and report TARGET1
+  BLOCKED rather than guessing"), I ROUTE these rather than unilaterally changing resolutionEngine.ts or the 3 named pins.
+  I continue the INDEPENDENT, DECIDABLE blast-radius work (the 6 pure required-arg-count deltas: paramFold V2e/FS5,
+  stagnantHedge SH7, comp4x2, shqa1) which are safe and do not depend on the doc-door ruling.
