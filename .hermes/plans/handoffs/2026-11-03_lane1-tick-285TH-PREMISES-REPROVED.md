@@ -16,13 +16,16 @@ Trunk was at **`3ca46dfa`** when I reconciled — i.e. it had moved past the 284
 (52/52 focused, 382/382 `src/analysis`, tsc 12 lines / 0 in `src/analysis`, CSS blob `c6930c66`) is
 **still valid at the current tip** and needs no re-rehearsal.
 
-## Fleet, measured (flock truth, not pidfile prose)
+## Fleet, measured — **CORRECTED 11:38, see the closing addendum**
 
-- appliance-2 slot-0: **HELD** — `L2-CHATHOST-CONSOLIDATE-1`, pid 1101760 live, etime **1h41m**.
-- appliance-2 slot-1: **FREE** — the reconcile pidfile holds a **DEAD** pid (1213096, the
-  `fix4-conform` pass that exited rc=0 at ~16:07Z and was recorded in the 284TH addendum). I confirmed
-  freedom by **acquiring the flock** (`flock -n … -c 'echo SLOT1-ACQUIRABLE'` → acquired, released), not
-  by reading the pidfile.
+> The slot-1 reading below was taken with `flock -n` on **`~/.hermes/cl/lanes/1/appliance2-coder-slot-1.lock`**,
+> which is a **STALE per-lane copy**. `cl-coder-launch.py` takes its fleet locks under the shared base
+> **`~/.hermes/cl/appliance2-coder-slot-{0,1}.lock`**; a lane-dir copy always reports FREE. The mechanic
+> below ("I acquired the lock") is therefore an INVALID witness and is retracted in the addendum.
+
+- appliance-2 slot-0: **HELD** — `L2-CHATHOST-CONSOLIDATE-1`, pid 1101760 live, etime **1h43m** at close.
+- appliance-2 slot-1 (as measured at 11:30): reported FREE from the stale lane-dir lock. **Retracted** —
+  the shared lock was in fact taken by lane 2's `L2-CLARIFY-CARD-1` (pid 1314955) at **16:22:29Z**.
 - Lane 2 queue: **4 todo + 3 in-progress** and an active `corpus-state.md` ⇒ **CORPUS PRIORITY**
   (Brad 2026-11-02T17:05) makes a freed slot **lane 2's first refusal**. Lane 2's own orchestrator tick
   was live while I ran (pid 1287707). I launched nothing and claimed no lock.
@@ -69,9 +72,13 @@ Nothing written to any store; no record, schema or product file touched.
   rehearsal bar still holds at the current trunk. **debt: false**.
 - **AS-L1T285-2** The column-type audit is safely re-runnable: read-only by inspection of its own I/O
   calls, no writes, lane store is TEST DATA per Brad's standing ruling. **debt: false**.
-- **AS-L1T285-3** Slot-1 was genuinely free *and* legally unusable by lane 1 — two independent facts this
-  tick (flock-acquired, then corpus priority + an empty lane-1 dispatchable set). This is a stronger form
-  of the 284TH's AS-L1T284-3 because the former read the pidfile and I took the lock. **debt: false**.
+- **AS-L1T285-3 (RETRACTED 11:38)** Original text claimed slot-1 was genuinely free because I had *taken the
+  flock*. That lock was a **stale per-lane copy** (`~/.hermes/cl/lanes/1/appliance2-coder-slot-1.lock`); the
+  launcher's real fleet locks live at `~/.hermes/cl/appliance2-coder-slot-{0,1}.lock`. Measured truth at
+  close: **both slots HELD** (slot-0 `L2-CHATHOST-CONSOLIDATE-1` pid 1101760; slot-1 `L2-CLARIFY-CARD-1`
+  pid 1314955, started 16:22:29Z). The dispatch conclusion is unchanged — and better supported — because
+  lane 2 converted the freed slot into a coder within ~90 s. Replaced by **AS-L1T285-3R**: at no point this
+  tick was a fleet slot both free and legally claimable by lane 1. **debt: false**.
 - **AS-L1T285-4** No lane-1 coder/agent process is orphaned: the only coder-family process on the box is
   lane 2's slot-0 launcher (pid 1101760) plus the two orchestrator ticks (lane 2 pid 1287707, this lane
   pid 1310079). **debt: false**.
@@ -124,3 +131,23 @@ left to fill the gap, and this tick's own value came from *verification*, which 
 
 Docs-only: this handoff + a `# 285TH` note under the three open items. No product file, no schema, no
 data-store write, no merge, no dispatch. Queue counts unchanged: todo 2, blocked 1, in-progress 0, done 107.
+
+## Closing addendum (11:38) — one witness corrected, conclusion unchanged
+
+I re-checked the fleet after committing and found **my own slot measurement was taken on the wrong lock file**.
+`cl-coder-launch.py` takes its fleet locks at the shared base `~/.hermes/cl/`; the
+`~/.hermes/cl/lanes/1/appliance2-coder-slot-*.lock` copies are stale and **always report FREE under `flock -n`**.
+So "SLOT1-ACQUIRABLE" was not evidence of anything. Measured at the shared locks at 11:38:
+
+| shared lock | pidfile | flock | holder |
+|---|---|---|---|
+| `appliance2-coder-slot-0.lock` | `L2-CHATHOST-CONSOLIDATE-1-1101760-…` | **HELD** | pid 1101760 live, 1h43m |
+| `appliance2-coder-slot-1.lock` | `L2-CLARIFY-CARD-1-1314955-2026-11-03T16:22:29Z` | **HELD** | pid 1314955 live |
+
+Timeline, from `coder-launches.jsonl`: `L2-CLARIFY-TARGET-1` (pid 1213096) exited rc=0 at **16:03:28Z**, and
+lane 2 launched `L2-CLARIFY-CARD-1` into slot-1 at **16:22:29Z — ~90 s after my 11:20:56 reconcile**. Lane 2 is
+using the freed capacity exactly as CORPUS PRIORITY intends, and never was a slot both free *and* legally
+claimable by lane 1 this tick. **No dispatch, no merge, no product change, no data write; queue counts unchanged.**
+
+Lesson recorded (also to memory): fleet-slot truth = `flock` on `~/.hermes/cl/appliance2-coder-slot-N.lock`
+(the shared base), never the per-lane copies; pidfiles and lane-dir locks are witness-only.
