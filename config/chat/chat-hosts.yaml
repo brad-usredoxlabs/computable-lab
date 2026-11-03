@@ -103,19 +103,22 @@ hosts:
 
   - id: project-deck-tab
     surface: analysis   # four-way collision: same surface as record/artifact/registry-host
-    mount: app/src/event-editor/projects/ProjectWorkspacePage.tsx:82 <ProjectSurfaceChat> (page-level, ABOVE EventEditorProvider); deck branch :280 <DeckSurfaceChat>
+    mount: app/src/event-editor/projects/ProjectWorkspacePage.tsx:83 <ProjectWorkspaceDoor> (page-level, ABOVE EventEditorProvider — the ONE registrar, host="project-deck-tab", :132); deck branch :287 renders <DeckChatSlice/> (the deck slice publisher) — no second door
     route: /project/:studyId  and  /project/:studyId/event-graph/:eventGraphId  (App.tsx:178-179)
     required_providers: []
     optional_providers: [deck]
     ghost_mount: true
     note: >-
-      THE LEG-F SURVIVOR. ProjectSurfaceChat is mounted page-level, ABOVE EventEditorProvider
-      (ProjectWorkspacePage.tsx:101-131), so on a non-deck tab it can only send {studyId,
-      activeTabKind} — no labwares/events/selection; on a deck tab it stands down
-      (:129) and the deck's own DeckSurfaceChat registers from INSIDE the provider (:275-280).
-      AiContext.surface 'analysis' (ProjectWorkspacePage.tsx:107). This was the host LEG F's
-      gate was structurally blind to (green gate, dead UI) — it is in the inventory so no
-      future gate can repeat the miss.
+      THE LEG-F SURVIVOR (the fix ships in this branch). The page-level door
+      (ProjectWorkspaceDoor -> the ONE registrar, host="project-deck-tab", mounted ABOVE
+      EventEditorProvider at ProjectWorkspacePage.tsx:83) registers on EVERY tab, so on a
+      non-deck tab it sends {studyId, activeTabKind} — no labwares/events/selection; on a
+      deck tab the deck slice is published from INSIDE the provider (DeckChatSlice,
+      ProjectWorkspacePage.tsx:287) and the page-level registrar collects it through the
+      app-level slice store (position-independent — the store, not a context), so the door
+      no longer stands down. AiContext.surface 'analysis' (ProjectWorkspacePage.tsx:111).
+      This was the host LEG F's gate was structurally blind to (green gate, dead UI) —
+      it is in the inventory so no future gate can repeat the miss.
 
   - id: record-host
     surface: analysis   # four-way collision: same surface as project-deck-tab/artifact/registry-host
