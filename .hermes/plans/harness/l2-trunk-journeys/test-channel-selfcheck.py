@@ -1060,13 +1060,16 @@ def main():
             rewrite_cited = dict(rewrite, blessed_records=[rec_spec])
             sg_ok8, sg_rm8, sg_reason8, sg_auth8 = sgm.shrink_guard(
                 shrunk, rewrite_cited)
-            # Note: with a consistent top-level rewrite the top level already
-            # FORGETS the dropped host, so removed (derived from the
-            # rewritten top-level set) is legitimately [] — the point of this
-            # arm is that the spec-cited blessed_records entry AUTHORIZES the
-            # rewritten state (RED without it, per the arm above).
-            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless + a blessed_records entry citing an EXISTING spec -> authorized GREEN (fix2 D2)",
-                            sg_ok8 and sg_rm8 == []
+            # CONSOLIDATE-1 OBS-B option (i): with a consistent top-level
+            # rewrite the top level already FORGETS the dropped host, but the
+            # ANCHOR SET (first_blessed_ids) is what REMEMBERS it — removed is
+            # derived from the anchor, so the dropped host is NAMED even on
+            # the authorized path (c3 D3, closed). The point of this arm is
+            # therefore that the spec-cited blessed_records entry AUTHORIZES
+            # the rewritten state (RED without it, per the arm above) AND
+            # that the authorized removed-set names the dropped host.
+            results.append(("CHATHOST shrink-guard: a CONSISTENT top-level re-bless + a blessed_records entry citing an EXISTING spec -> authorized GREEN, dropped host NAMED (OBS-B i)",
+                            sg_ok8 and sg_rm8 == [dropped]
                             and sg_reason8 is None and sg_auth8 == good_spec,
                             ["ok=%r removed=%r reason=%r auth=%r"
                              % (sg_ok8, sg_rm8, sg_reason8, sg_auth8)]))
