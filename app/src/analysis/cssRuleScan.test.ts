@@ -171,6 +171,58 @@ describe('cssRuleScan.parseCssRules', () => {
     expect(inner?.atContext).toEqual(['@media (min-width: 40rem)', '@supports (overflow-wrap: anywhere)'])
   })
 
+  // FIX RUN 2 (adversarial review advc2, defect 1): relaxed nesting.
+  it('composes a bare nested head against the parent as an implicit descendant', () => {
+    const rules = parseCssRules('.view-spec__table { td { overflow-wrap: anywhere; } }')
+    // The emitted selector ALWAYS retains the full parent chain — the
+    // bare head is `.view-spec__table td`, never a scope-less `td`.
+    expect(rules[rules.length - 1]).toEqual({
+      selector: '.view-spec__table td',
+      decls: 'overflow-wrap: anywhere;',
+      atContext: [],
+    })
+  })
+
+  it('distributes a bare nested head over a parent selector list', () => {
+    const rules = parseCssRules('.view-spec__table, .other { td { color: red; } }')
+    const nested = rules.filter((r) => r.decls === 'color: red;')
+    // TWO composed selectors — the head distributed over the parent list.
+    expect(nested.map((r) => r.selector)).toEqual([
+      '.view-spec__table td',
+      '.other td',
+    ])
+    expect(nested.every((r) => r.atContext.length === 0)).toBe(true)
+    // Deeper nesting under a distributed parent keeps distributing: the
+    // recursion carries the resolved selector LIST as its parent, so the
+    // grandchild distributes over it too (parent text always retained).
+    const deeper = parseCssRules('.view-spec__table, .other { td { b { color: blue; } } }')
+    const innermost = deeper.filter((r) => r.decls === 'color: blue;')
+    expect(innermost.map((r) => r.selector)).toEqual([
+      '.view-spec__table td b',
+      '.other td b',
+    ])
+  })
+
+  it('never emits a nested rule that escaped its parent chain (fail-closed invariant)', () => {
+    // Ambiguous & placement composes BOTH ways; every emitted selector
+    // carries the parent text. Over-flagging is acceptable, escaping the
+    // parent chain is not.
+    for (const head of [':is(&) td', ':where(&) > td', ':hover td', 'td']) {
+      const rules = parseCssRules(`.view-spec__table { ${head} { color: red; } }`)
+      const emitted = rules.filter((r) => r.decls === 'color: red;')
+      expect(emitted.length).toBeGreaterThan(0)
+      for (const r of emitted) {
+        expect(r.selector).toContain('.view-spec__table')
+      }
+    }
+    // Bare-nested inside at-rules on both sides: composition applies only
+    // under a STYLE parent; the at-rule prelude stays in atContext.
+    const deep = parseCssRules('@supports (x: y) { .view-spec__table { @media (min-width: 1px) { td { color: red; } } } }')
+    const inner = deep.find((r) => r.decls === 'color: red;')
+    expect(inner?.selector).toBe('.view-spec__table td')
+    expect(inner?.atContext).toEqual(['@supports (x: y)', '@media (min-width: 1px)'])
+  })
+
   it('decodes CSS hex escapes in selectors before token checks (review case 17: \\74 d is td)', () => {
     expect(decodeCssEscapes('.view-spec__table \\74 d')).toBe('.view-spec__table td')
     // A trailing whitespace char is the escape terminator (consumed).
