@@ -1,4 +1,4 @@
-# LANE 1 TICK 300TH HANDOFF — 2026-11-03 18:00 → 18:2x EST
+# LANE 1 TICK 300TH HANDOFF — 2026-11-03 18:00 → 18:0x EST
 
 One line: **no coder dispatch was lawful again** (both lane-1 todo items externally gated; lane 2 is live and
 corpus-priority holds the fleet), **and no lane-1 browser gate was lawful either** (the ONE local vision slot
@@ -71,10 +71,30 @@ QUOTABLE** at `df1e00f5`, same verdicts, same receipts. No row was refreshed by 
 BRAD-BINDING negative-claim and settle rules, forbids mounted-DOM-only evidence, and carries the fixture fact
 below so the reviewer cannot repeat the historical false-accept pattern.
 
-**Fixture fact discovered this tick (would have burned a gate):** `DOC-DEMO-SOP` is `state=effective`
+**Fixture facts discovered this tick (either would have burned a gate):** `DOC-DEMO-SOP` is `state=effective`
 (`updatedAt 2026-10-19T19:22:03.106Z`) — it is **locked**, so the historical S1 persistence leg cannot be
 graded on it. The brief requires a draft-copy or another draft record, and permits `not-exercisable` (with the
-reason) rather than a manufactured pass.
+reason) rather than a manufactured pass. I then enumerated the lane's controlled-documents myself
+(`GET :3092/api/records?kind=controlled-document`, 7 records) and named two ALREADY-EDITABLE drafts in the
+brief — `DOC-20660FF4E9734191` and `DOC-A56FD77A9B124087` — so the reviewer neither hunts nor grows the fixture
+set. Also verified the brief's own revision-check command works before staging it
+(`curl :5192/src/analysis/ViewRenderer.tsx | grep -c 'scalarCellText\|view-spec__cell-json'` = 6).
+The brief additionally applies ROUND-TRIP-GATE-1 ONCE as liveness-only on the record host (no surface has
+changed since the last accepted gate), with the explicit prohibition on reading it as AI correctness.
+
+### 4. Served-module identity proved by content (and a false positive refused)
+
+The QMS-6E fix above only matters if the RUNNING frontend carries it. `curl :5192/src/pages/RecordRegistryPage.tsx`
+returns the dev-transformed module, and its `handleSave` body is the HEAD logic verbatim — `const docJson =
+editor.getJSON(); const serialized = serializeDocument(docJson, selectedRecord.payload); … updateRecord(…,
+serialized);` matching HEAD `app/src/pages/RecordRegistryPage.tsx:519-528`, with that path clean in
+`git status` and working tree == HEAD (985 lines, 6 occurrences both ends).
+
+**False positive refused:** my first measurement was `grep -c serializeDocument` = 6 on HEAD vs 2 in the served
+response — which looks like a stale served tree. It is not: the served module is 935 lines because the TS
+transform strips comments and type assertions, and 4 of HEAD's 6 occurrences are comments. Raw grep counts are
+not a served-vs-HEAD test on a Vite dev URL; statement bodies are. Recorded in the ledger so no future tick
+re-derives the wrong conclusion.
 
 ## Gates / merges
 
@@ -97,6 +117,10 @@ restart, no task status changed, no coder dispatched, no coder slot claimed, no 
   AND ≥25 min of tick budget remain (so the orchestrator can audit the trail/receipts before expiry). Dispatch
   via `systemd-run --user --collect` (a `-z` tick's background children die at tick exit). If the served
   revision has moved by then, re-pin the sha in the brief first.
+  **Status at tick close (18:30):** still not dispatchable — the vision slot was held the WHOLE tick by lane 2's
+  `CHATHOST-CONSOLIDATE-1` 6-host gate (pid 2136564, unit active since 18:02:57, 28 min in). I did NOT dispatch
+  at expiry: a 4-surface gate started at 18:30 would run unaudited past budget, and a simultaneous lane-2 gate
+  would put TWO local vision workers on a one-worker slot. Staging was the disciplined choice, not a deferral.
 - **CARRIED (lane 2 owns) — `SEQ-ANSWER-CONTRACT-1` still unfiled:** `grep -c` in `lanes/2/task-list.md` = **0**.
   Counting anchor unchanged (delivery 17:27:01): lane 2's running tick started **17:10:54 — before delivery**,
   so it does not count. Post-delivery lane-2 ticks so far = **0**; re-surface ONCE after the second.
