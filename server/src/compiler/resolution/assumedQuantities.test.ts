@@ -23,7 +23,7 @@ import {
 } from './assumedQuantities.js';
 import { defaultScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
 
-const REAL_POLICY_URL = new URL('../../../../../../config/drafting/shorthand-drafting.yaml', import.meta.url);
+const REAL_POLICY_URL = new URL('../../../../config/drafting/shorthand-drafting.yaml', import.meta.url);
 
 const POLICY = `surfaces: [run-workspace, event-editor]
 nounShape:
@@ -100,8 +100,8 @@ describe('loadAssumedQuantities (L2-CLARIFY-TARGET-1 Change 1)', () => {
   });
 
   it('declared value equals the FROZEN prompt example (submitSuggestionTool.ts:645) — a data drift fails this test', () => {
-    const example = readFileSync(new URL('../../../ai/submitSuggestionTool.ts', import.meta.url), 'utf8');
-    const volumeLine = /^ +volumeUl: (\d+(?:\.\d+)?)$/m.exec(example);
+    const example = readFileSync(new URL('../../ai/submitSuggestionTool.ts', import.meta.url), 'utf8');
+    const volumeLine = /volumeUl:\s*(\d+(?:\.\d+)?)/.exec(example);
     expect(volumeLine, 'the frozen example line `volumeUl: <n>` must exist in submitSuggestionTool.ts').not.toBeNull();
     const policy = loadAssumedQuantities(REAL_POLICY_URL);
     const entry = assumedQuantityFor('add_material', 'volumeUl', policy);
