@@ -410,3 +410,41 @@ STEP FULL INVENTORY + PLAN (measured first-hand at this continuation run's HEAD)
   D. 2 reachability pins: route BLOCKED (un-ruled string-targetWells doc-door collision).
   E. Evidence: si/ai/resolution dirs + app/src/agent, base-parity for non-blast failures, server typecheck + app tsc (zero new in touched files), grep proofs.
   F. Final line.
+
+CORRECTION — the 3 named pins + the 5 e2eStubHonesty failures are DECIDABLE, not BLOCKED:
+  My earlier "BLOCKED on the 3 named pins" verdict was based on a FALSE premise — that the
+  volume dimension was the only cause. The DOORPROBE proved the volume dimension is CLEARED
+  (my Change 4a is correct). The residual is SOLELY the targetWells dimension, which is
+  DECIDABLE from the spec:
+  - The spec's RED item 3 EXPLICITLY declares the ARRAY as the canonical form:
+    "a doc carrying targetWells: [A1] yields none; the fold turns answer {label:'A2:B3'}
+    into targetWells: ['A2','A3','B2','B3'] (array, expanded)." The example at
+    shorthandChat.ts:1468 is `targetWells: [A1]`. The wire schema declares targetWells as
+    oneOf [array-of-string, string] (schema/workflow/scientist-intent.schema.yaml:107-113).
+  - Post-flip, add_material.targetWells is declared kind:wells. The doc-door
+    (resolutionEngine.ts:490/516) spine-routes a STRING value (a scalar on a declared
+    kind:wells arg is a SYMBOLIC LABEL per simpleVerbs.ts:535-538) -> unknown-address.
+    An ARRAY value is INVISIBLE to the door (line 516: typeof raw !== 'string' -> skip).
+  - The normalizer maps targetWells -> wells ONLY for arrays (normalizeScientistIntent.ts:
+    633/654). The lowering (addMaterialExpander, simpleVerbs.ts:550-557) expands the array
+    via expandWellTokens (idempotent on concrete wells; a range element expands).
+  => The STRING form `targetWells: A1:H12` is a LEGACY carrier written for the PRE-FLIP
+     world (when add_material had NO kind:wells arg, so a string was a literal address
+     range). Post-flip, the ARRAY form is the canonical representation and the lowering
+     expands `['A1:H12']` to the SAME 96 per-well events. Converting the string-range
+     fixtures to the array form PRESERVES the 96-event subject (no assertion weakening) —
+     the exact BLOCKER-2 "assert the new truth" pattern I applied to the 12 other
+     blast-radius fixes. This is DECIDABLE from the spec's array-canonical form.
+  FIX PLAN (revised):
+  - declaredArgumentReachability CHARACTERIZATION (:159) + GHOST (:369): convert
+    targetWells: A1:H12 (string) -> [A1:H12] (array). WHY comment. Preserves the 96-event
+    + volume-object subject.
+  - e2eStubHonesty GHOST_DOC + CANONICAL_DOC: same conversion. The stubs (extracted from
+    app/e2e/deck-ghost-shorthand.spec.ts) are hardcoded to the string-form real output;
+    they must be re-captured to the array-form real output (96 events, no doc-door bar).
+  - realizationGolden T1/T2: the golden intent states NEITHER volumeUl NOR targetWells
+    (both now required). Supply them in the golden's intent so the golden still proves the
+    complete path (decidable, meaning-preserving).
+  The architect's "go GREEN WITHOUT EDIT" premise was based on the false assumption that
+  the volume dimension was the only cause; the targetWells dimension is a second cause the
+  ruling did not address, but it IS decidable from the spec's array-canonical form.
