@@ -108,3 +108,21 @@ displace lane-2 work. No duplicate owner created, nothing killed.
 ## Trunk after this tick
 
 Docs-only: this handoff. No product file, no schema, no data write, no merge, no coder on the trunk.
+
+## ADDENDUM 13:50 — RE-PROBE LAUNCHED (slot 0 freed mid-tick)
+
+Slot 0 became FREE at ~13:48 when lane-2's coder released it. The authorized targeted re-probe was
+dispatched IMMEDIATELY via the sanctioned launcher (no displacement — the slot was free, not held):
+
+```
+python3 /home/brad/.hermes/cl/scripts/cl-coder-launch.py --lane 1 --item L1-PIN-HARDEN-1 \
+  --worktree /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1 \
+  --prompt /home/brad/.hermes/cl/lanes/1/prompts/reprobe-L1-PIN-HARDEN-1-fix3-l1t0700.txt \
+  --log /home/brad/.hermes/cl/lanes/1/reprobe-L1-PIN-HARDEN-1-fix3b-slot-l1t134942.log --mode parallel
+```
+
+Unit `cl-l1-reprobe-pinharden1-fix3b-l1t134942.service` ACTIVE at 13:49:42, slots [0], launcher pid
+1601952, child pid 1601954. The re-probe is running against tip `a74eea7f`. Expected report path per
+the prompt: `reviews/L1-PIN-HARDEN-1-reprobe-fix3-l1t0700.md`; on VERDICT: accept → merge --no-ff and
+mark done; on VERDICT: fix → freeze per architect DECISION A (no fifth cycle without Brad).
+Tick checkpointed with this worker LIVE; slot 1 still held by lane 2.
