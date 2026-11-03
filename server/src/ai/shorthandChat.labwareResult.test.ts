@@ -112,12 +112,16 @@ actions:
     const store = mockStore();
     // 'Test Shelf' is seeded, so resolve_nouns binds it: the compile is
     // complete and resolve_labware proposes nothing → zero additions.
+    // WHY (L2-CLARIFY-TARGET-1 flip): add_material now REQUIRES targetWells;
+    // supply it (ARRAY form — invisible to the doc-door) so the subject stays
+    // the COMPLETE arm (labwareAdditions omission), not a required-arg bar.
     const doc = parseScientistIntent(`intentId: labware-result-complete-none
 actions:
   - action: add_material
     labware: test shelf
     material: Test Reagent
     volumeUl: 10
+    targetWells: [A1]
 `);
     const compiled = await compileShorthandDeterministically(doc, { store: store as never });
     expect(compiled).not.toBeNull();

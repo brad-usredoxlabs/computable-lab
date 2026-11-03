@@ -247,9 +247,14 @@ function binding(over: Partial<BoundNoun>): BoundNoun {
   };
 }
 
+// WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required args
+// (volumeUl + targetWells). runGatedPass's minimal fixture supplies BOTH (targetWells
+// as the ARRAY form — invisible to the doc-door, satisfies the §5.2 sweep) so the
+// required-arg sweep stays SILENT and the only possible bar is the gated material
+// fact the T4 subject is about (no weakening of the suppression assertion).
 async function runGatedPass(bindings: BoundNoun[], gated: readonly typeof gatedBlobFact[]) {
   return createResolveNounsPass({
-    intent: unitIntent([{ action: 'add_material', material: gated[0]?.label ?? 'x', volumeUl: 10 }]),
+    intent: unitIntent([{ action: 'add_material', material: gated[0]?.label ?? 'x', volumeUl: 10, targetWells: ['A1'] }]),
     vocabulary: defaultScientistIntentVocabulary(),
     spine: createResolveSpine({}), // declared test seam
     resolve: stubEngine({ bindings, clarifications: [], failures: [], traces: [] }),
