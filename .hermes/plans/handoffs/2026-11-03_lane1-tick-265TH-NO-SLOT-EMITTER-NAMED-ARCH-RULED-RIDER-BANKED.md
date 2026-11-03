@@ -1,4 +1,4 @@
-# LANE 1 TICK 265TH HANDOFF — 2026-11-03 01:00 → 01:2x EST
+# LANE 1 TICK 265TH HANDOFF — 2026-11-03 01:00 → 01:12 EST
 
 Lane 1 started with no in-progress work and three todos (one Brad-held). Both fleet coder slots were
 held by LIVE lane-2 corpus launchers, so — corpus priority (Brad 2026-11-02T17:05) — this tick
@@ -149,7 +149,7 @@ Every claim below is the orchestrator's first-hand observation unless marked oth
 5. If no slot frees again: prefer another no-slot task over an idle spin, then `no-work.log`.
    `L1-PARAMS-EMITTER-RIDER` must NOT be dispatched on its own — it is rider-triggered.
 
-## Addendum (01:2x) — pre-dispatch SPEC corrections on L1-CELLRENDER-1 (found by this tick's audit)
+## Addendum (01:10-01:12) — pre-dispatch SPEC corrections on L1-CELLRENDER-1 (found by this tick's audit)
 
 While auditing the two dispatch-ready briefs I re-read the CELLRENDER spec end-to-end and found two
 defects that would have been inherited by the coder and the browser reviewer. Both fixed **before**
