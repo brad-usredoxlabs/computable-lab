@@ -109,6 +109,18 @@
 .view-spec__title { font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
 .view-spec__table { border-collapse: collapse; width: 100%; font-size: .85rem; }
 .view-spec__table th, .view-spec__table td { border: 1px solid #e5e7eb; padding: .3rem .5rem; text-align: left; }
+/* FAME-8 GATEFIX4 (D1 reachability): long cell values (e.g. a `flags` column)
+   and long header tokens must be READABLE within the default report pane, not
+   pushed off-screen by auto-layout min-content. `overflow-wrap: anywhere`
+   (unlike `word-wrap: break-word`) actually REDUCES a column's min-content, so
+   the table can shrink to the pane width instead of overflowing it; `white-space:
+   normal` lets long tokens wrap. Scoped to .view-spec__table th/td ONLY — the
+   FAME-LAYOUT-1 scroll door on .analysis-right (overflow:auto) and the
+   .chromatogram__table are untouched, so genuinely wide tables keep their
+   horizontal-scroll reachability. Generic: no column / artifact special-casing.
+   (Measured: the table's min-content collapses into the 574 px pane, no
+   horizontal scroll; cost is a taller table — see the l1t1855 report.) */
+.view-spec__table th, .view-spec__table td { overflow-wrap: anywhere; white-space: normal; }
 .view-spec__table th { background: #f9fafb; font-weight: 600; }
 .view-spec__signal { max-width: 100%; color: #1971c2; }
 .view-spec__metric-value { font-size: 1.5rem; font-weight: 700; }

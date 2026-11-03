@@ -70,6 +70,29 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** Render a table cell's value.
+ *
+ * FAME-8 GATEFIX4 (D1 reachability): an array-valued cell (e.g. a `flags`
+ * column) previously rendered as ONE unbreakable comma-joined run
+ * (`String(['a','b'])` => 'a,b' with no space) — 730 px of text that sat
+ * entirely outside the 574 px report pane. Rendering one element per line
+ * breaks that run so each item stays readable at the default pane width.
+ * GENERIC by construction: the branch is on the VALUE'S SHAPE (Array.isArray)
+ * only — no artifact, column-name, or flag-substring special-casing. A
+ * scalar value renders verbatim, byte-identical to the prior `String(value)`.
+ */
+function cellContent(value: unknown): ReactNode {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return ''
+    return value.map((e, i) => (
+      <div key={i} className="view-spec__cell-item">
+        {String(e)}
+      </div>
+    ))
+  }
+  return String(value ?? '')
+}
+
 /** Render a table artifact (rows of plain values).
  *
  * C1 (FAME-2): the generic table also understands the DECLARED object shape
@@ -102,7 +125,7 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
           const r: Record<string, unknown> = isRecord(raw) ? raw : { value: raw }
           return (
             <tr key={i}>
-              {columns.map((c) => <td key={c}>{String(r[c] ?? '')}</td>)}
+              {columns.map((c) => <td key={c}>{cellContent(r[c])}</td>)}
             </tr>
           )
         })}
@@ -230,7 +253,7 @@ function ArtifactTable({ artifact, bindings }: { artifact: RenderableArtifact; b
             const r: Record<string, unknown> = isRecord(raw) ? raw : { value: raw }
             return (
               <tr key={i}>
-                {columns.map((c) => <td key={c}>{String(r[c] ?? '')}</td>)}
+                {columns.map((c) => <td key={c}>{cellContent(r[c])}</td>)}
               </tr>
             )
           })}
