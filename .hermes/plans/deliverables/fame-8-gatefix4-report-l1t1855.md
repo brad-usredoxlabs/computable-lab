@@ -98,7 +98,8 @@ Harness: `/home/brad/.hermes/cl/receipts/fame-8-gatefix4-l1t1855/fame8-gatefix4-
 `networkidle` + 2 s; lands ANR-000071 via the "GATEFIX3 D1 replay" run button, default
 pane, no resize, no scroll). Served from MY worktree's own vite on :5201 proxying the
 lane backend :3092 (`VITE_API_PROXY=http://localhost:3092`) — so BEFORE/AFTER measure the
-worktree branch code, not trunk :5192.
+worktree branch code, not trunk :5192. Provenance audit of exactly that claim (the script as
+it stood during the run wrote `served: null`): see §9.3 and `served-attestation.json`.
 
 ### BEFORE (base code, must reproduce the failure) — receipts `before-measure.json`
 - pane clientWidth **574**, scrollWidth **1743**, right edge 1440, `noHScroll: false`
@@ -307,3 +308,58 @@ Both files record their own command line, the revision they ran against, and the
 their headers. The worktree was not modified by the RED leg (the scratch copy was made and the
 revert applied there only); `/tmp/f8pap-d2` was removed after the run. The one-file RED proves
 the new pin is non-vacuous: it fails on the pre-fix renderer and passes on the candidate.
+
+### 9.3 [review defect 3] no receipt attested which revision :5201 served — attested as far as evidence allows
+
+What the review found: `fame8-gatefix4-measure-l1t1855.js` line 76 hardcoded
+`served: null, steps: []`, so all four measure JSONs (`before`, `after-arraybranch`, `after`,
+`after-final`) carry no record of which app revision the dev server was serving.
+
+Both halves of the review's closure options were used, and what could NOT be recovered is
+stated as such rather than invented:
+
+**(i) The script now captures it, and was re-run.** `fame8-gatefix4-measure-l1t1855.js` now
+records, per run, into `served`: `git rev-parse HEAD` of the serving worktree, its branch, its
+`git status --porcelain`, the sha256 of the module bytes the dev server actually returned for
+`/src/analysis/ViewRenderer.tsx` and `/src/analysis/AnalysisPage.css`, whether those bytes
+carry the array-cell marker (`view-spec__cell-item`) and `overflow-wrap: anywhere`, plus the
+git-cat-file sha256 of the committed sources; and `steps` now holds the real navigation steps
+with timings. Fresh run (this run's own vite on :5201, `VITE_API_PROXY=http://localhost:3092`,
+screenshot `00-after-served-fullpage.png`):
+
+- artifact: `after-served-measure.json` (`at` 2026-11-03T02:06:25Z)
+- `served.head` **42425c39** (branch `cl/lane1-fame8-gatefix4-l1t1855`; dirty = the three
+  pre-existing `?? node_modules` lines only)
+- `served.viewRenderer` HTTP 200, 76082 bytes, sha256 `0015ebfd…`, `hasArrayCellMarker: true`
+- `served.css` HTTP 200, 19591 bytes, sha256 `a0cbc1ef…`, `hasOverflowWrapAnywhere: true`
+- `steps`: 10 entries, `git-served-capture` -> `served-module-capture` -> `goto-/analysis` ->
+  `run-list-ready` -> `click-GATEFIX3-D1-replay` -> `table-mounted` -> `networkidle+2s` ->
+  `pane-reset` -> `geometry-measured` -> `screenshot-written`
+- geometry: pane 574/574 `noHScroll true`, tableW **534**, tableH **4165**, flags index 9 at
+  **1296..1420** (w 123, clientW 122 == scrollW 122), `cellItemCount: 2`, `fullyReadable: true`
+
+42425c39 is the candidate 522040e9 plus two docs-only commits; `git diff --stat
+522040e9..42425c39 -- app server schema records scripts` is EMPTY, so the served product bytes
+are the candidate's.
+
+**Reproduction check:** `after-served-measure.json` is identical to the historical
+`after-measure.json` on every field present in both (pane 574/574, tableW 534, tableH 4165,
+flags 1296..1420 w123, fullyReadable true). The historical AFTER numbers therefore reproduce on
+code whose revision is now attested.
+
+**(ii) The historical window is reported as unattested, with corroboration.** Sidecar:
+`/home/brad/.hermes/cl/receipts/fame-8-gatefix4-l1t1855/served-attestation.json`. It states
+plainly that the revision served during 2026-11-03T01:19Z..01:39Z (20:19-20:39 EST) cannot be
+recovered — the old script recorded nothing, the serving process was gone before review, and no
+vite/coder log naming the :5201 launch survived — and lists only what was actually gathered:
+the four JSONs self-record `frontend: http://localhost:5201`; BEFORE reproduces the gate's D1
+numbers (1723 / 730 px @x1878); AFTER matches the orchestrator's independent prerecon (534 /
+574); product commits 780bc393 (20:34:25) and 522040e9 (20:38:54) predate the last window
+artifact and the later commits are docs-only; and the intermediate `after-arraybranch` (20:26,
+tableW 1286) already showed the array branch, which exists only in the worktree, never on trunk
+:5192. **No revision string is invented for that window**, and the before leg was not re-run
+(it would need a second server on a non-worktree port, which this run's rules disallow); the
+sidecar records that too.
+
+Housekeeping: the :5201 vite this run started (pid 3636873) was stopped afterwards; :5192 was
+never contacted; `/tmp` is clean.
