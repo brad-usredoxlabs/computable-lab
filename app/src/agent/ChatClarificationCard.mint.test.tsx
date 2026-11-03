@@ -466,3 +466,43 @@ describe('L2-CLARIFY-CARD-1 (fix2) D-3 — the mint row Create button does not c
     expect(preview).toContain('min-width: 0')
   })
 })
+
+// D4 (browser-gate tier1, FIX RUN 4): the mint row overran the card. The
+// reporter measured the clarification card x=981 w=520 right=1501 but the mint
+// row right=1651 (150 px WIDER than the card) and its Create button
+// x=1584 w=57 right=1642 — 42 px PAST a 1600 px viewport. Root cause: the
+// picker root is display:grid with no column constraint, so its single
+// implicit track is max-content sized; the nowrap Create verb + the seeded
+// label force the track (and the mint row's width:100%) wider than the card.
+// jsdom cannot measure layout, so this pin reads the CSS SOURCE (the ruleOf
+// idiom the BGATE chrome pins use — ChatLog.test.tsx:288, the D-3 block above)
+// and asserts the containment fix: the picker's single column is clamped to
+// the container with minmax(0,1fr) (min 0 lets the nowrap children shrink
+// instead of growing the track) and the preview still declares the deliberate
+// ellipsis contract. Live visual proof is the orchestrator's browser gate.
+describe('L2-CLARIFY-CARD-1 (fix4) D4 — the mint row stays inside the card at every width', () => {
+  const cssSource = readFileSync(resolve(process.cwd(), 'src/event-editor/right-pane/ai/ai.css'), 'utf8')
+  const ruleOf = (selector: string): string => {
+    const at = cssSource.indexOf(selector)
+    expect(at, `ai.css must define ${selector}`).toBeGreaterThan(-1)
+    return cssSource.slice(at, cssSource.indexOf('}', at))
+  }
+
+  it('the picker root clamps its single column to the card (minmax(0,1fr)) so the mint row cannot grow past it', () => {
+    const picker = ruleOf('.message-log__clarification-picker {')
+    // min 0 is the load-bearing part: without it the track is max-content and
+    // the nowrap Create verb forces the whole row wider than the card.
+    expect(picker).toContain('grid-template-columns: minmax(0, 1fr)')
+    // The card content must never overflow the card horizontally.
+    expect(picker).toContain('max-width: 100%')
+  })
+
+  it('the preview declares the deliberate ellipsis contract (no horizontal overflow, no clipped verb)', () => {
+    const preview = ruleOf('.message-log__clarification-mint__preview {')
+    expect(preview).toContain('text-overflow: ellipsis')
+    expect(preview).toContain('white-space: nowrap')
+    expect(preview).toContain('min-width: 0')
+    const create = ruleOf('.message-log__clarification-mint__create {')
+    expect(create).toContain('flex: none')
+  })
+})
