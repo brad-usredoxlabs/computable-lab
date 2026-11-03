@@ -118,6 +118,50 @@ measured it** (reach at the default viewport, no divider drag, no horizontal scr
   revision-lineage; GCM-DEMO-AOAC-FAME; FL1; FAME-1B-BACKFILL Brad-held; gate-observations 1-6 routing;
   ANREV entryScript tracked-fixture note.
 
+## ADDENDUM (20:53) — ADVERSARIAL VERDICT LANDED: FIX, 3 defects, ALL EVIDENCE-TRAIL
+Unit `cl-l1-advc-fame8-gatefix4-l1t2005` exited after 300 s; review written
+`/home/brad/.hermes/cl/lanes/1/reviews/FAME8-GATEFIX4-adv1-l1t2005.md` (13054 bytes) — read in full by me.
+Reviewer's own runs (its words, spot-checked against the file): boundary CLEAN (4 files, no
+server/schema/records/scripts/YAML); `tsc` exit 2 / 21 error lines / 0 in `src/analysis`, base-revert in
+/tmp scratch also 21 with `comm -3` EMPTY; named suites 4 files / 46 tests pass, wider
+`vitest run src/analysis` 23 files / 330 tests pass; RED control reproduced in a /tmp scratch
+(`expected 'ALPHA_FLAG,BETA_FLAG' to be 'ALPHA_FLAGBETA_FLAG'`, 1 failed | 14 passed), worktree HEAD
+unchanged; record store mtimes unchanged (`find -newermt '2026-11-02 20:15'` EMPTY on AOUT-000134 /
+ANREV-000022 / ANR-000071 / ANR-000068); `.analysis-right` door byte-identical; all four measured claims
+backed by receipts (1723→534, 1120→4165, 1878→1296..1420, pane 574==574, fullyReadable true).
+**VERDICT: fix — 3 defects, ALL EVIDENCE-TRAIL/minor. NO PRODUCT DEFECT; the reviewer states D1 is closed.**
+
+Defects (verbatim substance):
+1. [EVIDENCE-TRAIL, minor] report:146-152 vs spec:101 — the D2 deferral reason is FALSE twice:
+   (a) `ChromatogramView.tsx` lives at `app/src/analysis/ChromatogramView.tsx`, i.e. INSIDE the spec's
+   boundary `app/src/analysis/**` (only the spec's parenthetical lists two files); (b) the x-tick label
+   is not "centered" — no `textAnchor` on :386 and no `text-anchor` anywhere in app CSS, so SVG's default
+   `start` applies. A one-line conditional `textAnchor="end"` on the last tick is exactly the bounded
+   anchor tweak the spec asks for. Fix it, or restate the reason truthfully.
+2. [EVIDENCE-TRAIL, minor] report:161-163 — the RED→GREEN proof cites a receipt ("this dir's … test
+   output") that does not exist; the receipts dir holds only 7 JSON / 5 PNG / 3 .js probes. Substance
+   holds (reviewer reproduced RED itself); the cited artifact was never filed.
+3. [EVIDENCE-TRAIL, minor] measure script:76 — all four measure JSONs carry `"served": null` and
+   `"steps": []`, so no receipt attests which app revision :5201 served. Mitigated by the numbers
+   matching both the gate's D1 baseline and my independent variant-A prediction.
+
+Reviewer's orchestrator notes (carry forward): **O1 gate hazard** — an array cell's `textContent` no
+longer contains the comma separator (`…AREA_NULLCONTESTED_CLAIM:…`) and the new pin asserts that
+concatenation; the spec's mechanism 3 authorises it, but the cycle-2 gate's D1 evidence was "cell text ==
+payload text", so a re-gate comparing text verbatim would fail for the WRONG reason. **Brief the browser
+gate on this.** Also: the report's stale "base 29ec4be3" is a docs-only ancestor of the authoritative
+base 5e861a0e — harmless, do not propagate it into the merge note.
+
+### Routing decision (mine, made at budget expiry — dispatch deferred to the next tick, not skipped)
+All three defects are evidence-trail only ⇒ the cheap path is `cl-paperwork-fixer` (OpenRouter, NO coder
+slot, NO stagger, no thunderbeast slot). Defect 1 has TWO admissible closures; the reviewer allows either.
+I choose the **truthful-restatement** closure for defect 1 and carry D2 as a follow-up, because the
+one-line `textAnchor="end"` fix is a PRODUCT change and a lane-1 coder claim is barred by strict corpus
+priority now that AMENDED-A is consumed (one-shot). Next tick: dispatch `cl-paperwork-fixer` with the
+worktree `/mnt/vast/home/brad/git/wt/FAME-8-GATEFIX4-lane1`, branch
+`cl/lane1-fame8-gatefix4-l1t1855`, spec, review report, the three defects verbatim, and a unique report
+path; then re-review (advc cycle 2) before any merge.
+
 ## Next-tick checks (priority)
 1. `cl-reconcile.sh 1`; read this handoff. Check `reviews/FAME8-GATEFIX4-adv1-l1t2005.md` and unit
    `cl-l1-advc-fame8-gatefix4-l1t2005` (if still active past ~40 min = 2x expected, inspect the log for
