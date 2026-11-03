@@ -107,3 +107,110 @@ bare `td` with `atContext []` — no `.view-spec__table` scope, ban silent.
 The &-controls (`& td`, `&.x td`) already FLAGED pre-fix (fix run 1 held);
 the benign guards were [] pre-fix BY CONSTRUCTION (no-false-positive guards,
 per the decision's §4 amendment — not claimed RED).
+
+--------------------------------------------------------------------------------
+## 3. Required fixture set — post-fix verdicts (case by case)
+
+Same probe against the WORKTREE module (`node ../deliverables/l1-pin-harden-1-fix2/fix2-red-probe.mts .. WORKTREE`
+from `app/`), full transcript committed as
+`deliverables/l1-pin-harden-1-fix2/fix2-red-probe-postfix.txt`. ANYWHERE =
+`["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]`.
+
+    .view-spec__table { td { overflow-wrap: anywhere; } }                          -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { th { … } }                                                 -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { @media (m) { td { … } } }                                  -> [ANYWHERE_VIOLATION]  FLAG
+    @media (m) { .view-spec__table { td { … } } }                                  -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { th, td { … } }                                             -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { :hover td { … } }                                          -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { & { color:red } td { … } }                                 -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table, .other { td { … } }              (parent-list distribution) -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { :is(&) td { … } }                                          -> [ANYWHERE_VIOLATION]  FLAG
+    .view-spec__table { :where(&) > td { … } }                                      -> [ANYWHERE_VIOLATION]  FLAG
+    @supports (x:y) { .view-spec__table { @media (min-width: 1px) { td { … } } } } -> [ANYWHERE_VIOLATION]  FLAG
+    RED (evasion accepted): 0/11
+
+Every case is appended to the CONFORMING_FLOOR and must yield EXACTLY the one
+ANYWHERE violation; the probe compares with `JSON.stringify(got) ===
+JSON.stringify(ANY)`, so a double-report or an extra floor violation would
+print MISS, not FLAG.
+
+MUST STAY [] (controls + guards, same transcript):
+    CTRL control "& td"                    -> [ANYWHERE_VIOLATION]  FLAG   (keeps flagging)
+    CTRL control "&.x td" glued            -> [ANYWHERE_VIOLATION]  FLAG   (keeps flagging)
+    CTRL control bare "&" block            -> []  CLEAN
+      (`.view-spec__table { & { … } }` resolves to the parent ELEMENT selector
+      `.view-spec__table` — no th/td token, so the cell-family ban does not
+      apply; it behaved identically pre-fix and that is the pin's documented
+      cell-family scope, not an evasion of THIS defect. The overflow-wrap
+      inheritance question is an OBSERVATION in §7, not fix-2 scope.)
+    GUARD benign nested font-size / td padding / thead anywhere / @media font-size -> [] CLEAN (x4)
+    SHIPPED AnalysisPage.css                -> []   (unchanged under the composed scanner)
+
+The same eleven shapes plus the controls and benign guards are ALSO pinned
+inside vitest: `ViewRenderer.cellrender.test.tsx` describe
+"L1-PIN-HARDEN-1 FIX RUN 2 — relaxed nesting (bare head) composes against
+the parent (advc2 D1)" (3 it-blocks: 11 labelled fixtures each expected
+[ANYWHERE_VIOLATION], controls keep flagging, benign shapes stay []).
+Parser-contract level (exact emitted rule objects incl. the atContext chain
+and the parent-chain invariant at depth) in `cssRuleScan.test.ts` (3 new
+it-blocks).
+
+--------------------------------------------------------------------------------
+## 4. D2 — re-run battery transcripts (banner names the real module)
+
+`fix1-battery.mts:94` now prints the RESOLVED argv[2] path. Re-run transcripts
+committed under `deliverables/l1-pin-harden-1-fix2/`:
+
+- POST-FIX: `fix2-battery-postfix.txt`
+      == BATTERY (review §3) against /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app/src/analysis/cssRuleScan.ts ==
+      … battery: 20/20 match expectation
+      (run from app/: `node ../deliverables/l1-pin-harden-1-fix1/fix1-battery.mts
+        ./src/analysis/cssRuleScan.ts src/analysis/ViewRenderer.cellrender.test.tsx`
+        at final tip — the banner names the module actually imported)
+- PRE-FIX: `fix2-battery-prefix.txt`
+      == BATTERY (review §3) against /tmp/fix2-battery-prefix/cssRuleScan.ts ==
+      … battery: 20/20 match expectation
+      (scanner + pin extracted from commit b2b59fdf via `git show` into
+      /tmp/fix2-battery-prefix/; the banner names the extracted file, which is
+      what was actually imported)
+
+Honest note (and the reason the D1 hole survived fix run 1): the PRE-FIX
+battery is ALSO 20/20 — fix run 1's battery never contained a bare-head
+shape, so it could not catch the relaxed-nesting family. That is precisely
+advc2 §5's test-gap finding. The D1 coverage lives in the fix2 probe (§3) and
+the vitest pins, not in the fix1 battery; the fix2 battery re-run exists to
+prove the D2 banner defect is closed and fix-run-1's 20 cases did not regress.
+
+--------------------------------------------------------------------------------
+## 5. D3 — token-boundary carve-out, pinned BOTH directions
+
+Carve-out regex (ViewRenderer.cellrender.test.tsx, inside `sourceViolations`):
+`/(^|[^\w-])\.view-spec__cell-item(?![\w-])/` — the exact pattern advc2 §7
+verified and the decision names.
+
+Pinned in describe "L1-PIN-HARDEN-1 FIX RUN 2 — .view-spec__cell-item
+carve-out is token-exact (advc2 D3)" (2 it-blocks, all green in
+`fix2-vitest-green.txt`):
+
+VIOLATES (must report the anywhere ban):
+    CONFORMING_FLOOR + .view-spec__table td.view-spec__cell-item-x { overflow-wrap: anywhere; }  -> [ANYWHERE_VIOLATION]
+    CONFORMING_FLOOR + .view-spec__table td.view-spec__cell-itemx { overflow-wrap: anywhere; }   -> [ANYWHERE_VIOLATION]
+EXEMPT (must stay []):
+    CONFORMING_FLOOR + .view-spec__table td .view-spec__cell-item { overflow-wrap: anywhere; }   -> []
+    shipped AnalysisPage.css (bare .view-spec__cell-item rule, token at both boundaries)          -> []
+
+Boundary behaviour recorded honestly: the reviewer's exact regex treats a
+glued compound `td.view-spec__cell-item` as NOT exempt — the character before
+the token's `.` is `d` (a word char), so neither the start-of-part branch nor
+the `[^\w-]` branch can match. (Measured: the lookaround variant
+`(?<![\w-])…(?![\w-])` behaves IDENTICALLY on this shape — `td.` fails both
+patterns; both exempt `td .view-spec__cell-item` and the bare token. There is
+no reasonable variant that exempts `…td.view-spec__cell-item-x` while also
+exempting `…td.view-spec__cell-item`; any leading-boundary rule that accepts
+the glued form re-opens the fail-open.) This over-flag is the fail-closed
+side the decision sanctions ("over-flagging is acceptable; escaping the ban
+is not"), and the shape does not exist in the real DOM — ViewRenderer.tsx:88
+puts the class on a DIV inside the td, never on the td itself. Pinned
+explicitly so the behaviour is owned, not accidental:
+    CONFORMING_FLOOR + .view-spec__table td.view-spec__cell-item { overflow-wrap: anywhere; }    -> [ANYWHERE_VIOLATION]
+with the reason in the test comment.
