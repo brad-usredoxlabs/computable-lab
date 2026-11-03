@@ -262,3 +262,131 @@ NOT rewrite the history; the original wording stands as written at that run.
 - NOT live :5193 (orch owns that; the reviewer's screenshot remains the
   D-3-chrome evidence). The D3-chrome CSS pin is a source assertion, not a
   measurement.
+
+### browser-gate fix run 3 (advc-c4 cycle 4, D1/D3/D4) — what changed
+
+Scope: ONLY the bounded defect list from the cycle-4 adversarial review
+(`L2-CLARIFY-CARD-1-advc-c4-l2t2110.md`): D1 (HIGH, product code), D3 (LOW,
+tests only), D4 (LOW, this report's prose). D2 of that review is CLOSED by
+ORCH AMENDMENT 2 (l2t2110) and is not re-litigated here: the empty seed +
+bubble-owner shape stands, `ChatLog.test.tsx` is in scope (AMENDMENT 2 §2),
+and the suppression authorization is conditional on the D1 predicate below
+(AMENDMENT 2 §3). No `server/`, `schema/`, `records/`, or
+`app/src/event-editor/**` change; no picker ranking change; the deferred 3b
+volume gate's own semantics are untouched.
+
+- **D1 (HIGH): the bubble-suppression predicate follows what the card
+  ACTUALLY RENDERS, not the request count.**
+  `ChatLog.tsx`: the new module-private function
+  `requestRendersPrompt(request)` = `(request.options ?? []).length > 0
+  || requestHasPicker(request)` is THE ONE predicate for "a typed request
+  renders a prompt". It is the render decision both arms read:
+  (a) `renderTypedClarification`'s guard is now `!requestRendersPrompt(r)`
+      (same rule as before, now one shared copy — no second options/picker
+      check);
+  (b) `bubbleIsOwnedPrompt` suppresses the bubble paragraph only when the
+      content verbatim matches a prompt the card actually PRINTS — for the
+      single arm (`renderTypedClarification` map) that is exactly
+      `requestRendersPrompt(r)`, so a request the card renders NOTHING for
+      keeps BASE behaviour: the bubble `<p>` prints the question once;
+      for the grouped arm (`ChatClarificationCard`, 2+ requests + batch
+      submit) the card prints EVERY slot's prompt unconditionally (its
+      per-slot answer surface falls back to the parameter box), so the
+      verbatim-owned prompt is card-printed and the bubble is suppressed
+      there exactly as before (the card always owns the print, so the
+      suppression can never zero it).
+  Why it matters (the reviewer's measured delta): the server emits
+  `menuProvider: 'choice'`, `options: []` for any fact whose argument
+  declares no domain (shorthandChat.ts:883-887, 903-907; `volumeUl` is
+  `kind: quantity` with no domain — the deferred 3b gate's shape). The
+  count-keyed predicate suppressed the bubble for that shape while NOTHING
+  rendered a prompt (the single arm's guard returns null; the grouped card
+  never mounts for 1 request): the question went from printed ONCE (base)
+  to printed ZERO times (HEAD), and the assistant row rendered as an empty
+  "Assistant" label. With the render-derived predicate the card renders
+  nothing for that request, so the bubble owns the question again — and no
+  new parameter-input UI is invented for it (that surface belongs to the
+  item that owns the 3b gate; AMENDMENT 2 §4). No prompt-text sniffing, no
+  prose regex: the rule reads the request's own options/picker shape in ONE
+  place shared with the render decision.
+  **NEW PIN (non-vacuous):** `ChatLog.test.tsx` — "D1 (advc-c4 fix3,
+  AMENDMENT 2): the unrenderable choice/options:[] request keeps its bubble
+  question" uses the EXACT emitted shape (`menuProvider: 'choice'`,
+  `options: []`, `content === request.prompt`) and asserts the question
+  appears EXACTLY ONCE (exact-`<p>` count AND the substring backstop), the
+  assistant row is not empty, and no card div renders for the shape.
+  **RED (real output, BEFORE the product fix — commit `a70b5c7c`):**
+  `cd app && npx vitest run src/agent/ChatLog.test.tsx`
+  → `Tests 1 failed | 26 passed (27)`; the failure:
+  `expected 'Assistant' to contain 'The draft omits a required value for
+  …'` — the assistant row's text is literally just "Assistant" (empty
+  row, 0 prints), matching the reviewer's probe (base = 1 print, HEAD = 0
+  prints, 0 card divs) exactly. After the product fix the same pin is
+  GREEN (part of the 40/40 below).
+
+- **D3 (LOW): the "exactly once on screen" counters are no longer
+  exact-paragraph-equality only; the grouped bubble assertion is positive.**
+  `ChatLog.grouped.card1.test.tsx`: (a) the D1/D2 owner pin now ALSO counts
+  SUBSTRING occurrences over `container.textContent` (`.split(text).length
+  - 1`, expected 1 for both prompts) — a prompt re-printed inside a LONGER
+  paragraph scores 0 for the exact-`<p>` count but is counted here; (b) the
+  D-1/D-4 wording pin now carries the same substring backstops over the
+  row text AND a POSITIVE bubble-presence assertion: `bubbleExists`
+  (captured via `:scope > p`, the bubble paragraph being a DIRECT CHILD of
+  the row — the earlier `p:not(.chat-clarification-card__prompt)` selector
+  wrongly matched the card's own title `<p>` and its absence check would
+  have been a false positive) is asserted `false` on first-ask (bubble
+  stripped, the card owns the print) and `true` on loop-ask (bubble is the
+  server's escalation text) — replacing the vacuous `bubbleContent … ?? ''`
+  `not.toBe(req1.prompt)` comparison. The existing exact-count assertions
+  are KEPT (both counters agree). `ChatLog.test.tsx`: the D1 single-arm pin
+  gets the same substring backstop over the row text in both wordings
+  (first-ask and repeat-ask, expected 1).
+
+- **D4 (LOW): the fix3 "EXACTLY ONCE … in BOTH arms, for BOTH wordings"
+  sentence is scoped to what the pins actually cover.** The sentence in the
+  fix3 section (above) covered the material/labware NOUN-card shapes — the
+  renderable requests the pins exercise (`/m`/`/l` pickers, the choice
+  arm with options, the `options: []` + picker shape). With D1 fixed, the
+  precise statement is: for every request the card RENDERS a prompt for
+  (the renderable shapes above), each prompt sentence is on screen exactly
+  once in both arms and both wordings; for a request the card renders
+  NOTHING for — `choice`/`options: []`/no picker, the shape the server
+  emits for a non-domain argument (the deferred 3b `volumeUl` gate's
+  shape) — the invariant is BASE behaviour: the bubble prints the question
+  once (now pinned by the new choice/options:[] pin, the THIRD wording).
+  The unrenderable shape's ANSWER surface (a parameter-input card for it)
+  is the known limit and belongs to the item that owns the 3b gate
+  (AMENDMENT 2 §4: out of scope here).
+
+### Verification evidence (fix run 3, real output)
+
+- **RED (the new D1 pin, BEFORE the product fix):**
+  `cd app && npx vitest run src/agent/ChatLog.test.tsx`
+  → `Tests 1 failed | 26 passed (27)` — the new pin fails with
+  `expected 'Assistant' to contain 'The draft omits a required value for
+  "volumeUl" (missing-required). What volume should be used?'` (the row
+  renders only the "Assistant" label: 0 prints, empty row — the reviewer's
+  measured delta reproduced). Commit `a70b5c7c` (test only, RED state).
+- **GREEN (after the D1+D3 fix):**
+  `npx vitest run src/agent/ChatLog.test.tsx
+  src/agent/ChatLog.grouped.card1.test.tsx
+  src/agent/ChatClarificationCard.mint.test.tsx`
+  → `Test Files 3 passed (3) / Tests 40 passed (40)` (39 pre-run + the new
+  D1 pin).
+- **Seven regression-locked suites:** answerChannel (2), bothfields.uifix1
+  (4), d3chrome.uifix3 (4), ClarificationPicker.test (20),
+  mintrow.uifix2.fix2 (7), lifecycle.uifix2 (7), searchReplace.uifix3 (2)
+  → `Test Files 7 passed (7) / Tests 46 passed (46)` — the same counts the
+  cycle-4 review measured.
+- `npx tsc --noEmit` (app): **11 error lines / 10 files — ZERO in any
+  touched file** (the pre-existing trunk set: tabNavPlugin, EventEditor
+  Context, deck/viewer tests, Viewer*, ingestion/*; baseline 11, parity
+  holds).
+- `git diff --name-only 85858153..HEAD`: only
+  `app/src/agent/ChatLog.tsx`, `app/src/agent/ChatLog.test.tsx`,
+  `app/src/agent/ChatLog.grouped.card1.test.tsx` + this report — NO
+  `server/`, NO `schema/`, NO `records/`, NO `app/src/event-editor/**`.
+- Worktree CLEAN at the end of this run.
+- NOT live :5193 (orchestrator-owned; this run does not claim live browser
+  verification).
