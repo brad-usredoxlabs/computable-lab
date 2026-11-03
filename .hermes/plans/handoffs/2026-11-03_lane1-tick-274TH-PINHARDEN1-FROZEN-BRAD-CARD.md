@@ -121,3 +121,12 @@ no third coder run, no merge.
 3. `L1-CELLRENDER-1` — dispatch only on a fleet coder slot lane 2 does not want (corpus priority first); the
    worktree/launcher/prompt are pre-built and verified present. Browser gate afterwards on `:5192`/`:3092` with
    AOUT-000100 / AOUT-000136 plus the `analyte_summary` regression leg.
+
+## addendum (06:44, bookkeeping accuracy)
+
+`stagger-trial.log`'s exit line for this run reads `2026-11-03T05:22:53 … EXITED rc=0`, i.e. it stamps the **start**
+time on the exit line: `launchers/launch-L1-PIN-HARDEN-1-fix2-thunderbeast.sh:53` writes `$TS` (captured at line 13)
+instead of a second `date -Iseconds`. The real exit was **~06:26** per the unit's journal, `pgrep` and the state.db
+session counters. So the trial log's launch line is correct and its exit line's time is not — read the journal, not
+that field. Fix is one line in the launcher; queued as a bookkeeping chore for the next tick that touches it, not a
+gate issue (I observed the unit directly rather than trusting the log).
