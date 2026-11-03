@@ -309,8 +309,13 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     // The call mints the BARE noun, never the blob.
     fireEvent.click(createObj())
     await waitFor(() => expect(onPickObj).toHaveBeenCalledTimes(1))
-    expect(mintLocalTerm.mock.calls[0]?.[1]).toBe(noun)
-    expect(mintLocalTerm.mock.calls[0]?.[1]).not.toContain('mint')
+    // D4 (advc-c3): the LAST call — leg (a)'s own call (the mock is shared
+    // across the legs inside this single `it`; only afterEach resets it, so
+    // calls[0] is leg-independent and could not fail if the wire form minted
+    // something else).
+    const lastCallA = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCallA?.[1]).toBe(noun)
+    expect(lastCallA?.[1]).not.toContain('mint')
     cleanup()
 
     // (b) the JS-OBJECT-LITERAL string the live wire delivered (unquoted keys,
@@ -327,7 +332,15 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     expect(searchStr.value).toBe(noun)
     fireEvent.click(screen.getByTestId('clarification-mint-create'))
     await waitFor(() => expect(onPickStr).toHaveBeenCalledTimes(1))
-    expect(mintLocalTerm.mock.calls[0]?.[1]).toBe(noun)
+    // D4 (advc-c3): assert the LAST call (leg (b)'s own mint). The mock is NOT
+    // reset between legs inside this single `it` (only afterEach resets it), so
+    // `mock.calls[0]` is leg (a)'s call — the pre-fix assertion repeated the
+    // :312 check and could not fail if the string-form path minted something
+    // else. Exactly TWO mints have happened (one per leg); the last is leg (b)'s.
+    expect(mintLocalTerm).toHaveBeenCalledTimes(2)
+    const lastCallB = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCallB?.[1]).toBe(noun)
+    expect(lastCallB?.[1]).not.toContain('mint')
     cleanup()
 
     // (c) CONTROL: a bare noun is byte-unchanged (the pre-fix path, untouched).
@@ -339,6 +352,89 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     expect(labelCtl().value).toBe('radicicol')
     expect(screen.getByText(mintLocalTermLabel('radicicol'))).toBeTruthy()
     cleanup()
+  })
+
+  it('D3 (advc-c3 fix3): the DSL unwrap is QUOTE/ESCAPE-AWARE and NARROW — an apostrophe label unwraps WHOLE (never truncated at the quote), and a JSON array / a quoted scalar / a malformed blob are NOT nouns (the affordance stays hidden, no partial or bracketed label ever reaches the mint row)', async () => {
+    // The reviewer's probe (receipt dom/draw-02.json wire shapes): the pre-fix
+    // /label\s*:\s*["']([^"']*)["']/ regex stopped at an inner apostrophe, so
+    // {mint:{label:"O'Brien extract"}} minted a durable record named "O" with
+    // Create ENABLED; and the pre-fix string gate returned ANY non-`{` string
+    // verbatim, so ["frobnicate","zymosolve"] (the plausible array-typed-slot
+    // wire shape) and "frobnicate" reached the mint row as "labels". The
+    // post-fix unwrap: the object-literal form is parsed by a quote/escape-
+    // aware scanner (a value is read from its opening quote to its matching
+    // closing quote — escapes honored — so an apostrophe inside a value is
+    // part of the value), and every other bracketed value returns '' so
+    // mintAvailable keeps the affordance hidden.
+    const mkRequest = (id: string, query: string) => ({
+      id,
+      kind: 'material' as const,
+      prompt: 'Choose what it is, or create a material record.',
+      entityType: 'material' as const,
+      menuProvider: '/m' as const,
+      query,
+      options: [] as { id: string; label: string }[],
+      allowCreateLocal: true,
+    })
+
+    // (a) APOSTROPHE (the reviewer's exact probe): the label unwraps WHOLE —
+    // never "O", never "Komagataeibacter" — and the mint call mints the whole
+    // label (a click writes a record named "O'Brien extract", not "O").
+    const obrien = "O'Brien extract"
+    const obrienBlob = `{mint:{label:"${obrien}",domain:"chemical"}}`
+    resolveMaterial.mockResolvedValue([])
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-obrien', label: obrien, iri: 'urn:cl:local:MAT-obrien' })
+    const onPickObrien = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-obrien', obrienBlob)} onPick={onPickObrien} />)
+    const labelObrien = screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(labelObrien.value).toBe(obrien)
+    expect(labelObrien.value).not.toBe('O')
+    expect(screen.getByText(mintLocalTermLabel(obrien))).toBeTruthy()
+    const createObrien = screen.getByTestId('clarification-mint-create') as HTMLButtonElement
+    expect(createObrien.disabled).toBe(false)
+    fireEvent.click(createObrien)
+    await waitFor(() => expect(onPickObrien).toHaveBeenCalledTimes(1))
+    const lastCall = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCall?.[1]).toBe(obrien)
+    expect(lastCall?.[1]).not.toBe('O')
+    cleanup()
+
+    // (b) JSON ARRAY (the array-typed-slot wire shape): NOT a noun. The mint
+    // row is ABSENT (mintAvailable hides the affordance) — and critically, the
+    // search box is NOT seeded with the bracketed text either (seed = '').
+    resolveMaterial.mockResolvedValue([])
+    const onPickArr = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-arr', '["frobnicate","zymosolve"]')} onPick={onPickArr} />)
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+    expect(screen.queryByTestId('clarification-mint-create')).toBeNull()
+    expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+    const placeholderArr = screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement
+    expect(placeholderArr.placeholder).toBe('Search materials…')
+    cleanup()
+
+    // (c) QUOTED SCALAR: NOT a noun (the pre-fix gate passed it through WITH
+    // the quotes as the label). Same affordance-hidden outcome.
+    resolveMaterial.mockResolvedValue([])
+    const onPickQuoted = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-quoted', '"frobnicate"')} onPick={onPickQuoted} />)
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+    expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+    cleanup()
+
+    // (d) NOT-the-DSL-SHAPE bracketed values: the affordance stays hidden and
+    // the label is never a partial/truncated fragment of the raw text.
+    for (const malformed of [
+      '{mint:"frobnicate"}',
+      '{"mint":["x"]}',
+      '{label:"outer",domain:"chemical"}',
+      '{mint:{label:"unterminated',
+    ]) {
+      resolveMaterial.mockResolvedValue([])
+      const { unmount } = render(<ClarificationPicker request={mkRequest('req-mal', malformed)} onPick={vi.fn()} />)
+      expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+      expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+      unmount()
+    }
   })
 })
 

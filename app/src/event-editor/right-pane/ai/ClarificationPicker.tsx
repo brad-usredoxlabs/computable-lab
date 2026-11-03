@@ -162,12 +162,25 @@ function safeMentionPart(value: string): string {
 /**
  * The prompt's noun out of a `request.query` value, whatever shape it arrived
  * in. A bare string is the prompt's noun verbatim (byte-unchanged). The
- * mint-intent DSL — a structured `{mint:{label|name,…}}` object, or the JSON
- * text of one — carries the noun under `mint.label` (or `mint.name`); that is
- * what the row must name and what the Create button must mint. Anything else
- * (a number, null, a string that is not that shape) returns '' — the
- * empty-seed "of what?" fact, so the row's predicate (mintAvailable) keeps
- * hiding the mint affordance rather than minting a non-noun.
+ * mint-intent DSL — a structured `{mint:{label|name,…}}` object, or its
+ * serialized text — carries the noun under `mint.label` (or `mint.name`);
+ * that is what the row must name and what the Create button must mint.
+ *
+ * What counts as a noun is deliberately NARROW (advc-c3 D3):
+ *  - a bare (non-bracketed) string — the noun verbatim;
+ *  - the structured `{mint:{label|name}}` object (the drafting shape);
+ *  - WELL-FORMED JSON of that same shape (the `value` attribute can carry an
+ *    object only as text);
+ *  - the JS-OBJECT-LITERAL form the live wire actually delivered (unquoted
+ *    keys — receipt dom/draw-02.json), parsed by the quote/escape-aware
+ *    scanner below.
+ * Everything else — a JSON array (`["frobnicate","zymosolve"]`, the plausible
+ * array-typed-slot wire shape), a quoted scalar (`"frobnicate"`), a number,
+ * null, a bracketed string that is not the DSL shape — returns ''. That is
+ * the empty-seed "of what?" fact: the row's predicate (mintAvailable) keeps
+ * the mint affordance HIDDEN rather than minting a truncated or bracketed
+ * label (the pre-fix `[^"']*` regex stopped at an inner apostrophe —
+ * `{mint:{label:"O'Brien extract"}}` minted a record named "O").
  */
 function mintNounFromQuery(query: unknown): string {
   // (1) The structured mint-intent object (the shape the drafting contract emits).
@@ -185,28 +198,192 @@ function mintNounFromQuery(query: unknown): string {
   }
   if (typeof query !== 'string') return ''
   const trimmed = query.trim()
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return trimmed // a bare noun — byte-unchanged
-  // (2) Well-formed JSON -> recurse into the (1) object shape.
+  // A quoted SCALAR (`"frobnicate"`) is a serialized value, not a bare noun —
+  // the reviewer's pin: a quoted string is NOT a mintable noun (the pre-fix
+  // `startsWith('{')` gate let it through verbatim, label = `"frobnicate"`
+  // with the quotes). A bare noun never LEADS with a quote.
+  if (trimmed.startsWith('"') || trimmed.startsWith("'")) return ''
+  // A bare noun — byte-unchanged (never a bracketed serialized value).
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return trimmed
+  // (2) Bracketed: only WELL-FORMED JSON of the {mint:{label|name}} shape is a
+  // noun. A JSON ARRAY parses fine but is not the mint-intent shape — the same
+  // for a quoted scalar or a number: all return '' (the affordance stays
+  // hidden). The pre-fix code returned any non-`{` string verbatim, so
+  // `["frobnicate","zymosolve"]` reached the mint row as a "label".
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(trimmed)
-    return mintNounFromQuery(parsed)
+    parsed = JSON.parse(trimmed)
   } catch {
-    // Not JSON — the wire delivered the DSL as a JS-OBJECT-LITERAL string
-    // (unquoted keys, e.g. {mint:{label:"frobnicate",domain:"chemical"}}).
-    // (3) Parse the DECLARED DSL shape: the `mint` block's own `label`/`name`
-    //     field. Shape-driven (anchored on the DSL's property names) — this is
-    //     parsing a fixed contract structure, never a free-text / prompt
-    //     substring sniff. A string that is not that shape is NOT a noun.
-    const mintBlock = trimmed.match(/mint\s*:\s*\{([\s\S]*?)\}/)
-    if (mintBlock) {
-      const block = mintBlock[1]
-      const label = block.match(/label\s*:\s*["']([^"']*)["']/)
-      if (label && label[1].trim()) return label[1].trim()
-      const name = block.match(/name\s*:\s*["']([^"']*)["']/)
-      if (name && name[1].trim()) return name[1].trim()
+    parsed = undefined
+  }
+  if (parsed !== undefined) {
+    if (Array.isArray(parsed) || !parsed || typeof parsed !== 'object') return ''
+    const mint = (parsed as Record<string, unknown>).mint
+    if (mint && typeof mint === 'object' && !Array.isArray(mint)) {
+      const m = mint as Record<string, unknown>
+      if (typeof m.label === 'string' && m.label.trim()) return m.label.trim()
+      if (typeof m.name === 'string' && m.name.trim()) return m.name.trim()
     }
     return ''
   }
+  // (3) Not JSON — the wire delivered the DSL as a JS-OBJECT-LITERAL string
+  // (unquoted keys, e.g. {mint:{label:"frobnicate",domain:"chemical"}}; the
+  // LIVE wire form — receipt dom/draw-02.json). Parse the DECLARED DSL shape
+  // with a tolerant, QUOTE/ESCAPE-AWARE scanner (never the pre-fix
+  // /label\s*:\s*["']([^"']*)["']/ regex — it stopped at an inner apostrophe
+  // and truncated the noun). Shape-driven: anchored on the DSL's own property
+  // names (`mint`, then `label`/`name`), never a free-text / prompt substring
+  // sniff. A `{...}` that is not that shape — or any other non-object literal —
+  // is NOT a noun.
+  if (!trimmed.startsWith('{')) return ''
+  // The literal must span the WHOLE value — trailing junk
+  // (`{mint:{label:"a"}}extra`) is not the DSL shape (a bare noun's byte
+  // range would include it; a mintable noun does not carry it).
+  const outerClose = matchBrace(trimmed, 0)
+  if (outerClose === -1 || trimmed[outerClose + 1] !== undefined) return ''
+  const mintBlock = objectLiteralField(trimmed, 'mint', 'object')
+  if (mintBlock === null) return ''
+  const label = objectLiteralField(mintBlock, 'label', 'string')
+  if (label !== null && label.trim()) return label.trim()
+  const name = objectLiteralField(mintBlock, 'name', 'string')
+  if (name !== null && name.trim()) return name.trim()
+  return ''
+}
+
+const IDENT_CHARS = /[A-Za-z0-9_$]/
+const WS_CHARS = /[\t\r\n ]/
+
+/**
+ * The index just past the closing quote of the string that opens at `i`
+ * (`s[i]` is `"` or `'`), or -1 when the string is unterminated. A backslash
+ * escapes the NEXT character (an escaped quote is not the terminator), so a
+ * value like `"O'Brien extract"` is read WHOLE — the opening quote governs,
+ * and a quote of the OTHER kind inside the value is part of the value.
+ */
+function skipQuoted(s: string, i: number): number {
+  const quote = s[i]
+  let k = i + 1
+  while (k < s.length) {
+    const c = s[k]
+    if (c === '\\') {
+      k += 2
+      continue
+    }
+    if (c === quote) return k + 1
+    k++
+  }
+  return -1
+}
+
+/**
+ * The index of the `}` matching the `{` at `open` (brace-matching that
+ * respects quote/escape state — braces inside string values never count), or
+ * -1 when unbalanced.
+ */
+function matchBrace(s: string, open: number): number {
+  let depth = 0
+  let i = open
+  while (i < s.length) {
+    const c = s[i]
+    if (c === '"' || c === "'") {
+      const close = skipQuoted(s, i)
+      if (close === -1) return -1
+      i = close
+      continue
+    }
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  return -1
+}
+
+/** Decode the backslash escapes of a quoted literal's inner text. */
+function decodeQuoted(raw: string): string {
+  let out = ''
+  for (let k = 0; k < raw.length; k++) {
+    const c = raw[k]
+    if (c !== '\\') {
+      out += c
+      continue
+    }
+    k++
+    const e = raw[k]
+    if (e === undefined) break
+    if (e === 'u') {
+      const hex = raw.slice(k + 1, k + 5)
+      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+        out += String.fromCharCode(parseInt(hex, 16))
+        k += 4
+        continue
+      }
+      out += e
+      continue
+    }
+    const simple: Record<string, string> = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', '0': '\0' }
+    out += simple[e] ?? e
+  }
+  return out
+}
+
+/**
+ * A top-level field of an object-literal body (`body` INCLUDES the outer
+ * braces) by property NAME — the quote/escape-aware replacement for the
+ * pre-fix regex arms. Returns the field's value: `kind: 'object'` -> the
+ * field's raw `{...}` text; `kind: 'string'` -> the UNESCAPED string value.
+ * `null` when the key is absent, the value has the wrong kind, or the body is
+ * malformed (never throws). Only depth-1 (top-level) keys are read, and a
+ * key match must be a STANDALONE identifier (not a prefix/suffix of a longer
+ * name, not inside a string value), so e.g. `mints` / `xmint` / a `mint`
+ * inside a label value can never be mistaken for the DSL's `mint` block.
+ */
+function objectLiteralField(body: string, key: string, kind: 'object' | 'string'): string | null {
+  const n = body.length
+  if (n < 2 || body[0] !== '{') return null
+  let depth = 0
+  for (let i = 0; i < n; i++) {
+    const c = body[i]
+    if (c === '"' || c === "'") {
+      const close = skipQuoted(body, i)
+      if (close === -1) return null
+      i = close - 1
+      continue
+    }
+    if (c === '{') {
+      depth++
+      continue
+    }
+    if (c === '}') {
+      depth--
+      continue
+    }
+    if (depth !== 1) continue
+    if (!body.startsWith(key, i)) continue
+    const before = body[i - 1]
+    const after = body[i + key.length]
+    if ((before !== undefined && IDENT_CHARS.test(before)) || (after !== undefined && IDENT_CHARS.test(after))) continue
+    let j = i + key.length
+    while (j < n && WS_CHARS.test(body[j])) j++
+    if (body[j] !== ':') continue
+    j++
+    while (j < n && WS_CHARS.test(body[j])) j++
+    if (kind === 'object') {
+      if (body[j] !== '{') return null
+      const close = matchBrace(body, j)
+      if (close === -1) return null
+      return body.slice(j, close + 1)
+    }
+    if (body[j] === '"' || body[j] === "'") {
+      const close = skipQuoted(body, j)
+      if (close === -1) return null
+      return decodeQuoted(body.slice(j + 1, close - 1))
+    }
+    return null
+  }
+  return null
 }
 
 export function mintLabelFor(request: AiClarificationRequest, query: string): string {
