@@ -552,3 +552,20 @@ ClarificationPanel.tsx:147/:150-152 panel title, resolveNounsPass.ts:555 bar,
 scientist-intent-vocabulary.yaml volumeUl required:false (:31-33), ClarificationPicker.tsx:440/:447
 mint-from-live-query, clarificationAnswerPrompt.ts:24/:28 sentence + batch builders. Composer
 claims not re-verified by orch are the coder's own gate duties, not accepted evidence.
+
+### ORCH AMENDMENT 2 (l2t2110, 2026-11-02) — the card OWNS its prompts; bubble suppression must be derived from what actually RENDERS
+
+Closes advc-c4 D2 (authorization gap) and scopes fix run 3.
+
+1. RULING 2's "identity-derived seed" wording is SUPERSEDED. An identity-derived seed still flips the
+   card's visible prompts between the first-ask and repeat-ask wordings (advc-c4 measured it), because
+   card membership is by prompt STRING, not by slot identity. The authorized shape is the one fix run 2
+   shipped: `shownPrompts` / `groupedShownPrompts` start EMPTY and the card prints every prompt it owns,
+   exactly once, independent of the bubble's wording. The card, not the bubble, owns its prompts.
+2. `app/src/agent/ChatLog.test.tsx` is IN SCOPE: the browser-gate D3 pin's DOM owner moved from the
+   bubble `<p>` to the card, so the pin necessarily changes in that file.
+3. The bubble-side `<p>` may be suppressed ONLY for a request the card actually renders a prompt for.
+   Authorization for the suppression is ack'd, with that predicate as its condition (see fix run 3 D1).
+4. STILL OUT OF SCOPE, unchanged: the deferred 3b volume gate's own semantics and any new
+   parameter-input UI. A request the card cannot render keeps base behaviour (the bubble prints the
+   question once) until the item that owns that surface lands.
