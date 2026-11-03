@@ -140,3 +140,125 @@ SERVER: NOT TOUCHED (no `server/` path in the diff).
   identical request set (the freshpair-style grouped arm); D-2 expects the
   noun label + honest preview even if the model re-emits the mint DSL; D-3
   expects "Create" unclipped.
+
+---
+
+### CORRECTION (browser-gate fix3, advc-c3 D6) — arm-scoped determinism + like-with-like tsc comparison
+
+This section corrects two overstatements in the fix-run-2 report above. It does
+NOT rewrite the history; the original wording stands as written at that run.
+
+1. **"the card now renders deterministically for whatever identical slot set
+   it is given" (above, "Residual risk / honest limit") — TRUE for the grouped
+   arm, FALSE for the single-request arm at that commit.** advc-c3 D1 proved
+   (and re-probed) that the single-request arm's `shownPrompts` seed was still
+   `new Set([message.content])` (ChatLog.tsx:334 at ca73c3db), so the single
+   arm's card DID flip with the bubble's wording (first-ask 0 prompt
+   paragraphs, repeat-ask 1 — for the identical request; the gate's series A
+   is 9/10 single-request draws). The fix run above therefore closed D-1/D-4
+   only for the grouped arm. This run (fix3) closes the single arm: the
+   prompt-ownership invariant is now "the card owns its prompt" (seed no
+   longer reads message.content in EITHER arm; the bubble suppresses its
+   verbatim copy) — see the fix3 section below. The corrected claim: for
+   BOTH arms, the card renders deterministically for whatever identical slot
+   set it is given, and each prompt sentence is on screen exactly once.
+
+2. **"11 errors after, 10 fail-files at base — comm EMPTY ⇒ zero new
+   fail-files" (above, "Verification evidence") — CONFLATES an ERROR count
+   with a FILE count.** The correct like-with-like comparison at this tip:
+   `npx tsc --noEmit` (app) = 11 ERROR LINES after the fix3 run, ZERO of them
+   in files this run touched (ChatLog.tsx, ChatClarificationCard.tsx,
+   ClarificationPicker.tsx, the two new/updated test files); the 11 errors
+   are the pre-existing trunk set (tabNavPlugin, EventEditorContext,
+   deck/viewer tests, Viewer*, ingestion/*). Comparing 11 error lines to 10
+   fail-files was the error; the zero-new-in-touched-files conclusion is
+   unchanged and re-proven in the fix3 section below (error lines to error
+   lines).
+
+### browser-gate fix3 (advc-c3 cycle 3, D1/D2/D3/D4) — what changed
+
+- **D1 (HIGH) + D2 (MEDIUM), ONE invariant: the card OWNS its prompts.**
+  `ChatLog.tsx`: both arms now pass an EMPTY `shownPrompts` seed
+  (`new Set<string>()`) — the card renders every prompt ONCE (intra-card
+  dedupe for a shared prompt string), independent of the bubble's wording.
+  The bubble side of the invariant: `bubbleIsOwnedPrompt` suppresses the
+  bubble paragraph ONLY when a typed card is rendered (unanswered, >=1 typed
+  request) AND the content verbatim equals a prompt the card owns (the live
+  first-ask shape, useAiChat.ts:1543 `content = result.clarification.prompt`;
+  the repeat-ask bubble is the server's `clarification_loop:` text, which
+  matches no prompt and prints as-is). Result: each prompt sentence is on
+  screen EXACTLY ONCE — never twice (the double-print the gate measured),
+  never zero (the D2 defect), in BOTH the single-request and grouped arms,
+  for BOTH wordings. `ChatClarificationCard.tsx` unchanged in behaviour
+  (its local-copy dedupe now runs against the empty host seed — it owns slot 1
+  no longer hides it); prop contract documented. ORCH RULING 2 authorized the
+  single-arm seed derivation; nothing else in the single arm changed
+  (renderTypedClarification's dedupe logic, the answered row, the one-click
+  path are untouched).
+  Tests: `ChatLog.grouped.card1.test.tsx` — the D-1/D-4 pin now asserts the
+  card is identical across first-ask/loop wordings AND each prompt sentence
+  counts to EXACTLY 1 on screen in both wordings (count assertion, not
+  absence); a new single-arm pin in `ChatLog.test.tsx` asserts the card
+  prints the prompt in BOTH wordings (seed-independent) and total count 1;
+  the pre-existing owner pin (`renders a typed clarification request…`) now
+  asserts the question exactly once with the CARD owning the <p> (its intent
+  is unchanged; only the DOM owner moved from bubble to card).
+- **D3 (MEDIUM): the DSL unwrap is quote/escape-aware and narrow.**
+  `ClarificationPicker.tsx` `mintNounFromQuery`: (a) a quoted scalar
+  (`"frobnicate"`) is no longer passed through verbatim — a leading quote
+  returns ''; (b) a bracketed value is a noun ONLY if it is well-formed JSON
+  of the `{mint:{label|name}}` shape — a JSON array (`["frobnicate",
+  "zymosolve"]`) returns '' so `mintAvailable` keeps the affordance hidden;
+  (c) the JS-object-literal form (the live wire shape, receipt
+  dom/draw-02.json) is parsed by a tolerant QUOTE/ESCAPE-AWARE scanner
+  (`skipQuoted`/`matchBrace`/`decodeQuoted`/`objectLiteralField`) instead of
+  the pre-fix `/label\s*:\s*["']([^"']*)["']/` regex — a value is read from
+  its opening quote to its matching closing quote (backslash escapes
+  honored), so `O'Brien extract` unwraps WHOLE, never "O"; a `{...}` literal
+  must span the whole value (trailing junk is not the DSL shape); key matches
+  are standalone identifiers at depth 1 only (`mints`/`xmint`/a `mint` inside
+  a value never matches). Pin: a new D3 test in
+  `ChatClarificationCard.mint.test.tsx` (apostrophe leg asserts the FULL label
+  in the label input AND the mint CALL argument — never "O"; array + quoted
+  scalar + not-DSL legs assert the affordance is hidden and the search seed
+  is empty).
+- **D4 (LOW): the D-2 test's leg (b) mint-call assertion was leg (a)'s call.**
+  `mintLocalTerm` is not reset between legs inside the single `it` (only
+  afterEach resets it), so `mock.calls[0]` was leg (a) and the assertion
+  repeated the :312 check. Both legs now assert the LAST call (leg's own
+  mint) and leg (b) additionally pins `toHaveBeenCalledTimes(2)`.
+  Non-vacuity beyond the RED control: a MUTANT run (fixed product with a
+  4-char truncation of the string-form unwrap) fails leg (b) with
+  `expected 'frob' to be 'frobnicate'` — the last-call assertion pins the
+  wire-form call.
+- **D5 (LOW): CLOSED BY THE ORCHESTRATOR** (spec AMENDMENT 1 names ai.css in
+  scope). No code change; the three selectors stay.
+- **D6 (LOW): corrected above** (this section).
+
+### Verification evidence (fix3, real output)
+
+- RED control (fresh /tmp copy of the app, ONLY the three pre-fix product
+  files restored from ca73c3db, node_modules symlinked to the shared pnpm
+  store so vitest 1.6.1 resolves — same version as the worktree run):
+  `npx vitest run src/agent/ChatLog.grouped.card1.test.tsx
+  src/agent/ChatClarificationCard.mint.test.tsx src/agent/ChatLog.test.tsx`
+  → **5 failed / 34 passed (39)**: (1) D3 pin — `expected 'O' to be
+  "O'Brien extract"` (the regex truncation, the reviewer's exact probe);
+  (2)+(3) grouped card1 pins — card prints only slot 2
+  (`expected [ 'Which material is the solvent?' ] to deeply equal
+  [ 'Which material is the clofibrate stock?', 'Which material is the
+  solvent?' ]`) — slot 1 hidden, the D2 zero-print; (4) the owner pin —
+  `expected undefined to be 'Which material?'` (card has no <p>); (5) the new
+  single-arm D1 pin — `expected +0 to be 1` (card's prompt <p> count 0 on
+  first-ask). All five FAIL pre-fix and PASS in the worktree (GREEN).
+- GREEN (worktree): same 3-file command → 3 files / all pass; full acceptance
+  set (3 ChatLog files + answerChannel + bothfields + d3chrome + the four
+  ClarificationPicker suites) → **10 files / 85 tests, all pass**.
+- `npx tsc --noEmit` (app): **11 error lines, ZERO in the six touched files**
+  (the pre-existing trunk set: tabNavPlugin, EventEditorContext, deck/viewer
+  tests, Viewer*, ingestion/*).
+- `git diff --name-only`: six app/ paths only — NO server/, NO schema/, NO
+  records/.
+- NOT live :5193 (orch owns that; the reviewer's screenshot remains the
+  D-3-chrome evidence). The D3-chrome CSS pin is a source assertion, not a
+  measurement.
