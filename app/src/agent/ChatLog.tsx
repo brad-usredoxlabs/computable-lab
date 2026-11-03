@@ -327,32 +327,48 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
           const answered = hasClarification && isClarificationAnswered(messages, index)
           const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
-          // BGATE-FIX D3: the bubble's <p> has already shown message.content;
-          // seed the per-message prompt set with it so the typed cards print
-          // a prompt only when it is NOT already on screen (render-side
-          // dedupe — see renderTypedClarification).
-          const shownPrompts = new Set<string>([message.content])
-          // L2-CLARIFY-CARD-1 (browser-gate fix2, D-1 + D-4): the GROUPED card's
-          // dedupe must be stable across the bubble's wording. The bubble shows
-          // the PLAIN question on a first ask but the clarification_loop
-          // escalation on a repeat ask (the server flips message.content), so
-          // seeding the card from message.content makes the card's visible
-          // prompts — and its hash — FLIP between wordings for an IDENTICAL
-          // slot set (2 distinct hashes per 10 draws), and re-prints the first
-          // slot's question once the bubble stops carrying its exact text
-          // (the double-print). The grouped card owns its OWN first slot (the
-          // first request is the one the bubble's plain question / the loop
-          // escalation corresponds to), so its dedupe is seeded from the
-          // request set's identity (the first request's prompt), never from
-          // the bubble content: the same slot set renders byte-identically no
-          // matter what wording the bubble carries. The single-request and
-          // legacy arms keep the message.content seed above (the D3 pin —
-          // ChatLog.test.tsx "the prompt prints ONCE" — is untouched).
-          const groupedFirstPrompt = message.clarificationRequests?.[0]?.prompt
-          const groupedShownPrompts =
-            (message.clarificationRequests?.length ?? 0) > 1 && groupedFirstPrompt
-              ? new Set<string>([groupedFirstPrompt])
-              : shownPrompts
+          // BGATE-FIX D3 (render-side dedupe — see renderTypedClarification):
+          // the typed cards print a prompt only when it is NOT already on
+          // screen.
+          // L2-CLARIFY-CARD-1 (browser-gate fix3, advc-c3 D1 + D2 — ORCH RULING 2):
+          // the card OWNS its prompts. The bubble shows the PLAIN question on a
+          // first ask but the clarification_loop escalation on a repeat ask
+          // (useAiChat flips message.content), so seeding the dedupe from
+          // message.content made the card's visible prompts — and its hash —
+          // FLIP between wordings for an IDENTICAL slot set (2 distinct hashes
+          // per 10 draws; 9 of 10 gate draws are single-request), and re-print
+          // the first slot's question once the bubble stopped carrying its
+          // exact text (the double-print). An identity seed (the first request's
+          // prompt) is deterministic but HIDEs the prompt whenever the bubble
+          // does not carry it — the D2 zero-print (a card that always dedupes
+          // its own prompt is a question that is printed ZERO times on a
+          // loop-text bubble). So the card OWNS the print: an EMPTY seed means
+          // the card renders EVERY prompt ONCE (intra-card dedupe for a shared
+          // string), independent of the bubble's wording — the same slot set
+          // renders byte-identically no matter what the bubble carries. The
+          // BUBBLE side of the invariant lives in `bubbleIsOwnedPrompt` below:
+          // when the bubble verbatim carries a prompt the card owns (the live
+          // first-ask shape, useAiChat.ts:1543) it is suppressed, so the
+          // sentence is on screen EXACTLY ONCE — never twice (the double-print)
+          // and never zero (the card's owner slot always prints). (ORCH RULING 2
+          // authorizes the seed-derivation change in the single arm — the seed
+          // no longer reads message.content; nothing else in the single arm
+          // changes — renderTypedClarification's dedupe logic is untouched.)
+          const shownPrompts = new Set<string>()
+          const groupedShownPrompts = new Set<string>()
+          // D2 (advc-c3 fix3): the card is the deterministic OWNER of the typed
+          // message's prompts, so the bubble must not double-print the one it
+          // carries verbatim (the live first-ask shape, useAiChat.ts:1543:
+          // content === the first request's prompt). The bubble is suppressed
+          // ONLY when a typed card is actually rendered (unanswered, >=1 typed
+          // request) AND the content verbatim matches a prompt the card owns.
+          // A loop-escalation bubble (the repeat-ask content) matches no prompt,
+          // so it is printed as-is and the card still prints every prompt —
+          // exactly once each. The legacy block arm (no clarificationRequests)
+          // keeps its own promptDiffers dedupe and is never suppressed here.
+          const typedCardRendered = !answered && (message.clarificationRequests?.length ?? 0) > 0
+          const bubbleIsOwnedPrompt = typedCardRendered
+            && (message.clarificationRequests ?? []).some((r) => r.prompt === message.content)
           return <div key={message.id} className={bubbleClass}>
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           {message.shorthand !== undefined && (
@@ -368,8 +384,14 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               mention tokens as the SAME readable-token sentence as the
               answered row — the raw `[[material:…]]` wiki-markup the picker
               sends to the agent (byte-stable wire) never shows the scientist
-              their own turn. Token-free content passes through unchanged. */}
-          <p>{clarificationBubbleText(message.content)}</p>
+              their own turn. Token-free content passes through unchanged.
+              L2-CLARIFY-CARD-1 (advc-c3 D2, fix3): the bubble is OMITTED when
+              it verbatim carries a prompt the grouped card OWNS (the live
+              first-ask shape) — the card is the single owner of that sentence,
+              so printing it here too would be the double-print. Every other
+              bubble (loop escalation, a prose answer, a non-verbatim content)
+              prints as-is. */}
+          {!bubbleIsOwnedPrompt ? <p>{clarificationBubbleText(message.content)}</p> : null}
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
               When the typed requests ride the message (the universal done

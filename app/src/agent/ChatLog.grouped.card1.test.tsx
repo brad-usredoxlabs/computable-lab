@@ -108,34 +108,42 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
     expect(document.querySelector('.chat-log-clarification')).toBeNull()
   })
 
-  it('D1 (advc-c1 fix1): each slot prints its prompt ONCE — the bubble-printed prompt is deduped, the SECOND slot prompt is in the DOM after mount AND after a pick', () => {
+  it('D1 (advc-c1 fix1) / D2 (advc-c3 fix3): the card is the OWNER of the first slot prompt — it prints BOTH slot prompts once (the bubble that carried the first prompt verbatim is stripped), and the prompts survive a card-local re-render', () => {
     const onSubmit = vi.fn()
     const onPick = vi.fn()
     const { container } = render(<ChatLog {...props} onClarificationSubmit={onSubmit} onClarificationPick={onPick} messages={[clarMessage]} />)
 
-    // The card prints a slot's prompt only when the BUBBLE has not already
-    // printed that exact sentence (message.content = req1.prompt, so the bubble
-    // shows req1's question). req2's prompt is the ONLY one the card must print.
-    // Pre-fix (advc-c1 D1, BLOCKER) the card MUTATED the shownPrompts prop
-    // during render (ChatClarificationCard.tsx:117-118); the mount effect's
-    // setPicks({} then re-renders the card against the SAME (now-mutated) Set
-    // instance, so EVERY prompt reads as "already shown" and every
-    // <p class=chat-clarification-card__prompt> is dropped — the second slot's
-    // question never reaches the DOM. This pin asserts slot 2's prompt text is
-    // present after mount AND survives a pick (a card-local re-render).
+    // The card owns the first slot's prompt (deterministic, D2): slot 1 prints
+    // req1's question, slot 2 prints req2's — each ONCE. The bubble's content
+    // IS req1.prompt (the live first-ask shape, useAiChat.ts:1543), so the
+    // bubble paragraph would double-print it: it is stripped, and the card is
+    // the single owner. Pre-fix (advc-c1 D1) the card MUTATED the shownPrompts
+    // prop during render and the mount effect's re-render dropped every
+    // <p class=chat-clarification-card__prompt>; pre-fix2 (advc-c3 D2) the
+    // card hid slot 1 unconditionally (zero prints when the bubble did not
+    // carry the sentence). Both are wrong — exactly once is the invariant.
     const promptTexts = () =>
       Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
+    expect(promptTexts()).toEqual([req1.prompt, req2.prompt])
 
-    // After mount: exactly the second slot's prompt (the first is the bubble's).
-    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+    // Each prompt sentence appears EXACTLY ONCE on screen (bubble + card),
+    // not merely "present" — the double-print (twice) AND the zero-print
+    // (absent) are both defects.
+    const countOnScreen = (text: string) =>
+      Array.from(container.querySelectorAll('p')).filter((p) => p.textContent === text).length
+    expect(countOnScreen(req1.prompt)).toBe(1)
+    expect(countOnScreen(req2.prompt)).toBe(1)
 
-    // After a pick (a card-local re-render): the prompt must SURVIVE.
+    // After a pick (a card-local re-render): the prompts must SURVIVE.
     fireEvent.click(screen.getByTestId('fake-pick-req-1'))
-    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+    expect(promptTexts()).toEqual([req1.prompt, req2.prompt])
+    expect(countOnScreen(req1.prompt)).toBe(1)
 
     // After the second pick: still there.
     fireEvent.click(screen.getByTestId('fake-pick-req-2'))
-    expect(promptTexts()).toEqual(['Which material is the solvent?'])
+    expect(promptTexts()).toEqual([req1.prompt, req2.prompt])
+    expect(countOnScreen(req1.prompt)).toBe(1)
+    expect(countOnScreen(req2.prompt)).toBe(1)
   })
 
   it('keeps the submit disabled until BOTH slots are picked, then answers the sentence ONCE with the batch builder (never onClarificationPick)', () => {
@@ -179,43 +187,63 @@ describe('L2-CLARIFY-CARD-1 (P4): one card per sentence, one Submit, one answere
     expect(screen.queryByTestId('chat-clarification-card')).toBeNull()
   })
 
-  it('D-1/D-4 (browser-gate fix2): the grouped card is IDENTICAL across the first-ask and loop-escalation bubble wording — the per-slot prompt dedupe is IDENTITY-driven (the first request), never the bubble message.content', () => {
+  it('D-1/D-4 (browser-gate fix2) + D2 (fix3): the grouped card is IDENTICAL across the first-ask and loop-escalation bubble wording (identity-driven dedupe, never message.content) AND each prompt sentence is on screen EXACTLY ONCE in both wordings — never twice, never zero', () => {
     // The browser gate measured 2 distinct hashes per 10 identical draws: the
     // card's dedupe seeded from message.content flips when the bubble wording
     // flips (first-ask = the plain question; repeat-ask = the clarification_loop
-    // escalation). Same slot set, two bubble wordings -> the visible prompts
-    // must be the SAME (D-1 determinism) and the first request's question must
-    // NOT be re-printed in the card (D-4 — the bubble/loop already names it).
-    const visiblePrompts = (messages: ChatMessage[]): string[] => {
+    // escalation, which does NOT carry either prompt sentence). Same slot set,
+    // two bubble wordings -> the card must be byte-identical (D-1) and each
+    // prompt sentence must appear EXACTLY ONCE on screen (D-4's invariant is
+    // "exactly once", not "absent from the card": the card owns the first
+    // slot's prompt; the bubble must not double-print it, and the loop text
+    // must not leave it unprinted).
+    const visible = (messages: ChatMessage[]) => {
       const { container, unmount } = render(
         <ChatLog {...props} onClarificationSubmit={vi.fn()} onClarificationPick={vi.fn()} messages={messages} />,
       )
-      const texts = Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
+      const cardPrompts = Array.from(container.querySelectorAll('.chat-clarification-card__prompt')).map((p) => p.textContent)
+      const onScreen = (text: string) =>
+        Array.from(container.querySelectorAll('p')).filter((p) => p.textContent === text).length
+      const result = {
+        cardPrompts,
+        bubbleContent: (container.querySelector('.chat-log-msg--assistant') as HTMLElement).querySelector('p:not(.chat-clarification-card__prompt)')?.textContent ?? '',
+        count1: onScreen(req1.prompt),
+        count2: onScreen(req2.prompt),
+      }
       unmount()
-      return texts
+      return result
     }
-    // First-ask: the bubble carries the PLAIN question (the first request's prompt).
+    // First-ask: the bubble carries the PLAIN question (the first request's prompt) —
+    // the live shape (useAiChat.ts:1543: content = result.clarification.prompt).
     const firstAsk: ChatMessage = { id: 'm1', role: 'assistant', content: req1.prompt, clarificationRequests: [req1, req2], timestamp: 0 }
-    // Repeat-ask: the bubble carries the clarification_loop escalation (a DIFFERENT sentence).
+    // Repeat-ask: the bubble carries the clarification_loop escalation — the live
+    // server text (clarificationLoopAsk.ts:94), which does NOT carry either prompt
+    // sentence. The card must still print both prompts (exactly once each).
     const repeatAsk: ChatMessage = {
       id: 'm1',
       role: 'assistant',
-      content: 'clarification_loop: the draft names "clofibrate" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help.',
+      content: 'clarification_loop: the draft names "1 mM Clofibrate in DMSO" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. (2 questions looped this turn.) Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied.',
       clarificationRequests: [req1, req2],
       timestamp: 0,
     }
-    const first = visiblePrompts([firstAsk])
-    const repeat = visiblePrompts([repeatAsk])
-    // D-1: the card is byte-identical across the two bubble wordings.
-    expect(repeat).toEqual(first)
-    // D-4: the first request's question is NOT re-printed in the card in EITHER
-    // wording (the bubble's plain question / the loop escalation already names
-    // it) — so it is never printed twice on screen.
-    expect(first).not.toContain(req1.prompt)
-    expect(repeat).not.toContain(req1.prompt)
-    // No over-suppression: the SECOND slot's prompt is printed in both.
-    expect(first).toContain(req2.prompt)
-    expect(repeat).toContain(req2.prompt)
+    const first = visible([firstAsk])
+    const repeat = visible([repeatAsk])
+
+    // D-1: the CARD is byte-identical across the two bubble wordings.
+    expect(repeat.cardPrompts).toEqual(first.cardPrompts)
+    // The card owns BOTH prompts (the first slot is no longer hidden).
+    expect(first.cardPrompts).toEqual([req1.prompt, req2.prompt])
+    // Exactly once on screen in BOTH wordings — the first-ask bubble is
+    // stripped (it carried req1.prompt verbatim, so it would double-print),
+    // and the loop-text bubble does not suppress the card.
+    expect(first.count1).toBe(1)
+    expect(first.count2).toBe(1)
+    expect(repeat.count1).toBe(1)
+    expect(repeat.count2).toBe(1)
+    // The first-ask bubble no longer prints req1.prompt (the card owns it) —
+    // but the loop-ask bubble is the server's escalation text, verbatim.
+    expect(first.bubbleContent).not.toBe(req1.prompt)
+    expect(repeat.bubbleContent).toContain('clarification_loop:')
   })
 
   it('regression lock: a SINGLE request keeps the immediate one-click path and renders NO grouped card / NO submit', () => {

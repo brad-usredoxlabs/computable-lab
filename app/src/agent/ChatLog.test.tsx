@@ -121,12 +121,19 @@ describe('sequence conversation scrolling', () => {
           options: [{ id: 'o1', label: 'Clofibrate 1 mM' }, { id: 'o2', label: 'DMSO' }],
         }] },
     ]} />)
-    // BGATE-FIX D3: this message's bubble content IS the prompt, so the
-    // question renders ONCE (the bubble paragraph) instead of also inside
-    // the card — the whole point of the dedupe. Assert it once on the log.
-    expect(screen.getByRole('log', { name: 'Conversation' })).toHaveTextContent('Which material?')
+    // BGATE-FIX D3 (fix3, card-owns): the typed card OWNS the prompt <p> and
+    // the bubble (content === the prompt) is suppressed, so the question is on
+    // screen EXACTLY ONCE (the card's <p>), never twice. Pre-fix the bubble
+    // owned the <p> and the card deduped (box.querySelector('p') null); the
+    // owner moved to the card so it is deterministic across the bubble's
+    // wording (advc-c3 D1), and the bubble suppresses its verbatim copy (advc-c3
+    // D2). The single-click answer path is unchanged below.
+    const log = screen.getByRole('log', { name: 'Conversation' })
+    const questionCount = () =>
+      Array.from(log.querySelectorAll('p')).filter((p) => p.textContent === 'Which material?').length
+    expect(questionCount()).toBe(1)
     const box = screen.getByTestId('chat-log-request-req-1')
-    expect(box.querySelector('p')).toBeNull()
+    expect(box.querySelector('p')?.textContent).toBe('Which material?')
     fireEvent.click(screen.getByRole('button', { name: '1. Clofibrate 1 mM' }))
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
   })
@@ -346,6 +353,60 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     const card = screen.getByTestId('chat-log-request-req-keep')
     expect(card).toHaveTextContent('Which material?')
     expect(screen.getByRole('button', { name: '1. Clofibrate 1 mM' })).not.toBeNull()
+  })
+
+  it('D1 (advc-c3 fix3, ORCH RULING 2): the SINGLE-request arm is DETERMINISTIC across bubble wording — the card prints the prompt in BOTH wordings (seed-independent), and the prompt is on screen exactly once (the bubble drops its verbatim copy when it carries it)', () => {
+    // The single-request arm's dedupe was seeded from message.content, so the
+    // CARD's prompt paragraph flipped with the bubble's wording: first-ask
+    // (bubble = the plain question) the card DEDUPED it (0 card <p>s), the
+    // repeat-ask (bubble = the clarification_loop escalation, which does not
+    // carry the question) the card PRINTED it (1 card <p>) — the reviewer's
+    // probe: prompts = [] on first-ask, [question] on repeat-ask for the
+    // IDENTICAL request (9 of 10 gate draws are single-request). The seed no
+    // longer reads message.content: the card owns the prompt <p> in BOTH
+    // wordings, and the bubble suppresses its verbatim copy (leg 1) so the
+    // question is on screen EXACTLY ONCE either way.
+    const question = 'The draft names "DMEM" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.'
+    const request = {
+      id: 'req-d1', kind: 'material' as const, prompt: question, entityType: 'material' as const,
+      menuProvider: '/m' as const, query: 'DMEM', options: [] as { id: string; label: string }[],
+    }
+    const cardPromptCount = () => {
+      const card = document.querySelector('[data-testid="chat-log-request-req-d1"]')
+      return card ? [...card.querySelectorAll('p')].filter((p) => p.textContent === question).length : -1
+    }
+    const totalPromptCount = () => {
+      const row = document.querySelector('.chat-log-msg--assistant') as HTMLElement
+      return [...row.querySelectorAll('p')].filter((p) => p.textContent === question).length
+    }
+    // First-ask (the live done shape, useAiChat.ts:1543): the bubble content IS
+    // the question. The card OWNS the prompt <p>; the bubble is suppressed (it
+    // would double-print).
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar-first', 'assistant', question), clarificationRequests: [request] },
+    ]} />)
+    const firstCard = cardPromptCount()
+    const firstTotal = totalPromptCount()
+    expect(firstCard).toBe(1)
+    expect(firstTotal).toBe(1)
+    cleanup()
+    // Repeat-ask: the bubble is the clarification_loop escalation (the live
+    // server text does NOT carry the question sentence). The card still prints
+    // the prompt — the SAME card as the first-ask wording (determinism), and
+    // the question is still on screen exactly once.
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      message('u0', 'user', 'Add 100 ul of DMEM'),
+      { ...message('clar-loop', 'assistant', 'clarification_loop: the draft names "DMEM" (reason: unknown-noun), which the lab spine could not bind, and the SAME question has now been asked twice; a third identical card will not help. Answer the card (a pick is applied directly and ends the loop) or name an existing lab term explicitly; nothing was applied.'), clarificationRequests: [request] },
+    ]} />)
+    const repeatCard = cardPromptCount()
+    const repeatTotal = totalPromptCount()
+    expect(repeatCard).toBe(1)
+    expect(repeatTotal).toBe(1)
+    // D1: the card is identical across the two bubble wordings (no flip).
+    expect(repeatCard).toBe(firstCard)
+    // The answer controls are never gated by the dedupe.
+    expect(document.querySelector('.chat-log-clarification .message-log__clarification-picker')).not.toBeNull()
   })
 })
 
