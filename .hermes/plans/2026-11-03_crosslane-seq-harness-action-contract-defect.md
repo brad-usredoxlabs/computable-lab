@@ -25,6 +25,14 @@ workspace.'` :3495). Line numbers below are lane-1 trunk's.
 - Every turn ended `done {success:true}`. Gap turns surface the raw validator text as the user-visible
   answer; target-less turns surface the note `"Action sent — see the workspace."`
 
+### Breadth (added after the table): not a sequences-only problem
+
+The same question on `surface:"analysis"` — 2/2 turns returned `agent_action {open-surface,
+surface:"analysis"}` plus `done notes ["Opened analysis — nothing was written."]` and **zero `text` frames**.
+So a question is unanswerable on every surface that takes the forced-tool path; only the client-side
+reaction to a target-less action differs per surface (`/analysis`'s handler was not exercised in a browser,
+so its visible outcome is UNVERIFIED; the absence of answer text is verified from the frames).
+
 ## The contradiction, with anchors
 
 | layer | behaviour | anchor |
@@ -61,7 +69,9 @@ answer a question, or is it action-only by design?*
 
 ## Not claimed
 
-- Not graded: whether `/analysis`, event-editor or the other harness surfaces share the forced-tool
-  shape (probe not run there).
+- Partly graded: `/analysis` shares the forced-tool shape for questions (2/2, zero text frames);
+  event-editor (different endpoint `/ai/draft-events/stream`) and the remaining surfaces are NOT probed.
+- `/analysis`'s client-side reaction to a target-less action was not exercised in a browser — its visible
+  outcome there is UNVERIFIED.
 - The model used is whatever the server config resolves to (same as the browser); no per-turn thinking
   flag or history was supplied.
