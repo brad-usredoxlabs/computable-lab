@@ -16,8 +16,19 @@
  *  - dropping one event is local to that event: `setPreviewEventState(id,
  *    'rejected')`, the rest of the proposal stays staged.
  */
+import { useMemo } from 'react'
 import type { UseAiChatReturn } from '../shared/hooks/useAiChat'
+import { proposalRowFact, recordIdsFromLastUserMessage } from './proposalRowFacts'
 import './ChatPreviewCard.css'
+
+// L2-CLARIFY-TARGET-1 (Change 5 / P7): ONE module constant for the proposal's
+// reject verb — the bar's OWN word at :192 (the D1 guardrail's "row-action
+// uses the bar's verb"). The row button renders it when pending and `Restore`
+// when dropped; with `aria-label` = `${verb} ${fact}` two identically-worded
+// controls stay distinguishable. The D1 pin: the per-row toggle keeps calling
+// `chat.setPreviewEventState(event.eventId, …)` — this constant only names the
+// visible verb, it adds no second approval surface.
+const PROPOSAL_REJECT_VERB = 'Discard'
 
 function eventLabel(event: { eventId: string; event_type?: string; stepId?: string }): string {
   const kind = event.event_type ?? 'event'
@@ -95,6 +106,14 @@ function eventDetailLine(event: { details?: unknown }): string | null {
 }
 
 export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
+  // L2-CLARIFY-TARGET-1 (Change 5 / P7): `material label → record id` from the
+  // LAST user message (the answer sentence of the turn that produced the
+  // preview) via the EXISTING `parsePromptMentions` — no new grammar, no
+  // server field, no re-search (OQ3 ratified: the transcript's mention token
+  // is the id's only home; a label mismatch yields no id, never an invented
+  // one). `useMemo` over `chat.messages` (spec :391-397); null → rows render
+  // well ← volume ← material with no `(…)` suffix.
+  const recordIds = useMemo(() => recordIdsFromLastUserMessage(chat.messages), [chat.messages])
   if (!chat.hasPreview) return null
 
   const events = chat.previewEvents ?? []
@@ -141,6 +160,9 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
           {events.map((event) => {
             const state = chat.previewEventStates.get(event.eventId) ?? 'pending'
             const dropped = state === 'rejected'
+            // L2-CLARIFY-TARGET-1 (Change 5 / P7): the checkable row fact, once
+            // per row, shared by the detail line and the row-action aria-label.
+            const rowFact = proposalRowFact(event, recordIds ?? undefined)
             return (
               <li
                 key={event.eventId}
@@ -149,6 +171,18 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
                 <span className="chat-preview__event-text">
                   <span className="chat-preview__event-label">{eventLabel(event)}</span>
                   {(() => {
+                    // The row-fact line REPLACES the bare detail line when the
+                    // formatter yields a fact (no double line); an event with
+                    // no recognised field falls through to the eventDetailLine
+                    // line, and with neither, no line at all (dead chrome is
+                    // not added).
+                    if (rowFact) {
+                      return (
+                        <span className="chat-preview__event-details" data-testid="chat-preview-row-fact">
+                          {rowFact}
+                        </span>
+                      )
+                    }
                     const detail = eventDetailLine(event)
                     return detail ? (
                       <span className="chat-preview__event-details" data-testid="chat-preview-event-details">
@@ -157,15 +191,27 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
                     ) : null
                   })()}
                 </span>
-                <button
-                  type="button"
-                  className="chat-preview__toggle"
-                  data-testid={`chat-preview-toggle-${event.eventId}`}
-                  aria-pressed={dropped}
-                  onClick={() => chat.setPreviewEventState(event.eventId, dropped ? 'pending' : 'rejected')}
-                >
-                  {dropped ? 'Include' : 'Drop'}
-                </button>
+                {(() => {
+                  // The row-action verb is the BAR'S verb (D1 guardrail):
+                  // `PROPOSAL_REJECT_VERB` (the bar's own `Discard`) when
+                  // pending, `Restore` when dropped. The aria-label names the
+                  // row's fact (or the verb line) so two identically-worded
+                  // controls stay distinguishable. The D1 pin: the click path
+                  // is still ONLY `chat.setPreviewEventState(event.eventId, …)`.
+                  const rowLabel = rowFact ?? eventLabel(event)
+                  return (
+                    <button
+                      type="button"
+                      className="chat-preview__toggle"
+                      data-testid={`chat-preview-toggle-${event.eventId}`}
+                      aria-pressed={dropped}
+                      aria-label={`${dropped ? 'Restore' : PROPOSAL_REJECT_VERB} ${rowLabel}`}
+                      onClick={() => chat.setPreviewEventState(event.eventId, dropped ? 'pending' : 'rejected')}
+                    >
+                      {dropped ? 'Restore' : PROPOSAL_REJECT_VERB}
+                    </button>
+                  )
+                })()}
               </li>
             )
           })}

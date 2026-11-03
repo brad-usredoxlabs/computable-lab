@@ -23,8 +23,11 @@
  * keep approve DISABLED (no auto-accept); a real address (A1:B3) enables it.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useEffect, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiClarificationRequest, ChatMessage } from '../types/ai'
+import { PLATE_CONFIGS } from '../types/plate'
+import { WellSelectionProvider, useWellSelection } from '../shared/context/WellSelectionContext'
 import { ChatLog } from './ChatLog'
 import { ChatClarificationCard } from './ChatClarificationCard'
 
@@ -39,6 +42,18 @@ vi.mock('../event-editor/right-pane/ai/ClarificationPicker', () => ({
 afterEach(cleanup)
 
 const baseProps = { isStreaming: false, prompt: '', onPromptChange: vi.fn(), onSend: vi.fn(), onCancel: vi.fn(), onReview: vi.fn() }
+
+/** Seeds the well selection context with a fixed set of wells (the D3
+    affordance pins render the slot inside a real WellSelectionProvider —
+    `useOptionalWellSelection` is null-safe, so a real provider with a real
+    selection is the faithful harness). */
+function SelectionSeeder({ children }: { children: ReactNode }) {
+  const { selectWells } = useWellSelection()
+  useEffect(() => {
+    selectWells(['B2', 'A2', 'B3', 'A3']) // deliberately unsorted → the button sorts
+  }, [selectWells])
+  return <>{children}</>
+}
 
 // The live first-ask shape (useAiChat.ts:1543): the assistant bubble's
 // `content` IS the first request's prompt.
@@ -194,7 +209,132 @@ describe('D3b: the grouped card passes `disabled` to the TARGET-WELL slot arm', 
     expect(input.disabled).toBe(false)
     // empty text -> approve disabled (never a silent default), input still editable
     expect(approve.disabled).toBe(true)
-    fireEvent.change(input, { target: { value: 'A1:B3' } })
+    fireEvent.change(input, { target: { value: 'A1:B3' }})
     expect(approve.disabled).toBe(false)
   })
+})
+
+// ---------------------------------------------------------------------------
+// D3 (fix2, adversarial l2t0745 defect 3): the spec's FILL-only "use selected
+// wells" affordance (spec :362-364; the base slot's exact behavior) is
+// RESTORED. When `useOptionalWellSelection()` returns a non-empty selection,
+// a "Use selected wells (…)" button FILLS the input (sorted, comma-joined).
+// It FILLS, it does NOT answer: `onAnswer` is never called from it. With no
+// context (the run host) the button simply does not render — and
+// `useOptionalWellSelection()` is no longer a dead export (this run had
+// deleted the consumer and left the export orphaned).
+// ---------------------------------------------------------------------------
+describe('D3: the FILL-only "use selected wells" affordance is restored', () => {
+  it('no selection context ⇒ the button does not render (run host)', () => {
+    const message: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: wellsRequest.prompt,
+      clarificationRequests: [wellsRequest],
+      timestamp: 0,
+    }
+    render(<ChatLog {...baseProps} onClarificationPick={vi.fn()} messages={[message]} />)
+    expect(screen.getByTestId('clarify-well-target-slot')).toBeTruthy()
+    expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
+  })
+
+  it('empty selection ⇒ the button does not render', () => {
+    const message: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: wellsRequest.prompt,
+      clarificationRequests: [wellsRequest],
+      timestamp: 0,
+    }
+    render(
+      <WellSelectionProvider plateConfig={PLATE_CONFIGS['96']}>
+        <ChatLog {...baseProps} onClarificationPick={vi.fn()} messages={[message]} />
+      </WellSelectionProvider>,
+    )
+    expect(screen.getByTestId('clarify-well-target-slot')).toBeTruthy()
+    expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
+  })
+
+  it('a non-empty selection ⇒ the button FILLS the input and does NOT answer', () => {
+    const onClarificationPick = vi.fn()
+    const message: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: wellsRequest.prompt,
+      clarificationRequests: [wellsRequest],
+      timestamp: 0,
+    }
+    render(
+      <WellSelectionProvider plateConfig={PLATE_CONFIGS['96']}>
+        <SelectionSeeder>
+          <ChatLog {...baseProps} onClarificationPick={onClarificationPick} messages={[message]} />
+        </SelectionSeeder>
+      </WellSelectionProvider>,
+    )
+    const useSelected = screen.getByTestId('clarify-well-target-use-selected') as HTMLButtonElement
+    // the button names the selection (sorted — the base affordance's label):
+    expect(useSelected.textContent).toBe('Use selected wells (A2, A3, B2, B3)')
+    const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
+    // IT FILLS: clicking fills the input with the sorted selection …
+    fireEvent.click(useSelected)
+    expect(input.value).toBe('A2, A3, B2, B3')
+    // … and does NOT answer: no callback fired at all (the answer still
+    // requires the scientist's own approve of a valid address):
+    expect(onClarificationPick).not.toHaveBeenCalled()
+    const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
+    // the filled comma list is NOT a single address/range the ONE grammar
+    // accepts as one literal, so approve stays DISABLED after the fill (the
+    // scientist edits or re-enters a single well/range) — never a silent
+    // answer for the whole selection:
+    expect(approve.disabled).toBe(true)
+    // … and the scientist CAN approve a single well from the same input:
+    fireEvent.change(input, { target: { value: 'A2' } })
+    expect(approve.disabled).toBe(false)
+    fireEvent.click(approve)
+    expect(onClarificationPick).toHaveBeenCalledTimes(1)
+    const [, answer] = onClarificationPick.mock.calls[0]!
+    expect((answer as { value: string }).value).toBe('A2')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D2 (fix2, adversarial l2t0745 defect 2) at the SURFACE: the slot runs
+// `expandWellAddressLiteral(text) !== null` on EVERY keystroke in render.
+// Before the fix, "A1:ZZZ99" blocked the UI ~1.8 s per keystroke and
+// "A1:ZZZZ999" threw `RangeError: Set maximum size exceeded` OUT OF render
+// (React has no guard — the chat pane died). After the fix the endpoint gate
+// rejects these in O(1) before the ONE parser runs: the slot renders
+// (unmounted = pane dead), approve stays disabled, and no throw escapes.
+// ---------------------------------------------------------------------------
+describe('D2: the slot never throws out of render on unbounded range text', () => {
+  const message: ChatMessage = {
+    id: 'm1',
+    role: 'assistant',
+    content: wellsRequest.prompt,
+    clarificationRequests: [wellsRequest],
+    timestamp: 0,
+  }
+
+  it.each(['A1:ZZ99', 'A1:ZZZ99', 'A1:ZZZZ999'])(
+    'typing %s on the keystroke render path does not throw and keeps approve disabled',
+    (input) => {
+      render(<ChatLog {...baseProps} onClarificationPick={vi.fn()} messages={[message]} />)
+      const el = screen.getByTestId('clarify-well-target') as HTMLInputElement
+      const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
+      // simulate the keystrokes of the input (each change re-runs render and
+      // the O(1) endpoint check — pre-fix the last one threw / blocked ~2.6 s):
+      const chars = input.split('')
+      let typed = ''
+      for (const char of chars) {
+        typed += char
+        expect(() => fireEvent.change(el, { target: { value: typed } })).not.toThrow()
+      }
+      // the pane is still alive (the slot re-rendered) and the value is the
+      // typed text (nothing swallowed a render):
+      expect(el.value).toBe(input)
+      expect(screen.getByTestId('clarify-well-target-slot')).toBeTruthy()
+      // and the grammar REJECTED the text: approve stays disabled:
+      expect(approve.disabled).toBe(true)
+    },
+  )
 })

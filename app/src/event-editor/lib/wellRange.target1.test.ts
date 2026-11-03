@@ -30,7 +30,12 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { WELL_ADDRESS_SHAPE_RE, expandWellAddressLiteral, expandWellTokens } from './wellRange'
+import {
+  WELL_ADDRESS_SHAPE_RE,
+  expandWellAddressLiteral,
+  expandWellTokens,
+  isWellAddressLiteralShape,
+} from './wellRange'
 
 // ---------------------------------------------------------------------------
 // (1) the app's parity-pinned bounds are BYTE-IDENTICAL to the server's
@@ -109,6 +114,84 @@ describe('D4 (fix1) the app has ONE well-address grammar, parity-pinned to the s
   it('accepts a whitespace-padded address (trims) and a single well', () => {
     expect(expandWellAddressLiteral('  A1  ')).toEqual(['A1'])
     expect(expandWellAddressLiteral('H12')).toEqual(['H12'])
+  })
+
+  // -----------------------------------------------------------------
+  // (2b) fix2 (adversarial l2t0745 D2): the BOUNDED endpoint gate.
+  //     The reviewer MEASURED on the real module (before the fix):
+  //       "A1:ZZ99"   -> 69,498 tokens,  expandMs 19.5, result=null
+  //       "A1:ZZZ99"  -> 1,809,522 tokens, expandMs 966.7, result=null
+  //       "A1:ZZZZ999"-> RangeError: Set maximum size exceeded —
+  //                       THROWN INSIDE render (React has no guard)
+  //     `expandWellTokens` iterates the full rectangle and its RANGE_RE
+  //     accepts unbounded letters/digits; the slot runs
+  //     `expandWellAddressLiteral(text) !== null` on EVERY keystroke.
+  //     The fix validates the range ENDPOINTS against the SAME one parity
+  //     grammar (rows A–P, columns 1–24) BEFORE the ONE parser runs.
+  //     These pins assert the BOUND structurally (not by timing — timing
+  //     alone is too flaky): the shape gate rejects the endpoint in O(1)
+  //     (isWellAddressLiteralShape is false ⇒ expandWellAddressLiteral
+  //     returns null without ever calling expandWellTokens), and the call
+  //     can never throw out of a render-path check.
+  // -----------------------------------------------------------------
+  it('D2: the reviewer measured the three unbounded inputs before the fix — pinned here', () => {
+    // The reviewer's own measurement, quoted verbatim from the defect list
+    // (l2t0745, scratch copy of the pre-fix worktree, real module):
+    //   PERF "A1:ZZ99"    tokens=69498    expandMs=19.5  shapeCheckMs=13.3  result=null
+    //   PERF "A1:ZZZ99"   tokens=1809522  expandMs=966.7 shapeCheckMs=792.5 result=null
+    //   PERF_WORST "A1:ZZZZ999" -> RangeError: Set maximum size exceeded
+    // Post-fix, ALL THREE are rejected by the endpoint gate before the ONE
+    // parser is reached:
+    const reviewerInputs = ['A1:ZZ99', 'A1:ZZZ99', 'A1:ZZZZ999']
+    for (const input of reviewerInputs) {
+      // The bound: the endpoint fails the ONE parity grammar in O(1) (a
+      // pure regex test — no expansion, no loop over the rectangle):
+      expect(isWellAddressLiteralShape(input), `shape gate must reject ${input}`).toBe(false)
+      // … so the literal test returns null WITHOUT calling the ONE parser
+      // (the structural bound — a timing assertion alone is too flaky).
+      expect(expandWellAddressLiteral(input), `literal test must reject ${input}`).toBeNull()
+    }
+  })
+
+  it('D2: the three inputs can never throw out of a render-path check (they do not reach the parser)', () => {
+    // A throw here (RangeError: Set maximum size exceeded) would have taken
+    // the chat pane down: React has no guard around the render-path call.
+    // The gate makes this a plain `false`/`null` — wrap in try/catch so the
+    // pin FAILS (not crashes) if the parser is ever reached again.
+    for (const input of ['A1:ZZ99', 'A1:ZZZ99', 'A1:ZZZZ999', 'A1:ZZZZZZZZ99999']) {
+      expect(() => expandWellAddressLiteral(input)).not.toThrow()
+      expect(() => isWellAddressLiteralShape(input)).not.toThrow()
+    }
+  })
+
+  it('D2: the gate keeps accepting exactly the ONE grammar it always accepted (no new vocabulary)', () => {
+    // Single addresses and real ranges still pass the gate and expand:
+    expect(isWellAddressLiteralShape('A1')).toBe(true)
+    expect(isWellAddressLiteralShape('H12')).toBe(true)
+    expect(isWellAddressLiteralShape('P24')).toBe(true)
+    expect(isWellAddressLiteralShape('A1:H12')).toBe(true)
+    expect(isWellAddressLiteralShape('H12:A1')).toBe(true) // corners in any order
+    expect(isWellAddressLiteralShape('A1..H12')).toBe(true) // double-dot form
+    expect(expandWellAddressLiteral('A1:H12')).toHaveLength(96)
+    // … and still rejects what the grammar rejects (the same bounds, not a
+    // second set): loose columns, out-of-range rows, lowercase, two-letter
+    // rows, and every non-address endpoint:
+    expect(isWellAddressLiteralShape('A99')).toBe(false)
+    expect(isWellAddressLiteralShape('P99')).toBe(false)
+    expect(isWellAddressLiteralShape('A25')).toBe(false)
+    expect(isWellAddressLiteralShape('Q1')).toBe(false)
+    expect(isWellAddressLiteralShape('a1')).toBe(false)
+    expect(isWellAddressLiteralShape('AA1')).toBe(false)
+    expect(isWellAddressLiteralShape('A1:ZZ99')).toBe(false)
+    expect(isWellAddressLiteralShape('ZZ99:A1')).toBe(false)
+    expect(isWellAddressLiteralShape('A1:H25')).toBe(false)
+    expect(isWellAddressLiteralShape('control_well')).toBe(false)
+    expect(isWellAddressLiteralShape('')).toBe(false)
+    expect(isWellAddressLiteralShape('   ')).toBe(false)
+    // the gate is O(1) in the RECTANGLE (the input length is the only
+    // variable cost): an enormous shaped-but-legal endpoint (P24) and an
+    // enormous rectangle (A1:P24 = 384 wells) are both fine and bounded:
+    expect(expandWellAddressLiteral('A1:P24')).toHaveLength(384)
   })
 
   // -----------------------------------------------------------------

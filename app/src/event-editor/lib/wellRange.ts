@@ -40,17 +40,54 @@ const RANGE_RE = /^([A-Za-z]+)(\d+)(?::|\.\.)([A-Za-z]+)(\d+)$/
 export const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/
 
 /**
+ * L2-CLARIFY-TARGET-1 fix2 (adversarial l2t0745 D2) — the BOUNDED endpoint
+ * gate: a trimmed scalar is a single well address or a rectangular range
+ * whose BOTH endpoints are plate-address-shaped under `WELL_ADDRESS_SHAPE_RE`
+ * (rows A–P, columns 1–24 — the SAME one parity grammar, no second
+ * vocabulary). Endpoints may be given in any order ("H12:A1" == "A1:H12");
+ * row letters are case-sensitive (A–P) to match the parity-pinned
+ * WELL_ADDRESS_SHAPE_RE.
+ *
+ * This is a pure regex test — O(1), no expansion, no loop. `expandWellTokens`
+ * iterates the FULL rectangle and its `RANGE_RE` accepts unbounded
+ * letters/digits, so an un-shape-checked endpoint like "A1:ZZ99" expands
+ * ~69k tokens and "A1:ZZZZ999" throws `RangeError: Set maximum size exceeded`
+ * (measured on the reviewer's own probe: 19.5ms / 966.7ms / thrown inside
+ * render). Running this gate BEFORE the ONE parser makes a non-address
+ * endpoint O(1) — rejected before any expansion — so a typo or
+ * attacker-controlled range text can neither freeze the input nor throw out
+ * of render.
+ */
+const WELL_ADDRESS_LITERAL_RE = new RegExp(
+  // One endpoint, or two endpoints joined by the ONE parser's range
+  // separators (`:` or `..` — RANGE_RE `(?::|\\.\\.)`), both under the SAME
+  // one parity grammar. A single `.` is NOT a range separator (the parser
+  // never treats it as one) and is rejected here.
+  `^(?:${WELL_ADDRESS_SHAPE_RE.source.slice(1, -1)}(?::|\\.\\.)${WELL_ADDRESS_SHAPE_RE.source.slice(1, -1)}|${WELL_ADDRESS_SHAPE_RE.source.slice(1, -1)})$`,
+)
+
+export function isWellAddressLiteralShape(value: string): boolean {
+  return WELL_ADDRESS_LITERAL_RE.test(value.trim())
+}
+
+/**
  * The app's ONE address-literal test (parity mirror of the server's
  * `isWellAddressLiteral`, normalizeScientistIntent.ts:88): a trimmed scalar is
- * an address literal iff the ONE parser (`expandWellTokens`) resolves it to one
- * or more tokens AND every token is plate-address-shaped under
- * `WELL_ADDRESS_SHAPE_RE`. "A1:H12" -> 96 shaped tokens => literal;
- * "control_well" / "bogus_role" / "A1:ZZ99" (ZZ99 not shaped) -> NOT literal.
- * Returns null (not shaped) so the caller can disable the affordance.
+ * an address literal iff its endpoints pass the BOUNDED shape gate above AND
+ * the ONE parser (`expandWellTokens`) resolves it to tokens that are all
+ * plate-address-shaped under `WELL_ADDRESS_SHAPE_RE`. "A1:H12" -> 96 shaped
+ * tokens => literal; "control_well" / "bogus_role" / "A1:ZZ99" (ZZ99 not
+ * shaped) -> NOT literal. Returns null (not shaped) so the caller can disable
+ * the affordance.
+ *
+ * The gate runs FIRST (fix2/D2): a non-address endpoint never reaches
+ * `expandWellTokens`, so the cost is bounded by the input length, never by
+ * the rectangle area.
  */
 export function expandWellAddressLiteral(value: string): string[] | null {
   const trimmed = value.trim()
   if (!trimmed) return null
+  if (!WELL_ADDRESS_LITERAL_RE.test(trimmed)) return null
   const tokens = expandWellTokens([trimmed])
   if (tokens.length === 0) return null
   return tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token)) ? tokens : null
