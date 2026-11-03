@@ -109,18 +109,17 @@
 .view-spec__title { font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
 .view-spec__table { border-collapse: collapse; width: 100%; font-size: .85rem; }
 .view-spec__table th, .view-spec__table td { border: 1px solid #e5e7eb; padding: .3rem .5rem; text-align: left; }
-/* FAME-8 GATEFIX4 (D1 reachability): long cell values (e.g. a `flags` column)
-   and long header tokens must be READABLE within the default report pane, not
-   pushed off-screen by auto-layout min-content. `overflow-wrap: anywhere`
-   (unlike `word-wrap: break-word`) actually REDUCES a column's min-content, so
-   the table can shrink to the pane width instead of overflowing it; `white-space:
-   normal` lets long tokens wrap. Scoped to .view-spec__table th/td ONLY — the
-   FAME-LAYOUT-1 scroll door on .analysis-right (overflow:auto) and the
-   .chromatogram__table are untouched, so genuinely wide tables keep their
-   horizontal-scroll reachability. Generic: no column / artifact special-casing.
-   (Measured: the table's min-content collapses into the 574 px pane, no
-   horizontal scroll; cost is a taller table — see the l1t1855 report.) */
-.view-spec__table th, .view-spec__table td { overflow-wrap: anywhere; white-space: normal; }
+/* FAME-8 GATEFIX5 (supersedes the GATEFIX4 `anywhere` rule; architect decision 2026-11-02):
+   plain cells never break a token in layout — auto table layout sizes every column to its honest
+   min-content (longest whole token), so numbers and header words stay intact; `break-word` is only
+   the last-resort valve if a cell is ever artificially narrowed. Genuinely wide tables then exceed
+   the pane and stay reachable through the .analysis-right door (overflow:auto, :72-81);
+   `.view-spec__table { width:100% }` (:110) keeps narrow tables fitting. */
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+/* Array-valued cells (ViewRenderer value-shape branch, .view-spec__cell-item) keep D1's collapse —
+   they wrap anywhere INSIDE their own column — with a content floor so auto layout cannot starve
+   the column to one character. */
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
 .view-spec__table th { background: #f9fafb; font-weight: 600; }
 .view-spec__signal { max-width: 100%; color: #1971c2; }
 .view-spec__metric-value { font-size: 1.5rem; font-weight: 700; }
