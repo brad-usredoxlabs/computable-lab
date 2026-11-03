@@ -264,4 +264,54 @@ RED evidence in section 2 — that is the O1 reproduction the spec asks for).
   1a443259 in this worktree (12), and the post-change run is identical to it —
   the 21-line trunk figure remains what the merged layout must show.
 
+## 7. Independent re-verification pass (cl-coder, fresh run at af1c024c,
+## 2026-11-03 ~02:46 EST)
+
+All commands below were re-run from scratch on the committed worktree (clean
+`git status --porcelain` at HEAD af1c024c4914bf80f032c88585e1d7939d3baab8);
+none of this section is copied from section 4.
+
+7.1 `cd app && npx vitest run src/analysis/ViewRenderer.cellrender.test.tsx`:
+
+    RUN  v1.6.1 /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app
+    ✓ src/analysis/ViewRenderer.cellrender.test.tsx  (15 tests) 109ms
+    Test Files  1 passed (1)
+         Tests  15 passed (15)
+
+    (both files together: `... run src/analysis/ViewRenderer.cellrender.test.tsx
+    src/analysis/cssRuleScan.test.ts` -> `2 passed (2)` files, `25 passed (25)`
+    tests — 15 pin-suite + 10 parser-contract.)
+
+7.2 `cd app && npx tsc --noEmit`: exit 2 (pre-existing debt), 12 `error TS`
+lines, 0 in `src/analysis`. Normalized sorted diff of the error lines against
+the start-commit baseline capture (/tmp/tsc-base-l1pin.txt, measured at
+1a443259 in this worktree):
+
+    $ diff <(grep 'error TS' /tmp/tsc-base-l1pin.txt | sort) \
+           <(grep 'error TS' /tmp/tsc-verify-l1pin.txt | sort)
+    ERROR SET IDENTICAL: 12 error lines, zero new
+
+7.3 `git diff --stat 1a443259..HEAD` (re-run): exactly the four permitted
+paths (the two test/source files under app/src/analysis/, the report), 4 files
+changed, 665 insertions(+), 58 deletions(-). `git status --porcelain` empty.
+
+7.4 O1 fixture through the exported scanner, re-run with `node --input-type=module`
+importing ./src/analysis/cssRuleScan.ts directly (pre-fix path computed in the
+same process with the verbatim line-anchored regex for the RED record):
+
+    PRE-FIX line-anchored: rules=["@media (max-width: 900px)"] -> violations []
+    POST-FIX nested rule: {"selector":".view-spec__table td","decls":"overflow-wrap: anywhere;","atContext":["@media (max-width: 900px)"]}
+    POST-FIX violations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+
+    The pre-fix line-anchored scan collapses the O1 fixture to the single
+    pseudo-rule `@media (max-width: 900px)` and returns `[]` (the O1 evasion,
+    reproduced first-hand); the brace-depth scanner emits the nested rule with
+    `atContext ["@media (max-width: 900px)"]` and the ban fires — the evasion
+    no longer reproduces (spec AC 2 + AC 5).
+
+7.5 The RED capture referenced in section 2 (/tmp/red-run-l1pin.txt, 02:33)
+was re-inspected and matches the quoted summary exactly: 5 failed | 10 passed
+(15); failures are fixtures (a)-(d) plus the atContext-shape test (missing
+module `./cssRuleScan`).
+
 
