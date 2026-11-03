@@ -288,3 +288,98 @@ is committed first (C1); the DONE line below is stamped in a follow-up append co
 full sha — C1 being the commit that first contains this report.
 
 CHATHOST-SWEEPLEG DONE dbe9cfb5b5f0bccdbc42cf1dbcc00e8f577d2449
+
+---
+
+## FIX RUN 1 (l2t1405)
+
+Closes the adversarial cycle-1 verdict (FIX — 1 MAJOR D1, 1 MINOR D2;
+`/home/brad/.hermes/cl/lanes/2/reviews/CHATHOST-CONSOLIDATE-1-advc-c1-l2t1358.md` §2).
+Product code was accepted on substance; both defects were the inventory DATA lying
+about it. Two commits, one per defect, both on
+`cl/lane2-chathost-consolidate-1-l2t0410` (base tip `08251e85`, tree confirmed clean
+before starting).
+
+### D1 (MAJOR) — commit `e8ad1c8f` — `config/chat/chat-hosts.yaml` prose only
+
+All four falsified spots fixed, prose only (no `id:`/`surface:` touched, 6 hosts,
+order unchanged):
+- a. `:80` run-workspace `mount:` → `RunWorkspacePage.tsx:184 <SurfaceChatBridge
+  host="run-workspace">` (the ONE registrar, INSIDE EventEditorProvider) + deck slice
+  publisher `<DeckChatSlice/>` at `:183` (`DeckChatSlice.tsx:238`) — no second door.
+- b. `:88` note: the branch ships the J1 selectedWells channel through the deck slice —
+  the registrar passes its own base context to the ONE collector
+  (`collectSurfaceContext.ts`); `<DeckChatSlice/>` publishes the editor's live selection
+  as `contextPatch.selectedWells` (object form, `DeckChatSlice.tsx:182-184`) and the
+  collector merges it into the posted AiContext. No dead-file cite, no invented
+  replacement mechanism.
+- c. `:94` event-editor `mount:` → `DeckHostPage.tsx:147 <DeckChatSlice/>` +
+  `:148 <SurfaceChatBridge host="event-editor">` — no second door.
+- d. `:100` note: `AiContext.surface 'event-editor'` is declared by the deck slice
+  (`DeckChatSlice.tsx:41, :146`) and posted via the collector
+  (`collectSurfaceContext.ts:148`) — live locations replace `DeckSurfaceChat.tsx:97`.
+- e. `:125` record-host `mount:` line corrected `195` → `198` (`RecordSurfaceChat`
+  still exists at `RecordHostPage.tsx:34`; only the render line was wrong — verified
+  the render at :198).
+- Also: the file header's "SurfaceChatBridge / DeckSurfaceChat / RunSurfaceChatBridge
+  pattern" phrase (same defect class, and the required grep gate scans the whole file)
+  now names the ONE registrar.
+
+### D2 (MINOR) — commit `58284135` — honest `publisher:` values + pin 3 strengthened
+
+Measured at tip: the ONLY `usePublishSurfaceSlice(...)` call site in `app/src` is
+`DeckChatSlice.tsx:238` (`'deck'`), plus the definition
+(`SurfaceSliceStore.tsx:163`).
+- `deck` `publisher:` → `DeckChatSlice.tsx:238` (the real call site; the old value
+  `EventEditorContext.tsx:1372` is a state provider that publishes nothing — the
+  comment now says so).
+- `workspace` (`WorkspaceContext.tsx:89`) and `protocol-selection`
+  (`ProtocolSelectionContext.tsx:160`) marked honestly with a `NOT PUBLISHED` marker:
+  no `usePublishSurfaceSlice` call exists in `app/src` (spec §8.4 permits not
+  publishing slices the collector does not consume — the collector's `CollectorSlices`
+  carries no workspace slice; the registrar reads the focused step directly from
+  `ProtocolSelectionContext`, `SurfaceChatBridge.tsx:200`). The entries and their
+  `carries:` are kept; the owning provider is still named; nothing invented. Values are
+  double-quoted YAML scalars so the marker survives `?raw` + parse into the contract
+  test. The `slices:` header documents the marker convention.
+- Pin 3 (one-line-equivalent change, NOT skipped): the named file must still exist AND
+  — a published slice's file must contain a `usePublishSurfaceSlice(` call; a
+  `NOT PUBLISHED` slice must have NO call site for its id anywhere in `app/src` (test
+  files excluded — this pin's own failure messages name the call form; same idiom as
+  pin 5's `collectHostLiterals`). Both directions verified RED by mutation: (i) a
+  planted `usePublishSurfaceSlice('workspace', ...)` in `app/src` fails the
+  NOT-PUBLISHED arm naming the file; (ii) repointing `deck`'s publisher at
+  `collectSurfaceContext.ts:126` (a non-publisher) fails the call-site arm.
+  Probes removed after measuring; tree clean.
+- Optional LOW (OBS-1, `SurfaceChatBridge.tsx:147-149` `'deck'` literal): SKIPPED — the
+  change is a 1-line equivalent, but the task bounds this run to two commits and the
+  reviewer ruled it a smell, not a defect; recorded here so it is not forgotten.
+
+### VERIFY (raw output, all at final tip `58284135`)
+
+- `python3 .hermes/plans/harness/l2-trunk-journeys/chat-hosts-shrink-guard.py`:
+  `SHRINK-GUARD green (current sha=dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b; no blessed host dropped)`
+  `rc=0` — sha UNCHANGED from base AND after each commit (additive/prose-only).
+- `python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py | tail -3`:
+  `§6 T-4: the probe prompt is matched by the ONE CHATHOST-SWEEP canned block (non-vacuous) OK` / `SELFCHECK: PASS`
+- `cd app && npx vitest run src/shared/config/chatDoorRegistry.contract.test.ts src/shared/shell`:
+  `Test Files  22 passed (22)` / `Tests  109 passed (109)`
+- `cd app && npx tsc --noEmit`: 11 error lines (the worktree baseline; the 11th is
+  `src/editor/taptab/tabNavPlugin.ts`, untouched here). Touched files
+  (`config/chat/chat-hosts.yaml` is not TS; `chatDoorRegistry.contract.test.ts`):
+  ZERO new error lines.
+- `git -c core.fileMode=false diff --stat` (08251e85..HEAD):
+  `app/src/shared/config/chatDoorRegistry.contract.test.ts | 55 +++++++++++++++++++++-` /
+  `config/chat/chat-hosts.yaml | 45 ++++++++++++++++-------` / `2 files changed, 83 insertions(+), 17 deletions(-)`
+- `git status --porcelain`: empty (clean).
+- `grep -nE "RunSurfaceChatBridge|DeckSurfaceChat" config/chat/chat-hosts.yaml`:
+  no output (rc=1) — no deleted-component name remains anywhere in the file.
+
+### Boundaries held
+
+No rebase/push/merge; no `app/src/agent/**` or TARGET-1 files touched; no record
+writes; no formatting sweep; no stack restarts; prose kept short. The live six-host
+sweep remains the orchestrator's post-merge job (unchanged from the sweep-leg
+report).
+
+CARD-CONSOLIDATE1 FIX1 DONE 0000000000000000000000000000000000000000
