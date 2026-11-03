@@ -164,7 +164,13 @@ RAN (all green):
   -> **4 test files, 46 tests, all passed** (includes my 2 new array-cell pins).
 - RED->GREEN proof: my new `ViewRenderer.test.tsx` pin FAILED at base with
   `expected 'ALPHA_FLAG,BETA_FLAG' to be 'ALPHA_FLAGBETA_FLAG'` (the comma-joined run) and
-  PASSES after; the scalar pin is unchanged. (Receipts in this dir's git log / test output.)
+  PASSES after; the scalar pin is unchanged. Cited artifacts (filed by paperwork run l1t2105,
+  which re-ran both legs itself — see §9.2): receipts
+  `/home/brad/.hermes/cl/receipts/fame-8-gatefix4-l1t1855/test-green-head.txt` (worktree HEAD
+  `522040e9`: `Test Files 4 passed (4)` / `Tests 46 passed (46)`, exit 0) and
+  `/home/brad/.hermes/cl/receipts/fame-8-gatefix4-l1t1855/test-red-base.txt` (/tmp scratch with
+  `git show 5e861a0e:app/src/analysis/ViewRenderer.tsx` restored, HEAD tests kept:
+  `Test Files 1 failed | 3 passed (4)`, `Tests 1 failed | 45 passed (46)`, exit 1).
 
 NOT RUN (and why):
 - The broader AnalysisPage.* / ChromatogramView / CompareTraces / CalibrationCurveView
@@ -258,3 +264,46 @@ gone. The reviewer identified the fix as the 1-line, in-boundary tweak
 orchestrator is **carrying D2 as a follow-up rather than closing it here**, per its chosen
 closure for this defect (truthful restatement, not a code change). No product file was touched
 by this correction.
+
+### 9.2 [review defect 2] RED->GREEN proof cited a receipt that did not exist — filed
+
+What §6 used to say (pre-correction text at `522040e9`, report:161-163):
+
+> "... the scalar pin is unchanged. (Receipts in this dir's git log / test output.)"
+
+No such artifact existed. What the receipts dir actually held before this correction (`ls`
+counted first-hand: `json=7 png=5 js=5 txt=4`) was 7 measure/compare JSONs, 5 PNGs, 5 `.js`
+(the measure harness plus 4 probes: `compare-probe`, `compare-shot`, `diag-cols`,
+`door-probe`) and 4 `.txt` (`tsc-base`, `tsc-head`, `door-base`, `door-head`) — no vitest
+output at all, and the receipts dir is not a git repo (`git -C ~/.hermes/cl/receipts/.../
+rev-parse --show-toplevel` -> `fatal: not a git repository`), so "this dir's git log" pointed
+at nothing. The claim was therefore unsupported as written.
+
+Filed now, by actually running both legs in this run (paperwork run l1t2105):
+
+| leg | where | command (identical both legs) | artifact |
+|---|---|---|---|
+| GREEN (candidate) | worktree `FAME-8-GATEFIX4-lane1/app` @ `522040e9` | `npx vitest run src/analysis/ViewRenderer.test.tsx src/analysis/ViewRenderer.artifact-table.test.tsx src/analysis/ViewRenderer.compat.test.tsx src/analysis/ViewRenderer.signal.test.tsx` | `test-green-head.txt` |
+| RED (control) | `/tmp/f8pap-d2/app` — `cp -r` copy of the worktree `app/`, `app/node_modules` symlink preserved, then `git show 5e861a0e:app/src/analysis/ViewRenderer.tsx` restored over it (sha256 `d44a08e5…`, byte-identical to base), HEAD test file kept | same | `test-red-base.txt` |
+
+Actual output, quoted:
+
+GREEN (`test-green-head.txt`):
+```
+ Test Files  4 passed (4)
+      Tests  46 passed (46)
+EXIT=0
+```
+RED (`test-red-base.txt`):
+```
+ FAIL  src/analysis/ViewRenderer.test.tsx > TableView array-valued cells (FAME-8 GATEFIX4 reachability) > renders an array cell as one element per line (not a comma-joined run)
+AssertionError: expected 'ALPHA_FLAG,BETA_FLAG' to be 'ALPHA_FLAGBETA_FLAG' // Object.is equality
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 45 passed (46)
+EXIT=1
+```
+
+Both files record their own command line, the revision they ran against, and the timestamp in
+their headers. The worktree was not modified by the RED leg (the scratch copy was made and the
+revert applied there only); `/tmp/f8pap-d2` was removed after the run. The one-file RED proves
+the new pin is non-vacuous: it fails on the pre-fix renderer and passes on the candidate.
