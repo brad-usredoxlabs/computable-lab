@@ -408,6 +408,53 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     // The answer controls are never gated by the dedupe.
     expect(document.querySelector('.chat-log-clarification .message-log__clarification-picker')).not.toBeNull()
   })
+
+  // advc-c4 D1 (HIGH, fix run 3, ORCH AMENDMENT 2 §3): the bubble-suppression
+  // predicate must follow what the card ACTUALLY RENDERS, not the request
+  // count. The server emits `menuProvider: 'choice'`, `options: []` for any
+  // fact whose argument declares no domain (shorthandChat.ts:883-887,
+  // 903-907 — `volumeUl` is `kind: quantity` with no domain); for that shape
+  // renderTypedClarification returns null (no options, no picker) and the
+  // grouped card offers no answer surface for it either, so NOTHING renders
+  // a prompt. Pre-fix the bubble (content === request.prompt) was still
+  // suppressed by the request-COUNT predicate — the question printed ZERO
+  // times and the assistant row rendered empty (the reviewer's probe:
+  // base = 1 print, HEAD = 0 prints, 0 card divs). With the render-derived
+  // predicate the card renders nothing for this request, so the bubble
+  // KEEPS BASE behaviour: the question prints exactly once, in the bubble.
+  it('D1 (advc-c4 fix3, AMENDMENT 2): the unrenderable choice/options:[] request keeps its bubble question — the prompt is on screen EXACTLY ONCE and the assistant row is not empty', () => {
+    // The EXACT shape the server emits for a non-domain (quantity) fact:
+    // menuProvider 'choice' (no readings, no domain), options: [] (no
+    // candidates to offer), and the done arm's content === request.prompt
+    // (useAiChat.ts:1543). `volumeUl` (kind: quantity, no domain) is the
+    // deferred 3b gate's shape — its surface is OUT of scope here; this pin
+    // only asserts the question is not lost.
+    const question = 'The draft omits a required value for "volumeUl" (missing-required). What volume should be used?'
+    const request = {
+      id: 'req-vol', kind: 'general' as const, prompt: question, entityType: 'general' as const,
+      menuProvider: 'choice' as const, options: [] as { id: string; label: string }[],
+    }
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      message('u0', 'user', 'Add DMEM to the plate'),
+      { ...message('clar-vol', 'assistant', question), clarificationRequests: [request] },
+    ]} />)
+    const row = document.querySelector('.chat-log-msg--assistant') as HTMLElement
+    const rowText = row.textContent ?? ''
+    // The assistant row is NOT empty: it carries the question.
+    expect(rowText).toContain(question)
+    // The question is on screen EXACTLY ONCE (the bubble paragraph) — no
+    // double-print (the card renders no prompt for this shape) and no
+    // zero-print (the pre-fix regression: count 0, empty row).
+    const exactParas = Array.from(row.querySelectorAll('p')).filter((p) => p.textContent === question).length
+    expect(exactParas).toBe(1)
+    // The substring counter (advc-c4 D3): a re-print inside a LONGER
+    // paragraph would be invisible to the exact-<p> count — the row text
+    // carries the sentence exactly once as well.
+    expect(rowText.split(question).length - 1).toBe(1)
+    // No card divs for this shape (the single arm renders nothing for a
+    // choice/options:[] request) — the bubble is the owner.
+    expect(document.querySelector('.chat-log-clarification')).toBeNull()
+  })
 })
 
 /**
