@@ -168,7 +168,10 @@ function resolveNestedSelectors(head: string, parent: string): string[] {
   if (head.includes('&')) {
     // Ambiguous `&` placement: substitute per the `:is()` equivalence AND
     // compose as an implicit descendant. Both forms retain the parent.
-    const substituted = head.replaceAll('&', parentParts.join(', '))
+    // (Function replacement so a `$` in the parent text stays literal;
+    //  `replace(/&/g, …)` instead of `replaceAll` — the project's tsc
+    //  lib target predates ES2021.)
+    const substituted = head.replace(/&/g, () => parentParts.join(', '))
     return [substituted, ...parentParts.map((p) => `${p} ${head}`)]
   }
   // No `&`: relaxed nesting — implicit descendant, distributed over the

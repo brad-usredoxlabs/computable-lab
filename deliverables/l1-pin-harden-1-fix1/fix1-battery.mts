@@ -91,7 +91,11 @@ const battery: [number, string, string, string[]][] = [
     FLOOR + `@media (max-width: 900px) { .view-spec__table td { color: red; margin: 0; overflow-wrap: anywhere; } }\n`, ANY],
 ]
 
-console.log('== BATTERY (review §3) against', new URL('./cssRuleScan.ts', import.meta.url).pathname, '==')
+// FIX RUN 2 (advc2 defect 2): print the RESOLVED path of the module
+// actually imported (argv[2]), not a hardcoded sibling path — the old
+// banner named deliverables/l1-pin-harden-1-fix1/cssRuleScan.ts, a file
+// that is not committed and was never the module under test.
+console.log('== BATTERY (review §3) against', resolve(process.cwd(), scannerPath), '==')
 let pass = 0
 for (const [n, label, css, expected] of battery) {
   const got = sourceViolations(css)

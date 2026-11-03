@@ -1,0 +1,35 @@
+== BATTERY (review §3) against /tmp/fix2-battery-prefix/cssRuleScan.ts ==
+case  1 [OK ] multi-line @media -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  2 [OK ] one-line @media -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  3 [OK ] @supports -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  4 [OK ] @layer -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  5 [OK ] @container -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  6 [OK ] two-deep @media > @supports -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  7 [OK ] :is(th, td) inside @supports -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  8 [OK ] selector split across lines -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case  9 [OK ] @media no space after name -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 10 [OK ] @media screen and (...) -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 11 [OK ] rule brace and at-rule brace on same line -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 12 [OK ] commented-out rule (benign) -> []
+case 13 [OK ] NESTED: at-rule inside style rule (review case 13) -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 14 [OK ] NESTED: & td inside .view-spec__table (review case 14) -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 15 [OK ] comment between prelude and brace -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 16 [OK ] UPPERCASE decl -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 17 [OK ] CSS escape-encoded td: \74 d (review case 17) -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+case 18 [OK ] benign: floor only, no at-rules -> []
+case 19 [OK ] benign @media block over conforming floor (fixture e shape) -> []
+case 20 [OK ] 3 declarations including anywhere -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+battery: 20/20 match expectation
+STACK a: ["@media A"] OK
+STACK b: ["@media A","@supports B"] OK
+STACK c: ["@media A"] OK
+STACK d: [] OK
+STACK side-by-side a: ["@media A"] OK
+STACK side-by-side a2: ["@media C"] OK
+FAIL-CLOSED unbalanced open @media (floor rule inherits open context) -> ["no .view-spec__table th/td rule declares overflow-wrap: break-word"] OK (flagged)
+rules(unbalanced @media): [".x"]
+FLOOR break-word only in @media -> ["no .view-spec__table th/td rule declares overflow-wrap: break-word"] OK
+DOOR door only in @media -> [".analysis-right no longer declares overflow: auto (FAME-LAYOUT-1 door regressed)"] OK (flagged)
+BENIGN @media over conforming floor -> [] OK
+BOTH unconditional+conditional break-word -> [] OK
+SHIPPED AnalysisPage.css -> [] OK
