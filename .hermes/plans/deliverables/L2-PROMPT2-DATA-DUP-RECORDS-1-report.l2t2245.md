@@ -223,9 +223,14 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
     missing shipped block)
   - fe913e3f — THE ONE data commit: YAML block + closed meta-schema property + one optional
     interface field + contract test + 6 fixture dirs (GREEN 5/5)
-  - 365c3333 — the evidence-trail docs commit (final report + remaining receipts). It is the
-    current branch tip and was authored after the run died at report-finalize; it is the commit
-    that carries this report, not a hypothetical "this commit".
+  - 365c3333 — the run's evidence-trail docs commit (final report + remaining receipts), authored
+    after the run died at report-finalize.
+  The cycle-2 review-response commit that carries the text you are reading is the HEAD of this
+  branch at read time: in `git -c core.fileMode=false log --oneline -5` it is the first line, ahead
+  of the commits listed above (252f5feb, then 365c3333, ...). Its sha is deliberately NOT written
+  into this file — naming it here would make this paragraph false the moment it is committed.
+  Authoritative chain as observed before that commit:
+  .hermes/plans/receipts/L2-PROMPT2-DATA-DUP-RECORDS-1/l2t2245/commit-chain-at-head.txt.
   Data-repo commits (lane-2 store, API-produced, 78b3f623..394f384c): 15 deletes
   (bc4c692e b54edecd b1ef4dbe a77dd211 20aad60b eef726c1 798ba6e9 80f1bacc 92c617fb d1ce44a7
   34aa406c b6d17972 ebb88f86 a7faaad4 0442b918) + 1 label fix (c8ef996d), interleaved with the
@@ -251,7 +256,8 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
   survives; the after set additionally carries ontology rows BAO:0000118 and CHEBI:28262 @0.75, per
   non-vacuity-analysis.txt:13-15). Dumps CHANGED — non-vacuity leg holds.
 (4) Files changed (lane branch): the five in-scope files of commit fe913e3f (2 schema YAMLs,
-  vocabulary.ts, the new test, 6 fixture dirs) + the docs commit 365c3333 (this report + receipts).
+  vocabulary.ts, the new test, 6 fixture dirs) + the evidence-trail docs commits — 365c3333 and the
+  cycle-2 review-response commit that follows it (this report + receipts).
   Lane-2 DATA store:
   16 API-produced commits (15 deletes + 1 label fix) + index rebuilds; no hand edits anywhere.
 (5) Reviewer hardest checks: the "What a reviewer should check hardest" section above (raw
