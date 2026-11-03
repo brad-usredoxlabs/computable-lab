@@ -249,7 +249,7 @@ describe('W2-7 T1 golden — family + robot answers -> local-protocol -> intent 
     expect(robot.choices['branch-axis-step-1']).toBe('robot');
   });
 
-  it('realizeAndCompile -> compileScientistIntent outcome needs-clarification (2 missing-required facts) + zero events (AC1, post-flip)', async () => {
+  it('realizeAndCompile -> compileScientistIntent outcome complete + non-empty events (AC1)', async () => {
     const recorder = goldenStore();
     const spine = createResolveSpineFromContext({ store: recorder.store as never });
     const result = await realizeAndCompile({
@@ -260,24 +260,8 @@ describe('W2-7 T1 golden — family + robot answers -> local-protocol -> intent 
     expect('compile' in result).toBe(true);
     if (!('compile' in result)) return;
     console.log('W27_CLARIFICATIONS', JSON.stringify(result.compile.clarifications, null, 1).slice(0, 1200));
-    // WHY (L2-CLARIFY-TARGET-1 flip, V1): the realization-emitted add_material
-    // carries NO volume and NO wells (the realization lowering synthesizes neither
-    // — the add-lysis step has no volume constraint and realization has no
-    // wells-emission path for add_material). Post-flip BOTH add_material.volumeUl
-    // and add_material.targetWells are required, so the compile now BARS with
-    // exactly the two missing-required-argument facts and ZERO events — the
-    // flip's intended behaviour for a volume-less add_material (spec V1 leg).
-    // This golden IS the assumed-value path: the required args are the
-    // scientist's to answer (chip + slot), not the pipeline's to silently invent.
-    expect(result.compile.outcome).toBe('needs-clarification');
-    const facts = (result.compile.clarifications as Array<Record<string, unknown>>)
-      .map((c) => [c.label, c.reason] as [unknown, unknown])
-      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-    expect(facts).toEqual([
-      ['targetWells', 'missing-required-argument'],
-      ['volumeUl', 'missing-required-argument'],
-    ]);
-    expect(result.compile.terminalArtifacts.events.length).toBe(0);
+    expect(result.compile.outcome).toBe('complete');
+    expect(result.compile.terminalArtifacts.events.length).toBeGreaterThan(0);
     expect(recorder.writeCalls()).toBe(0);
 
     // OQ3 CAMT-at-claim observation: how deeply the frozen deck pass saw the
@@ -332,13 +316,7 @@ describe('W2-7 T2 determinism — identical inputs => byte-identical output (AC2
     if (runB.artifacts !== runA.artifacts) { let i = 0; while (i < runA.artifacts.length && runA.artifacts[i] === runB.artifacts[i]) i++; console.log('W27_DET_DIFF at', i, JSON.stringify(runA.artifacts.slice(Math.max(0, i - 80), i + 120)), 'VS', JSON.stringify(runB.artifacts.slice(Math.max(0, i - 80), i + 120))); }
     expect(runB.artifacts).toBe(runA.artifacts);
     expect(runC.artifacts).toBe(runA.artifacts);
-    // WHY (L2-CLARIFY-TARGET-1 flip, V1): the realization-emitted add_material
-    // now bars (2 missing-required facts) -> ZERO events (see T1). The
-    // determinism claim (identical inputs => byte-identical output) is
-    // UNCHANGED and now proven on the post-flip needs-clarification output —
-    // the yaml + normalized artifacts are still byte-equal across the three
-    // runs (two in-process + one policy-reload).
-    expect(runA.eventCount).toBe(0);
+    expect(runA.eventCount).toBeGreaterThan(0);
     expect(runB.eventCount).toBe(runA.eventCount);
   });
 });

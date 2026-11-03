@@ -157,24 +157,13 @@ actions:
   });
 
   it('CHARACTERIZATION (post-C2, green today): volume object + compact range reach 96 per-well events — the guard does NOT fire for carryable values', async () => {
-    // WHY (L2-CLARIFY-TARGET-1 flip): post-flip add_material declares
-    // targetWells kind:wells required, so a STRING compact range ("A1:H12") is a
-    // SYMBOLIC label that the doc-door spine-routes (simpleVerbs.ts:535-538;
-    // resolutionEngine.ts:490/516) -> unknown-address, and the normalizer drops
-    // it (it only carries the ARRAY form, normalizeScientistIntent.ts:633/654).
-    // The spec's canonical form is the ARRAY (RED item 3: "targetWells: [A1]
-    // yields none"; shorthandChat.ts:1468 `targetWells: [A1]`); the lowering
-    // (addMaterialExpander simpleVerbs.ts:550-557) expands [A1:H12] through the
-    // SAME one parser to the SAME 96 per-well events. Convert the fixture to the
-    // array form to preserve the 96-event + volume-object subject (no
-    // assertion weakening).
     const compiled = await compileReal(`intentId: reach-volume-object
 actions:
   - action: add_material
     labware: plate
     material: Test Reagent
     volume: { value: 50, unit: uL }
-    targetWells: [A1:H12]
+    targetWells: A1:H12
 `);
     expect(compiled.clarifications).toEqual([]);
     expect(compiled.outcome).toBe('complete');
@@ -378,17 +367,13 @@ actions:
   });
 
   it('GHOST leg: the plain-material live prompt yields 96 ghostable per-well events (wells + volume carriers the deck ghosts)', async () => {
-    // WHY (L2-CLARIFY-TARGET-1 flip): same string->array conversion as the
-    // CHARACTERIZATION leg above (the spec's canonical array form; the lowering
-    // expands [A1:H12] to the same 96 per-well events; the array is invisible to
-    // the doc-door). Preserves the 96-event ghost subject.
     const compiled = await compileReal(`intentId: live-plain-dmem
 actions:
   - action: add_material
     labware: plate
     material: DMEM
     volume: { value: 50, unit: uL }
-    targetWells: [A1:H12]
+    targetWells: A1:H12
 `);
     expect(compiled.outcome).toBe('complete');
     expect(compiled.clarifications).toEqual([]);
