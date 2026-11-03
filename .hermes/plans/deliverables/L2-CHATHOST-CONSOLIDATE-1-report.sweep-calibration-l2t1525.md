@@ -155,8 +155,16 @@ not a host-name comparison). The route-shape rule is the only branch; policy sta
 in YAML; the other five hosts stay seedless. Teardown deletes the record.
 
 **Commands + raw results (counts, not dumps):**
-- `python3 _u1_rerun_probes.py` (fake model, live stack) →
-  `VERDICT artifact-host=GREEN`, `RESTORE_OK=True`.
+- The two probes were driven by an ad-hoc helper `_u1_rerun_probes.py` that was **never
+  committed** (it is absent from the tree; only a stale
+  `.hermes/plans/harness/l2-trunk-journeys/__pycache__/_u1_rerun_probes.cpython-314.pyc`
+  remains), so `python3 _u1_rerun_probes.py` is NOT reproducible by a reader. The receipts
+  below are the **evidence of record**. The nearest committed entry point that exercises the
+  same chat-host probe path (it builds each `probe-<host>.yaml` from the inventory and runs
+  it, `run-journeys.py:1042-1049`) is `python3
+  .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --all --fake --chat-hosts` against
+  the live lane stack — it writes a fresh dated receipt dir, it does not re-emit the one
+  below verbatim. Result recorded then: `VERDICT artifact-host=GREEN`, `RESTORE_OK=True`.
 - Receipt dir `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/`:
   `artifact-host.json` `verdict=green`, `n_ai_request_bodies=3`, request body carries
   the sweep prompt; `artifact-host-ui.json` `assistant_turns=1 turns_completed=1
@@ -189,10 +197,13 @@ browser/stack): the probe's own `assert.rendered` scores a pane-absent fixture
 (0 assistant turns) RED and a pane-present fixture (1 non-empty answer) GREEN.
 
 **Commands + raw results (counts, not dumps):**
-- `python3 test-channel-selfcheck.py` → `SELFCHECK: PASS` (9 new U1a/U1b arms OK,
-  including the pane-absent→RED negative control).
-- `python3 _u1_rerun_probes.py` (fake model, live stack) →
-  `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`.
+- `python3 test-channel-selfcheck.py` → `SELFCHECK: PASS` (10 new U1a/U1b arms OK — 5 U1a +
+  5 U1b, including the pane-absent→RED negative control).
+- The same **uncommitted** ad-hoc helper `_u1_rerun_probes.py` (see U1a above; absent from
+  the tree) drove the run-workspace probe; the receipt dir below is the evidence of record.
+  Committed reproducible entry point: `python3
+  .hermes/plans/harness/l2-trunk-journeys/run-journeys.py --all --fake --chat-hosts`.
+  Result recorded then: `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`.
 - Same receipt dir: `run-workspace.json` `verdict=green`, `n_ai_request_bodies=3`,
   request body carries the sweep prompt; `run-workspace-ui.json`
   `assistant_turns=1 turns_completed=1 last_assistant_text_nonempty=True
@@ -223,13 +234,19 @@ receipts that exist; the id/surface set is untouched.)
 
 **VERIFY (raw, once):**
 - `python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py` →
-  `SELFCHECK: PASS` (+ 9 new U1a/U1b arms).
+  `SELFCHECK: PASS` (+ 10 new U1a/U1b arms).
 - Two changed probes re-run against the live lane stack (`:5193` → `:3093`):
   `VERDICT artifact-host=GREEN`, `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`;
   receipt dir `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/`.
-- `git -c core.fileMode=false diff --stat fbbca785..HEAD` → 5 files changed,
-  341 insertions(+), 15 deletions(-) (report 131+, completions.yaml 31±,
-  run-journeys.py 68+, test-channel-selfcheck.py 93+, ui-drive.cjs 33+).
+- `git -c core.fileMode=false diff --stat fbbca785..HEAD` (HEAD `0d0e6b72`) →
+  **5 files changed, 459 insertions(+), 15 deletions(-)** (report 249+/0-,
+  completions.yaml 23+/8-, run-journeys.py 63+/5-, test-channel-selfcheck.py 93+/0-,
+  ui-drive.cjs 31+/2-). The earlier figure this report carried — "341 insertions(+),
+  15 deletions(-) (report 131+, completions.yaml 31±, run-journeys.py 68+,
+  test-channel-selfcheck.py 93+, ui-drive.cjs 33+)" — was measured at the U1b commit
+  `ef0ebde5` (`git -c core.fileMode=false diff --stat fbbca785..ef0ebde5` → 341(+)/15(-)),
+  before the report body grew to its final 249 lines. That 341 figure is a stale
+  mid-stack snapshot, not the frozen-HEAD stat.
 - `git -c core.fileMode=false status --porcelain` → clean (only the untracked
   `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` dir remains, which is never
   committed).
@@ -247,3 +264,44 @@ product/teach fix is attempted here.
 
 
 CHATHOST-CALIB DONE 34cbac7bb39da2de07f071c0389d3bf408bc76c7
+
+---
+
+## PAPERWORK FIX (l2t1712)
+
+Evidence-trail-only corrections per adversarial cycle-3 (`.hermes/../cl/lanes/2/reviews/CHATHOST-CONSOLIDATE-1-advc-calib-c3-l2t1712.md`).
+No harness, product, config or test file was touched; no stack was re-run. One commit.
+
+**DEFECT-1 — §U3 diff-stat number (MINOR).** The report claimed `git -c core.fileMode=false
+diff --stat fbbca785..HEAD` → "5 files changed, 341 insertions(+), 15 deletions(-)". Re-ran it
+against the frozen HEAD: the actual stat is **459 insertions(+), 15 deletions(-)** (5 files).
+Command re-run:
+    git -c core.fileMode=false diff --stat fbbca785..HEAD        # -> 459 insertions(+), 15 deletions(-)
+    git -c core.fileMode=false diff --numstat fbbca785..HEAD     # report 249/0, completions 23/8, run-journeys 63/5, selfcheck 93/0, ui-drive 31/2
+The 341 number is not a fabrication: it is the real `git -c core.fileMode=false diff --stat
+fbbca785..ef0ebde5` (the U1b commit — "5 files changed, 341 insertions(+), 15 deletions(-)"),
+captured before the report body and two later commits grew the diff. The §U3 text now states
+the frozen-HEAD numbers and names `ef0ebde5` as the head at which 341 was measured, rather
+than silently swapping the value.
+
+**DEFECT-2 — U1a/U1b arm count (MINOR).** §U1b and §U3 said "9 new U1a/U1b arms". Counted from
+the selfcheck run:
+    python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py | grep -cE '^U1(a|b)'
+    # -> 10
+(5 lines prefix `U1a`, 5 lines prefix `U1b`; `SELFCHECK: PASS`, exit 0.) Both occurrences now
+read **10**.
+
+**DEFECT-3 — non-reproducible command (MINOR).** §U1a and §U1b cited `python3
+_u1_rerun_probes.py` as the U1 evidence command. Re-checked: that file is NOT in the tree
+(`ls _u1_rerun_probes.py` → No such file; `git ls-files | grep _u1_rerun` → empty; only a stale
+`.hermes/plans/harness/l2-trunk-journeys/__pycache__/_u1_rerun_probes.cpython-314.pyc` remains),
+so a reader cannot run it. Both citations were replaced with an honest account: the ad-hoc
+helper was never committed, the receipts under
+`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/` (artifact-host.json,
+run-workspace.json, the two ui.json files and their screenshots) are the evidence of record, and
+the committed reproducible entry point for the same chat-host probe path is `python3
+.hermes/plans/harness/l2-trunk-journeys/run-journeys.py --all --fake --chat-hosts`
+(`run-journeys.py:1042-1049` builds each `probe-<host>.yaml` and runs it).
+
+
+CHATHOST-PAPERWORK DONE 5db37aebf9ad9464d6bbeb2bc746c1152dd34134
