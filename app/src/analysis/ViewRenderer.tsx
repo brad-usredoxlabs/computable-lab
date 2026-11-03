@@ -80,17 +80,147 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * GENERIC by construction: the branch is on the VALUE'S SHAPE (Array.isArray)
  * only — no artifact, column-name, or flag-substring special-casing. A
  * scalar value renders verbatim, byte-identical to the prior `String(value)`.
+ *
+ * L1-CELLRENDER-1 (architect ruling 2026-11-03): `String(non-scalar)` is the
+ * `[object Object]` class of defect — an object-valued cell (e.g. the
+ * `params` column of `effective_parameters` on ANR-000056/ANR-000071, whose
+ * stored value is a dict behind a declared `type: string`) rendered the
+ * literal text `[object Object]`. Two honest arms, both SHAPE-GENERIC:
+ *  - DECLARED arm: `bindings.columnFields` (`{ "<column>": "<path>" }`)
+ *    reduces an object-valued column to one value per RESOLVED PATH. A
+ *    hand-written segment walker (dot segments, `[*]` = map -> one resolved
+ *    value per `view-spec__cell-item` line, `[<n>]` = index) — NO
+ *    eval/Function/dynamic execution. Resolved scalar -> rendered verbatim;
+ *    anything else falls through, NEVER blank.
+ *  - FALLBACK arm (a rendering-safety law, not a domain decision): a
+ *    non-scalar cell value — or a non-scalar ELEMENT of an array column —
+ *    renders compact `JSON.stringify(value)` with the full string on a
+ *    `title` attribute. Never `[object Object]`, never blank.
+ * Scalars, the empty-array arm and the 'No rows' arm stay byte-identical.
  */
-function cellContent(value: unknown): ReactNode {
+function isCellScalar(v: unknown): v is string | number | bigint | boolean {
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint' || typeof v === 'boolean'
+}
+
+/** The scalar text arm — byte-identical to the pre-fix `String(value ?? '')`,
+ *  reached ONLY after `isCellScalar` (or a null/undefined check) narrows the
+ *  value: `String(` never sees a non-scalar in the cell path. */
+function scalarCellText(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value)
+}
+
+/** The fallback arm: compact JSON + full text on `title`. */
+function jsonCell(value: unknown): ReactNode {
+  const text = JSON.stringify(value)
+  return (
+    <span className="view-spec__cell-json" title={text}>
+      {text}
+    </span>
+  )
+}
+
+type CellPathStep = { kind: 'prop'; key: string } | { kind: 'index'; n: number } | { kind: 'map' }
+
+/** Hand-written path-segment parser (L1-CELLRENDER-1 ruling 2):
+ *  dot-separated object segments, each optionally suffixed with `[*]`
+ *  (map over the array) or `[<n>]` (index). Returns null for any token it
+ *  cannot represent — an unparseable path is an UNRESOLVABLE path, which
+ *  falls through to the fallback arm. No eval/Function anywhere. */
+function parseCellPath(path: string): CellPathStep[] | null {
+  const steps: CellPathStep[] = []
+  for (const token of path.split('.')) {
+    if (token === '') return null
+    const m = /^([^[\]]*)(?:\[(\*|\d+)\])?$/.exec(token)
+    if (!m) return null
+    if (m[1] !== '') steps.push({ kind: 'prop', key: m[1] })
+    if (m[2] === '*') steps.push({ kind: 'map' })
+    else if (m[2] !== undefined) steps.push({ kind: 'index', n: Number(m[2]) })
+  }
+  return steps.length > 0 ? steps : null
+}
+
+interface CellPathResult {
+  /** true when a `[*]` map fired — the resolved values render one per line */
+  multi: boolean
+  values: unknown[]
+}
+
+/** Walk `steps` over `value` (hand-written, no dynamic execution). A missing
+ *  prop, a non-array for an index/map step, or an out-of-range index is
+ *  UNRESOLVABLE mid-way -> null (the caller falls back, never blank). */
+function resolveCellPath(value: unknown, steps: CellPathStep[]): CellPathResult | null {
+  let multi = false
+  let current: unknown[] = [value]
+  for (const step of steps) {
+    const next: unknown[] = []
+    for (const c of current) {
+      if (step.kind === 'prop') {
+        if (!isRecord(c) || !(step.key in c)) return null
+        next.push(c[step.key])
+      } else if (step.kind === 'index') {
+        if (!Array.isArray(c) || step.n >= c.length) return null
+        next.push(c[step.n])
+      } else {
+        if (!Array.isArray(c)) return null
+        multi = true
+        for (const e of c) next.push(e)
+      }
+    }
+    current = next
+  }
+  return { multi, values: current }
+}
+
+function cellContentBody(value: unknown): ReactNode {
   if (Array.isArray(value)) {
     if (value.length === 0) return ''
     return value.map((e, i) => (
       <div key={i} className="view-spec__cell-item">
-        {String(e)}
+        {isCellScalar(e) || e === null || e === undefined ? scalarCellText(e) : jsonCell(e)}
       </div>
     ))
   }
-  return String(value ?? '')
+  if (isCellScalar(value) || value === null || value === undefined) return scalarCellText(value)
+  return jsonCell(value)
+}
+
+/** Render a table cell, optionally reduced along a declared `columnFields`
+ *  path first (see the cellContentBody doc above). */
+function cellContent(value: unknown, declaredPath?: string): ReactNode {
+  if (declaredPath !== undefined) {
+    const steps = parseCellPath(declaredPath)
+    if (steps) {
+      const resolved = resolveCellPath(value, steps)
+      if (resolved === null) return cellContentBody(value) // unresolvable mid-way -> fallback on the cell
+      if (resolved.multi || resolved.values.length > 1) {
+        if (resolved.values.every((v) => isCellScalar(v) || v === null || v === undefined)) {
+          return resolved.values.map((v, i) => (
+            <div key={i} className="view-spec__cell-item">
+              {scalarCellText(v)}
+            </div>
+          ))
+        }
+        return cellContentBody(value) // a mapped value is non-scalar -> fallback
+      }
+      const only = resolved.values[0]
+      if (isCellScalar(only) || only === null || only === undefined) return scalarCellText(only)
+      return cellContentBody(only) // resolved non-scalar -> JSON of the RESOLVED value
+    }
+  }
+  return cellContentBody(value)
+}
+
+/** Extract the canonical `columnFields` binding (`{ "<column>": "<path>" }`,
+ *  ruling 2026-11-03) from a renderer's bindings object. Malformed shapes
+ *  (non-object map, non-string path for a column) degrade to "no declared
+ *  path" for the affected column — the fallback arm then applies. */
+function columnFieldPaths(bindings: Record<string, unknown> | undefined): Record<string, string | undefined> {
+  const raw = bindings !== undefined && isRecord(bindings.columnFields) ? (bindings.columnFields as Record<string, unknown>) : {}
+  const out: Record<string, string | undefined> = {}
+  for (const [col, path] of Object.entries(raw)) {
+    out[col] = typeof path === 'string' ? path : undefined
+  }
+  return out
 }
 
 /** Render a table artifact (rows of plain values).
@@ -100,9 +230,15 @@ function cellContent(value: unknown): ReactNode {
  * plain strings, and rows are records. Detection is SHAPE-ONLY (an object
  * whose `rows` member is an array); a bare array of rows keeps today's
  * behavior verbatim, `{ rows: [] }` keeps the named "No rows" arm, and any
- * other value keeps the existing fallback. */
-function TableView({ artifact }: { artifact: RenderableArtifact }) {
+ * other value keeps the existing fallback.
+ *
+ * L1-CELLRENDER-1 (ruling 4): the table renderer ALSO takes `bindings` and
+ * applies the canonical `columnFields` slot — the observed broken surface
+ * (ANR-000056/ANR-000071) is a `renderer: "table"` view, so a binding-only
+ * fix in ArtifactTable would have left it broken. */
+function TableView({ artifact, bindings }: { artifact: RenderableArtifact; bindings?: Record<string, unknown> }) {
   const value = artifact.inlineValue
+  const columnFields = columnFieldPaths(bindings)
   const declared = isRecord(value) && Array.isArray(value.rows)
   const rows = Array.isArray(value) ? value : declared ? (value.rows as unknown[]) : []
   if (rows.length === 0) return <div className="view-spec__empty">No rows</div>
@@ -125,7 +261,7 @@ function TableView({ artifact }: { artifact: RenderableArtifact }) {
           const r: Record<string, unknown> = isRecord(raw) ? raw : { value: raw }
           return (
             <tr key={i}>
-              {columns.map((c) => <td key={c}>{cellContent(r[c])}</td>)}
+              {columns.map((c) => <td key={c}>{cellContent(r[c], columnFields[c])}</td>)}
             </tr>
           )
         })}
@@ -195,6 +331,8 @@ function ArtifactTable({ artifact, bindings }: { artifact: RenderableArtifact; b
     ? (bindings.columns as unknown[]).filter((c): c is string => typeof c === 'string')
     : undefined
 
+  const columnFields = columnFieldPaths(bindings)
+
   const warningsBlock =
     warnings.length > 0 ? (
       <div data-testid="view-spec-artifact-table-warnings">
@@ -253,7 +391,7 @@ function ArtifactTable({ artifact, bindings }: { artifact: RenderableArtifact; b
             const r: Record<string, unknown> = isRecord(raw) ? raw : { value: raw }
             return (
               <tr key={i}>
-                {columns.map((c) => <td key={c}>{cellContent(r[c])}</td>)}
+                {columns.map((c) => <td key={c}>{cellContent(r[c], columnFields[c])}</td>)}
               </tr>
             )
           })}
@@ -458,7 +596,7 @@ export function ViewRenderer({
 }) {
   switch (view.renderer) {
     case 'table':
-      return <TableView artifact={artifact} />
+      return <TableView artifact={artifact} bindings={view.bindings ?? {}} />
     case 'signal':
       return <SignalView artifact={artifact} />
     case 'metric':
