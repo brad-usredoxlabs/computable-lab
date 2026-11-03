@@ -994,6 +994,14 @@ policies:
       min: 0.7
       max: 1
     strategyRef: symbolic_label
+    # Identity policy l2t2030: same (normalized_label, candidate_level) is ONE identity — the
+    # store may not carry two local terms for one entity. survivor is an ORDERED list of policy
+    # ids; each pass is fail-safe (never empties the set). ABSENT => no collapse, pre-fix bytes.
+    identityCollapse:
+      key: [normalized_label, candidate_level]
+      survivor:
+        - declared_substance
+        - stable_order
   hintAuthority:
     mode: lab_hint_first
     strategyRef: hint_search
