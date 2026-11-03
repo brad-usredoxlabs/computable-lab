@@ -47,13 +47,34 @@ function parseCssRules(css: string): Array<{ selector: string; decls: string }> 
   }))
 }
 
+const ANYWHERE_VIOLATION =
+  'a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere'
+
+/**
+ * True when ONE selector part targets a `.view-spec__table` cell: it is scoped
+ * under `.view-spec__table` (with or without a `table` tag prefix) and carries
+ * a standalone `th` or `td` tag token. Descendant/child/sibling combinators and
+ * pseudo-classes/pseudo-elements are tolerated; `thead`/`tbody` are not `th`/`td`.
+ */
+function isTableCellSelectorPart(part: string): boolean {
+  const scopedToTable = /\.view-spec__table(?![\w-])/.test(part)
+  const cellToken = /(?:^|[\s,>+~])(?:th|td)(?![\w-])/.test(part)
+  return scopedToTable && cellToken
+}
+
 /**
  * The source pin (spec §2.1). Returns the list of violated claims — empty
- * means the file satisfies the GATEFIX5 floor. The claims are keyed on the
- * PLAIN-CELL selector (.view-spec__table th/td): the file keeps legal
- * `overflow-wrap: anywhere` rules on other, non-cell selectors
- * (.compare-surface__*), so a file-wide `anywhere` ban would be both wrong
- * and fragile.
+ * means the file satisfies the GATEFIX5 floor.
+ *
+ * Scope (documented deviation, review D2): the `anywhere` ban is enforced on
+ * every selector in the `.view-spec__table` CELL family, not literally on every
+ * selector in the file. The file legitimately keeps `overflow-wrap: anywhere`
+ * on three `.compare-surface__*` rules (a different component, out of this
+ * item's scope), so a file-wide textual ban is unsatisfiable. Within the
+ * table-cell family the ban is evaluated PER SELECTOR PART: `th` and `td` are
+ * separate tokens, so split, `table.`-prefixed and descendant-combinator
+ * selectors cannot evade it (review D1). `.view-spec__cell-item` is the one
+ * legal carrier of `anywhere` inside that family.
  */
 function sourceViolations(css: string): string[] {
   const rules = parseCssRules(css)
@@ -62,8 +83,16 @@ function sourceViolations(css: string): string[] {
            /(^|,)\s*\.view-spec__table\s+td\s*(,|$)/.test(r.selector),
   )
   const violations: string[] = []
-  if (plainCellRules.some((r) => /overflow-wrap\s*:\s*anywhere/.test(r.decls))) {
-    violations.push('a .view-spec__table th/td rule still declares overflow-wrap: anywhere')
+  const anywhereOnTableCell = rules.some((r) =>
+    r.selector.split(',').some(
+      (part) =>
+        isTableCellSelectorPart(part.trim()) &&
+        !part.includes('.view-spec__cell-item') &&
+        /overflow-wrap\s*:\s*anywhere/.test(r.decls),
+    ),
+  )
+  if (anywhereOnTableCell) {
+    violations.push(ANYWHERE_VIOLATION)
   }
   if (!plainCellRules.some((r) => /overflow-wrap\s*:\s*break-word/.test(r.decls))) {
     violations.push('no .view-spec__table th/td rule declares overflow-wrap: break-word')
@@ -136,7 +165,7 @@ describe('FAME-8 GATEFIX5 — AnalysisPage.css cell-render floor (source pin)', 
     // Non-vacuity: the SAME function, called on the pre-fix text, must fail.
     // Full pre-fix rule + the door context the pin also asserts:
     expect(sourceViolations(PREFIX_CSS)).toEqual([
-      'a .view-spec__table th/td rule still declares overflow-wrap: anywhere',
+      ANYWHERE_VIOLATION,
       'no .view-spec__table th/td rule declares overflow-wrap: break-word',
       'no .view-spec__cell-item rule exists',
     ])
@@ -147,6 +176,33 @@ describe('FAME-8 GATEFIX5 — AnalysisPage.css cell-render floor (source pin)', 
       'no .view-spec__cell-item rule exists',
       '.analysis-right no longer declares overflow: auto (FAME-LAYOUT-1 door regressed)',
     ])
+  })
+})
+
+/**
+ * Review D1: the AC §2.1 bullet 1 ban must survive the selector shapes the
+ * original matcher missed (split `th`/`td`, `table.` prefix, descendant
+ * combinator). Fixture is a minimal CONFORMING floor; appending one defect rule
+ * must yield exactly the one `anywhere` violation — nothing else.
+ */
+describe('FAME-8 GATEFIX5 — source pin catches split/qualified plain-cell selectors (review D1)', () => {
+  const CONFORMING_FLOOR = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+`
+
+  it('flags `anywhere` in all four previously-evading selector shapes', () => {
+    expect(sourceViolations(CONFORMING_FLOOR)).toEqual([])
+    const shapes = [
+      '.view-spec__table td { overflow-wrap: anywhere; }',
+      '.view-spec__table th { overflow-wrap: anywhere; }',
+      'table.view-spec__table td { overflow-wrap: anywhere; }',
+      '.view-spec__table tr > td { overflow-wrap: anywhere; }',
+    ]
+    for (const shape of shapes) {
+      expect(sourceViolations(CONFORMING_FLOOR + shape)).toEqual([ANYWHERE_VIOLATION])
+    }
   })
 })
 
