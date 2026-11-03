@@ -1,0 +1,36 @@
+DANGLING-REFERENCE ENUMERATION — spec §3.4 (adapted: the data repo has no docs/ dir; see note)
+run from: /home/brad/.computable-lab-lane2/worktrees/main
+when: 2026-11-03T05:40:42Z
+cmd: for i in <15 ids>; do grep -rl --exclude-dir=_index "$i" records; done | sort -u
+note: spec's 'records docs' — docs/ does not exist in the data repo (grep prints
+      'No such file or directory' per id; records/ is the complete search space).
+=== file set (expected EXACTLY 8: 7 event-graphs + 1 form-draft) ===
+records/event-graph/EVG-API-mu50x5z7__spec-first-add-material.yaml
+records/event-graph/EVG-API-mu50yjk9__spec-first-add-material.yaml
+records/event-graph/EVG-API-mu50yysb__spec-first-add-material.yaml
+records/event-graph/EVG-API-mu7uyw18__spec-first-add-material.yaml
+records/event-graph/EVG-API-mu7uzgnr__spec-first-add-material.yaml
+records/event-graph/EVG-API-mu7v07f1__spec-first-add-material.yaml
+records/event-graph/EVG-API-mujsue6o__spec-first-add-material.yaml
+records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml
+=== id -> file map ===
+MSP-API-mu50x5z7 => records/event-graph/EVG-API-mu50x5z7__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mu50yjk9 => records/event-graph/EVG-API-mu50yjk9__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mu50yysb => records/event-graph/EVG-API-mu50yysb__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mu7uyw18 => records/event-graph/EVG-API-mu7uyw18__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mu7uzgnr => records/event-graph/EVG-API-mu7uzgnr__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mu7v07f1 => records/event-graph/EVG-API-mu7v07f1__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MSP-API-mujsue6o => records/event-graph/EVG-API-mujsue6o__spec-first-add-material.yaml records/form-draft/DRAFT-91172e04-01fe-4949-8424-a21ee7b3216a__untitled.yaml 
+MAT-TEST-DMSO => <none>
+ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 => records/event-graph/EVG-API-mu50x5z7__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9 => records/event-graph/EVG-API-mu50yjk9__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB => records/event-graph/EVG-API-mu50yysb__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18 => records/event-graph/EVG-API-mu7uyw18__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR => records/event-graph/EVG-API-mu7uzgnr__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1 => records/event-graph/EVG-API-mu7v07f1__spec-first-add-material.yaml 
+ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O => records/event-graph/EVG-API-mujsue6o__spec-first-add-material.yaml 
+=== checks ===
+dangling file count: 8 (expected 8)
+MAT-TEST-DMSO contributing files: 0 (expected 0)
+survivor files present: 3 of 3
+PROVENANCE: the enumerated files are NOT to be deleted, rewritten, or repaired (B1 :152-154).

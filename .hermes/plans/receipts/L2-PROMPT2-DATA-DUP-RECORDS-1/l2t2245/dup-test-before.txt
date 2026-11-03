@@ -1,0 +1,16 @@
+OQ2 DUPLICATION TEST — spec §3.5 verbatim filter (run pre-mutation)
+when: 2026-11-03T05:33:27Z
+cmd: curl -s -X POST localhost:3093/api/resolve -H content-type:application/json -d {"term":"1 mM Clofibrate in DMSO"} | jq '[.candidates[] | select(.level=="concept" and (.label|ascii_downcase)=="1 mm clofibrate in dmso")]'
+
+-- verbatim exact-label filter result:
+[]
+
+-- all concept-level candidates for the term (context):
+local:MAT-1-mm-clofibrate1-mm-clof-l84l	1 mM clofibrate1 mM Clofibrate in DMSO
+	Create local term “1 mM Clofibrate in DMSO”
+
+FINDING: no concept-level RECORD carries the clean label '1 mM Clofibrate in DMSO'.
+The only real concept record is the mangled one itself (label '1 mM clofibrate1 mM Clofibrate in DMSO';
+its mangled label does not exact-match the clean string, which is why the verbatim filter is empty).
+The empty-curie row is the UI mint-offer, not a record. No SECOND concept candidate exists
+=> NOT a duplicate => OQ2 default applies: LABEL FIX to '1 mM Clofibrate in DMSO', keep the record.

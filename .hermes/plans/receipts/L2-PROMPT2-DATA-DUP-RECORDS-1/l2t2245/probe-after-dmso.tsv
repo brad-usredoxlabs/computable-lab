@@ -1,0 +1,21 @@
+concept	local:MAT-PR9-TEST-DMSO	DMSO	1.15
+concept	local:MAT-1-mm-clofibrate1-mm-clof-l84l	1 mM Clofibrate in DMSO	1.02
+spec	local:MSP-1-mm-fenofibrate-in-dmso	1 mM Fenofibrate in DMSO	1.02
+spec	local:MSP-DRAFT-EVG_MVY8XMJF_5FY2_EVT_ADD_MATERIAL_MQD2ESVM	Clofibrate + DMSO	1.02
+spec	local:MSP-PR9-TEST-CLO-1MM	1 mM Clofibrate in DMSO	1.02
+spec	local:MSP-PR9-TEST-RPMI-1PCT-DMSO	RPMI + 1% DMSO	1.02
+concept	BAO:0000118	DMSO	0.75
+concept	CHEBI:28262	DMSO	0.75
+concept	CHEBI:193041	DMSO-d6	0.6799999999999999
+concept	mesh:C000729147	DMSO-d6	0.6799999999999999
+concept	CHEBI:49123	DMSO reductase	0.6799999999999999
+concept	FBbt:00002929	abdominal 8 dorsal trichoid sensillum DMSOh	0.62
+concept	FBbt:00002930	abdominal 8 dorsal basiconic sensillum DMSOp	0.62
+concept	mesh:C050433	ruthenium chloride-DMSO(2)-4-nitroimidazole(2)	0.62
+concept	FBbt:00002610	larval DMSOp neuron	0.62
+concept	FBbt:00052038	larval DMSOh neuron	0.62
+concept	MI:2109	solubility in dmso	0.62
+concept	mesh:C548993	trans-cis-cis-(RuCl2(DMSO)2(2-amino-5-methyl-thiazole)2)	0.62
+concept	mesh:C549083	Zn(hqxc)2(DMSO)2	0.62
+concept	http://snomed.info/id/21210003	Cryopreservation technique with DMSO	0.62
+concept		Create local term “DMSO”	0.05

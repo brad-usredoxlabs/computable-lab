@@ -1,0 +1,21 @@
+spec	local:MSP-API-mu50x5z7	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mu50yjk9	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mu50yysb	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mu7uyw18	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mu7uzgnr	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mu7v07f1	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-API-mujsue6o	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-PR9-TEST-CLO-1MM	1 mM Clofibrate in DMSO	1.15
+concept	local:MAT-1-mm-clofibrate1-mm-clof-l84l	1 mM clofibrate1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+aliquot	local:ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O	Ad hoc instance of 1 mM Clofibrate in DMSO	1.02
+unknown	local:vendor-catalog-3feh	Clofibrate | APExBIO	0.4
+unknown	local:vendor-catalog-jgkl	Clofibrate	0.4
+unknown	local:vendor-catalog-y7nf	Clofibrate	0.4
+unknown	local:vendor-labware-9mbm	Clofibrate	0.4
+concept		Create local term “1 mM clofibrate in DMSO”	0.05

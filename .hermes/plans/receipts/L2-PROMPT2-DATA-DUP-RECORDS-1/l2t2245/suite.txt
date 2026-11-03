@@ -1,0 +1,71 @@
+FULL SUITE (npx vitest run) — SET DIFF vs pre-change baseline (spec §6: report SET DIFFS, not counts)
+baseline: /mnt/vast/home/brad/git/wt/datadup-baseline-wt @ cf855add (claim-tip; worktree removed after the run)
+after:    /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server @ fe913e3f (the one data commit)
+
+== AFTER raw tail ==
+ Test Files  258 failed | 563 passed | 9 skipped (830)
+
+      Tests  146 failed | 5410 passed | 68 skipped (5624)
+
+   Start at  00:42:37
+
+   Duration  136.92s (transform 80.06s, setup 352ms, collect 417.32s, tests 661.61s, environment 1.08s, prepare 463.95s)
+
+
+
+== BASE raw tail ==
+      Tests  147 failed | 5404 passed | 68 skipped (5619)
+
+   Start at  00:59:14
+
+   Duration  198.60s (transform 177.57s, setup 438ms, collect 624.64s, tests 933.66s, environment 1.46s, prepare 638.67s)
+
+
+
+SUITE_EXIT=1
+
+
+FAIL-file sets: base=259 files failing, after=258 files failing
+NEW failing files (after only): NONE
+FIXED failing files (base only): src/schema/MaterialReceivingSchemas.test.ts
+  note: those are pre-existing trunk-debt files that happened to pass on the after run — improvement, not regression; none touched by this item
+
+TSC (npx tsc --noEmit) unique (file, code) error sites: base=16, after=16 (raw error lines: base=25, after=25)
+NEW tsc error sites (after only): NONE
+GONE tsc error sites (base only): NONE
+Touched-file check: vocabulary.ts and vocabularyIdentityCollapse.test.ts appear in NEITHER error set — zero new errors in touched files.
+All 25 raw errors are pre-existing TS2307 'Cannot find module' debt (untracked files absent from the fresh worktree — fleet memory note); identical set before/after.
+
+========================================================================
+SKILL-RULE RE-DERIVATION (identical extraction on BOTH raws, incl. test/-rooted)
+cmd: grep -oE "❯[[:space:]]+(src|test)/[^[:space:]]+\.test\.\w?" <raw> | sort -u
+extracted lists: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/.hermes/plans/receipts/L2-PROMPT2-DATA-DUP-RECORDS-1/l2t2245/fail-set-base.txt (259 files), fail-set-after.txt (258 files)
+comm -3 (left=base-only/fixed, right=after-only/new):
+src/schema/MaterialReceivingSchemas.test.t
+VERDICT: zero NEW failing files; the single base-only file is pre-existing trunk debt
+that passed on the after run (improvement, not regression; not touched by this item).
+PROVENANCE: both runs CODER-CAPTURED, serialized (one suite at a time on the NFS
+worktree — no concurrent vitest jobs during either run).
+  baseline raw (saved at run, worktree since removed): /tmp/datadup-suite-base.txt
+  after raw:   /tmp/datadup-suite-after.txt
+Verbatim summary blocks (extracted programmatically; verified grep -F -x 4/4 each):
+--- BASE (verbatim) ---
+ Test Files  259 failed | 561 passed | 9 skipped (829)
+      Tests  147 failed | 5404 passed | 68 skipped (5619)
+   Start at  00:59:14
+   Duration  198.60s (transform 177.57s, setup 438ms, collect 624.64s, tests 933.66s, environment 1.46s, prepare 638.67s)
+--- AFTER (verbatim) ---
+ Test Files  258 failed | 563 passed | 9 skipped (830)
+      Tests  146 failed | 5410 passed | 68 skipped (5624)
+   Start at  00:42:37
+   Duration  136.92s (transform 80.06s, setup 352ms, collect 417.32s, tests 661.61s, environment 1.08s, prepare 463.95s)
+RED (targeted, pre-YAML; verbatim; verified 4/4):
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  00:29:59
+   Duration  1.08s (transform 132ms, setup 0ms, collect 216ms, tests 253ms, environment 0ms, prepare 69ms)
+GREEN (targeted, post-commit; verbatim; verified 4/4):
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  00:41:55
+   Duration  1.03s (transform 94ms, setup 0ms, collect 170ms, tests 254ms, environment 0ms, prepare 74ms)
