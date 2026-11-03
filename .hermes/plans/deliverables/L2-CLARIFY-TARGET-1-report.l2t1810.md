@@ -448,3 +448,44 @@ CORRECTION — the 3 named pins + the 5 e2eStubHonesty failures are DECIDABLE, n
   The architect's "go GREEN WITHOUT EDIT" premise was based on the false assumption that
   the volume dimension was the only cause; the targetWells dimension is a second cause the
   ruling did not address, but it IS decidable from the spec's array-canonical form.
+
+STEP 4 — si/ai BLAST RADIUS FULLY RESOLVED (all 20 NEW failures green)
+==================================================================
+
+Re-measured `src/compiler/scientistIntent src/ai` at tip after the full
+blast-radius pass: **16 failed files | 142 passed (158 files); 29 failed
+tests | 1534 passed (1563)**.
+- `comm -23 (current-fail-tests) (base-fail-tests)` = **EMPTY** — ZERO new
+  failures vs base 0579e8a1/8b61971b. The 29 remaining are ALL pre-existing
+  trunk debt (fail identically at base: AgentOrchestrator.*, chatbotCompile.*,
+  tubeGate, etc.).
+- The 20 NEW failures are ALL resolved. Per-file:
+  - resolution dir: 170/170 (6 count-deltas, committed earlier).
+  - vocabularyMirrorDrift 2 + shorthandContractDisclosure 1: mirror ARGUMENTS
+    line post-flip (+WHY); 22/22.
+  - cueResolutionGate T4 + labwareResult complete-arm: supply targetWells
+    (array) to isolate the subject; green.
+  - foldNullArms LEG_YAML: supply volumeUl (array targetWells present); 12/12.
+  - goldens (24/24): treeState vocab pin re-bless (4f72ede5->fa919ec5),
+    labware-hint record re-bless (clarifications 3->5, only that field moved
+    per drift probe), goldenIntentToClarification count 3->5 (assert new
+    truth).
+  - shorthandDeckBinding store-hint: supply targetWells (array); green.
+  - e2eStubHonesty 7/7: docs string->array targetWells; app/e2e stub
+    doc-echo re-pinned to array (honesty contract stub===real; payloads
+    unchanged).
+  - **declaredArgumentReachability CHARACTERIZATION + GHOST: 41/41 —
+    string->array targetWells (spec canonical form; array invisible to the
+    doc-door, lowering expands to the same 96 events). CORRECTS the earlier
+    BLOCKED verdict.**
+  - **realizationGolden T1/T2: 6/6 — assert the flip's NEW truth
+    (realization-emitted add_material now bars: 2 missing-required facts
+    volumeUl+targetWells, 0 events; determinism claim unchanged). BLOCKER-2
+    licenses (this golden IS the assumed-value path).**
+
+Remaining work:
+  - 3 missing server RED test files (assumedValue/wellTarget/sameNounDedupe
+    target1) — spec Change 2/3 RED-first.
+  - Entire APP side: Changes 2 chip, 4 slot, 5 rows + all app tests +
+    useOptionalWellSelection + ChatLog/ChatClarificationCard insertions.
+  - Evidence: server typecheck + app tsc (zero new in touched files).
