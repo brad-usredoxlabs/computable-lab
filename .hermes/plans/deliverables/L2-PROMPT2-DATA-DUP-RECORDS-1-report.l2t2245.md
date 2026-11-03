@@ -74,12 +74,21 @@ Absolute dir: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/.hermes/plans/receip
 ## STEP 3 — removals + label fix via the ordinary HTTP record path on :3093
 Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No hand edits anywhere.
 - 15 DELETE /api/records/:id?expectedSha=<contentSha> (order: 7 aliquots → 7 shells → MAT-TEST-DMSO).
-  Every removal's FINAL HTTP status: 200. Each response body carried success:true + the data-repo
-  commit sha (full log: receipts/removal-log.txt).
+  FINAL HTTP status CAPTURED for 7 of 15 only — the aliquot rows carry a literal `HTTP=200` in
+  removal-log.txt:10,16,22,28,34,40,46. For the other 8 (all 7 MSP-API-* shells + MAT-TEST-DMSO)
+  the harness printed the literal unset sentinel `CODE` in the status column
+  (removal-log.txt:78-93): the status code of those DELETEs was NOT captured. The 8 removals are
+  nonetheless proven, just not by a status line — each returned a `success:true` body carrying its
+  own data-repo commit sha (80f1bacc 92c617fb d1ce44a7 34aa406c b6d17972 ebb88f86 a7faaad4
+  0442b918; each commit touches exactly its own record path), and all 15 ids answer 404 NOT_FOUND
+  on post-removal GET (removal-log.txt:97-111, re-captured with an explicit status column in
+  receipts/removal-status-recapture.txt).
   - 409 note (recorded, not a refusal): the first-pass aliquot loop dropped expectedSha on shell
     word-splitting; the handler's 409 body "SHA mismatch: expected <id-echo>, got <sha>" named the
     correct sha, which was IDENTICAL to the sha read in shas-before.txt. Spec §3.7 step 3 says use
-    the got value → retry returned 200. Shells + MAT-TEST-DMSO looped tab-safe and hit 200 first try.
+    the got value → retry returned 200. Shells + MAT-TEST-DMSO ran single-shot (no 409 in the log,
+    each body success:true); their status line is the unexpanded `CODE` sentinel and is therefore
+    not of record — see the paragraph above.
   - Seed-refusal canary (spec §3.3): never fired (no 405, no "resolves from seed").
   - Post-removal GET /api/records/:id → 404 NOT_FOUND for ALL 15 (proof of removal, not a filter).
 - 1 PUT /api/records/MAT-1-mm-clofibrate1-mm-clof-l84l (label fix): body = WHOLE GET payload with
@@ -108,7 +117,11 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
   incl. loss of the 7 shell + 7 aliquot + MAT-TEST-DMSO rows). The §3.8 AFTER table holds on the
   store's own identity set: clofibrate = 1 spec + 1 concept (the "2" the spec itself calls correct);
   DMSO = 1. An unchanged dump would have failed this item; it changed.
-- dangling-refs-after.txt + dangling-refs-after-map.raw.txt: the spec §3.4 enumeration from the
+  Caveat on the pair: the BEFORE/AFTER DMSO dumps are NOT engine-state-identical — the AFTER set
+  carries BAO:0000118 + CHEBI:28262 at 0.75 that the BEFORE capture lacked, and they persist in a
+  live re-probe, so the pair should not be read as a single-population diff (it does not weaken
+  non-vacuity: MAT-TEST-DMSO demonstrably left the local-record set).
+- dangling-refs-after.txt + dangling-refs-after-map.txt: the spec §3.4 enumeration from the
   data repo root (adapted: the data repo has NO docs/ dir — grep's per-id 'No such file' recorded
   in the artifact; records/ is the complete search space). Result: EXACTLY the 8 expected files
   (7 records/event-graph/EVG-API-mu*__spec-first-add-material.yaml + records/form-draft/
@@ -141,9 +154,14 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
     MaterialReceivingSchemas.test.ts) passed on the after run (pre-existing trunk debt, not touched
     by this item — improvement, not regression).
   - npx tsc --noEmit: raw error lines 25 = 25; unique (file, code) sites 16 = 16; NEW: NONE;
-    GONE: NONE. All 25 are pre-existing TS2307 missing-module debt from the fresh worktree lacking
-    ~54 untracked trunk files (fleet-known). Touched files (vocabulary.ts, the new test) appear in
-    NEITHER error set.
+    GONE: NONE. The split is 18 TS2307 "Cannot find module" (missing untracked files in the fresh
+    worktree) + 7 CASCADED type errors in the same untouched files — TS18048 (AgentOrchestrator.ts
+    :4181), five TS7006 (AgentOrchestrator.ts :4230/:4240/:4326, resolveDraftMaterials.ts :196,
+    run-execution.ts :308) and one TS2379 exactOptionalPropertyTypes (AgentOrchestrator.ts :4332).
+    Corrected receipt with the real split and the verbatim output: receipts/tsc-split-rerun.txt
+    (re-run in this worktree, 25 raw = 18 + 1 + 5 + 1). It supersedes the "all 25 TS2307" summary
+    line at tsc.txt:2, which mislabelled the same 25 lines. Touched files (vocabulary.ts, the new
+    test) appear in NEITHER error set.
 - Live acceptance re-check (post-commit, :3093 still serving): /api/resolve clofibrate → 2
   local-record candidates; /api/resolve DMSO → exact-label local set = ["local:MAT-PR9-TEST-DMSO"].
   :3093 health 200 at the end (never restarted; the :3093 backend runs from the cl-integration-2
@@ -205,18 +223,23 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
     missing shipped block)
   - fe913e3f — THE ONE data commit: YAML block + closed meta-schema property + one optional
     interface field + contract test + 6 fixture dirs (GREEN 5/5)
-  - (this docs commit — report + remaining receipts)
+  - 365c3333 — the evidence-trail docs commit (final report + remaining receipts). It is the
+    current branch tip and was authored after the run died at report-finalize; it is the commit
+    that carries this report, not a hypothetical "this commit".
   Data-repo commits (lane-2 store, API-produced, 78b3f623..394f384c): 15 deletes
   (bc4c692e b54edecd b1ef4dbe a77dd211 20aad60b eef726c1 798ba6e9 80f1bacc 92c617fb d1ce44a7
   34aa406c b6d17972 ebb88f86 a7faaad4 0442b918) + 1 label fix (c8ef996d), interleaved with the
   server's index-rebuild commits; full per-id table in cleanup-ledger.md.
-(2) 15 removed ids + HTTP status (final; see receipts/removal-log.txt for the raw 409-retry trail):
+(2) 15 removed ids + final HTTP status (see receipts/removal-log.txt for the raw 409-retry trail):
+  7 aliquot ids — final status 200 (literal in the log):
   ALQ-IMPLICIT-EVG_API_MU50X5Z7_EVT_API_MU50X5Z7 200 · ALQ-IMPLICIT-EVG_API_MU50YJK9_EVT_API_MU50YJK9
   200 · ALQ-IMPLICIT-EVG_API_MU50YYSB_EVT_API_MU50YYSB 200 · ALQ-IMPLICIT-EVG_API_MU7UYW18_EVT_API_MU7UYW18
   200 · ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR 200 · ALQ-IMPLICIT-EVG_API_MU7V07F1_EVT_API_MU7V07F1
-  200 · ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O 200 · MSP-API-mu50x5z7 200 · MSP-API-mu50yjk9 200 ·
-  MSP-API-mu50yysb 200 · MSP-API-mu7uyw18 200 · MSP-API-mu7uzgnr 200 · MSP-API-mu7v07f1 200 ·
-  MSP-API-mujsue6o 200 · MAT-TEST-DMSO 200 — all confirmed 404 on post-removal GET.
+  200 · ALQ-IMPLICIT-EVG_API_MUJSUE6O_EVT_API_MUJSUE6O 200.
+  8 ids — final status NOT CAPTURED (harness printed the unset sentinel `CODE`; see STEP 3):
+  MSP-API-mu50x5z7 · MSP-API-mu50yjk9 · MSP-API-mu50yysb · MSP-API-mu7uyw18 · MSP-API-mu7uzgnr ·
+  MSP-API-mu7v07f1 · MSP-API-mujsue6o · MAT-TEST-DMSO — each proven removed by a `success:true`
+  body with its own data-repo commit sha, and all 15 ids confirmed 404 on post-removal GET.
   Label fix PUT MAT-1-mm-clofibrate1-mm-clof-l84l 200 ("1 mM clofibrate1 mM Clofibrate in DMSO"
   → "1 mM Clofibrate in DMSO"; not a duplicate per dup-test-before.txt, so OQ2 default applied).
 (3) Before/after dumps (absolute; dir
@@ -224,9 +247,12 @@ Actor: x-user-id: USR-BRAD (resolved active; no local-admin fallback used). No h
   probe-before-clofibrate.json ↔ probe-after-clofibrate.json: 21 → 10 raw; identity-level local-record
   16 → 2 (exact-label 8 → 2: now spec MSP-PR9-TEST-CLO-1MM + concept MAT-1-mm-clofibrate1-mm-clof-l84l
   clean-labelled). probe-before-dmso.json ↔ probe-after-dmso.json: raw 21 → 21 (membership changed);
-  exact-label 'DMSO' concept 2 → 1 (MAT-PR9-TEST-DMSO). Dumps CHANGED — non-vacuity leg holds.
+  exact-label 'DMSO' concept rows 2 → 3 (2 → 1 LOCAL RECORDS — MAT-TEST-DMSO removed, MAT-PR9-TEST-DMSO
+  survives; the after set additionally carries ontology rows BAO:0000118 and CHEBI:28262 @0.75, per
+  non-vacuity-analysis.txt:13-15). Dumps CHANGED — non-vacuity leg holds.
 (4) Files changed (lane branch): the five in-scope files of commit fe913e3f (2 schema YAMLs,
-  vocabulary.ts, the new test, 6 fixture dirs) + this report/receipts doc commit. Lane-2 DATA store:
+  vocabulary.ts, the new test, 6 fixture dirs) + the docs commit 365c3333 (this report + receipts).
+  Lane-2 DATA store:
   16 API-produced commits (15 deletes + 1 label fix) + index rebuilds; no hand edits anywhere.
 (5) Reviewer hardest checks: the "What a reviewer should check hardest" section above (raw
   before/after dumps; the 409-retry note; the data-repo per-path commit chain; the label-fix body;

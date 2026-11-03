@@ -1,0 +1,60 @@
+D2 TYPECHECK SPLIT RE-RUN
+captured: 2026-11-03T06:23Z (cl-paperwork-fixer, evidence-trail pass c2)
+command: cd /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245 && npm run typecheck -w server
+         (exit 2 — pre-existing debt, unchanged by this item)
+
+raw error lines: 25
+split by code:
+  18  TS2307  Cannot find module (missing untracked files in the fresh worktree)
+   5  TS7006  Parameter implicitly has an 'any' type
+   1  TS18048  'parsed.events' is possibly 'undefined'
+   1  TS2379  exactOptionalPropertyTypes mismatch (AgentOrchestrator.ts 4332,50)
+unique (file, code) sites: 16
+unique files in error set: 11
+touched-file hits (vocabulary.ts | vocabularyIdentityCollapse): 0
+
+CONCLUSION: 18 TS2307 + 7 cascaded type errors, ALL in files this item's diff does not touch.
+The item's files (server/src/compiler/scientistIntent/vocabulary.ts and the new
+vocabularyIdentityCollapse.test.ts) appear in NEITHER the base nor the after error set, so
+"no new typecheck error" stands. The earlier tsc.txt line 2 ("all pre-existing TS2307") and
+report:143-146 ("All 25 are pre-existing TS2307") are corrected: the count is right, the
+"all TS2307" label was not.
+
+=== RAW OUTPUT (verbatim, /tmp/tsc-rerun-l2t2245.txt) ===
+npm notice run @computable/server@1.0.0 typecheck
+npm notice run tsc --noEmit
+src/ai/AgentOrchestrator.ts(47,60): error TS2307: Cannot find module './materialBinding.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(49,67): error TS2307: Cannot find module './clarificationLoop.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(52,52): error TS2307: Cannot find module './mintLabelFidelity.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(53,47): error TS2307: Cannot find module './recoverInventedMaterialFields.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(54,39): error TS2307: Cannot find module './enrichMaterialDomains.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(102,36): error TS2307: Cannot find module './materialRefFields.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(4181,29): error TS18048: 'parsed.events' is possibly 'undefined'.
+src/ai/AgentOrchestrator.ts(4230,27): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/ai/AgentOrchestrator.ts(4240,48): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/ai/AgentOrchestrator.ts(4266,32): error TS2307: Cannot find module './materialRefFields.js' or its corresponding type declarations.
+src/ai/AgentOrchestrator.ts(4326,66): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/ai/AgentOrchestrator.ts(4332,50): error TS2379: Argument of type '{ requestId: string; requirements?: string[]; details: Record<string, unknown>; wells?: unknown[]; well?: string; policy: MaterialClarificationPolicy; layer: any; label: any; }' is not assignable to parameter of type '{ policy: LayerPolicy | undefined; layer: MaterialLayer; label: string; well?: string; wells?: readonly string[]; details: Record<string, unknown>; requirements?: readonly string[] | null; requestId: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'wells' are incompatible.
+    Type 'unknown[]' is not assignable to type 'readonly string[]'.
+      Type 'unknown' is not assignable to type 'string'.
+src/ai/forceMaterialClarifications.ts(39,73): error TS2307: Cannot find module './materialRefFields.js' or its corresponding type declarations.
+src/ai/forceMaterialClarifications.ts(40,39): error TS2307: Cannot find module './materialIdentity.js' or its corresponding type declarations.
+src/ai/materialFollowUp.ts(18,36): error TS2307: Cannot find module './materialRefFields.js' or its corresponding type declarations.
+src/ai/resolveDraftMaterials.ts(26,76): error TS2307: Cannot find module './materialRefFields.js' or its corresponding type declarations.
+src/ai/resolveDraftMaterials.ts(196,38): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/api/handlers/ProtocolIntakeHandlers.ts(25,44): error TS2307: Cannot find module '../../protocol-intake/materializeBranchCandidate.js' or its corresponding type declarations.
+src/api/routes.ts(79,42): error TS2307: Cannot find module './labwareDefinitionSearch.js' or its corresponding type declarations.
+src/api/routes/run-execution.ts(18,38): error TS2307: Cannot find module '../../readiness/RunStartGateService.js' or its corresponding type declarations.
+src/api/routes/run-execution.ts(308,63): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/compiler/resolution/eligibility/facts.ts(23,33): error TS2307: Cannot find module '../../../ai/materialRefFields.js' or its corresponding type declarations.
+src/compiler/resolution/resolutionEngine.ts(19,51): error TS2307: Cannot find module '../../ai/materialRefFields.js' or its corresponding type declarations.
+src/protocol-intake/ProtocolIntakeService.ts(41,44): error TS2307: Cannot find module './materializeBranchCandidate.js' or its corresponding type declarations.
+src/store/RecordStoreImpl.ts(35,8): error TS2307: Cannot find module '../lifecycle/BypassAudit.js' or its corresponding type declarations.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server
+npm error workspace @computable/server@1.0.0
+npm error location /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server
+npm error command failed
+npm error command sh -c tsc --noEmit
