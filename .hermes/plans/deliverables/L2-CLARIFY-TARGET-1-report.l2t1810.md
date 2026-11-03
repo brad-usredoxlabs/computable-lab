@@ -388,3 +388,25 @@ STEP 3 (decidable blast-radius, BLOCKER-2 ruling) — 6 required-arg-count delta
     - resolveNounsPass.stagnantHedge.test.ts: SH7 (sweepIntent, part b).
     - resolveNounsPass.test.ts: comp4 mixtureAction (both comp4 tests share it), shqa1 'bound slot' fixture.
   RESULT (raw /tmp/t21-reso-afterfix.txt): `npm run test:run -w server -- src/compiler/resolution` = Test Files 19 passed (19), Tests 170 passed (170). exit 0. THE RESOLUTION DIR IS FULLY GREEN.
+
+STEP FULL INVENTORY + PLAN (measured first-hand at this continuation run's HEAD):
+=== DONE + VERIFIED ===
+  Change 1: assumedValues DATA (config/drafting/shorthand-drafting.yaml) + loader (server/src/compiler/resolution/assumedQuantities.ts) + test (assumedQuantities.test.ts). EXISTS.
+  Change 2 server: clarifyControl stamp (server/src/ai/shorthandChat.ts, 7 hits) + types (server/src/ai/types.ts:2, app/src/types/ai.ts:1). DONE (server-side, committed from dead run in STEP 0).
+  Change 3: fold splice arm for declared-kind quantity/wells (shorthandChat.ts:1086-1128, uses assumedQuantityFor + expandWellTokens, no 'uL' literal). DONE.
+  Change 4 DATA: add_material.volumeUl required:true + targetWells declared (schema/scientist-intent/scientist-intent-vocabulary.yaml:318). DONE.
+  Change 4a (ruling l2t2230 (a)): satisfiedBy alias slot + argumentPresent shape arm + sweep OR-alias. GREEN, typecheck 0, grep-proof clean.
+  Resolution dir: 170/170 green (6 count-deltas fixed: V2e/FS5/SH7/comp4x2/shqa1).
+=== MISSING (in-scope, spec-named, NOT yet done) ===
+  3 server RED test files: shorthandChat.assumedValue.target1.test.ts, shorthandChat.wellTarget.target1.test.ts, shorthandChat.sameNounDedupe.target1.test.ts (spec RED-plan items 2,3,5). Server code they test IS implemented; tests must be written GREEN.
+  ENTIRE app side: ClarifyAssumedChip.tsx(+test), ClarifyWellTargetSlot.tsx(+test), proposalRowFacts.ts(+test), ChatPreviewCard row-fact(+test), ChatClarificationCard insertion(+test), ChatLog single-request arm (S3 guard), WellSelectionContext.useOptionalWellSelection, ChatPreviewCard.rowFact.target1.test.tsx.
+=== 3 NAMED PINS (ruling said go green WITHOUT edit) ===
+  realizationGolden.test.ts:262 T1 (+T2): golden intent states NEITHER volumeUl NOR targetWells -> 2 missing-required facts -> outcome needs-clarification (was complete). W27 dump CONFIRMS exactly {volumeUl, targetWells} missing-required-argument. BLOCKER 2 licenses asserting the NEW truth (this golden IS the assumed-value path). DECIDABLE in-scope.
+  declaredArgumentReachability.test.ts:159 (CHARACTERIZATION) + :369 (GHOST): fixture uses STRING `targetWells: A1:H12`. Post-flip that string is spine-routed by the pre-existing doc-door (resolutionEngine.ts:490 kind wells; :498/516 array-invisible; :409 unknown-address). Empirically re-confirmed AT THIS HEAD with full compileReal spine -> unknown-address. Fix requires resolutionEngine.ts (NOT in spec In-scope path list) OR a domain decision on string-range targetWells (spec:368-370 explicitly defers it as a follow-up). UN-DECIDABLE from the spec -> route BLOCKED, do not guess.
+=== PLAN (small turns, commit after each) ===
+  A. 3 server RED test files -> GREEN (server code done).
+  B. realizationGolden T1/T2 -> assert new truth (needs-clarification + 2 facts + chip for assumed-value path), WHY comment.
+  C. App side: useOptionalWellSelection -> proposalRowFacts(+test) -> ClarifyAssumedChip(+test) -> ClarifyWellTargetSlot(+test) -> ChatLog arm -> ChatClarificationCard(+test) -> ChatPreviewCard row-fact(+test).
+  D. 2 reachability pins: route BLOCKED (un-ruled string-targetWells doc-door collision).
+  E. Evidence: si/ai/resolution dirs + app/src/agent, base-parity for non-blast failures, server typecheck + app tsc (zero new in touched files), grep proofs.
+  F. Final line.
