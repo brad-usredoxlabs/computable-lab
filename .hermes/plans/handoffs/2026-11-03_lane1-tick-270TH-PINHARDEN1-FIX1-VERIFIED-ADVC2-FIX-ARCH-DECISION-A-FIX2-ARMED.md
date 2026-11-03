@@ -150,3 +150,35 @@ written 04:32 at `.hermes/plans/2026-11-03_l1-pin-harden-1-cycle2-cap-decision.m
 5. Then `L1-CELLRENDER-1` (dispatch-ready, no trunk merge needed at `1a443259`); it DOES need the browser gate on
    `:5192`/`:3092` with AOUT-000100 / AOUT-000136 plus the `analyte_summary` regression leg.
 6. `L1-PARAMS-EMITTER-RIDER` must NOT be dispatched on its own; `FAME-1B-BACKFILL` stays Brad-held.
+
+## ADDENDUM (04:40) — fix run 2 was launched, then STOPPED. A deviation, recorded not excused.
+
+While polling for a free slot after the checkpoint above, slot-0 genuinely emptied: lane 2's
+`TARGET1-WELLSFIX-FIX1` coder **DIED of an admission timeout at 04:31:28** (86 min,
+`inference request expired while waiting for admission`, WIP preserved as `a6a71bcb`, no report, no marker).
+At **04:34:00** the fleet appended to `stagger-trial.log`:
+
+    FLEET STAGGER WINDOW REVERTED 10min -> 60min per the 2026-11-01 concurrency ruling
+    (new admission-timeout death under the 10-min window); no further coder launches this tick
+
+At 04:34:03 I read the slots (`fuser` → 0 holders on slot-0; the other coder 12.7 min old) and **launched fix
+run 2 at 04:34:58 — 58 seconds AFTER that freeze line.** My launcher's gates read pid files and live coder
+processes, never the trial log, so it could not see the freeze; the freeze was in a file I had not re-read
+between 04:28 and 04:34. That is my error, not the launcher's alone.
+
+**Recovery, same tick:**
+
+- Stopped the run at **04:36:40** (`systemctl --user stop cl-l1-coder-pinharden1-fix2b-l1t0500`). It was 1 m 42 s
+  in and had written **nothing**: worktree CLEAN at `b2b59fdf`, no report, no marker, no commit. Slot-0 released.
+- The fleet 2-slot cap was never exceeded (lane 2's `439414` + mine = 2 concurrent).
+- **Harness repair (lane tooling, not product):** the launcher now carries a **FLEET-FREEZE-GATE** that greps the
+  newest `FLEET STAGGER WINDOW REVERTED` line out of `stagger-trial.log` and refuses while it is <60 min old.
+  Verified with a faithful copy (launch replaced by an echo): **exit 3**,
+  `FLEET-FREEZE-WAIT 2026-11-03T04:37:06-05:00 revert-line age=186s (<3600) — no launch`.
+- Both trial-log lines were appended (`started_at` + `STOPPED …`), the task block carries a `270TH DEVIATION`
+  record and `AS-L1T270-4` is in the lane ledger.
+
+**Consequence for the next tick:** fix run 2 stays ARMED and is now mechanically gated. Next eligible launch is
+≈**05:22** (60 min from lane 2's 04:22:13 start) or as soon as the other coder exits — whichever the launcher's
+gates allow. Lane 2's next action after its death is an advc + a re-dispatch of TARGET-1, which is a coder action,
+so **lane 2 gets first refusal on any free slot**; lane 1 must re-check lane 2 before firing.
