@@ -94,11 +94,12 @@ function splitSelectorParts(selector: string): string[] {
  * pseudo-classes (`:is(th, td)`) — the token may be preceded by any
  * non-identifier character, so `(` and `:` do not hide it (review D4).
  * `thead`/`tbody`/`.view-spec__table-cell` are not `th`/`td`: the trailing
- * `(?![\w-])` guard rejects them.
+ * `(?![\w-])` guard rejects them. Both regexes are case-insensitive because
+ * CSS type selectors are case-insensitive in an HTML document (review D5).
  */
 function isTableCellSelectorPart(part: string): boolean {
   const scopedToTable = /\.view-spec__table(?![\w-])/.test(part)
-  const cellToken = /(?:^|[^\w-])(?:th|td)(?![\w-])/.test(part)
+  const cellToken = /(?:^|[^\w-])(?:th|td)(?![\w-])/i.test(part)
   return scopedToTable && cellToken
 }
 
@@ -128,13 +129,13 @@ function sourceViolations(css: string): string[] {
       (part) =>
         isTableCellSelectorPart(part) &&
         !part.includes('.view-spec__cell-item') &&
-        /overflow-wrap\s*:\s*anywhere/.test(r.decls),
+        /overflow-wrap\s*:\s*anywhere/i.test(r.decls),
     ),
   )
   if (anywhereOnTableCell) {
     violations.push(ANYWHERE_VIOLATION)
   }
-  if (!plainCellRules.some((r) => /overflow-wrap\s*:\s*break-word/.test(r.decls))) {
+  if (!plainCellRules.some((r) => /overflow-wrap\s*:\s*break-word/i.test(r.decls))) {
     violations.push('no .view-spec__table th/td rule declares overflow-wrap: break-word')
   }
   const cellItem = rules.find((r) => /(^|,)\s*\.view-spec__cell-item\s*(,|$)/.test(r.selector))
@@ -144,7 +145,7 @@ function sourceViolations(css: string): string[] {
     if (!/min-width\s*:/.test(cellItem.decls)) {
       violations.push('.view-spec__cell-item declares no min-width floor')
     }
-    if (!/overflow-wrap\s*:\s*anywhere/.test(cellItem.decls)) {
+    if (!/overflow-wrap\s*:\s*anywhere/i.test(cellItem.decls)) {
       violations.push('.view-spec__cell-item no longer declares overflow-wrap: anywhere')
     }
   }
@@ -254,6 +255,10 @@ describe('FAME-8 GATEFIX5 — source pin catches split/qualified plain-cell sele
       '.view-spec__table :is(td) { overflow-wrap: anywhere; }',
       '.view-spec__table :is(th, td) { overflow-wrap: anywhere; }',
       '.view-spec__table :is(th,td) { overflow-wrap: anywhere; }',
+      // D5 cycle 2: CSS type selectors and keyword values are case-insensitive.
+      '.view-spec__table TD { overflow-wrap: anywhere; }',
+      '.view-spec__table TH, .view-spec__table TD { overflow-wrap: anywhere; }',
+      '.view-spec__table td { overflow-wrap: ANYWHERE; }',
     ]
     for (const shape of shapes) {
       expect(sourceViolations(CONFORMING_FLOOR + shape)).toEqual([ANYWHERE_VIOLATION])
@@ -262,16 +267,19 @@ describe('FAME-8 GATEFIX5 — source pin catches split/qualified plain-cell sele
 })
 
 /**
- * Review D4 (cycle 2): the pin must see through functional pseudo-classes,
- * and must still NOT invent cell selectors where there are none (`thead`,
- * `.view-spec__table-cell`). Each shape is asserted with its own labelled
- * failure message so a hole names itself.
+ * Review D4/D5 (cycle 2): the pin must see through functional pseudo-classes
+ * and CSS case-insensitivity, and must still NOT invent cell selectors where
+ * there are none (`thead`, `.view-spec__table-cell`). Each shape is asserted
+ * with its own labelled failure message so a hole names itself.
  */
-describe('FAME-8 GATEFIX5 — source pin handles functional pseudo-classes (review D4)', () => {
+describe('FAME-8 GATEFIX5 — source pin handles functional pseudo-classes and case variants (review D4/D5)', () => {
   const evasions: Array<[string, string]> = [
     ['functional pseudo-class, single arg', '.view-spec__table :is(td) { overflow-wrap: anywhere; }'],
     ['functional pseudo-class, comma+space', '.view-spec__table :is(th, td) { overflow-wrap: anywhere; }'],
     ['functional pseudo-class, comma no space', '.view-spec__table :is(th,td) { overflow-wrap: anywhere; }'],
+    ['upper-case type selector', '.view-spec__table TD { overflow-wrap: anywhere; }'],
+    ['upper-case split type selectors', '.view-spec__table TH, .view-spec__table TD { overflow-wrap: anywhere; }'],
+    ['upper-case keyword value', '.view-spec__table td { overflow-wrap: ANYWHERE; }'],
   ]
 
   it('flags every evasion class as exactly the `anywhere` violation', () => {
