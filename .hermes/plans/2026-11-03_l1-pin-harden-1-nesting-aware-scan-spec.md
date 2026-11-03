@@ -52,11 +52,13 @@ any other CSS, any component, any server file, any YAML.
    declaring `overflow-wrap: anywhere` is a violation REGARDLESS of `atContext`; the pre-existing
    selector-part logic (`splitSelectorParts`, `isTableCellSelectorPart`, case-insensitivity, the
    `.view-spec__cell-item` carve-out) is unchanged — extend it, do not re-derive it.
+
+   **AMENDED 2026-11-03 by the architect's cycle-2 cap decision** (`.hermes/plans/2026-11-03_l1-pin-harden-1-cycle2-cap-decision.md`, binding): the `.view-spec__cell-item` carve-out is applied at TOKEN BOUNDARIES, not as a substring test. The carve-out's semantic is unchanged (only its boundary is made exact), which removes the one reading that locks in a fail-open (`…td.view-spec__cell-item-x` must not be excused).
 3. **Do not weaken the current floor.** `plainCellRules` (the `break-word` requirement on the
    unconditional `th, td` rule) and the `.analysis-right { overflow: auto }` door check stay
    requirements on UNCONDITIONAL rules only (empty `atContext`). A conditional-only rule must not
    satisfy them; report that as the existing "no … declares overflow-wrap: break-word" violation.
-4. **RED FIRST — new fixtures, each demonstrated failing before the fix:**
+4. **RED FIRST — new fixtures.** **AMENDED 2026-11-03 (same decision):** each EVASION-SHAPE fixture is demonstrated failing before the fix; NO-FALSE-POSITIVE guards are GREEN pre-fix by construction and are stated as such (advc2 observation O1: the original blanket wording was unsatisfiable).
    a. multi-line `@media`-nested `td { overflow-wrap: anywhere }` ⇒ exactly `[ANYWHERE_VIOLATION]`;
    b. one-line `@media`-nested equivalent ⇒ exactly `[ANYWHERE_VIOLATION]`;
    c. `@supports`-nested equivalent ⇒ exactly `[ANYWHERE_VIOLATION]` (proves the scanner is
