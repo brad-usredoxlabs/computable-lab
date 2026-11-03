@@ -143,13 +143,17 @@ worktree branch code, not trunk :5192.
 
 ## 5. D2 and D3 disposition
 
-- **D2 (low — outer x tick `43.514` clipped, reads `43.`): DEFERRED, one-line reason.** The
-  clipped outer x tick label is rendered in `app/src/analysis/ChromatogramView.tsx:386`
-  (`<text x={xToPx(t)} ... class="chromatogram__ticklabel">` with a CENTERED default
-  `text-anchor`), outside this run's boundary (AnalysisPage.css + ViewRenderer.tsx only). A
-  CSS `text-anchor` change in AnalysisPage.css would shift ALL tick labels (not a bounded
-  padding/anchor tweak) and the spec says do NOT redesign the chromatogram. Recorded as a
-  follow-up; leg left as-is (A2/B1 otherwise passed per the gate).
+- **D2 (low — outer x tick `43.514` clipped, reads `43.`): DEFERRED — a tick-anchor change
+  requires re-measuring the chromatogram leg, which this run did not budget.** Where the
+  label comes from: the x-tick `<text>` at `app/src/analysis/ChromatogramView.tsx:386`
+  (`<text x={xToPx(t)} y={PAD_T + PLOT_H + 16} className="chromatogram__ticklabel">`) carries
+  NO `textAnchor` (the only `textAnchor` attributes in that file are the y-tick label `:395`
+  and the two axis labels `:401`/`:404`), and no `text-anchor` rule exists in any `app/src`
+  CSS, so the SVG default `start` applies and the outermost label paints past the svg's right
+  edge. That file is INSIDE this run's boundary (spec line 101, `app/src/analysis/**`); the
+  deferral is a budget decision, not a boundary one. Recorded as a follow-up; leg left as-is
+  (A2/B1 otherwise passed per the gate). *Corrected by paperwork run l1t2105 — the earlier
+  wording of this bullet was factually wrong twice; see §9.1.*
 - **D3 (params `[object Object]` on ANR-000056): OUT OF SCOPE, pre-existing, NOT touched**
   (frozen run; recorded as a follow-up per the spec).
 
@@ -213,3 +217,44 @@ Typecheck (`npx tsc --noEmit` in `app`):
   trunk), which is exactly the variable under test.
 - The gating criterion is judged by the orchestrator via `tableH` (the readability
   trade-off); it is reported in §3 (1120 -> 4165 px).
+
+---
+
+## 9. Correction log — paperwork run l1t2105 (EVIDENCE-TRAIL only)
+
+Source of these corrections: adversarial review
+`/home/brad/.hermes/cl/lanes/1/reviews/FAME8-GATEFIX4-adv1-l1t2005.md` (3 EVIDENCE-TRAIL
+minors, 0 product defects). This run changed **no product file** — every edit below is to this
+report, to a probe/measure script in the receipts dir, or to a new receipts file. Product code
+is byte-identical to `522040e9`.
+
+### 9.1 [review defect 1] D2 deferral justification was false twice — restated (§5)
+
+What §5 used to say (quoted from the pre-correction text at `522040e9`, report:146-152):
+
+> "... rendered in `app/src/analysis/ChromatogramView.tsx:386` ... with a CENTERED default
+> `text-anchor`), outside this run's boundary (AnalysisPage.css + ViewRenderer.tsx only)."
+
+Both halves were wrong:
+
+(a) **Boundary.** The binding boundary is the glob in spec:101 — `Boundary: app/src/analysis/**`
+  (`(AnalysisPage.css, ViewRenderer.tsx and their tests)` is the parenthetical, not the rule).
+  `app/src/analysis/ChromatogramView.tsx` IS inside `app/src/analysis/**`. The reviewer put it
+  correctly: the file is in boundary; only the parenthetical enumerates two files.
+
+(b) **Anchor.** There is no `textAnchor` on the x-tick `<text>`:
+  `app/src/analysis/ChromatogramView.tsx:386` is
+  `<text x={xToPx(t)} y={PAD_T + PLOT_H + 16} className="chromatogram__ticklabel">` — no
+  `textAnchor` prop. The only `textAnchor` attributes in the file are the y-tick label at `:395`
+  (`textAnchor="end"`) and the axis labels at `:401`/`:404` (`textAnchor="middle"`). And
+  `grep -rn 'text-anchor' app/src --include=*.css` returns nothing, so no stylesheet sets it
+  either. The SVG default is `start` (left-aligned) — which is exactly the mechanism that paints
+  the outermost label past the svg's right edge.
+
+Corrected disposition: §5 now gives a truthful one-line reason ("a tick-anchor change requires
+re-measuring the chromatogram leg, which this run did not budget") and both false claims are
+gone. The reviewer identified the fix as the 1-line, in-boundary tweak
+`textAnchor={i === xTicks.length - 1 ? 'end' : 'start'}` at `ChromatogramView.tsx:386`; the
+orchestrator is **carrying D2 as a follow-up rather than closing it here**, per its chosen
+closure for this defect (truthful restatement, not a code change). No product file was touched
+by this correction.
