@@ -130,3 +130,20 @@ Every claim below is the orchestrator's first-hand observation unless marked oth
 4. If no slot frees this tick: do not idle-spin — the only remaining lane-1 work is Brad-held
    (FAME-1B-BACKFILL, do not re-ask). Append the no-work reason to `no-work.log` and let lane 2 use
    both slots.
+
+## Addendum (00:25) — dispatch artefacts pre-built so next tick is one command
+Written and syntax-checked this tick, no process launched (no slot was free and corpus priority
+forbids taking one):
+- Prompt file `/home/brad/.hermes/cl/lanes/1/prompts/coder-L1-PIN-HARDEN-1-l1t0020.txt`
+  (4439 B, prompt-file dispatch only — inline quoting has killed a launch before, AS-L1T262-3).
+- Checkout unit `/home/brad/.hermes/cl/lanes/1/launchers/checkout-L1-PIN-HARDEN-1-l1t0020.sh`
+  (worktree `/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1`, branch
+  `cl/lane1-pin-harden-1-l1t0020` off `cl/integration-1`; logs `CHECKOUT rc=N` marker).
+- Launcher `/home/brad/.hermes/cl/lanes/1/launchers/launch-L1-PIN-HARDEN-1-l1t0020.sh` —
+  self-reexec flock shape (the only shape that has never EBADF'd under systemd-run), outer stagger
+  gate (10 min, pid files + live `hermes -p cl-coder` scan), WT marker wait (60 min), pid stamp
+  `ITEM-PID-ISO` inside the inner, `stagger-trial.log` line on launch, `NO-SLOT` exit 9 that takes
+  no lock. Both `bash -n` clean; both `chmod +x` verified with `ls -l` in the same call.
+Dispatch next tick (lane 2 first): checkout unit, then
+`systemd-run --user --collect --unit=cl-l1-coder-pinharden1-l1t0020 /home/brad/.hermes/cl/lanes/1/launchers/launch-L1-PIN-HARDEN-1-l1t0020.sh`
+(no `-t`).
