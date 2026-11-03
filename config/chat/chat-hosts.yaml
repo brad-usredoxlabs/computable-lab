@@ -1,8 +1,8 @@
 # CHATHOST-SWEEP-1 Change 1 — the chat-host inventory as DATA.
 #
 # A "chat host" is a ROUTED page that registers the universal chat pane
-# (useSurfaceChat -> useRegisterAiChat — the SurfaceChatBridge / DeckSurfaceChat /
-# RunSurfaceChatBridge pattern, "L2-CHAT-UI-1 LEG C: the universal-chat registrar").
+# (useSurfaceChat -> useRegisterAiChat — the ONE registrar SurfaceChatBridge,
+# "L2-CHAT-UI-1 LEG C: the universal-chat registrar").
 # Every chat browser gate from now on MUST sweep THIS set: per host, one live round
 # trip with a request-body receipt, or the verdict is not-accept (spec Change 2).
 #
@@ -77,29 +77,38 @@
 hosts:
   - id: run-workspace
     surface: run-workspace
-    mount: app/src/run/RunWorkspacePage.tsx:168 <RunSurfaceChatBridge> (app/src/run/RunSurfaceChatBridge.tsx:90 useSurfaceChat)
+    mount: app/src/run/RunWorkspacePage.tsx:184 <SurfaceChatBridge host="run-workspace"> (the ONE registrar, INSIDE EventEditorProvider); deck slice publisher <DeckChatSlice/> at app/src/run/RunWorkspacePage.tsx:183 (app/src/event-editor/deck/DeckChatSlice.tsx:238) — no second door
     route: /runs/:runId  (App.tsx:202)
     required_providers: [deck]
     optional_providers: []
     ghost_mount: true
     note: >-
-      AiContext.surface 'run-workspace' (RunWorkspacePage.tsx:101). The bridge mounts INSIDE
-      EventEditorProvider and threads context.selectedWells (the well selection) onto the
-      outgoing /api/ai/** request body (RunSurfaceChatBridge.tsx chatContext) — the J1
-      selectedWells channel. Event-drafting shorthand surface (config/drafting/shorthand-
+      AiContext.surface 'run-workspace' (RunWorkspacePage.tsx:102). The ONE registrar
+      (host="run-workspace") mounts INSIDE EventEditorProvider and passes its own base
+      context (the run surface/summary/editorMode) to the ONE collector
+      (app/src/shared/lib/collectSurfaceContext.ts). The J1 selectedWells channel rides the
+      deck slice: <DeckChatSlice/> (:183) publishes the editor's live selection as
+      contextPatch.selectedWells (the object form, DeckChatSlice.tsx:182-184) and the
+      collector merges it into the posted AiContext (the /api/ai/** request body) — the run
+      door keeps its 'run-workspace' surface (only a generic 'analysis' base yields to the
+      deck slice's surface). Event-drafting shorthand surface (config/drafting/shorthand-
       drafting.yaml).
 
   - id: event-editor
     surface: event-editor
-    mount: app/src/shared/shell/DeckHostPage.tsx:139 <DeckSurfaceChat> (app/src/event-editor/deck/DeckSurfaceChat.tsx:198 useSurfaceChat)
+    mount: app/src/shared/shell/DeckHostPage.tsx:148 <SurfaceChatBridge host="event-editor"> (the ONE registrar, INSIDE EventEditorProvider); deck slice publisher <DeckChatSlice/> at app/src/shared/shell/DeckHostPage.tsx:147 (app/src/event-editor/deck/DeckChatSlice.tsx:238) — no second door
     route: /deck/:eventGraphId/:runId?  (App.tsx:212)
     required_providers: [deck]
     optional_providers: []
     ghost_mount: true
     note: >-
-      AiContext.surface 'event-editor' (DeckSurfaceChat.tsx:97). The deck pane posts the
-      selectedWells/sourceSelection channels (J1/J2 journeys ride it). Event-drafting
-      shorthand surface (config/drafting/shorthand-drafting.yaml).
+      AiContext.surface 'event-editor' — the deck slice declares it (DeckChatSlice.tsx:41,
+      :146) and the collector posts it for this door: the registrar mounts without a
+      page-local base (the generic 'analysis' base, SurfaceChatBridge.tsx:158), so the deck
+      slice's surface wins (app/src/shared/lib/collectSurfaceContext.ts:148). The deck pane
+      posts the selectedWells/sourceSelection channels via the deck slice's contextPatch
+      (the projection, DeckChatSlice.tsx:84-90, :182-184; J1/J2 journeys ride it).
+      Event-drafting shorthand surface (config/drafting/shorthand-drafting.yaml).
 
   - id: project-deck-tab
     surface: analysis   # four-way collision: same surface as record/artifact/registry-host
@@ -122,7 +131,7 @@ hosts:
 
   - id: record-host
     surface: analysis   # four-way collision: same surface as project-deck-tab/artifact/registry-host
-    mount: app/src/shared/shell/RecordHostPage.tsx:195 <RecordSurfaceChat> (app/src/shared/shell/RecordHostPage.tsx:53 SurfaceChatBridge)
+    mount: app/src/shared/shell/RecordHostPage.tsx:198 <RecordSurfaceChat> (app/src/shared/shell/RecordHostPage.tsx:53 SurfaceChatBridge)
     route: /record/:recordId  and  /record/new/:nodeType/:parentId?  (App.tsx:208-209)
     required_providers: []
     optional_providers: []
