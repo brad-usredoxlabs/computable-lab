@@ -156,3 +156,23 @@ own (the value really is an object and really renders `[object Object]`), so `L1
 unaffected — but the follow-up item must start from the stored manifests, NOT from a
 `peak_integration.py` line, and its first step is to find the emitter (my earlier phrasing in this
 handoff's "evidence debt" section over-named the file; this addendum supersedes it).
+
+## Addendum 2 (00:59) — L1-CELLRENDER-1 dispatch artefacts pre-built (nothing launched)
+
+Built and syntax-checked while no slot was free (this supersedes next-tick item 3's "NOT yet pre-built"):
+- Prompt `/home/brad/.hermes/cl/lanes/1/prompts/coder-L1-CELLRENDER-1-l1t0057.txt` (5625 B, prompt-file
+  dispatch only) — carries the ruling's three-part fix, the six RED arms, the hard scope and stop
+  boundary, report-first delivery at `deliverables/l1-cellrender-1-report-l1t0057.md`, and the
+  `L1-CELLRENDER-1 DONE <sha>` end marker.
+- Checkout unit `launchers/checkout-L1-CELLRENDER-1-l1t0057.sh` (worktree
+  `/mnt/vast/home/brad/git/wt/l1-cellrender-1-lane1`, branch `cl/lane1-cellrender-1-l1t0057` off
+  `cl/integration-1`, idempotent when the worktree already exists, `CHECKOUT rc=N` marker).
+- Launcher `launchers/launch-L1-CELLRENDER-1-l1t0057.sh` — verified `diff`-identical to the working
+  L1-PIN-HARDEN-1 launcher modulo the four name substitutions (same self-reexec flock shape, 10-min
+  stagger gate incl. the repair'd timestamp-anchored pid parser, WT marker wait, NO-SLOT exit 9, trial-log
+  line, pid stamp `ITEM-PID-ISO`). Both files `bash -n` clean, exec bits set (`ls -l`).
+Dispatch on the first free slot: the checkout unit, then
+`systemd-run --user --collect --unit=cl-l1-coder-cellrender1-l1t0057 <launcher>` (no `-t`).
+Reminder: `L1-PIN-HARDEN-1` goes first (it was banked first and its baseline is re-pinned) — run its
+checkout unit and `--unit=cl-l1-coder-pinharden1-l1t0020` before this one, one coder per slot, 10-min
+fleet stagger between the two launches.
