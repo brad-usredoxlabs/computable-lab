@@ -1,0 +1,9 @@
+CASE17 raw css tail: @media (max-width: 900px) { .view-spec__table \74 d { overflow-wrap: anywhere; } }
+node v26.7.0
+pre-fix scanner+pin from e2d18589
+CASE13 nested-at-rule-in-style-rule -> [] RED (evasion accepted)
+CASE14 &-tail-nesting             -> [] RED (evasion accepted)
+CASE17 css-escape td (review §3)  -> [] RED (evasion accepted)
+RULES13 [{"selector":".analysis-right","decls":"overflow: auto;","atContext":[]},{"selector":".view-spec__table th, .view-spec__table td","decls":"overflow-wrap: break-word; white-space: normal;","atContext":[]},{"selector":".view-spec__cell-item","decls":"overflow-wrap: anywhere; min-width: 12ch;","atContext":[]},{"selector":".analyses","decls":"@media (max-width: 900px) { .view-spec__table td { overflow-wrap: anywhere; } }","atContext":[]}]
+RULES14 [{"selector":".analysis-right","decls":"overflow: auto;","atContext":[]},{"selector":".view-spec__table th, .view-spec__table td","decls":"overflow-wrap: break-word; white-space: normal;","atContext":[]},{"selector":".view-spec__cell-item","decls":"overflow-wrap: anywhere; min-width: 12ch;","atContext":[]},{"selector":".view-spec__table","decls":"& td { overflow-wrap: anywhere; }","atContext":[]}]
+RULES17 [{"selector":".analysis-right","decls":"overflow: auto;","atContext":[]},{"selector":".view-spec__table th, .view-spec__table td","decls":"overflow-wrap: break-word; white-space: normal;","atContext":[]},{"selector":".view-spec__cell-item","decls":"overflow-wrap: anywhere; min-width: 12ch;","atContext":[]},{"selector":".view-spec__table \\74 d","decls":"overflow-wrap: anywhere;","atContext":["@media (max-width: 900px)"]}]

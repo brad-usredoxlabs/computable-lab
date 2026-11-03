@@ -221,12 +221,14 @@ other product file byte-identical (not in the diff).
 
 ### 4.4 O1 fixture through the exported scanner (node -e, node v26.7.0)
 
-Command (verbatim, run from app/):
+Command (the literal runnable command, run from app/ — the probe script is
+committed at deliverables/l1-pin-harden-1-fix1/fix1-ac2-repro.mts so the
+line is verbatim re-runnable; node version per `node --version` in this
+toolchain, v26.7.0 — see the FIX RUN 1 section for the v26.7.0 vs v26.8.1
+explanation):
 
-    node --input-type=module -e '<O1 fixture through the exported
-    parseCssRules/splitSelectorParts/isTableCellSelectorPart from
-    cssRuleScan.ts, printing the nested rule atContext and the violation
-    list>'
+    cd /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app && \
+      node ../deliverables/l1-pin-harden-1-fix1/fix1-ac2-repro.mts
 
 Real output:
 
@@ -315,3 +317,224 @@ was re-inspected and matches the quoted summary exactly: 5 failed | 10 passed
 module `./cssRuleScan`).
 
 
+
+## 8. FIX RUN 1 (adversarial review advc1 — L1-PIN-HARDEN-1-advc1-l1t0300.md)
+
+Adversarial review VERDICT: fix. Defects: (1) BLOCKER — pin still evadable by
+native CSS Nesting (nested at-rule inside a style rule, `&`-prefixed nested
+rule) — cssRuleScan.ts:66-104 + test :90-97; (2) LOW — AC2 node repro was a
+placeholder, node version stated v26.7.0 vs reviewer-measured v26.8.1; (3)
+LOW — tsc/RED receipts only under /tmp. The review's §3 battery also missed
+cases 13, 14 AND 17 (17: `.view-spec__table \74 d` — a hex-escape-encoded
+cell token; identified from the battery text in §3, reproduced first-hand).
+
+### 8.1 D1 — scanner recursed into nested style rules (direction (a) from the
+review's fix options)
+
+Changes (RED first — the three new fixtures were written and shown failing
+against the pre-fix scanner in this run, see 8.2):
+
+1. `app/src/analysis/cssRuleScan.ts` — the style-rule arm no longer swallows
+   nested blocks as raw decl text:
+   - `captureBlock` (brace-matched, string-aware) extracts the rule body,
+     then `scanDecls` walks it: text up to `;` commits to the rule's own
+     decls; text up to `{` becomes a nested construct's head.
+   - Nested style rule: `resolveNestedSelector` desugars the CSS Nesting
+     `&` per the spec's `:is()` equivalence — bare `&` IS the parent
+     selector; `& td` -> `parent td`; glued `&.y` -> `parent.y`; a
+     non-`&` selector is kept verbatim (conservative: only makes MORE text
+     visible to the ban, never less). The nested rule is emitted with its
+     resolved selector, its own decls, and the parent's `atContext`.
+   - At-rule nested INSIDE a style rule (CSS Nesting spec §2.3): its prelude
+     is pushed onto the context chain exactly like a top-level one; its
+     contents parse with the same rules. Declarations written directly under
+     it (no selector) apply to the PARENT selector while the condition holds,
+     so they are emitted as a separate rule — parent selector, EXTENDED
+     atContext — never merged into the parent's own (unconditional) decls:
+     a conditional `break-word` cannot satisfy the unconditional floor.
+   - New export `decodeCssEscapes`: decodes CSS hex escapes (`\74 ` -> `t`,
+     the trailing whitespace is the escape terminator) and `\_`-style
+     escapes in a selector — generic CSS syntax handling, no domain values.
+     The pin's `anywhere` ban now runs over
+     `splitSelectorParts(decodeCssEscapes(r.selector))`, closing the case-17
+     escape-encoded-token evasion identically to plain text.
+   - Fail-closed behaviour preserved and verified unchanged vs pre-fix: an
+     unbalanced `{`/unterminated at-rule keeps the remainder inside the open
+     scope (transcript `fix1-unbalanced-compare.txt` — identical rule/atContext
+     sets before and after this fix).
+   - No hardcoded selectors beyond what the spec declares; no domain policy in
+     TS; the `view-spec` literals stay in the pin, verbatim.
+
+2. `app/src/analysis/ViewRenderer.cellrender.test.tsx`:
+   - imports `decodeCssEscapes` from './cssRuleScan'; the `anywhere` ban's
+     selector check is now `splitSelectorParts(decodeCssEscapes(r.selector))`
+     (one line changed, the rest of `sourceViolations` untouched).
+   - THREE NEW pin fixtures in the O1 describe block, letters (g)/(i)/(j)
+     (continuing the a-f enumeration; (h) unused):
+     (g) `(g) at-rule nested INSIDE a style rule cannot reopen anywhere
+        (CSS Nesting §2.3, review case 13)` — `NEST_ATRULE_INSIDE_RULE`:
+        conforming floor + `.analyses { @media (max-width: 900px) {
+        .view-spec__table td { overflow-wrap: anywhere; } } }`
+        => toEqual([ANYWHERE_VIOLATION])
+     (i) `(i) &-prefixed nested style rule cannot reopen anywhere (CSS
+        Nesting & desugaring, review case 14)` — `AMPERSAND_TAIL`: conforming
+        floor + `.view-spec__table { & td { overflow-wrap: anywhere; } }`
+        => toEqual([ANYWHERE_VIOLATION])
+     (j) `(j) escape-encoded cell token cannot evade the ban (review case 17:
+        \74 d is td)` — `ESCAPED_CELL_TOKEN`: conforming floor +
+        `@media (max-width: 900px) { .view-spec__table \74 d {
+        overflow-wrap: anywhere; } }` => toEqual([ANYWHERE_VIOLATION])
+
+3. `app/src/analysis/cssRuleScan.test.ts` — SIX NEW parser-contract tests
+   (recursion into nested at-rule with exact atContext + outer decls empty;
+   `& td` desugaring with exact atContext; bare `&` + glued `&.y`; separate
+   conditional rule for decls directly under a nested at-rule; two-deep
+   nested at-rules inside a style rule; `decodeCssEscapes` unit checks incl.
+   the case-17 raw-vs-decoded token comparison).
+
+### 8.2 RED evidence (pre-fix, this run)
+
+Against the pre-fix committed scanner + pin (e2d18589), the three new pin
+fixtures were staged in the worktree (scanner/pin checked out from
+e2d18589; the three fixtures added; nothing else) and run:
+
+    cd app && npx vitest run src/analysis/ViewRenderer.cellrender.test.tsx src/analysis/cssRuleScan.test.ts
+
+Real output (full capture: deliverables/l1-pin-harden-1-fix1/fix1-vitest-red.txt):
+
+    ✓ src/analysis/cssRuleScan.test.ts  (10 tests)
+    FAIL  ... > (g) at-rule nested INSIDE a style rule cannot reopen anywhere (CSS Nesting §2.3, review case 13)
+    AssertionError: expected [] to deeply equal [ Array(1) ]
+    FAIL  ... > (i) &-prefixed nested style rule cannot reopen anywhere (CSS Nesting & desugaring, review case 14)
+    AssertionError: expected [] to deeply equal [ Array(1) ]
+    FAIL  ... > (j) escape-encoded cell token cannot evade the ban (review case 17: \74 d is td)
+    AssertionError: expected [] to deeply equal [ Array(1) ]
+     Test Files  1 failed | 1 passed (2)
+          Tests  3 failed | 25 passed (28)
+
+Exactly the three new fixtures RED (each returning [] against the pre-fix
+scanner — the two CSS-Nesting evasions + the escape evasion); all 25
+pre-existing tests (8 base + 7 O1 fixtures/atContext + 10 parser contract)
+green. A standalone probe (committed:
+deliverables/l1-pin-harden-1-fix1/fix1-red-probe.mts, re-runnable via
+`node ../deliverables/l1-pin-harden-1-fix1/fix1-red-probe.mts .. e2d18589`
+from app/) recorded the pre-fix rule dumps, e.g. case 13 parsed as ONE rule
+`{"selector":".analyses","decls":"@media (max-width: 900px) { .view-spec__table td { overflow-wrap: anywhere; } }","atContext":[]}`
+and case 14 as `{"selector":".view-spec__table","decls":"& td { overflow-wrap: anywhere; }","atContext":[]}` —
+the same shapes the review quoted (transcript: fix1-red-probe.txt).
+
+The review's §3 battery re-run PRE-FIX (committed probe
+deliverables/l1-pin-harden-1-fix1/fix1-battery.mts against the e2d18589
+scanner, transcript fix1-battery-prefix.txt) reproduced the review's own
+result exactly: 17/20, MISS on cases 13/14/17, atContext-stack probes OK,
+floor/door directions OK, shipped CSS -> [].
+
+### 8.3 Post-fix verification (real output; all captures under
+deliverables/l1-pin-harden-1-fix1/, absolute paths
+/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/deliverables/l1-pin-harden-1-fix1/)
+
+vitest (fix1-vitest-green.txt):
+
+    cd app && npx vitest run src/analysis/ViewRenderer.cellrender.test.tsx src/analysis/cssRuleScan.test.ts
+    ✓ src/analysis/cssRuleScan.test.ts  (16 tests)
+    ✓ src/analysis/ViewRenderer.cellrender.test.tsx  (18 tests)
+    Test Files  2 passed (2)
+         Tests  34 passed (34)
+
+18 = 8 pre-existing + 7 (a-f + atContext) + 3 NEW pin fixtures (g)/(i)/(j);
+16 = 10 pre-existing parser tests + 6 NEW. All existing fixtures green; the
+real-file pin returning [] is among the 8 pre-existing and green; the
+atContext === [] assertion is green.
+
+Review §3 battery re-run POST-FIX (fix1-battery-postfix.txt) — case-by-case
+(full 20-case transcript committed; every case that should flag does flag,
+every benign case returns []):
+
+    case 1  multi-line @media                    -> [ANYWHERE_VIOLATION] OK
+    case 2  one-line @media                      -> [ANYWHERE_VIOLATION] OK
+    case 3  @supports                            -> [ANYWHERE_VIOLATION] OK
+    case 4  @layer                               -> [ANYWHERE_VIOLATION] OK
+    case 5  @container                           -> [ANYWHERE_VIOLATION] OK
+    case 6  two-deep @media > @supports          -> [ANYWHERE_VIOLATION] OK
+    case 7  :is(th, td) inside @supports         -> [ANYWHERE_VIOLATION] OK
+    case 8  selector split across lines          -> [ANYWHERE_VIOLATION] OK
+    case 9  @media no space after name           -> [ANYWHERE_VIOLATION] OK
+    case 10 @media screen and (...)              -> [ANYWHERE_VIOLATION] OK
+    case 11 rule+at-rule brace same line         -> [ANYWHERE_VIOLATION] OK
+    case 12 commented-out rule (benign)          -> []                OK
+    case 13 NESTED at-rule inside style rule     -> [ANYWHERE_VIOLATION] OK  (was MISS/[] pre-fix)
+    case 14 NESTED & td inside .view-spec__table -> [ANYWHERE_VIOLATION] OK  (was MISS/[] pre-fix)
+    case 15 comment between prelude and brace    -> [ANYWHERE_VIOLATION] OK
+    case 16 UPPERCASE decl                       -> [ANYWHERE_VIOLATION] OK
+    case 17 CSS escape-encoded td: \74 d        -> [ANYWHERE_VIOLATION] OK  (was MISS/[] pre-fix)
+    case 18 benign: floor only, no at-rules      -> []                OK
+    case 19 benign @media over conforming floor  -> []                OK
+    case 20 3 declarations including anywhere    -> [ANYWHERE_VIOLATION] OK
+    battery: 20/20 match expectation
+
+Stack/floor/door probes in the same transcript: atContext chains a/b/c/d OK,
+side-by-side at-rules OK, fail-closed unbalanced @media behaviour IDENTICAL
+to pre-fix (fix1-unbalanced-compare.txt), floor-only-in-@media -> FLOOR
+violation OK, door-only-in-@media -> door violation OK, benign @media over
+conforming floor -> [], unconditional+conditional break-word -> [],
+SHIPPED AnalysisPage.css -> [].
+
+tsc (fix1-tsc-after.txt): `cd app && npx tsc --noEmit -p tsconfig.json`
+exit 2, 12 `error TS` lines, 0 in src/analysis; normalized sorted diff
+against the start-commit baseline (/tmp/tsc-base-l1pin.txt — supplementary;
+the set is reproduced in fix1-tsc-after.txt): identical, zero NEW.
+
+git: `git diff --stat 1a443259..HEAD` touches only the permitted paths (the
+two test files, cssRuleScan.ts, deliverables);
+`git rev-parse 1a443259:app/src/analysis/AnalysisPage.css
+HEAD:app/src/analysis/AnalysisPage.css` -> c6930c66eabf3918ececb2df3a0f682b7e94c4da
+both (byte-identical); `git status --porcelain` empty after the commit.
+
+### 8.4 D2 — literal AC2 command + node version
+
+The placeholder in §4.4 is replaced in place by the literal command, which
+is verbatim re-runnable (probe committed):
+
+    cd /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app && node ../deliverables/l1-pin-harden-1-fix1/fix1-ac2-repro.mts
+
+Real output (fix1-ac2.txt):
+
+    node v26.7.0
+    CURRENT  nested rule: {"selector":".view-spec__table td","decls":"overflow-wrap: anywhere;","atContext":["@media (max-width: 900px)"]}
+    CURRENT  violations:  ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    PREVIOUS (e2d18589) violations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+
+i.e. ONE rule with atContext ['@media (max-width: 900px)'] and
+sourceViolations -> [ANYWHERE_VIOLATION]. (The ORIGINAL line-anchored parser
+at base 1a443259 returned [] for this fixture — the first run's RED record,
+report §2/§4.4, supplementary capture /tmp/red-run-l1pin.txt.)
+
+Node version, measured both ways in this session:
+`/usr/bin/node --version` -> v26.7.0 (the toolchain `node` on PATH in this
+session — the version every command in this run actually executed);
+`/home/brad/.local/share/mise/shims/node --version` -> v26.8.1 (mise-managed
+install, `mise ls node` -> 26.8.1; the reviewer's shell resolves node
+through the mise shim, hence its v26.8.1). All runs in this report were
+executed under v26.7.0; the probe scripts print `node <version>` so the
+version of record is in each transcript. No behavioural difference
+asserted between the two.
+
+### 8.5 D3 — durable receipts moved into the worktree
+
+All receipts now live under
+`/mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/deliverables/l1-pin-harden-1-fix1/`
+(this section cites them by absolute path):
+
+    fix1-vitest-red.txt        RED vitest transcript (3 new fixtures fail, 25 pass)
+    fix1-vitest-green.txt      post-fix vitest transcript (34/34 green)
+    fix1-tsc-after.txt         tsc --noEmit capture (12 errors, 0 in src/analysis)
+    fix1-red-probe.mts/.txt    pre-fix RED probe (re-runnable; rule dumps for 13/14/17)
+    fix1-battery.mts           the §3 20-case battery + stack/floor/door probes
+    fix1-battery-prefix.txt    battery vs pre-fix scanner: 17/20, MISS 13/14/17
+    fix1-battery-postfix.txt   battery vs fixed scanner: 20/20, case-by-case
+    fix1-unbalanced-compare.txt fail-closed parity pre-fix vs post-fix
+    fix1-ac2-repro.mts/.txt    literal AC2 command + output
+
+The /tmp captures (/tmp/red-run-l1pin.txt, /tmp/tsc-base-l1pin.txt,
+/tmp/tsc-after-l1pin.txt, /tmp/tsc-verify-l1pin.txt) remain cited as
+supplementary only.

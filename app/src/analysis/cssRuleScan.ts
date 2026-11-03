@@ -2,7 +2,7 @@
  * L1-PIN-HARDEN-1 — brace-depth CSS rule scanner for the FAME-8 GATEFIX5
  * cell-render source pin (ViewRenderer.cellrender.test.tsx).
  *
- * The pre-fix parser was line-anchored (`matchAll(/^([^{}\/][^{]*)\{([^}]*)\}
+ * The pre-fix parser was line-anchored (`matchAll(/^([^{}\\/][^{]*)\{([^}]*)\}
  * \s*$/gm)`): a rule nested inside @media/@supports/@layer/@container was
  * invisible to it, so a responsive override reintroducing
  * `overflow-wrap: anywhere` on a `.view-spec__table` cell passed the pin
@@ -11,6 +11,38 @@
  * each style rule with `selector`, `decls`, and `atContext` — the chain of
  * enclosing at-rule preludes. No parser dependency (no postcss/css-tree):
  * a ~60-line brace scanner is the point (item contract).
+ *
+ * FIX RUN 1 (adversarial review advc1, defect 1 + §3 cases 13/14/17): the
+ * first version swallowed any `{ … }` block inside a style rule's decls
+ * verbatim, so two more native CSS Nesting shapes evaded the pin (both
+ * valid browser CSS; app/ has no postcss config, so Vite ships them
+ * untouched):
+ *   - an at-rule nested INSIDE a style rule (review §3 case 13):
+ *     `.analyses { @media (…) { .view-spec__table td { overflow-wrap:
+ *       anywhere; } } }` — the whole conditional group became ".analyses"
+ *     decl text and the inner rule was never emitted;
+ *   - a `&`-prefixed nested style rule (review §3 case 14):
+ *     `.view-spec__table { & td { overflow-wrap: anywhere; } }` — the
+ *     nested selector `& td` was never desugared, so the ban's token
+ *     check saw no `th`/`td` at all.
+ * Both are now recursed into: a `{` inside a style rule's declaration body
+ * starts a nested construct whose selector is resolved against the parent
+ * (a bare `&` IS the parent selector; `& td` -> parent + " td") and whose
+ * body is parsed with the same rules. An at-rule nested inside a style
+ * rule pushes its prelude onto the context chain exactly like a top-level
+ * one; declarations written directly under it (no selector of their own)
+ * apply to the PARENT selector per the CSS Nesting spec, so they are
+ * emitted as a separate rule carrying the parent's selector WITH the
+ * extended `atContext` — never merged into the parent's unconditional
+ * decls (a conditional `break-word` must not satisfy the unconditional
+ * floor). Case 17 of the review's battery: CSS escape-encoded selector
+ * tokens (`\74 d` is `td` with a hex escape) are decoded via
+ * `decodeCssEscapes` before the pin's selector checks — generic CSS
+ * syntax handling, no domain-specific knowledge. The pin must never
+ * silently accept a nested override of the shatter property: every shape
+ * either emits the offending rule or fails closed (an unbalanced `{`
+ * keeps the rest of the file inside the open rule's scope, so nothing
+ * after it can satisfy the unconditional floor).
  */
 
 export interface CssRule {
@@ -70,39 +102,17 @@ export function parseCssRules(css: string): CssRule[] {
         // At-rule with a body: its prelude becomes context for everything
         // nested inside it (@media/@supports/@layer/@container alike).
         atContext.push(head)
-      } else {
-        // Style rule: capture decls until THIS rule's own closing brace;
-        // inner braces (CSS nesting) are tracked so a nested `}` cannot end
-        // the rule early.
-        let j = i + 1
-        let inner = 0
-        let dquote: '"' | "'" | null = null
-        let decls = ''
-        while (j < text.length) {
-          const c = text[j]
-          if (dquote) {
-            decls += c
-            if (c === dquote) dquote = null
-          } else if (c === '"' || c === "'") {
-            dquote = c
-            decls += c
-          } else if (c === '{') {
-            inner += 1
-            decls += c
-          } else if (c === '}') {
-            if (inner === 0) break
-            inner -= 1
-            decls += c
-          } else {
-            decls += c
-          }
-          j += 1
-        }
-        rules.push({ selector: head, decls: decls.trim(), atContext: atContext.slice() })
-        i = j + 1
+        i += 1
         continue
       }
-      i += 1
+      // Style rule: capture decls until THIS rule's own closing brace;
+      // inner braces (CSS nesting) are tracked so a nested `}` cannot end
+      // the rule early, then recurse into the body for nested constructs.
+      const [body, end] = captureBlock(text, i + 1)
+      const [ownDecls, nested] = scanDecls(body, atContext.slice(), head)
+      rules.push({ selector: head, decls: ownDecls, atContext: atContext.slice() })
+      rules.push(...nested)
+      i = end + 1
       continue
     }
     if (ch === '}') {
@@ -115,6 +125,210 @@ export function parseCssRules(css: string): CssRule[] {
     i += 1
   }
   return rules
+}
+
+/**
+ * Resolve a nested rule's selector against its parent (CSS Nesting `&`
+ * semantics, desugared per the spec's `:is()` equivalence):
+ *  - a bare `&` IS the parent selector itself;
+ *  - `&` followed by whitespace (or end of input) descends from the parent
+ *    (`& td` -> `parent td`);
+ *  - `&` glued to a compound suffix (`&.x`, `&:hover`) compounds with the
+ *    parent (`parent.x`, `parent:hover`);
+ *  - a selector WITHOUT `&` is kept as-is. Under strict CSS Nesting such a
+ *    selector is invalid inside a nested style rule (nest-prefixed
+ *    selectors are required), but keeping it verbatim is the conservative
+ *    direction for a pin: it can only make MORE text visible to the ban,
+ *    never less.
+ */
+function resolveNestedSelector(head: string, parent: string): string {
+  if (head === '&') return parent
+  if (head.startsWith('&')) {
+    const rest = head.slice(1)
+    if (/^[\s]/.test(rest)) return `${parent} ${rest.trimStart()}`
+    return `${parent}${rest}`
+  }
+  return head
+}
+
+/**
+ * Find the matching `}` for the `{` just before `start`, tracking brace
+ * depth and string state. Returns the body text (inner content, raw) and
+ * the index of the closing `}` (or `text.length - 1` if unbalanced —
+ * fail-closed: the remainder stays inside this rule's scope).
+ */
+function captureBlock(text: string, start: number): [string, number] {
+  let j = start
+  let inner = 0
+  let dquote: '"' | "'" | null = null
+  let body = ''
+  while (j < text.length) {
+    const c = text[j]
+    if (dquote) {
+      body += c
+      if (c === dquote) dquote = null
+    } else if (c === '"' || c === "'") {
+      dquote = c
+      body += c
+    } else if (c === '{') {
+      inner += 1
+      body += c
+    } else if (c === '}') {
+      if (inner === 0) break
+      inner -= 1
+      body += c
+    } else {
+      body += c
+    }
+    j += 1
+  }
+  return [body, j]
+}
+
+/**
+ * Walk a style rule's declaration body. Text accumulates into a pending
+ * buffer; a `;` commits the pending run (plus the `;`) to this rule's own
+ * `decls` (in valid CSS a rule body's `;` separates declarations only —
+ * at-rule preludes use commas, not semicolons); a `{` takes the pending
+ * run as the NESTED construct's head:
+ *  - an at-rule (`@…`): push its prelude onto the context chain and parse
+ *    its contents with the same rules. Declarations written directly
+ *    under it (no selector) apply to the PARENT selector when the
+ *    condition holds (CSS Nesting spec §2.3), so they are emitted as a
+ *    separate rule — parent selector, extended `atContext` — NEVER merged
+ *    into the parent's own (unconditional) decls, so a conditional
+ *    `break-word` cannot satisfy the unconditional floor;
+ *  - a nested STYLE rule: resolve its selector against the parent (`&`
+ *    semantics above) and recurse with it as the new nesting scope,
+ *    carrying the current `atContext` chain;
+ *  - an EMPTY head (malformed: `{` with no selector): fail closed — parse
+ *    what is inside it anyway (children remain visible to the pin) and
+ *    merge its plain decls into the parent's own decls (any
+ *    `overflow-wrap: anywhere` there stays visible to the ban).
+ * Returns `[decls, nestedRules]`. `decls` is the parent's own declaration
+ * text (outer whitespace trimmed, inner text raw — parity with the
+ * pre-fix parser's `.trim()`).
+ */
+function scanDecls(
+  body: string,
+  atContext: string[],
+  parentSelector: string,
+): [string, CssRule[]] {
+  const nested: CssRule[] = []
+  let decls = ''
+  let pending = ''
+  let quote: '"' | "'" | null = null
+  let i = 0
+  while (i < body.length) {
+    const ch = body[i]
+    if (quote) {
+      if (ch === quote) quote = null
+      pending += ch
+      i += 1
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      pending += ch
+      i += 1
+      continue
+    }
+    if (ch === ';') {
+      // Declaration terminator: commit the pending run to this rule's own
+      // decls and reset it so a later statement cannot bleed into a
+      // nested head.
+      decls += pending + ';'
+      pending = ''
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      const head = pending.trim()
+      pending = ''
+      const [innerBody, end] = captureBlock(body, i + 1)
+      if (head.startsWith('@')) {
+        // Conditional group nested inside a style rule (CSS Nesting
+        // spec §2.3). Its contents are a rule list scoped to the PARENT
+        // style rule; recurse with the extended context chain.
+        const childContext = [...atContext, head]
+        const [childDecls, childRules] = scanDecls(innerBody, childContext, parentSelector)
+        if (childDecls) {
+          // Declarations directly under the condition apply to the parent
+          // selector ONLY while the condition holds — a separate rule with
+          // the extended chain, never part of the parent's own decls.
+          nested.push({ selector: parentSelector, decls: childDecls, atContext: childContext })
+        }
+        nested.push(...childRules)
+      } else if (head) {
+        // Nested style rule: resolve against the parent and recurse (its
+        // own body may nest further).
+        const selector = resolveNestedSelector(head, parentSelector)
+        const [ownDecls, grandChild] = scanDecls(innerBody, atContext.slice(), selector)
+        nested.push({ selector, decls: ownDecls, atContext: atContext.slice() })
+        nested.push(...grandChild)
+      } else {
+        // Empty head (invalid CSS): fail closed — the block's plain decls
+        // merge into the parent's own decls and its children are still
+        // parsed, so nothing inside it can hide from the pin.
+        const [childDecls, childRules] = scanDecls(innerBody, atContext.slice(), parentSelector)
+        decls += childDecls
+        nested.push(...childRules)
+      }
+      i = end + 1
+      continue
+    }
+    if (ch === '}') {
+      // Stray close inside a decl body: captureBlock already bounded the
+      // body, so this is malformed input — stop accumulating (fail
+      // closed; nothing after a stray `}` can be attributed).
+      break
+    }
+    pending += ch
+    i += 1
+  }
+  decls += pending
+  return [decls.trim(), nested]
+}
+
+/**
+ * Decode CSS escape sequences in a selector string (generic CSS syntax,
+ * no domain values): a `\XX` hex escape (1-6 hex digits) becomes the code
+ * point and a single following whitespace character is the escape
+ * terminator (consumed); a backslash before a non-hex character escapes
+ * that character (`\_` -> `_`); a trailing backslash is dropped.
+ * Review §3 case 17: `.view-spec__table \74 d` is `.view-spec__table td`
+ * with the cell token escape-encoded — without decoding, the pin's token
+ * check could be evaded by writing `td` as a hex escape. The pin applies
+ * this to each rule's selector before its selector checks, so escape-
+ * encoded evasion and plain-text evasion are pinned identically.
+ */
+export function decodeCssEscapes(s: string): string {
+  let out = ''
+  let i = 0
+  while (i < s.length) {
+    const ch = s[i]
+    if (ch !== '\\') {
+      out += ch
+      i += 1
+      continue
+    }
+    const next = s[i + 1]
+    if (next === undefined) break // trailing backslash: drop it
+    const hexDigits = s.slice(i + 1, i + 7).match(/^[0-9a-fA-F]+/)?.[0] ?? ''
+    if (hexDigits.length > 0) {
+      out += String.fromCodePoint(parseInt(hexDigits.slice(0, 6), 16))
+      i += 1 + hexDigits.length
+      // A single following whitespace char terminates the hex escape.
+      const after = s[i]
+      if (after === ' ' || after === '\t' || after === '\n' || after === '\r' || after === '\f') {
+        i += 1
+      }
+    } else {
+      out += next
+      i += 2
+    }
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

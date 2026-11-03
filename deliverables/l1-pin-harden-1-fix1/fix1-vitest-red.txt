@@ -1,0 +1,88 @@
+npm notice run npx
+npm notice run 'vitest' run src/analysis/ViewRenderer.cellrender.test.tsx src/analysis/cssRuleScan.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app
+
+(node:389387) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:389387) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/cssRuleScan.test.ts  (10 tests) 8ms
+ ❯ src/analysis/ViewRenderer.cellrender.test.tsx  (18 tests | 3 failed) 181ms
+   ❯ src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (g) at-rule nested INSIDE a style rule cannot reopen anywhere (CSS Nesting §2.3, review case 13)
+     → expected [] to deeply equal [ Array(1) ]
+   ❯ src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (i) &-prefixed nested style rule cannot reopen anywhere (CSS Nesting & desugaring, review case 14)
+     → expected [] to deeply equal [ Array(1) ]
+   ❯ src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (j) escape-encoded cell token cannot evade the ban (review case 17: \74 d is td)
+     → expected [] to deeply equal [ Array(1) ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (g) at-rule nested INSIDE a style rule cannot reopen anywhere (CSS Nesting §2.3, review case 13)
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- Array [
+-   "a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere",
+- ]
++ Array []
+
+ ❯ src/analysis/ViewRenderer.cellrender.test.tsx:446:55
+    444| 
+    445| it('(g) at-rule nested INSIDE a style rule cannot reopen anywhere (CSS…
+    446|     expect(sourceViolations(NEST_ATRULE_INSIDE_RULE)).toEqual([ANYWHER…
+       |                                                       ^
+    447|   })
+    448| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (i) &-prefixed nested style rule cannot reopen anywhere (CSS Nesting & desugaring, review case 14)
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- Array [
+-   "a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere",
+- ]
++ Array []
+
+ ❯ src/analysis/ViewRenderer.cellrender.test.tsx:450:46
+    448| 
+    449|   it('(i) &-prefixed nested style rule cannot reopen anywhere (CSS Nes…
+    450|     expect(sourceViolations(AMPERSAND_TAIL)).toEqual([ANYWHERE_VIOLATI…
+       |                                              ^
+    451|   })
+    452| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/analysis/ViewRenderer.cellrender.test.tsx > L1-PIN-HARDEN-1 — source pin is nesting-aware (O1) > (j) escape-encoded cell token cannot evade the ban (review case 17: \74 d is td)
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- Array [
+-   "a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere",
+- ]
++ Array []
+
+ ❯ src/analysis/ViewRenderer.cellrender.test.tsx:454:50
+    452| 
+    453|   it('(j) escape-encoded cell token cannot evade the ban (review case …
+    454|     expect(sourceViolations(ESCAPED_CELL_TOKEN)).toEqual([ANYWHERE_VIO…
+       |                                                  ^
+    455|   })
+    456| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  3 failed | 25 passed (28)
+   Start at  03:58:00
+   Duration  14.38s (transform 518ms, setup 2.14s, collect 1.98s, tests 189ms, environment 17.07s, prepare 1.19s)
+

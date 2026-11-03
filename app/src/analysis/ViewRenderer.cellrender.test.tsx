@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ViewRenderer, toRenderableArtifact } from './ViewRenderer'
 import {
+  decodeCssEscapes,
   isTableCellSelectorPart,
   parseCssRules,
   splitSelectorParts,
@@ -88,7 +89,7 @@ function sourceViolations(css: string): string[] {
   )
   const violations: string[] = []
   const anywhereOnTableCell = rules.some((r) =>
-    splitSelectorParts(r.selector).some(
+    splitSelectorParts(decodeCssEscapes(r.selector)).some(
       (part) =>
         isTableCellSelectorPart(part) &&
         !part.includes('.view-spec__cell-item') &&
@@ -371,6 +372,29 @@ describe('L1-PIN-HARDEN-1 — source pin is nesting-aware (O1)', () => {
 .view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
 @supports (overflow-wrap: anywhere) { .view-spec__table td { overflow-wrap: anywhere; } }
 `
+  // FIX RUN 1 (adversarial review advc1, §3): the two remaining native CSS
+  // Nesting evasion shapes, plus the review's case 17 (escape-encoded cell
+  // token). All three were reproduced RED first-hand against the pre-fix
+  // scanner before this fix run: each returns [] there (probe transcript in
+  // deliverables/l1-pin-harden-1-fix1/fix1-red-probe.txt).
+  const NEST_ATRULE_INSIDE_RULE = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.analyses { @media (max-width: 900px) { .view-spec__table td { overflow-wrap: anywhere; } } }
+`
+  const AMPERSAND_TAIL = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { & td { overflow-wrap: anywhere; } }
+`
+  const ESCAPED_CELL_TOKEN = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@media (max-width: 900px) { .view-spec__table \\74 d { overflow-wrap: anywhere; } }
+`
   const O1_IS_SHAPE = `
 .analysis-right { overflow: auto; }
 .view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
@@ -417,6 +441,18 @@ describe('L1-PIN-HARDEN-1 — source pin is nesting-aware (O1)', () => {
 }
 `
     expect(sourceViolations(conditionalFloor)).toEqual([FLOOR_VIOLATION])
+  })
+
+  it('(g) at-rule nested INSIDE a style rule cannot reopen anywhere (CSS Nesting §2.3, review case 13)', () => {
+    expect(sourceViolations(NEST_ATRULE_INSIDE_RULE)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(i) &-prefixed nested style rule cannot reopen anywhere (CSS Nesting & desugaring, review case 14)', () => {
+    expect(sourceViolations(AMPERSAND_TAIL)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(j) escape-encoded cell token cannot evade the ban (review case 17: \\74 d is td)', () => {
+    expect(sourceViolations(ESCAPED_CELL_TOKEN)).toEqual([ANYWHERE_VIOLATION])
   })
 
   it('the exported brace-depth scanner emits atContext for the O1 rule', () => {

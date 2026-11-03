@@ -1,0 +1,20 @@
+npm notice run npx
+npm notice run 'tsc' --noEmit -p tsconfig.json
+src/editor/taptab/tabNavPlugin.ts(102,7): error TS2322: Type '(view: EditorView, event: KeyboardEvent) => boolean' is not assignable to type '(this: Plugin<any>, view: EditorView, event: KeyboardEvent) => boolean | void'.
+  Types of parameters 'view' and 'view' are incompatible.
+    Type 'import("/mnt/vast/home/brad/git/computable-lab/node_modules/prosemirror-view/dist/index").EditorView' is not assignable to type 'import("/mnt/vast/home/brad/git/computable-lab/node_modules/@tiptap/pm/node_modules/prosemirror-view/dist/index").EditorView'.
+      Types have separate declarations of a private property 'directPlugins'.
+src/event-editor/EventEditorContext.tsx(1302,29): error TS2339: Property 'equipments' does not exist on type '{ eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; placements: EventEditorPlacement[]; }'.
+src/event-editor/deck/LawnSurface.moveAcross.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/deck/PreviewActionBar.test.tsx(108,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/editorHistory.test.ts(176,34): error TS2345: Argument of type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: never[]; labwares: {}; placements: never[]; }' is not assignable to parameter of type 'EventEditorAction'.
+  Property 'equipments' is missing in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: never[]; labwares: {}; placements: never[]; }' but required in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; equipments: Record<string, Equipment>; placements: EventEditorPlacement[]; }'.
+src/event-editor/editorHistory.test.ts(199,37): error TS2345: Argument of type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: PlateEvent[]; labwares: {}; placements: never[]; }' is not assignable to parameter of type 'EventEditorAction'.
+  Property 'equipments' is missing in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: PlateEvent[]; labwares: {}; placements: never[]; }' but required in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; equipments: Record<string, Equipment>; placements: EventEditorPlacement[]; }'.
+src/event-editor/focus/LabwareFocus.instrument.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/right-pane/ai/systemPromptForViewer.ts(46,3): error TS2322: Type '"document" | "protocol-review" | "pdf" | "deck" | "project-details"' is not assignable to type 'SystemPromptKind'.
+  Type '"protocol-review"' is not assignable to type 'SystemPromptKind'.
+src/event-editor/viewer/Viewer.tsx(65,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
+src/event-editor/viewer/ViewerToolbar.tsx(55,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
+src/ingestion/components/IngestionUploadModal.tsx(232,23): error TS2554: Expected 2 arguments, but got 1.
+src/ingestion/protocol-review/ExtractionProgressPanel.test.tsx(9,19): error TS6133: 'fireEvent' is declared but its value is never read.
