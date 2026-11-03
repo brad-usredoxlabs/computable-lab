@@ -24,7 +24,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 const mocks = vi.hoisted(() => ({
@@ -218,7 +219,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
 
     const view = render(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
         <HarnessChatPane />
       </AiPanelProvider>,
     )
@@ -267,7 +269,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     mocks.state = deckState('EVG-seam-B')
     view.rerender(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
         <HarnessChatPane />
       </AiPanelProvider>,
     )
@@ -313,7 +316,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
 
     render(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
       </AiPanelProvider>,
     )
 

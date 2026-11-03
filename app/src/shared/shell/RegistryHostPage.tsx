@@ -48,7 +48,7 @@ function RegistrySurfaceChat() {
   }), [ws?.state.studyId, activeTab])
   // No scope: the registry is not instance-scoped (it rides the scratch
   // study), so its thread lives under the server's reserved "_" scope.
-  return <SurfaceChatBridge aiContext={aiContext} />
+  return <SurfaceChatBridge host="registry-host" base={{ context: aiContext }} />
 }
 
 export function RegistryHostPage() {

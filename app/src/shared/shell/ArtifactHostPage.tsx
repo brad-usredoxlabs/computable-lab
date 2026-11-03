@@ -46,7 +46,7 @@ function ArtifactSurfaceChat({ artifact, kind, artifactId }: {
       mode: kind === 'pdf' ? 'pdf-viewer' : 'document-editor',
     },
   }), [artifact, kind, artifactId])
-  return <SurfaceChatBridge aiContext={aiContext} scope={artifactId} />
+  return <SurfaceChatBridge host="artifact-host" base={{ context: aiContext, scope: artifactId }} />
 }
 
 export function ArtifactHostPage() {

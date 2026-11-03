@@ -13,7 +13,8 @@ import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
-import { RunSurfaceChatBridge } from './RunSurfaceChatBridge'
+import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
+import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
@@ -165,7 +166,21 @@ export function RunWorkspacePage() {
                 the legacy ChatContextHeader. Deck precedent:
                 DeckHostPage.tsx:138 wraps the deck subtree the same way. */}
             <ChatFocusProvider>
-              <RunSurfaceChatBridge aiContext={aiContext} />
+              {/* CHATHOST-CONSOLIDATE-1: the ONE registrar (host
+                  "run-workspace" — the YAML door registry id). The deck slice is
+                  PUBLISHED by DeckChatSlice (inside EventEditorProvider, INSIDE
+                  the provider where it reads the real editor state) and the
+                  registrar collects it through the store. The run door passes its
+                  own base context (surface 'run-workspace', the run title, the
+                  plan/execute mode) — the collector keeps the run surface/summary/
+                  editorMode and merges the deck slice's endpoint/scope/handlers +
+                  the well-selection context (the J1 selectedWells channel, which
+                  the old top-level page call could never see). The deck slice is
+                  REQUIRED for this host (config/chat/chat-hosts.yaml
+                  required_providers: [deck]); a missing publisher is a loud
+                  error, never a silent empty pane. */}
+              <DeckChatSlice />
+              <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
               <RunWorkspaceShell
                 navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
                 rightPane={<HarnessChatPane />}

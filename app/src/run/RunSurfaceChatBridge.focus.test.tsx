@@ -119,7 +119,12 @@ vi.mock('../event-editor/EventEditorContext', () => ({
 import { useChatFocus, ChatFocusProvider, type ChatFocus } from '../agent/ChatFocusContext'
 import { ProtocolSelectionProvider, useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import { AiPanelProvider } from '../shared/context/AiPanelContext'
-import { RunSurfaceChatBridge } from './RunSurfaceChatBridge'
+// CHATHOST-CONSOLIDATE-1 T-3 retarget: the run door's deck slice is PUBLISHED
+// by DeckChatSlice (reads the mocked useEventEditor) and the ONE registrar
+// (SurfaceChatBridge, host="run-workspace") collects it — the assertions
+// (the published working focus) are unchanged.
+import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
+import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 
 const aiContext: AiContext = {
@@ -152,7 +157,8 @@ function renderRunChat() {
               <AiPanelProvider>
                 <ChatFocusProvider>
                   <FocusProbe />
-                  <RunSurfaceChatBridge aiContext={aiContext} />
+                  <DeckChatSlice />
+                  <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
                 </ChatFocusProvider>
               </AiPanelProvider>
             </ProtocolSelectionProvider>

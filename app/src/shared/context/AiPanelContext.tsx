@@ -1,7 +1,11 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { UseAiChatReturn } from '../hooks/useAiChat'
 import type { WorkstateProposalFlow } from '../ai/useWorkstateProposalFlow'
+import {
+  createSurfaceSliceStore,
+  SurfaceSliceStoreContext,
+} from './SurfaceSliceStore'
 
 const STORAGE_KEY = 'ai-panel-open'
 
@@ -120,9 +124,19 @@ export function AiPanelProvider({ children }: { children: ReactNode }) {
     bumpChatVersion()
   }, [bumpChatVersion])
 
+  // CHATHOST-CONSOLIDATE-1 §2.4: the ONE surface-slice store (created here so
+  // there is exactly one per app tree, and no module-global cross-test
+  // leakage). Provided through its own context (a separate context avoids the
+  // SurfaceSliceStore <-> AiPanelContext import cycle); the providers nest so
+  // a door "reads through the same provider" (AiPanelProvider owns the
+  // instance). useMemo keeps the instance stable across re-renders.
+  const sliceStore = useMemo(() => createSurfaceSliceStore(), [])
+
   return (
     <AiPanelContext.Provider value={{ open, setOpen, toggle, chatRef, proposalFlowRef, chatVersion, subscribe, getSnapshot, writeChat, writeProposalFlow, bumpChatVersion, clearChat }}>
-      {children}
+      <SurfaceSliceStoreContext.Provider value={sliceStore}>
+        {children}
+      </SurfaceSliceStoreContext.Provider>
     </AiPanelContext.Provider>
   )
 }

@@ -25,7 +25,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { streamAssist } from '../../shared/api/aiClient'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 // LEG D step 5 (OQ-4 PORT): HarnessChatPane now mounts the attached-sources
@@ -210,7 +211,8 @@ function frames(...events: Array<Record<string, unknown>>) {
 function renderDeckChat() {
   const makeTree = () => (
     <AiPanelProvider>
-      <DeckSurfaceChat />
+      <DeckChatSlice />
+      <SurfaceChatBridge host="event-editor" />
       <HarnessChatPane />
     </AiPanelProvider>
   )

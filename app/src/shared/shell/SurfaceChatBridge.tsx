@@ -1,97 +1,215 @@
 /**
- * SurfaceChatBridge — L2-CHAT-UI-1 LEG C: the universal-chat registrar for
- * the workspace host surfaces (registry / record / artifact / project).
+ * SurfaceChatBridge — CHATHOST-CONSOLIDATE-1: the ONE universal-chat registrar.
  *
- * ONE registrar, the DeckSurfaceChat pattern (memoized AiContext in the
- * host + `useSurfaceChat`), MINUS the deck ghosting: these surfaces own no
- * event-editor preview, so there is no ghost mount, no adoption seam, and
- * no deck-layout handler. The bridge RENDERS NOTHING — `useSurfaceChat`
- * registers the chat + proposal flow through AiPanelContext
- * (useRegisterAiChat). RightPane's AI mode ALWAYS renders HarnessChatPane
- * (LEG D: the legacy AiTabPanel fallback arm and the panelSlot?.chat gate
- * died), so registering here is what gives that pane the chat to render.
+ * It replaces the four handwritten per-host bridges (DeckSurfaceChat,
+ * RunSurfaceChatBridge, ProjectSurfaceChat, and this file's old
+ * aiContext-prop form). It takes `host` (a door-registry id — the door naming
+ * itself, NOT a host list) plus an optional `base` (the page-local context +
+ * scope record/artifact/registry/project build today) and:
+ *   1. resolves the host's entry from the YAML door registry (build-time parse);
+ *   2. LOUD-FAILS (throws ChatDoorMisconfiguredError naming the host + every
+ *      missing required slice) if a `required_providers` slice is not published —
+ *      never a silent empty pane (the LEG-F defect: a door mounted one provider
+ *      too high is a loud error, not a deaf pane);
+ *   3. collects the AiContext through the ONE collector (collectSurfaceContext:
+ *      merges published slices into the base, resolves the posted surface);
+ *   4. wires the ghost/adoption/deck-layout handlers from the published `deck`
+ *      slice ONLY when the host's `ghost_mount` is true;
+ *   5. calls useSurfaceChat exactly once.
  *
- * Honest no-provider posture: `useRegisterAiChat` THROWS without an
- * AiPanelProvider (AiPanelContext.tsx:211). The routed app always has one
- * (main.tsx wraps the app), but host pages are also rendered provider-free
- * in tests — there the bridge registers NOTHING and the rendered
- * HarnessChatPane shows its own honest empty state (never a legacy fallback,
- * which died in LEG D, and never a crash). The provider check lives here; the
- * actual hook calls live in the inner component so they are never conditional
- * (rules-of-hooks).
+ * NO HOST-NAME COMPARISON (bait #8 / V-8): the `host` id only indexes the YAML
+ * entry; endpoint/scope/ghost-wiring/surface all key off the entry's DATA and
+ * the PUBLISHED slices. The capability facts live in config/chat/chat-hosts.yaml.
  *
- * Thread identity: endpoint 'browser' (the generic-chat thread endpoint —
- * same choice MaterialsPage made pre-routing, MaterialsPage.tsx:46). Scope
- * is the surface's INSTANCE identity when it is thread-segment safe: the
- * server keys threads on (user, endpoint, scope, threadId) and every path
- * segment must be SAFE — the client guard below mirrors the server's ONE
- * rule (AiThreadStore.ts isValidThreadSegment: non-empty,
- * THREAD_SEGMENT_PATTERN /^[A-Za-z0-9._-]+$/, and NOT dots-only —
- * DOTS_ONLY_SEGMENT_PATTERN /^\.+$/, because '.' is a no-op path hop and
- * '..' escapes the {endpoint} directory). A scope the client refuses is
- * OMITTED (the server's reserved "_" scope then holds the thread); a
- * malformed scope header maps to fresh-empty "_" semantics at the handler
- * (AiThreadHandlers.ts:71) — never a 4xx, never a fallback read.
- *
- * LEG D rider D1 (AS-L2T0915-LEGC-MINORS-DEFERRED, DEFECT D1): the old
- * client mirror omitted the server's dots-only refusal (so '.' / '..'
- * passed the guard) and its header claimed a malformed scope "would 400 the
- * thread fetch and fail every turn" — no longer true since the handler maps
- * malformed scope to undefined (fresh "_"). Aligned with isValidThreadSegment
- * (ONE guard, no per-surface branch) and the header re-worded to the never-4xx
- * truth. Pin: the '.' / '..' refusal is unit-asserted in
- * RegistryHostPage.surfaceChat.test.tsx (the bridge's home surface).
- *
- * Surface kind: 'analysis' — the server's declared no-params AI-context
- * surface (server/src/ai/systemPrompt.ts:299-303): generic prompt with an
- * empty preamble, the intended behavior for a context-reading chat.
+ * Provider posture: renders nothing. Without an AiPanelProvider it honestly
+ * registers nothing (useRegisterAiChat throws, so the inner hook component is
+ * gated on the optional provider — the same posture the old bridge had; host
+ * pages render provider-free in tests and keep the pane's honest empty state).
  */
+import { useEffect, useMemo } from 'react'
 import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import { useOptionalAiPanel } from '../context/AiPanelContext'
-import type { AiContext } from '../../types/aiContext'
+import { useSurfaceSlices } from '../context/SurfaceSliceStore'
+import {
+  collectSurfaceContext,
+  isThreadSegmentSafe,
+  focusedStepDetail,
+  type DoorEntry,
+  type CollectorBase,
+  type CollectorDeckSlice,
+} from '../lib/collectSurfaceContext'
+import { useSetChatFocus } from '../../agent/ChatFocusContext'
+import { useProtocolSelection } from '../../event-editor/protocol/ProtocolSelectionContext'
+import { parse as parseYaml } from 'yaml'
+import chatHostsRaw from '../../../../config/chat/chat-hosts.yaml?raw'
+
+// Re-exported (the registry-host pin unit-asserts the thread-scope segment
+// refusal through this import — the bridge's home surface): ONE guard, the
+// server mirror (isThreadSegmentSafe), no per-surface branch.
+export { isThreadSegmentSafe }
+
+// ---------------------------------------------------------------------------
+// The door registry (build-time parse, §2.6) — parse ONCE at module load.
+// ---------------------------------------------------------------------------
+
+interface RegistryHost {
+  id: string
+  surface: string
+  required_providers?: string[]
+  optional_providers?: string[]
+  ghost_mount?: boolean
+}
+
+function loadDoorRegistry(): { byId: Map<string, DoorEntry> } {
+  let doc: { hosts?: RegistryHost[] }
+  try {
+    doc = parseYaml(chatHostsRaw) as { hosts?: RegistryHost[] }
+  } catch (e) {
+    throw new Error(
+      `chat-door registry: malformed config/chat/chat-hosts.yaml — ${String(e)}`,
+    )
+  }
+  const hosts = doc.hosts
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    throw new Error('chat-door registry: config/chat/chat-hosts.yaml has no hosts')
+  }
+  const byId = new Map<string, DoorEntry>()
+  for (const h of hosts) {
+    byId.set(h.id, {
+      id: h.id,
+      surface: h.surface,
+      required_providers: h.required_providers ?? [],
+      optional_providers: h.optional_providers ?? [],
+      ghost_mount: h.ghost_mount ?? false,
+    })
+  }
+  return { byId }
+}
+
+// Parsed once (the registry is static — not caller-parameterized). A YAML typo
+// throws at import: it cannot reach production (the contract test runs in CI).
+export const doorRegistry = loadDoorRegistry()
+
+/** The set of door-registry host ids (the closed vocabulary the call sites name). */
+export type ChatHostId = string
 
 /**
- * Mirror of the server's thread-scope segment rule (see header cite).
- * LEG D rider D1: aligned with the server's ONE guard (isValidThreadSegment) —
- * the alphabet guard PLUS the dots-only refusal ('.' / '..' are refused even
- * though the alphabet technically admits dots). Exported so the refusal is
- * unit-pinnable; ONE guard for all surfaces — no per-surface branching.
+ * The loud door-misconfiguration error (§2.5 step 2). Names the host and every
+ * required slice that is not published, so a door mounted one provider too high
+ * is a loud error, never a silent empty pane.
  */
-const THREAD_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/
-const DOTS_ONLY_SEGMENT_PATTERN = /^\.+$/
-
-export function isThreadSegmentSafe(value: unknown): value is string {
-  return (
-    typeof value === 'string'
-    && value.length > 0
-    && THREAD_SEGMENT_PATTERN.test(value)
-    && !DOTS_ONLY_SEGMENT_PATTERN.test(value)
-  )
+export class ChatDoorMisconfiguredError extends Error {
+  readonly host: string
+  readonly missing: string[]
+  constructor(host: string, missing: string[]) {
+    super(
+      `chat door '${host}' is misconfigured: required slice(s) not published: ${missing.join(', ')}`,
+    )
+    this.name = 'ChatDoorMisconfiguredError'
+    this.host = host
+    this.missing = missing
+  }
 }
 
 export interface SurfaceChatBridgeProps {
-  /** The surface's context, memoized by the host page (DeckSurfaceChat pattern). */
-  aiContext: AiContext
+  /** The door-registry host id (the door naming itself — a data lookup, never compared). */
+  host: ChatHostId
   /**
-   * The surface's instance identity for thread scoping (studyId / recordId).
-   * Omitted, or not thread-segment safe, => no scope => the server's "_" scope.
+   * The page-local base context + thread scope (record/artifact/registry/
+   * project build today). Deck doors pass none: the published `deck` slice
+   * supplies the full context.
    */
-  scope?: string | null
+  base?: CollectorBase
 }
 
-export function SurfaceChatBridge({ aiContext, scope }: SurfaceChatBridgeProps) {
-  // Provider presence is stable per tree, so this early return never makes
-  // a hook conditional inside this component (it calls exactly one hook).
+export function SurfaceChatBridge(props: SurfaceChatBridgeProps) {
   const panel = useOptionalAiPanel()
   if (!panel) return null
-  return <SurfaceChatRegistrar aiContext={aiContext} scope={scope} />
+  return <SurfaceChatRegistrar {...props} />
 }
 
-function SurfaceChatRegistrar({ aiContext, scope }: SurfaceChatBridgeProps) {
+function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
+  const entry = doorRegistry.byId.get(host)
+  if (!entry) {
+    // A literal host id that is not in the registry: a loud error (the
+    // contract test pins the literal set == the YAML ids, so this is the
+    // anti-drift backstop at runtime).
+    throw new Error(`chat door '${host}' is not declared in config/chat/chat-hosts.yaml`)
+  }
+
+  const { getSlice } = useSurfaceSlices()
+  const deckSlice = getSlice('deck') as CollectorDeckSlice | undefined
+
+  // §2.5 step 2: verify every required slice is published — LOUD (throw), never
+  // a silent empty pane. (A render-body throw propagates to the test / error
+  // boundary; it is the acceptance (b) "unit test mounts the registrar with a
+  // required provider absent and asserts the loud error".)
+  const missing = entry.required_providers.filter(
+    (id) => (id === 'deck' ? deckSlice == null : getSlice(id) == null),
+  )
+  if (missing.length > 0) {
+    throw new ChatDoorMisconfiguredError(host, missing)
+  }
+
+  const collected = useMemo(
+    () =>
+      collectSurfaceContext({
+        host,
+        base: base ?? { context: { surface: 'analysis', summary: '', surfaceContext: {} } },
+        slices: {
+          ...(deckSlice ? { deck: deckSlice } : {}),
+        },
+        entry,
+      }),
+    [host, base, deckSlice, entry],
+  )
+
+  const endpoint = collected.endpoint
+  const scope = collected.scope
+  // §2.5 step 3: the ghost handlers wire ONLY when the host declares ghost_mount
+  // (the collector only returns handlers in that case — belt and braces).
+  const handlers = entry.ghost_mount ? collected.handlers : undefined
+
+  // Thread-scope segment guard (the server mirror — the dots-only refusal the
+  // host-page pins assert on isThreadSegmentSafe). Exported (kept from the old
+  // bridge) so the refusal stays unit-pinnable.
   useSurfaceChat({
-    aiContext,
-    endpoint: 'browser',
-    ...(isThreadSegmentSafe(scope) ? { scope } : {}),
+    aiContext: collected.aiContext,
+    endpoint,
+    ...(scope !== undefined && isThreadSegmentSafe(scope) ? { scope } : {}),
+    ...(handlers ? handlers : {}),
   })
+
+  // Working-focus publish (the pane's SurfaceFocusHeader carrier). Data-driven,
+  // no host-name comparison (V-8): the collector's `deckSurfaceWins` signal (the
+  // deck slice won the posted surface — the deck door) selects the deck slice's
+  // working focus (label `Deck <eventGraphId>`, detail `platform · variant ·
+  // N wells` — the old DeckSurfaceChat's focus). Every other door (the run
+  // door, the page-level `analysis` doors) publishes the POSTED summary as the
+  // label plus the protocol-selection focused step as the detail (the run
+  // door's "Step N: label" — absent when no step is focused OR no
+  // ProtocolSelectionProvider: the conditional spread keeps the detail key
+  // ABSENT, never `undefined`). The focused step is read from the
+  // protocol-selection context DIRECTLY (the same truth the deleted
+  // ChatContextHeader + the old RunSurfaceChatBridge read): §8.4 forbids
+  // publishing the protocol-selection SLICE unless the collector consumes it,
+  // and the collector does not — the focus concern is the registrar's, and the
+  // slice store cannot reach a provider mounted ABOVE the registrar (the run
+  // page's ProtocolSelectionProvider is above its AiPanelProvider).
+  const setFocus = useSetChatFocus()
+  const selection = useProtocolSelection()
+  const deckFocus = collected.deckSurfaceWins ? deckSlice?.focus : undefined
+  const focusSurface = collected.aiContext.surface
+  const focusLabel = deckFocus?.label ?? collected.aiContext.summary
+  const detail = deckFocus?.detail ?? focusedStepDetail(selection?.focusedStep ?? null)
+  useEffect(() => {
+    setFocus({
+      surface: focusSurface,
+      label: focusLabel,
+      ...(detail !== undefined ? { detail: detail } : {}),
+    })
+    return () => setFocus(null)
+  }, [setFocus, focusSurface, focusLabel, detail])
+
   return null
 }
