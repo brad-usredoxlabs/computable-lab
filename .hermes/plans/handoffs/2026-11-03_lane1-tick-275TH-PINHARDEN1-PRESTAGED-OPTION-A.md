@@ -79,6 +79,26 @@ now stamps the EXIT time from a fresh `date -Iseconds` instead of re-using the s
   (correct — nothing was launched); no `request_queue_timeout` deaths; no >200 K-token payload.
 - `npm`-free: no installs, no lockfile touched, `node_modules` churn zero in git.
 
+## Addendum (06:47-06:50, same trap in the OTHER ready item — fixed before it could bite)
+
+The empty-`node_modules` trap is not specific to the pin worktree: `wt/l1-cellrender-1-lane1` has the same
+empty `app/node_modules`, and `L1-CELLRENDER-1`'s pre-built prompt still instructed
+`cd app && npx vitest run src/analysis/` — so its very first bar would have died or started a network install.
+Fixed while the item is cheap to touch (it is still `todo`, no coder owns it):
+
+- Prompt amended in place (`prompts/coder-L1-CELLRENDER-1-l1t0057.txt`): STEP 3 now names the two sanctioned
+  commands (trunk binaries, worktree as cwd) and explicitly bans `npx`/`npm ci`/`pnpm install`/`node_modules`
+  symlinks.
+- **Baselines measured first-hand at base `1a443259`** (the 267th note recorded only the `ViewRenderer` subset):
+  `vitest run src/analysis/` → **24 files / 338 tests passed**; `vitest run src/analysis/ViewRenderer` → **5 files
+  / 54 tests passed** (compat 5, signal 13, artifact-table 13, cellrender 8, ViewRenderer 15); `tsc` → **12
+  `error TS` lines**.
+- Launcher gained a **WT-TIP gate** (`EXPECT_TIP=1a443259` + clean tree, exit 6) ahead of the slot grab:
+  `bash -n` clean; a real run at 06:48:35 refused correctly with `SERIAL-BLOCKED` (lane 2's coder holds slot-1)
+  — no launch, no lock taken.
+- `L1-CELLRENDER-1` remains **not dispatched** (corpus priority); with the prompt and gates now correct it is
+  a single `systemd-run` away on whichever engine lane 2 leaves free.
+
 ## assumptions
 
 - **AS-L1T275-1** (pre-staging is not a cycle): the kit is inert, enforced by the AUTHORIZATION marker gate and
