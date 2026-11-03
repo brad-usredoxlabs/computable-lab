@@ -42,7 +42,7 @@ todo **2**, in-progress **0** at open (now 1 = this item, claimed by me), blocke
 | option B still automatic (fallback intact) | `git merge-tree --write-tree 4f5b003e 6ea3ec29` → RC=0, tree **`175d2855`**; `diff 22f7d63d 175d2855 -- ':(exclude)*.md'` **EMPTY** ⇒ product tree identical to the 287TH/280TH green rehearsal tree |
 | node | v26.8.1 (probe path in the prompt is valid) |
 
-## Dispatch attempts — ALL exit 75 (fleet busy), 4 tries across 27 minutes
+## Dispatch attempts — ALL exit 75 (fleet busy), 6 tries across 36 minutes
 
 Command (the only sanctioned path, per the 2026-11-03 policy; the legacy fix3 launchers stay retired):
 
@@ -60,6 +60,7 @@ python3 /home/brad/.hermes/cl/scripts/cl-coder-launch.py --lane 1 --item L1-PIN-
 | 3 | 12:32:10 | `…-l1t1235` | 75 |
 | 4 | 12:40:27 | `…-l1t1242` | 75 |
 | 5 | 12:49:00 | `…-l1t1250` | 75 |
+| 6 | 12:58:01 | `…-l1t1258` | 75 |
 
 Slots measured on the SHARED base locks (`~/.hermes/cl/appliance2-coder-slot-{0,1}.lock`, flock
 **HELD** both times I probed with `flock -n`):
