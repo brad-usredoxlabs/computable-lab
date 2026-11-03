@@ -747,14 +747,27 @@ function toCandidateEvent(
     // TARGET-1 WELLS DOOR (ruling l2t2310, option (i) SHAPE-GATED): an
     // address-LITERAL scalar (isWellAddressLiteral — the SAME shape test the
     // doc-door uses and the (b) arm below applies) is a LITERAL value, not a
-    // label: carry it verbatim as the event's wells value, so the expander's
-    // ONE parser (expandWellTokens, simpleVerbs.ts add_material :550-557)
-    // expands "A1:H12" to the 96 per-well events. Symbolic labels keep the
-    // wellRole/clarity behaviour below, untouched.
+    // label. L2-CLARIFY-TARGET-1 fix1/D1 (adversarial l2t0230): the carry must
+    // be CO-EXTENSIVE with the lowering's actual ability to consume the value.
+    // Only addMaterialExpander expanded a raw STRING (expandWellTokens on
+    // params.wells); transferExpander passed the string VERBATIM into
+    // details.wells (the array-only downstream readers — AgentOrchestrator
+    // :626/:4313, forceMaterialClarifications :165/:189, ProtocolIdeHandlers
+    // :228 — read a string as EMPTY) and aliquotExpander ITERATED the string
+    // char-by-char (6 events whose wells are "A","1",":","H","1","2"). Both
+    // are silent data loss/corruption — the exact ground the ruling rejected
+    // the bare (i) on (§4a "no silent drops"). The fix: carry the
+    // address-literal EXPANDED through the SAME ONE parser (expandWellTokens)
+    // into a CONCRETE address array — the shape EVERY target-wells expander
+    // natively consumes (params.wells / p.wells as string[]; the array branch
+    // of addMaterialExpander runs expandWellTokens idempotently on it, so
+    // add_material is byte-identical). One parser, one change point, zero
+    // verb/field-name tables, zero new policy literals. Symbolic labels keep
+    // the wellRole/clarity behaviour below, untouched.
     if (typeof found.value === 'string' && found.value.trim() && wellsLabelArgs.has(found.key)) {
       const scalar = found.value.trim();
       if (eventKey === 'wells' && isWellAddressLiteral(scalar)) {
-        event[eventKey] = scalar;
+        event[eventKey] = expandWellTokens([scalar]);
         continue;
       }
       if (eventKey === 'wells') {

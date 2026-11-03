@@ -64,7 +64,25 @@ treeState:
   # (L2-CLARIFY-TARGET-1-report.l2t1810.md, CONTINUATION RUN l2t2245).
   # BEFORE: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
   # AFTER: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc}
+  # L2-CLARIFY-TARGET-1 FIX RUN 1 MERGE RIDER (adversarial l2t0230 fix1, blessed
+  # ONCE): the STEP 0 merge of cl/integration-2 brought trunk's l2t2030
+  # identityCollapse policy DATA into policies.ambiguity (a NEW additive policy
+  # block; no verb, arg, referentLevel, or prior policy value changed) on TOP of
+  # this item's Change-4 targetWells declaration — the merged vocabulary is the
+  # clean UNION of both (three-way: merge-base 4f72ede5.. / this-branch
+  # fa919ec5.. / trunk 01bcfe9e.. / merged 7908fa38..). Trunk landed the
+  # identityCollapse vocabulary change WITHOUT re-blessing this treeState pin,
+  # so the pin went stale against the merged content (the exact "merge rider"
+  # case blessed once at LABSTATE-CONTENTS-1 above). The re-bless is OUTCOME-
+  # INERT and PROVEN: (a) identityCollapse has NO resolution consumer (grep:
+  # only the vocabulary.ts type decl + its own loader test) — it is declared-
+  # but-unwired data; (b) ALL 553 golden outcome replays pass byte-green with
+  # the merged vocabulary (pre-merge AND post-merge); the ONLY failures are the
+  # two pure hash-ledger checks (versions-current + B4 "MANIFEST did not move").
+  # No golden fixture/record moved — ONLY this one treeState sha256 pin
+  # re-hashed. BEFORE: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
+  # AFTER: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
