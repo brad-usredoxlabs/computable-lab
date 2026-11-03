@@ -167,3 +167,49 @@ describe('TableView declared-object shape (C1)', () => {
     expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1'])
   })
 })
+
+describe('TableView array-valued cells (FAME-8 GATEFIX4 reachability)', () => {
+  // A long array-valued cell (e.g. the `flags` column) must not render as one
+  // unbreakable comma-joined run (String(array) => 'a,b,c' with no space).
+  // Rendering one element per line makes each flag readable within a narrow
+  // report pane (D1: the peak-1 flags cell was 730 px and fully outside the
+  // 574 px pane). This is a GENERIC array branch — no artifact/column/flag
+  // special-casing.
+  it('renders an array cell as one element per line (not a comma-joined run)', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', {
+          columns: ['k', 'flags'],
+          rows: [{ k: 1, flags: ['ALPHA_FLAG', 'BETA_FLAG'] }],
+        })}
+      />,
+    )
+    // The cell must contain both flag elements as their own nodes, one per
+    // line — NOT the comma-joined 'ALPHA_FLAG,BETA_FLAG' run.
+    const cell = screen.getAllByRole('cell')[1]
+    expect(cell.textContent).toBe('ALPHA_FLAGBETA_FLAG')
+    expect(cell.querySelectorAll('.view-spec__cell-item').length).toBe(2)
+    // Each element is its own stacked block.
+    expect(screen.getByText('ALPHA_FLAG')).toBeDefined()
+    expect(screen.getByText('BETA_FLAG')).toBeDefined()
+    // No comma-joined run remains.
+    expect(cell.textContent).not.toContain('ALPHA_FLAG,BETA_FLAG')
+  })
+
+  it('leaves a scalar cell unchanged (no array wrapper)', () => {
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'T', artifact: 'a', renderer: 'table' }}
+        artifact={toRenderableArtifact('a', 'table', {
+          columns: ['k', 'flags'],
+          rows: [{ k: 1, flags: 'SINGLE' }],
+        })}
+      />,
+    )
+    const cell = screen.getAllByRole('cell')[1]
+    // A scalar renders verbatim with no array wrapper.
+    expect(cell.textContent).toBe('SINGLE')
+    expect(cell.querySelectorAll('.view-spec__cell-item').length).toBe(0)
+  })
+})
