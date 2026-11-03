@@ -118,7 +118,7 @@ with `bindings.columnFields` renders the declared labels.
 
        /mnt/vast/home/brad/git/cl-integration-1/app/node_modules/.bin/tsc --noEmit -p tsconfig.json
        → EXIT=2, 12 `error TS` lines (identical to the 12-line worktree baseline at
-         1a443259; all in src/event-editor, src/ingestion, src/shared — none new)
+         1a443259; 9 src/event-editor, 2 src/ingestion, 1 src/editor — none in src/analysis)
        tsc … 2>&1 | grep "src/analysis" | wc -l  →  0
 
 4. No `String(` on a non-scalar in the cell path:
@@ -134,13 +134,28 @@ with `bindings.columnFields` renders the declared labels.
 
 ## 5. diff --stat
 
-    git diff --stat 1a443259..HEAD
-     app/src/analysis/ViewRenderer.celljson.test.tsx | 178 +++++++++++++++++++++++
+The `1a443259..HEAD` range INCLUDES this report file (it is committed on the same branch),
+so the HEAD receipt is 4 files while the product-only delta is the same range ending at the
+GREEN commit `9e455216` — 3 files. Raw output of both commands, run in the worktree at HEAD:
+
+    $ git -c core.fileMode=false diff --stat 1a443259..HEAD
+     app/src/analysis/ViewRenderer.celljson.test.tsx | 178 ++++++++++++++++++++++++
+     app/src/analysis/ViewRenderer.tsx               | 154 ++++++++++++++++++--
+     deliverables/l1-cellrender-1-report-l1t0057.md  | 174 +++++++++++++++++++++++
+     schema/knowledge/view-spec.schema.yaml          |   8 ++
+     4 files changed, 506 insertions(+), 8 deletions(-)
+
+    ^ 4 files = the 3 permitted product files PLUS this report file itself.
+
+    $ git -c core.fileMode=false diff --stat 1a443259..9e455216
+     app/src/analysis/ViewRenderer.celljson.test.tsx | 178 ++++++++++++++++++++++++
      app/src/analysis/ViewRenderer.tsx               | 154 ++++++++++++++++++--
      schema/knowledge/view-spec.schema.yaml          |   8 ++
      3 files changed, 332 insertions(+), 8 deletions(-)
 
-Only the three permitted files. `git status --porcelain` after the report commit: clean.
+    ^ 3 files / 332 insertions = the product-only delta (the three permitted product files).
+
+Only the three permitted product files. `git status --porcelain` after the report commit: clean.
 
 ## 6. Not done / notes
 
