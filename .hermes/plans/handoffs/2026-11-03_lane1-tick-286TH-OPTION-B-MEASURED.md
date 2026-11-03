@@ -11,6 +11,10 @@ todo **2**, in-progress **none**, blocked **1**, superseded **1**, done **107**.
 Neither lane paused. `corpus-state.md` absent in lane 1. Exa tripwire **OK** ("apiKey present and
 consistent across lane1/lane2/canonical"). Stack `:3092` and `:5192` both **200**.
 
+Precision note (measured at close): `:3092` has no root route, so `GET /` answers **404** by design;
+the backend was confirmed serving at `GET /api/health` **200** and `GET /api/schemas` **200**.
+`:5192` answers **200** at `/`.
+
 Trunk **`3a970e3a`**. `git diff --stat 3ca46dfa..3a970e3a` = **exactly 1 file, 153 insertions** (the
 285TH handoff `.md`). Zero product paths ⇒ docs-only movement, so no prior rehearsal is invalidated.
 
