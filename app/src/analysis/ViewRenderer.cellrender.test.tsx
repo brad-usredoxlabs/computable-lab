@@ -3,6 +3,11 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ViewRenderer, toRenderableArtifact } from './ViewRenderer'
+import {
+  isTableCellSelectorPart,
+  parseCssRules,
+  splitSelectorParts,
+} from './cssRuleScan'
 
 /**
  * FAME-8 GATEFIX5 — cell-render floor pins (architect decision 2026-11-02).
@@ -35,20 +40,11 @@ const PREFIX_CSS = `
 .view-spec__table th, .view-spec__table td { overflow-wrap: anywhere; white-space: normal; }
 `
 
-function parseCssRules(css: string): Array<{ selector: string; decls: string }> {
-  // Comments stripped FIRST: the GATEFIX5 history/architect prose legitimately
-  // contains the words `overflow-wrap: anywhere`, so matching the raw text
-  // would be wrong. Block comments only — no string literals carry `/*` in
-  // this file.
-  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  return Array.from(stripped.matchAll(/^([^{\/][^{]*)\{([^}]*)\}\s*$/gm), (m) => ({
-    selector: m[1].trim(),
-    decls: m[2].trim(),
-  }))
-}
-
 const ANYWHERE_VIOLATION =
   'a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere'
+
+const FLOOR_VIOLATION =
+  'no .view-spec__table th/td rule declares overflow-wrap: break-word'
 
 /**
  * Minimal CONFORMING floor: every positive claim of §2.1 satisfied. Appending
@@ -60,48 +56,6 @@ const CONFORMING_FLOOR = `
 .view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
 .view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
 `
-
-/**
- * Split a selector list on its TOP-LEVEL commas only: commas inside `()`
- * (functional pseudo-classes such as `:is(th, td)`) or `[]` (attribute
- * selectors) are part of one selector part. A naive `split(',')` tears
- * `.view-spec__table :is(th, td)` into `.view-spec__table :is(th` + ` td)`,
- * neither of which names a cell selector (review D4).
- */
-function splitSelectorParts(selector: string): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let current = ''
-  for (const ch of selector) {
-    if (ch === '(' || ch === '[') depth++
-    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
-    if (ch === ',' && depth === 0) {
-      parts.push(current)
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  parts.push(current)
-  return parts.map((p) => p.trim())
-}
-
-/**
- * True when ONE selector part targets a `.view-spec__table` cell: it is scoped
- * under `.view-spec__table` (with or without a `table` tag prefix) and carries
- * a standalone `th` or `td` tag token. Descendant/child/sibling combinators,
- * pseudo-classes and pseudo-elements are tolerated, INCLUDING functional
- * pseudo-classes (`:is(th, td)`) — the token may be preceded by any
- * non-identifier character, so `(` and `:` do not hide it (review D4).
- * `thead`/`tbody`/`.view-spec__table-cell` are not `th`/`td`: the trailing
- * `(?![\w-])` guard rejects them. Both regexes are case-insensitive because
- * CSS type selectors are case-insensitive in an HTML document (review D5).
- */
-function isTableCellSelectorPart(part: string): boolean {
-  const scopedToTable = /\.view-spec__table(?![\w-])/.test(part)
-  const cellToken = /(?:^|[^\w-])(?:th|td)(?![\w-])/i.test(part)
-  return scopedToTable && cellToken
-}
 
 /**
  * The source pin (spec §2.1). Returns the list of violated claims — empty
@@ -116,10 +70,19 @@ function isTableCellSelectorPart(part: string): boolean {
  * separate tokens, so split, `table.`-prefixed and descendant-combinator
  * selectors cannot evade it (review D1). `.view-spec__cell-item` is the one
  * legal carrier of `anywhere` inside that family.
+ *
+ * L1-PIN-HARDEN-1 (O1): parsing is now brace-depth (./cssRuleScan) with an
+ * `atContext` chain per rule. The `anywhere` ban applies REGARDLESS of
+ * `atContext` — a responsive override cannot reintroduce it. The positive
+ * floor claims (the `th, td` `break-word` floor, the `.view-spec__cell-item`
+ * min-width/anywhere pair, the `.analysis-right` door) are satisfied ONLY by
+ * UNCONDITIONAL rules (empty `atContext`): a rule declared only inside
+ * @media/@supports/@layer/@container must not count.
  */
 function sourceViolations(css: string): string[] {
   const rules = parseCssRules(css)
-  const plainCellRules = rules.filter(
+  const unconditional = rules.filter((r) => r.atContext.length === 0)
+  const plainCellRules = unconditional.filter(
     (r) => /(^|,)\s*\.view-spec__table\s+th\s*(,|$)/.test(r.selector) &&
            /(^|,)\s*\.view-spec__table\s+td\s*(,|$)/.test(r.selector),
   )
@@ -136,9 +99,9 @@ function sourceViolations(css: string): string[] {
     violations.push(ANYWHERE_VIOLATION)
   }
   if (!plainCellRules.some((r) => /overflow-wrap\s*:\s*break-word/i.test(r.decls))) {
-    violations.push('no .view-spec__table th/td rule declares overflow-wrap: break-word')
+    violations.push(FLOOR_VIOLATION)
   }
-  const cellItem = rules.find((r) => /(^|,)\s*\.view-spec__cell-item\s*(,|$)/.test(r.selector))
+  const cellItem = unconditional.find((r) => /(^|,)\s*\.view-spec__cell-item\s*(,|$)/.test(r.selector))
   if (!cellItem) {
     violations.push('no .view-spec__cell-item rule exists')
   } else {
@@ -149,7 +112,7 @@ function sourceViolations(css: string): string[] {
       violations.push('.view-spec__cell-item no longer declares overflow-wrap: anywhere')
     }
   }
-  const door = rules.find((r) => /(^|,)\s*\.analysis-right\s*(,|$)/.test(r.selector))
+  const door = unconditional.find((r) => /(^|,)\s*\.analysis-right\s*(,|$)/.test(r.selector))
   if (!door || !/overflow\s*:\s*auto/.test(door.decls)) {
     violations.push('.analysis-right no longer declares overflow: auto (FAME-LAYOUT-1 door regressed)')
   }
@@ -374,5 +337,92 @@ describe('FAME-8 GATEFIX5 — ViewRenderer cell DOM shape (DOM pin)', () => {
       'expected 2 .view-spec__cell-item nodes, found 0',
       'cell renders the comma-joined run (pre-GATEFIX4 shape)',
     ])
+  })
+})
+
+/**
+ * L1-PIN-HARDEN-1 (adv-cycle-3 O1): the line-anchored parseCssRules could not
+ * see a rule nested inside @media/@supports/@layer, so a responsive override
+ * reintroducing `overflow-wrap: anywhere` on a table cell passed the pin.
+ * These fixtures are RED against the pre-fix line-anchored parser (the
+ * nested rule is invisible -> the pin returns []) and GREEN once
+ * parseCssRules is the brace-depth scanner with an `atContext` chain.
+ */
+describe('L1-PIN-HARDEN-1 — source pin is nesting-aware (O1)', () => {
+  const O1_MULTI = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@media (max-width: 900px) {
+  .view-spec__table td {
+    overflow-wrap: anywhere;
+  }
+}
+`
+  const O1_ONELINE = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@media (max-width: 900px) { .view-spec__table td { overflow-wrap: anywhere; } }
+`
+  const O1_SUPPORTS = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@supports (overflow-wrap: anywhere) { .view-spec__table td { overflow-wrap: anywhere; } }
+`
+  const O1_IS_SHAPE = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@media (max-width: 900px) {
+  .view-spec__table :is(th, td) {
+    overflow-wrap: anywhere;
+  }
+}
+`
+
+  it('(a) multi-line @media-nested td anywhere is flagged (O1, verbatim from the review)', () => {
+    expect(sourceViolations(O1_MULTI)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(b) one-line @media-nested td anywhere is flagged (same evasion, compact form)', () => {
+    expect(sourceViolations(O1_ONELINE)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(c) @supports-nested td anywhere is flagged (the scanner is at-rule-generic)', () => {
+    expect(sourceViolations(O1_SUPPORTS)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(d) @media-nested :is(th, td) shape is flagged (D4 evasion plus nesting)', () => {
+    expect(sourceViolations(O1_IS_SHAPE)).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('(e) conforming floor plus a benign @media block stays clean (no false positive)', () => {
+    const benign = `
+@media (max-width: 900px) {
+  .view-spec__cell-item { min-width: 8ch; }
+  .view-spec__table { font-size: .8rem; }
+}
+`
+    expect(sourceViolations(CONFORMING_FLOOR + benign)).toEqual([])
+  })
+
+  it('(f) break-word floor existing ONLY inside @media does not satisfy the unconditional floor', () => {
+    const conditionalFloor = `
+.analysis-right { overflow: auto; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+@media (max-width: 900px) {
+  .view-spec__table th, .view-spec__table td { overflow-wrap: break-word; }
+}
+`
+    expect(sourceViolations(conditionalFloor)).toEqual([FLOOR_VIOLATION])
+  })
+
+  it('the exported brace-depth scanner emits atContext for the O1 rule', () => {
+    const rules = parseCssRules(O1_MULTI)
+    const nested = rules.find((r) => r.selector === '.view-spec__table td')
+    expect(nested).toBeDefined()
+    expect(nested?.atContext).toEqual(['@media (max-width: 900px)'])
   })
 })
