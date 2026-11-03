@@ -52,7 +52,19 @@ treeState:
   # referentLevel, or policy value changed; no golden fixture/record moved.
   # BEFORE: 15e5820d..,
   # AFTER: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471}
+  # L2-CLARIFY-TARGET-1 REBLESS (this item, blessed ONCE): the mandated flip
+  # landed in the SHIPPED vocabulary DATA — (1) the V1 required-arg flip
+  # (add_material.volumeUl required:true) + the Change-4 targetWells declaration
+  # (kind:wells, required:true), and (2) the ruling l2t2230 (a) `satisfiedBy:
+  # [volume]` alias slot on the volumeUl contract. Only DECLARATION SLOTS moved
+  # (required flag + one new arg + one new optional slot); no verb, no arg
+  # rename, no strategyOrder, no policy value changed. The wire schema and
+  # pipeline pins are UNCHANGED (verified byte-OK). Golden fixture/record
+  # re-blesses for the count delta are recorded in the item report
+  # (L2-CLARIFY-TARGET-1-report.l2t1810.md, CONTINUATION RUN l2t2245).
+  # BEFORE: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
+  # AFTER: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
@@ -165,7 +177,17 @@ records:
   # MATRES-ELIG-report.l2t1445-coder2-fix1.md.
   - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: c750c1effbf3434d51f740f7728931079ebb30b05b464b8ac64d32a6399caf08}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
-  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
+  # L2-CLARIFY-TARGET-1 REBLESS (this item, blessed ONCE): the mandated flip
+  # (add_material.volumeUl required:true + targetWells declaration) means this
+  # fixture's canned add_material action now omits TWO required args -> the
+  # §5.2 sweep adds two missing-required-argument facts to the bar (3 -> 5).
+  # Drift probe (temp re-capture, this run) proved the ONLY divergence is
+  # body.clarifications (the two new missing-required-argument facts,
+  # volumeUl + targetWells); localMacro/terminalArtifacts/error/outcome are
+  # byte-identical. Fixture bytes UNCHANGED. Before/after + the 5-card count
+  # assertion are recorded in L2-CLARIFY-TARGET-1-report.l2t1810.md (CONT
+  # l2t2245). BEFORE: 5d994a19.. AFTER: fcc39d21..
+  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: fcc39d212fce0943b201caafefb0a1edb06eae6fb68e228bb02aa218b8180fb4}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}
   # SPINE7-REBLESS: rule-file pins re-hashed once on the SPINE-7 tip (wire
   # schema widened + aliquot.targetWells required); new golden records blessed
