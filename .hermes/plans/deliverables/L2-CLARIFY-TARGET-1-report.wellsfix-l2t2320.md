@@ -228,9 +228,11 @@ The dead run had actually FINISHED the app side before it died on the cap
   the ENGINE change).
 - rolesSeam SPINE-7 legs: rolesSeam 20/20 + goldenRolesSeam 7/7 GREEN.
 - nounResolution unknown-address: 16/16 GREEN (bogus_role -> unknown-address).
-- golden MANIFEST unmoved by the door change: the 2 golden fails are
-  missing-required-argument (lowerer), byte-identical base vs head — the door
-  did not move the golden's manifest/events.
+- golden MANIFEST unmoved by the door change: the 2 golden legs fail IDENTICALLY
+  base vs head on `missing-required-argument` (lowerer), NOT unknown-address —
+  the door is orthogonal to the golden's bar. (Note: T1 aborts at the outcome
+  assertion before the manifest print, so I proved the bar/outcome is unchanged,
+  not a byte-diff of the manifest payload.)
 - e2eStubHonesty 7/7 GREEN (string doc-echo is the honest real output).
 - pattern verbs: ProtocolIntent 5 + ProtocolIntentPatternExpanders 8 = 13/13
   GREEN unamended (no shape-gate parity needed).
