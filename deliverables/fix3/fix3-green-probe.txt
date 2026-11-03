@@ -1,0 +1,313 @@
+=== L1-PIN-HARDEN-1 FIX RUN 3 probe (B4) ===
+node v26.8.1
+scanner  src/analysis/cssRuleScan.ts            sha256 59227b210580586bca0938177ccc6ec76b726f5044ccf363dd84e8a2895c2e0f
+pin fn   sourceViolations (verbatim extract)    sha256 6c7fbb3800828562f77cdb61822fbbd3b4005f3c7cf1839eaca9247511a7d730
+
+== the six nested head-list shapes (all must FLAG) ==
+--- H1 head list .wrap, td
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { .wrap, td { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table .wrap" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table td" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- H2 head list .wrap, th
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { .wrap, th { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table .wrap" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table th" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- H3 head list .a, .b, td
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { .a, .b, td { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table .a" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table .b" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table td" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- H4 parent list x head list
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.other, .view-spec__table { .wrap, td { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".other, .view-spec__table" atContext=[] decls=""
+      selector=".other .wrap" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".other td" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table .wrap" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table td" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- H5 triple-nested head list
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { .wrap { .x, td { overflow-wrap: anywhere; } } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table .wrap" atContext=[] decls=""
+      selector=".view-spec__table .wrap .x" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table .wrap td" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- H6 ambiguous-& head list
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { :is(&) .x, td { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=":is(.view-spec__table) .x" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table :is(&) .x" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table td" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+== controls ==
+--- C1 control: first head part is the cell token (td, .wrap) — must keep flagging
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { td, .wrap { overflow-wrap: anywhere; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table td" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".view-spec__table .wrap" atContext=[] decls="overflow-wrap: anywhere;"
+    sourceViolations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+    verdict: expect FLAG -> OK
+
+--- C2 control: non-cell head list must NOT start flagging
+    css: 
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+.view-spec__table { .wrap, .other { color: red; } }
+    emitted rules (parseCssRules):
+      selector=".analysis-right" atContext=[] decls="overflow: auto;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table" atContext=[] decls=""
+      selector=".view-spec__table .wrap" atContext=[] decls="color: red;"
+      selector=".view-spec__table .other" atContext=[] decls="color: red;"
+    sourceViolations: []
+    verdict: expect CLEAN -> OK
+
+== shipped AnalysisPage.css (must be CLEAN) ==
+--- shipped CSS: 169 emitted rules
+      selector=".analysis" atContext=[] decls="display: flex;\n  flex-direction: column;\n  gap: 1rem;\n  padd…"
+      selector=".analysis__header h1" atContext=[] decls="margin: 0 0 .25rem; font-size: 1.4rem;"
+      selector=".analysis__header p" atContext=[] decls="margin: 0; color: #6b7280; font-size: .9rem;"
+      selector=".analysis__section" atContext=[] decls="border: 1px solid #e5e7eb;\n  border-radius: 8px;\n  padding: …"
+      selector=".analysis__section h2" atContext=[] decls="margin: 0 0 .25rem; font-size: 1rem;"
+      selector=".analysis input,\n.analysis select,\n.analysis textarea" atContext=[] decls="padding: .4rem .5rem;\n  border: 1px solid #d1d5db;\n  border-…"
+      selector=".analysis textarea" atContext=[] decls="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;…"
+      selector=".analysis__mono" atContext=[] decls="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;"
+      selector=".analysis button" atContext=[] decls="padding: .4rem .8rem;\n  border: 1px solid #cbd5e1;\n  backgro…"
+      selector=".analysis button:hover:not(:disabled)" atContext=[] decls="background: #eef2f7;"
+      selector=".analysis button:disabled" atContext=[] decls="opacity: .5; cursor: not-allowed;"
+      selector=".analysis__run" atContext=[] decls="display: flex; align-items: center; gap: .5rem;"
+      selector=".analysis__empty" atContext=[] decls="color: #9ca3af; font-size: .85rem;"
+      selector=".analysis__status" atContext=[] decls="font-size: .7rem; font-weight: 600; text-transform: uppercas…"
+      selector=".analysis__status--succeeded" atContext=[] decls="background: #d3f9d8; color: #2b8a3e;"
+      selector=".analysis__status--failed" atContext=[] decls="background: #ffe3e3; color: #c92a2a;"
+      selector=".analysis__status--running" atContext=[] decls="background: #d0ebff; color: #1971c2;"
+      selector=".analysis__status--queued" atContext=[] decls="background: #fff3bf; color: #e67700;"
+      selector=".analysis__status--cancelled" atContext=[] decls="background: #e9ecef; color: #495057;"
+      selector=".analysis__error" atContext=[] decls="color: #c92a2a; font-size: .85rem;"
+      selector=".analysis-right" atContext=[] decls="padding: 1rem 1.25rem 2rem;\n  display: flex;\n  flex-directio…"
+      selector=".analysis-right__title" atContext=[] decls="font-weight: 600; display: flex; align-items: center; gap: .…"
+      selector=".analysis-chat" atContext=[] decls="border: 1px solid #e5e7eb; border-radius: 8px; padding: .75r…"
+      selector=".analysis-chat__header" atContext=[] decls="display: flex; flex-direction: column; gap: .15rem;"
+      selector=".analysis-chat__title" atContext=[] decls="font-weight: 600; font-size: .9rem;"
+      selector=".analysis-chat__hint" atContext=[] decls="color: #6b7280; font-size: .75rem;"
+      selector=".analysis-chat__messages" atContext=[] decls="display: flex; flex-direction: column; gap: .4rem; max-heigh…"
+      selector=".analysis-chat__message" atContext=[] decls="display: flex; gap: .5rem; font-size: .85rem;"
+      selector=".analysis-chat__role" atContext=[] decls="font-weight: 600; color: #374151; min-width: 3.2rem;"
+      selector=".analysis-chat__message--system .analysis-chat__content" atContext=[] decls="color: #92400e;"
+      selector=".analysis-chat__empty" atContext=[] decls="color: #9ca3af; font-size: .8rem;"
+      selector=".analysis-chat__unavailable" atContext=[] decls="color: #c92a2a; font-size: .8rem;"
+      selector=".analysis-chat__input-area" atContext=[] decls="display: flex; gap: .5rem; align-items: flex-end;"
+      selector=".analysis-chat__input-area textarea" atContext=[] decls="flex: 1; padding: .4rem .5rem; border: 1px solid #d1d5db; bo…"
+      selector=".analysis-chat__input-area button" atContext=[] decls="padding: .45rem .8rem; border: none; border-radius: 6px; bac…"
+      selector=".analysis-chat__input-area button:disabled" atContext=[] decls="background: #cbd5e1; color: #64748b; cursor: not-allowed;"
+      selector=".analysis-right__views" atContext=[] decls="display: flex; flex-direction: column; gap: 1.25rem;"
+      selector=".analysis-right__promote" atContext=[] decls="border-top: 1px solid #e5e7eb; padding-top: 1rem; display: f…"
+      selector=".analysis__promote-result" atContext=[] decls="color: #2b8a3e; font-size: .85rem;"
+      selector=".view-spec__model" atContext=[] decls="display: flex; align-items: center; gap: .5rem; font-size: .…"
+      selector=".view-spec__model-kind" atContext=[] decls="background: #e7f5ff; color: #1864ab; border-radius: 999px; p…"
+      selector=".view-spec__model-format" atContext=[] decls="font-family: ui-monospace, monospace; background: #f1f3f5; b…"
+      selector=".view-spec__model-dref" atContext=[] decls="font-family: ui-monospace, monospace; color: #e67700;"
+      selector=".view-spec__model-dref--inline" atContext=[] decls="color: #868e96; font-style: italic;"
+      selector=".view-spec__title" atContext=[] decls="font-size: .8rem; font-weight: 600; color: #374151; margin-b…"
+      selector=".view-spec__table" atContext=[] decls="border-collapse: collapse; width: 100%; font-size: .85rem;"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="border: 1px solid #e5e7eb; padding: .3rem .5rem; text-align:…"
+      selector=".view-spec__table th, .view-spec__table td" atContext=[] decls="overflow-wrap: break-word; white-space: normal;"
+      selector=".view-spec__cell-item" atContext=[] decls="overflow-wrap: anywhere; min-width: 12ch;"
+      selector=".view-spec__table th" atContext=[] decls="background: #f9fafb; font-weight: 600;"
+      selector=".view-spec__signal" atContext=[] decls="max-width: 100%; color: #1971c2;"
+      selector=".view-spec__metric-value" atContext=[] decls="font-size: 1.5rem; font-weight: 700;"
+      selector=".view-spec__metric-unit" atContext=[] decls="margin-left: .35rem; color: #6b7280;"
+      selector=".view-spec__error" atContext=[] decls="color: #c92a2a; font-size: .85rem;"
+      selector=".view-spec__figure" atContext=[] decls="max-width: 100%; border-radius: 6px;"
+      selector=".view-spec__empty" atContext=[] decls="color: #9ca3af; font-size: .85rem;"
+      selector=".analysis__params-noschema" atContext=[] decls="color: #6b7280; font-size: .85rem;"
+      selector=".analysis__params-advanced" atContext=[] decls="border: 1px dashed #cbd5e1; border-radius: 6px; padding: .5r…"
+      selector=".analysis__params-advanced summary" atContext=[] decls="cursor: pointer; font-size: .8rem; color: #475569; user-sele…"
+      selector=".analysis__params-advanced > *:not(summary)" atContext=[] decls="margin-top: .5rem;"
+      selector=".analysis__params-override" atContext=[] decls="color: #e67700; font-size: .8rem; font-weight: 600;"
+      selector=".analysis__params-preview" atContext=[] decls="display: flex; flex-direction: column; gap: .25rem;"
+      selector=".analysis__params-preview-label" atContext=[] decls="font-size: .75rem; color: #6b7280;"
+      selector=".analysis__params-preview pre" atContext=[] decls="margin: 0; padding: .5rem .6rem; border: 1px solid #e5e7eb; …"
+      selector=".paramform" atContext=[] decls="display: flex; flex-direction: column; gap: .5rem;"
+      selector=".paramform__field" atContext=[] decls="display: flex; align-items: center; gap: .5rem; flex-wrap: w…"
+      selector=".paramform__field > label" atContext=[] decls="min-width: 9rem; font-size: .85rem; color: #374151;"
+      selector=".paramform__field > input, .paramform__field > select" atContext=[] decls="flex: 0 1 12rem;"
+      selector=".paramform__unit" atContext=[] decls="color: #6b7280; font-size: .75rem;"
+      selector=".paramform__missing" atContext=[] decls="color: #c92a2a; font-size: .7rem; font-weight: 600; text-tra…"
+      selector=".paramform__group" atContext=[] decls="border: 1px solid #e5e7eb; border-radius: 6px; padding: .5re…"
+      selector=".paramform__group legend" atContext=[] decls="font-size: .8rem; font-weight: 600; color: #374151; padding:…"
+      selector=".paramform__list" atContext=[] decls="display: flex; flex-direction: column; gap: .4rem;"
+      selector=".paramform__list-label" atContext=[] decls="font-size: .85rem; color: #374151;"
+      selector=".paramform__row" atContext=[] decls="display: flex; align-items: center; gap: .5rem; border: 1px …"
+      selector=".paramform__row .paramform__field" atContext=[] decls="flex: 1;"
+      selector=".paramform__row .paramform__field > input, .paramform__row .paramform__field > select" atContext=[] decls="flex: 1; min-width: 5rem;"
+      selector=".paramform__remove, .paramform__add, .paramform__reset" atContext=[] decls="font-size: .75rem; padding: .25rem .55rem;"
+      selector=".paramform__unsupported" atContext=[] decls="border: 1px solid #f5c2c7; background: #fff5f5; color: #c92a…"
+      selector=".paramform__field-actions" atContext=[] decls="display: inline-flex; align-items: center; gap: .4rem;"
+      selector=".paramform__override" atContext=[] decls="color: #e67700; font-size: .7rem; font-weight: 600; text-tra…"
+      selector=".view-spec__chromatogram" atContext=[] decls="display: flex; flex-direction: column; gap: .4rem;"
+      selector=".chromatogram__toolbar" atContext=[] decls="display: flex; align-items: center; gap: .6rem; font-size: .…"
+      selector=".chromatogram__reset" atContext=[] decls="font-size: .75rem; padding: .2rem .55rem;"
+      selector=".chromatogram__readout" atContext=[] decls="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;…"
+      selector=".chromatogram__decim" atContext=[] decls="color: #e67700; font-size: .72rem;"
+      selector=".chromatogram__svg" atContext=[] decls="width: 100%; height: auto; display: block; background: #fff;…"
+      selector=".chromatogram__frame" atContext=[] decls="fill: #fbfcfe; stroke: #d1d5db; stroke-width: 1;"
+      selector=".chromatogram__tick" atContext=[] decls="stroke: #9ca3af; stroke-width: 1;"
+      selector=".chromatogram__ticklabel" atContext=[] decls="fill: #6b7280; font-size: 9px; font-family: ui-monospace, mo…"
+      selector=".chromatogram__axislabel" atContext=[] decls="fill: #374151; font-size: 10px; font-weight: 600;"
+      selector=".chromatogram__trace" atContext=[] decls="stroke: #1971c2; stroke-width: 1.4; fill: none;"
+      selector=".chromatogram__hover" atContext=[] decls="stroke: #c2255c; stroke-width: 1; stroke-dasharray: 3 2;"
+      selector=".chromatogram__sel" atContext=[] decls="fill: rgba(25, 113, 194, 0.14); stroke: #1971c2; stroke-widt…"
+      selector=".chromatogram__marker" atContext=[] decls="cursor: pointer;"
+      selector=".chromatogram__markerline" atContext=[] decls="stroke: #2f9e44; stroke-width: 1;"
+      selector=".chromatogram__markerlabel" atContext=[] decls="fill: #2f9e44; font-size: 9px; font-weight: 600;"
+      selector=".chromatogram__marker--saturated .chromatogram__markerline" atContext=[] decls="stroke: #e8590c; stroke-width: 1.6;"
+      selector=".chromatogram__marker--saturated .chromatogram__markerlabel" atContext=[] decls="fill: #e8590c;"
+      selector=".chromatogram__marker--active .chromatogram__markerline" atContext=[] decls="stroke: #1971c2; stroke-width: 2;"
+      selector=".chromatogram__marker--active .chromatogram__markerlabel" atContext=[] decls="fill: #1971c2;"
+      selector=".chromatogram__markersat" atContext=[] decls="fill: #e8590c; font-size: 9px; font-weight: 700;"
+      selector=".chromatogram__legend" atContext=[] decls="color: #e8590c; font-size: .75rem; font-weight: 600;"
+      selector=".chromatogram__tablewrap" atContext=[] decls="display: flex; flex-direction: column; gap: .3rem;"
+      selector=".chromatogram__skipnote" atContext=[] decls="color: #6b7280; font-size: .75rem;"
+      selector=".chromatogram__table" atContext=[] decls="border-collapse: collapse; width: 100%; font-size: .8rem;"
+      selector=".chromatogram__table th" atContext=[] decls="border: 1px solid #e5e7eb; padding: .25rem .5rem; text-align…"
+      selector=".chromatogram__table td" atContext=[] decls="border: 1px solid #e5e7eb; padding: .25rem .5rem;"
+      selector=".chromatogram__table tr" atContext=[] decls="cursor: pointer;"
+      selector=".chromatogram__table tr:hover" atContext=[] decls="background: #f9fafb;"
+      selector=".chromatogram__row--active" atContext=[] decls="background: #e7f5ff !important;"
+      selector=".chromatogram__rowlabel" atContext=[] decls="font-weight: 600; color: #374151;"
+      selector=".chromatogram__row-saturated" atContext=[] decls="color: #e8590c; font-weight: 600;"
+      selector=".chromatogram__rowflags" atContext=[] decls="color: #6b7280; font-family: ui-monospace, monospace; font-s…"
+      selector=".chromatogram__empty" atContext=[] decls="color: #6b7280; font-size: .85rem; padding: 1rem 0;"
+      selector=".compare-surface" atContext=[] decls="display: flex; flex-direction: column; gap: .5rem; border: 1…"
+      selector=".compare-surface__header" atContext=[] decls="display: flex; align-items: center; justify-content: space-b…"
+      selector=".compare-surface__header h2" atContext=[] decls="margin: 0; font-size: 1rem;"
+      selector=".compare-surface__body" atContext=[] decls="display: grid; grid-template-columns: 1fr; gap: .75rem; alig…"
+      selector=".compare-surface__body > *" atContext=[] decls="min-width: 0;"
+      selector=".compare-surface__body" atContext=["@container (min-width: 40rem)"] decls="grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) mi…"
+      selector=".compare-surface__select" atContext=["@container (max-width: 39.9375rem)"] decls="border-right: 0; padding-right: 0;"
+      selector=".compare-surface__saved" atContext=["@container (max-width: 39.9375rem)"] decls="border-left: 0; padding-left: 0;"
+      selector=".compare-surface__select" atContext=[] decls="display: flex; flex-direction: column; gap: .5rem; border-ri…"
+      selector=".compare-surface__run" atContext=[] decls="display: flex; flex-direction: column; gap: .25rem;"
+      selector=".compare-surface__run-toggle" atContext=[] decls="text-align: left; font-weight: 600; font-size: .85rem;"
+      selector=".compare-surface__artifact" atContext=[] decls="display: flex; align-items: center; gap: .35rem; font-size: …"
+      selector=".compare-surface__artifact > span:nth-child(2)" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".compare-surface__artifact-id" atContext=[] decls="color: #9ca3af; font-family: ui-monospace, monospace; font-s…"
+      selector=".compare-surface__overlay" atContext=[] decls="display: flex; flex-direction: column; gap: .4rem; min-width…"
+      selector=".compare-surface__conflicts" atContext=[] decls="display: flex; flex-direction: column; gap: .25rem;"
+      selector=".compare-surface__conflicts > *" atContext=[] decls="overflow-wrap: anywhere;"
+      selector=".compare-surface__conv-hint" atContext=[] decls="color: #6b7280; font-size: .75rem;"
+      selector=".compare-surface__hint" atContext=[] decls="color: #6b7280; font-size: .78rem;"
+      selector=".compare-surface__decim" atContext=[] decls="color: #e67700; font-size: .72rem;"
+      selector=".compare-overlay__svg" atContext=[] decls="width: 100%; height: auto; display: block; background: #fff;…"
+      selector=".compare-overlay__frame" atContext=[] decls="fill: #fbfcfe; stroke: #d1d5db; stroke-width: 1;"
+      selector=".compare-overlay__tick" atContext=[] decls="stroke: #9ca3af; stroke-width: 1;"
+      selector=".compare-overlay__ticklabel" atContext=[] decls="fill: #6b7280; font-size: 9px; font-family: ui-monospace, mo…"
+      selector=".compare-overlay__axislabel" atContext=[] decls="fill: #374151; font-size: 10px; font-weight: 600;"
+      selector=".compare-overlay__trace" atContext=[] decls="fill: none;"
+      selector=".compare-overlay__toolbar" atContext=[] decls="display: flex; align-items: center; gap: .5rem; flex-wrap: w…"
+      selector=".compare-overlay__reset" atContext=[] decls="padding: .15rem .6rem; border: 1px solid #d1d5db; border-rad…"
+      selector=".compare-overlay__reset:hover" atContext=[] decls="background: #f3f4f6;"
+      selector=".compare-overlay__readout" atContext=[] decls="display: inline-flex; gap: .75rem; font-family: ui-monospace…"
+      selector=".compare-overlay__readout-row" atContext=[] decls="white-space: nowrap;"
+      selector=".compare-overlay__hover" atContext=[] decls="stroke: #c2255c; stroke-width: 1; stroke-dasharray: 3 2;"
+      selector=".compare-overlay__sel" atContext=[] decls="fill: rgba(25, 113, 194, 0.14); stroke: #1971c2; stroke-widt…"
+      selector=".compare-surface__legend" atContext=[] decls="display: flex; flex-direction: column; gap: .2rem;"
+      selector=".compare-surface__legend-row" atContext=[] decls="display: flex; align-items: center; gap: .4rem; font-size: .…"
+      selector=".compare-surface__legend-row--hidden" atContext=[] decls="opacity: .45;"
+      selector=".compare-surface__swatch" atContext=[] decls="width: .8rem; height: .8rem; border-radius: 3px; display: in…"
+      selector=".compare-surface__conversions" atContext=[] decls="display: flex; flex-direction: column; gap: .3rem;"
+      selector=".compare-surface__conversion" atContext=[] decls="display: flex; align-items: center; gap: .5rem; font-size: .…"
+      selector=".compare-surface__conversion label" atContext=[] decls="display: inline-flex; align-items: center; gap: .25rem;"
+      selector=".compare-surface__conversion input" atContext=[] decls="width: 4.5rem; padding: .2rem .3rem; border: 1px solid #d1d5…"
+      selector=".compare-surface__conversion-label" atContext=[] decls="font-weight: 600; color: #374151;"
+      selector=".compare-surface__actions" atContext=[] decls="display: flex; align-items: center; gap: .5rem;"
+      selector=".compare-surface__save-result" atContext=[] decls="font-size: .78rem; color: #374151;"
+      selector=".compare-surface__saved" atContext=[] decls="display: flex; flex-direction: column; gap: .3rem; border-le…"
+      selector=".compare-surface__saved-title" atContext=[] decls="font-weight: 600; font-size: .85rem;"
+      selector=".compare-surface__saved-row" atContext=[] decls="display: flex; flex-direction: column; gap: .2rem; font-size…"
+      selector=".compare-surface__saved-row button" atContext=[] decls="align-self: flex-start; font-size: .72rem; padding: .15rem .…"
+      selector=".analysis-right__title" atContext=[] decls="display: flex; align-items: center; gap: .6rem;"
+      selector=".analysis-right__title-text" atContext=[] decls="flex: 0 1 auto;"
+      selector=".analysis-compare-btn" atContext=[] decls="margin-left: auto;\n  padding: .35rem .8rem;\n  border: 1px so…"
+      selector=".analysis-compare-btn:hover:not(:disabled)" atContext=[] decls="background: #d0ebff;"
+      selector=".analysis-compare-btn:disabled" atContext=[] decls="background: #f1f3f5; border-color: #d1d5db; color: #9ca3af; …"
+      selector=".analysis-compare-btn__reason" atContext=[] decls="font-weight: 400; color: #6b7280;"
+    sourceViolations: []
+    verdict: expect CLEAN -> OK
