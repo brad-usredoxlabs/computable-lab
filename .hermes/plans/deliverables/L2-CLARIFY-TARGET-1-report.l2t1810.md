@@ -126,3 +126,14 @@ canonical W11 V2 turn, a single-fact request) needs a line in
 `renderTypedClarification` (the :276 guard + one answer-surface arm).
 SERIALIZATION POINT — I will NOT edit ChatLog.tsx; the single-request chip mount
 is reported as the pending handoff. ROUTED TO ORCHESTRATOR.
+
+
+## CONTINUATION RUN l2t2245
+
+Continuation of L2-CLARIFY-TARGET-1 after dead run l2t1810 (pid 3651837, rc=0 at 22:19:54, output-token cap mid-work).
+Both blockers are now RULED: BLOCKER 1 (volume-object bar) by architect decision l2t2230 (arrives via merge of cl/integration-2);
+BLOCKER 2 (blast-radius scope) and BLOCKER 3 (serialization / ChatLog.tsx ownership) by orchestrator.
+Turn discipline: report-first, commit-after-every-step, small commands.
+
+STEP 0 (in progress): deleting the two stale untracked SWEEP-1 copies (config/chat, app/src/shared/config/chatHostInventory.contract.test.ts)
+and committing the dead run's uncommitted Change-2 work (app/src/types/ai.ts, server/src/ai/shorthandChat.ts, server/src/ai/types.ts) as-is.

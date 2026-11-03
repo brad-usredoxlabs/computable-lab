@@ -619,6 +619,21 @@ export interface AgentClarificationRequest {
    * actionLocation.
    */
   unresolvedFact?: import('../compiler/scientistIntent/types.js').ScientistIntentUnresolvedFact;
+  /**
+   * L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE control the CARD renders
+   * for a declared quantity/wells slot, sourced from the assumed-value DATA
+   * (config/drafting/shorthand-drafting.yaml `assumedValues:`), never a
+   * TypeScript literal. A `quantity` arm carries the declared number the
+   * scientist approves or edits (`value` is the assumption's value; the
+   * scientist's APPROVED number — never the assumed one — is what travels on
+   * the answer's `ref`). A `wells` arm carries the declared target-slot
+   * question. STAMPED only when the DATA declares the slot; a fact with no
+   * declaration gets NO `clarifyControl` key (exactOptionalPropertyTypes: the
+   * key is ABSENT via a conditional spread, never `undefined` — bait 5).
+   */
+  clarifyControl?:
+    | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
+    | { kind: 'wells'; question: string };
 }
 
 export interface AgentClarificationAnswer {
