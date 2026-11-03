@@ -51,14 +51,54 @@ const ANYWHERE_VIOLATION =
   'a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere'
 
 /**
+ * Minimal CONFORMING floor: every positive claim of §2.1 satisfied. Appending
+ * ONE defect rule to this fixture must yield exactly the one `anywhere`
+ * violation — nothing else.
+ */
+const CONFORMING_FLOOR = `
+.analysis-right { overflow: auto; }
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
+`
+
+/**
+ * Split a selector list on its TOP-LEVEL commas only: commas inside `()`
+ * (functional pseudo-classes such as `:is(th, td)`) or `[]` (attribute
+ * selectors) are part of one selector part. A naive `split(',')` tears
+ * `.view-spec__table :is(th, td)` into `.view-spec__table :is(th` + ` td)`,
+ * neither of which names a cell selector (review D4).
+ */
+function splitSelectorParts(selector: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let current = ''
+  for (const ch of selector) {
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+    if (ch === ',' && depth === 0) {
+      parts.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  parts.push(current)
+  return parts.map((p) => p.trim())
+}
+
+/**
  * True when ONE selector part targets a `.view-spec__table` cell: it is scoped
  * under `.view-spec__table` (with or without a `table` tag prefix) and carries
- * a standalone `th` or `td` tag token. Descendant/child/sibling combinators and
- * pseudo-classes/pseudo-elements are tolerated; `thead`/`tbody` are not `th`/`td`.
+ * a standalone `th` or `td` tag token. Descendant/child/sibling combinators,
+ * pseudo-classes and pseudo-elements are tolerated, INCLUDING functional
+ * pseudo-classes (`:is(th, td)`) — the token may be preceded by any
+ * non-identifier character, so `(` and `:` do not hide it (review D4).
+ * `thead`/`tbody`/`.view-spec__table-cell` are not `th`/`td`: the trailing
+ * `(?![\w-])` guard rejects them.
  */
 function isTableCellSelectorPart(part: string): boolean {
   const scopedToTable = /\.view-spec__table(?![\w-])/.test(part)
-  const cellToken = /(?:^|[\s,>+~])(?:th|td)(?![\w-])/.test(part)
+  const cellToken = /(?:^|[^\w-])(?:th|td)(?![\w-])/.test(part)
   return scopedToTable && cellToken
 }
 
@@ -84,9 +124,9 @@ function sourceViolations(css: string): string[] {
   )
   const violations: string[] = []
   const anywhereOnTableCell = rules.some((r) =>
-    r.selector.split(',').some(
+    splitSelectorParts(r.selector).some(
       (part) =>
-        isTableCellSelectorPart(part.trim()) &&
+        isTableCellSelectorPart(part) &&
         !part.includes('.view-spec__cell-item') &&
         /overflow-wrap\s*:\s*anywhere/.test(r.decls),
     ),
@@ -201,23 +241,68 @@ describe('FAME-8 GATEFIX5 — AnalysisPage.css cell-render floor (source pin)', 
  * must yield exactly the one `anywhere` violation — nothing else.
  */
 describe('FAME-8 GATEFIX5 — source pin catches split/qualified plain-cell selectors (review D1)', () => {
-  const CONFORMING_FLOOR = `
-.analysis-right { overflow: auto; }
-.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
-.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
-`
-
-  it('flags `anywhere` in all four previously-evading selector shapes', () => {
+  it('flags `anywhere` in every evade-then-flag selector shape', () => {
     expect(sourceViolations(CONFORMING_FLOOR)).toEqual([])
     const shapes = [
+      // D1 cycle 1: split th/td, table. prefix, descendant/child combinator.
       '.view-spec__table td { overflow-wrap: anywhere; }',
       '.view-spec__table th { overflow-wrap: anywhere; }',
       'table.view-spec__table td { overflow-wrap: anywhere; }',
       '.view-spec__table tr > td { overflow-wrap: anywhere; }',
+      // D4 cycle 2: functional pseudo-class (token hidden behind `(` and a
+      // comma that a naive split(',') tears in half).
+      '.view-spec__table :is(td) { overflow-wrap: anywhere; }',
+      '.view-spec__table :is(th, td) { overflow-wrap: anywhere; }',
+      '.view-spec__table :is(th,td) { overflow-wrap: anywhere; }',
     ]
     for (const shape of shapes) {
       expect(sourceViolations(CONFORMING_FLOOR + shape)).toEqual([ANYWHERE_VIOLATION])
     }
+  })
+})
+
+/**
+ * Review D4 (cycle 2): the pin must see through functional pseudo-classes,
+ * and must still NOT invent cell selectors where there are none (`thead`,
+ * `.view-spec__table-cell`). Each shape is asserted with its own labelled
+ * failure message so a hole names itself.
+ */
+describe('FAME-8 GATEFIX5 — source pin handles functional pseudo-classes (review D4)', () => {
+  const evasions: Array<[string, string]> = [
+    ['functional pseudo-class, single arg', '.view-spec__table :is(td) { overflow-wrap: anywhere; }'],
+    ['functional pseudo-class, comma+space', '.view-spec__table :is(th, td) { overflow-wrap: anywhere; }'],
+    ['functional pseudo-class, comma no space', '.view-spec__table :is(th,td) { overflow-wrap: anywhere; }'],
+  ]
+
+  it('flags every evasion class as exactly the `anywhere` violation', () => {
+    expect(sourceViolations(CONFORMING_FLOOR)).toEqual([])
+    for (const [label, shape] of evasions) {
+      expect({ label, violations: sourceViolations(CONFORMING_FLOOR + shape) }).toEqual({
+        label,
+        violations: [ANYWHERE_VIOLATION],
+      })
+    }
+  })
+
+  it('splits selectors on top-level commas only', () => {
+    // The naive split(',') produced ['.view-spec__table :is(th', ' td)'].
+    expect(splitSelectorParts('.view-spec__table :is(th, td)')).toEqual(['.view-spec__table :is(th, td)'])
+    expect(splitSelectorParts('.view-spec__table th, .view-spec__table td')).toEqual([
+      '.view-spec__table th',
+      '.view-spec__table td',
+    ])
+    expect(splitSelectorParts('[data-join="a,b"] td')).toEqual(['[data-join="a,b"] td'])
+  })
+
+  it('still rejects non-cell tokens (trailing-identifier guard intact)', () => {
+    // `thead`/`tbody` are not `th`/`td`, and `.view-spec__table-cell` is not
+    // the table scope — neither may be reported, so no false positive.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table thead { overflow-wrap: anywhere; }'),
+    ).toEqual([])
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table-cell { overflow-wrap: anywhere; }'),
+    ).toEqual([])
   })
 })
 
