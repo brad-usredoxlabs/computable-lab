@@ -1,0 +1,23 @@
+node v26.8.1
+scanner+pin extracted from commit b2b59fdf
+CASE K  bare nested td                              -> []  RED (evasion accepted)
+CASE K2 bare nested th                              -> []  RED (evasion accepted)
+CASE L  @media inside style rule, bare td head      -> []  RED (evasion accepted)
+CASE M  bare td nested under .view-spec__table inside @media -> []  RED (evasion accepted)
+CASE N  bare nested head list th, td                -> []  RED (evasion accepted)
+CASE O  bare nested :hover td                       -> []  RED (evasion accepted)
+CASE P  &-block then bare td sibling                -> []  RED (evasion accepted)
+CASE Q  parent selector list distribution           -> []  RED (evasion accepted)
+CASE R  :is(&) td (ambiguous & placement)           -> []  RED (evasion accepted)
+CASE S  :where(&) > td (ambiguous & placement)      -> []  RED (evasion accepted)
+CASE D2 @supports > style > @media > bare td        -> []  RED (evasion accepted)
+CTRL &-control & td                                 -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CTRL &-control bare & block                         -> []  RED (evasion accepted)
+CTRL &-control &.x glued                            -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+GUARD benign nested font-size                       -> []  CLEAN
+GUARD benign nested td padding                      -> []  CLEAN
+GUARD benign nested thead                           -> []  CLEAN
+GUARD benign nested @media font-size                -> []  CLEAN
+SHIPPED AnalysisPage.css -> []
+RED (evasion accepted): 11/11
+PARSER DUMP K: [[".analysis-right",[]],[".view-spec__table th, .view-spec__table td",[]],[".view-spec__cell-item",[]],[".view-spec__table",[]],["td",[]]]
