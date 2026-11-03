@@ -147,3 +147,24 @@ forbids taking one):
 Dispatch next tick (lane 2 first): checkout unit, then
 `systemd-run --user --collect --unit=cl-l1-coder-pinharden1-l1t0020 /home/brad/.hermes/cl/lanes/1/launchers/launch-L1-PIN-HARDEN-1-l1t0020.sh`
 (no `-t`).
+
+## Addendum 2 (00:33) — tick-digest tool defect found and repaired
+While re-running the digest I saw `appliance2-coder-slot-1.lock ... holder=DEAD` while PID 4083023
+was demonstrably live (`ps -p 4083023` → `launch-DATADUP1-l2t2320.sh --inner`, 10m). Root cause is
+the pid-file parser, not a dead worker: `cl-reconcile.sh:67` took the FIRST purely-numeric
+hyphen-delimited field, and the item name `L2-PROMPT2-DATA-DUP-RECORDS-1-4083023-…` yields `1`
+before the real PID, so `kill -0 1` fails and a live holder reads DEAD. A digest that under-reports
+live fleet capacity is how a duplicate dispatch gets launched, so I repaired it:
+- `/home/brad/.hermes/profiles/orchestrator/scripts/cl-reconcile.sh` now anchors on the ISO
+  timestamp and takes the numeric field immediately before it, with the legacy 2-field fallback.
+  `bash -n` clean; re-run now prints **holder=alive** for slot-1 and the correct PID for the
+  legacy `FAME6COMPOSER-3240811-2026-11-01 08:23:37-0500` shape (3240811, fallback path).
+- My own new launcher had copied the same bad rule; fixed there too, plus a legacy-file mtime
+  fallback, and dry-run verified against the two live pid files (slot-0 pid 3850850 live/6694 s,
+  slot-1 pid 4083023 live/660 s — both parsed correctly, both locks held ⇒ still NO-SLOT).
+- `cl-coder-launcher-pattern` skill patched: its "first purely-numeric field" advice was the source
+  of the bug; it now documents the timestamp-anchored parser.
+Provenance: orchestrator tooling only, no product code, no lane stack touched. The 262ND/263RD
+conclusions are unaffected — the mis-read made the fleet look MORE idle than it was, and the
+lane-1 dispatch decision was already "no slot free" on the strong evidence (both flocks refused,
+both launchers live).
