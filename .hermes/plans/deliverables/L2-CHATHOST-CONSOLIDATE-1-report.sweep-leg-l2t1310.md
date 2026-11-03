@@ -287,4 +287,4 @@ Convention note (precedent: lane-1 L1-PIN-HARDEN-1 fix3, commits 81d8e565 → a7
 is committed first (C1); the DONE line below is stamped in a follow-up append commit with C1's
 full sha — C1 being the commit that first contains this report.
 
-CHATHOST-SWEEPLEG DONE <C1-sha-pending-stamp>
+CHATHOST-SWEEPLEG DONE dbe9cfb5b5f0bccdbc42cf1dbcc00e8f577d2449
