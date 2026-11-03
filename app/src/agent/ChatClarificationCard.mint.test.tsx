@@ -14,6 +14,8 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { AiClarificationRequest, ChatMessage } from '../types/ai'
 import { ClarificationPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
 import { mintLocalTermLabel } from '../shared/taptab/slashMenu/resolvers'
@@ -259,5 +261,208 @@ describe('L2-CLARIFY-CARD-1 (Change 2): mint honesty (W9/W14/W7/P5)', () => {
     expect(answered).toBeTruthy()
     expect(answered!.textContent).toContain('MAT-clof-9')
     expect(within(container as HTMLElement).getByTestId('chat-log-clarification-answered').textContent).toContain('MAT-clof-9')
+  })
+
+  it('D-2 (browser-gate fix2): a MINT-INTENT blob as request.query unwraps to the PROMPT noun — the label input, the honest preview, and the mint call all name the noun, never the raw blob (object AND JS-literal-string forms)', async () => {
+    // The browser gate (shots/02-draw-02.png) observed the model's mint-intent
+    // DSL reach the mint label verbatim: {mint:{label:"frobnicate",domain:"chemical"}}
+    // rendered in [clarification-mint-label] with a preview of the raw JSON and
+    // Create ENABLED (a click would write a record named after raw JSON). The
+    // seed point must unwrap it to the noun. Two shapes are pinned: (a) the
+    // structured {mint:{label,domain}} object (the DSL as typed data) and
+    // (b) the JS-OBJECT-LITERAL string the live wire actually delivered
+    // (unquoted keys — not JSON). A bare noun (control) must stay byte-unchanged.
+    const noun = 'frobnicate'
+    const blobString = '{mint:{label:"frobnicate",domain:"chemical"}}'
+    const blobObject = { mint: { label: 'frobnicate', domain: 'chemical' } } as unknown as string
+
+    const makeRequest = (id: string, query: string) => ({
+      id,
+      kind: 'material' as const,
+      prompt: `The draft names "${noun}" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.`,
+      entityType: 'material' as const,
+      menuProvider: '/m' as const,
+      query,
+      options: [] as { id: string; label: string }[],
+      allowCreateLocal: true,
+    })
+
+    // (a) the structured object form.
+    resolveMaterial.mockResolvedValue([])
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-frob-obj', label: noun, iri: 'urn:cl:local:MAT-frob-obj' })
+    const onPickObj = vi.fn()
+    render(<ClarificationPicker request={makeRequest('req-obj', blobObject)} onPick={onPickObj} />)
+    // The label is the BARE noun — never the raw blob.
+    const labelObj = () => screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(labelObj().value).toBe(noun)
+    expect(labelObj().value).not.toContain('mint')
+    expect(labelObj().value).not.toContain('{')
+    // The honest preview names the noun (the one-source sentence).
+    expect(screen.getByText(mintLocalTermLabel(noun))).toBeTruthy()
+    expect(screen.queryByText(mintLocalTermLabel(blobString))).toBeNull()
+    // Create is enabled (the noun is mintable) and the search box is seeded
+    // with the noun too (same root — the blob is not a material to search).
+    const createObj = () => screen.getByTestId('clarification-mint-create') as HTMLButtonElement
+    expect(createObj().disabled).toBe(false)
+    const searchObj = document.querySelector(SEARCH) as HTMLInputElement
+    expect(searchObj.value).toBe(noun)
+    // The call mints the BARE noun, never the blob.
+    fireEvent.click(createObj())
+    await waitFor(() => expect(onPickObj).toHaveBeenCalledTimes(1))
+    // D4 (advc-c3): the LAST call — leg (a)'s own call (the mock is shared
+    // across the legs inside this single `it`; only afterEach resets it, so
+    // calls[0] is leg-independent and could not fail if the wire form minted
+    // something else).
+    const lastCallA = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCallA?.[1]).toBe(noun)
+    expect(lastCallA?.[1]).not.toContain('mint')
+    cleanup()
+
+    // (b) the JS-OBJECT-LITERAL string the live wire delivered (unquoted keys,
+    // not JSON — JSON.parse throws; the unwrap must still recover the noun).
+    resolveMaterial.mockResolvedValue([])
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-frob-str', label: noun, iri: 'urn:cl:local:MAT-frob-str' })
+    const onPickStr = vi.fn()
+    render(<ClarificationPicker request={makeRequest('req-str', blobString)} onPick={onPickStr} />)
+    const labelStr = () => screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(labelStr().value).toBe(noun)
+    expect(labelStr().value).not.toContain('mint')
+    expect(screen.getByText(mintLocalTermLabel(noun))).toBeTruthy()
+    const searchStr = document.querySelector(SEARCH) as HTMLInputElement
+    expect(searchStr.value).toBe(noun)
+    fireEvent.click(screen.getByTestId('clarification-mint-create'))
+    await waitFor(() => expect(onPickStr).toHaveBeenCalledTimes(1))
+    // D4 (advc-c3): assert the LAST call (leg (b)'s own mint). The mock is NOT
+    // reset between legs inside this single `it` (only afterEach resets it), so
+    // `mock.calls[0]` is leg (a)'s call — the pre-fix assertion repeated the
+    // :312 check and could not fail if the string-form path minted something
+    // else. Exactly TWO mints have happened (one per leg); the last is leg (b)'s.
+    expect(mintLocalTerm).toHaveBeenCalledTimes(2)
+    const lastCallB = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCallB?.[1]).toBe(noun)
+    expect(lastCallB?.[1]).not.toContain('mint')
+    cleanup()
+
+    // (c) CONTROL: a bare noun is byte-unchanged (the pre-fix path, untouched).
+    resolveMaterial.mockResolvedValue([])
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-ctl', label: 'radicicol', iri: 'urn:cl:local:MAT-ctl' })
+    const onPickCtl = vi.fn()
+    render(<ClarificationPicker request={makeRequest('req-ctl', 'radicicol')} onPick={onPickCtl} />)
+    const labelCtl = () => screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(labelCtl().value).toBe('radicicol')
+    expect(screen.getByText(mintLocalTermLabel('radicicol'))).toBeTruthy()
+    cleanup()
+  })
+
+  it('D3 (advc-c3 fix3): the DSL unwrap is QUOTE/ESCAPE-AWARE and NARROW — an apostrophe label unwraps WHOLE (never truncated at the quote), and a JSON array / a quoted scalar / a malformed blob are NOT nouns (the affordance stays hidden, no partial or bracketed label ever reaches the mint row)', async () => {
+    // The reviewer's probe (receipt dom/draw-02.json wire shapes): the pre-fix
+    // /label\s*:\s*["']([^"']*)["']/ regex stopped at an inner apostrophe, so
+    // {mint:{label:"O'Brien extract"}} minted a durable record named "O" with
+    // Create ENABLED; and the pre-fix string gate returned ANY non-`{` string
+    // verbatim, so ["frobnicate","zymosolve"] (the plausible array-typed-slot
+    // wire shape) and "frobnicate" reached the mint row as "labels". The
+    // post-fix unwrap: the object-literal form is parsed by a quote/escape-
+    // aware scanner (a value is read from its opening quote to its matching
+    // closing quote — escapes honored — so an apostrophe inside a value is
+    // part of the value), and every other bracketed value returns '' so
+    // mintAvailable keeps the affordance hidden.
+    const mkRequest = (id: string, query: string) => ({
+      id,
+      kind: 'material' as const,
+      prompt: 'Choose what it is, or create a material record.',
+      entityType: 'material' as const,
+      menuProvider: '/m' as const,
+      query,
+      options: [] as { id: string; label: string }[],
+      allowCreateLocal: true,
+    })
+
+    // (a) APOSTROPHE (the reviewer's exact probe): the label unwraps WHOLE —
+    // never "O", never "Komagataeibacter" — and the mint call mints the whole
+    // label (a click writes a record named "O'Brien extract", not "O").
+    const obrien = "O'Brien extract"
+    const obrienBlob = `{mint:{label:"${obrien}",domain:"chemical"}}`
+    resolveMaterial.mockResolvedValue([])
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-obrien', label: obrien, iri: 'urn:cl:local:MAT-obrien' })
+    const onPickObrien = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-obrien', obrienBlob)} onPick={onPickObrien} />)
+    const labelObrien = screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(labelObrien.value).toBe(obrien)
+    expect(labelObrien.value).not.toBe('O')
+    expect(screen.getByText(mintLocalTermLabel(obrien))).toBeTruthy()
+    const createObrien = screen.getByTestId('clarification-mint-create') as HTMLButtonElement
+    expect(createObrien.disabled).toBe(false)
+    fireEvent.click(createObrien)
+    await waitFor(() => expect(onPickObrien).toHaveBeenCalledTimes(1))
+    const lastCall = mintLocalTerm.mock.calls[mintLocalTerm.mock.calls.length - 1]
+    expect(lastCall?.[1]).toBe(obrien)
+    expect(lastCall?.[1]).not.toBe('O')
+    cleanup()
+
+    // (b) JSON ARRAY (the array-typed-slot wire shape): NOT a noun. The mint
+    // row is ABSENT (mintAvailable hides the affordance) — and critically, the
+    // search box is NOT seeded with the bracketed text either (seed = '').
+    resolveMaterial.mockResolvedValue([])
+    const onPickArr = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-arr', '["frobnicate","zymosolve"]')} onPick={onPickArr} />)
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+    expect(screen.queryByTestId('clarification-mint-create')).toBeNull()
+    expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+    const placeholderArr = screen.getByPlaceholderText(/Search materials/i) as HTMLInputElement
+    expect(placeholderArr.placeholder).toBe('Search materials…')
+    cleanup()
+
+    // (c) QUOTED SCALAR: NOT a noun (the pre-fix gate passed it through WITH
+    // the quotes as the label). Same affordance-hidden outcome.
+    resolveMaterial.mockResolvedValue([])
+    const onPickQuoted = vi.fn()
+    render(<ClarificationPicker request={mkRequest('req-quoted', '"frobnicate"')} onPick={onPickQuoted} />)
+    expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+    expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+    cleanup()
+
+    // (d) NOT-the-DSL-SHAPE bracketed values: the affordance stays hidden and
+    // the label is never a partial/truncated fragment of the raw text.
+    for (const malformed of [
+      '{mint:"frobnicate"}',
+      '{"mint":["x"]}',
+      '{label:"outer",domain:"chemical"}',
+      '{mint:{label:"unterminated',
+    ]) {
+      resolveMaterial.mockResolvedValue([])
+      const { unmount } = render(<ClarificationPicker request={mkRequest('req-mal', malformed)} onPick={vi.fn()} />)
+      expect(screen.queryByTestId('clarification-mint-row')).toBeNull()
+      expect((document.querySelector(SEARCH) as HTMLInputElement).value).toBe('')
+      unmount()
+    }
+  })
+})
+
+// D-3 (browser-gate fix2, chrome): the mint row's Create button clipped its
+// verb to "Crea/te" (shots/c1-prompt-and-card.png). The row is a full-width
+// flex line whose children all default to `flex: 0 1 auto`, so the button was
+// the one that collapsed and wrapped. jsdom cannot measure layout, so this pin
+// reads the CSS SOURCE (the same ruleOf idiom the BGATE chrome pins use —
+// ChatLog.test.tsx:288) and asserts the fix: the button is given the width its
+// verb needs (flex: none + nowrap) and the flexible siblings are allowed to
+// absorb the shrinkage (min-width: 0).
+describe('L2-CLARIFY-CARD-1 (fix2) D-3 — the mint row Create button does not clip its verb', () => {
+  const cssSource = readFileSync(resolve(process.cwd(), 'src/event-editor/right-pane/ai/ai.css'), 'utf8')
+  const ruleOf = (selector: string): string => {
+    const at = cssSource.indexOf(selector)
+    expect(at, `ai.css must define ${selector}`).toBeGreaterThan(-1)
+    return cssSource.slice(at, cssSource.indexOf('}', at))
+  }
+
+  it('the Create button is flex:none + nowrap (its verb never wraps) and the label/preview siblings shrink instead', () => {
+    const create = ruleOf('.message-log__clarification-mint__create {')
+    expect(create).toContain('flex: none')
+    expect(create).toContain('white-space: nowrap')
+    // The flexible siblings must be able to absorb the shrinkage (min-width:0)
+    // — otherwise the button would still be the one that collapses.
+    const label = ruleOf('.message-log__clarification-mint__label {')
+    expect(label).toContain('min-width: 0')
+    const preview = ruleOf('.message-log__clarification-mint__preview {')
+    expect(preview).toContain('min-width: 0')
   })
 })

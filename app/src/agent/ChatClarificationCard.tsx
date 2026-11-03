@@ -41,11 +41,19 @@ export interface ChatClarificationCardProps {
    */
   turnKey: string
   /**
-   * Prompts the bubble has already printed (message.content) — render-side
-   * dedupe, the single-request arm's BGATE-FIX D3 rule (ChatLog.tsx
-   * shownPrompts). A section prints its prompt only when the bubble and no
-   * earlier section have shown that exact sentence. Pass [] for a standalone
-   * card (no bubble to dedupe against).
+   * Prompts already shown OUTSIDE this card that the card must not re-print —
+   * the render-side dedupe seed (the single-request arm's BGATE-FIX D3 rule,
+   * ChatLog.tsx `shownPrompts`). A section prints its prompt only when no
+   * earlier section has shown that exact sentence (intra-card dedupe for a
+   * shared prompt string).
+   *
+   * L2-CLARIFY-CARD-1 (advc-c3 D2, fix3): the grouped host passes an EMPTY set
+   * — the bubble is NOT a seed source for the card. The card is the
+   * deterministic OWNER of every grouped prompt (it prints slot 1, not just
+   * slot N), and the host's bubble suppresses a verbatim duplicate instead
+   * (ChatLog.tsx `bubbleIsOwnedPrompt`). Passing the first prompt here is what
+   * made the card hide slot 1 unconditionally — on a bubble that did not carry
+   * that sentence the question was printed ZERO times.
    *
    * READ-ONLY (advc-c1 D1, fix1): the card dedupes against a LOCAL copy
    * seeded from this prop — it NEVER mutates the Set the parent owns.
@@ -87,19 +95,22 @@ export function ChatClarificationCard({
 
   if (requests.length === 0) return null
 
-  // BGATE-FIX D3 dedupe, derived from IMMUTABLE data only (advc-c1 D1,
-  // BLOCKER): the `shownPrompts` PROP is owned by the parent (ChatLog.tsx:334
-  // builds it per render and shares the SAME instance across card-local
-  // re-renders — the mount effect's setPicks({} at :79-81 fires one extra
-  // render right after mount, and every pick re-renders the card). The pre-fix
-  // code did `shownPrompts.add(request.prompt)` inside this render function;
-  // the very next render read the MUTATED Set (every prompt now "shown") and
-  // dropped every <p class="chat-clarification-card__prompt">. A render must
-  // never mutate a prop — so dedupe runs against a LOCAL copy seeded from the
-  // prop: the bubble's sentence (message.content) plus the requests' own
-  // wire-order first-occurrence reduction. Re-created on every render, so a
-  // card-local re-render re-derives the same membership from the same
-  // immutable inputs instead of remembering a mutation.
+  // L2-CLARIFY-CARD-1 (advc-c3 D2, fix3): the card OWNS its prompts. It
+  // renders EVERY slot's prompt ONCE (an EMPTY seed from the host — the bubble
+  // is not a seed source) with intra-card dedupe for a shared prompt string.
+  // The bubble side of the "exactly once" invariant lives in ChatLog.tsx
+  // (bubbleIsOwnedPrompt: the bubble is omitted when it verbatim carries a
+  // prompt the card owns — the live first-ask shape, useAiChat.ts:1543).
+  // The pre-fix seed (the identity seed, or message.content) HAD the card hide
+  // slot 1 whenever the bubble carried that sentence — and, on a bubble that
+  // did not carry it, left the question printed ZERO times (the D2 defect).
+  // Owning the print makes it deterministic: same slot set => same prompts,
+  // never twice, never zero.
+  //
+  // READ-ONLY (advc-c1 D1, fix1): the dedupe runs against a LOCAL copy seeded
+  // from this prop — the card NEVER mutates the Set the parent owns. (Mutating
+  // it during render is what dropped every per-slot prompt on the mount
+  // effect's re-render — the BLOCKER.)
   const promptShown = new Set<string>(shownPrompts)
 
   const record = (request: AiClarificationRequest, answer: AiClarificationAnswer) => {
@@ -131,12 +142,12 @@ export function ChatClarificationCard({
         const options = request.options ?? []
         const hasPicker = requestHasPicker(request)
         // BGATE-FIX D3 (the single-request arm's rule, ChatLog.tsx
-        // shownPrompts): the bubble already printed message.content; a section
-        // prints its prompt only when the bubble and no earlier section have
-        // shown that exact sentence. The answer controls are never gated.
-        // advc-c1 D1 (fix1): the check ADDS to the local `promptShown` copy,
-        // never to the prop (a render must not mutate its inputs — see the
-        // dedupe comment above).
+        // shownPrompts) — for the GROUPED card the host passes an EMPTY seed
+        // (advc-c3 D2, fix3): the card OWNS its prompts and the dedupe is
+        // INTRA-CARD (a shared prompt string prints once, not per slot). The
+        // answer controls are never gated. advc-c1 D1 (fix1): the check ADDS
+        // to the local `promptShown` copy, never to the prop (a render must
+        // not mutate its inputs — see the dedupe comment above).
         const promptAlreadyShown = promptShown.has(request.prompt)
         if (!promptAlreadyShown) promptShown.add(request.prompt)
         return (

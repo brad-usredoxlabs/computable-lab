@@ -101,6 +101,33 @@ function clarificationQuestion(message: ChatMessage): string | undefined {
 }
 
 /**
+ * L2-CLARIFY-CARD-1 (advc-c4 D1, fix run 3, ORCH AMENDMENT 2 §3) — THE ONE
+ * predicate that decides whether a typed clarification request renders a
+ * PROMPT. The single-request arm (renderTypedClarification below) and the
+ * grouped card (ChatClarificationCard) both read a request's OWN shape —
+ * `options.length > 0 || requestHasPicker(request)` — never its prompt text.
+ * The bubble-suppression arm (bubbleIsOwnedPrompt) must key on this SAME
+ * render decision, not on the request COUNT: the server emits
+ * `menuProvider: 'choice'`, `options: []` for any fact whose argument
+ * declares no domain (shorthandChat.ts:883-887, 903-907 — `volumeUl` is
+ * `kind: quantity` with no domain), and for that shape NEITHER arm renders a
+ * prompt (renderTypedClarification returns null; the grouped card, mounted
+ * only for 2+ requests, has no answer surface for it). A count-keyed
+ * suppression deleted the bubble question for exactly that shape — the
+ * question printed ZERO times and the assistant row rendered empty (the
+ * reviewer's probe: base = 1 print, HEAD = 0 prints). Deriving the
+ * suppression from this predicate restores BASE behaviour for a request the
+ * card cannot render (the bubble prints the question once, the documented
+ * contract of the sibling arm at :213-215) while keeping it suppressed for a
+ * request the card actually prints (the live first-ask shape: content ===
+ * the owned prompt; never twice, never zero). One copy of the rule —
+ * both arms call it; no prose sniffing, no prompt-text matching.
+ */
+function requestRendersPrompt(request: AiClarificationRequest): boolean {
+  return (request.options ?? []).length > 0 || requestHasPicker(request)
+}
+
+/**
  * L2-CLARIFY-PICKER-1 (P2, W5) — the human-facing ANSWER sentence. The picker
  * sends the agent `Use [[material:…|…]] for material.` (byte-stable wire
  * contract — clarificationAnswerPrompt.ts is untouched), but the TRANSCRIPT
@@ -272,8 +299,11 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     shownPrompts: Set<string>,
   ) {
     const options = request.options ?? []
+    // advc-c4 D1 (fix run 3): the render decision is the SHARED
+    // requestRendersPrompt predicate — the bubble-suppression arm keys on
+    // the SAME rule (no second copy of the options/picker check).
+    if (!requestRendersPrompt(request)) return null
     const hasPicker = requestHasPicker(request)
-    if (options.length === 0 && !hasPicker) return null
     const promptAlreadyShown = shownPrompts.has(request.prompt)
     if (!promptAlreadyShown) shownPrompts.add(request.prompt)
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
@@ -327,11 +357,72 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
           const answered = hasClarification && isClarificationAnswered(messages, index)
           const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
-          // BGATE-FIX D3: the bubble's <p> has already shown message.content;
-          // seed the per-message prompt set with it so the typed cards print
-          // a prompt only when it is NOT already on screen (render-side
-          // dedupe — see renderTypedClarification).
-          const shownPrompts = new Set<string>([message.content])
+          // BGATE-FIX D3 (render-side dedupe — see renderTypedClarification):
+          // the typed cards print a prompt only when it is NOT already on
+          // screen.
+          // L2-CLARIFY-CARD-1 (browser-gate fix3, advc-c3 D1 + D2 — ORCH RULING 2):
+          // the card OWNS its prompts. The bubble shows the PLAIN question on a
+          // first ask but the clarification_loop escalation on a repeat ask
+          // (useAiChat flips message.content), so seeding the dedupe from
+          // message.content made the card's visible prompts — and its hash —
+          // FLIP between wordings for an IDENTICAL slot set (2 distinct hashes
+          // per 10 draws; 9 of 10 gate draws are single-request), and re-print
+          // the first slot's question once the bubble stopped carrying its
+          // exact text (the double-print). An identity seed (the first request's
+          // prompt) is deterministic but HIDEs the prompt whenever the bubble
+          // does not carry it — the D2 zero-print (a card that always dedupes
+          // its own prompt is a question that is printed ZERO times on a
+          // loop-text bubble). So the card OWNS the print: an EMPTY seed means
+          // the card renders EVERY prompt ONCE (intra-card dedupe for a shared
+          // string), independent of the bubble's wording — the same slot set
+          // renders byte-identically no matter what the bubble carries. The
+          // BUBBLE side of the invariant lives in `bubbleIsOwnedPrompt` below:
+          // when the bubble verbatim carries a prompt the card owns (the live
+          // first-ask shape, useAiChat.ts:1543) it is suppressed, so the
+          // sentence is on screen EXACTLY ONCE — never twice (the double-print)
+          // and never zero (the card's owner slot always prints). (ORCH RULING 2
+          // authorizes the seed-derivation change in the single arm — the seed
+          // no longer reads message.content; nothing else in the single arm
+          // changes — renderTypedClarification's dedupe logic is untouched.)
+          const shownPrompts = new Set<string>()
+          const groupedShownPrompts = new Set<string>()
+          // D2 (advc-c3 fix3): the card is the deterministic OWNER of the typed
+          // message's prompts, so the bubble must not double-print the one it
+          // carries verbatim (the live first-ask shape, useAiChat.ts:1543:
+          // content === the first request's prompt).
+          // advc-c4 D1 (fix run 3, ORCH AMENDMENT 2 §3): the suppression is
+          // derived from the SAME decision that decides a prompt actually
+          // RENDERS, not from the request COUNT. Which decision applies is
+          // the message's own arm:
+          //   - grouped arm (this map renders ChatClarificationCard): the
+          //     card renders EVERY request's prompt unconditionally (its slot
+          //     answer surface falls back to the parameter box), so any
+          //     verbatim-owned prompt is card-printed — suppress (the pre-fix
+          //     behaviour, which is correct THERE: the card always owns the
+          //     print, so suppression can never zero it);
+          //   - single arm (renderTypedClarification per request): a prompt
+          //     renders only when requestRendersPrompt(r) holds (the shared
+          //     options/picker rule the arm's guard calls). For a request the
+          //     card renders NOTHING for (`choice`/`options: []`/no picker —
+          //     the shape the server emits for every non-domain argument,
+          //     e.g. `volumeUl`) the card owns NO print, so the bubble KEEPS
+          //     BASE behaviour: it prints the question once, exactly as the
+          //     sibling arm's documented contract at :213-215 requires.
+          //     Suppressing on count deleted that question for precisely that
+          //     shape (base = 1 print, HEAD = 0 prints, empty assistant row —
+          //     the reviewer's probe).
+          // A loop-escalation bubble (the repeat-ask content) matches no
+          // prompt, so it is printed as-is and the card still prints every
+          // renderable prompt — exactly once each. The legacy block arm (no
+          // clarificationRequests) keeps its own promptDiffers dedupe and is
+          // never suppressed here.
+          const rendersGroupedCard = (message.clarificationRequests?.length ?? 0) > 1
+            && onClarificationSubmit !== undefined
+          const typedCardRendersOwnedPrompt = !answered
+            && (message.clarificationRequests ?? []).some(
+              (r) => r.prompt === message.content && (rendersGroupedCard || requestRendersPrompt(r)),
+            )
+          const bubbleIsOwnedPrompt = typedCardRendersOwnedPrompt
           return <div key={message.id} className={bubbleClass}>
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           {message.shorthand !== undefined && (
@@ -347,8 +438,14 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               mention tokens as the SAME readable-token sentence as the
               answered row — the raw `[[material:…]]` wiki-markup the picker
               sends to the agent (byte-stable wire) never shows the scientist
-              their own turn. Token-free content passes through unchanged. */}
-          <p>{clarificationBubbleText(message.content)}</p>
+              their own turn. Token-free content passes through unchanged.
+              L2-CLARIFY-CARD-1 (advc-c3 D2, fix3): the bubble is OMITTED when
+              it verbatim carries a prompt the grouped card OWNS (the live
+              first-ask shape) — the card is the single owner of that sentence,
+              so printing it here too would be the double-print. Every other
+              bubble (loop escalation, a prose answer, a non-verbatim content)
+              prints as-is. */}
+          {!bubbleIsOwnedPrompt ? <p>{clarificationBubbleText(message.content)}</p> : null}
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {/* L2-SUITE-A-uifix1 F1: exactly ONE clarification arm per message.
               When the typed requests ride the message (the universal done
@@ -381,7 +478,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
                   key={`card-${message.id}`}
                   requests={message.clarificationRequests}
                   turnKey={`${message.id}:${message.clarificationRequests.map((r) => r.id).join('|')}`}
-                  shownPrompts={shownPrompts}
+                  shownPrompts={groupedShownPrompts}
                   onClarificationSubmit={onClarificationSubmit}
                 />
               ) : (
