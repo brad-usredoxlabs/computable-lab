@@ -19,6 +19,43 @@ import type { WellId } from '../../types/plate'
 // START..END or START:END, where each endpoint is row-letters + column-number.
 const RANGE_RE = /^([A-Za-z]+)(\d+)(?::|\.\.)([A-Za-z]+)(\d+)$/
 
+/**
+ * L2-CLARIFY-TARGET-1 (fix1/D4, adversarial l2t0230) — the app's ONE
+ * well-address shape predicate, parity-pinned BYTE-FOR-BYTE to the server's
+ * canonical compiler WELL_RE (server/src/compiler/pipeline/passes/
+ * ChatbotCompilePasses.ts:3031 and its parity mirror
+ * normalizeScientistIntent.ts:73 `WELL_ADDRESS_SHAPE_RE`):
+ * a physical plate-address fact (rows A–P, columns 1–24), NOT domain policy.
+ *
+ * The ClarifyWellTargetSlot (app/src/agent) previously carried a SECOND
+ * `WELL_RE = /^([A-P])(\d+)$/i` + a hand-rolled `rangeBetween` — a different
+ * second vocabulary that accepted any column (`A99`, `P99`) while the
+ * server's own shape test rejects it, and the answer travelled as an array
+ * no server-side shape gate inspects (AgentOrchestrator.ts:269 only
+ * JSON.stringify's the ref into the prompt). ONE grammar: the slot now
+ * validates through this single bounds set + the ONE `expandWellTokens`
+ * parser above, so a non-address the server would bar is rejected here too —
+ * no parallel validation, no duplicated range expansion.
+ */
+export const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/
+
+/**
+ * The app's ONE address-literal test (parity mirror of the server's
+ * `isWellAddressLiteral`, normalizeScientistIntent.ts:88): a trimmed scalar is
+ * an address literal iff the ONE parser (`expandWellTokens`) resolves it to one
+ * or more tokens AND every token is plate-address-shaped under
+ * `WELL_ADDRESS_SHAPE_RE`. "A1:H12" -> 96 shaped tokens => literal;
+ * "control_well" / "bogus_role" / "A1:ZZ99" (ZZ99 not shaped) -> NOT literal.
+ * Returns null (not shaped) so the caller can disable the affordance.
+ */
+export function expandWellAddressLiteral(value: string): string[] | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const tokens = expandWellTokens([trimmed])
+  if (tokens.length === 0) return null
+  return tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token)) ? tokens : null
+}
+
 /** Bijective base-26 row letters → 0-based index (A→0, Z→25, AA→26). */
 export function rowLabelToIndex(label: string): number {
   let n = 0

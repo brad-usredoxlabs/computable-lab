@@ -3,112 +3,61 @@
  * on a clarification card (rendered when `request.clarifyControl?.kind ===
  * 'wells'`).
  *
- * A text input (data-testid `clarify-well-target`) with placeholder `A2:B3`
- * (a range or comma list). Validation is LOCAL and SYNTACTIC only (non-empty,
- * matches the address/range grammar the client already uses for plate
- * coordinates — the same `^([A-P])(\d+)$` per-well grammar as parseWellId):
- * invalid text disables the approve affordance. No resolution, no guessing,
- * no auto-fill.
+ * A text input (data-testid `clarify-well-target`) holding ONE well address
+ * (a single well or a rectangular range, e.g. `A2:B3`).
  *
- * Approve sends `{requestId, label, value: label, ref: {kind:'wells',
- * wells:[...]}}` — the client's list is a HINT; the server expands
- * authoritatively (expandWellTokens), the server's expansion is the truth.
+ * L2-CLARIFY-TARGET-1 fix1/D4 (adversarial l2t0230): validation is LOCAL and
+ * SYNTACTIC, derived from the app's ONE well-grammar home
+ * (event-editor/lib/wellRange.ts) — `expandWellAddressLiteral` = the ONE
+ * parser (`expandWellTokens`) + the parity-pinned `WELL_ADDRESS_SHAPE_RE`
+ * (rows A–P, columns 1–24), BYTE-FOR-BYTE identical to the server's canonical
+ * WELL_RE (ChatbotCompilePasses.ts:3031 / normalizeScientistIntent.ts:73).
+ * The slot previously carried a SECOND parser (`WELL_RE = /^([A-P])(\d+)$/i`
+ * + a hand-rolled `rangeBetween`) with LOOSER bounds (any column — it accepted
+ * `A99`/`P99` the server's own shape test rejects), and it expanded ranges
+ * client-side into an array no server-side shape gate inspects. ONE grammar,
+ * no second vocabulary: the slot now validates through the shared bounds and
+ * sends the scalar; the server's ONE parser (expandWellTokens) expands it
+ * authoritatively (the server's expansion is the truth). Invalid / non-address
+ * text (control_well, A99, A1:ZZ99, empty) disables the approve affordance —
+ * the slot NEVER invents a default.
  *
- * Optional affordance: when `useOptionalWellSelection()` returns a non-empty
- * selection, a "Use selected wells (…)" button fills the input. It FILLS, it
- * does NOT answer. With no context (the run host) the button does not render.
+ * Approve sends `{requestId, label, value}` where `value` is the trimmed
+ * scalar address; the server's kind:'wells' address-literal carry
+ * (normalizeScientistIntent) expands it through the ONE parser into per-well
+ * events. No new callback, no new state channel — the answer reaches the host
+ * via `onAnswer` (the card's `record(request, answer)`).
  *
- * Same slot rules: unanswered until approve; one control per slot; the answer
- * reaches the host via `onAnswer` (the card's `record(request, answer)` — no
- * new callback, no new state channel).
+ * Same slot rules: unanswered until approve; one control per slot.
  */
 import { useState } from 'react'
 import type { AiClarificationAnswer } from '../types/ai'
-import { useOptionalWellSelection } from '../shared/context/WellSelectionContext'
-
-const WELL_RE = /^([A-P])(\d+)$/i
-
-/** A single well token is valid under the client's plate-coordinate grammar. */
-function isValidWell(token: string): boolean {
-  return WELL_RE.test(token)
-}
-
-/** A comma list of well tokens, each a single well or a two-well range. */
-function parseWellInput(raw: string): string[] | null {
-  const parts = raw
-    .split(',')
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-  if (parts.length === 0) return null
-  const out: string[] = []
-  for (const part of parts) {
-    if (part.includes(':')) {
-      const [startRaw, endRaw] = part.split(':').map((s) => s.trim())
-      if (!isValidWell(startRaw) || !isValidWell(endRaw)) return null
-      const start = parseWell(startRaw)
-      const end = parseWell(endRaw)
-      if (!start || !end) return null
-      for (const w of rangeBetween(start, end)) out.push(w)
-    } else {
-      if (!isValidWell(part)) return null
-      out.push(part.toUpperCase())
-    }
-  }
-  return out
-}
-
-function parseWell(token: string): { row: number; col: number } | null {
-  const m = token.match(WELL_RE)
-  if (!m) return null
-  const row = m[1].toUpperCase().charCodeAt(0) - 65
-  const col = parseInt(m[2], 10)
-  if (col < 1) return null
-  return { row, col }
-}
-
-function rangeBetween(a: { row: number; col: number }, b: { row: number; col: number }): string[] {
-  const out: string[] = []
-  const minRow = Math.min(a.row, b.row)
-  const maxRow = Math.max(a.row, b.row)
-  const minCol = Math.min(a.col, b.col)
-  const maxCol = Math.max(a.col, b.col)
-  for (let r = minRow; r <= maxRow; r++) {
-    for (let c = minCol; c <= maxCol; c++) {
-      out.push(`${String.fromCharCode(65 + r)}${c}`)
-    }
-  }
-  return out
-}
+import { expandWellAddressLiteral } from '../event-editor/lib/wellRange'
 
 export interface ClarifyWellTargetSlotProps {
   requestId: string
   onAnswer: (answer: AiClarificationAnswer) => void
+  /** Disabled while the turn is busy (the card's `disabled`). */
+  disabled?: boolean
 }
 
-export function ClarifyWellTargetSlot({ requestId, onAnswer }: ClarifyWellTargetSlotProps) {
+export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: ClarifyWellTargetSlotProps) {
   const [text, setText] = useState('')
-  const optionalSelection = useOptionalWellSelection()
-  const selected =
-    optionalSelection && optionalSelection.state.selectedWells.size > 0
-      ? Array.from(optionalSelection.state.selectedWells).sort()
-      : []
 
-  const parsed = parseWellInput(text)
-  const valid = parsed !== null && parsed.length > 0
+  // ONE grammar: a non-empty scalar that the shared ONE parser + parity-pinned
+  // bounds accept is an address literal (a single well or a range). Anything
+  // else (control_well, A99, A1:ZZ99, empty) is NOT addressed — approve stays
+  // disabled, so the slot never emits a non-address the server would bar.
+  const shaped = expandWellAddressLiteral(text) !== null
 
   const approve = () => {
-    if (!valid || parsed === null) return
+    if (!shaped || disabled) return
+    const scalar = text.trim()
     onAnswer({
       requestId,
-      label: text.trim(),
-      value: text.trim(),
-      ref: { kind: 'wells', wells: parsed },
+      label: scalar,
+      value: scalar,
     })
-  }
-
-  const useSelected = () => {
-    // FILL the input (do NOT answer).
-    setText(selected.join(', '))
   }
 
   return (
@@ -119,27 +68,18 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer }: ClarifyWellTarget
         value={text}
         placeholder="A2:B3"
         onChange={(e) => setText(e.target.value)}
-        aria-label="Target wells (range or comma list)"
+        disabled={disabled}
+        aria-label="Target wells (a well address or rectangular range, e.g. A2:B3)"
       />
       <button
         type="button"
         className="clarify-well-target-slot__approve"
         data-testid="clarify-well-target-approve"
-        disabled={!valid}
+        disabled={disabled || !shaped}
         onClick={approve}
       >
         Use wells
       </button>
-      {selected.length > 0 ? (
-        <button
-          type="button"
-          className="clarify-well-target-slot__use-selected"
-          data-testid="clarify-well-target-use-selected"
-          onClick={useSelected}
-        >
-          Use selected wells ({selected.join(', ')})
-        </button>
-      ) : null}
     </div>
   )
 }

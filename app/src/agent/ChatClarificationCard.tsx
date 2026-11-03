@@ -197,6 +197,7 @@ export function ChatClarificationCard({
               <ClarifyWellTargetSlot
                 requestId={request.id}
                 onAnswer={declaredAnswer}
+                disabled={disabled}
               />
             ) : hasPicker ? (
               <ClarificationPicker
