@@ -1,4 +1,26 @@
-# LANE 1 TICK 262ND HANDOFF — 2026-11-02 ~23:20–00:05 EST
+# LANE 1 TICK 262ND HANDOFF — 2026-11-02 23:20 → 2026-11-03 00:10 EST
+
+**CLOSEOUT ADDENDUM (00:08): gate 4 returned VERDICT: accept and FAME-8 is now DONE.**
+Unit `cl-l1-gate4-fame8-l1t2357` exited rc=0 at 00:00:14 with real receipts at
+`~/.hermes/cl/receipts/FAME-8/gate4-2354/` (report.md, evidence.json, 104-line trail.md over 80 driven
+steps, per-leg raw trail.json + screenshots for g1/g2/g2b/g2c/g2d/g3/g5, 2.7 MB). I audited them
+first-hand: evidence.json geometry numbers, per-leg trails, an md5 sweep (the g1 shots 12/14 duplicate pair
+is disclosed by the reviewer — the earlier shot is the evidence), and I read the key screenshot
+(g1/shots/08-02-anr71-default-pane-peak1-row.png) myself: `rt_min` "4.946334540681159" on ONE line,
+header `peak` whole, the 10-column table wider than the pane and reachable through the door.
+Numbers: G1 rt_min/area_pa_min/area_percent = 1 line box each; all 10 `th` whole-token (`peak` 48 px/1
+rect, `eligible` 64 px/1 rect — gate-3's p/e/a/k and el/ig/ib/le are gone); flags = 2
+`div.view-spec__cell-item` with all four substrings painted once the door opens; pane 574 / scrollWidth
+1121 → maxScrollLeft 547, wheel 0→547 (EXPECTED under A3-r1). G2 ANR-000069 table 2089 px in a 574 px
+pane, maxScrollLeft 1536, wheels 0→600→1200→1536, none of the 14 columns crushed, all analytically
+reachable. G3 real `POST /api/ai/assist/stream` 200 text/event-stream, zero interception, body captured
+(269 B). G4 AOUT-000134 contentSha `0768786c…` unchanged, flags byte-identical. G5 0 mid-token breaks
+across 4 tables / 36 headers (7 cells break only at hyphen opportunities). G6 0 console/page/failed/non-2xx
+errors. Non-gating measurements recorded: table height 2947 px for 31 rows vs gate-3's 4165 (−29%);
+ANR-000071 door range 547 px (wider than the briefed 150–250 estimate); hyphen breaks in the 77 px
+`source` column; array cells still break inside underscores; the pre-existing red `null_area_policy`
+chrome, `[object Object]`, and the "compiling…" spinner. FAME-8 marked **done** in the task list under the
+queue lock at 11351. Lane 1 now has ONLY the Brad-held FAME-1B-BACKFILL left.
 
 Every claim below is the orchestrator's first-hand observation unless marked worker/gate report.
 
