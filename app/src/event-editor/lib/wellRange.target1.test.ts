@@ -35,6 +35,7 @@ import {
   expandWellAddressLiteral,
   expandWellTokens,
   isWellAddressLiteralShape,
+  rectangularRangeScalar,
 } from './wellRange'
 
 // ---------------------------------------------------------------------------
@@ -204,8 +205,83 @@ describe('D4 (fix1) the app has ONE well-address grammar, parity-pinned to the s
     expect(slot).not.toMatch(/WELL_RE\s*=\s*\^\(?\[A\-P\]\)?\(/)
     expect(slot).not.toMatch(/function rangeBetween/)
     expect(slot).not.toMatch(/function parseWell\(/)
-    // The slot now validates through the ONE-grammar home.
-    expect(slot).toMatch(/import \{ expandWellAddressLiteral \} from '..\/event-editor\/lib\/wellRange'/)
+    // The slot now validates through the ONE-grammar home (fix run 4 / D2
+    // adds the rectangularRangeScalar helper to the SAME import — the slot
+    // still carries no second parser / no second WELL_RE).
+    expect(slot).toMatch(/import \{ expandWellAddressLiteral(, rectangularRangeScalar)? \} from '..\/event-editor\/lib\/wellRange'/)
     expect(slot).toMatch(/expandWellAddressLiteral\(text\)/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (4) fix run 4 / D2 (adversarial l2t0937 DEFECT 2): the SELECTION →
+//     ONE-grammar range-scalar helper. The "use selected wells" affordance
+//     must lead to an ANSWER with the ONE grammar: it fills the slot with the
+//     CANONICAL RANGE SCALAR only when the selection is exactly ONE full
+//     rectangular range the ONE grammar accepts — never a comma list, never a
+//     second client-side expansion. `rectangularRangeScalar` validates its
+//     candidate through the ONE parser (`expandWellAddressLiteral`) and
+//     requires the parser's expansion to EXACTLY equal the selection.
+// ---------------------------------------------------------------------------
+describe('fix run 4 / D2: rectangularRangeScalar is ONE-grammar-honest (no second expansion)', () => {
+  it('a full 2×2 rectangle (the test seed A2/A3/B2/B3, unsorted) → the canonical scalar A2:B3', () => {
+    const scalar = rectangularRangeScalar(['B2', 'A2', 'B3', 'A3'])
+    expect(scalar).toBe('A2:B3')
+    // the scalar is ONE-grammar-shaped AND the ONE parser's expansion is
+    // exactly the selection (the parser's expansion is the truth):
+    expect(isWellAddressLiteralShape('A2:B3')).toBe(true)
+    expect(expandWellAddressLiteral('A2:B3')).toEqual(['A2', 'A3', 'B2', 'B3'])
+  })
+
+  it('a single well → the degenerate scalar A2:A2 (the ONE grammar accepts it)', () => {
+    expect(rectangularRangeScalar(['A2'])).toBe('A2:A2')
+    expect(expandWellAddressLiteral('A2:A2')).toEqual(['A2'])
+  })
+
+  it('a full 96-plate rectangle (A1:H12, 96 wells) → the canonical scalar A1:H12', () => {
+    const wells = expandWellTokens(['A1:H12']) // the ONE parser's 96 wells
+    expect(wells).toHaveLength(96)
+    expect(rectangularRangeScalar(wells)).toBe('A1:H12')
+  })
+
+  it('a non-rectangular selection (an L-shape / a gap) → null (NO affordance, never a comma list)', () => {
+    // A2, A3, B2 — the B3 corner is missing: bounding box A2:B3 is 4 wells,
+    // the selection is 3 → NOT one full rectangle.
+    expect(rectangularRangeScalar(['A2', 'A3', 'B2'])).toBeNull()
+    // two diagonal corners (A2, B3) — bounding box A2:B3 is 4 wells, the
+    // selection is 2 → NOT one full rectangle.
+    expect(rectangularRangeScalar(['A2', 'B3'])).toBeNull()
+    // a single row across non-contiguous columns (A1, A3) → bounding box
+    // A1:A3 is 3 wells, the selection is 2 → NOT one full rectangle.
+    expect(rectangularRangeScalar(['A1', 'A3'])).toBeNull()
+  })
+
+  it('a selection with a non-plate-shaped well (A99 — col 99 > 24) → null (the ONE grammar rejects it)', () => {
+    // A99 is not well-shaped under the parity WELL_ADDRESS_SHAPE_RE, so a
+    // selection containing it is not a plate range the ONE grammar accepts.
+    expect(rectangularRangeScalar(['A99', 'A98'])).toBeNull()
+  })
+
+  it('duplicate wells / empty selection → null (a clean rectangle has unique, non-empty wells)', () => {
+    expect(rectangularRangeScalar(['A2', 'A2'])).toBeNull()
+    expect(rectangularRangeScalar([])).toBeNull()
+  })
+
+  it('never returns a value the ONE grammar would not accept as one literal (structural bound)', () => {
+    // Every non-null result must be ONE-grammar-shaped and must expand
+    // (through the ONE parser) to EXACTLY the input selection — a second
+    // client-side expansion is impossible by construction.
+    const cases: Array<[string[], string]> = [
+      [['B2', 'A2', 'B3', 'A3'], 'A2:B3'],
+      [['A2'], 'A2:A2'],
+      [[...expandWellTokens(['A1:H12'])], 'A1:H12'],
+    ]
+    for (const [wells, expected] of cases) {
+      const scalar = rectangularRangeScalar(wells)
+      expect(scalar).toBe(expected)
+      if (scalar === null) throw new Error(`expected a non-null scalar for ${JSON.stringify(wells)}`)
+      expect(isWellAddressLiteralShape(scalar)).toBe(true)
+      expect(expandWellAddressLiteral(scalar)!.sort()).toEqual([...wells].sort())
+    }
   })
 })

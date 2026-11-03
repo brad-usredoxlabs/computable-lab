@@ -93,6 +93,62 @@ export function expandWellAddressLiteral(value: string): string[] | null {
   return tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token)) ? tokens : null
 }
 
+/**
+ * L2-CLARIFY-TARGET-1 (fix run 4 / D2) — the SELECTION → ONE-grammar
+ * range-scalar helper for the "use selected wells" affordance.
+ *
+ * Given a set of individual well ids (the plate-selection context's
+ * `selectedWells`), return the canonical rectangular-range scalar
+ * (`A2:B3` — corners in top-left → bottom-right order) when and ONLY when the
+ * selection is exactly ONE full rectangular range that the ONE grammar
+ * (`expandWellAddressLiteral`) accepts; otherwise `null`. A `null` result
+ * means the selection is not a single rectangular range — the affordance must
+ * not render (it is never a silent no-op that fills an unsubmittable value the
+ * slot's own gate rejects).
+ *
+ * ONE grammar, no second client-side expansion: the helper derives the
+ * bounding box from wells that are each well-shaped under the SAME parity
+ * `WELL_ADDRESS_SHAPE_RE`, constructs ONE candidate range scalar, and
+ * VALIDATES it through the ONE parser (`expandWellAddressLiteral`) — requiring
+ * the parser's expansion to EXACTLY equal the selection. No comma-list
+ * parsing, no `WELL_RE`/`rangeBetween` second vocabulary.
+ */
+export function rectangularRangeScalar(wells: readonly string[]): string | null {
+  if (wells.length === 0) return null
+  // A clean rectangle has no duplicate wells.
+  if (new Set(wells).size !== wells.length) return null
+  const rows: number[] = []
+  const cols: number[] = []
+  for (const well of wells) {
+    // Each well must be well-shaped under the ONE parity grammar (single-letter
+    // A–P row, column 1–24). A non-well-shaped member ⇒ not a rectangular range.
+    if (!WELL_ADDRESS_SHAPE_RE.test(well)) return null
+    // The parity grammar is single-letter A–P, so the row is the first char and
+    // the column is the remainder.
+    rows.push(rowLabelToIndex(well.slice(0, 1)))
+    cols.push(Number(well.slice(1)))
+  }
+  const minRow = Math.min(...rows)
+  const maxRow = Math.max(...rows)
+  const minCol = Math.min(...cols)
+  const maxCol = Math.max(...cols)
+  // A full rectangle has exactly (rowSpan × colSpan) wells. A selection with
+  // gaps (a missing corner) is NOT a full rectangle.
+  if ((maxRow - minRow + 1) * (maxCol - minCol + 1) !== wells.length) return null
+  const candidate = `${indexToRowLabel(minRow)}${minCol}:${indexToRowLabel(maxRow)}${maxCol}`
+  // VALIDATE the candidate through the ONE grammar and require the parser's
+  // expansion to EXACTLY equal the selection (the ONE parser's expansion is
+  // the truth — no second expansion path).
+  const expansion = expandWellAddressLiteral(candidate)
+  if (!expansion) return null
+  const selectionSet = new Set(wells)
+  if (expansion.length !== selectionSet.size) return null
+  for (const well of expansion) {
+    if (!selectionSet.has(well)) return null
+  }
+  return candidate
+}
+
 /** Bijective base-26 row letters → 0-based index (A→0, Z→25, AA→26). */
 export function rowLabelToIndex(label: string): number {
   let n = 0

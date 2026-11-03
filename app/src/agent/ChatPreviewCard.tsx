@@ -171,19 +171,38 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
                 <span className="chat-preview__event-text">
                   <span className="chat-preview__event-label">{eventLabel(event)}</span>
                   {(() => {
-                    // The row-fact line REPLACES the bare detail line when the
-                    // formatter yields a fact (no double line); an event with
-                    // no recognised field falls through to the eventDetailLine
-                    // line, and with neither, no line at all (dead chrome is
-                    // not added).
+                    // L2-CLARIFY-TARGET-1 (Change 5 / P7) + fix run 4 / D1
+                    // (adversarial l2t0937 DEFECT 1): the row fact COMPOSES
+                    // with the detail line — it never REPLACES it. The
+                    // formatter's fact renders on its OWN line (the row's
+                    // checkable identity, `chat-preview-row-fact`); the
+                    // `eventDetailLine` descriptor stays FULL on the face —
+                    // the record's own displayable fields in the record's
+                    // order (the L2-SUITE-A-uifix2 [B] doctrine), so a field
+                    // the fact does not carry (the mix's `cycles`) is never
+                    // dropped from the card. Stated order: fact first, then
+                    // the descriptor line. An event the formatter cannot
+                    // represent keeps today's single `eventLabel` +
+                    // `eventDetailLine` line; with neither, no line at all
+                    // (dead chrome is not added).
+                    const detail = eventDetailLine(event)
                     if (rowFact) {
                       return (
-                        <span className="chat-preview__event-details" data-testid="chat-preview-row-fact">
-                          {rowFact}
-                        </span>
+                        <>
+                          <span className="chat-preview__row-fact" data-testid="chat-preview-row-fact">
+                            {rowFact}
+                          </span>
+                          {detail ? (
+                            <span
+                              className="chat-preview__event-details"
+                              data-testid="chat-preview-event-details"
+                            >
+                              {detail}
+                            </span>
+                          ) : null}
+                        </>
                       )
                     }
-                    const detail = eventDetailLine(event)
                     return detail ? (
                       <span className="chat-preview__event-details" data-testid="chat-preview-event-details">
                         {detail}

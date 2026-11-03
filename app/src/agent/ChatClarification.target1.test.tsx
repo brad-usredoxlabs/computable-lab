@@ -46,12 +46,14 @@ const baseProps = { isStreaming: false, prompt: '', onPromptChange: vi.fn(), onS
 /** Seeds the well selection context with a fixed set of wells (the D3
     affordance pins render the slot inside a real WellSelectionProvider —
     `useOptionalWellSelection` is null-safe, so a real provider with a real
-    selection is the faithful harness). */
-function SelectionSeeder({ children }: { children: ReactNode }) {
+    selection is the faithful harness). `wells` defaults to the fix2 seed
+    (A2/A3/B2/B3 — a full 2×2 rectangle, deliberately unsorted → the button
+    sorts). */
+function SelectionSeeder({ children, wells }: { children: ReactNode; wells?: string[] }) {
   const { selectWells } = useWellSelection()
   useEffect(() => {
-    selectWells(['B2', 'A2', 'B3', 'A3']) // deliberately unsorted → the button sorts
-  }, [selectWells])
+    selectWells(wells ?? ['B2', 'A2', 'B3', 'A3']) // deliberately unsorted → the button sorts
+  }, [selectWells, wells])
   return <>{children}</>
 }
 
@@ -215,16 +217,21 @@ describe('D3b: the grouped card passes `disabled` to the TARGET-WELL slot arm', 
 })
 
 // ---------------------------------------------------------------------------
-// D3 (fix2, adversarial l2t0745 defect 3): the spec's FILL-only "use selected
-// wells" affordance (spec :362-364; the base slot's exact behavior) is
-// RESTORED. When `useOptionalWellSelection()` returns a non-empty selection,
-// a "Use selected wells (…)" button FILLS the input (sorted, comma-joined).
-// It FILLS, it does NOT answer: `onAnswer` is never called from it. With no
-// context (the run host) the button simply does not render — and
-// `useOptionalWellSelection()` is no longer a dead export (this run had
-// deleted the consumer and left the export orphaned).
+// D3 (fix2, adversarial l2t0745 defect 3; re-pinned fix run 4 / D2 —
+// adversarial l2t0937 DEFECT 2): the "use selected wells" affordance leads to
+// an ANSWER with the ONE grammar. When `useOptionalWellSelection()` returns a
+// non-empty selection that forms ONE full rectangular range the ONE grammar
+// accepts, a "Use selected wells (…)" button FILLS the input with the
+// CANONICAL RANGE SCALAR (`A2:B3`) — the slot's own gate accepts it, so the
+// scientist's own approve is the existing `onAnswer({requestId,label,value})`
+// scalar path (it FILLS, it does NOT answer: `onAnswer` is never called from
+// the click). When the selection does NOT form one rectangular range (gaps,
+// an L-shape) the button does NOT render at all — never a silent no-op that
+// fills a comma list the slot's own gate rejects, never a second client-side
+// expansion grammar. With no context (the run host) the button simply does not
+// render — and `useOptionalWellSelection()` is no longer a dead export.
 // ---------------------------------------------------------------------------
-describe('D3: the FILL-only "use selected wells" affordance is restored', () => {
+describe('D3: the "use selected wells" affordance leads to an ANSWER with the ONE grammar', () => {
   it('no selection context ⇒ the button does not render (run host)', () => {
     const message: ChatMessage = {
       id: 'm1',
@@ -255,7 +262,7 @@ describe('D3: the FILL-only "use selected wells" affordance is restored', () => 
     expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
   })
 
-  it('a non-empty selection ⇒ the button FILLS the input and does NOT answer', () => {
+  it('a rectangular selection ⇒ fill writes the canonical range scalar, approve ENABLED, answer = the scalar', () => {
     const onClarificationPick = vi.fn()
     const message: ChatMessage = {
       id: 'm1',
@@ -275,25 +282,59 @@ describe('D3: the FILL-only "use selected wells" affordance is restored', () => 
     // the button names the selection (sorted — the base affordance's label):
     expect(useSelected.textContent).toBe('Use selected wells (A2, A3, B2, B3)')
     const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
-    // IT FILLS: clicking fills the input with the sorted selection …
-    fireEvent.click(useSelected)
-    expect(input.value).toBe('A2, A3, B2, B3')
-    // … and does NOT answer: no callback fired at all (the answer still
-    // requires the scientist's own approve of a valid address):
-    expect(onClarificationPick).not.toHaveBeenCalled()
     const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
-    // the filled comma list is NOT a single address/range the ONE grammar
-    // accepts as one literal, so approve stays DISABLED after the fill (the
-    // scientist edits or re-enters a single well/range) — never a silent
-    // answer for the whole selection:
-    expect(approve.disabled).toBe(true)
-    // … and the scientist CAN approve a single well from the same input:
-    fireEvent.change(input, { target: { value: 'A2' } })
+    expect(approve.disabled).toBe(true) // empty input: never a silent default
+    // THE FILL: clicking fills the input with the CANONICAL RANGE SCALAR —
+    // the ONE grammar's own form (a rectangular range), not a comma list the
+    // slot's gate rejects:
+    fireEvent.click(useSelected)
+    expect(input.value).toBe('A2:B3')
+    // … and the fill did NOT answer: no callback fired (the answer is the
+    // scientist's own approve of the address the fill wrote):
+    expect(onClarificationPick).not.toHaveBeenCalled()
+    // THE ANSWER PATH: the filled scalar passes the slot's OWN gate, so
+    // approve becomes ENABLED (fix run 4 / D2: the fill leads to an answer):
     expect(approve.disabled).toBe(false)
+    // … and approving sends the canonical range scalar through the EXISTING
+    // onAnswer scalar path (label === value; the server's ONE parser expands
+    // it authoritatively):
     fireEvent.click(approve)
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
     const [, answer] = onClarificationPick.mock.calls[0]!
-    expect((answer as { value: string }).value).toBe('A2')
+    expect((answer as { value: string }).value).toBe('A2:B3')
+    expect((answer as { label: string }).label).toBe('A2:B3')
+  })
+
+  it('a non-rectangular selection (L-shape) ⇒ NO fill button (never a silent no-op, never a comma list)', () => {
+    const onClarificationPick = vi.fn()
+    const message: ChatMessage = {
+      id: 'm1',
+      role: 'assistant',
+      content: wellsRequest.prompt,
+      clarificationRequests: [wellsRequest],
+      timestamp: 0,
+    }
+    render(
+      <WellSelectionProvider plateConfig={PLATE_CONFIGS['96']}>
+        <SelectionSeeder wells={['A2', 'A3', 'B2']}>
+          <ChatLog {...baseProps} onClarificationPick={onClarificationPick} messages={[message]} />
+        </SelectionSeeder>
+      </WellSelectionProvider>,
+    )
+    // The selection is NOT one full rectangular range (A2, A3, B2 — B3 is
+    // missing): the affordance must NOT render at all — not disabled, not
+    // rendered-but-dead. No comma list is ever written into the input:
+    expect(screen.queryByTestId('clarify-well-target-use-selected')).toBeNull()
+    const input = screen.getByTestId('clarify-well-target') as HTMLInputElement
+    expect(input.value).toBe('')
+    // … and the slot is still never a silent default (approve disabled):
+    const approve = screen.getByTestId('clarify-well-target-approve') as HTMLButtonElement
+    expect(approve.disabled).toBe(true)
+    expect(onClarificationPick).not.toHaveBeenCalled()
+    // the scientist's typed answer path is intact: a manual address enables
+    // approve exactly as before:
+    fireEvent.change(input, { target: { value: 'A2:B2' } })
+    expect(approve.disabled).toBe(false)
   })
 })
 

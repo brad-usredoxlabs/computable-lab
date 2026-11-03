@@ -102,6 +102,23 @@
   white-space: nowrap;
 }
 
+/* L2-CLARIFY-TARGET-1 (Change 5 / P7) + fix run 4 / D1 (adversarial l2t0937
+   DEFECT 1): the row's CHECKABLE FACT is its own line, ABOVE the descriptor.
+   It is the row's primary identity (`A2 ← 100 uL DMEM (MAT-…)`), so it takes
+   the row's own text colour — the descriptor detail line beneath it stays
+   the dim secondary summary. The fact line COMPOSES with the descriptor; it
+   never replaces it, so a field the fact does not carry (the mix's `cycles`)
+   is never dropped from the face. */
+.chat-preview__row-fact {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* The detail line is dim (it is the human-readable summary of a field the
    raw-JSON "View changes" modal also carries — secondary, not a second title).
    No dead chrome: it renders only when there is a displayable field. */

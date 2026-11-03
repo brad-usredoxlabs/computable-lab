@@ -38,18 +38,25 @@
  *
  * Optional affordance (spec :362-364, restored by fix2 per defect 3 — this run
  * had deleted the block and left `useOptionalWellSelection()` a dead export):
- * when `useOptionalWellSelection()` returns a non-empty selection, a
- * "Use selected wells (…)" button FILLS the input with the selection (sorted,
- * comma-joined — the base affordance's exact behavior). It FILLS, it does NOT
- * answer: `onAnswer` is never called from it. With no context (the run host)
- * the button simply does not render.
+ * when `useOptionalWellSelection()` returns a non-empty selection that forms
+ * ONE full rectangular range the ONE grammar accepts (`rectangularRangeScalar`),
+ * a "Use selected wells (…)" button FILLS the input with the canonical range
+ * scalar (`A2:B3`). It FILLS, it does NOT answer: `onAnswer` is never called
+ * from it — the fill is an address the slot's OWN gate accepts, so the
+ * scientist's own approve (the existing `onAnswer({requestId, label, value})`
+ * scalar path) is a normal one-click finish. A selection that does NOT form one
+ * rectangular range (gaps, an L-shape, anything the ONE grammar would not
+ * accept as one literal) does NOT render the button at all — never a silent
+ * no-op that fills an unsubmittable comma list, never a second client-side
+ * expansion grammar. With no context (the run host) the button simply does not
+ * render.
  *
  * Same slot rules: unanswered until approve; one control per slot.
  */
 import { useState } from 'react'
 import type { AiClarificationAnswer } from '../types/ai'
 import { useOptionalWellSelection } from '../shared/context/WellSelectionContext'
-import { expandWellAddressLiteral } from '../event-editor/lib/wellRange'
+import { expandWellAddressLiteral, rectangularRangeScalar } from '../event-editor/lib/wellRange'
 
 export interface ClarifyWellTargetSlotProps {
   requestId: string
@@ -65,6 +72,13 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: Clarify
     optionalSelection && optionalSelection.state.selectedWells.size > 0
       ? Array.from(optionalSelection.state.selectedWells).sort()
       : []
+  // L2-CLARIFY-TARGET-1 fix run 4 / D2: the affordance's fill must lead to an
+  // ANSWER with the ONE grammar. The selection only earns the button when it
+  // is exactly ONE full rectangular range the shared ONE parser accepts; the
+  // canonical range scalar (`A2:B3`) is what the fill writes. A non-
+  // rectangular selection (gaps / L-shape) gets NO button — never a silent
+  // no-op, never a comma list the slot's own gate rejects.
+  const selectedRange = rectangularRangeScalar(selected)
 
   // ONE grammar: a non-empty scalar that the shared ONE parser + parity-pinned
   // bounds accept is an address literal (a single well or a range). Anything
@@ -85,8 +99,11 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: Clarify
   }
 
   const useSelected = () => {
-    // FILL the input (do NOT answer — onAnswer is never called here).
-    setText(selected.join(', '))
+    // FILL the input with the canonical range scalar (do NOT answer —
+    // onAnswer is never called here). The fill is the ONE grammar's own form
+    // (a rectangular range scalar), so it is exactly what the slot's gate
+    // accepts: the scientist's own approve finishes the answer.
+    if (selectedRange) setText(selectedRange)
   }
 
   return (
@@ -109,7 +126,7 @@ export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: Clarify
       >
         Use wells
       </button>
-      {selected.length > 0 ? (
+      {selected.length > 0 && selectedRange ? (
         <button
           type="button"
           className="clarify-well-target-slot__use-selected"
