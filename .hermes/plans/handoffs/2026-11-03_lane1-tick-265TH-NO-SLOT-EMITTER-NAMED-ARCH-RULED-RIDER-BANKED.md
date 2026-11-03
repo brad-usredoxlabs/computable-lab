@@ -148,3 +148,34 @@ Every claim below is the orchestrator's first-hand observation unless marked oth
    `:5192`/`:3092` (readable `params` cells on ANR-000056 + ANR-000071, `analyte_summary` unchanged).
 5. If no slot frees again: prefer another no-slot task over an idle spin, then `no-work.log`.
    `L1-PARAMS-EMITTER-RIDER` must NOT be dispatched on its own — it is rider-triggered.
+
+## Addendum (01:2x) — pre-dispatch SPEC corrections on L1-CELLRENDER-1 (found by this tick's audit)
+
+While auditing the two dispatch-ready briefs I re-read the CELLRENDER spec end-to-end and found two
+defects that would have been inherited by the coder and the browser reviewer. Both fixed **before**
+any dispatch, committed `77f21899` (docs only):
+
+1. **Stale attribution in the spec's own root-cause block** — it still said the declared-`string` vs
+   dict mismatch was `peak_integration.py` "ships a dict". The 264TH addendum had already refuted
+   that and this tick NAMED the real emitter
+   (`scripts/fame-gatefix/assignment-contested-entry.py:702/:709`). Left uncorrected, a coder reading
+   the stop boundary would have been pointed at the wrong file. Now names the emitter, states that
+   `peak_integration.py` publishes a different (flat-dict) shape and is NOT the source, and hands
+   ownership to `L1-PARAMS-EMITTER-RIDER` in BOTH the root-cause block and the stop boundary.
+2. **Browser criterion violated ROUND-TRIP-GATE-1** — it asked only for "the params cell shows readable
+   JSON … receipts under ~/.hermes/cl/receipts/", which is exactly the "mounted / visible DOM" evidence
+   the lane's binding rule says is NOT accept evidence. Rewritten as six sub-clauses: served-sha check
+   FIRST, zero interception of `/api/**`, the outgoing artifact request + response body captured and
+   PAIRED with the rendered-cell screenshot, the two data legs plus the `analyte_summary` regression
+   leg, an explicit requirement that the reviewer DECLARE in `trail.json` that this surface has no AI
+   stream (with the AI round trip required if any touched affordance does have one), and the receipts
+   layout.
+   Also updated the spec header's trunk reference (`e8ce5621` → re-verified at `1360894d`; the
+   `app/src/analysis/` diff between them is empty, so every line reference in the spec still holds).
+
+`L1-PIN-HARDEN-1`'s spec needed no equivalent fix: it is test-only, has no browser leg and makes no
+gate claim (grepped: no `browser` / `gate` / emitter reference). Both items remain dispatch-ready, and
+the pre-built coder prompts were left byte-identical (no stale statement in either).
+
+Commits this tick: `1360894d` (request + ruling + this handoff), `77f21899` (spec corrections). Trunk
+`cl/integration-1` @ `77f21899`. No product file, no schema, no CSS, no record touched.
