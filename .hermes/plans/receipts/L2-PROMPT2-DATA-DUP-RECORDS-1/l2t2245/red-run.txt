@@ -1,0 +1,55 @@
+RED RUN — L2-PROMPT2-DATA-DUP-RECORDS-1 (l2t2245)
+when: 2026-11-03T05:30:59Z
+cwd: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server (branch  @ )
+cmd: npx vitest run src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts
+state: BEFORE the shipped YAML+schema+interface edit (test + fixtures already on disk;
+       server/schema symlink materialized locally — untracked, fresh-worktree fleet note)
+expectation: legs 1-2 FAIL because the shipped vocabulary has NO identityCollapse block
+(right reason). Legs 3-5 pass: they exercise the fixture copies whose schema pair already
+carries the closed enums / additionalProperties:false, so the off-state and never-guess
+properties are schema-level and do not depend on the shipped data block.
+================================================================
+npm notice run npx
+npm notice run 'vitest' run src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server
+
+ ❯ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts  (5 tests | 2 failed) 253ms
+   ❯ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts > identityCollapse (identity policy as data — L2-PROMPT2-DATA-DUP-RECORDS-1) > leg 1: the shipped block is what ships (byte-parity, both sides from data)
+     → no identityCollapse block in data file: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server/schema/scientist-intent/scientist-intent-vocabulary.yaml
+   ❯ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts > identityCollapse (identity policy as data — L2-PROMPT2-DATA-DUP-RECORDS-1) > leg 2: survivor order is data-driven — reversed fixture, shipped untouched
+     → no identityCollapse block in data file: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server/schema/scientist-intent/scientist-intent-vocabulary.yaml
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts > identityCollapse (identity policy as data — L2-PROMPT2-DATA-DUP-RECORDS-1) > leg 1: the shipped block is what ships (byte-parity, both sides from data)
+Error: no identityCollapse block in data file: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server/schema/scientist-intent/scientist-intent-vocabulary.yaml
+ ❯ collapseFromData src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts:50:21
+     48|   } | null;
+     49|   const block = doc?.policies?.ambiguity?.identityCollapse;
+     50|   if (!block) throw new Error(`no identityCollapse block in data file:…
+       |                     ^
+     51|   return {
+     52|     key: block.key as string[],
+ ❯ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts:60:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts > identityCollapse (identity policy as data — L2-PROMPT2-DATA-DUP-RECORDS-1) > leg 2: survivor order is data-driven — reversed fixture, shipped untouched
+Error: no identityCollapse block in data file: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server/schema/scientist-intent/scientist-intent-vocabulary.yaml
+ ❯ collapseFromData src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts:50:21
+     48|   } | null;
+     49|   const block = doc?.policies?.ambiguity?.identityCollapse;
+     50|   if (!block) throw new Error(`no identityCollapse block in data file:…
+       |                     ^
+     51|   return {
+     52|     key: block.key as string[],
+ ❯ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts:70:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  00:29:59
+   Duration  1.08s (transform 132ms, setup 0ms, collect 216ms, tests 253ms, environment 0ms, prepare 69ms)
+
