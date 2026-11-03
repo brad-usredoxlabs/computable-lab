@@ -230,3 +230,117 @@ STEP 2 PLAN (ruling l2t2230 RULING (a), 5 items, VERBATIM — RED-first):
   consequence of Change 4, NOT cleared by satisfiedBy). Base-parity confirms this test PASSES at base, so the unknown-address
   is a flip consequence. I will implement (a)-(e) and run the three pins to determine empirically whether the ruling's
   'goes green without edit' holds for the targetWells dimension; if unknown-address persists I will diagnose and report.
+
+STEP 2 RESULT (ruling l2t2230 (a) implemented + committed 42f85403):
+  GREEN (verified, raw /tmp/t21-green-satisfiedby.txt): all 4 spine4.satisfiedBy-alias tests pass
+  (stated volume object satisfies, blank {} still bars, absent still bars, bare number satisfies).
+  GREP PROOF (task mandate): `grep -n "'volume" server/src/compiler/resolution/resolveNounsPass.ts` = EMPTY (exit 1).
+  The only `volumeUl` token in the file is a COMMENT; zero NAME LITERALS in the sweep logic.
+
+CRITICAL NEW FINDING — the three pins fail on a SECOND, un-ruled dimension (targetWells), NOT the volumeUl dimension:
+  Ran the three pins (raw /tmp/t21-pins.txt). My satisfiedBy fix CLEARED the volumeUl missing-required fact
+  (the diff now shows `volumeUl`/missing-required GONE from the CHARACTERIZATION pin — only ONE fact remains).
+  But the three pins STILL fail, all on the TARGETWELLS dimension:
+    - declaredArgumentReachability CHARACTERIZATION (:168): now exactly ONE fact {label:'A1:H12', argument:'targetWells',
+      reason:'unknown-address'}; volumeUl fact is GONE.
+    - declaredArgumentReachability GHOST (:378): 'needs-clarification' (targetWells unknown-address).
+    - realizationGolden W2-7 T1/T2: 'needs-clarification' (the golden doc fires targetWells).
+  ROOT CAUSE (verified in code): the doc-door (resolutionEngine.ts:489-492) routes EVERY declared `kind:'resolvable'`
+  OR `kind:'wells'` arg with a non-empty STRING value to the material spine (the scalar arm :516). Before my Change-4
+  flip, add_material declared NO targetWells contract, so `targetWells: A1:H12` (a compact-range STRING) was invisible
+  to the door. Now that add_material declares `targetWells:{kind:wells,required:true}` (the mandated flip), the door
+  spine-routes the string `A1:H12` as a NOUN -> the material spine can't find a thing called "A1:H12" -> the engine's
+  `kind==='wells'` arm (resolutionEngine.ts:408) emits `unknown-address`. Base-parity confirms these tests PASS at base,
+  so this is a pure flip consequence.
+  The spec's own RED test item 3 (shorthandChat.wellTarget.target1.test.ts) uses the ARRAY form `targetWells: [A1]`
+  ("a doc carrying targetWells: [A1] yields none") — an ARRAY is INVISIBLE to the door (scalar arm requires string;
+  many-arm requires cardinality:many which wells does not declare). The three pins use the STRING compact-range form
+  `A1:H12`, which is now spine-routed.
+  THIS DIMENSION IS UN-RULED: the architect's ruling (a) addresses ONLY the volumeUl/volume satisfiedBy bar; its claim
+  "the three pins need NO edit under (a): they go green again as written" was premised on the packet's analysis that the
+  ONLY collision was the volumeUl false-bar (the dead run's BLOCKER 1 report analyzed the three pins solely on the volumeUl
+  dimension and never measured the targetWells door-routing). Resolving the targetWells dimension requires EITHER
+    (i) a doc-door behavior change in resolutionEngine.ts (skip `kind:wells` args in the scalar arm — they are addresses,
+        not material nouns; the client collects them via ClarifyWellTargetSlot) — NOT in my "In scope (exact paths)" list,
+        NOT in the ruling (a)'s ~10-line scope, a resolution-engine behavior change affecting ALL kind:wells args
+        (aliquot.targetWells, transfer.sourceWells); OR
+    (ii) editing the three pins' string `targetWells: A1:H12` to the canonical ARRAY form (the task STEP 2 says these three
+        pins go green "WITHOUT EDIT"; and a string->96-well-array rewrite changes the pin's core 96-per-well property).
+  Per the task: "if a conflict is not decidable from the spec, STOP and report TARGET1 BLOCKED rather than guessing."
+  I will (a) verify Change 4a is solid (typecheck + resolution re-measure), (b) characterize the door-routing precisely,
+  (c) fix the INDEPENDENT blast-radius failures (pure count-deltas / contract-block / goldens / foldNullArms per BLOCKER-2,
+  which do NOT depend on the door decision), and (d) route the targetWells dimension to the orchestrator. I will NOT
+  unilaterally change resolutionEngine.ts or rewrite the three pins' core property.
+
+STEP 2 VERIFICATION (Change 4a is SOLID and CORRECT — the ruling (a) is implemented VERBATIM):
+  - `npm run typecheck -w server` = exit 0, ZERO errors (exactOptionalPropertyTypes ON; the satisfiedBy slot +
+    conditional spread + the sweep OR-alias all typecheck clean). Raw at /tmp/t21-server-typecheck.txt.
+  - spine4.satisfiedBy-alias: 4/4 GREEN (raw /tmp/t21-green-satisfiedby.txt).
+  - Resolution re-measure WITH change 4a (raw /tmp/t21-reso-with4a.txt): 6 failed | 164 passed — the SAME 6 pre-existing
+    flip-blaster (paramFold V2e/FS5, stagnantHedge SH7, comp4x2, shqa1). My change 4a adds NO new resolution failure.
+  - GREP PROOF: `grep -n "'volume" server/src/compiler/resolution/resolveNounsPass.ts` = EMPTY. Zero name literals.
+  - The `volumeUl` missing-required fact is PROVABLY CLEARED from the three pins (the diff no longer shows it).
+
+SCOPE DECISION (the targetWells doc-door dimension — ROUTE TO ORCHESTRATOR, do NOT guess):
+  CONFIRMED the three pins' residual is the targetWells doc-door, NOT my implementation, and NOT the sweep:
+    (1) The CHARACTERIZATION pin's doc ALREADY states `targetWells: A1:H12` (present) + `volume:{value:50,unit:uL}`
+        (present). After my fix the sweep fires NOTHING (both required args satisfied). The ONLY residual bar is the
+        doc-door (resolutionEngine.ts:489-492 scalar arm) spine-routing the STRING `A1:H12` -> material spine ->
+        `unknown-address` (engine :408). So the sweep is correct; the DOOR is the defect for this pin.
+    (2) Base-parity (probe at 0579e8a1): these three tests PASS at base (add_material declared NO targetWells contract,
+        so the string was invisible to the door). The door's `kind:'wells'` routing is PRE-EXISTING (identical at base)
+        and applies to ALL kind:wells args (aliquot.targetWells required:true :574-576, transfer.sourceWells/targetWells
+        :358-363). My flip adds add_material to the set of verbs whose string targetWells now spine-routes.
+    (3) The wire schema (schema/workflow/scientist-intent.schema.yaml:107-113) declares targetWells oneOf [array, string
+        minLength 1] — the STRING compact-range form is schema-VALID. A compact range `A1:H12` is a PLATE ADDRESS (96
+        wells), not a material noun; routing it to the material spine is a category error. The spec's own Change 4 says
+        the server expands targetWells "authoritatively (expandWellTokens)" — the server does the expansion, not the spine.
+  WHY THIS IS A ROUTE, NOT A GUESS:
+    - The fix is a resolution-engine BEHAVIOR change (how a raw well address in the doc-door is handled) — NOT in the
+      spec's "In scope (exact paths)" list (resolutionEngine.ts is not named), NOT in ruling (a)'s ~10-line sweep scope,
+      and it changes behavior for ALL kind:wells args across ALL verbs. That is a domain/contract decision (the BLOCKER-1
+      class), which my persistence contract sends to the decision maker.
+    - The task STEP 1: "if a conflict is not decidable from the spec, STOP and report TARGET1 BLOCKED rather than guessing."
+      This conflict (does a stated string targetWells compile, or bar?) is NOT decidable from the spec — the spec's RED test
+      item 3 uses the ARRAY form `targetWells: [A1]` ("yields none"), never the STRING form; the three pins use the STRING
+      form `A1:H12`. The spec is silent on the string-form resolution-path behavior.
+    - The only honest "new truth" for the string-form pins REQUIRES the door fix (the doc states everything; there is no
+      non-weakening test rewrite). Rewriting `A1:H12` -> `[A1]` would change the pin's core 96-per-well-events property
+      (forbidden: "Do NOT weaken an assertion's meaning").
+  PROPOSED CHANGE FOR THE ORCHESTRATOR/ARCHITECT (exact, minimal, declarative):
+    In resolveScientistIntentNouns' doc-door (resolutionEngine.ts:489-523), a `kind:'wells'` arg whose value is a STRING
+    compact-range/list is a PLATE ADDRESS, not a material noun — it must NOT enter the material spine. Two candidate
+    rulings (architect to pick):
+      (a) DOOR-SKIP raw string well addresses (the server expands them via expandWellTokens downstream / the card-answer
+          fold); only an ARRAY-valued (many) wells arg or a declared itemNounField entry enters the spine. A stated raw
+          string then compiles (96 events) and the three pins go green WITHOUT EDIT (the ruling's original premise holds).
+      (b) DOOR-EXPAND raw string well addresses (call expandWellTokens in the door and bind the resulting wells). More
+          machinery; the spine gets 96 address tokens.
+    Either is a resolution-engine change OUTSIDE the spec's In-scope path list and OUTSIDE ruling (a). I will NOT make it
+    unilaterally. I continue the INDEPENDENT blast-radius work (pure sweep count-deltas, contract-block/mirror, foldNullArms)
+    which is safe and does not depend on the door decision.
+
+STEP 2 FINAL CATEGORIZATION of the 28 NEW (flip-blast) failures — what is decidable vs. blocked:
+  A. THE 3 TASK-NAMED SHIPPED PINS (the STEP 2 acceptance gate: "go green WITHOUT EDIT"):
+     - declaredArgumentReachability :159 CHARACTERIZATION + :369 GHOST -> DOOR dimension (string targetWells
+       A1:H12 spine-routed -> unknown-address). NOT my implementation error (volumeUl fact proven cleared).
+       Fix = resolutionEngine.ts behavior change, NOT in the In-scope path list. UN-RULED.
+     - realizationGolden :262 W2-7 T1 (+ T2 determinism twin) -> SWEEP dimension (the full-chain golden doc states
+       NEITHER volume NOR targetWells -> W27_CLARIFICATIONS shows BOTH missing-required). volumeUl fact is NOT
+       satisfiedBy-able (no volume stated). The golden's core outcome genuinely changes complete->needs-clarification.
+       BLOCKER-2 class, but a MAJOR e2e golden's top-level outcome. Routed (not guessed).
+     => NONE of the three go green without edit, and I've PROVEN (raw /tmp/t21-pins.txt) it is NOT an implementation
+        error: the volumeUl dimension is cleared; the residuals are (i) the doc-door string-wells routing and
+        (ii) the realization golden's complete->needs-clarification semantic. Per task STEP 1: "if a conflict is not
+        decidable from the spec, STOP and report TARGET1 BLOCKED rather than guessing." Both residuals are domain/
+        contract decisions OR an out-of-scope file change. I will NOT unilaterally rewrite the three pins, the
+        realization golden's core outcome, or resolutionEngine.ts.
+  B. DECIDABLE new-truth updates (BLOCKER-2 sanctioned: "assert the new truth, add a WHY comment"):
+     - 6 pure count-deltas: paramFold V2e/FS5, stagnantHedge SH7, comp4x2, shqa1 (requiredVerb=add_material now has
+       2 required args -> 2 sweep facts where the tests expected 1). Data-driven helpers pick add_material.
+     - mirror/contract-block: vocabularyMirrorDrift, shorthandContractDisclosure (the generated add_material line
+       changes: volumeUl now required + targetWells:wells appended). The mirror DATA must regenerate.
+     - e2e-stub/labware/foldNullArms: the canonical doc's bar count changes (2 required args -> 2 bars).
+     These are independent of the door conflict and I update them now.
+  PLAN: do B (decidable, commit per step), re-measure the 3 dirs, then report the A residual (3 pins) as BLOCKED with
+  the precise proposed change. Change 2/3/5 (app-side chip/fold/rows) next if budget allows.
