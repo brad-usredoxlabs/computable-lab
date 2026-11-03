@@ -83,3 +83,20 @@ No stack restart: no schema/lint/ui/lifecycle YAML changed.
 ## Trunk after this tick
 
 `b1dd259f` (merge) + this handoff (docs-only). No schema, no data write, no stack restart.
+
+## ADDENDUM 14:06 — post-merge trunk bars + my own evasion probe
+
+Beyond the rehearsal numbers, on the MERGED trunk (`b1dd259f`/`79fc1f50`):
+
+- `vitest run src/analysis/` → **26 files / 391 tests PASSED** (branch 381 + trunk's 10 `celljson`).
+- `tsc --noEmit -p tsconfig.json` → exit 2, **21 `error TS` lines, 0 in `src/analysis`** — the
+  documented trunk-layout baseline (the worktree bar is 12; the two layouts are NOT interchangeable,
+  see the 267th tick).
+- **My own independent pin probe** (a throwaway vitest file importing only
+  `parseCssRules/splitSelectorParts/decodeCssEscapes/isTableCellSelectorPart`, with my own
+  re-implementation of the anywhere leg — deliberately NOT the test's `sourceViolations`), then deleted:
+  the advc3 blocker shape `.view-spec__table { .wrap, td { … } }` is CAUGHT and every emitted part
+  carries `.view-spec__table`; the `@media`-wrapped, `&`-nested and two-parent × two-head shapes are
+  all CAUGHT; a benign head list is NOT flagged; the shipped `AnalysisPage.css` is CLEAN
+  (1/1 on re-run — the first attempt's CSS leg died on a `new URL()` harness error, not on the pin).
+  Trunk left clean of the probe file (`git status` shows no `zz-orch` path).
