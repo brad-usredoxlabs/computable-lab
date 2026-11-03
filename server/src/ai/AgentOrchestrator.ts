@@ -88,6 +88,7 @@ import {
   parseShorthandForChat,
   factRequestId,
   shorthandResultFromCompile,
+  canonicalLabelsForFacts,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
   partitionReadingAnswers,
@@ -1550,12 +1551,21 @@ export function createAgentOrchestrator(
               // no ledger (conditional spread — exactOptionalPropertyTypes:
               // absent, never undefined).
               const foldH4Seed = held.loopAskCounts;
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — the surviving facts' local-term record
+              // titles (STAGE A) via the store, built per call (never
+              // process-cached); absent store ⇒ empty map ⇒ STAGE B identity
+              // form for every surviving card.
+              const foldCanonicalLabels = await canonicalLabelsForFacts(survivingFacts, deps.store);
               const foldResult = shorthandResultFromCompile(
                 { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
-                { ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}) },
+                {
+                  ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}),
+                  canonicalLabels: foldCanonicalLabels,
+                },
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {
@@ -3080,6 +3090,12 @@ export function createAgentOrchestrator(
                   ...(Object.keys(h4HoldCounts).length > 0 ? { loopAskCounts: h4HoldCounts } : {}),
                 });
               }
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — this compile's unresolved facts'
+              // local-term record titles (STAGE A) via the store, built per
+              // call (never process-cached); absent store ⇒ empty map ⇒ STAGE
+              // B identity form for every card.
+              const shCanonicalLabels = await canonicalLabelsForFacts(compiledSh.clarifications ?? [], deps.store);
               const shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
@@ -3088,7 +3104,10 @@ export function createAgentOrchestrator(
                 // L2-FREEFORM-1 H4: the loop detector's seed (conditional
                 // spread — exactOptionalPropertyTypes: absent on every turn
                 // with no seed).
-                { ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}) },
+                {
+                  ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}),
+                  canonicalLabels: shCanonicalLabels,
+                },
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];

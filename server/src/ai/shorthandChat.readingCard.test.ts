@@ -20,6 +20,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { clarificationsFromUnresolvedFacts, factRequestId } from './shorthandChat.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
 
 /** The fact AS THE PRODUCER BAR EMITS IT: the declared envelope is
@@ -147,10 +148,16 @@ describe('READING-CARD-ANSWER-1 — the map arm: a readings-bearing fact becomes
     const [request] = clarificationsFromUnresolvedFacts([noReadings]);
     // The shipped shape verbatim: /m provider, noun-template prompt with the
     // mint clause (Enigma Broth is DATA-mintable), empty options.
+    // D3 (ruling l2t1430 §2 rule 3 / §3 read path (i)): the displayed label
+    // token is now the label's IDENTITY FORM (STAGE B, no grounded record) —
+    // the raw model label survives on `unresolvedFact.label` (provenance).
+    // The sentence template around it stays byte-identical; only the ONE label
+    // token folds to `canonicalLabelKey` (this pin's literal re-derives).
     expect(request!.menuProvider).toBe('/m');
     expect(request!.allowCreateLocal).toBe(true);
+    expect(request!.unresolvedFact!.label).toBe('Enigma Broth');
     expect(request!.prompt).toBe(
-      'The draft names "Enigma Broth" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
+      `The draft names "${canonicalLabelKey('Enigma Broth')}" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.`,
     );
     expect(request!.options).toEqual([]);
     // An EMPTY readings array is not "carrying readings" — the arm fires on

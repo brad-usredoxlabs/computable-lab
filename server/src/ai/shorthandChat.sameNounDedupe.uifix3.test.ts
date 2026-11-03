@@ -30,6 +30,7 @@
 import { describe, expect, it } from 'vitest';
 import { foldSameNounCards, REASON_SPECIFICITY_ORDER } from '../compiler/resolution/clarificationDedupe.js';
 import { clarificationsFromUnresolvedFacts, factRequestId } from './shorthandChat.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 import type { AgentClarificationRequest } from './types.js';
 import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
 
@@ -63,7 +64,12 @@ describe('foldSameNounCards — L2-SUITE-A-uifix3 D4: one noun, one response, on
     // content-keyed id the fold channel would join on, the same query.
     expect(card.id).toBe(factRequestId(specific));
     expect(card.id).not.toBe(factRequestId(generic));
-    expect(card.query).toBe(LABEL);
+    // D3 (ruling l2t1430 §3 read path (i)): the request's LABEL rides the
+    // canonical display string — STAGE B identity form (no grounded record
+    // here), so `query` folds to `canonicalLabelKey` (re-pinned). The RAW
+    // model label survives on `unresolvedFact.label`.
+    expect(card.query).toBe(canonicalLabelKey(LABEL));
+    expect(card.unresolvedFact!.label).toBe(LABEL);
     // The only-action (the mint row is the card's single option-free
     // affordance) is intact: same menu, same query, no options added.
     expect(card.menuProvider).toBe('/m');
@@ -99,8 +105,17 @@ describe('foldSameNounCards — L2-SUITE-A-uifix3 D4: one noun, one response, on
     ]);
     expect(cards).toHaveLength(4);
     const folded = foldSameNounCards(cards);
-    expect(folded.map((c) => c.query)).toEqual(['DMEM', 'FBS', LABEL]);
-    // The clofibrate survivor is the specific one.
+    // D3 (ruling l2t1430 §3 read path (i)): `query` now rides the canonical
+    // display string (STAGE B identity form, no grounded record) — re-pinned
+    // to `canonicalLabelKey`; the RAW model labels survive on
+    // `unresolvedFact.label` (asserted below for the survivor).
+    expect(folded.map((c) => c.query)).toEqual([
+      canonicalLabelKey('DMEM'),
+      canonicalLabelKey('FBS'),
+      canonicalLabelKey(LABEL),
+    ]);
+    // The clofibrate survivor is the specific one (raw label preserved).
+    expect(folded[2]!.unresolvedFact!.label).toBe(LABEL);
     expect(folded[2]!.unresolvedFact?.reason).toBe('unrealized-mixture-blob-material');
   });
 
@@ -126,7 +141,9 @@ describe('foldSameNounCards — L2-SUITE-A-uifix3 D4: one noun, one response, on
     expect(cards[0]!.id).not.toBe(cards[1]!.id);
     const folded = foldSameNounCards(cards);
     expect(folded).toHaveLength(1);
-    expect(folded[0]!.query).toBe('DMEM');
+    // D3 (ruling l2t1430 §3 read path (i)): `query` rides the canonical
+    // identity form (STAGE B) — re-pinned to `canonicalLabelKey`.
+    expect(folded[0]!.query).toBe(canonicalLabelKey('DMEM'));
   });
 
   it('the specificity order is a DECLARED list (single home, data-shaped): ambiguous-noun ranks above unknown-noun (a more constrained failure)', () => {
