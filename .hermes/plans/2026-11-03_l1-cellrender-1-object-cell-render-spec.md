@@ -3,9 +3,12 @@
 Spec authored 2026-11-03T00:57-05:00 by the lane-1 orchestrator tick (264TH) from the architect
 ruling `.hermes/plans/2026-11-03_l1-object-cell-render-decision.md` (request:
 `…-decision-request.md`). Trunk `cl/integration-1` @ `e8ce5621` when authored; **re-verified at
-`1360894d` by the 265TH tick** (its `app/src/analysis/` diff from `e8ce5621` is EMPTY, so every line
-reference below still holds). Status: dispatch-ready behind `L1-PIN-HARDEN-1` (no coder slot this
-tick: both `:18080` slots held by live lane-2 corpus launchers, corpus priority Brad 2026-11-02T17:05).
+`1360894d` by the 265TH tick and again at `3363a3fa` by the 266TH** (the `app/src/analysis/` diff from
+`e8ce5621` is EMPTY at both, so every line reference below still holds; every cited anchor was
+re-grepped at `3363a3fa`: `cellContent` :84-95, `String(e)` :89, `String(value ?? '')` :93,
+`TableView` :104, `ArtifactTable` :170). Status: dispatch-ready behind `L1-PIN-HARDEN-1` (no coder slot
+this tick either: the fleet stagger window reverted to 60 min after a lane-2 `request_queue_timeout`
+death at 01:11:52, and corpus priority Brad 2026-11-02T17:05 still governs — see the 266TH handoff).
 
 ## Root cause (verified by the orch AND the architect, independently, at e8ce5621)
 
@@ -74,9 +77,13 @@ tick: both `:18080` slots held by live lane-2 corpus launchers, corpus priority 
    (iii) the reviewer captures the **outgoing request URL + response body** for the run's artifact
        payload as a receipt artifact, PAIRED with the rendered-cell screenshot — the
        request/response + rendered-answer pair the rule requires per changed surface;
-   (iv) legs: `ANR-000056` `effective_parameters` `params` cell shows readable JSON (parseable, never
-       `[object Object]`); `ANR-000071` likewise; the `analyte_summary` table on the same run renders
-       unchanged (regression leg); console clean;
+   (iv) legs, with artifact ids PINNED by the 266TH tick at trunk `3363a3fa` (so the reviewer does not
+       hunt): run `ANR-000056` → artifact `AOUT-000100` (`effective_parameters`) — its `params` cell
+       shows readable JSON (parseable, never `[object Object]`); run `ANR-000071` → artifact
+       `AOUT-000136` likewise; the `analyte_summary` table on the same run renders unchanged
+       (regression leg); console clean. Both artifacts were re-read on the lane data at 266TH:
+       `columns[0] = {name: params, type: string}`, one row, `rows[0].params` is a **dict** — the
+       declared-type-vs-stored-value mismatch the renderer must absorb is still live;
    (v) this surface is a stored-artifact RENDERER with no AI stream — the reviewer must say so
        explicitly in `trail.json` and substitute the two evidence halves in (iii). If any AI
        affordance the change touches exists on `/analysis`, a full AI round trip (outgoing request
