@@ -238,7 +238,7 @@ receipts that exist; the id/surface set is untouched.)
 - Two changed probes re-run against the live lane stack (`:5193` → `:3093`):
   `VERDICT artifact-host=GREEN`, `VERDICT run-workspace=GREEN`, `RESTORE_OK=True`;
   receipt dir `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261103T220210Z-u1-probes/`.
-- `git -c core.fileMode=false diff --stat fbbca785..HEAD` (HEAD `0d0e6b72`) →
+- `git -c core.fileMode=false diff --stat fbbca785..0d0e6b72` →
   **5 files changed, 459 insertions(+), 15 deletions(-)** (report 249+/0-,
   completions.yaml 23+/8-, run-journeys.py 63+/5-, test-channel-selfcheck.py 93+/0-,
   ui-drive.cjs 31+/2-). The earlier figure this report carried — "341 insertions(+),
@@ -246,7 +246,9 @@ receipts that exist; the id/surface set is untouched.)
   test-channel-selfcheck.py 93+, ui-drive.cjs 33+)" — was measured at the U1b commit
   `ef0ebde5` (`git -c core.fileMode=false diff --stat fbbca785..ef0ebde5` → 341(+)/15(-)),
   before the report body grew to its final 249 lines. That 341 figure is a stale
-  mid-stack snapshot, not the frozen-HEAD stat.
+  mid-stack snapshot, not the frozen-HEAD stat. Any `HEAD`-relative stat keeps growing
+  as this report file grows (every paperwork commit enlarges it), so a reader must pin
+  the explicit head `0d0e6b72`; the range printed above does.
 - `git -c core.fileMode=false status --porcelain` → clean (only the untracked
   `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` dir remains, which is never
   committed).
@@ -276,8 +278,8 @@ No harness, product, config or test file was touched; no stack was re-run. One c
 diff --stat fbbca785..HEAD` → "5 files changed, 341 insertions(+), 15 deletions(-)". Re-ran it
 against the frozen HEAD: the actual stat is **459 insertions(+), 15 deletions(-)** (5 files).
 Command re-run:
-    git -c core.fileMode=false diff --stat fbbca785..HEAD        # -> 459 insertions(+), 15 deletions(-)
-    git -c core.fileMode=false diff --numstat fbbca785..HEAD     # report 249/0, completions 23/8, run-journeys 63/5, selfcheck 93/0, ui-drive 31/2
+    git -c core.fileMode=false diff --stat fbbca785..0d0e6b72        # -> 459 insertions(+), 15 deletions(-)
+    git -c core.fileMode=false diff --numstat fbbca785..0d0e6b72     # report 249/0, completions 23/8, run-journeys 63/5, selfcheck 93/0, ui-drive 31/2
 The 341 number is not a fabrication: it is the real `git -c core.fileMode=false diff --stat
 fbbca785..ef0ebde5` (the U1b commit — "5 files changed, 341 insertions(+), 15 deletions(-)"),
 captured before the report body and two later commits grew the diff. The §U3 text now states
@@ -304,4 +306,42 @@ the committed reproducible entry point for the same chat-host probe path is `pyt
 (`run-journeys.py:1042-1049` builds each `probe-<host>.yaml` and runs it).
 
 
-CHATHOST-PAPERWORK DONE 5db37aebf9ad9464d6bbeb2bc746c1152dd34134
+CHATHOST-PAPERWORK DONE 6ac19250d8fe59e6e02140bf19cccc631d4d7dc7
+
+(The sha this marker was first written with, `5db37aeb`, was an amended-away draft — folded
+into `6ac19250` by `git commit --amend`, not the commit of record — see D-2 below.)
+
+---
+
+## PAPERWORK FIX 2 (l2t1712)
+
+Evidence-trail-only corrections per adversarial cycle-4 (`.hermes/../cl/lanes/2/reviews/CHATHOST-CONSOLIDATE-1-advc-calib-c4-l2t1712.md`).
+Report-text only: no harness, product, config or test file was touched; no stack was re-run.
+
+**D-1 (MINOR) — the printed diff-stat commands bound the moving ref `HEAD`.** The corrected
+figure `459 insertions(+), 15 deletions(-)` is true at `0d0e6b72`, but lines 241, 279 and 280
+printed the range as `fbbca785..HEAD`; at the report's own HEAD that same command reports a
+different number (517 today), so the line did not reproduce as written. All three now print the
+immutable range `fbbca785..0d0e6b72` (the now-redundant "(HEAD `0d0e6b72`)" gloss was dropped),
+and the §U3 paragraph adds the sentence that any `HEAD`-relative stat grows with this report
+file itself, so a reader must pin the head. The 459 / 341 explanation is unchanged.
+
+Command re-run to confirm the pinned text reproduces as written:
+    git -c core.fileMode=false diff --stat fbbca785..0d0e6b72
+      -> 5 files changed, 459 insertions(+), 15 deletions(-)
+    git -c core.fileMode=false diff --numstat fbbca785..0d0e6b72
+      -> report 249/0, completions.yaml 23/8, run-journeys.py 63/5, test-channel-selfcheck.py 93/0, ui-drive.cjs 31/2
+Both match the figures printed at those three lines, and reproduce at any checkout.
+
+**D-2 (MINOR) — the DONE marker named a dangling object.** The `CHATHOST-PAPERWORK DONE` marker
+named `5db37aebf9ad9464d6bbeb2bc746c1152dd34134`, which was amended away and is not an ancestor
+of the branch: it was a draft commit folded into `6ac19250` by `git commit --amend`, not the
+commit of record. The marker now names the reachable commit
+`6ac19250d8fe59e6e02140bf19cccc631d4d7dc7` (this report's paperwork commit). Reachability checks
+run:
+    $ git rev-parse 6ac19250
+    6ac19250d8fe59e6e02140bf19cccc631d4d7dc7
+    $ git merge-base --is-ancestor 6ac19250 HEAD ; echo $?
+    0            # 6ac19250 IS an ancestor of HEAD
+    $ git merge-base --is-ancestor 5db37aeb HEAD ; echo $?
+    1            # 5db37aeb is NOT an ancestor of HEAD (dangling, amended away)
