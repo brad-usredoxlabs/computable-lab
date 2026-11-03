@@ -381,11 +381,17 @@ describe('ANSWER-FOLD-NULL-1 — AgentOrchestrator fold-success leg: done line, 
    *  test above), so the fold-SUCCESS consumer leg uses the basis-summing
    *  fractions. Same document, same 5 cards, fractions are DATA the fraction
    *  convention (config/drafting/composition-fraction-convention.yaml) accepts. */
+  // WHY (L2-CLARIFY-TARGET-1 flip): add_material now REQUIRES volumeUl (V1 flip)
+  // in addition to the already-present targetWells. LEG_YAML carries BOTH so the
+  // real-orchestrator recompile holds the ORIGINAL 5 cards (4 composition + 1
+  // material) — the subject of this fold test — not a 6th volumeUl required-arg
+  // card (no assertion weakening; the 5-card identity below is unchanged).
   const LEG_YAML = `intentId: seed-hepg2-32wells
 actions:
   - action: add_material
     labware: "seeding plate"
     material: "Trypsin-EDTA/DMEM/FBS mix"
+    volumeUl: 200
     targetWells: [A1:A3]
     composition:
       - material: "Trypsin-EDTA"
