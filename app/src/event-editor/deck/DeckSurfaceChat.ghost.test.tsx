@@ -1,6 +1,7 @@
 /**
- * L2-CHAT-1 — RED-first: the /deck route's universal chat (DeckSurfaceChat +
+ * L2-CHAT-1 — RED-first: the /deck route's universal chat (the deck door +
  * HarnessChatPane) must own the GHOST MOUNT of event-bearing proposals:
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  *  - a done result carrying events + resolvedLabwares mounts DECK GHOSTS on
  *    the editor state (actions.setPreview — the same contract AiTabPanel's
@@ -24,7 +25,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { streamAssist } from '../../shared/api/aiClient'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 // LEG D step 5 (OQ-4 PORT): HarnessChatPane now mounts the attached-sources
@@ -109,7 +111,7 @@ vi.mock('../../shared/api/aiClient', () => ({
   getAiHealth: vi.fn().mockResolvedValue({ available: true }),
 }))
 
-// Thread persistence: DeckSurfaceChat registers the chat with endpoint
+// Thread persistence: the deck door (the ONE registrar) registers the chat with endpoint
 // 'event-editor' — the thread hydrate/append effects would hit the LIVE
 // stack's /api/ai/threads. Stub them: the ghost lock asserts the mount path,
 // not persistence, and this test must never write to a running thread.
@@ -209,7 +211,8 @@ function frames(...events: Array<Record<string, unknown>>) {
 function renderDeckChat() {
   const makeTree = () => (
     <AiPanelProvider>
-      <DeckSurfaceChat />
+      <DeckChatSlice />
+      <SurfaceChatBridge host="event-editor" />
       <HarnessChatPane />
     </AiPanelProvider>
   )
@@ -244,7 +247,7 @@ async function sendThroughPane(text: string, deck: ReturnType<typeof renderDeckC
   return awaitPreviewCard(deck)
 }
 
-describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1)', () => {
+describe('deck door + HarnessChatPane — universal ghost mount (L2-CHAT-1; T-3 retarget)', () => {
   it('an event-bearing proposal mounts deck ghosts (setPreview) and the pane Apply applies them (appendEvent)', async () => {
     frames(
       { type: 'status', message: 'working' },

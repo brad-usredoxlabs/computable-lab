@@ -180,11 +180,16 @@ universal-chat host: `id`, `surface`, `mount`, `route`, `note` — `surface` is
 the machine surface id the server reads; the four-way `analysis` collision is
 documented in-file) with a blessed manifest at
 `config/chat/chat-hosts.manifest.yaml` (the Change 3 shrink-guard anchor; the
-top-level blessed_sha256/blessed_ids is the FROZEN first bless, the guard
-pins it against the frozen `first_blessed_sha256` DATA anchor — any deviation
-of the top-level sha, INCLUDING a consistent rewrite, requires a spec-cited
-blessed_records entry; the top-level bless_note is prose, never
-authorization — and a re-bless APPENDS a `blessed_records` entry). `check-gate.py` gains a SECOND
+top-level blessed_sha256/blessed_ids is the record of the ORIGINAL first bless,
+and the guard uses the `first_blessed_sha256`/`first_blessed_ids` DATA carried
+in the same writable manifest as a TRIPWIRE: an accidental or uncited rewrite of
+the blessed set goes RED, while a deliberate rewrite that moves the anchor
+together with the blessed set is NOT stopped by this guard — that class is
+policed by adversarial review and the trunk merge; any deviation of the
+top-level sha, INCLUDING a consistent rewrite, requires a spec-cited
+blessed_records entry, and the removed-set is derived from the anchor id set so
+a dropped host is named on every path — the top-level bless_note is prose,
+never authorization — and a re-bless APPENDS a `blessed_records` entry). `check-gate.py` gains a SECOND
 scope axis — `--chat-hosts` (the no-flag journey gate is byte-for-byte
 unchanged; no parallel harness):
 

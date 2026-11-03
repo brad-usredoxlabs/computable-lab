@@ -1,12 +1,13 @@
 /**
  * LEG E / E-α — run working-focus publish (deck precedent
- * DeckSurfaceChat.tsx:207-216): the run workspace must publish the
+ * the retired deck bridge (deck focus block): the run workspace must publish the
  * ChatFocusContext the universal pane's SurfaceFocusHeader renders, so the
  * /runs/:runId chat keeps its "what are we looking at" header after LEG D
  * deleted the legacy ChatContextHeader (the run surface regressed to NO
  * header — the pane's SurfaceFocusHeader renders null without a publish).
+ * retargeted from RunSurfaceChatBridge — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
- * The publisher is RunSurfaceChatBridge (the run page's chat registrar,
+ * The publisher is the ONE registrar (host="run-workspace"; the deck slice is
  * mounted INSIDE the page's ProtocolSelectionProvider + EventEditorProvider).
  * The focused-step truth is ProtocolSelectionContext.focusedStep — the SAME
  * truth the deleted ChatContextHeader read (ChatContextHeader.tsx:22-23 at
@@ -45,7 +46,7 @@ vi.mock('../shared/api/aiThreadClient', () => ({
   listThreads: vi.fn(async () => []),
   createThread: vi.fn(async () => ({ id: 't1' })),
   // REJECT (not resolve(null)): a resolved null makes useAiChat's hydrate
-  // effect fail the turn — the passing DeckSurfaceChat.ghost + run-page
+  // effect fail the turn — the passing deck-door ghost pin + run-page
   // surface lock use the same rejection posture.
   getThread: vi.fn().mockRejectedValue(new Error('no thread')),
   listMessages: vi.fn(async () => []),
@@ -118,7 +119,12 @@ vi.mock('../event-editor/EventEditorContext', () => ({
 import { useChatFocus, ChatFocusProvider, type ChatFocus } from '../agent/ChatFocusContext'
 import { ProtocolSelectionProvider, useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import { AiPanelProvider } from '../shared/context/AiPanelContext'
-import { RunSurfaceChatBridge } from './RunSurfaceChatBridge'
+// CHATHOST-CONSOLIDATE-1 T-3 retarget: the run door's deck slice is PUBLISHED
+// by DeckChatSlice (reads the mocked useEventEditor) and the ONE registrar
+// (SurfaceChatBridge, host="run-workspace") collects it — the assertions
+// (the published working focus) are unchanged.
+import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
+import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 
 const aiContext: AiContext = {
@@ -151,7 +157,8 @@ function renderRunChat() {
               <AiPanelProvider>
                 <ChatFocusProvider>
                   <FocusProbe />
-                  <RunSurfaceChatBridge aiContext={aiContext} />
+                  <DeckChatSlice />
+                  <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
                 </ChatFocusProvider>
               </AiPanelProvider>
             </ProtocolSelectionProvider>
@@ -176,7 +183,7 @@ function focusStep(step: { stepId: string; label: string; ordinal?: number } | n
   })
 }
 
-describe('RunSurfaceChatBridge — working-focus publish (E-α, deck precedent)', () => {
+describe('run door — working-focus publish (E-α, deck precedent; T-3 retarget)', () => {
   it('publishes a working focus with NO step focused (label = the run, NO detail key)', async () => {
     renderRunChat()
     await vi.waitFor(() => expect(focusSeen).not.toBeNull())

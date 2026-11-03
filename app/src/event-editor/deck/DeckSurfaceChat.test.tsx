@@ -1,9 +1,10 @@
 /**
  * L2-CHAT-1 gatefix1 D1 (client leg) — the deck surface's AI context must
  * carry the SAME core fields the other chat surfaces send.
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * The tier-2 gate found every /deck chat turn crashing server-side:
- * DeckSurfaceChat's surfaceContext omitted `labwares`, `eventSummary`, and
+ * the retired deck bridge's surfaceContext omitted `labwares`, `eventSummary`, and
  * `availableVerbs`, so the prompt builder died on the first read. This test
  * pins the shape parity with graph/hooks/useLabwareAiContext (via
  * acceptedEventGraphProjection): the three fields present, shaped like the
@@ -13,7 +14,15 @@
  */
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { render } from '@testing-library/react'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+// CHATHOST-CONSOLIDATE-1 T-3 retarget: the deck slice is PUBLISHED by
+// DeckChatSlice (reads the mocked useEventEditor) and the ONE registrar
+// (SurfaceChatBridge, host="event-editor") collects it through the store. The
+// AiPanelProvider provides the store (the registrar's slice read). The
+// behavioral assertions (the captured useSurfaceChat options' aiContext) are
+// unchanged.
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
+import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 
 vi.mock('../EventEditorContext', () => ({ useEventEditor: vi.fn() }))
 vi.mock('../../agent/useSurfaceChat', () => ({ useSurfaceChat: vi.fn() }))
@@ -30,6 +39,16 @@ import type { Labware } from '../../types/labware'
 
 const useEventEditorMock = useEventEditor as unknown as Mock
 const useSurfaceChatMock = useSurfaceChat as unknown as Mock
+
+/** The retargeted deck door: the slice publisher + the ONE registrar. */
+function DeckDoor() {
+  return (
+    <AiPanelProvider>
+      <DeckChatSlice />
+      <SurfaceChatBridge host="event-editor" />
+    </AiPanelProvider>
+  )
+}
 
 function labwareFixture(id: string): Labware {
   return {
@@ -71,14 +90,14 @@ function capturedAiContext(): { surfaceContext: Record<string, unknown> } {
   return { surfaceContext: options.aiContext.surfaceContext }
 }
 
-describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
+describe('deck door AI context — parity core fields (D1; T-3 retarget)', () => {
   it('sends labwares / eventSummary / availableVerbs alongside the deck fields', () => {
     const state = makeState()
     useEventEditorMock.mockReturnValue({ state, actions: state })
     useSurfaceChatMock.mockReturnValue({ chat: {}, flow: {} })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    render(<DeckSurfaceChat />)
+    render(<DeckDoor />)
 
     const ctx = capturedAiContext().surfaceContext
     expect(ctx.eventGraphId).toBe('EVG-a5-fixture-method')
@@ -101,7 +120,7 @@ describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
     useSurfaceChatMock.mockReturnValue({ chat: {}, flow: {} })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    render(<DeckSurfaceChat />)
+    render(<DeckDoor />)
 
     const ctx = capturedAiContext().surfaceContext
     expect(ctx.selectedWells).toEqual({ labwareId: 'LWI-1', wells: ['A1', 'A2', 'A3'] })
@@ -130,7 +149,7 @@ describe('DeckSurfaceChat AI context — parity core fields (D1)', () => {
     useSurfaceChatMock.mockReturnValue({ chat: {}, flow: {} })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    render(<DeckSurfaceChat />)
+    render(<DeckDoor />)
 
     const ctx = capturedAiContext().surfaceContext
     // summarizeLabwares parity: id/type/name + grid rows/columns.

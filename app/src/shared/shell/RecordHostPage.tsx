@@ -51,8 +51,11 @@ function RecordSurfaceChat({ recordId, nodeType, studyId }: {
   }), [recordId, nodeType, studyId, isCreate])
   return (
     <SurfaceChatBridge
-      aiContext={aiContext}
-      {...(recordId && !isCreate ? { scope: recordId } : {})}
+      host="record-host"
+      base={{
+        context: aiContext,
+        ...(recordId && !isCreate ? { scope: recordId } : {}),
+      }}
     />
   )
 }

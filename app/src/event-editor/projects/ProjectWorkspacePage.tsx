@@ -43,7 +43,7 @@ import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
 import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
-import { DeckSurfaceChat } from '../deck/DeckSurfaceChat'
+import { DeckChatSlice } from '../deck/DeckChatSlice'
 import type { AiContext } from '../../types/aiContext'
 import { ProjectCollectionView } from '../../collections/ProjectCollectionView'
 import { RunCollectionView } from '../../collections/RunCollectionView'
@@ -78,8 +78,9 @@ export function ProjectWorkspacePage() {
 
   return (
     <WorkspaceProvider studyId={studyId}>
-      {/* L2-CHAT-UI-1 LEG C4: universal chat registrar (renders nothing). */}
-      <ProjectSurfaceChat studyId={studyId} />
+      {/* L2-CHAT-UI-1 LEG C4 (CHATHOST-CONSOLIDATE-1): the ONE registrar
+          (host="project-deck-tab"), page-level — renders nothing. */}
+      <ProjectWorkspaceDoor studyId={studyId} />
       <WorkspaceShellHost
         studyId={studyId}
         autoOpenEventGraphId={eventGraphId ?? null}
@@ -89,16 +90,19 @@ export function ProjectWorkspacePage() {
 }
 
 /**
- * L2-CHAT-UI-1 LEG C4: the project workspace's universal chat. Reads the
- * active workspace tab through the SAME WorkspaceContext the shell uses so
- * the context names what the user is looking at (homepage / deck / pdf /
- * record editor …) without new wiring. Thread-scoped on the studyId — one
- * conversation per study. Renders nothing; RightPane's panelSlot?.chat arm
- * shows HarnessChatPane. Deck tabs inside the project keep the same chat —
- * the deck-specific ghost bridge (DeckSurfaceChat) lives on the /deck route
- * and is untouched by this leg.
+ * L2-CHAT-UI-1 LEG C4 (CHATHOST-CONSOLIDATE-1 retarget): the project
+ * workspace's universal chat — the ONE registrar (host="project-deck-tab").
+ * Reads the active workspace tab through the SAME WorkspaceContext the shell
+ * uses so the page-local context names what the user is looking at
+ * (homepage / deck / pdf / record editor …) and the thread scope is the
+ * studyId — one conversation per study. The deck slice (published by
+ * DeckChatSlice, INSIDE the page's EventEditorProvider) is OPTIONAL for this
+ * host (required_providers: [] in config/chat/chat-hosts.yaml): the
+ * page-level door registers on every tab, and the collector merges the deck
+ * slice in when it is published (a deck tab). Renders nothing; RightPane's
+ * panelSlot?.chat arm shows HarnessChatPane.
  */
-function ProjectSurfaceChat({ studyId }: { studyId: string }) {
+function ProjectWorkspaceDoor({ studyId }: { studyId: string }) {
   const ws = useWorkspace()
   const activeTab = ws.state.activeTabId
     ? ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
@@ -117,17 +121,15 @@ function ProjectSurfaceChat({ studyId }: { studyId: string }) {
         : {}),
     },
   }), [studyId, activeTab])
-  // WELL-SELECTION / DECK CONTEXT (2026-11-01): this registrar is mounted at
-  // the PAGE level — ABOVE EventEditorProvider — so on a deck tab it can only
-  // ever send `{studyId, activeTabKind}`: no labwares, no events, no
-  // selection. Measured live on this page:
-  //   {"surface":"analysis","context":{"studyId":"STU-scratch","activeTabKind":"project-details"}}
-  // The deck tab therefore answered "add 100ul of DMEM" with no wells and
-  // ghosted nothing. When the active tab IS a deck, stand down and let the
-  // deck's own bridge register from INSIDE the provider (see the deck branch
-  // below) — one registrar at a time, the deck one.
-  if (activeTab?.kind === 'deck') return null
-  return <SurfaceChatBridge aiContext={aiContext} scope={studyId} />
+  // CHATHOST-CONSOLIDATE-1: the door names itself (host="project-deck-tab")
+  // and the page-local context + thread scope (the studyId) go on `base`.
+  // The deck slice is OPTIONAL for this host — the page-level door registers
+  // even when no deck slice is published (a non-deck tab), and the collector
+  // merges the deck slice in when it is (a deck tab). The deck tab's
+  // DeckChatSlice (inside the EventEditorProvider) publishes into the SAME
+  // app-level slice store, so the page-level registrar — mounted ABOVE the
+  // provider — still sees it (the store, not a context: §9 bait #3).
+  return <SurfaceChatBridge host="project-deck-tab" base={{ context: aiContext, scope: studyId }} />
 }
 
 interface WorkspaceShellHostProps {
@@ -272,12 +274,17 @@ function WorkspaceShellHost({
         {...(activeTab.runId ? { runId: activeTab.runId } : {})}
       >
         <FocusModalsProvider>
-          {/* The deck tab's chat, registered from INSIDE the provider so it
-              sees what the page-level registrar structurally could not:
-              labwares, events, deck placements and the WELL SELECTION. Same
-              bridge the /deck/:id route uses (one implementation, no second
-              dialect). ProjectSurfaceChat stands down on deck tabs. */}
-          <DeckSurfaceChat />
+          {/* CHATHOST-CONSOLIDATE-1: the project host has ONE registrar — the
+              page-level door (host="project-deck-tab") above.
+              The deck slice is PUBLISHED here (inside EventEditorProvider, where
+              it can read the real editor state) and the page-level registrar
+              collects it through the store (position-independent). On a deck tab
+              the deck slice is OPTIONAL for this host (config/chat/chat-hosts.yaml
+              optional_providers: [deck]) — the page-level door registers even on
+              a non-deck tab and the collector merges the deck slice in when the
+              active tab is a deck (the LEG-F fix: the page-level door no longer
+              stands down, it just gets the deck slice when there is one). */}
+          <DeckChatSlice />
           {shellContent}
           <ProtocolPreviewBridge />
         </FocusModalsProvider>

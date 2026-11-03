@@ -1,14 +1,15 @@
 /**
  * L2-THREAD-SCOPED-1 FIX RUN 1 — D1 seam test (adversarial-review defect 1,
  * acceptance (5) of the SUITEA-D3 deck-scope amendment).
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * Cycle-1 verdict: `scope` existed as a useAiChat OPTION but NO production
  * caller passed it — every real request carried no scope, so one tab
  * navigating deck A -> deck B held ONE thread with both decks' turns (the
  * D3 leak). The fix wires the loaded `state.eventGraphId` as the chat scope
- * at the deck surfaces (DeckSurfaceChat + RunSurfaceChatBridge).
+ * at the deck surfaces (the deck door + the run door — the ONE registrar).
  *
- * This test runs against the REAL DeckSurfaceChat -> REAL useSurfaceChat ->
+ * This test runs against the REAL deck door (DeckChatSlice + the ONE registrar) -> REAL useSurfaceChat ->
  * REAL useAiChat -> REAL aiThreadClient (NOT a hand-passed scope prop): a
  * fake fetch router answers thread traffic by REQUEST HEADERS only. Pins:
  *  - the hydration GET and the append POST for a loaded deck carry
@@ -23,7 +24,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 const mocks = vi.hoisted(() => ({
@@ -209,7 +211,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))', () => {
+describe('deck door — deck scope on the wire (FIX1 D1, acceptance (5); T-3 retarget)', () => {
   it('sends x-cl-thread-scope = loaded eventGraphId on get + append and RE-KEYS on deck navigation', async () => {
     autoSeedContents['EVG-seam-A'] = 'deck A turn'
     autoSeedContents['EVG-seam-B'] = 'deck B turn'
@@ -217,7 +219,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
 
     const view = render(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
         <HarnessChatPane />
       </AiPanelProvider>,
     )
@@ -236,7 +239,7 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     // Acceptance (5)'s append leg must be exercised, not asserted vacuously
     // (cycle-2 mutation control: deleting `threadOpts` from the hook's
     // appendThreadMessage call must turn THIS test red). The pane is rendered
-    // beside the surface: DeckSurfaceChat registers the chat, HarnessChatPane
+    // beside the surface: the deck door registers the chat, HarnessChatPane
     // sends through it — the same send path the deck route uses.
     const textarea = screen.getByLabelText('Message') as HTMLTextAreaElement
     await act(async () => {
@@ -266,7 +269,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
     mocks.state = deckState('EVG-seam-B')
     view.rerender(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
         <HarnessChatPane />
       </AiPanelProvider>,
     )
@@ -312,7 +316,8 @@ describe('DeckSurfaceChat — deck scope on the wire (FIX1 D1, acceptance (5))',
 
     render(
       <AiPanelProvider>
-        <DeckSurfaceChat />
+        <DeckChatSlice />
+        <SurfaceChatBridge host="event-editor" />
       </AiPanelProvider>,
     )
 

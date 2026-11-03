@@ -27,6 +27,7 @@ import hashlib
 import importlib  # noqa: F401  (kept for selfcheck import symmetry)
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -61,6 +62,138 @@ def app_base_is_trunk(u):
     """A4: literal-set membership. run-meta must not be able to lie about
     which FE a run exercised (the cycle-1 D2 defect class)."""
     return _hostport(u) in TRUNK_PORTS
+
+# ---------------------------------------------------------------------------
+# LEG-C6-SWEEP-DEBT (spec §6): the chat-host sweep scope.
+#
+# The inventory is DATA (config/chat/chat-hosts.yaml) — read it, NEVER a
+# hardcoded host list. A `--chat-hosts` run drives each inventory host ONCE
+# through the EXISTING browser executor (run_journey -> ui-drive.cjs), writes
+# ONE receipt per host (the outgoing request body + the rendered-answer
+# screenshot) into the SAME run dir, and appends a `chat_host_verdicts` table
+# to run-meta BEFORE the `latest` flip. There is no parallel harness: this is
+# the ONE driver's run shape gaining a scope, the sweep rides the existing
+# run_journey path, and the probe journeys are DATA built from the inventory
+# (one generic step sequence + one shared canned prompt, no per-host code).
+# ---------------------------------------------------------------------------
+
+CHAT_HOSTS_INVENTORY = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yaml")
+
+# The shared probe prompt (DATA — one canned CHATHOST-SWEEP block keyed by
+# prompt_contains serves all hosts; no per-host prompt strings in code).
+CHATHOST_SWEEP_PROMPT = "CHATHOST-SWEEP probe round trip"
+
+
+def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
+    """The chat-host inventory entries (config/chat/chat-hosts.yaml): returns
+    (ids, surfaces) IN FILE ORDER — ids[i] and surfaces[i] describe the SAME
+    host. Mirrors check-gate.py's loader (id + surface required, no duplicate
+    ids) so the sweep grades against the exact same set the gate uses. The
+    inventory is the single source of truth: a missing/malformed file raises
+    so the sweep fails closed."""
+    import yaml
+    with open(path) as fh:
+        doc = yaml.safe_load(fh)
+    hosts = (doc or {}).get("hosts") or []
+    ids = []
+    surfaces = []
+    for h in hosts:
+        if not isinstance(h, dict) or not h.get("id"):
+            raise ValueError("chat-host inventory %s has a host entry with no id"
+                             % path)
+        surface = h.get("surface")
+        if not isinstance(surface, str) or not surface:
+            raise ValueError("chat-host inventory %s host %r has no machine "
+                             "`surface` field" % (path, h.get("id")))
+        ids.append(h["id"])
+        surfaces.append(surface)
+    if len(ids) != len(set(ids)):
+        raise ValueError("chat-host inventory %s has duplicate host ids" % path)
+    return ids, surfaces
+
+
+def probe_nav_path(route):
+    """Build the browser probe's nav path from the inventory `route` DATA (the
+    first URL path of the entry). Generic over the DATA — no per-host code:
+    each `:param` is substituted with a stable probe token (so the goto
+    reaches a real host route, not a 404), EXCEPT an optional `:param?`
+    which is dropped (the product makes it optional). `studyId` gets a
+    `STU-`-shaped token because ProjectWorkspacePage validates
+    `/^STU-[A-Za-z0-9_-]+$/`. The instance params resolve to the product's
+    own honest fallback/empty state for a probe token — the probe asserts the
+    UNIVERSAL chat round trip, never a host-specific content channel.
+    (Whether each host renders its chat pane at a probe-token URL is the
+    orchestrator's LIVE acceptance, §6.)"""
+    m = re.search(r"[\"'`]?(/[^\s\"'`)]*)", route or "")
+    base = m.group(1) if m else "/"
+    def _sub(mm):
+        name = mm.group(1)
+        if name == "studyId":
+            return "STU-CHATHOST-PROBE"
+        return "CHATHOST-PROBE"
+    # drop optional `:param?` segments FIRST (while the `?` marker is still
+    # present — the product makes these params optional), then any residual
+    # `?` (e.g. a query fragment), then substitute the remaining `:param`s.
+    base = re.sub(r"/:[A-Za-z0-9_]+\?", "", base)
+    base = base.split("?")[0]
+    base = re.sub(r":([A-Za-z0-9_]+)", _sub, base)
+    return base.rstrip("/") or "/"
+
+
+def build_chat_host_probe(host_id, surface, route):
+    """One generic probe journey for a single chat host (DATA from the
+    inventory). Reuses the existing step vocabulary (goto -> open_ai_tab ->
+    ask -> screenshot) — the universal HarnessChatPane composer/affordances
+    are host-generic, so there is NO per-host code and NO per-host prompt
+    string. `seed`/`teardown` are empty (no record is materialised; the
+    probe is a read-only round trip)."""
+    return {
+        "id": host_id,
+        "title": "chat-host sweep probe: %s (%s)" % (host_id, surface),
+        "file": "probe-%s.yaml" % host_id,
+        "timeout_s": 300,
+        "seed": {},
+        "teardown": {},
+        "steps": [
+            {"step": "goto", "path": probe_nav_path(route)},
+            {"step": "open_ai_tab"},
+            {"step": "ask", "text": CHATHOST_SWEEP_PROMPT},
+            {"step": "screenshot", "tag": "rendered-answer"},
+        ],
+        "assert": {"rendered": [
+            {"assistant_answer_visible": True},
+            {"turns_at_least": 1},
+            {"no_error_frame": True},
+        ]},
+    }
+
+
+def emit_chat_host_verdicts(run_dir, host_ids, receipts=None):
+    """THE EMITTER (spec §8.2 T-4 / §6, LEG-C6-SWEEP-DEBT): build the
+    `chat_host_verdicts` table from the receipts that ACTUALLY exist in the
+    run dir. PURE over the on-disk receipts (the gate re-verifies existence).
+    Honest + fail-closed, mirroring the sweep's real outcome per host:
+      - a host whose `<host>.json` receipt exists AND grades green
+            -> {"verdict": "accept", "receipts": "<host>.json"};
+      - a host that WAS swept but graded red/transport-error
+            -> {"verdict": "red", ...} (a non-accept the gate grades RED);
+      - a host NEVER swept (no receipt file)
+            -> OMITTED (so the gate's strict-subset check names it).
+    A strict-subset table (a dropped host) is the spec's RED case. Receipts
+    default to the per-host `<host>.json` files that run_journey writes into
+    `run_dir`."""
+    verdicts = {}
+    for hid in host_ids:
+        rx = (receipts or {}).get(hid) or ("%s.json" % hid)
+        p = os.path.join(run_dir, rx)
+        if not os.path.isfile(p):
+            continue                      # never swept -> omit -> gate names it
+        with open(p) as fh:
+            rec = json.load(fh)
+        verdicts[hid] = {"verdict": "accept" if rec.get("verdict") == "green"
+                         else "red",
+                         "receipts": rx}
+    return verdicts
 
 # ---------------------------------------------------------------------------
 # Channel assertions — PURE over the captured request-body artifact.
@@ -809,6 +942,62 @@ def commit_latest_flip(run_dir):
     os.replace(tmp, link)  # atomic flip of `latest`
 
 
+def run_chat_host_sweep(args, run_dir):
+    """LEG-C6-SWEEP-DEBT (spec §6): drive each inventory chat host ONCE
+    through the EXISTING browser executor (run_journey -> ui-drive.cjs) inside
+    the SAME run dir, writing one receipt per host (outgoing request body +
+    the rendered-answer screenshot). The inventory is DATA (chat-hosts.yaml) —
+    a single shared prompt + generic step sequence serves every host; there is
+    no per-host code and no second harness. Returns the `chat_host_verdicts`
+    table (the emitter over the receipts this run just wrote).
+
+    The probe journey YAMLs are written into `run_dir` (NOT `journeys/`, so the
+    no-flag gate's exact-set journey check is untouched); each is passed to
+    run_journey as an ABSOLUTE file path so the existing executor runs it
+    unmodified. A host that fails to seed/drive still leaves a receipt (the
+    stub receipt), so the emitter records an honest non-accept (or omits a
+    host that was never swept) — never a fabricated green."""
+    import yaml  # probe journeys are YAML by design
+    try:
+        host_ids, surfaces = load_chat_host_inventory()
+    except Exception as exc:
+        print("ENV ERROR: cannot load the chat-host inventory (DATA) — %s"
+              % exc, file=sys.stderr)
+        return None
+    if not host_ids:
+        print("ENV ERROR: chat-host inventory is empty — cannot sweep",
+              file=sys.stderr)
+        return None
+    print("== chat-host sweep: %d inventory host(s) (DATA: %s)"
+          % (len(host_ids), os.path.relpath(CHAT_HOSTS_INVENTORY, REPO_ROOT)),
+          flush=True)
+    # Per-host route DATA (the `route:` field) for probe navigation — read
+    # alongside the id/surface the loader already validated, in file order.
+    routes = []
+    with open(CHAT_HOSTS_INVENTORY) as fh:
+        _doc = yaml.safe_load(fh) or {}
+    for _h in _doc.get("hosts") or []:
+        routes.append(_h.get("route") or "")
+    ids, surs = host_ids, surfaces
+    results = {}
+    for idx, hid in enumerate(ids):
+        probe = build_chat_host_probe(ids[idx], surs[idx], routes[idx])
+        probe_yaml = os.path.join(run_dir, "probe-%s.yaml" % hid)
+        with open(probe_yaml, "w") as fh:
+            yaml.safe_dump(probe, fh, sort_keys=False)
+        probe["file"] = probe_yaml          # ABSOLUTE path -> run_journey verbatim
+        print("== chat-host %s (%s) nav=%s"
+              % (hid, surs[idx], probe["steps"][0]["path"]), flush=True)
+        jid, verdict, _info = run_journey(probe, run_dir, args.app_base,
+                                          args.api_base)
+        results[hid] = verdict
+        print("   -> %s" % verdict.upper(), flush=True)
+    verdicts = emit_chat_host_verdicts(run_dir, ids)
+    print("chat-host sweep: %d/%d host(s) swept, %d verdict(s) emitted"
+          % (len(results), len(ids), len(verdicts)), flush=True)
+    return verdicts
+
+
 def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
                              fake_info=None, advisory=False, health=None):
     """Run the selected journeys, write run-meta + the `latest` flip. Returns
@@ -825,6 +1014,16 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
         if verdict != "green" and isinstance(info, dict):
             failures[jid] = info        # N3: the failure dict is persisted
         print("   -> %s" % verdict.upper(), flush=True)
+    # LEG-C6-SWEEP-DEBT (spec §6): the chat-host sweep rides the SAME run dir
+    # and the EXISTING executor — run it BEFORE run-meta is built so the
+    # `chat_host_verdicts` table lands in the SAME run-meta.json write that
+    # records `app_base` (the gate re-derives trunk from that app_base), and
+    # therefore strictly BEFORE the `latest` flip (which happens later, in
+    # main's A2-restore finally). The sweep's host receipts + verdicts never
+    # touch the journey `verdicts` table (the no-flag gate's exact-set check).
+    chat_host_verdicts = None
+    if getattr(args, "chat_hosts", False):
+        chat_host_verdicts = run_chat_host_sweep(args, run_dir)
     d_after = digest_repo(DATA_REPO)
 
     reds = sum(1 for v in results.values() if v == "red")
@@ -871,6 +1070,12 @@ def _run_journeys_and_finish(args, journeys, run_dir, ts, results,
     link = os.path.join(RECEIPTS_ROOT, "latest")
     if os.path.islink(link):
         run_meta["latest_was"] = os.path.realpath(link)
+    # LEG-C6-SWEEP-DEBT (spec §6): append the chat-host sweep verdict table to
+    # the SAME run-meta.json that records app_base, strictly BEFORE the
+    # `latest` flip. Absent (not set) when --chat-hosts was not requested, so
+    # a plain journey run's run-meta is byte-unchanged in shape.
+    if chat_host_verdicts is not None:
+        run_meta["chat_host_verdicts"] = chat_host_verdicts
     with open(os.path.join(run_dir, "run-meta.json"), "w") as fh:
         json.dump(run_meta, fh, indent=2)
     # D1/D2 (fix4): `latest` eligibility is DECIDED here (a complete trunk
@@ -926,6 +1131,14 @@ def main():
     ap.add_argument("--advisory", action="store_true",
                     help="record the verdict but NEVER flip `latest` (advisory "
                          "live-sampler runs — J2-live shape)")
+    # LEG-C6-SWEEP-DEBT (spec §6): ALSO drive every inventory chat host once
+    # through the existing executor, in the SAME run dir, and append a
+    # `chat_host_verdicts` table to run-meta BEFORE the `latest` flip. The
+    # inventory is DATA (config/chat/chat-hosts.yaml).
+    ap.add_argument("--chat-hosts", action="store_true",
+                    help="sweep the chat-host inventory (one receipt per host, "
+                         "appended to run-meta as chat_host_verdicts before the "
+                         "`latest` flip)")
     args = ap.parse_args()
 
     import yaml  # stdlib-only except this; journeys are YAML by design

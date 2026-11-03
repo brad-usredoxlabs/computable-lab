@@ -2,6 +2,7 @@
  * L2-SUITE-A-uifix1 [D1] RED — a deck_layout done does not change the deck
  * (gate: P1 "Navigate to the freeform manual deck" left the deck on
  * "Liquid Handling · Manual · Single SBS Plate"; only an honest wall showed.
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  * The SERVER leg works: `done deck_layout success=true variant=manual_freeform`
  * every drive — AgentOrchestrator.ts:2885-2920 returns
  * `{ success: true, deckLayout: { platformId, variantId } }`, a deliverable
@@ -12,7 +13,7 @@
  * switch the deck — `actions.setPlatform` + `actions.setVariant`
  * (EventEditorContext.tsx:1102-1103; variant `manual_freeform` =
  * "Manual Bench (freeform)", defaultManifests.ts:71-72) — into the universal
- * deck path through the DeckSurfaceChat seam (smallest correct seam: the
+ * deck path through the deck door seam (smallest correct seam: the
  * same ref-callback family as onProposalDrafted).
  *
  * RED pins (shaped on the gate trail's P1 read):
@@ -33,7 +34,8 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { streamAssist } from '../../shared/api/aiClient'
-import { DeckSurfaceChat } from './DeckSurfaceChat'
+import { DeckChatSlice } from './DeckChatSlice'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 // LEG D step 5 (OQ-4 PORT): HarnessChatPane now mounts the attached-sources
@@ -175,7 +177,8 @@ function frames(...events: Array<Record<string, unknown>>) {
 function renderDeckChat() {
   const makeTree = () => (
     <AiPanelProvider>
-      <DeckSurfaceChat />
+      <DeckChatSlice />
+      <SurfaceChatBridge host="event-editor" />
       <HarnessChatPane />
     </AiPanelProvider>
   )
@@ -198,7 +201,7 @@ async function awaitTurnComplete(deck: ReturnType<typeof renderDeckChat>, timeou
   }
 }
 
-describe('DeckSurfaceChat — L2-SUITE-A-uifix1 D1: a deck_layout done switches the deck', () => {
+describe('deck door — L2-SUITE-A-uifix1 D1: a deck_layout done switches the deck (T-3 retarget)', () => {
   it('applies the delivered variant through the native editor action (setPlatform+setVariant) and skips the false empty-success bubble', async () => {
     frames(
       { type: 'status', message: 'working' },
