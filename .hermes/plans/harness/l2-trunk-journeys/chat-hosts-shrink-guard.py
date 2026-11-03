@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""chat-hosts-shrink-guard.py — CHATHOST-SWEEP-1 Change 3: the tick-time
+shrink-guard for the chat-host inventory (config/chat/chat-hosts.yaml).
+
+A host may be DELETED from the inventory ONLY with a re-bless (a NEW
+blessed_sha256 in the MANIFEST) AND a spec path cited in the re-bless record's
+bless_note. This guard FAILS (returns non-zero / reports the removed hosts)
+when the CURRENT inventory's host-id set is a strict subset of the blessed
+set — i.e. a blessed host disappeared without the re-bless + spec citation
+that authorizes it.
+
+THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1+D2). The top-level
+`blessed_sha256`/`blessed_ids` is the ORIGINAL bless and is FROZEN: the guard
+ASSERTS the manifest invariant
+
+    canonical_sha(blessed_ids) == blessed_sha256
+
+before trusting ANY part of the manifest, and derives the removed-set from
+that invariant-checked set — never from a mutable blessed_ids that does not
+reproduce its sha (trimming blessed_ids while the sha stays, or the full
+drain hosts:[]/blessed_ids:[] with a stale sha, breaks the invariant -> RED,
+fail closed). FIX2 D2: the guard ALSO compares the top-level blessed_sha256
+against the FROZEN `first_blessed_sha256` anchor carried as DATA in the
+manifest — ANY deviation (including a CONSISTENT top-level rewrite: trimmed
+blessed_ids + re-set blessed_sha256, invariant intact) is a blessed-set
+change and is authorized ONLY by a blessed_records entry citing a spec that
+exists; the top-level bless_note is prose and is NEVER read as
+authorization. A re-bless does NOT overwrite the top-level; it APPENDS a
+blessed_records entry. Any inventory-sha mismatch that is a SHRINK is RED
+unless the manifest carries a NEWER consistent bless record: a blessed_records
+entry whose blessed_sha256 EQUALS the current inventory sha (the new sha) and
+whose blessed_ids reproduce that sha (hashes consistently) AND whose bless_note
+cites a spec path that EXISTS in the repo (D2: a re-bless without an existing
+spec citation keeps the RED). Pure growth (no host removed) is allowed and is
+re-blessed by the item that added the host.
+
+Importable (check-gate.py's `--chat-hosts` axis imports `shrink_guard`) AND
+tick-runnable:
+
+    python3 chat-hosts-shrink-guard.py                     # guard the repo inventory
+    python3 chat-hosts-shrink-guard.py --recompute         # print the canonical sha
+    python3 chat-hosts-shrink-guard.py --inventory <path> --manifest <path>
+
+Exit 0 = the inventory did not shrink past the blessed set (or the shrink is
+authorized by a consistent re-bless record with a spec that exists).
+Exit 1 = a blessed host is missing / the blessed set changed WITHOUT an
+authorizing re-bless record (includes: invariant failure, missing first-bless
+anchor, mismatch without a consistent newer record, and a re-bless record
+whose cited spec does not exist — including a CONSISTENT top-level rewrite).
+Exit 2 = env error (inventory / manifest unreadable — fail closed).
+"""
+import argparse
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _repo_root():
+    # .hermes/plans/harness/l2-trunk-journeys -> four levels up = repo root.
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def canonical_sha(host_ids):
+    """Sorted host ids, one per line, one trailing newline -> sha256 hex."""
+    import hashlib
+    canon = "\n".join(sorted(host_ids)) + "\n"
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def inventory_ids(path):
+    """The host ids from a chat-hosts.yaml (hosts[].id), sorted."""
+    import yaml
+    with open(path) as fh:
+        doc = yaml.safe_load(fh)
+    hosts = (doc or {}).get("hosts") or []
+    ids = []
+    for h in hosts:
+        if not isinstance(h, dict) or not h.get("id"):
+            raise ValueError("inventory %s has a host entry with no id" % path)
+        ids.append(h["id"])
+    return sorted(ids)
+
+
+def load_manifest(path):
+    import yaml
+    with open(path) as fh:
+        return (yaml.safe_load(fh) or {})
+
+
+def _bless_records(manifest):
+    """The manifest's blessed_records list (a list of re-bless records).
+    The TOP-LEVEL blessed_sha256/blessed_ids/bless_note/blessed_at is the
+    newest record itself (the first bless); blessed_records carries every
+    subsequent re-bless, newest last. Only dict entries are yielded."""
+    recs = manifest.get("blessed_records")
+    if not isinstance(recs, (list, tuple)):
+        return []
+    return [r for r in recs if isinstance(r, dict)]
+
+
+def spec_cited(bless_note, repo_root):
+    """A bless_note cites a spec when it names a path that EXISTS under
+    repo_root. Returns (cited, path-or-None):
+      - a path component of the note (the first token run that looks like a
+        repo-relative path, starting with '.'/'config'/'docs'/'specifications'
+        or ending in '.md' — the plan/spec layout) that exists on disk;
+      - a bare note names NO spec (the RED case, D2)."""
+    if not isinstance(bless_note, str):
+        return False, None
+    for tok in bless_note.split():
+        t = tok.rstrip(".,;:)]}'\u201d")   # trailing punctuation only — a
+                                           # leading '.' (e.g. .hermes/) is a
+                                           # path component, NOT punctuation
+        if not t or " " in t:
+            continue
+        looks_like_path = (t.endswith(".md") or t.startswith("./") or
+                           t.startswith("config/") or t.startswith("docs/")
+                           or t.startswith("specifications/")
+                           or t.startswith(".hermes/"))
+        if not looks_like_path:
+            continue
+        cand = t if os.path.isabs(t) else os.path.join(repo_root, t)
+        if os.path.isfile(cand):
+            return True, t
+    return False, None
+
+
+def shrink_guard(current_ids, manifest, repo_root=None):
+    """PURE (no I/O beyond the spec-existence check, which takes an explicit
+    repo_root so callers — check-gate's axis and the selfcheck — stay
+    deterministic). Compares the CURRENT inventory id set to the blessed
+    manifest. Returns (ok, removed, reason, authorized):
+      ok         — False => RED (the guard blocks the tick).
+      removed    — blessed host ids MISSING from the current inventory (a
+                   shrink); [] when there is no shrink.
+      reason     — None when ok; otherwise a short machine-readable cause
+                   ("un-blessed", "invariant", or "no-consistent-record"),
+                   for the gate's BLOCKER line.
+      authorized — the spec path cited by the authorizing re-bless record,
+                   when one exists (ok, an authorized shrink); None otherwise.
+
+    THE HASHED PAYLOAD IS THE AUTHORITY (fix1, D1+D2). The manifest's
+    TOP-LEVEL blessed_sha256/blessed_ids is the ORIGINAL (first) bless and is
+    FROZEN: the guard ASSERTS the manifest invariant
+
+        canonical_sha(blessed_ids) == blessed_sha256
+
+    and derives the removed-set from that invariant-checked set — NEVER from a
+    mutable blessed_ids that does not reproduce its sha (trimming blessed_ids
+    while the sha stays breaks the invariant -> RED; the full drain
+    hosts:[]/blessed_ids:[] with a stale sha breaks it too). FIX2 D2: the
+    guard ALSO compares the top-level blessed_sha256 against the FROZEN
+    first_blessed_sha256 anchor (DATA in the manifest; a missing anchor fails
+    closed, reason "no-anchor"). Any DEVIATION of blessed_sha256 from that
+    anchor — including a CONSISTENT top-level rewrite (trimmed blessed_ids +
+    re-set blessed_sha256, invariant intact, current inventory equal to the
+    rewritten set) — is a blessed-set change and is authorized ONLY via the
+    blessed_records path below; the top-level bless_note is prose and is
+    NEVER read as authorization. A re-bless does NOT overwrite the top-level;
+    it appends a blessed_records entry. Any inventory-sha mismatch (the
+    current inventory differs from the blessed set) that is a SHRINK is RED
+    unless a NEWER consistent bless record authorizes it: a blessed_records
+    entry whose blessed_sha256 is the "new sha" (== the current inventory
+    sha), whose blessed_ids reproduce that sha ("hashes consistently"), and
+    whose bless_note cites a spec path that EXISTS in the repo (D2: no
+    citation -> no deletion). Pure growth (no host removed) off the FROZEN
+    first bless (blessed_sha256 == the anchor) is allowed and is re-blessed
+    by the item that added the host.
+    """
+    if repo_root is None:
+        repo_root = _repo_root()
+    cur = list(current_ids)
+    cur_sha = canonical_sha(cur)
+    blessed_sha = manifest.get("blessed_sha256")
+    blessed_ids = manifest.get("blessed_ids")
+    if blessed_sha is None:
+        # No blessed sha -> the manifest has never been blessed; fail closed
+        # (an un-blessed inventory has no shrink to authorize).
+        return False, sorted(set(cur)), "un-blessed", None
+    if not isinstance(blessed_ids, (list, tuple)):
+        # No id record -> the blessed set cannot be derived from the hashed
+        # payload -> fail closed (cannot prove no host was dropped).
+        return False, ["<blessed set unreadable — re-bless the manifest>"], \
+            "invariant", None
+    # MANIFEST INVARIANT (fix1, D1): the sha is the authority. The top-level
+    # blessed_ids record MUST reproduce blessed_sha256. If it does not —
+    # trimmed/edited while the sha stays, or a drained list with a stale sha —
+    # the manifest is untrusted and the guard fails closed BEFORE trusting any
+    # part of it. This is exactly the case that killed the D1 drain.
+    if canonical_sha(blessed_ids) != blessed_sha:
+        return False, ["<manifest invariant broken: blessed_sha256 != "
+                       "canonical_sha(blessed_ids)>"], "invariant", None
+    blessed = set(blessed_ids)
+    removed = sorted(blessed - set(cur))     # derived from the hashed payload
+    # FIX2 D2: the FROZEN FIRST-BLESS ANCHOR. The top-level blessed_sha256
+    # MUST still be the sha of the ORIGINAL first bless — carried as DATA in
+    # the manifest (first_blessed_sha256), not a guard constant; a missing
+    # anchor fails closed (the invariant alone cannot pin the FIRST bless).
+    # Any DEVIATION of blessed_sha256 from that anchor — including a
+    # CONSISTENT top-level rewrite (trimmed blessed_ids + re-set
+    # blessed_sha256, invariant intact, current inventory equal to the
+    # rewritten set) — is a blessed-set change and falls through to the
+    # blessed_records authorization path below. The TOP-LEVEL bless_note is
+    # prose and is NEVER read as authorization.
+    anchor = manifest.get("first_blessed_sha256")
+    if not isinstance(anchor, str) or not anchor:
+        return False, ["<first-bless anchor missing: no frozen "
+                       "first_blessed_sha256 to pin the top-level bless>"], \
+            "no-anchor", None
+    if blessed_sha == anchor:
+        if cur_sha == anchor:
+            # The current inventory IS the frozen first-bless set
+            # (invariant-checked above). No change -> green.
+            return True, [], None, None
+        if not removed:
+            # Pure GROWTH off the FROZEN first bless (the top-level is
+            # untouched): not a shrink. Allowed (the item that added the
+            # host re-blesses).
+            return True, [], None, None
+    # HERE (and ONLY here): the blessed set changed — the top-level
+    # blessed_sha256 deviates from the frozen first-bless anchor, and/or the
+    # current inventory differs from the top-level blessed set (a SHRINK:
+    # blessed hosts missing, or a CONSISTENT top-level rewrite the inventory
+    # now matches). RED unless a NEWER consistent bless record authorizes the
+    # CURRENT set:
+    #   blessed_records entry whose blessed_sha256 is the "new sha" == the
+    #   current inventory sha, whose blessed_ids reproduce that sha (hashes
+    #   consistently), and whose bless_note cites a spec path that EXISTS in
+    #   the repo (fix1 D2: no existing-spec citation -> no deletion).
+    for rec in _bless_records(manifest):
+        rec_ids = rec.get("blessed_ids")
+        rec_sha = rec.get("blessed_sha256")
+        if not isinstance(rec_ids, (list, tuple)):
+            continue
+        if rec_sha is None or rec_sha != cur_sha:
+            continue          # the record's "new sha" must match the current set
+        if canonical_sha(rec_ids) != rec_sha:
+            continue          # record does not hash consistently
+        cited, path = spec_cited(rec.get("bless_note"), repo_root)
+        if cited:
+            return True, removed, None, path
+    return False, removed, "no-consistent-record", None
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--inventory", default=os.path.join(
+        _repo_root(), "config", "chat", "chat-hosts.yaml"))
+    ap.add_argument("--manifest", default=os.path.join(
+        _repo_root(), "config", "chat", "chat-hosts.manifest.yaml"))
+    ap.add_argument("--recompute", action="store_true",
+                    help="print the CURRENT inventory's canonical sha and exit "
+                         "(for a re-bless); does NOT grade")
+    args = ap.parse_args(argv)
+    try:
+        cur = inventory_ids(args.inventory)
+    except Exception as exc:
+        print("BLOCKER: chat-host inventory unreadable (%s) — FAIL CLOSED "
+              "(Change 3)" % exc)
+        return 2
+    if args.recompute:
+        print("canonical sha of %d host(s): %s" % (len(cur), canonical_sha(cur)))
+        print("host ids: " + ", ".join(cur))
+        return 0
+    try:
+        manifest = load_manifest(args.manifest)
+    except Exception as exc:
+        print("BLOCKER: blessed manifest unreadable (%s) — FAIL CLOSED "
+              "(Change 3)" % exc)
+        return 2
+    ok, removed, reason, authorized = shrink_guard(cur, manifest, _repo_root())
+    if not ok:
+        cause_key = reason if reason else "unauthorized"
+        cause = {
+            "invariant": "the manifest invariant FAILED "
+                         "(canonical_sha(blessed_ids) != blessed_sha256 — the "
+                         "hashed payload is the authority and the id record "
+                         "does not reproduce it)",
+            "un-blessed": "the manifest is un-blessed (no blessed_sha256)",
+            "no-anchor": "the manifest carries no FROZEN first-bless anchor "
+                         "(first_blessed_sha256) — the top-level bless cannot "
+                         "be pinned to the original first bless",
+            "no-consistent-record": "no NEWER consistent re-bless record "
+                         "(a blessed_records entry whose blessed_sha256 "
+                         "equals the current inventory sha, whose blessed_ids "
+                         "reproduce that sha, and whose bless_note cites a "
+                         "spec path that EXISTS in the repo) authorizes this "
+                         "state",
+        }.get(cause_key, cause_key)
+        print("BLOCKER: the chat-host inventory changed without an authorized "
+              "re-bless — %s (Change 3: a deletion is allowed ONLY with a "
+              "re-blessed blessed_sha256 whose id record reproduces it AND a "
+              "spec path in the re-bless record's bless_note that exists in "
+              "the repo)" % cause)
+        if removed:
+            print("  removed/changed host(s): %s" % removed)
+        print("SHRINK-GUARD red")
+        return 1
+    if removed:
+        print("SHRINK-GUARD green (current sha=%s; %d blessed host(s) removed "
+              "— authorized by re-bless record citing spec %s)"
+              % (canonical_sha(cur), len(removed), authorized))
+    else:
+        print("SHRINK-GUARD green (current sha=%s; no blessed host dropped)"
+              % canonical_sha(cur))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

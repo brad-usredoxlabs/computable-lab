@@ -78,6 +78,22 @@ number below is the CURRENT shape and may move under the merge — re-verify, do
 - `server/src/compiler/scientistIntent/vocabularyContractBlock.test.ts` / `quantityWireContract.test.ts`
   — extend for the new required flag (these pin the contract block).
 
+### ORCH AMENDMENT 1 (l2t1955, 2026-11-02) — `ai.css` is IN SCOPE (closes advc-c3 D5)
+
+- `app/src/event-editor/right-pane/ai/ai.css` — the mint row's own declaration block. The advc-c3
+  review flagged that the fix run edited this file while the in-scope list did not name it; the
+  rules added are the `.message-log__clarification-mint*` selectors that already live in this
+  stylesheet, and the file owns the picker's chrome. Ownership acknowledged by the orchestrator;
+  no code change is required to close D5.
+
+### ORCH RULING 2 (l2t1955) — single-request arm seed MAY change (supersedes "byte-identical" for that one expression)
+
+The line above that keeps the single-request arm byte-identical governs the GROUPING work (it must
+not be turned into the grouped card). It is NOT a bar to the browser-gate D-1/D-4 determinism fix:
+advc-c3 D1 proves the single arm's `shownPrompts` seed (`new Set([message.content])`) still flips
+the card hash with bubble wording on 9 of 10 gate draws. Changing ONLY that seed derivation to an
+identity-derived seed is authorized; nothing else in the single arm may change.
+
 ## Explicitly OUT of scope
 
 - **PICKER-1's merged surface**: row ranking/comparator/focus default, top-3 inline buttons,
@@ -536,3 +552,20 @@ ClarificationPanel.tsx:147/:150-152 panel title, resolveNounsPass.ts:555 bar,
 scientist-intent-vocabulary.yaml volumeUl required:false (:31-33), ClarificationPicker.tsx:440/:447
 mint-from-live-query, clarificationAnswerPrompt.ts:24/:28 sentence + batch builders. Composer
 claims not re-verified by orch are the coder's own gate duties, not accepted evidence.
+
+### ORCH AMENDMENT 2 (l2t2110, 2026-11-02) — the card OWNS its prompts; bubble suppression must be derived from what actually RENDERS
+
+Closes advc-c4 D2 (authorization gap) and scopes fix run 3.
+
+1. RULING 2's "identity-derived seed" wording is SUPERSEDED. An identity-derived seed still flips the
+   card's visible prompts between the first-ask and repeat-ask wordings (advc-c4 measured it), because
+   card membership is by prompt STRING, not by slot identity. The authorized shape is the one fix run 2
+   shipped: `shownPrompts` / `groupedShownPrompts` start EMPTY and the card prints every prompt it owns,
+   exactly once, independent of the bubble's wording. The card, not the bubble, owns its prompts.
+2. `app/src/agent/ChatLog.test.tsx` is IN SCOPE: the browser-gate D3 pin's DOM owner moved from the
+   bubble `<p>` to the card, so the pin necessarily changes in that file.
+3. The bubble-side `<p>` may be suppressed ONLY for a request the card actually renders a prompt for.
+   Authorization for the suppression is ack'd, with that predicate as its condition (see fix run 3 D1).
+4. STILL OUT OF SCOPE, unchanged: the deferred 3b volume gate's own semantics and any new
+   parameter-input UI. A request the card cannot render keeps base behaviour (the bubble prints the
+   question once) until the item that owns that surface lands.
