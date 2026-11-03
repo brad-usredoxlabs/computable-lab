@@ -294,6 +294,12 @@ verbs:
       - name: volumeUl
         kind: quantity
         required: true
+        # L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a)):
+        # a volume STATED via the `volume` quantity-object form {value, unit}
+        # (declared :297, honored at simpleVerbs.ts lowering) SATISFIES this
+        # required contract — the §5.2 sweep's present-check reads this alias
+        # list generically (no name literal in TS). NO other verb gets the slot.
+        satisfiedBy: [volume]
       - name: volume
         kind: quantity
         required: false

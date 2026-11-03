@@ -253,6 +253,28 @@ function argumentPresent(raw: unknown): boolean {
   if (typeof raw === 'string') return raw.trim().length > 0;
   if (Array.isArray(raw)) return raw.length > 0;
   if (typeof raw === 'number') return Number.isFinite(raw);
+  // L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a)): one
+  // SHAPE arm (not a name arm) — a plain OBJECT is PRESENT iff it carries a
+  // finite numeric `value` AND a non-empty-string `unit`. Generic quantity-object
+  // recognition (e.g. a stated `volume: { value, unit }`); `volume: {}` stays
+  // ABSENT. A bare number already passes the number arm above (consistent with
+  // the bare-numeric-volume-as-uL lowering at simpleVerbs.ts). NO unit
+  // validation, NO conversion here — unit honesty stays in the lowering (which
+  // derives volumeUl only for a literal 'uL'); a stated non-uL object still
+  // counts as STATED. Zero arg/verb NAME literals.
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    !Array.isArray(raw)
+  ) {
+    const obj = raw as Record<string, unknown>;
+    return (
+      typeof obj.value === 'number' &&
+      Number.isFinite(obj.value) &&
+      typeof obj.unit === 'string' &&
+      obj.unit.trim().length > 0
+    );
+  }
   return false;
 }
 
@@ -268,7 +290,16 @@ export function requiredArgumentClarifications(
       // field decides eligibility (data), never a per-verb table.
       if (contract.kind === 'scalar') continue;
       if (contract.required !== true) continue;
-      if (argumentPresent(fields[contract.name])) continue;
+      // L2-CLARIFY-TARGET-1 Change 4a (ruling l2t2230 (a)): a contract is
+      // PRESENT when its own field passes argumentPresent OR any name in the
+      // DECLARED satisfiedBy alias list (DATA) passes argumentPresent. Zero name
+      // literals — the alias names come from the contract, never from TS.
+      const present =
+        argumentPresent(fields[contract.name]) ||
+        (contract.satisfiedBy ?? []).some((alias) =>
+          argumentPresent(fields[alias]),
+        );
+      if (present) continue;
       out.push({
         label: contract.name,
         reason: MISSING_REQUIRED_ARGUMENT_REASON,

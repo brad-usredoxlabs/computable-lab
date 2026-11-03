@@ -87,6 +87,13 @@ export interface ScientistIntentArgContract {
    *  DATA list (token membership stays single-homed; zero token literals in
    *  TS — the B3 discipline resolveWellsetsPass.ts honors). */
   teaching?: string;
+  /** L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a))
+   *  DECLARATION SLOT — a list of ALTERNATIVE argument names whose presence
+   *  satisfies this contract (the §5.2 sweep's present-check: argumentPresent
+   *  on the contract's own name OR any of these). Names OTHER declared args of
+   *  the SAME verb; no dangling aliases (pinned by test — the lint DSL cannot
+   *  express cross-sibling membership). Absent = no alias (today's behavior). */
+  satisfiedBy?: readonly string[];
 }
 
 export interface ScientistIntentVerbEntry {
@@ -245,7 +252,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string; satisfiedBy?: string[] }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labStateContentBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
@@ -285,6 +292,12 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       // exactOptionalPropertyTypes). Only consumed by contractBlock()'s
       // generic render — the resolver/parser never read it (zero behavior).
       ...(typeof a.teaching === 'string' ? { teaching: a.teaching } : {}),
+      // L2-CLARIFY-TARGET-1 Change 4a [ruling l2t2230 (a)]: the DECLARED
+      // satisfiedBy alias slot (same SPINE-8 idiom — generic read, the
+      // meta-schema is the structural authority, no per-verb/per-arg branches,
+      // conditional spread for exactOptionalPropertyTypes). The §5.2 sweep
+      // consumes it as the alias list whose presence satisfies the contract.
+      ...(Array.isArray(a.satisfiedBy) && a.satisfiedBy.length > 0 ? { satisfiedBy: a.satisfiedBy } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
