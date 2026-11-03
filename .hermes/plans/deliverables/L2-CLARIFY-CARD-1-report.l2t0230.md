@@ -528,3 +528,18 @@ volume gate untouched.
 
 ### D5 (MEDIUM) — exact-string pins — IN PROGRESS
 [append as the unit lands]
+
+- **U1 / D5 — CLOSED (no new pin needed; existing pins verified non-vacuous).**
+  Mint/durable-name half: `server/src/api/handlers/VocabHandlers.mint.test.ts:290-339`
+  (2 `it()` pins, D5 block) — `MAT-` id keys off `canonicalLabelKey`, re-mint of a
+  case-variant returns the first mint's title (titleAdoption); 11/11 GREEN at HEAD.
+  Row half: the `[Local]` top-3 row renders ONE label — `candidate.label` =
+  `item.title` (single string, no `${seed}${noun}` concat), built by
+  `materialCandidates` (app/src/shared/taptab/slashMenu/clarifyPickerRanking.ts,
+  `label: item.title`) → `materialSuggestions` (resolvers.ts `label: row.label`);
+  the concat is GONE from the builder. The client renders the server's one string
+  (STAGE A/B seam, `shorthandChat.ts:929,1001`) — no client seam invented.
+  Non-vacuity PROVEN by mutation: temporarily reintroduced `label: item.title + noun`
+  → `clarifyPickerRanking.test.ts` RED `Tests 4 failed | 7 passed (11)`; reverted →
+  GREEN `Tests 11 passed (11)` (clean tree). The row/durable-name pins the ruling
+  §3(iii) demands already exist and are non-vacuous — nothing added.
