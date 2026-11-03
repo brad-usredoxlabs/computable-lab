@@ -203,16 +203,87 @@ describe('cssRuleScan.parseCssRules', () => {
     ])
   })
 
-  it('never emits a nested rule that escaped its parent chain (fail-closed invariant)', () => {
+  // FIX RUN 3 (adversarial review advc3, BLOCKER): a nested rule whose HEAD
+  // is itself a selector list got the parent prefixed to the WHOLE head
+  // string, so every head part after the first was emitted with no parent
+  // chain (`.view-spec__table { .wrap, td { … } }` emitted the single
+  // selector `.view-spec__table .wrap, td`; the pin's top-level comma split
+  // re-splits it into `.view-spec__table .wrap` + a scope-less `td`, which
+  // the ban never sees). The fix composes the CARTESIAN PRODUCT
+  // parentParts x headParts so every emitted selector keeps the full parent
+  // chain. All shapes below were RED on tip 6ea3ec29 — the pin returned []
+  // for each (probe transcript: deliverables/fix3/fix3-red-probe.txt).
+  it('composes a nested head that is itself a selector list part-by-part (cartesian product over the parent)', () => {
+    const rules = parseCssRules('.view-spec__table { .wrap, td { overflow-wrap: anywhere; } }')
+    const nested = rules.filter((r) => r.decls === 'overflow-wrap: anywhere;')
+    expect(nested.map((r) => r.selector)).toEqual([
+      '.view-spec__table .wrap',
+      '.view-spec__table td',
+    ])
+    expect(nested.every((r) => r.atContext.length === 0)).toBe(true)
+  })
+
+  it('distributes a parent selector list x a nested head selector list (cartesian product, both axes)', () => {
+    const rules = parseCssRules('.other, .view-spec__table { .wrap, td { color: red; } }')
+    const nested = rules.filter((r) => r.decls === 'color: red;')
+    expect(nested.map((r) => r.selector)).toEqual([
+      '.other .wrap',
+      '.other td',
+      '.view-spec__table .wrap',
+      '.view-spec__table td',
+    ])
+  })
+
+  it('composes an ambiguous-& nested head list part-by-part (substitution never collapses the head into one string)', () => {
+    // The `&`-free part of the head (`td`) must get the SAME per-part
+    // descendant composition as the `&`-bearing part — never a bare
+    // scope-less emission.
+    const rules = parseCssRules('.view-spec__table { :is(&) .x, td { color: red; } }')
+    const nested = rules.filter((r) => r.decls === 'color: red;')
+    expect(nested.map((r) => r.selector)).toEqual([
+      ':is(.view-spec__table) .x',
+      '.view-spec__table :is(&) .x',
+      '.view-spec__table td',
+    ])
+  })
+
+  it('keeps distributing a head list across the full chain at every nesting depth (triple nesting)', () => {
+    // The recursion receives the resolved selector LIST joined, so the
+    // grandchild head-list distributes over the already-composed middle.
+    const rules = parseCssRules('.view-spec__table { .wrap { .x, td { color: red; } } }')
+    const innermost = rules.filter((r) => r.decls === 'color: red;')
+    expect(innermost.map((r) => r.selector)).toEqual([
+      '.view-spec__table .wrap .x',
+      '.view-spec__table .wrap td',
+    ])
+  })
+
+  it('filters empty head-list parts (trailing comma) — never emits a bare parent or a blank tail', () => {
+    const rules = parseCssRules('.view-spec__table { td, { color: red; } }')
+    const nested = rules.filter((r) => r.decls === 'color: red;')
+    expect(nested.map((r) => r.selector)).toEqual(['.view-spec__table td'])
+  })
+
+  it('never emits a nested rule part that escaped its parent chain (fail-closed invariant, per emitted part)', () => {
     // Ambiguous & placement composes BOTH ways; every emitted selector
     // carries the parent text. Over-flagging is acceptable, escaping the
     // parent chain is not.
-    for (const head of [':is(&) td', ':where(&) > td', ':hover td', 'td']) {
+    // FIX RUN 3: the check is PER EMITTED SELECTOR PART (splitSelectorParts),
+    // not `.toContain` over the joined string — the joined check passed a
+    // selector like `.view-spec__table .wrap, td` because the scope
+    // survived in the FIRST part while the re-split `td` part escaped. The
+    // head lists (`.wrap, td`, `:is(&) .x, td`) are in the loop on purpose:
+    // they are the shapes the fix3 blocker produced.
+    for (const head of [':is(&) td', ':where(&) > td', ':hover td', 'td', '.wrap, td', ':is(&) .x, td']) {
       const rules = parseCssRules(`.view-spec__table { ${head} { color: red; } }`)
       const emitted = rules.filter((r) => r.decls === 'color: red;')
       expect(emitted.length).toBeGreaterThan(0)
       for (const r of emitted) {
-        expect(r.selector).toContain('.view-spec__table')
+        const parts = splitSelectorParts(r.selector)
+        expect(parts.length).toBeGreaterThan(0)
+        for (const p of parts) {
+          expect(p).toContain('.view-spec__table')
+        }
       }
     }
     // Bare-nested inside at-rules on both sides: composition applies only

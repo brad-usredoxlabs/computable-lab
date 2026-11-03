@@ -573,3 +573,66 @@ describe('L1-PIN-HARDEN-1 FIX RUN 2 — .view-spec__cell-item carve-out is token
     expect(sourceViolations(css)).toEqual([])
   })
 })
+
+/**
+ * L1-PIN-HARDEN-1 FIX RUN 3 (adversarial review advc3, BLOCKER): a nested
+ * rule whose HEAD is itself a selector list (`.view-spec__table { .wrap, td
+ * { overflow-wrap: anywhere; } }`) got the parent prefixed to the WHOLE head
+ * string, so every head part after the first was emitted with no parent
+ * chain and the pin's per-part check never saw a scope-less `td`. The
+ * scanner now composes the cartesian product parentParts x headParts. All
+ * six shapes below were reproduced RED first-hand on tip 6ea3ec29 — each
+ * returned [] (probe transcript: deliverables/fix3/fix3-red-probe.txt).
+ */
+describe('L1-PIN-HARDEN-1 FIX RUN 3 — nested head-list composes under the full parent chain (advc3 blocker)', () => {
+  const headLists: Array<[string, string]> = [
+    ['H1 head list .wrap, td', '.view-spec__table { .wrap, td { overflow-wrap: anywhere; } }'],
+    ['H2 head list .wrap, th', '.view-spec__table { .wrap, th { overflow-wrap: anywhere; } }'],
+    ['H3 head list .a, .b, td', '.view-spec__table { .a, .b, td { overflow-wrap: anywhere; } }'],
+    ['H4 parent list x head list', '.other, .view-spec__table { .wrap, td { overflow-wrap: anywhere; } }'],
+    ['H5 triple-nested head list', '.view-spec__table { .wrap { .x, td { overflow-wrap: anywhere; } } }'],
+    ['H6 ambiguous-& head list', '.view-spec__table { :is(&) .x, td { overflow-wrap: anywhere; } }'],
+  ]
+
+  it('every nested head-list shape is flagged as exactly the anywhere violation', () => {
+    expect(sourceViolations(CONFORMING_FLOOR)).toEqual([])
+    for (const [label, shape] of headLists) {
+      expect({ label, violations: sourceViolations(CONFORMING_FLOOR + shape) }).toEqual({
+        label,
+        violations: [ANYWHERE_VIOLATION],
+      })
+    }
+  })
+
+  it('the first-head-part-cell control keeps flagging (pre-fix behaviour, pinned against regression)', () => {
+    // `td` is the FIRST head part, so even the buggy whole-head prefix
+    // composition emitted a scoped `.view-spec__table td` part — this shape
+    // flagged before fix3 and must keep flagging after it.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table { td, .wrap { overflow-wrap: anywhere; } }'),
+    ).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('a non-cell nested head list does NOT start flagging (composition invents no false positives)', () => {
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table { .wrap, .other { color: red; } }'),
+    ).toEqual([])
+  })
+
+  it('the .view-spec__cell-item carve-out is not an excuse for a composed head-list part (token-boundary check intact)', () => {
+    // The composed part `.view-spec__table td .view-spec__cell-item` is the
+    // exempt descendant-carrier shape: the cell token AND the true-boundary
+    // carve-out token sit in the same part, so the pin excuses it (no
+    // violation) — exactly as the flat form is excused today.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table { .view-spec__cell-item, td .view-spec__cell-item { overflow-wrap: anywhere; } }'),
+    ).toEqual([])
+    // The glued variant is NOT excused in either head-list part: the
+    // token-boundary carve-out rejects `td.view-spec__cell-item` (word char
+    // before the token's `.`), so the composed part still violates —
+    // over-flagging, the fail-closed side of the boundary.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table { td.view-spec__cell-item, td { overflow-wrap: anywhere; } }'),
+    ).toEqual([ANYWHERE_VIOLATION])
+  })
+})
