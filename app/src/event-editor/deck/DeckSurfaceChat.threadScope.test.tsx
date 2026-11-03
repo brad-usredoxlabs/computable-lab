@@ -1,6 +1,7 @@
 /**
  * L2-THREAD-SCOPED-1 FIX RUN 1 — D1 seam test (adversarial-review defect 1,
  * acceptance (5) of the SUITEA-D3 deck-scope amendment).
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * Cycle-1 verdict: `scope` existed as a useAiChat OPTION but NO production
  * caller passed it — every real request carried no scope, so one tab

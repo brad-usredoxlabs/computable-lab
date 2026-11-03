@@ -1,6 +1,7 @@
 /**
  * L2-CHAT-1 gatefix1 D1 (client leg) — the deck surface's AI context must
  * carry the SAME core fields the other chat surfaces send.
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * The tier-2 gate found every /deck chat turn crashing server-side:
  * DeckSurfaceChat's surfaceContext omitted `labwares`, `eventSummary`, and

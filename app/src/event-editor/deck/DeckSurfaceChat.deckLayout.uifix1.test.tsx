@@ -2,6 +2,7 @@
  * L2-SUITE-A-uifix1 [D1] RED — a deck_layout done does not change the deck
  * (gate: P1 "Navigate to the freeform manual deck" left the deck on
  * "Liquid Handling · Manual · Single SBS Plate"; only an honest wall showed.
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  * The SERVER leg works: `done deck_layout success=true variant=manual_freeform`
  * every drive — AgentOrchestrator.ts:2885-2920 returns
  * `{ success: true, deckLayout: { platformId, variantId } }`, a deliverable

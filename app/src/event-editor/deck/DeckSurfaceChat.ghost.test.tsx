@@ -1,6 +1,7 @@
 /**
  * L2-CHAT-1 — RED-first: the /deck route's universal chat (DeckSurfaceChat +
  * HarnessChatPane) must own the GHOST MOUNT of event-bearing proposals:
+ * retargeted from DeckSurfaceChat — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  *  - a done result carrying events + resolvedLabwares mounts DECK GHOSTS on
  *    the editor state (actions.setPreview — the same contract AiTabPanel's

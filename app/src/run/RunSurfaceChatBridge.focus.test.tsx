@@ -5,6 +5,7 @@
  * /runs/:runId chat keeps its "what are we looking at" header after LEG D
  * deleted the legacy ChatContextHeader (the run surface regressed to NO
  * header — the pane's SurfaceFocusHeader renders null without a publish).
+ * retargeted from RunSurfaceChatBridge — assertions unchanged (CHATHOST-CONSOLIDATE-1 T-3)
  *
  * The publisher is RunSurfaceChatBridge (the run page's chat registrar,
  * mounted INSIDE the page's ProtocolSelectionProvider + EventEditorProvider).
