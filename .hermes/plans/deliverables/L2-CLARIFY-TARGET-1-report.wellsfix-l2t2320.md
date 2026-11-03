@@ -119,3 +119,148 @@ Files (ruling's own two-file shape — nothing more):
   them as literal addresses only via the array form), and no shipped pattern
   fixture carries an address-literal SCALAR that the shape gate would
   mis-handle. (See lowerer/next step for the one nuance.)
+
+## l2t2320 STEP — golden (lowerer) leg MEASURED -> BLOCKED (ruling §4c, addendum E)
+
+The realizationGolden T1/T2 bar is `missing-required-argument` x2 (volumeUl +
+targetWells), NOT unknown-address — confirmed by dumping W27_CLARIFICATIONS:
+  {label:'volumeUl', reason:'missing-required-argument', action:add_material}
+  {label:'targetWells', reason:'missing-required-argument', action:add_material}
+=> the lowerer (`realizeScientistIntent.ts`) emits `add_material` with NO
+volumeUl and NO targetWells. No door change touches that (proven orthogonal
+below).
+
+I MEASURED (not assumed) whether the lowerer can emit these HONESTLY. The
+ruling says "fixture/policy feed the values" — but the shipped data does NOT:
+- The `add-lysis` step (familyFixture, the one lowering to add_material)
+  carries `materialNeeds:[{need:'lysis_solution'}]` and NO constraints (no
+  volume bound). The ONLY volume constraint is on the `transfer` step
+  (200 uL).
+- The realization fixture's only wells-unit datum is
+  `sample_count:{value:96, unit:'wells', dimension:'count'}` — a COUNT, not a
+  target ADDRESS.
+- The bound scale profile `robot-assist-plus-96` (ExecutionScaleProfileRecord)
+  carries `reagentSource.defaultSourceWells` (SOURCE side) and
+  `pipetting.maxVolumeUl` (a capability CAP) — neither is the add_material
+  target-wells address or a per-event add volume.
+- `assumedValues` DATA (config/drafting/shorthand-drafting.yaml) declares
+  add_material.volumeUl=100 uL (value+source+question) BUT
+  add_material.targetWells = QUESTION ONLY, NO VALUE ("Which wells? Name a
+  range (A2:B3) or pick wells on the deck.").
+- The realization lowerer does NOT read assumedValues (it is a chatbot/
+  shorthand surface, not a realization-surface source). Its only numeric-
+  emission path is `parameterBindings` (volume->volumeUl), which fires only
+  from a STEP CONSTRAINT — the add-lysis step has none.
+
+VERDICT: making the lowerer "emit" volumeUl + targetWells would require
+INVENTING a target-wells address (and a per-event add volume) that exist
+NOWHERE in the data — the W12 / never-fabricate class this campaign forbids,
+and the golden's own comment: "the required args are the scientist's to answer
+(chip + slot), not the pipeline's to silently invent." Per ruling §4c and
+addendum E: the golden is a SEPARATE leg; I STOP on it alone and do NOT
+re-bless it (blessing a lowerer gap into the golden would hide it). The door
+work STANDS AND SHIPS. The honest fix is the lowerer reading the assumedValues
+DATA for volumeUl AND a declared target-wells value — but the DATA has no
+target-wells value to read, so an honest fix needs a DATA/fixture decision that
+is Brad's to make (add a target-wells assumed value / a step constraint), not a
+code change I can make without fabricating a number.
+
+### BASE-PARITY PROOF (verification a)
+
+The 2 golden failures are NOT caused by my engine change. Proof:
+- Swapped the engine files to the pre-shape-gate state
+  (`git show 9374a681^:<file>`; verified `git diff c7b196ba 9374a681^` on both
+  engine files is EMPTY, i.e. the pre-fix tip's engine).
+- Ran the REVERTED (original) realizationGolden.test.ts against that BASE
+  engine: 2 failed | 4 passed (6); the 2 fails are the SAME
+  `missing-required-argument` x2 (NOT unknown-address).
+- Restored the shape-gate engine (verified `git diff HEAD` on both engine files
+  EMPTY). 
+=> The 2 golden legs fail IDENTICALLY with and without my engine change:
+   base-parity holds; the lowerer gap is independent of the door.
+
+## l2t2320 STEP — app side (Change 2) — VERIFIED COMPLETE (addendum C)
+
+The dead run had actually FINISHED the app side before it died on the cap
+(only the commit was missing). I committed it as-is (856d5210), then verified:
+- Single-request arm (renderTypedClarification, ChatLog.tsx:302-339): the chip
+  renders the DATA value from server-stamped `clarifyControl` (quantity arm
+  :328-333), the target-well slot for the wells arm (:334-338), both editable,
+  neither a silent default (slot starts UNANSWERED/empty; approve required).
+- Card arm (ChatClarificationCard.tsx:181-201): the same two surfaces mount as
+  the FIRST arms of the per-slot ternary, riding the existing `record` sink.
+- requestRendersPrompt predicate UNCHANGED (ChatLog.tsx:132-134:
+  `options.length>0 || requestHasPicker`); the bubble-suppression arm
+  (:448-454) keys on the SAME shared predicate. The declared-slot guard
+  (:318/:322 `hasDeclaredSlot = clarifyControl != null`) EXTENDS the render
+  guard additively so the single-fact (n===1) turn is answerable WITHOUT
+  touching the predicate — addendum C requirement satisfied.
+- CARD-1 pins run after the edit: ChatLog.test.tsx 27 + grouped.card1 6 =
+  33/33 GREEN (predicate + bubble-suppression arm keep working).
+- App typecheck (exactOptionalPropertyTypes ON): 10 errors at HEAD. TRUE-BASE
+  (a3863306, WIP files removed, tracked app at a3863306) = 10 errors. Error-set
+  diff base-vs-head = EMPTY (byte-identical) — ZERO NEW, none in any of the 6
+  touched files. All 10 are pre-existing trunk debt (event-editor/ingestion).
+- Server-side RED pins (the chip/slot DATA + fold + dedupe, already in the
+  tree): shorthandChat.assumedValue 6 + wellTarget 4 + sameNounDedupe 1 =
+  11/11 GREEN.
+- NOTE: `proposalRowFacts.ts` (Change 5) is present in the WIP but not yet
+  consumed by a component (no import) — it is a standalone declarative
+  formatter for the proposed-changes rows; the Change 5 row wiring is not
+  part of Change 2 (the chip) and is outside this run's finish scope. Left as
+  the dead run left it (committed, not deleted, not finished here per addendum
+  A). Flagged for the orchestrator.
+
+## l2t2320 STEP — final verification summary (per-leg evidence)
+
+### (a) dir sweep + base parity
+- `npm run test:run -w server -- src/compiler/resolution src/compiler/scientistIntent`
+  (run via npx vitest in server/): **49 files, 547 passed / 2 failed (549)**.
+  The 2 fails = realizationGolden T1/T2 ONLY (the lowerer gap, separate leg).
+- Base-parity: the 2 golden fails reproduce IDENTICALLY at the pre-shape-gate
+  engine (9374a681^ == pre-fix tip c7b196ba engine, verified empty diff),
+  `missing-required-argument` x2, NOT unknown-address. Zero new failures from
+  the door change.
+
+### (b) wells-dimension legs (named)
+- two reachability pins UNEDITED: declaredArgumentReachability 41/41 GREEN
+  (CHARACTERIZATION :166 + GHOST :376, string `targetWells: A1:H12`, pass via
+  the ENGINE change).
+- rolesSeam SPINE-7 legs: rolesSeam 20/20 + goldenRolesSeam 7/7 GREEN.
+- nounResolution unknown-address: 16/16 GREEN (bogus_role -> unknown-address).
+- golden MANIFEST unmoved by the door change: the 2 golden fails are
+  missing-required-argument (lowerer), byte-identical base vs head — the door
+  did not move the golden's manifest/events.
+- e2eStubHonesty 7/7 GREEN (string doc-echo is the honest real output).
+- pattern verbs: ProtocolIntent 5 + ProtocolIntentPatternExpanders 8 = 13/13
+  GREEN unamended (no shape-gate parity needed).
+
+### (c) typecheck
+- server `npm run typecheck`: **0 errors** (exactOptionalPropertyTypes ON).
+- app `tsc --noEmit`: 10 errors, ZERO NEW vs true-base (error-set diff empty,
+  none in the 6 touched files).
+
+### Files changed this run
+- server/src/compiler/resolution/resolutionEngine.ts (doc-door scalar arm).
+- server/src/compiler/scientistIntent/normalizeScientistIntent.ts
+  (isWellAddressLiteral + mappings loop + (b) arm DRY).
+- Reverts (4 shipped-test files to pre-edit state):
+  declaredArgumentReachability.test.ts, shorthandChat.e2eStubHonesty.test.ts,
+  app/e2e/deck-ghost-shorthand.spec.ts, realizationGolden.test.ts.
+- App WIP committed as-is (6 files, the dead run's Change 2/4/5 app side).
+- This report.
+
+### What a reviewer should attack hardest
+1. The (b)-arm DRY refactor — confirm isWellAddressLiteral is byte-behaviour-
+   identical to the old inline expandWellTokens+WELL_ADDRESS_SHAPE_RE test.
+2. The mappings-loop gate — confirm ONLY address-literal scalars on a
+   kind:'wells' 'wells'-family arg flip from wellRole to literal; symbolic
+   labels + bogus addresses still bar.
+3. The import edge resolutionEngine->normalizeScientistIntent (acyclic? used
+   only at call-time?).
+4. The golden BLOCKED verdict — confirm no honest data source for a target-
+   wells value exists (so the lowerer CANNOT emit it without fabricating).
+5. App single-request arm guard — confirm requestRendersPrompt predicate is
+   byte-unchanged and only the render guard is extended.
+
+TARGET1-WELLSFIX DONE 9374a6814cb81beeeaab7f9cc931af14b09191f9
