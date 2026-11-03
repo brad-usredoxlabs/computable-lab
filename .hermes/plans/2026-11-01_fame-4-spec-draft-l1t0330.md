@@ -1,0 +1,438 @@
+# FAME-4 SPEC DRAFT — l1t0330 (composer draft, pending orchestrator review/promotion)
+
+Item: FAME-4 "Area-% compute: qualified assignments, declared denominator, unresolved area
+retained" — lane 1, trunk cl/integration-1.
+Composer worked at trunk tips b787c20e -> 5444e69c -> 2b48b30a (docs merges land often — re-verify
+tip at promotion). ALL file:line cites below were read first-hand in /mnt/vast/home/brad/git/cl-
+integration-1 this session; scout output was screening only, every load-bearing claim re-read.
+
+## DEPENDENCY GATE (stated plainly, per the brief)
+DISPATCH WAITS UNTIL BOTH FAME-2 AND FAME-3 ARE MERGED. At composition start both were unmerged
+(git branch --contains 12280925 -> only wt/fame-2-lane1-l1t0200; FAME-3 in-progress). NOTE: trunk
+moved MID-COMPOSITION — the 225TH handoff records FAME-2 MERGED (b654a8d6, tip 2b48b30a) and the
+FAME-3 coder live; FAME-3's merge remains the open gate. The merged shape this spec assumes MUST
+be re-verified against trunk tip at promotion, specifically:
+1. app/src/analysis/ViewRenderer.tsx TableView accepts {columns,rows} — ALREADY MERGED: verified
+   in trunk first-hand at 2b48b30a (TableView :74-100 reads value.rows/value.columns); re-confirm
+   the shape still matches at promotion — the analyte_summary view renders through it.
+2. schema/lab/gc-method.schema.yaml compound_assignments item props: assignment_state /
+   provenance / reporting_basis_ref (FAME-3 W3) — today `grep assignment_state schema/ server/src
+   app/src config/` = 0 hits (composer-verified at 5444e69c); the enum terms and their exact
+   spelling are FAME-3's declaration, and this spec references them, never re-declares.
+3. The FAME-3 working gc-method record's id + its verified/provisional assignment entries (record
+   ids minted only at FAME-3 merge/bench time — the coder reads it live at start; not an OQ).
+4. The frozen FAME-2 artifacts (ANREV-000013, ANR-000033, AOUT-000041 peak_table 31 rows;
+   ANR-000035, AOUT-000044 peak_table 2 rows) still present and unchanged (append-only; composer
+   re-read ANR-000033 LIVE: succeeded, peaks_detected=31, overlap_shared_baseline_pairs=3).
+5. config/drafting/record-edit-guards.yaml + the OPT-A edit arm (FAME-3 W6) landed — affects only
+   WHERE assignments were authored, not FAME-4's consumption (which rides the transcription door).
+6. quantification.py / peak_integration.py line numbers cited below (a merged fix cycle could
+   shift them; re-grep the named symbols, not the lines).
+
+## 1. Goal
+One sentence: mint an immutable successor revision (as a RECORD via the API, parent ANREV-000013)
+whose Python entry script consumes frozen run parameters transcribed 1:1 from the method's
+compound_assignments, matches them to a consumed FAME-2 peak_table artifact by declared RT windows,
+and publishes peak-level assignment results PLUS an analyte-summary artifact — area-% over the
+ELIGIBLE set with the denominator value, contributing peak refs, and excluded/unresolved area all
+retained IN the artifact, coeluting peaks never split, and a zero/compromised denominator published
+as an explicit null-with-reason non-result — with ZERO TypeScript logic (R3) and zero invented
+vocabulary.
+
+## 2. Code/data boundary (declarative-first)
+CLAUDE.md:147 — "Code never makes policy decisions — it follows the rules declared in data"
+(composer-verified at /mnt/vast/home/brad/git/computable-lab/CLAUDE.md:147). Campaign rules
+R1-R7 in ~/.hermes/specs/intake/2026-10-31_fame-quantitation-chain/draft-campaign-list.md:20-42
+(verified): R1 relative area-% only, no response factors/calibration (quantification.py is NOT
+this item); R3 no peak math / RT windows / analyte names / thresholds in TypeScript; R4
+percentages must show denominator + excluded/unresolved area, never imply "all fatty acids".
+- The compute rides the REVISION RECORD's entryScript (Python, data) using only the shipped SDK
+  context API — the task's own words: "Pure revision-side compute calling shipped SDK output
+  discipline". Precedents verified first-hand: ANREV-000007's entryScript performs arithmetic in
+  the script itself (ANREV-000007__*.yaml:9-19, computes area_percent); ANREV-000011/-000012
+  scripts do provenance-echo logic in-script (ANREV-000012 entryScript :40-60). NO new SDK module
+  is the default (OQ-1 names the alternative). ZERO TypeScript change expected (bait #1): the
+  summary renders through FAME-2's already-fixed TableView via ctx.view DATA.
+- Every policy input is DECLARED parameterSchema DATA: the assignment list (transcribed from the
+  method record), eligible_states (opaque string array — §5), overlap/saturation exclusion
+  switches, RT windows. All counts, RT values, compound names, areas are record payloads + frozen
+  artifact data. Sanity bands (12-22 / 8-16) are DATA-only (AS-L1T223-1: real runs gave 31 and 2;
+  the compute MUST work on whatever the frozen peak sets are — never hardcode expected peak/
+  analyte counts as logic; OQ-3).
+- Records land in the lane data repo via the API at :3092 — never hand-written YAML, never the
+  code repo (FAME-2 spec §2 doctrine, unchanged).
+
+## 3. Grounding — what exists TODAY vs what arrives with FAME-2/FAME-3
+EXISTS ON TRUNK (composer-verified at 5444e69c / live :3092):
+- Frozen FAME-2 chain LIVE: ANR-000033 (curl, x-user-id: USR-LOCAL-ADMIN): succeeded; artifacts
+  [peak_table, signal_plus_baseline, effective_parameters]; views [table, signal, chromatogram];
+  peaks_detected=31, overlap_shared_baseline_pairs=3. AOUT-000041__peak_table.yaml = dataKind
+  table, inlineValue {columns:9, rows:31} (inlineValue starts :78); 4 rows carry
+  OVERLAP_SHARED_BASELINE (:142/:154/:166/:178); 3 rows carry area_pa_min: null +
+  UNDEFINED_SIBLING_AREA_NULL. COUNTRYSIDE side: AOUT-000044 (2 rows).
+- Peak-table column contract (9 cols): peak, rt_min, height_pa, area_pa_min, width_min,
+  area_percent, symmetry, saturated, flags (peak_integration.py PEAK_TABLE_COLUMNS :100,
+  assembly :1027-1038; area_percent units "% of reported total" :112).
+- Cross-run artifact-as-input DOOR exists: analysisRunner.ts provisionInputs accepts inputs of
+  type analysis-output-artifact (DREF or inlineValue-as-inline data, :171-199, inline :193-195)
+  and data-reference (:200+); routes POST /api/analysis-runs + /:id/execute (routes.ts:1282-1284);
+  small artifacts persist inlineValue (analysisRunner.ts:409-433; AOUT-000041 proves it).
+- ctx SDK API (ctx.py, first-hand): parameters (:237-239), input() -> DatasetHandle (:241+),
+  publish(name,data,kind=,units=,schema=) (:264-275), metric (:316), view(...) (:326-344),
+  log (:345), manifest (:355). N artifacts per revision fully supported (runner persists each +
+  views, dedupe artifact+title :449-456); ANREV-000013 already publishes 3 artifacts/3 views —
+  peak_table + analyte_summary needs ZERO server change.
+- Views-as-data = FAME-2's mechanism verbatim: renderer enum CLOSED, contains table
+  (view-spec.schema.yaml enum block ~:29-45); VSPECs persisted at analysisRunner.ts:449-480; live
+  /analysis reads the manifest. NO bespoke UI; FAME-6 owns per-analyte report views later.
+ARRIVES WITH FAME-2: NOW MERGED (225TH tick, b654a8d6) — TableView {columns,rows} verified in
+trunk first-hand at 2b48b30a (:74-100); the ANREV-000013/ANR/VSPEC records were already frozen
+DATA on the lane.
+ARRIVES WITH FAME-3 (in flight, UNMERGED): compound_assignments gains assignment_state +
+provenance + reporting_basis_ref (schema change, W3); the working method record with one VERIFIED
+entry + provisional seed map; OPT-A edit-record door + config/drafting/record-edit-guards.yaml
+(the "frozen method assignments" this compute consumes are the payload of THAT record, frozen
+into run parameters by transcription — §4). Composer-verified today: assignment_state exists
+NOWHERE (0 hits repo-wide); gc-method.schema.yaml:171-190 has only label/compound_ref/
+expected_rt_min/rt_window_min/response_factor, additionalProperties:false (:175).
+
+## 4. Grounding — the method->compute door (RATIFIED, verified)
+- OQ-3 of FAME-3 was RATIFIED option (a): transcription into frozen run parameters
+  (.hermes/plans/2026-11-01_fame-3-spec.md §18 OQ-3, lines 435-437). The repo's own words:
+  "Parameters transcribed from a gc-method record analysis section 1:1 per the spec §A2 mapping"
+  — analysisGcIntegration.test.ts:160 (composer-verified line).
+- The transcription echo is real in shipped compute: quantification.py publishes compound_ref as a
+  column "declared target ref echoed verbatim; null when undeclared or unmatched" (:821 columns,
+  :842 schema text — composer-verified), and its targets[] shape
+  {compound_label, rt_target_min, rt_window_min} + loud PARAM_MISSING on absence
+  (quantification.py:473-494 — composer-verified, matching the brief's citation).
+- FAME-4's input door is the SAME door: a run whose frozen parameters carry an `assignments` array
+  — each entry {label, compound_ref, expected_rt_min, rt_window_min, assignment_state} transcribed
+  1:1 from the merged method record's compound_assignments. That is SUFFICIENT for eligibility
+  matching: the entry script needs no method record ref (none exists on the analysis chain —
+  analysis-run.schema.yaml links only revisionRef (:30) + optional measurementContextRef (:148);
+  status enum [queued, running, succeeded, failed, cancelled] :39-41). The frozen run IS the
+  immutable snapshot of "the method at compute time" (analysis-run.schema.yaml:7-8: "A run is
+  immutable once created — inputs + parameters are frozen at submit time").
+
+## 5. Grounding — eligibility, denominator, and the layer that owns the arithmetic (DATA + cited)
+- WHERE the rule lives: parameterSchema DATA on the revision record (the UI renders it without
+  executing Python — analysis-revision.schema.yaml parameterSchema comment :55-58; working
+  template ANREV-000012 parameterSchema :68-121 with additionalProperties:false, composer read).
+  Declared parameters (names to be finalized by the coder, all DATA on the record):
+  * assignments: array of {label, compound_ref (ref shape), expected_rt_min >= 0,
+    rt_window_min > 0, assignment_state (string)} — transcribed 1:1;
+  * eligible_states: array of strings — OPAQUE, NO enum re-declaration. The assignment_state
+    vocabulary belongs to FAME-3's schema declaration (bait #3); the entry script compares the
+    state string IN each transcribed entry against eligible_states by equality. A run that
+    declares eligible_states=[verified-term] vs one that includes the provisional term is the
+    "provisional identity" leg's honest knob.
+  * overlap/saturation exclusion switches (booleans, declared): whether peaks flagged
+    OVERLAP_SHARED_BASELINE or saturated join the eligible denominator (default: excluded —
+    §6 rationale); how rows with area_pa_min null are handled (MUST be excluded + counted as
+    unresolved, never zero-filled).
+  * class-membership rule: DEFAULT = an optional declared list of admitted compound_ref ids
+    (or namespaces) on the parameterSchema — membership as pure declared data. The richer reading
+    (dereference fame-local.yaml meta.species ffa|methyl-ester via GET
+    /api/ontology-terms/lookup, routes.ts:1190) would need the entry script to reach the API —
+    NOT assumed available; OQ-2.
+- ELIGIBLE SET per the task = peaks with verified assignments = peak_table rows that uniquely
+  match (declared inclusive RT window, expected_rt_min ± rt_window_min) an assignment entry whose
+  assignment_state is in the declared eligible_states AND pass the declared exclusion switches.
+  Match semantics ride the shipped declared vocabulary (quantification.py precedent, composer
+  verified :635-642 region): ZERO in-window rows => target simply unmatched (named warning,
+  "loudness is data", code TARGET_UNMATCHED :899-904); MORE THAN ONE in-window row for one target
+  => loud AMBIGUOUS_PEAK_MATCH, "no nearest-RT rescue" (:635-642); one row claimed by two targets
+  => declared declared-order precedence + named TARGET_WINDOW_OVERLAP warning, quantified ONCE,
+  "never a silent overwrite" (:838 schema text).
+- DENOMINATOR (R4): the artifact payload MUST carry, in its own fields:
+  denominator = math.fsum of the eligible rows' area_pa_min; contributing_peak_refs = the 1-based
+  peak indices (+ their assignment labels/refs); excluded/unresolved area totals = declared sums
+  with named bucket counts (unmatched peaks, provisional-only, overlap-excluded,
+  saturated-excluded, null-area rows); every analyte row's compound_ref echoed verbatim.
+  Denominator over the whole table already exists as shipped discipline: peak_integration.py
+  :1007-1021 computes total via math.fsum and nulls area_percent with a reason CODE — the exact
+  honest pattern FAME-4 reuses at the eligible-set level.
+- LAYER OWNERSHIP (cited, not assumed): arithmetic lives in PYTHON, never TS. Evidence:
+  (a) R3 + CLAUDE.md:72/147 (TS is schema-driven orchestration; "Business logic lives in
+  declarative YAML... Code never makes policy decisions"); (b) every shipped compute is an SDK
+  module the runner spawns — the runner runs `python3 -m computable_lab_analysis run
+  <entry.py>` with PYTHONPATH=<root>/server/python-executor-service/src (analysisRunner.ts:287,
+  analysisSdkDir :55-79, composer-verified); the runner/server does NO arithmetic — it persists
+  whatever the manifest carries; (c) within Python, the DEFAULT for THIS item is the revision
+  record's entryScript (task words "pure revision-side compute" + ANREV-000007 in-script
+  arithmetic precedent), with the shipped ctx.publish output discipline (publish + metric + view +
+  log — ctx.py:264-355). The alternative (a promoted analyte_summary.py SDK module with unittest
+  discipline) is OQ-1 — an orchestrator/architect call, NOT a coder decision.
+  If OQ-1 ratifies the module option, the files-in-scope change to
+  server/python-executor-service/src/computable_lab_analysis/analyte_summary.py +
+  tests/test_analyte_summary.py and this spec's W1 grows a RED-first unittest section.
+
+## 6. Grounding — coelution/overlap: what the data exposes TODAY
+- The peak table's ONLY overlap observable is the flag OVERLAP_SHARED_BASELINE on BOTH members of
+  a pair: peak_integration.py FLAG_OVERLAP_SHARED_BASELINE :96, pairing loop :1001-1010 ("an
+  envelope is not N compounds, and we never pretend the split is clean" — :995 region), metric
+  overlap_shared_baseline_pairs (:1085 region). LIVE proof the leg is exercisable on real bytes:
+  AOUT-000041 carries the flag on 4 rows (3 pairs, from ANR-000033's manifest).
+- "Never arbitrarily split" = observable data discipline: the entry script NEVER apportions an
+  overlapped region between compounds. The declared options are (i) exclude flagged rows from the
+  denominator (their whole area lands in the excluded/unresolved bucket) or (ii) keep an overlapped
+  row's WHOLE area as one analyte's row when uniquely matched — the shipped AMBIGUOUS_PEAK_MATCH /
+  TARGET_WINDOW_OVERLAP semantics (§5) already forbid silent splitting on the target side. The
+  parameterSchema switch declares which policy runs; the TS layer never sees the choice.
+- saturated (bool column) + null area_pa_min (3 rows on AOUT-000041, reason flag
+  UNDEFINED_SIBLING_AREA_NULL) are the other compromised-data observables the exclusion
+  switches must handle — nulls are retained as unresolved area, never dropped, never zero-filled.
+
+## 7. Grounding — zero/compromised denominator: the explicit non-result precedent
+- SHIPPED PRECEDENT, composer-verified: peak_integration.py :1007-1021 — when ANY accepted peak's
+  area is null (REASON_SIBLING_AREA_NULL :92) or the table total is zero (REASON_ZERO_TOTAL :93),
+  EVERY row's area_percent is null + the reason code rides the row flags. The result is a
+  published artifact that SAYS it is undefined — not an absent artifact, not a fabricated
+  fraction, not a crash. quantification.py carries the same class at run level (declared failure
+  codes MODEL_PAYLOAD_INVALID :67, INPUT_NOT_PROMOTED :75 — "the loudness is data", A4.3 :78).
+- FAME-4's non-result = the SAME pattern at the analyte-summary level: denominator == 0, or any
+  eligible row with null/compromised area, or every assignment provisional (eligible set empty)
+  => publish the analyte_summary artifact anyway with denominator: null + named reason code + all
+  assignment rows present with area_percent: null + excluded/unresolved buckets filled.
+  Two REAL zero-denominator doors without invented fixtures: (a) COUNTRYSIDE's frozen AOUT-000044
+  (2 rows, rt 4.27/4.52) with assignments whose windows match nothing; (b) eligible_states
+  excluding every present state => eligible set empty. (eligible_states=[] itself is rejected by
+  parameterSchema DATA, minItems:1 — the empty set is expressed by states/windows.)
+  VOCABULARY DISCIPLINE (bait #4): the reason codes are module-style DECLARED FAILURE CODES in the
+  REASON_*/CODE_* Python precedent (peak_integration.py:92-93, quantification.py:67-76), e.g.
+  UNDEFINED_ZERO_ELIGIBLE_TOTAL — they are NOT controlled-ontology enums and MUST NOT borrow
+  FAME-5's comparison outcome vocabulary (comparison-only|within-tolerance|outside-tolerance|
+  not-assessable, campaign R2, which belongs to the reference-CHECK entity, FAME-5,
+  task-list.md:10802+).
+
+## 8. Grounding — the two reference files + re-Analyze door
+- Paths exactly as FAME-2 ratified/reported (fame-2-report-l1t0200.md §5 + spec OQ-2
+  ratification): machine1/RES35077-5.D/FID1A.CH = DREF-000097 (contentHash 18ffea68b6...== disk),
+  machine1/20201023-COUNTRYSIDE-BUTTER.D/FID1A.CH = DREF-000164 (ab3c205c...== disk), device
+  mountPath /mnt/vast/gc-fid.
+- Frozen peak sets consumed: ANR-000033's AOUT-000041 (31 rows, 3 overlap pairs, 3 null-area rows
+  — exercises EVERY exclusion bucket) and ANR-000035's AOUT-000044 (2 rows — near-empty /
+  zero-denominator side). WEGMANS + RES35077-4.D stay honest-failure fixtures, never inputs (R7).
+- Re-Analyze door = the FAME-2 flow verbatim: POST /api/analysis-runs {revisionRef,
+  inputs:{peak_table:{kind:record,type:analysis-output-artifact,id:AOUT-...}},
+  parameters:{transcribed...}} then POST /:id/execute (routes.ts:1282-1284); each change is a
+  fresh immutable run freezing its parameters (params_digest = freeze witness; FAME-2 report §8
+  proved both directions).
+
+## 9. Work items (in order; default = ZERO product-code diff — records + receipts only)
+W1. Fresh baselines at claim (section 12 commands; tsc baselines DRIFT — composer measured
+    app tsc = 21 "error TS" lines at 5444e69c vs the 12 FAME-2 recorded at its claim; capture
+    fresh, gate = zero NEW) + capture pristine trunk SHA + re-run section 11 First Check and the
+    DEPENDENCY GATE re-verification list above. If FAME-2/FAME-3 are not both merged, STOP.
+W2. RED-first proof of the entry-script compute BEFORE minting anything: drive the candidate
+    entry script locally via the shipped CLI `python3 -m computable_lab_analysis run <entry.py>
+    --inputs <json> --parameters <json>` (__main__.py:1-30, composer-verified) against a small
+    synthetic inline peak_table fixture covering the five receipt legs (unique match, unmatched
+    peak, provisional-only state, overlap flag, zero denominator). Save raw outputs in the
+    report. (This is the honest test surface for revision-side compute; if OQ-1 ratifies the SDK
+    module instead, this leg becomes RED-first unittests.test_analyte_summary.)
+W3. Author the successor revision via POST /api/analysis-revisions: parentRevisionRef ->
+    ANREV-000013; inputs [{name: peak_table, dataKind: table, required}] ('table' is an existing
+    enum term, analysis-revision.schema.yaml inputs.dataKind enum); entryScript = pure
+    consumption (read ctx.input('peak_table') payload DIRECTLY via the DatasetHandle .inline /
+    file_bytes seam — DO NOT use read_rows() on an inline artifact: DatasetHandle.read_rows
+    returns [] for a dict inlineValue (ctx.py:64-72, composer-verified trap — inlineValue is
+    {columns, rows}, not a list); eligibility matching per §5; publish peak-level
+    `assignment_results` table + `analyte_summary` table per §5 payload contract +
+    effective_parameters echo (parameters + params_digest + consumed artifact id) + metrics
+    (eligible_peak_count, denominator_pa_min or null, excluded_peak_count, unresolved_area_pa_min,
+    params_digest) + views assignment_results_view + analyte_summary_view renderer 'table'.
+    parameterSchema per §5 (additionalProperties:false; NO peak-count/RT/compound literals;
+    assignments minItems + entry required fields declared; eligible_states items type:string,
+    NO enum). engineRef ENG-L1G-6a298b; requiredCapabilities — compute reads a frozen table,
+    detects nothing: DEFAULT [] / omit (ANREV-000007 precedent); do NOT re-require peak_detection
+    (bait #2). sdkVersion 0.4.0.
+W4. Runs on the two reference files (DATA, :3092 + :5192 re-Analyze round trip):
+    (a) RES35077 leg — inputs.peak_table -> AOUT-000041; assignments transcribed 1:1 from the
+    merged method record (verified + a provisional subset), RT values READ FROM THE FROZEN
+    ARTIFACT (receipt-quoted, never invented); eligible_states = [FAME-3's verified term]; expect
+    per-row results + analyte_summary with denominator + contributing peak refs + every
+    overlap/saturated/null row landing in a NAMED excluded bucket with its area accounted.
+    (b) COUNTRYSIDE leg — AOUT-000044 with the same assignments => mostly unmatched (2 peaks at
+    rt 4.27/4.52 vs a standard's map) — the unmatched + small-denominator leg on real bytes.
+    (c) Zero/near-zero denominator leg — AOUT-000044 with windows that match nothing OR
+    eligible_states excluding every present state => artifact publishes denominator: null + named
+    reason code + NO fabricated percentages.
+    (d) Provisional-identity leg — same input, eligible_states including the provisional term =>
+    summary changes (freeze witness: distinct params_digest), provisional analytes visible per-row,
+    NOT in (a)'s verified-only denominator.
+    Report ACTUALS everywhere; never assert expected peak counts (AS-L1T223-1: 31/2 are what the
+    frozen bytes carry; the compute must be count-agnostic).
+W5. Independent recomputation proof (task's verified-by): from the published AOUT peak_table
+    areas + the run's frozen parameters ALONE, recompute the eligible denominator and each
+    area_percent in a throwaway python calc (receipt, not product code) and assert byte-equality
+    with the published analyte_summary within a stated tolerance; also assert the retained-area
+    identity: denominator + every excluded/unresolved bucket == fsum of ALL peak_table areas
+    (nothing vanishes). Do this for BOTH reference files.
+W6. Views/render leg: the persisted VSPECs + live /analysis render of analyte_summary through the
+    (merged) TableView {columns,rows} path; chromatogram markers unchanged; name which surface the
+    screenshots show (bait #7).
+W7. ROUND-TRIP-GATE-1 receipts: per changed surface (revision create body, each run create/execute
+    body, re-Analyze eligibility-change pair, rendered summary) request body + rendered pair under
+    ~/.hermes/cl/receipts/FAME-4/<ts>/; zero /api/ai/** interception. Browser gate on the summary
+    render is the orchestrator's (cl-browser-reviewer).
+
+## 10. Explicitly out of scope
+- FAME-2's frozen chain and FAME-3's records/schema/UI/editor/chat surfaces: do not touch (if git
+  shows their files changed under you, rebase-free discipline: do not touch).
+- FAME-5: Restek 3 mg/mL / palmitate-6% reference CHECK, outcome vocabulary
+  comparison-only|within-tolerance|outside-tolerance|not-assessable, tolerance param, reusable
+  standard-summary for cross-run binding (task-list.md:10802+). FAME-4 publishes NO expected-vs-
+  observed comparison and borrows NO FAME-5 vocabulary (bait #4). R2: FID area-% != mass-% — the
+  summary's schema text carries an honesty sentence in AREA_PERCENT_HONESTY's style
+  (quantification.py:86-90): area-% over the DECLARED ELIGIBLE SET, not "all fatty acids" (R4).
+- FAME-6+: per-analyte report views, renderer-enum extension, bespoke UI (artifact + minimal
+  table views only here).
+- Calibration / response factors / ISTD / absolute concentration (R1; quantification.py is NOT a
+  dependency — untouched, its semantics cited as pattern only).
+- No new SDK module, server change, or schema/lint/UI YAML change (assignment_state is FAME-3's
+  diff; ZERO schema-repo files here — the YAML-reload trap has no door, bait #2); no new
+  capability/renderer/ontology terms; no new record kind (CMP-* does not exist — FAME-3 §5 +
+  §18 OQ-2 ratified; the verified-by "CMP-*/ontology ref" is satisfied by FAME-LOCAL refs,
+  bait #3); no analysis-run schema edits (no method-ref field).
+- No promotion provisional->verified (bench work, BRAD-DATA). No task-list edits, no merges, no
+  :3092/:5192 restarts. Genuine platform gap mid-flight -> STOP that leg, requires-rescope.
+
+## 11. Acceptance criteria (verbatim from the task block) + standing gates
+VERIFIED BY (verbatim):
+  Receipt-provable legs: unique match, unmatched peak, provisional identity, overlap, zero
+  denominator; independent recomputation from published areas matches the artifact; every analyte
+  a CMP-*/ontology ref. Runs on the two reference files.
+(Read honestly per §3/FAME-3 §18-OQ-2: "CMP-*" resolves to the FAME-LOCAL ontology refs — the
+only governed compound identity that exists; the spec does not fake a CMP- record.)
+Standing gates: fresh baselines at claim, zero NEW failures/errors (app-suite fail-file-set comm
+empty; tsc per-file comm zero new); adversarial review gate; ROUND-TRIP-GATE-1 (request body +
+rendered pair per changed surface, zero /api/ai/** interception, visible-DOM alone is not
+evidence); browser gate (orch, cl-browser-reviewer, VERDICT accept) on the summary surface; NO new
+vocabulary (assignment-state terms referenced, never re-declared; reason codes follow the
+REASON_*/CODE_* precedent); R3 (zero TS logic — an empty TS diff is the expected outcome), R4
+(denominator + contributing refs + excluded/unresolved retained in the artifact), R7 (lane 1,
+two reference files, honest-failure fixtures untouched); records via API read-and-create only
+(PUT only on the item's OWN new records); :3001/:5174 untouched; NEVER pkill; git -c
+core.fileMode=false; node_modules symlink never committed through.
+
+## 12. First targeted check (run before anything else; early-proves the approach)
+The whole item stands or falls on ONE door: a fresh run can consume a frozen peak_table artifact
+as an input. At :3092 (200-verified by the composer this session):
+  curl -s -H 'x-user-id: USR-LOCAL-ADMIN' http://localhost:3092/api/records/AOUT-000041 | python3 -c "import sys,json;p=json.load(sys.stdin)['record']['payload'];iv=p['inlineValue'];print(p['dataKind'],p['runRef']['id'],len(iv['rows']),len(iv['columns']),sum(1 for r in iv['rows'] if 'OVERLAP_SHARED_BASELINE' in r['flags']),sum(1 for r in iv['rows'] if r['area_pa_min'] is None))"
+Expected (composer ran the equivalent first-hand): table, ANR-000033, 31, 9, 4, 3 — the frozen
+input exists inline with the exclusion-bucket raw material. Then pair it with the W2 local CLI dry
+run (section 9) as the true early check of the compute itself. If AOUT-000041 is absent or
+non-inline, STOP and report — the frozen-artifact premise broke.
+Companion health check (also early): ANR-000033 manifest re-GET (peaks_detected=31,
+overlap_shared_baseline_pairs=3 — composer-verified LIVE this session).
+
+## 13. Verification commands (expected outputs)
+- Python suites (untouched by the default diff — regression fence):
+  cd server/python-executor-service && python -m unittest tests.test_peak_integration
+  tests.test_quantification -> composer MEASURED at 5444e69c: "Ran 65 tests ... OK (skipped=1)".
+  (tests.test_integra_runner has known pre-existing environment errors — do not "fix"; compare
+  against a fresh pristine baseline.)
+- Local compute dry run (W2): per leg, python3 -m computable_lab_analysis run /tmp/fame4-entry.py
+  --inputs <f.json> --parameters <p.json> -> exit 0, manifest carries analyte_summary + named
+  metrics; the zero-denominator leg shows denominator null + the named reason code (raw filed).
+- Server vitest: npm run test:run -w server -- src/analysis -> fresh baseline at claim, zero new
+  failing files. server tsc has 25 pre-existing error lines (FAME-2 §2) — per-file comm only.
+- App: npm run test -w app -> gate = fail-FILE-SET comm empty vs fresh baseline (trunk debt is
+  large and drifts; FAME-2 report §2 is the method). Any unexpected TS file change is RED-first.
+- Typecheck: per workspace -> fresh-baseline minus zero new (composer measured app tsc 21 error-TS
+  lines at 5444e69c; do NOT claim exit-0).
+- Records proof: GET the new ANREV -> parentRevisionRef.id == ANREV-000013,
+  parameterSchema.properties.assignments present, additionalProperties:false, NO peak-count
+  literal anywhere; GET each new run -> succeeded (or the named non-result leg) + distinct
+  params_digest per parameter set + predecessor runs re-GET byte-identical (append-only).
+- Artifact proof: GET <AOUT-analyte_summary> -> payload fields exactly per §5 (denominator +
+  contributing_peak_refs + excluded buckets + honesty sentence in schema); every compound_ref == a
+  term id present in schema/registry/ontology-terms/fame-local.yaml (exactly 6 terms, no
+  palmitate — FAME-3 §3) with kind:ontology; zero rows with kind:record/type:compound.
+- Lane hygiene: as standing gates; records API-only; never the code repo.
+
+## 14. Worker contract + file ownership
+- Branch: wt/fame-4-lane1-<ts> off cl/integration-1 (branch point = trunk tip AT DISPATCH, which
+  MUST include both FAME-2 and FAME-3 merges — re-verify, do not trust this draft's SHAs).
+- Deliverable report (unique path): <ORCH-FILL: /home/brad/.hermes/cl/lanes/1/fame-4-report-l1t<ts>.md>
+  + receipts ~/.hermes/cl/receipts/FAME-4/<ts>/.
+- Files OWNED: DEFAULT diff = ZERO code files. Everything is lane-data records via API (the
+  successor ANREV, the runs, the VSPECs the runner persists) + the report/receipts. If OQ-1
+  ratifies the SDK-module option, ownership EXTENDS to server/python-executor-service/src/
+  computable_lab_analysis/analyte_summary.py + tests/test_analyte_summary.py ONLY (nothing else —
+  no peak_integration/quantification edits, no ctx.py edits). If any leg proves a TS/real gap:
+  STOP, requires-rescope, do not fork the platform.
+- Records discipline: READ-and-CREATE against :3092 (x-user-id: USR-LOCAL-ADMIN for REST reads of
+  private-owner records; analysis routes are ACL-free — FAME-2 report §4). Mark in-progress on
+  claim; NEVER mark done. Final marker: `FAME-4 DONE <full-sha>` / `FAME-4 BLOCKED <one-line>`.
+
+## 15. Reviewer bait (expect these; pre-empt in diff/report)
+1. exactOptionalPropertyTypes: the DEFAULT diff has zero TS sites; if any sneaks in (e.g. a
+   renderer tweak), every optional field is an explicit conditional spread, never undefined-
+   assignment (FAME-2 C1 discipline). app/server tsc per-file comm is the mechanical witness.
+2. YAML-reload trap: this spec declares ZERO schema/lint/ui YAML edits — the parameterSchema rides
+   the revision RECORD (API-created, no reload). Any report claiming a gc-method.schema.yaml /
+   view-spec/schema edit here is a scope break (assignment_state was FAME-3's, already merged +
+   restarted). Same for requiredCapabilities: this revision should NOT claim peak_detection (it
+   detects nothing; ANREV-000007 precedent publishes with none) — requiring it would be a
+   capability lie, not a virtue.
+3. Vocabulary: assignment_state strings in parameters MUST be exactly FAME-3's merged declared
+   terms (grep the merged schema at dispatch; this spec deliberately never writes them); "unassigned"/
+   "pending"/"tentative"/"candidate" anywhere = invented vocabulary, reject. Every compound_ref is
+   an existing FAME-LOCAL term id (kind:ontology); a fabricated CMP-* record or a
+   {kind:record,type:compound} ref = the dangling-ref class (FAME-3 §5), reject. Reason codes are
+   REASON_*/CODE_*-style declared codes, NOT ontology enums.
+4. FAME-5 boundary: no 3mg/mL / 6% / expected-vs-observed / not-assessable vocabulary in FAME-4
+   payloads — that's the reference-check entity (grep the artifact payload for those strings).
+5. Hardcode boundary: greps empty on the entry-script record + any diff: compound names
+   ('hexanoate','octanoate','decanoate','palmitate','FAME-LOCAL'), file names ('RES35077',
+   'COUNTRYSIDE'), RT/area/threshold literals (15.673, 31, 2, '12'/'22'/'8'/'16' bands), the words
+   'verified'/'provisional' inside TS or inside the ENTRY SCRIPT as string branches (the script
+   compares assignment_state against the DECLARED eligible_states parameter, never against baked
+   state strings — bait #5b: the script's only allowed string comparisons are parameter-declared).
+   Peak/analyte COUNTS appear nowhere as logic (AS-L1T223-1: bands are DATA-only; the compute is
+   count-agnostic by construction — 31-row and 2-row tables run the same code path).
+6. The read_rows trap: the entry script MUST read the inline artifact payload directly (§9 W3 —
+   ctx.py:65-72 returns [] for dict inline). A reviewer should replay the W2 CLI dry run; a report
+   claiming "0 rows consumed, empty summary, working as intended" on a 31-row input is THAT bug,
+   not a pass.
+7. Denominator honesty: reviewer re-GETs the summary and checks (a) denominator value present,
+   (b) contributing refs resolve to real peak indices of the consumed AOUT, (c) bucket identity
+   denominator+excluded == fsum(all areas) (W5), (d) excluded rows NAMED not counted-away, (e)
+   percent column sums to ~100 over the ELIGIBLE set only — and the schema honesty sentence says
+   declared-eligible-set, not "all fatty acids" (R4). An artifact that quietly sums to 100 over
+   ALL peaks is the exact dishonesty the item exists to prevent.
+8. Overlap leg quality: AOUT-000041 HAS 3 overlap pairs live — a report whose overlap leg is
+   "fixture synthetic" on the reference file skipped real evidence; demand the real rows named by
+   peak index with their flags echoed.
+9. Zero-denominator quality: the non-result must be a PUBLISHED artifact (AOUT id, view, metrics)
+   with null + reason code — a FAILED run with no artifact is over-strict (the shipped precedent
+   publishes), and a succeeded run printing 0.000% percentages is fabrication, reject.
+10. Append-only: each eligibility/state/policy change = new run with distinct params_digest;
+   earlier runs byte-identical on re-GET (FAME-2 §8 method); no ANREV/ANR/AOUT mutation anywhere.
+
+## 16. Open questions (composer could not resolve locally — do not guess at dispatch)
+OQ-1 (compute placement — load-bearing for the diff shape): entryScript-side compute (default,
+  from the task's own "pure revision-side compute" + ANREV-000007 in-script arithmetic precedent)
+  vs a promoted analyte_summary.py SDK module (unittest discipline, reusable by FAME-5's
+  standard-summary artifact). Checked: ANREV-000007/-000011/-000012 entryScript contents, ctx.py
+  API surface, ANREV-000013 publishes fine with 3 artifacts/3 views, scout screening confirmed no
+  fixture/lane entry script is the shipped-math home. Orchestrator/architect ruling (testability
+  vs data-purity); W2/W3 rewrite for the module option is one paragraph — ratify one.
+OQ-2 ("any declared class-membership rule" beyond FAME-3's per-assignment states): DEFAULT = an
+  optional admitted-compound_ref/namespace list parameter (§5). The richer door (dereference
+  fame-local.yaml meta.species ffa|methyl-ester via GET /api/ontology-terms/lookup, routes.ts:1190)
+  needs the entry script to reach the API from inside the executor — NO precedent of a lane entry
+  script calling HTTP exists (d_reader/peak_integration/quantification read only ctx inputs).
+  Checked: fame-local.yaml meta shape (FAME-3 §3), ctx.py input API, shipped modules' I/O. If
+  ontology-dereferenced membership is wanted, name the door; do not assume network from the
+  executor.
+OQ-3 (AS-L1T223-1 band debt interaction): NOT a logic blocker — FAME-4's compute is count-agnostic
+  by design (§5, bait #5). It DOES block interpretation: bands (12-22/8-16) vs actual 31/2 remain
+  unrouted; if defaults are re-ratified and integrations RE-RUN, the frozen AOUT ids consumed here
+  (000041/000044) stay valid (append-only) but new "reference" artifacts may appear — DEPENDENCY
+  GATE item 4's promotion-time re-check covers it. Checked: FAME-2 report §14(a), 223RD addendum
+  (reviewer endorsed DATA routing), AS-L1T224-2. Band changes are the architect's, not FAME-4's;
+  flagged so FAME-4 is not blamed for band drift its legs merely report.
