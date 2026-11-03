@@ -115,3 +115,9 @@ Receipts: `~/.hermes/cl/receipts/L1-PIN-HARDEN-1/tick-280TH/` — `merge-rehears
 5. Cycle hygiene unchanged: trunk binaries with the worktree as cwd, never `npx`/`npm ci`/symlinked
    `node_modules` in a real (non-scratch) worktree; restart the lane stack after any schema/lint/ui/lifecycle
    YAML merge and re-prove the served revision.
+
+## Trunk after this tick
+
+Docs-only: this handoff committed as `27c6064c` (on `ec3c48f9`); the task-list gained one `# 280TH` note under
+`L1-PIN-HARDEN-1` recording the rehearsal + the corrected merge-time bar (382 tests, not 372). Queue counts after
+the note: todo 2, blocked 1, in-progress 0, done 107.
