@@ -88,11 +88,23 @@ function sourceViolations(css: string): string[] {
            /(^|,)\s*\.view-spec__table\s+td\s*(,|$)/.test(r.selector),
   )
   const violations: string[] = []
+  // FIX RUN 2 (advc2 defect 3): the .view-spec__cell-item carve-out is a
+  // TOKEN-BOUNDARY test, not a substring test — `td.view-spec__cell-item-x`
+  // (or any `cell-item` token extended by word chars/hyphens) is NOT the
+  // legal carrier and cannot excuse `anywhere`. The pattern is the exact
+  // one the reviewer verified in advc2 §7 / the decision: a non-word,
+  // non-hyphen character (or start of part) before the token's `.`, and no
+  // word char/hyphen after it. The real bare `.view-spec__cell-item` rule
+  // stays exempt; a glued compound (`td.view-spec__cell-item`) is NOT
+  // exempt — that is the over-flagging, fail-closed side of the boundary
+  // (a td that is itself a .view-spec__cell-item does not exist in the
+  // rendered DOM: ViewRenderer puts the class on a wrapper INSIDE the td).
+  const CELL_ITEM_TOKEN = /(^|[^\w-])\.view-spec__cell-item(?![\w-])/
   const anywhereOnTableCell = rules.some((r) =>
     splitSelectorParts(decodeCssEscapes(r.selector)).some(
       (part) =>
         isTableCellSelectorPart(part) &&
-        !part.includes('.view-spec__cell-item') &&
+        !CELL_ITEM_TOKEN.test(part) &&
         /overflow-wrap\s*:\s*anywhere/i.test(r.decls),
     ),
   )
@@ -460,5 +472,104 @@ describe('L1-PIN-HARDEN-1 — source pin is nesting-aware (O1)', () => {
     const nested = rules.find((r) => r.selector === '.view-spec__table td')
     expect(nested).toBeDefined()
     expect(nested?.atContext).toEqual(['@media (max-width: 900px)'])
+  })
+})
+
+/**
+ * L1-PIN-HARDEN-1 FIX RUN 2 (adversarial review advc2, defect 1): RELAXED
+ * CSS Nesting — a nested style rule whose head contains no `&` is an
+ * implicit descendant of its parent in current engines and Vite ships it
+ * as-is: `.view-spec__table { td { … } }` means `.view-spec__table td`.
+ * The pre-fix scanner emitted such a head verbatim (`td`), dropping the
+ * parent scope, so the ban never saw `.view-spec__table` and returned [].
+ * All 11 shapes below were reproduced RED first-hand on tip b2b59fdf
+ * (deliverables/l1-pin-harden-1-fix2/fix2-red-probe-prefix.txt).
+ */
+describe('L1-PIN-HARDEN-1 FIX RUN 2 — relaxed nesting (bare head) composes against the parent (advc2 D1)', () => {
+  const relaxedNesting: Array<[string, string]> = [
+    ['K bare nested td', '.view-spec__table { td { overflow-wrap: anywhere; } }'],
+    ['K2 bare nested th', '.view-spec__table { th { overflow-wrap: anywhere; } }'],
+    ['L at-rule inside style rule, bare head', '.view-spec__table { @media (max-width: 900px) { td { overflow-wrap: anywhere; } } }'],
+    ['M bare head under table rule inside @media', '@media (max-width: 900px) { .view-spec__table { td { overflow-wrap: anywhere; } } }'],
+    ['N bare nested head list th, td', '.view-spec__table { th, td { overflow-wrap: anywhere; } }'],
+    ['O bare nested :hover td', '.view-spec__table { :hover td { overflow-wrap: anywhere; } }'],
+    ['P &-block then bare td sibling', '.view-spec__table { & { color: red; } td { overflow-wrap: anywhere; } }'],
+    ['Q parent selector list distribution', '.view-spec__table, .other { td { overflow-wrap: anywhere; } }'],
+    ['R ambiguous & :is(&) td', '.view-spec__table { :is(&) td { overflow-wrap: anywhere; } }'],
+    ['S ambiguous & :where(&) > td', '.view-spec__table { :where(&) > td { overflow-wrap: anywhere; } }'],
+    ['D2 @supports > rule > @media > bare head', '@supports (overflow-wrap: anywhere) { .view-spec__table { @media (min-width: 1px) { td { overflow-wrap: anywhere; } } } }'],
+  ]
+
+  it('every relaxed-nesting bare-head shape is flagged as exactly the anywhere violation', () => {
+    expect(sourceViolations(CONFORMING_FLOOR)).toEqual([])
+    for (const [label, shape] of relaxedNesting) {
+      expect({ label, violations: sourceViolations(CONFORMING_FLOOR + shape) }).toEqual({
+        label,
+        violations: [ANYWHERE_VIOLATION],
+      })
+    }
+  })
+
+  it('the &-controls keep flagging (fix run 1 closures do not regress)', () => {
+    for (const shape of [
+      '.view-spec__table { & td { overflow-wrap: anywhere; } }',
+      '.view-spec__table { &.x td { overflow-wrap: anywhere; } }',
+    ]) {
+      expect(sourceViolations(CONFORMING_FLOOR + shape)).toEqual([ANYWHERE_VIOLATION])
+    }
+  })
+
+  it('benign bare-nested shapes stay clean (composition must not invent false positives)', () => {
+    for (const shape of [
+      '.view-spec__table { font-size: .8rem; }',
+      '.view-spec__table { td { padding: 2px; } }',
+      '.view-spec__table { thead { overflow-wrap: anywhere; } }',
+      '.view-spec__table { @media (max-width: 900px) { td { font-size: .8rem; } } }',
+    ]) {
+      expect({ shape, violations: sourceViolations(CONFORMING_FLOOR + shape) }).toEqual({
+        shape,
+        violations: [],
+      })
+    }
+  })
+})
+
+/**
+ * L1-PIN-HARDEN-1 FIX RUN 2 (advc2 defect 3, ruled in scope): the
+ * `.view-spec__cell-item` carve-out was a SUBSTRING test, so
+ * `.view-spec__table td.view-spec__cell-item-x { overflow-wrap: anywhere }`
+ * was excused by merely CONTAINING the token. It is now a token-boundary
+ * test — pinned in BOTH directions.
+ */
+describe('L1-PIN-HARDEN-1 FIX RUN 2 — .view-spec__cell-item carve-out is token-exact (advc2 D3)', () => {
+  it('extended token .view-spec__cell-item-x does NOT excuse anywhere (violation reported)', () => {
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table td.view-spec__cell-item-x { overflow-wrap: anywhere; }'),
+    ).toEqual([ANYWHERE_VIOLATION])
+    // Hyphen-free extension is equally rejected (word boundary both sides).
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table td.view-spec__cell-itemx { overflow-wrap: anywhere; }'),
+    ).toEqual([ANYWHERE_VIOLATION])
+  })
+
+  it('the real .view-spec__cell-item carrier stays exempt (no false positive)', () => {
+    // The exempt shape is the token at a true boundary: a descendant part
+    // `.view-spec__table td .view-spec__cell-item`, and the shipped file's
+    // bare `.view-spec__cell-item` rule.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table td .view-spec__cell-item { overflow-wrap: anywhere; }'),
+    ).toEqual([])
+    // Fail-closed side of the boundary (recorded, per the decision's
+    // "over-flagging is acceptable"): the reviewer's exact regex does NOT
+    // excuse a glued compound `td.view-spec__cell-item`. This shape does
+    // not exist in the rendered DOM (ViewRenderer puts the class on a
+    // wrapper INSIDE the td), so nothing legitimate depends on it.
+    expect(
+      sourceViolations(CONFORMING_FLOOR + '.view-spec__table td.view-spec__cell-item { overflow-wrap: anywhere; }'),
+    ).toEqual([ANYWHERE_VIOLATION])
+    // The shipped file (whose real rule is a bare .view-spec__cell-item)
+    // still satisfies every claim.
+    const css = readFileSync(CSS_PATH, 'utf8')
+    expect(sourceViolations(css)).toEqual([])
   })
 })

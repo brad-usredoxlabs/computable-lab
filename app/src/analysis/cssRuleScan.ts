@@ -129,26 +129,51 @@ export function parseCssRules(css: string): CssRule[] {
 
 /**
  * Resolve a nested rule's selector against its parent (CSS Nesting `&`
- * semantics, desugared per the spec's `:is()` equivalence):
+ * semantics, desugared per the spec's `:is()` equivalence). Returns every
+ * composed selector — a head with no `&` distributes over a parent
+ * selector list, so the result can hold more than one selector:
  *  - a bare `&` IS the parent selector itself;
  *  - `&` followed by whitespace (or end of input) descends from the parent
  *    (`& td` -> `parent td`);
  *  - `&` glued to a compound suffix (`&.x`, `&:hover`) compounds with the
  *    parent (`parent.x`, `parent:hover`);
- *  - a selector WITHOUT `&` is kept as-is. Under strict CSS Nesting such a
- *    selector is invalid inside a nested style rule (nest-prefixed
- *    selectors are required), but keeping it verbatim is the conservative
- *    direction for a pin: it can only make MORE text visible to the ban,
- *    never less.
+ *  - a selector WITHOUT `&` composes against the parent as an implicit
+ *    descendant (`parent head`). This is the relaxed CSS-Nesting behaviour
+ *    shipped by current engines and by Vite as-is: `.view-spec__table { td
+ *    { … } }` means `.view-spec__table { & td { … } }`. Composition
+ *    distributes over the parent's selector list. Resolution can only
+ *    WIDEN a rule's visible scope — a nested rule never escapes its parent
+ *    chain — which is the fail-closed direction for this pin. Dropping the
+ *    parent would hide text from the ban and is exactly what this branch
+ *    must not do;
+ *  - an `&` in an AMBIGUOUS position (not the leading token, e.g.
+ *    `:is(&) td`, `td &`): every `&` is replaced by the parent per the
+ *    `:is()` equivalence, and the head is additionally composed as an
+ *    implicit descendant. The composed forms may be over-broad —
+ *    over-flagging is acceptable for this pin; a emitted selector that
+ *    escapes its parent chain is not.
+ * Composition applies ONLY when the parent is a style rule — this function
+ * is called from `scanDecls` (a style-rule body) and never for top-level
+ * heads or heads written directly inside at-rules (those keep their head
+ * unmodified with the at-rule prelude in `atContext`).
  */
-function resolveNestedSelector(head: string, parent: string): string {
-  if (head === '&') return parent
+function resolveNestedSelectors(head: string, parent: string): string[] {
+  if (head === '&') return [parent]
   if (head.startsWith('&')) {
     const rest = head.slice(1)
-    if (/^[\s]/.test(rest)) return `${parent} ${rest.trimStart()}`
-    return `${parent}${rest}`
+    if (/^[\s]/.test(rest)) return [`${parent} ${rest.trimStart()}`]
+    return [`${parent}${rest}`]
   }
-  return head
+  const parentParts = splitSelectorParts(parent)
+  if (head.includes('&')) {
+    // Ambiguous `&` placement: substitute per the `:is()` equivalence AND
+    // compose as an implicit descendant. Both forms retain the parent.
+    const substituted = head.replaceAll('&', parentParts.join(', '))
+    return [substituted, ...parentParts.map((p) => `${p} ${head}`)]
+  }
+  // No `&`: relaxed nesting — implicit descendant, distributed over the
+  // parent's selector list.
+  return parentParts.map((p) => `${p} ${head}`)
 }
 
 /**
@@ -261,10 +286,15 @@ function scanDecls(
         nested.push(...childRules)
       } else if (head) {
         // Nested style rule: resolve against the parent and recurse (its
-        // own body may nest further).
-        const selector = resolveNestedSelector(head, parentSelector)
-        const [ownDecls, grandChild] = scanDecls(innerBody, atContext.slice(), selector)
-        nested.push({ selector, decls: ownDecls, atContext: atContext.slice() })
+        // own body may nest further). Resolution may return MULTIPLE
+        // selectors (a head with no `&` distributes over a parent
+        // selector list); each emitted rule carries the same decls and
+        // the current atContext chain.
+        const selectors = resolveNestedSelectors(head, parentSelector)
+        const [ownDecls, grandChild] = scanDecls(innerBody, atContext.slice(), selectors.join(', '))
+        for (const selector of selectors) {
+          nested.push({ selector, decls: ownDecls, atContext: atContext.slice() })
+        }
         nested.push(...grandChild)
       } else {
         // Empty head (invalid CSS): fail closed — the block's plain decls

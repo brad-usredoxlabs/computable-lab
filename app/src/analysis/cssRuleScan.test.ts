@@ -110,10 +110,14 @@ describe('cssRuleScan.parseCssRules', () => {
   })
 
   // FIX RUN 1 (adversarial review advc1, defect 1): CSS Nesting shapes.
+  // FIX RUN 2 (advc2 defect 1): the inner head has no `&`, so it composes
+  // against the style-rule parent as an implicit descendant — the emitted
+  // selector retains its FULL parent chain (relaxed nesting: the rule is
+  // `.analyses .view-spec__table td` under the media condition).
   it('recurses into an at-rule nested INSIDE a style rule (CSS Nesting §2.3, review case 13)', () => {
     const css = '.analyses { @media (max-width: 900px) { .view-spec__table td { overflow-wrap: anywhere; } } }'
     const rules = parseCssRules(css)
-    const inner = rules.find((r) => r.selector === '.view-spec__table td')
+    const inner = rules.find((r) => r.selector === '.analyses .view-spec__table td')
     expect(inner).toBeDefined()
     expect(inner?.decls).toBe('overflow-wrap: anywhere;')
     // The conditional group's prelude is context for the inner rule.
