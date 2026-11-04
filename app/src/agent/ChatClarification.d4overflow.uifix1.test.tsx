@@ -105,7 +105,14 @@ describe('L2-CLARIFY-TARGET-1 (uifix1 D4) — the option rows stay inside the pa
   const ruleOf = (source: string, file: string, selector: string): string => {
     const at = source.indexOf(selector)
     expect(at, `${file} must define ${selector}`).toBeGreaterThan(-1)
-    return source.slice(at, source.indexOf('}', at))
+    // Strip /* … */ comments from the rule body before asserting (advc c5
+    // defect 1): these rules carry explanatory comments that literally
+    // contain the pinned declaration text, so a comment that merely
+    // MENTIONS a declaration must never satisfy the pin — the assertions
+    // run on declarations only.
+    return source
+      .slice(at, source.indexOf('}', at))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
   }
 
   it('fix4 track clamp (the contract the item clamps depend on) stays declared: the picker root clamps its single column to the container', () => {
