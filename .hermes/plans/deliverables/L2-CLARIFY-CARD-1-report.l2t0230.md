@@ -637,3 +637,43 @@ Targeted vitest for every pin touched:
   to D2 (a held-intent zero-model-call assertion); U2 does not change that path
   (the 29-set is byte-identical).
 CARD1-FIX5 DONE ea7c49cc48e25c751d109a352ac5c23444b7a260
+
+## FIX-1 (route a) — scope-lock ALLOWED set += the D5 mint test
+
+Defect (reproduced first-hand at 97c5eac1): U1/D5 added
+`import { canonicalLabelKey, localMaterialIdForLabel } from '../../materials/termId.js'`
+at `src/api/handlers/VocabHandlers.mint.test.ts:26` (used at :304-305, :334). The file was
+not in the scope-lock ALLOWED set, so `termId.scopeLock.test.ts` ran
+`Tests 1 failed | 2 passed (3)`. The U4 verify block ran the `src/ai` suite + goldens but
+never `src/materials`, which is why the delta shipped the RED pin undisclosed.
+
+Route chosen: (a) — add the file to the closed set. Justification: the scope-lock's own
+header defines the closed set as "...+ the tests that pin it", and the allow-list already
+carries SIX server-side test files (termId.test.ts, the four shorthandChat tests, the
+pin itself). `VocabHandlers.mint.test.ts` is a server-side TEST that asserts the identity
+rule (D5 pins :291-338: case/whitespace variants mint the SAME id) — squarely within the
+set's stated purpose. Route (b) was rejected: reworking the pins to avoid the token would
+have edited the D5 pins themselves ("never weaken or delete an existing pin" boundary)
+for zero product benefit.
+Change: one entry + a 3-line WHY comment in the ALLOWED set
+(`server/src/materials/termId.scopeLock.test.ts`). The app/ exclusions (both hard-line
+assertions) and the closed-set semantics (unexpected==[] AND missing==[]) are untouched;
+the mint test file is byte-identical. No product-behaviour change.
+
+VERIFY counts (run at this verify-block commit):
+1. `cd server && npx vitest run src/materials/termId.scopeLock.test.ts src/materials/termId.test.ts src/api/handlers/VocabHandlers.mint.test.ts`
+   → `Test Files 3 passed (3)`; `Tests 23 passed (23)` (scopeLock 3, termId 9, mint 11)
+   — all GREEN (was `1 failed | 2 passed (3)`).
+2. `cd server && npx vitest run src/ai/AgentOrchestrator.repeatEcho.test.ts src/compiler/scientistIntent/goldens`
+   → `Test Files 1 failed | 4 passed (5)`; `Tests 1 failed | 34 passed (35)` — the SAME
+   state as before the fix: the sole failure is the pre-existing P8
+   `expected 1 to be +0` (repeatEcho.test.ts:448, held-intent zero-model-call assertion,
+   disclosed in the U2 section); the re-blessed goldens
+   `goldenIntentToGraph` + `goldenProseBlobStrip` → `Tests 9 passed (9)`
+   (whole goldens dir: `24 passed (24)`).
+3. `npx tsc --noEmit -p server` → 0 error lines (exit 0).
+4. `git -c core.fileMode=false diff --stat 10062725..HEAD` → 18 files changed,
+   1136 insertions(+), 29 deletions(-) (U3 tip was +1080; delta = U4 report additions
+   + FIX-1 +4 lines). `git -c core.fileMode=false status --porcelain` → clean except the
+   untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` (assignment-excluded,
+   never committed).
