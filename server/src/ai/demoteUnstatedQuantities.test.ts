@@ -257,3 +257,59 @@ describe('demoteUnstatedQuantities — the no-material mix leg (cycle 7 unit 1, 
     expect('cycles' in action).toBe(false); // the slot was ABSENT in the doc — untouched
   });
 });
+
+/**
+ * cycle 7 unit 2 (advc-c7 D1 MAJOR) — the material-less OVER-KEEP guard.
+ *
+ * Fix A (c7d1) closed the over-STRIP (P-a..P-d) but over-corrected: for a
+ * material-less action (label='') the demote side asked the ONE extractor over
+ * the WHOLE turn, whose no-anchor arm returns the FIRST amount-with-unit
+ * ANYWHERE (kind-blind, association-blind). So an UNRELATED action's amount
+ * (or a wrong-KIND amount) satisfied this action's declared-quantity slot —
+ * the mirror failure of the over-strip. The association rule (advc direction
+ * (a)): a material-less slot is "stated" only if an amount-with-unit of the
+ * slot's DECLARED KIND appears in the CLAUSE that mentions THAT action's verb.
+ *
+ * K1: the mix's invented volume must NOT be kept because an UNRELATED add
+ *      action stated a volume (different clause).
+ * K2: the mix's invented cycles must NOT be kept because the turn stated a
+ *      VOLUME (wrong kind — cycles is a count slot).
+ * P-a / P-d above are the MUST-STAY-green controls (stated-in-clause kept,
+ * zero-amount demoted).
+ */
+describe('demoteUnstatedQuantities — the no-material over-KEEP guard (cycle 7 unit 2, D1)', () => {
+  function mixDocSlots(slots: Record<string, number>): ScientistIntent {
+    const action: Record<string, unknown> = { action: 'mix', ...slots };
+    return {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 't1-c7d2-mix',
+      actions: [action as unknown as ScientistIntent['actions'][number]],
+      unresolved: [],
+    };
+  }
+
+  it('K1: an UNRELATED action\'s volume (different clause) must NOT keep this mix\'s invented volume', () => {
+    // The mix names no material (label=''). The 200 uL belongs to the ADD action
+    // (a different clause); the mix's own volume:50 was never stated → DEMOTED.
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Add 200 uL of DMEM to A1, then mix');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('volume');
+    expect(r.notes.length).toBe(1);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(false);
+  });
+
+  it('K2: a wrong-KIND amount (a volume) must NOT keep this mix\'s invented cycles (a count slot)', () => {
+    // The mix names no material (label=''). The turn states only a VOLUME
+    // (75 uL); the mix's cycles:3 is a COUNT slot never stated in a count → DEMOTED.
+    const r = demoteUnstatedQuantities(mixDocSlots({ cycles: 3 }), 'Mix 75 uL');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('cycles');
+    expect(r.notes.length).toBe(1);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('cycles' in action).toBe(false);
+  });
+});
