@@ -899,3 +899,125 @@ no hardcoded fallback policy. The `2af9d880` subject's "M6: … 20 failed |
 3. `git -c core.fileMode=false status --porcelain` = this report file
    modified, plus the assignment-excluded untracked
    `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` only.
+
+## CARD1-FIX3 (defects 5/6)
+
+Bounded continuation run (FIX-3 resume) over the dead run's LABELLED PRESERVATION commit
+`ec2b46d9` ("FIX5 FIX-3 PARTIAL (PRESERVED, NOT GATED, NOT ACCEPTED)"), which the orchestrator
+measured as landing defect 5 (Q1, `56f69cc6`), Q2 unit 2 (persist carrier
+`metadata.clarificationAnswers`, conditional spread, key ABSENT never `undefined`), Q2 unit 3
+(exported seam `unionClarificationAnswers(persisted, fresh)` in
+`app/src/shared/hooks/useAiChat.ts` wired into `sendPrompt`), the unit 1 render pin
+(`app/src/agent/ChatLog.answeredrow.reload.card1.test.tsx`) and the unit 2/3 pin
+(`app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts`). This run added:
+
+- R1 (test-only): `app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts` — the dead
+  run's single RED case (`a follow-up on a thread with NO answered request re-sends the
+  byte-identical fresh-ask wire shape`, asserting `sa.mock.calls[0][7] === []`) failed because the
+  `streamAssist` module mock was not cleared between cases, so `mock.calls[0]` was the previous
+  case's deliberately-sent clofibrate answer. Fixed with a `beforeEach` that installs a FRESH
+  `vi.fn()` on `aiClient.streamAssist` per case (product code untouched, case kept, assertion
+  unchanged). Committed `01244ada`.
+- R2 (new pin): `app/src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts` — Q2 unit 4,
+  the two-turn + reload pin at the server boundary. One case: drive the REAL `useAiChat` hook —
+  ask (seeded `clarification` event, fact label `Clofibrate dosing`, requestId
+  `unresolved_fact-2`), answer it (turn 1) — then simulate a reload by unmounting and mounting a
+  fresh hook on the same `threadId` (the thread hydrates back from the same `getThread` payload,
+  whose answer message carries the persisted `metadata.clarificationAnswers`), then send a
+  follow-up (turn 2) and assert the outgoing `clarificationAnswers` (streamAssist arg index 7)
+  carries the answered requestId `{requestId: 'unresolved_fact-2', ...}`. The case then EXERCISES
+  THE SHIPPED PREDICATE DIRECTLY: it imports `dropAnsweredRequestIds` + `factRequestId` from
+  `server/src/ai/shorthandChat.ts` (non-literal dynamic import + `process.cwd` patched to the
+  repo root for the import window, restored after) and asserts the follow-up's answers seed the
+  server's `answeredIds` (built at `server/src/ai/AgentOrchestrator.ts:3085-3090`, which the drop
+  at `:3091` consumes, P9a-pinned) so the shipped `dropAnsweredRequestIds(compiledSh.clarifications,
+  answeredIds)` removes the answered fact — i.e. the follow-up carries no re-opened card for that
+  requestId. `server/**` takes zero change. Committed `60b826ae`.
+
+Targeted vitest run (exact command and raw tail):
+
+    $ cd app && npx vitest run src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts \
+        src/agent/ChatLog.answeredrow.reload.card1.test.tsx
+      Test Files  2 passed (2)
+             Tests  10 passed (10)
+      Duration  3.67s (transform 425ms, setup 414ms, collect 1.11s, tests 233ms, environment 2.60s, prepare 445ms)
+
+    $ npx vitest run src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts
+      Test Files  1 passed (1)
+             Tests  1 passed (1)
+      Duration  3.62s (transform 52ms, setup 52ms, collect 1.02s, tests 1.11s, environment 2.60s, prepare 445ms)
+
+Mutation evidence for R2 (RED against the pre-fix shape, restored immediately, in place):
+temporarily removed the two Q2 legs from `app/src/shared/hooks/useAiChat.ts` (the persist carrier
+spread in the answer message's `metadata` and the `unionClarificationAnswers` merge in
+`sendPrompt`), re-ran both card1fix5 pin files, then `git -c core.fileMode=false checkout --`
+the file and re-ran (GREEN, restored; `grep -c MUTATION-R2` = 0 afterwards):
+
+    $ npx vitest run src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts \
+        src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts   # pre-fix shape
+      Test Files  2 failed (2)
+             Tests  2 failed | 7 passed (9)
+
+The two failing pins are exactly the composition legs: the persist-carrier case (follow-up does
+not carry the answered requestId — no persisted carrier) and the shipped-drop composition case
+(the drop's contract cannot be driven from the outgoing set). All other cases (unit 3 in-file
+union seam, render pin, fresh-ask byte-identity) still pass pre-fix, as they do not depend on the
+removed legs. Post-restore run: `2 passed (2) / 10 passed (10)` + `1 passed (1)`.
+
+Typecheck (raw): `cd app && npx tsc --noEmit -p .` → exactly **10 error lines**, the same set as
+the trunk baseline (verified by checking out `b4e62eeb` to a throwaway worktree, symlinking
+`node_modules`, and diffing the error lists — identical). NONE of the 10 are in the changed files
+(`useAiChat.ts`, `useAiChat.card1fix5.persistResend.test.ts`,
+`useAiChat.card1fix5.reloadBoundary.test.ts`, `ai.ts`, `ChatLog.tsx`):
+
+    1 src/event-editor/deck/LawnSurface.moveAcross.test.tsx
+    1 src/event-editor/deck/PreviewActionBar.test.tsx
+    2 src/event-editor/editorHistory.test.ts
+    1 src/event-editor/EventEditorContext.tsx
+    1 src/event-editor/focus/LabwareFocus.instrument.test.tsx
+    1 src/event-editor/viewer/ViewerToolbar.tsx
+    1 src/event-editor/viewer/Viewer.tsx
+    1 src/ingestion/components/IngestionUploadModal.tsx
+    1 src/ingestion/protocol-review/ExtractionProgressPanel.test.tsx
+
+Diff (raw):
+
+    $ git -c core.fileMode=false diff --stat b4e62eeb..HEAD
+     .../ChatLog.answeredrow.reload.card1.test.tsx      | 165 +++++++++++++
+     app/src/agent/ChatLog.legacyarm.card1.test.tsx     | 213 +++++++++++++++++
+     .../ai/ClarificationPicker.mintseed.card1.test.tsx | 144 +++++++++++
+     .../right-pane/ai/ClarificationPicker.tsx          |  23 +-
+     .../useAiChat.card1fix5.persistResend.test.ts      | 202 ++++++++++++++++
+     .../useAiChat.card1fix5.reloadBoundary.test.ts     | 264 +++++++++++++++++++++
+     app/src/shared/hooks/useAiChat.ts                  | 106 ++++++++-
+     app/src/types/ai.ts                                |  34 +++
+     8 files changed, 1149 insertions(+), 2 deletions(-)
+
+Every path is inside the original brief's opened-files list (the four APP product names + their
+test files). The report file itself is added by the stamp commit that follows this section.
+
+Assumptions:
+1. The ruling file `decisions/CARD1-MINT-ANSWER-STATE-ruling-l2t1951.md` is ABSENT from the
+   worktree, the main repo's `.hermes/plans/decisions/`, and the git history of both (searched by
+   name and `--diff-filter=A`); the binding points were taken verbatim from the continuation
+   brief's restatement (Q2 unit 4 quoted in full there). Flagged for the orchestrator; nothing in
+   this run re-derived any ruling content.
+2. The app's vitest (jsdom) environment can drive the shipped server predicate: `process.cwd()`
+   is not a writable in jsdom workers, so the test monkey-patches `process.cwd` for the import
+   window only (restored in `finally`); the import is non-literal so the app's `tsc --noEmit`
+   program does not pull the server graph in (verified: error count unchanged at the baseline 10,
+   zero `server/` paths in the error list).
+3. The reload simulation follows the existing `useAiChat.hydrationClobber.test.tsx` precedent:
+   the same stubbed `getThread` payload is re-fetched on the second mount, and the thread's
+   persisted `metadata` (the answer message) is what rehydrates the answered set — no new fetch
+   surface, no mock of `aiThreadClient` beyond what that precedent already uses.
+4. The `clarificationAnswers` wire position asserted (streamAssist arg index 7) is the same
+   position the dead run's unit 2/3 pin asserts; the pin does not reorder or rename any wire
+   field.
+5. The tsc "baseline 10" was reproduced against `b4e62eeb` (the brief's diff base), not merely
+   trusted: a throwaway worktree of `b4e62eeb` produced the identical 10-error set.
+6. The mutation evidence was captured in place (not a /tmp copy) and the file restored
+   immediately; `git status` after restore showed only the new test file untracked.
+7. The last CODE commit is `60b826ae` (R2); this stamp commit carries the marker and names it.
+
+CARD1-FIX5-FIX3 DONE 60b826aee84a53a64a242ad70fd21dc881bfd872
