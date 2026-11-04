@@ -25,7 +25,7 @@
  * `clarificationAnswers` (the pre-fix shape), and GREEN once the carrier +
  * re-send union are wired.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAiChat, unionClarificationAnswers } from './useAiChat'
 import type { AiClarificationAnswer } from '../../types/ai'
@@ -110,6 +110,17 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 3) — unionClarifi
 })
 
 describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 units 2-3) — persist carrier + re-send through sendPrompt', () => {
+  // TEST-ISOLATION FIX (FIX-3 R1 — the dead run's single failure was this, a
+  // test defect, not a product defect): the mocked `streamAssist` is a
+  // process-singleton module mock, so without a clear a case that starts on a
+  // thread with NO answered request read the PREVIOUS case's answer turn as
+  // `sa.mock.calls[0]`. Fresh mock state per case; each case then genuinely
+  // starts where its title says it starts.
+  beforeEach(async () => {
+    const { streamAssist } = await import('../api/aiClient')
+    ;(streamAssist as ReturnType<typeof vi.fn>).mockClear()
+  })
+
   it('an answer submission records the structured answer on the user message (the persist carrier), and a follow-up send RE-SENDS the answered requestId', async () => {
     const { streamAssist } = await import('../api/aiClient')
     const sa = streamAssist as ReturnType<typeof vi.fn>
