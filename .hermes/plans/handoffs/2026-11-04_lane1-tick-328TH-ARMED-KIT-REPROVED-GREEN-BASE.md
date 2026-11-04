@@ -133,3 +133,30 @@ change (**todo 2 / done 109 / superseded 1**). `cl-l1-armed-dispatch-0228.servic
   handoff docs only (`8708d595..HEAD` and `7681111f..15c34e32` product diffs are both 0 paths).
 - **AS-L1T328-2**: that measured window maturities (06:25:35 / 06:33:01) remain the binding constraint, i.e.
   lane 2 does not free a slot earlier without re-claiming. Async observation risk, same class as AS-L1T327-2.
+
+---
+
+## ADDENDUM — state changed during this tick (04:46:20 EST)
+
+While this tick was closing its queue transaction, **slot-0 went FREE** (its `CHATHOST-CONSOLIDATE-1`
+launcher exited). The armed unit's very next poll recorded the transition, and its GUARD2 re-parsed the
+rewritten `task-list.md` as `status=todo dispatched=none` **PASS** — so the atomic append was observed safe,
+not assumed:
+
+```
+04:46:20 gate rc=14 verdict=ROTATION-DEFERRED
+      shared slot-0: FREE
+      shared slot-1: HELD L2-CLARIFY-TARGET-1-3600006-2026-11-04T09:33:01.552683+00:00
+        [PASS] 1_not_paused_queue_free
+        [PASS] 2_item_todo_undispatched_HIGH: status=todo dispatched=none severity=HIGH
+        [FAIL] 3_cadence: lane2_launches_since_filed=14 (need >=4); other_slot_continuous_hold=0h13m (need >=2h) holder=L2-CLARIFY-TARGET-1 live_pair=3600008
+        [PASS] 4_slot_truth: free_slots=[0] held_slots=[1] live_lane2_pair=3600008
+```
+
+So at close the gate is **cadence-bound, not supply-bound** — check 4 now PASSES. The single remaining
+condition is the ≥2 h continuous hold on slot-1, measured from **09:33:01Z** ⇒ matures **11:33:01Z =
+06:33:01 EST**, still inside the 07:30 deadline. The binding risk is now the opposite of the 04:41 state:
+if lane 2 re-claims the free slot-0 before 06:33, check 4 fails again; if it re-claims *slot-1* with a gap
+longer than 60 s, the hold clock resets.
+
+The tables above remain accurate **as of 04:41:50** and are not retro-edited.
