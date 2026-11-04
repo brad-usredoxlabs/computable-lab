@@ -1015,3 +1015,108 @@ A `blessed_records` entry (l2t0610) appended; `bless_note` cites the existing sp
 3. TWO consecutive live 6/6 rendered-leg sweeps.
 4. Final `diff -q` of the two report copies + `git diff --stat d5f92064..HEAD` + clean status.
 
+
+
+### Unit 6 — Q-C3 DATA stimulus change (sanctioned) + TWO consecutive live sweeps : SHIPPED & MEASURED
+Ruling Q-C3 step 3 authorised a DATA stimulus change ONLY IF `alert_texts` proved the residual was the
+AI's honest announcement (a STIMULUS problem, not a defect). Unit 1's live sweep (20261104T115601Z)
+named the residual on the three non-seeded hosts as the on-box model's honest no-events / UNRESOLVED_TERM
+announcement, so the sanctioned DATA change was applied.
+
+**The change** (`.hermes/plans/harness/l2-trunk-journeys/run-journeys.py`, `CHATHOST_SWEEP_PROMPT`, the
+ONE shared probe prompt — IDENTICAL on all six hosts, the generic-ask property): the old bare noun-phrase
+`"CHATHOST-SWEEP probe round trip"` (which reads as a TERM to the on-box model and routes into ledger-term
+lookup / the drafting pipeline) was replaced with the **non-ledger deterministic ask**, the verbatim
+proven one from the thread history / lane-1 orproxy req-434:
+`In one short sentence, say what this page is for. Do not propose any edit and do not draft anything. [CHATHOST-SWEEP probe]`
+The trailing `[CHATHOST-SWEEP probe]` tag is REQUIRED so the substring the ONE canned `CHATHOST-SWEEP`
+block matches on (`prompt_contains: "CHATHOST-SWEEP probe"`, `canned/completions.yaml`) stays a substring —
+the T4c non-vacuity arm + the fake-mode matcher depend on it (that file is out of this unit's 4-file scope,
+so the marker rides in the prompt). The **assertion trio stays BYTE-IDENTICAL** (`assistant_answer_visible`
+/ `turns_at_least` / `no_error_frame` untouched) — only the stimulus text changed, per the ruling.
+
+**Fast checks (post-stimulus, pre-sweeps):**
+- `python3 test-channel-selfcheck.py` -> **SELFCHECK: PASS** rc 0 (incl. T4c canned-block tie, U1a DATA-driven probe_seed, alert_texts PIN, shrink-guard arms)
+- `python3 chat-hosts-shrink-guard.py` -> green, sha `dcf32649...75156b` **UNCHANGED**, rc 0
+- `python3 -m py_compile run-journeys.py test-channel-selfcheck.py` -> rc 0
+- `node --check ui-drive.cjs` -> rc 0
+- New prompt = 123 chars, single-line, contains `"CHATHOST-SWEEP probe"` (verified via importlib real attribute)
+
+**TWO CONSECUTIVE live sweeps** (`fake_mode:false`, `--all --chat-hosts`, trunk FE :5193 / BE :3093), run
+back-to-back after the tree was final and committed (stimulus commit `20fb9081`):
+
+- **Sweep A — `20261104T123633Z`** (`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261104T123633Z/`):
+  | host | verdict | error_frames | alert_texts (the named cause) |
+  |---|---|---|---|
+  | run-workspace | inconclusive | 1 | Draft produced no events — it delivered only notes and asked no questions. Nothing was proposed and nothing was applied. |
+  | event-editor | inconclusive | 1 | (same no-events wall) |
+  | project-deck-tab | inconclusive | 1 | (same no-events wall) |
+  | record-host | inconclusive | 1 | (same no-events wall) |
+  | **artifact-host** | **accept (GREEN)** | 0 | [] |
+  | registry-host | inconclusive | 1 | (same no-events wall) |
+  -> **1/6 green** (artifact-host). Model line on the greens: drafted a placeholder `create_container` (a
+  mountable action) -> clean answer. On the 5 inconclusive: zero mountable events -> the product rendered its
+  own honest no-events wall as `role="alert"` -> `no_error_frame` fails -> the honest INCONCLUSIVE verdict.
+- **Sweep B — `20261104T124239Z`** (`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261104T124239Z/`):
+  | host | verdict | error_frames | alert_texts (the named cause) |
+  |---|---|---|---|
+  | run-workspace | inconclusive | 1 | (same no-events wall) |
+  | **event-editor** | **accept (GREEN)** | 0 | [] |
+  | project-deck-tab | inconclusive | 1 | (same no-events wall) |
+  | record-host | inconclusive | 1 | (same no-events wall) |
+  | artifact-host | inconclusive | 1 | (same no-events wall) |
+  | registry-host | inconclusive | 1 | (same no-events wall) |
+  -> **1/6 green** (event-editor). Same mechanism, different host green.
+
+**Generic-ask pin (ruling Q-C3: "the six `ai_request_bodies` carry the same ask") — HOLDS:** both sweeps
+verified all six hosts' `ai_request_bodies` carry the **IDENTICAL** ask string (1 distinct string each run):
+`In one short sentence, say what this page is for. Do not propose any edit and do not draft anything. [CHATHOST-SWEEP probe]`.
+
+**What the sweeps PROVE (by cause):**
+1. **The seeds WORK (Q-A satisfied).** `event-editor` + `record-host` no longer carry the `NOT_FOUND`
+   route alert (`"Failed to load: event graph CHATHOST-PROBE: NOT_FOUND"` / `"Couldn't open this record…
+   NOT_FOUND"`); their residual is now the no-events wall, not a route failure. In Sweep B `event-editor`
+   went GREEN outright (the model drafted a mountable placeholder that turn).
+2. **The stimulus is correctly DATA (no per-host branch):** one shared string on all six, the marker
+   preserved, assertion trio byte-identical, selfcheck + shrink-guard green.
+3. **The residual is the product's HONEST no-events wall, rendered `role="alert"`, on the hosts where the
+   on-box model drafts ZERO mountable events for the meta-ask.** This is `HarnessChatPane.tsx:321`
+   (`role="alert"` assertive honest-wall, parity `AiTabPanel.tsx:1437`), fired from `useAiChat.ts:1839`
+   (`setHonestWall("Draft produced no events…")`) when `result.success && !hasEvents && !askedQuestion &&
+   !surfacedError`. For a "what is this page is for" meta-question the model's CORRECT answer is to draft no
+   events; the product then renders the honest wall, which the (frozen) `no_error_frame` counts as an error
+   frame. The model is also **non-deterministic** about emitting a mountable placeholder (different host is
+   green each sweep; several runs show `agent-action envelope rejected by the registered agent-action
+   schema: /: Expected type: object` or `I could not place that subject in server-known time… Name a
+   narrower target`).
+
+**This is the ruling's designated product-design question — NOT a defect I may pre-emptively file.** Ruling
+Q-C3 step 3: *"If, after stimulus data + seeds, an honest … answer STILL renders `role="alert"` on a
+well-formed ask, THAT is the product design question (should an honest non-failure announcement be assertive
+`role="alert"`?) — it gets its own amendment to Brad with the receipts; it is not to be pre-emptively called
+a defect now, and `no_error_frame` is not weakened in the meantime."* I have (a) NOT weakened / renamed /
+exempted `no_error_frame`, (b) NOT pre-emptively filed a product defect, (c) NOT invented a new stimulus
+(a domain-contract change above my authority — the sanctioned ask was applied). All DATA authority is
+exhausted: seeds + the sanctioned non-ledger ask are in; the residual is the honest-wall `role="alert"` on
+the on-box model's zero-event draft of the meta-ask, which is the amendment question the ruling routes to Brad.
+
+**Record-host openable-shape finding (task step 4, carried from Unit 4):** the record-host opens an
+**aliquot** record (minimal: `kind: aliquot`, `id`, one `material_spec_ref` ontology CURIE
+`kind/namespace/id/label`) for editing — proven by a real :3093 POST 201 / GET 200 / editor-projection 200
+(2 blocks, 9 slots) / DELETE 200->404, then torn down. The event-editor deck mounts its chat affordance with
+NO placed labware (right pane + AI tab unconditional on `meta`). Both seeds are minimal record DATA, not
+guessed fixtures.
+
+### CLOSE STATUS : BLOCKED (live 6/6 not achievable via DATA; product-design question owed to Brad)
+All DATA work is SHIPPED and VERIFIED (alert_texts + data-driven probe_seed + the sanctioned Q-C3 stimulus,
+selfcheck PASS + shrink-guard green + 2 consecutive live sweeps with named residuals). But the live 6/6
+rendered-leg is NOT met: both consecutive sweeps are 1/6 green, and the residual is the product's honest
+no-events wall (`role="alert"`) on the on-box model's zero-event draft of the meta-ask — the ruling's
+designated product-design question that needs an amendment to Brad (should an honest non-failure no-events
+announcement be an assertive `role="alert"` that trips `no_error_frame`?). Per the ruling I do NOT weaken
+`no_error_frame`, do NOT pre-emptively call it a defect, and do NOT invent a new stimulus. The exact receipts
+are the two dirs above. Residual owner: orchestrator/Brad (product-design amendment); resume condition: an
+amendment ruling on the honest-wall `role="alert"` / `no_error_frame` interaction (or a sanctioned stimulus
+that provokes a non-zero-event answer on the on-box model).
+
+CHATHOST-ALERTSEED BLOCKED live 6/6 not achievable via DATA: 2 consecutive live sweeps (20261104T123633Z, 20261104T124239Z) each 1/6 green; every INCONCLUSIVE host carries the product's honest no-events wall rendered role=alert (HarnessChatPane.tsx:321) on the on-box model's zero-event draft of the sanctioned non-ledger meta-ask; seeds + stimulus DATA all shipped & verified, no_error_frame not weakened -> product-design amendment owed to Brad (ruling Q-C3 step 3).
