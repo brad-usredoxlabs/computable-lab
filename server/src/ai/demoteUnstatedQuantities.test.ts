@@ -260,22 +260,12 @@ describe('demoteUnstatedQuantities — the no-material mix leg (cycle 7 unit 1, 
 
 /**
  * cycle 7 unit 2 (advc-c7 D1 MAJOR) — the material-less OVER-KEEP guard.
- *
- * Fix A (c7d1) closed the over-STRIP (P-a..P-d) but over-corrected: for a
- * material-less action (label='') the demote side asked the ONE extractor over
- * the WHOLE turn, whose no-anchor arm returns the FIRST amount-with-unit
- * ANYWHERE (kind-blind, association-blind). So an UNRELATED action's amount
- * (or a wrong-KIND amount) satisfied this action's declared-quantity slot —
- * the mirror failure of the over-strip. The association rule (advc direction
- * (a)): a material-less slot is "stated" only if an amount-with-unit of the
- * slot's DECLARED KIND appears in the CLAUSE that mentions THAT action's verb.
- *
- * K1: the mix's invented volume must NOT be kept because an UNRELATED add
- *      action stated a volume (different clause).
- * K2: the mix's invented cycles must NOT be kept because the turn stated a
- *      VOLUME (wrong kind — cycles is a count slot).
- * P-a / P-d above are the MUST-STAY-green controls (stated-in-clause kept,
- * zero-amount demoted).
+ * Fix A (c7d1) over-corrected: for a material-less action the demote side
+ * asked the ONE extractor over the WHOLE turn, whose no-anchor arm returns the
+ * FIRST amount-with-unit ANYWHERE (kind-blind, association-blind), so an
+ * UNRELATED action's amount or a wrong-KIND amount satisfied the slot.
+ * Rule (advc (a)): stated only if the slot's DECLARED KIND appears in the
+ * CLAUSE naming THIS action's verb. K1 = unrelated clause; K2 = wrong kind.
  */
 describe('demoteUnstatedQuantities — the no-material over-KEEP guard (cycle 7 unit 2, D1)', () => {
   function mixDocSlots(slots: Record<string, number>): ScientistIntent {
