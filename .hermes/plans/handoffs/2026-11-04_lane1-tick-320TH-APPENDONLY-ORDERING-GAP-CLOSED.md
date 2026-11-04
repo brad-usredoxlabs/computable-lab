@@ -73,8 +73,9 @@ APPLIED (brief + spec, no product code):
   `.hermes/plans/` only) so the durable contract matches the brief. No acceptance criterion, no AM-1..AM-10, no
   boundary, no token changed.
 - LEG-1 brief re-stamped to 53109901 (it still asserts ancestor/diff facts, never a moving HEAD). Prompt md5
-  `67c4f3b7dc9edaf6dd186dfa88ea5bc8` → **`181a1fa05b228f406538037ecceb1c51`** (22,321 B). LEG-2 prompt UNCHANGED
-  (`76c5f783958708aca19741c687dc9432`), its `<leg-1-merge-sha>` guard still a literal placeholder ⇒ fail-closed.
+  `67c4f3b7dc9edaf6dd186dfa88ea5bc8` → **`6a0854b17ff99329e1cc0a0b662ba4f5`** (23,653 B, final for this tick).
+  LEG-2 prompt UNCHANGED (`76c5f783958708aca19741c687dc9432`), its `<leg-1-merge-sha>` guard still a literal
+  placeholder ⇒ fail-closed.
 
 ## Readiness re-proved at 53109901 (fresh, this tick)
 
