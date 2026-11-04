@@ -438,6 +438,13 @@
 }
 
 .message-log__clarification-card {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): the deck panel mounts the picker inside
+     this card (ProtocolIdeShell.tsx:521). As a grid item of
+     .message-log__clarifications it carries the default automatic minimum
+     (min-width:auto = its content's min-content), so an unclamped content
+     chain grows the card past the column in a narrow pane. min-width: 0
+     removes that floor so the clamps below it can take effect. */
+  min-width: 0;
   border: 1px solid var(--cl-border);
   border-radius: 6px;
   background: var(--cl-bg-elev-1);
@@ -486,6 +493,14 @@
 }
 
 .message-log__clarification-option {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the single-track
+     .message-log__clarification-options. box-sizing + min-width: 0 keep the
+     100% width INSIDE the track (padding/border no longer add to it) and
+     drop the automatic minimum so the label's overflow-wrap can engage
+     instead of the row growing past the track. */
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
   width: 100%;
   appearance: none;
   border: 1px solid var(--cl-border);
@@ -574,6 +589,13 @@
 }
 
 .message-log__clarification-search {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track (minmax(0,1fr), see .message-log__clarification-picker). As a
+     content-box width:100% item its padding + border ADDED to the track
+     width — the automatic minimum (min-width:auto) carried that overflow
+     past the card. box-sizing + min-width: 0 keep it inside the track. */
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   appearance: none;
   border: 1px solid var(--cl-border);
@@ -602,9 +624,23 @@
    row renders whenever the server allowed minting (allowCreateLocal) and
    the question carries a name (the seeded query). */
 .message-log__clarification-mint {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track. The measured defect (CHATHOST-CONSOLIDATE-1 D2): this row ran
+     150 px past the card and its Create button 42 px off the 1440 px
+     viewport. fix4 clamped the TRACK (minmax(0,1fr) + max-width:100%) but a
+     content-box width:100% item's padding (16px) + border (2px) add to the
+     track width — the automatic minimum (min-width:auto) carried that 18px
+     past the card edge (the Create button is flex:none, the last flex item,
+     so it lands exactly at that overflow). box-sizing: border-box makes the
+     100% INCLUDE padding/border (the row stops at the track edge) and
+     min-width: 0 removes the automatic floor. Children already carry the
+     shrink discipline (label/preview min-width:0; the Create button is
+     flex:none with its own width — the fix2 D-3 pin below). */
   display: flex;
   align-items: center;
   gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   margin-top: 4px;
   padding: 6px 8px;
@@ -667,6 +703,11 @@
    Compact rows: badge + label; the consequence line is on the popover's rows
    (P2) — the buttons are the fast path, the popover is the full ranked list. */
 .message-log__clarification-top3 {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track — the top-three candidate rows (the "Composition rows" of the
+     CHATHOST D2 capture) ride this container. Same clamp as the mint row:
+     no automatic minimum, so an unclamped row cannot grow the track. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
