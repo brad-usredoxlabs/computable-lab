@@ -139,3 +139,26 @@ stack restart, no task-status change (**todo 2 / in-progress 0 / superseded 1 / 
    slot must actually have existed at some poll after 11:33:01Z. If lane 2 re-claims slot-1 across a
    >60 s gap the clock resets (`HANDOFF_GAP_TOLERANCE`) and the next maturity is ~13:00Z — past the
    unit's deadline.
+
+## Addendum — v2 fire branch proven end-to-end, both polarities (05:47–05:50 EST)
+
+Not just the detector: the real fire branch was exercised in an isolated harness
+(`/tmp/v2e2e/`, throwaway `git worktree` at trunk `1b89fe69`, stubbed gate returning
+`VERDICT: DISPATCH-ELIGIBLE-ROTATION` rc 0, stubbed launcher, 6 s fire-proof, 45 s deadline), with a
+pre-flight assert that the generated script contains no reference to `cl-coder-launch.py` or the real
+lane-1 runtime dir outside comments — i.e. no coder could be started.
+
+| case | launcher behaviour | v2 result |
+|---|---|---|
+| A | launcher exits non-zero, writes NO start record | `NO START RECORD after 6s (unit=… state=inactive) => launcher did not launch; KEEPING POLLING`, re-fired next poll, `BUDGET-EXPIRED … exit 8`. **v1 in this case would have logged "ARMED DONE — LEG 1 dispatched" and exited 0.** |
+| B | launcher writes the real `event=start` record (same shape as cl-coder-launch.py:71-76/:95-96) | `FIRE PROVEN — launcher START record: {"event": "start", … "item": "L1-RECORD-LOCK-GUARD-1" …}` then `ARMED v2 DONE … exit 0` |
+| C | worktree not at trunk and not a git repo | `worktree FF failed -> exit 2` (fail-closed, observed before the gate stub was finished) |
+
+Sandbox cleaned up (`git worktree remove --force /tmp/v2e2e/wt`, transient `cl-l1-leg1-*` units reset).
+The real arm was never touched by the harness and is still `active/running`, MainPID 3762406.
+
+Residual, accepted: v2 cannot read the launcher's *license* to be slow — if a real launcher took longer
+than `FIRE_PROOF_SECS` (180 s) to write its start record, v2 would keep polling and could double-launch.
+This is mitigated structurally: `cl-coder-launch.py` takes the locks and writes the start record within
+seconds, and its own per-worktree `coder-worktree-<hash>.lock` (plus the slot locks it holds for the
+child's whole lifetime) makes a second concurrent launch of THIS worktree exit 75 rather than start.
