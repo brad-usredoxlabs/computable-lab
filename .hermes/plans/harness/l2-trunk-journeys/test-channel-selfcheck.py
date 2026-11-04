@@ -1392,6 +1392,498 @@ def main():
         results.append(("U1a/U1b: self-check (probe seed + open_ai_tab negative control)",
                         False, ["err=%s" % _e]))
 
+    # ---- (D6) CHATHOST-CONSOLIDATE-1 GRADER FIX (ruling D-6, l2t0150):
+    # the Q3 negative-control pins + Q4 umbrella. Each browser arm drives
+    # the REAL ui-drive.cjs (temp-dir probe, symlinked node_modules, file://
+    # fixture page — the existing arm mechanism) so the receipt's
+    # rendered_evidence is the driver's OWN computation, then grades it
+    # through the driver's OWN check_rendered_assertions + the probe's real
+    # assert.rendered. Every arm must grade NOT-ACCEPT (violations non-empty
+    # -> red). The Q4 umbrella is pinned on the RECEIPTS (the selector-proof
+    # triple + bubbles_matched) and the driver SOURCE (no body_text_tail
+    # borrowing for the selector-proof terms).
+    _D6_NM = os.path.join(REPO_ROOT, "node_modules")
+    if not os.path.isdir(os.path.join(_D6_NM, "js-yaml")):
+        _D6_NM = "/mnt/vast/home/brad/git/cl-integration-2/node_modules"
+
+    def _d6_drive(tag, rows_html, log_selector=None, review_log=""):
+        """Drive the REAL driver against a file:// fixture page: a
+        [aria-label=Conversation] log root holding rows_html, plus an
+        OPTIONAL .review-ai__log root (the doc-root fallback target) so the
+        fallback path is EXERCISED, not skipped. Returns (rc, rec, stderr)."""
+        td6 = tempfile.mkdtemp(prefix="sc-d6-%s-" % tag)
+        try:
+            fix = os.path.join(td6, "fixture.html")
+            with open(fix, "w") as fh:
+                fh.write("<!doctype html><html><body>\n"
+                         "<div aria-label=\"Conversation\" "
+                         "class=\"sequence-chat-messages\">\n"
+                         "%s\n</div>\n%s\n</body></html>\n"
+                         % (rows_html, review_log))
+            jp = os.path.join(td6, "D6-%s.yaml" % tag)
+            # Build the journey YAML by hand (json.dumps gives valid YAML
+            # double-quoted scalars). log_selector is OMITTED when None so
+            # the driver's documented default ('[aria-label="Conversation"]')
+            # applies — yaml.safe_dump(None) would emit 'null' + a '...'
+            # doc-end marker that js-yaml rejects ("expected a single
+            # document"), the rc=1 the earlier draft hit.
+            _d6_lines = ["id: D6-%s" % tag, "timeout_s: 30"]
+            if log_selector is not None:
+                _d6_lines.append("log_selector: %s" % json.dumps(log_selector))
+            _d6_lines += ["steps:", "  - step: goto",
+                          "    path: %s" % json.dumps(fix)]
+            with open(jp, "w") as fh:
+                fh.write("\n".join(_d6_lines) + "\n")
+            op = os.path.join(td6, "D6-%s-ui.json" % tag)
+            os.symlink(_D6_NM, os.path.join(td6, "node_modules"))
+            p = subprocess.run(
+                ["node", os.path.join(HERE, "ui-drive.cjs"),
+                 "--journey", jp, "--out", op, "--app-base", "file://"],
+                cwd=APP_DIR, capture_output=True, text=True, timeout=180)
+            try:
+                rec = json.load(open(op))
+            except Exception:
+                rec = {"_unreadable": True}
+            return p.returncode, rec, (p.stderr or "")[-500:]
+        finally:
+            try:
+                os.unlink(os.path.join(td6, "node_modules"))
+            except OSError:
+                pass
+            shutil.rmtree(td6, ignore_errors=True)
+
+    _D6_ROWS_USER_ONLY = ('<div class="chat-log-msg chat-log-msg--user">'
+                          "<strong>You</strong><span>just a user row</span>"
+                          "</div>")
+    _D6_ROWS_ASSISTANT_EMPTY = ('<div class="chat-log-msg '
+                                'chat-log-msg--assistant"><strong>'
+                                "Assistant</strong></div>")
+    _D6_ROWS_ASSISTANT_ANSWER = ('<div class="chat-log-msg '
+                                 'chat-log-msg--assistant"><strong>'
+                                 "Assistant</strong>"
+                                 "<p>here is the rendered answer</p></div>")
+    _D6_REVIEW_LOG = ('<div class="review-ai__log">'
+                      "<div class=\"review-ai__message\">review log "
+                      "chrome</div></div>")
+    try:
+        _d6_src = open(os.path.join(HERE, "ui-drive.cjs")).read()
+        # (a) the driver's assistant-row set is the ruling's EXACT set: the
+        #     assistant row class + the intent-card render class. The check
+        #     is scoped to the ACTUAL selector token (the one that computes
+        #     `bubbles` inside readAssistantTexts) — scanning the whole file
+        #     for absence of the legacy names would false-RED on this
+        #     comment and on the FROZEN review-surface settle logic
+        #     (lines ~293/304) which legitimately uses
+        #     .message-log__bubble--assistant for the MessageLog surface.
+        #     .message-log__bubble is a USER-row base class (MessageLog.tsx:143
+        #     `message-log__bubble message-log__bubble--user`) — keeping it in
+        #     the assistant set would count user rows as assistant turns, the
+        #     flattery the ruling forbids. Raw .chat-log-msg (all rows) is
+        #     deliberately NOT in the set either.
+        _d6_m = re.search(
+            r"const\s+bubbles\s*=\s*Array\.from\(\s*root\.querySelectorAll\(([^)]*)\)\s*\)",
+            _d6_src)
+        _d6_set = _d6_m.group(1).strip() if _d6_m else ""
+        results.append((
+            "D6 Q1: driver assistant set is the ruling's exact set "
+            "(.chat-log-msg--assistant, .chat-log-intent-card; legacy + "
+            "raw .chat-log-msg ABSENT from that set)",
+            _d6_set == "'.chat-log-msg--assistant, .chat-log-intent-card'"
+            and "chat-log__bubble" not in _d6_set
+            and "message-log__bubble" not in _d6_set
+            and "'.chat-log-msg'" not in _d6_set,
+            ["bubbles set token=%r" % (_d6_set,)]))
+        # (b) Q4 umbrella (source-level): the selector-proof triple +
+        #     bubbles_matched are computed from MATCHED elements (the
+        #     readAssistantTexts result `after`), never borrowed from the
+        #     page-body text tail. `evidence.body_text_tail` is assigned
+        #     EXACTLY ONCE (the legitimate body-text read for text_contains)
+        #     and NONE of the four selector-proof fields read it.
+        _d6_tail_assigns = _d6_src.count("evidence.body_text_tail")
+        _d6_proof_lines = [ln for ln in _d6_src.splitlines()
+                           if re.match(
+                               r"\s*evidence\.(assistant_turns|turns_completed"
+                               r"|bubbles_matched|last_assistant_text_nonempty)"
+                               r"\s*=", ln)]
+        _d6_no_tail_borrow = (
+            _d6_tail_assigns == 1
+            and len(_d6_proof_lines) == 4
+            and not any("body_text_tail" in ln for ln in _d6_proof_lines))
+        results.append(("D6 Q4: selector-proof terms computed from matched "
+                        "elements, no body_text_tail borrowing",
+                        _d6_no_tail_borrow,
+                        ["body_text_tail assigns=%r proof-fields=%r"
+                         % (_d6_tail_assigns, len(_d6_proof_lines))]))
+        # (c) Q2 semantics pin (pure, no browser): assistant_answer_visible
+        #     requires BOTH a completed turn (baseline-subtracted
+        #     turns_completed >= 1) AND a non-empty last assistant row.
+        #     Pre-existing rows (assistant_turns >= 1, turns_completed == 0)
+        #     must NOT satisfy it; user-only / empty threads must grade
+        #     not-green. Uses the probe's REAL assert.rendered.
+        #
+        #     advc c10 D3: the pre-existing case is graded with the
+        #     {assistant_answer_visible: true} assertion ALONE — against the
+        #     full assert.rendered the sibling turns_at_least backstop
+        #     (turns_completed=0 < 1) would RED it at BASE too, so the arm
+        #     passed both ways and did not test the Q2 change. Alone, it
+        #     grades GREEN at base (assistant_answer_visible read
+        #     assistant_turns=1, nonempty=True — the false positive) and RED
+        #     at head — the arm flips with the Q2 line (verified against a
+        #     /tmp copy with the Q2 line reverted).
+        _d6_probe = rj.build_chat_host_probe("d6-semantics", "x", "/x")
+        _d6_ar = _d6_probe["assert"]["rendered"]
+        _d6_aav_only = [{"assistant_answer_visible": True}]
+        _d6_green_ev = {"assistant_turns": 1, "turns_completed": 1,
+                        "last_assistant_text_nonempty": True,
+                        "error_frames": 0}
+        _d6_pre_ev = {"assistant_turns": 1, "turns_completed": 0,
+                      "last_assistant_text_nonempty": True, "error_frames": 0}
+        _d6_user_ev = {"assistant_turns": 0, "turns_completed": 0,
+                       "last_assistant_text_nonempty": False,
+                       "error_frames": 0}
+        _d6_empty_ev = {"assistant_turns": 1, "turns_completed": 1,
+                        "last_assistant_text_nonempty": False,
+                        "error_frames": 0}
+        _d6_v = {k: rj.check_rendered_assertions(ev, _d6_ar)
+                 for k, ev in [("green", _d6_green_ev),
+                               ("useronly", _d6_user_ev),
+                               ("empty", _d6_empty_ev)]}
+        _d6_pre_alone = rj.check_rendered_assertions(_d6_pre_ev, _d6_aav_only)
+        _d6_pre_specific = any(
+            "no visible non-empty assistant answer" in v and "turns_completed=0" in v
+            for v in _d6_pre_alone)
+        results.append(("D6 Q2: green IFF (turns_completed>=1 AND "
+                        "non-empty last row); user-only / empty all grade "
+                        "not-green",
+                        not _d6_v["green"]
+                        and bool(_d6_v["useronly"])
+                        and bool(_d6_v["empty"]),
+                        ["violations=%r" % (
+                            {k: (v[:1] if v else v) for k, v in _d6_v.items()},
+                        )]))
+        results.append(("D6 Q2 pin: pre-existing evidence (assistant_turns=1, "
+                        "turns_completed=0) graded with {assistant_answer_"
+                        "visible:true} ALONE is RED with the specific "
+                        "violation (advc c10 D3 — alone it grades GREEN at "
+                        "base, so the arm flips with the Q2 line)",
+                        _d6_pre_specific,
+                        ["alone violations=%r" % (_d6_pre_alone,)]))
+        # (d) PIN 1 — user-only: ONLY a .chat-log-msg--user row renders.
+        _d6_rc_uo, _d6_rec_uo, _d6_err_uo = _d6_drive(
+            "uonly", _D6_ROWS_USER_ONLY)
+        _d6_ev_uo = (_d6_rec_uo.get("rendered_evidence") or {})
+        _d6_vu = rj.check_rendered_assertions(
+            _d6_ev_uo, _d6_probe["assert"]["rendered"])
+        results.append(
+            ("D6 Q3 pin 1: user-only thread grades NOT-ACCEPT "
+             "(assistant_turns=0, last_assistant_text_nonempty=false)",
+             _d6_rc_uo == 0
+             and _d6_ev_uo.get("assistant_turns") == 0
+             and _d6_ev_uo.get("last_assistant_text_nonempty") is False
+             and _d6_ev_uo.get("bubbles_matched") == 0
+             and bool(_d6_vu),
+             ["rc=%s ev=%r viol=%s"
+              % (_d6_rc_uo,
+                 {k: _d6_ev_uo.get(k) for k in (
+                     "assistant_turns", "last_assistant_text_nonempty",
+                     "turns_completed", "bubbles_matched")},
+                 _d6_vu[:2])]))
+        # (e) PIN 2 — empty assistant: ONE assistant-tagged row, empty
+        #     body, no intent card. assistant_turns >= 1 (the row IS
+        #     matched) but the last row grades empty -> not-accept.
+        _d6_rc_ea, _d6_rec_ea, _d6_err_ea = _d6_drive(
+            "eassist", _D6_ROWS_ASSISTANT_EMPTY)
+        _d6_ev_ea = (_d6_rec_ea.get("rendered_evidence") or {})
+        _d6_vea = rj.check_rendered_assertions(
+            _d6_ev_ea, _d6_probe["assert"]["rendered"])
+        results.append(
+            ("D6 Q3 pin 2: empty assistant row grades NOT-ACCEPT "
+             "(assistant_turns>=1 but last_assistant_text_nonempty=false)",
+             _d6_rc_ea == 0
+             and _d6_ev_ea.get("assistant_turns", 0) >= 1
+             and _d6_ev_ea.get("bubbles_matched", 0) >= 1
+             and _d6_ev_ea.get("last_assistant_text_nonempty") is False
+             and bool(_d6_vea),
+             ["rc=%s ev=%r viol=%s"
+              % (_d6_rc_ea,
+                 {k: _d6_ev_ea.get(k) for k in (
+                     "assistant_turns", "last_assistant_text_nonempty",
+                     "turns_completed", "bubbles_matched")},
+                 _d6_vea[:2])]))
+        # (f) PIN 3 — absent log root: log_selector matches NOTHING; the
+        #     fail-closed path returns turns:0. The fixture ALREADY CARRIES
+        #     a .review-ai__log (the doc-root fallback target) with
+        #     non-chrome text in the BODY — proving (1) the fallback does
+        #     NOT rescue (it carries no assistant rows: the assistant
+        #     set matches 0 inside it -> still turns:0, no double-count)
+        #     and (2) body-text-only "proof" would have found the answer
+        #     text in the page while the selector-proof triple stays 0.
+        _d6_rc_ab, _d6_rec_ab, _d6_err_ab = _d6_drive(
+            "absroot", _D6_ROWS_ASSISTANT_ANSWER,
+            log_selector=".no-such-log-root", review_log=_D6_REVIEW_LOG)
+        _d6_ev_ab = (_d6_rec_ab.get("rendered_evidence") or {})
+        _d6_vab = rj.check_rendered_assertions(
+            _d6_ev_ab, _d6_probe["assert"]["rendered"])
+        _d6_fallback_no_rescue = (
+            _d6_rc_ab == 0
+            and _d6_ev_ab.get("assistant_turns") == 0
+            and _d6_ev_ab.get("bubbles_matched") == 0
+            and _d6_ev_ab.get("last_assistant_text_nonempty") is False
+            and bool(_d6_vab))
+        results.append(
+            ("D6 Q3 pin 3: absent log root fails CLOSED (turns:0, "
+             "bubbles_matched:0, not-accept) even WITH the .review-ai__log "
+             "fallback present — no rescue, no double-count",
+             _d6_fallback_no_rescue,
+             ["rc=%s ev=%r viol=%s stderr=%s"
+              % (_d6_rc_ab,
+                 {k: _d6_ev_ab.get(k) for k in (
+                     "assistant_turns", "last_assistant_text_nonempty",
+                     "turns_completed", "bubbles_matched")},
+                 _d6_vab[:2], _d6_err_ab[:200])]))
+        # (f2) PIN 3b — advc c10 D1: the fallback claim is pinned on the
+        #      SURFACE property, not a false universal. (i) The real
+        #      fallback root is a MessageLog surface: ReviewAiPanel.tsx
+        #      wraps <MessageLog> in .review-ai__log, and MessageLog.tsx
+        #      carries NO chat-log row class — so the assistant set can
+        #      never match inside it, and the fallback cannot rescue a
+        #      chat-log selector ON THE REAL SURFACES. (ii) The property is
+        #      falsifiable: the reviewer's c10 repro — a fallback root that
+        #      DID carry a .chat-log-msg--assistant row — counts it
+        #      (turns:1), proving the fallback is a root substitution that
+        #      grades whatever the fallback root contains. A pin that only
+        #      checks "chrome-only fixture -> 0" (the c10 finding: passes
+        #      both ways for the stronger claim) is NOT a pin.
+        _d6_panel = os.path.join(REPO_ROOT, "app", "src", "ingestion",
+                                 "protocol-review", "ReviewAiPanel.tsx")
+        _d6_mlog = os.path.join(REPO_ROOT, "app", "src", "event-editor",
+                                "right-pane", "ai", "MessageLog.tsx")
+        _d6_panel_src = ""
+        _d6_mlog_src = ""
+        try:
+            with open(_d6_panel) as fh:
+                _d6_panel_src = fh.read()
+        except OSError:
+            pass
+        try:
+            with open(_d6_mlog) as fh:
+                _d6_mlog_src = fh.read()
+        except OSError:
+            pass
+        _d6_fallback_surface = (
+            bool(_d6_panel_src) and bool(_d6_mlog_src)
+            # the fallback root wraps the MessageLog component
+            and re.search(
+                r'<div className="review-ai__log">\s*<MessageLog\b',
+                _d6_panel_src) is not None
+            # the MessageLog surface renders its rows as message-log__bubble
+            and "message-log__bubble--assistant" in _d6_mlog_src
+            and "message-log__bubble--user" in _d6_mlog_src
+            # and carries NO chat-log row class anywhere (the reviewer's
+            # c10 grep: MessageLog.tsx has no chat-log-intent-card either)
+            and "chat-log-msg--assistant" not in _d6_mlog_src
+            and "chat-log-intent-card" not in _d6_mlog_src)
+        results.append(
+            ("D6 Q3 pin 3b: the REAL fallback root (.review-ai__log -> "
+             "MessageLog) carries no .chat-log-msg--assistant / "
+             ".chat-log-intent-card rows — no chat-log rescue ON THE REAL "
+             "SURFACES (advc c10 D1)",
+             _d6_fallback_surface,
+             ["panel wraps MessageLog in .review-ai__log=%r MessageLog has "
+              "message-log rows=%r chat-log classes absent=%r"
+              % (bool(re.search(
+                      r'<div className="review-ai__log">\s*<MessageLog\b',
+                      _d6_panel_src or "")),
+                 "message-log__bubble--assistant" in _d6_mlog_src,
+                 "chat-log-msg--assistant" not in _d6_mlog_src
+                 and "chat-log-intent-card" not in _d6_mlog_src)]))
+        _D6_REVIEW_LOG_WITH_ANSWER = (
+            '<div class="review-ai__log">'
+            '<div class="chat-log-msg chat-log-msg--assistant">'
+            "<strong>Assistant</strong>"
+            "<p>answer inside review log</p></div></div>")
+        _d6_rc_rs, _d6_rec_rs, _d6_err_rs = _d6_drive(
+            "rescue", _D6_ROWS_ASSISTANT_ANSWER,
+            log_selector=".no-such-log-root",
+            review_log=_D6_REVIEW_LOG_WITH_ANSWER)
+        _d6_ev_rs = (_d6_rec_rs.get("rendered_evidence") or {})
+        results.append(
+            ("D6 Q3 pin 3b (falsifiable): a fallback root that DID carry a "
+             "chat-log assistant row IS counted (turns>=1) — the fallback "
+             "grades whatever the fallback root contains, so the no-rescue "
+             "claim holds ONLY on the real MessageLog surface",
+             _d6_rc_rs == 0
+             and _d6_ev_rs.get("assistant_turns", 0) >= 1
+             and _d6_ev_rs.get("bubbles_matched", 0) >= 1,
+             ["rc=%s ev=%r stderr=%s"
+              % (_d6_rc_rs,
+                 {k: _d6_ev_rs.get(k) for k in (
+                     "assistant_turns", "bubbles_matched",
+                     "last_assistant_text_nonempty")},
+                 _d6_err_rs[:200])]))
+        # (g) POSITIVE CONTROL (the fix is not over-strict): a real
+        #     assistant row with body text, fresh (turns_completed=1),
+        #     no error frame -> the probe's own assert.rendered is CLEAN
+        #     (rendered-leg green).
+        _d6_rc_gc, _d6_rec_gc, _d6_err_gc = _d6_drive(
+            "greenctl", _D6_ROWS_ASSISTANT_ANSWER)
+        _d6_ev_gc = (_d6_rec_gc.get("rendered_evidence") or {})
+        _d6_vgc = rj.check_rendered_assertions(
+            _d6_ev_gc, _d6_probe["assert"]["rendered"])
+        results.append(
+            ("D6 control: a genuine rendered answer passes the probe's "
+             "own assert.rendered (fix not over-strict)",
+             _d6_rc_gc == 0 and not _d6_rec_gc.get("failure")
+             and _d6_ev_gc.get("assistant_turns", 0) >= 1
+             and _d6_ev_gc.get("turns_completed", 0) >= 1
+             and _d6_ev_gc.get("last_assistant_text_nonempty") is True
+             and _d6_ev_gc.get("error_frames", 0) == 0
+             and not _d6_vgc,
+             ["rc=%s ev=%r viol=%s"
+              % (_d6_rc_gc,
+                 {k: _d6_ev_gc.get(k) for k in (
+                     "assistant_turns", "last_assistant_text_nonempty",
+                     "turns_completed", "bubbles_matched",
+                     "error_frames")},
+                 _d6_vgc[:2])]))
+        # (h) Q4 umbrella on the RECEIPTS: every D6 receipt's
+        #     rendered_evidence carries the selector-proof TRIPLE
+        #     (assistant_turns, last_assistant_text_nonempty,
+        #     turns_completed) AND bubbles_matched (the number of bubbles
+        #     actually matched).
+        _d6_triple = ("assistant_turns", "last_assistant_text_nonempty",
+                      "turns_completed", "bubbles_matched")
+        _d6_umb = all(
+            all(k in ev for k in _d6_triple)
+            and isinstance(ev.get("bubbles_matched"), int)
+            for ev in (_d6_ev_uo, _d6_ev_ea, _d6_ev_ab, _d6_ev_gc))
+        results.append(
+            ("D6 Q4 umbrella: every receipt's rendered_evidence carries "
+             "the selector-proof triple + bubbles_matched",
+             _d6_umb,
+             ["keys=%r" % (
+                 {_name: (set(_d6_ev) & set(_d6_triple) == set(_d6_triple))
+                  for _name, _d6_ev in (
+                      ("uonly", _d6_ev_uo), ("eassist", _d6_ev_ea),
+                      ("absroot", _d6_ev_ab), ("green", _d6_ev_gc))},
+             )]))
+        # (i) THE grader-bug regression, demonstrated RED against the BASE
+        #     (96b3d8d4) selector set. The revert is a faithful RE-DRIVE of
+        #     the base commit's OWN driver file (git show) against the
+        #     SAME rendered-answer fixture the fixed driver grades green:
+        #     the base set (.chat-log__bubble / .message-log__bubble /
+        #     .chat-log-intent-card) matches ZERO rows on the current
+        #     ChatLog DOM (ChatLog.tsx:399-403 renders
+        #     chat-log-msg--*), so the base grades turns:0 while the fixed
+        #     driver counts the rendered answer — the fix is what changed
+        #     the grade. (Stated revert-and-restore: the base file is
+        #     materialised to a throwaway copy under /tmp, driven, and
+        #     deleted; the worktree file is never modified, so there is
+        #     nothing to restore — but the demonstration IS a revert of the
+        #     selector set.)
+        _d6_git_show = subprocess.run(
+            ["git", "-C", REPO_ROOT, "show", "96b3d8d4:"
+             ".hermes/plans/harness/l2-trunk-journeys/ui-drive.cjs"],
+            capture_output=True, text=True)
+        _d6_base_src = _d6_git_show.stdout if _d6_git_show.returncode == 0 \
+            else ""
+        _d6_base_set_line = next(
+            (ln for ln in _d6_base_src.splitlines()
+             if "const bubbles" in ln and "querySelectorAll" in ln), "")
+        results.append(
+            ("D6 RED-against-revert: the base selector set is still "
+             "wired (git show 96b3d8d4 selector line differs ONLY in the "
+             "selector tokens from the fixed line)",
+             bool(_d6_base_set_line)
+             and _d6_base_src != _d6_src
+             and ".chat-log__bubble" in _d6_base_set_line
+             and ".message-log__bubble" in _d6_base_set_line
+             and ".chat-log-msg--assistant" not in _d6_base_set_line
+             and ".chat-log-msg--assistant" in _d6_src,
+             ["base set line=%r" % (_d6_base_set_line.strip()[:120],)]))
+        if _d6_base_src and _d6_base_set_line:
+            td6r = tempfile.mkdtemp(prefix="sc-d6-rev-")
+            try:
+                _d6_rev_probe = os.path.join(td6r, "ui-drive-rev.cjs")
+                with open(_d6_rev_probe, "w") as fh:
+                    fh.write(_d6_base_src)
+                fixr = os.path.join(td6r, "fixture.html")
+                with open(fixr, "w") as fh:
+                    fh.write("<!doctype html><html><body>\n"
+                             "<div aria-label=\"Conversation\" "
+                             "class=\"sequence-chat-messages\">\n"
+                             "<div class=\"chat-log-msg "
+                             "chat-log-msg--assistant\"><strong>"
+                             "Assistant</strong>"
+                             "<p>here is the rendered answer</p></div>\n"
+                             "</div>\n</body></html>\n")
+                jpr = os.path.join(td6r, "D6-rev.yaml")
+                with open(jpr, "w") as fh:
+                    fh.write("id: D6-rev\ntimeout_s: 30\n"
+                             "log_selector: '[aria-label=\"Conversation\"]'\n"
+                             "steps:\n  - step: goto\n    path: %s\n" % fixr)
+                opr = os.path.join(td6r, "D6-rev-ui.json")
+                os.symlink(_D6_NM, os.path.join(td6r, "node_modules"))
+                _d6_pr = subprocess.run(
+                    ["node", _d6_rev_probe, "--journey", jpr,
+                     "--out", opr, "--app-base", "file://"],
+                    cwd=APP_DIR, capture_output=True, text=True,
+                    timeout=180)
+                try:
+                    _d6_rrec = json.load(open(opr))
+                except Exception:
+                    _d6_rrec = {"_unreadable": True}
+                _d6_rev_ev = (_d6_rrec.get("rendered_evidence") or {})
+                results.append(
+                    ("D6 RED-against-revert: the BASE set grades the "
+                     "rendered assistant answer turns:0 (the proven "
+                     "grader bug) while the fixed set counts it",
+                     _d6_pr.returncode == 0
+                     and _d6_rev_ev.get("assistant_turns") == 0
+                     and _d6_rev_ev.get("last_assistant_text_nonempty")
+                     is False
+                     and _d6_ev_gc.get("assistant_turns", 0) >= 1,
+                     ["base ev=%r fixed assistant_turns=%r"
+                      % ({k: _d6_rev_ev.get(k) for k in (
+                          "assistant_turns",
+                          "last_assistant_text_nonempty")},
+                         _d6_ev_gc.get("assistant_turns"))]))
+            finally:
+                try:
+                    os.unlink(os.path.join(td6r, "node_modules"))
+                except OSError:
+                    pass
+                shutil.rmtree(td6r, ignore_errors=True)
+        # (j) A-LEG data pass-through: the builder READS the inventory
+        #     row's answer_selector DATA (by id — never a branch) and
+        #     injects it as the probe's log_selector; every inventory
+        #     row carries the field; an explicit override is respected.
+        _d6_inv = yaml.safe_load(open(rj.CHAT_HOSTS_INVENTORY)) or {}
+        _d6_rows = _d6_inv.get("hosts") or []
+        _d6_sel_all = [h.get("answer_selector") for h in _d6_rows]
+        _d6_p = rj.build_chat_host_probe(
+            "artifact-host", "analysis", "/artifact/x/CHATHOST-PROBE")
+        results.append(
+            ("D6 A-leg: builder injects the inventory answer_selector "
+             "DATA as log_selector (data lookup, no per-host branch)",
+             len(_d6_rows) == 6
+             and all(s == '[aria-label="Conversation"]' for s in _d6_sel_all)
+             and _d6_p.get("log_selector") == '[aria-label="Conversation"]',
+             ["rows=%d selectors=%r probe.log_selector=%r"
+              % (len(_d6_rows), set(_d6_sel_all),
+                 _d6_p.get("log_selector"))]))
+        _d6_ov = rj.build_chat_host_probe(
+            "artifact-host", "analysis", "/artifact/x/CHATHOST-PROBE",
+            answer_selector="[data-testid='custom-log']")
+        results.append(
+            ("D6 A-leg: an explicit answer_selector override is respected "
+             "(the pin arms' model of a row lacking the field)",
+             _d6_ov.get("log_selector") == "[data-testid='custom-log']",
+             ["override log_selector=%r" % (_d6_ov.get("log_selector"),)]))
+    except Exception as _d6_e:
+        results.append(("D6 Q3/Q4 pins (self-check)", False,
+                        ["err=%s" % _d6_e]))
+
     # ---- (T5) CHATHOST-CONSOLIDATE-1 FIX2 (advc c8 D-1): probe side-record
     # teardown HONESTY — `_delete_probe_side_records` must report
     # acl_clean = False when the ACL GET returns ANY non-200 status except

@@ -192,20 +192,64 @@ function shaShort(s) {
   let reviewBaselineTaken = false;
 
   async function readAssistantTexts() {
-    // Assistant-visible outcome evidence: the conversation log's bubble texts
-    // plus intent cards (a deterministic compile answers with the shorthand
-    // card — a user-visible answer on this surface).
+    // Assistant-visible outcome evidence: the conversation log's ASSISTANT-
+    // AUTHORED rows. D-6 (l2t0150): the universal ChatLog renders each row as
+    // `chat-log-msg chat-log-msg--assistant|--user|--system` (ChatLog.tsx:399-
+    // 403) — the OLD set (.chat-log__bubble / .message-log__bubble) matched
+    // ZERO rows there, so a rendered assistant bubble graded turns:0 (a
+    // grader bug, not a product bug). The row class set is EXPLICIT and
+    // EXCLUDES the sibling --user / --system rows (raw .chat-log-msg is
+    // deliberately NOT in the set — it would count user rows as assistant
+    // turns). The selector is DATA per host (the inventory `answer_selector`,
+    // injected as log_selector); this default set is the documented
+    // fail-closed fallback. The row text EXCLUDES the author-label
+    // <strong> (so an assistant row with no body text grades empty — the
+    // Q2 "last rendered assistant row non-empty" predicate is load-bearing),
+    // and the row's intent-card textContent counts as visible answer text
+    // (a deterministic compile answers with the shorthand card — a user-
+    // visible answer on this surface). `bubbles_matched` is the count of
+    // rows actually matched by the selector (the Q3 umbrella selector-proof:
+    // a grader that sees only pane chrome is distinguishable from one that
+    // saw a row). The log_selector resolution and the doc-root fallback
+    // (.review-ai__log) are unchanged. The fallback is a ROOT substitution:
+    // it grades whatever the fallback ROOT contains, so a fallback root that
+    // carried chat-log rows WOULD count them. On the REAL surfaces it
+    // carries none — the fallback root is a MessageLog surface
+    // (ReviewAiPanel.tsx:294 wraps <MessageLog> in .review-ai__log;
+    // MessageLog.tsx:143-144 renders message-log__bubble--assistant and the
+    // file carries no chat-log rows) — so the fallback cannot rescue a
+    // chat-log selector ON THE REAL SURFACES. Selfcheck pin 3b pins that
+    // surface property (falsifiable: it goes RED if the fallback root ever
+    // carries a chat-log row class).
     return page.evaluate((sel) => {
+      const empty = { turns: 0, texts: [], intent_cards: 0, bubbles_matched: 0 };
       const root = document.querySelector(sel) || document.querySelector('.review-ai__log');
-      if (!root) return { turns: 0, texts: [], intent_cards: 0 };
-      const bubbles = Array.from(root.querySelectorAll('.chat-log__bubble, .message-log__bubble, .chat-log-intent-card'));
-      const texts = bubbles.map((b) => b.textContent.trim()).filter(Boolean);
+      if (!root) return empty;
+      // D-6 Q1: the ruling's EXACT set — the assistant-authored row class
+      // plus the confirmed intent-card render class (ChatLog.tsx:484). The
+      // legacy `.message-log__bubble` / `.chat-log__bubble` are DROPPED:
+      // `.message-log__bubble` is a USER-row base class (MessageLog.tsx:143
+      // `message-log__bubble message-log__bubble--user`) — keeping it would
+      // count user rows as assistant turns, EXACTLY the flattery the ruling
+      // forbids ("explicitly exclude the sibling user/system classes"). The
+      // --user / --system sibling classes are never in this set (raw
+      // `.chat-log-msg` is deliberately NOT added — it would match them).
+      // A shorthand assistant row renders the card INSIDE the row
+      // (ChatLog.tsx:484), so it matches BOTH selectors (the row + the
+      // nested card) — a monotone-safe over-count that never flips a pin.
+      const bubbles = Array.from(root.querySelectorAll('.chat-log-msg--assistant, .chat-log-intent-card'));
+      const texts = bubbles.map((b) => {
+        const c = b.cloneNode(true);
+        c.querySelectorAll('strong').forEach((s) => s.remove());
+        return (c.textContent || '').trim();
+      });
       return {
         turns: texts.length,
         texts: texts.slice(-6).map((t) => t.slice(0, 600)),
         intent_cards: root.querySelectorAll('.chat-log-intent-card').length,
+        bubbles_matched: bubbles.length,
       };
-    }, logSelector).catch(() => ({ turns: 0, texts: [], intent_cards: 0 }));
+    }, logSelector).catch(() => ({ turns: 0, texts: [], intent_cards: 0, bubbles_matched: 0 }));
   }
 
   async function visibleCardsWithOptions() {
@@ -216,6 +260,7 @@ function shaShort(s) {
   const steps = journey.steps || [];
   const evidence = {
     assistant_turns: 0, assistant_texts: [], intent_cards: 0,
+    bubbles_matched: 0,
     turns_before: 0, turns_completed: 0,
     clarification_answered: false, clarification_answer_no_loop: false,
     proposal_accepted: false, error_frames: 0,
@@ -499,9 +544,16 @@ function shaShort(s) {
     evidence.turns_completed = Math.max(0, after.turns - baseline.turns);
     evidence.assistant_texts = after.texts;
     evidence.intent_cards = after.intent_cards;
-    evidence.last_assistant_text_nonempty =
-      after.turns >= 1 && after.texts.length > 0 &&
-      after.texts[after.texts.length - 1].length > 0;
+    evidence.bubbles_matched = after.bubbles_matched;
+    // D-6 Q2: the non-empty predicate targets the LAST rendered assistant-
+    // authored row in the matched set. The matched set is now the WHOLE
+    // (readAssistantTexts dropped the empty-text filter), so an assistant
+    // row with an empty body (a label-only shell) grades EMPTY — the old
+    // filter made such rows invisible and the predicate tautological
+    // (nonempty === turns>=1). turns>=1 (baseline-subtracted) AND a
+    // non-empty last row are BOTH required for green.
+    const _lastAssistant = after.texts.length ? after.texts[after.texts.length - 1] : '';
+    evidence.last_assistant_text_nonempty = after.turns >= 1 && _lastAssistant.length > 0;
     evidence.error_frames = await page.locator('[role="alert"]').count().catch(() => 0);
     // Rendered-outcome evidence for content assertions: the live page text
     // (the re-read panes carry an accepted edit's new label).

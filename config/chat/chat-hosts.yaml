@@ -82,6 +82,15 @@ hosts:
     required_providers: [deck]
     optional_providers: []
     ghost_mount: true
+    # D-6 (l2t0150) A-leg: the host's assistant-answer render selector as
+    # DATA — the universal ChatLog log root (role=log,
+    # aria-label="Conversation", ChatLog.tsx:391) that contains this host's
+    # assistant rows (the row classes are the ONE universal set the driver
+    # matches: D-6 B-now). The sweep injects this value as the probe's
+    # `log_selector`. All six hosts render through the ONE SurfaceChatBridge
+    # -> ChatLog, so one value is universal — DATA per row, never a per-host
+    # code branch.
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       AiContext.surface 'run-workspace' (RunWorkspacePage.tsx:102). The ONE registrar
       (host="run-workspace") mounts INSIDE EventEditorProvider and passes its own base
@@ -101,6 +110,9 @@ hosts:
     required_providers: [deck]
     optional_providers: []
     ghost_mount: true
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       AiContext.surface 'event-editor' — the deck slice declares it (DeckChatSlice.tsx:41,
       :146) and the collector posts it for this door: the registrar mounts without a
@@ -117,6 +129,9 @@ hosts:
     required_providers: []
     optional_providers: [deck]
     ghost_mount: true
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       THE LEG-F SURVIVOR (the fix ships in this branch). The page-level door
       (ProjectWorkspaceDoor -> the ONE registrar, host="project-deck-tab", mounted ABOVE
@@ -136,6 +151,9 @@ hosts:
     required_providers: []
     optional_providers: []
     ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       AiContext.surface 'analysis' (RecordHostPage.tsx:41). Thread-scoped on the recordId
       (one conversation per record). Context = the record being created/edited + owning study.
@@ -147,6 +165,9 @@ hosts:
     required_providers: []
     optional_providers: []
     ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       AiContext.surface 'analysis' (ArtifactHostPage.tsx:40). Thread-scoped on the artifactId.
       Context = the artifact + its study.
@@ -158,6 +179,9 @@ hosts:
     required_providers: []
     optional_providers: []
     ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
     note: >-
       AiContext.surface 'analysis' (RegistryHostPage.tsx:41). Not instance-scoped (rides the
       scratch study) -> the server's reserved "_" thread scope. Context follows the live
