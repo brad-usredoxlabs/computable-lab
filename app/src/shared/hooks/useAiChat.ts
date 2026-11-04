@@ -442,6 +442,15 @@ export interface UseAiChatOptions {
    * rehydrates (the first deck's messages are never carried into the second).
    */
   scope?: string
+  /**
+   * L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): the registrar's scope-DECISION
+   * status. 'provisional': the scope is undecided — the lazy-mint and
+   * hydration effects RETURN EARLY (no mint/activation/GET): nothing
+   * persists under a provisional no-scope bucket. ABSENT / 'settled'
+   * (default) = pre-unit-2 behaviour. Provisional is an IO gate ONLY —
+   * an active thread is never cleared (C-4); settle re-hydrates once (C-3).
+   */
+  scopeStatus?: 'settled' | 'provisional'
   /** Handler called for each accepted preview event. */
   proposalScopeKey?: string
   onSequenceProposal?: (proposal: Record<string, unknown>, userRequest?: string) => void
@@ -688,7 +697,7 @@ export function unionClarificationAnswers(
   return out
 }
 
-export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -889,6 +898,16 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   const activeThreadRef = useRef(activeThread)
   activeThreadRef.current = activeThread
 
+  // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): scope-DECISION status
+  // (absent / 'settled' = default). While provisional the lazy-mint and
+  // hydration effects RETURN EARLY — nothing persists under the provisional
+  // no-scope bucket (persistence is activation-keyed: the sync effect's
+  // `!activeThread` guard, :1112). The ref keeps the status readable from
+  // the hydration effect WITHOUT joining its deps (a settle flip must not
+  // re-run hydration — C-3). Mid-session widening holds IO ONLY (C-4).
+  const scopeStatusRef = useRef<'settled' | 'provisional'>(scopeStatus ?? 'settled')
+  scopeStatusRef.current = scopeStatus ?? 'settled'
+
   const resetChatState = useCallback(() => {
     setMessages([])
     persistedIdsRef.current = new Set()
@@ -934,17 +953,36 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   // Runs again when the scope CHANGES (the state still holds the previous
   // scope's pair) — the in-effect re-key reset below then clears the chat
   // for the new (scope, threadId) key.
+  // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): PROVISIONAL HOLD. While the
+  // scope is undecided, minting would resolve the no-scope "_" bucket and
+  // persist a live session under it before the scope is known (the c7
+  // cold-mount split). RETURN EARLY — the settle flip RE-RUNS this effect
+  // (scopeStatus in deps) and takes the normal path; a mid-session
+  // widening returns early WITHOUT clearing the active thread (C-4).
   useEffect(() => {
     if (!endpoint) return
+    if (scopeStatus === 'provisional') return
     const id = resolveTabThreadId(scope)
-    setActiveThread({ scope: scope ?? '', id })
-  }, [endpoint, scope])
+    const next = { scope: scope ?? '', id }
+    // Stable activation (C-3): a settle re-run that resolves to the
+    // ALREADY-ACTIVE pair does not re-activate → the hydration effect
+    // (keyed on activeThread) does not re-run (no double-fetch).
+    const prev = activeThreadRef.current
+    if (prev && prev.scope === next.scope && prev.id === next.id) return
+    setActiveThread(next)
+  }, [endpoint, scope, scopeStatus])
 
   useEffect(() => {
     if (!endpoint) {
       hydratedRef.current = true
       return
     }
+    // L2-THREADSCOPE-FLIP-1 unit 2 (C-2): PROVISIONAL HOLD — via the ref
+    // (OUT of the deps array so a settle flip never re-runs this effect and
+    // double-hydrates). No (scope, id) pair to hydrate while undecided;
+    // `!activeThread` below covers the held-activation path, this is the
+    // explicit IO gate for mid-session widening.
+    if (scopeStatusRef.current === 'provisional') return
     // The tab thread resolves in the lazy-mint effect (one render later) —
     // skip until then so the hydration GET carries the resolved (scope, id)
     // pair (avoids a duplicate pre-mint GET; both would mint the SAME id
