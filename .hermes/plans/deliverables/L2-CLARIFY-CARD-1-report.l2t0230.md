@@ -678,3 +678,108 @@ VERIFY counts (run at this verify-block commit):
    untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` (assignment-excluded,
    never committed).
 CARD1-FIX5-FIX1 DONE c733a565acff96d833684709cf1dca5af54fd9c1
+
+---
+
+## FIX-2 (bounded fix run, advc c7 l2t1912)
+
+Work order: four code defects + two report-prose lines; nothing else re-opened.
+Commits: DEFECT 1 = `8b077aa0` (alone, its own commit); DEFECTS 2+3 = `14c67e45`;
+DEFECT 4 = `be9d9c45` + scope-lock hygiene `bf41e9e6`. All in the worktree;
+real YAML block never deleted (mutation proofs in a /tmp throwaway copy /
+local-sed with restore, `git diff` clean after each restore).
+
+### DEFECT 1 (BLOCKER) — the declared canonicalLabel POLICY is now load-bearing
+`server/src/ai/shorthandChat.ts`: `loadCanonicalLabelPolicy()` is called PER CALL
+inside `clarificationsFromUnresolvedFacts` (the nounShape/assumedValues law —
+never process-cached, no module-scope cache) and the display form now branches
+on the DECLARED tokens: grounded record + `mintedDisplay: record-title` ->
+mapped title; no record + `preMintDisplay: identity-case` -> canonical key.
+The implicit `?? identityKey` hardcoded fallback is gone. No token invented,
+no second policy hardcoded. The loader's throw-on-absent arm is load-bearing:
+M6 (reviewer's exact mutation, throwaway /tmp copy, real YAML untouched —
+`canonicalLabel:` block deleted) -> 20 failed | 9 passed (29) across
+nounShape/readingCard/uifix3/e2eStubHonesty (render path fails loudly on the
+ABSENT throw); block present -> 29/29 GREEN; materials+goldens+policy suite
+117/117 GREEN.
+
+### DEFECT 2 (MEDIUM) — ruling §5 pin 3 DROP half now pinned
+Hosted in the GREEN `shorthandChat.sameNounDedupe.uifix3.test.ts` (the
+cueCascade T6/T7 fold pins are RED at baseline and cannot witness). Exact
+review-order pin: `dropSatisfiedFacts([fact('1 mM Clofibrate  in DMSO')],
+[{actionIndex:0, argument:'material', label:'1 mM clofibrate in DMSO'}], doc)`
+-> `[]`; the doc's slot value carries the DRIFTED text (`1 mM Clofibrate  in
+DMSO`) so a pre-D3 string compare sees a different string and KEEPS the fact —
+the pin is RED on pre-D3 identity. The non-string arm (slot value `42` as
+deliberate degenerate doc) keeps `return true`; the different-label negative
+arm survives. M4 proof: revert to `return value !== entry.label;` -> 1 failed
+| 8 passed (9) (the DROP pin); restored -> 9/9 GREEN.
+
+### DEFECT 3 (MEDIUM) — STAGE A record-title read path now pinned
+Same file: ONE pin with a fake `RecordStore` whose `get` returns
+`{payload:{name:'1 mM Clofibrate in DMSO'}}`. Asserts: the card's `query` and
+`prompt` carry the TITLE form; `unresolvedFact.label` stays the RAW label
+(provenance never collapsed); exactly ONE deduped GET on
+`localMaterialIdForLabel(identityKey)`; read-only (a `store.create` stub that
+throws — the STAGE A seam is read-only, mint owns the write). D3 proof: body
+-> `return new Map()` -> 1 failed | 8 passed (9) (the STAGE A pin); restored ->
+9/9 GREEN.
+
+### DEFECT 4 (MEDIUM) — P9a now exercises the case drift the receipt showed
+`AgentOrchestrator.repeatEcho.test.ts` P9a: the answer turn re-extracts a
+CASE/SPACE-DRIFTED variant of the same label (fixture `mystery goop` ->
+`Mystery  Goop` on the answer turn: case drift + inner double space; the
+receipt's live defect was a one-character case re-roll). Fixture stays
+byte-identical; P9a/P9b kept; all existing assertions kept. Pre-D3 identity
+(RAW-label hash in `factRequestId`) the ask id and re-derived id DIVERGE -> the
+answered-requestId drop misses -> card re-opens: M-preD3 proof (factRequestId
+back to RAW hash) -> 2 failed | 9 passed (11) with P9a among the failures;
+restored -> P9a GREEN (only the pre-disclosed P8 red). Follow-up commit: the
+D3 rationale comment named the termId fold token verbatim, which the
+closed-set scanner (termId.scopeLock.test.ts, ruling l2t1430 §7) counts as a
+mentioner — reworded to "the canonical LABEL KEY (termId's fold)"; no
+assertion changed; scope-lock suite back to 99/99 GREEN.
+
+### Out of scope, untouched
+Durable mint-title provenance (adversarial DEFECT 5) and answered-state
+persistence (DEFECT 6): `query`/`mintLabelFor` wiring and store/metadata
+shapes untouched. `app/` zero changes. TARGET-1 files and
+`applyAgentAction.ts` untouched. MANIFEST treeState blocker: refuted, no
+action.
+
+### DEFECTS 7 + 8 (LOW) — report-prose corrections (state only; old sections not rewritten)
+- DEFECT 7: report :675-676 and the `c733a565` commit message say "18 files
+  changed, 1136 insertions(+), 29 deletions(-)". Re-measured:
+  `git -c core.fileMode=false diff --shortstat 10062725..cbc9755b` =
+  **18 files changed, 1177 insertions(+), 29 deletions(-)** — matches the
+  reviewer's measurement. The old claim stands corrected by this statement;
+  it is NOT rewritten in place.
+- DEFECT 8: report :581 calls `7084b0a0` "pristine". `7084b0a0` is a FIX5
+  commit that already carries the D3 units; the pristine base is
+  **`10062725`**. The underlying claim (P8 failing at the pristine base)
+  stands — the reviewer measured it at the real pristine base; only the word
+  was wrong.
+
+### VERIFY (run at this head; counts pasted)
+1. `cd server && npx vitest run src/materials src/api/handlers/VocabHandlers.mint.test.ts`
+   -> 12 files / 99 tests all GREEN (the scope-lock ALLOWED entry for the mint
+   test stays; the closed set is not loosened).
+2. `cd server && npx vitest run src/compiler/scientistIntent/goldens` ->
+   4 files / 24 tests all GREEN. (The work order's "28/28, 5 files" does not
+   match the directory at this head: it contains 4 test files (24 tests) plus
+   `MANIFEST.yaml`, the refuted treeState blocker (out of scope); 24/24 is the
+   measured full-directory result, all green.)
+3. `cd server && npx vitest run src/ai` -> **29 failed | 1171 passed (1200)**.
+   Baseline `cbc9755b` measured this run: 29 failed | 1168 passed (1197), same
+   16 failing files. Delta = **+3 passed** — exactly the three new uifix3
+   `it` blocks (the DROP pin, the non-string/negative arm pin, the STAGE A
+   pin); P9a is an edit to an existing test, so repeatEcho's count is
+   unchanged at 11. The 29-failure set is the baseline set — no new failing
+   test name. P8's pre-existing failure stays disclosed, not "fixed".
+4. `npx tsc --noEmit -p server` -> 0 error lines (exit 0). `npx tsc --noEmit
+   -p app` not required (no app change).
+5. `git -c core.fileMode=false diff --stat 10062725..HEAD` ->
+   **18 files changed, 1360 insertions(+), 32 deletions(-)**.
+   `git -c core.fileMode=false status --porcelain` -> clean except the
+   untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/`
+   (assignment-excluded, never committed).
