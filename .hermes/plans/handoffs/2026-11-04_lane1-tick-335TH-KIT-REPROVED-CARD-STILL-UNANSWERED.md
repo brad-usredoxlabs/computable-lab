@@ -125,3 +125,16 @@ repointed to this file. Artifacts: this handoff; `claims-ledger.md` addendum; no
    **(c)** → the §3 clause is amended by the architect, not by a tick.
 3. Post-answer order is pre-verified: `pregate-recordlock-1.py` (expect-green) →
    `probe-recordlock-2.py --live` → browser re-gate brief with a fresh runstamp.
+
+## Addendum 08:05 EST — post-tick trunk state (HEAD-independent phrasing on purpose)
+
+This tick's trunk commits are **docs-only** (this handoff; and this addendum itself). After committing,
+the pre-warmed worktree `wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010` was fast-forwarded to trunk and
+re-measured: **0 commits ahead**, **product diff over `app server schema config scripts` = 0 paths**,
+tracked tree clean (same two untracked `node_modules`). `scripts/verify-leg1-fired.sh` re-run *after*
+the ff still reads **NOT-FIRED / START_RECORDS=0**.
+
+Consequence for a future fire: the tree a coder would start from is byte-identical in product terms
+to the tree the bars above were measured at (`9e455216`), so no re-measurement is owed before dispatch
+— but a routine `git merge --ff-only cl/integration-1` in the worktree is still the first step, because
+docs commits land on trunk every tick and nothing else in this state should be assumed.
