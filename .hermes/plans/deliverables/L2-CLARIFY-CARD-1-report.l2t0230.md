@@ -636,3 +636,4 @@ Targeted vitest for every pin touched:
 - P8's `expected 1 to be +0` (repeatEcho:448) is a baseline failure unrelated
   to D2 (a held-intent zero-model-call assertion); U2 does not change that path
   (the 29-set is byte-identical).
+CARD1-FIX5 DONE ea7c49cc48e25c751d109a352ac5c23444b7a260
