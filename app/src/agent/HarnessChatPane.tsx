@@ -21,7 +21,7 @@
  * newThread — i.e. an endpoint was set); a chat without one renders NO
  * picker. No rename affordance.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOptionalAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
@@ -36,6 +36,7 @@ import {
 import { AddSourceModal } from '../event-editor/right-pane/ai/AddSourceModal'
 import { RunInEventEditorButton } from '../event-editor/right-pane/ai/RunInEventEditorButton'
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext'
+import { useOptionalEventEditor } from '../event-editor/EventEditorContext'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { openContent } from '../shared/lib/openContent'
 import type { WorkspaceTab } from '../event-editor/workspace/types'
@@ -274,6 +275,23 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
     ? ws.state.tabs.find((t: WorkspaceTab) => t.id === ws.state.activeTabId) ?? null
     : null
 
+  // L2-CLARIFY-TARGET-1 UI-gate fix 1 / D2 (ruling Q2): the host SUPPLIES the
+  // slot's selection as DATA. The deck's real selection lives in
+  // EventEditorContext.state.selection (the only product WellSelectionProvider
+  // is mounted around PlateCanvas — the slot's context fallback is never
+  // visible on the live deck). Read the OPTIONAL editor seam (null-safe on a
+  // non-deck host — the run workspace has no EventEditorProvider), and map it
+  // at THIS seam to a PLAIN sorted readonly string[] of well addresses. The
+  // prop type is the plain array (never WellSelection / the context value), so
+  // the universal pane's public API acquires no event-editor type. No
+  // second selection state, no second expander: this is the deck's own
+  // published selection, not a re-derivation of the expansion.
+  const editor = useOptionalEventEditor()
+  const selectedWells: readonly string[] = useMemo(() => {
+    const wells = editor?.state.selection?.wells
+    return wells && wells.length > 0 ? [...wells].sort() : []
+  }, [editor?.state.selection?.wells])
+
   if (!chat) {
     return (
       <aside className="harness-chat-pane" data-testid="harness-chat-pane">
@@ -365,6 +383,7 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
         onPromptChange={setPrompt}
         onSend={() => { chat.sendPrompt(prompt); setPrompt('') }}
         onCancel={chat.cancelStream}
+        selectedWells={selectedWells}
         {...(onReviewProposal ? { onReview: onReviewProposal } : {})}
         // ANSWER-CHANNEL: the sentence is the visible turn; the structured
         // answer rides the SAME turn as data so the server can fold the

@@ -68,6 +68,16 @@ export interface ChatLogProps {
     answers: AiClarificationAnswer[],
     requests: AiClarificationRequest[],
   ) => void
+  /**
+   * L2-CLARIFY-TARGET-1 UI-gate fix 1 / D2 (ruling Q2): the host's current
+   * well selection as PLAIN WELL-ADDRESS DATA (a sorted `readonly string[]`
+   * mapped at the host seam from `EventEditorContext.state.selection`).
+   * Threaded to the target-well slot (both the single-request arm and the
+   * grouped card). Absent (a non-deck host) -> the slot's context fallback
+   * is used, so the universal pane's public API acquires no event-editor type
+   * and no non-deck caller breaks.
+   */
+  selectedWells?: readonly string[]
 }
 
 /** Shape the exported lane-2 answer helper expects, built from the message's clarification. */
@@ -192,7 +202,7 @@ export function clarificationBubbleText(content: string): string {
   return clarificationAnsweredText(content)
 }
 
-export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit }: ChatLogProps) {
+export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
@@ -358,6 +368,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
         <ClarifyWellTargetSlot
           requestId={request.id}
           onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
+          selectedWells={selectedWells}
         />
       ) : null}
       {options.length > 0 && onClarificationPick ? (
@@ -532,6 +543,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
                   turnKey={`${message.id}:${message.clarificationRequests.map((r) => r.id).join('|')}`}
                   shownPrompts={groupedShownPrompts}
                   onClarificationSubmit={onClarificationSubmit}
+                  selectedWells={selectedWells}
                 />
               ) : (
                 message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request, shownPrompts))
