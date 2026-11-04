@@ -142,3 +142,14 @@ on two points (it deferred the DATA declaration as "A2 out" and put the no-op in
 3. Re-check `git log -1 -- scripts/fame-gatefix/` for the rider trigger.
 4. Re-check lane-2 post-delivery tick count for `SEQ-ANSWER-CONTRACT-1`.
 5. Do **not** treat the ACL 404 for `DOC-20660FF4E9734191` / `DOC-A56FD77A9B124087` as fixture loss.
+
+## Evidence index (observed, not asserted)
+
+- `8f9dc438` lane1 302ND: tick handoff + L1-RECORD-LOCK-GUARD-1 spec (amended) + policy decision doc
+- `2b1fca62` lane1 302ND: mark promoted spec header (reviewed, amendment binding, not yet dispatched)
+- spec: `.hermes/plans/2026-11-03_l1-record-lock-guard-1-spec.md` (2,393-word draft + AM-1..AM-8)
+- draft (provenance): `.hermes/plans/2026-11-03_l1-record-lock-guard-1-spec-DRAFT-l1t1905.md`
+- ruling: `.hermes/plans/2026-11-03_l1-record-lock-policy-decision.md`
+- composer log `composer-RECORD-LOCK-GUARD-1-l1t1905.log` (rc=0, 6m51s); architect log
+  `arch-record-lock-policy-l1t1910.log` (rc=0, 2m29s); prompts sha256-pinned in both logs.
+- drift receipt: lane data repo `/home/brad/.computable-lab-lane1/worktrees/main` commit `dbda2eda`.
