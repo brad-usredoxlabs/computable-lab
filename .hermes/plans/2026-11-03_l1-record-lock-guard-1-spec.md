@@ -149,6 +149,30 @@ Required additions to AM-6's pin set (RED-first where meaningful):
   absent-`lifecycleId` pass-through — but this must be an explicit, commented decision in the diff,
   not an accident of `undefined?.has(...)` (bait 14).
 
+## AM-10 (ORCHESTRATOR, 305TH tick 2026-11-03T20:1x — measured first-hand at af301799; binding)
+
+AM-2's config injection has a WIRING surface I measured myself; do not let the store half become a
+test-only feature.
+
+1. **Production `createRecordStore` call sites = exactly 3**: `server/src/server.ts:527` (the ONE
+   web-server path), `server/src/scripts/applyOwnershipDefaults.ts:282` and
+   `server/src/scripts/migrateRecordLifecycles.ts:512`. The signature is
+   `createRecordStore(repo, validator, lintEngine, config?: RecordStoreConfig)`
+   (`server/src/store/RecordStoreImpl.ts:1048-1056`), so config is OPTIONAL and 38 test call sites
+   pass none.
+2. Requirements:
+   - (a) `server.ts:527` MUST pass the real resolver (engine-backed). A pin that injects a fake
+     resolver into a hand-built store is VACUOUS for this — at least one pin must assert the
+     PRODUCTION construction site wires it (import/call-shape assertion on `server.ts`, or an
+     integration test through the real `buildServer`).
+   - (b) The two scripts write records in bulk. Either wire them to the same resolver, or declare them
+     OUT OF SCOPE in the diff with a one-line comment naming why (they are maintenance/migration
+     tools, run by a human, never over Brad's live dir). Silence is not an option: an unwired config
+     there is a lock bypass on a path that can touch effective records.
+   - (c) The absent-config default must be EXPLICIT and commented (AM-9 (f) already forbids relying on
+     `undefined?.has(...)`), because 38 existing test stores will take that branch — state in the
+     report which direction it fails and why that cannot hide the production defect.
+
 ## 1. Goal (one sentence)
 
 Make `/record/<id>` refuse to write an approved/effective (or lifecycle-terminal) controlled

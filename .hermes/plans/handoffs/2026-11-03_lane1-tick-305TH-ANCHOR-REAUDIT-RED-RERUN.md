@@ -5,7 +5,9 @@ holds corpus first refusal on measured capacity (slot-0 HELD by a live lane-2 co
 orchestrator tick live, lane 2 carrying todo + in-progress + an active corpus-state.md). The tick instead
 re-armed the item's dispatch: re-verified every load-bearing spec/code anchor first-hand at the NEW trunk
 HEAD, re-ran the RED pre-gate against the live stack (still red for the right reason, served HEAD == trunk),
-re-pinned the pre-staged LONG prompt, and re-derived the claims ledger at HEAD. No product code, no merge,
+re-pinned the pre-staged LONG prompt, re-derived the claims ledger at HEAD, and pinned a NEW binding
+spec amendment (AM-10) after finding that AM-2's store resolver could ship test-only (3 production
+`createRecordStore` sites, 38 config-less test stores). No product code, no merge,
 no restart, no data write, no task status change, no slot claimed.**
 
 ## Reconciled first-hand (`cl-reconcile.sh 1` @ 20:01)
@@ -66,6 +68,17 @@ second BEST-effort lane-1 browser gate while lane 2's reviewer occupies the visi
    305TH block): `11338a3a` is an ancestor, 15 commits, ZERO non-`.hermes/plans/` paths ⇒ all twelve
    quotable rows keep their verdicts/receipts; row 1 re-proved on reachability (same 3-file analysis delta,
    `cssRuleScan.ts` still ZERO non-test importers, `AnalysisPage.css` blob `c6930c66` unchanged).
+
+5. **NEW finding → binding spec amendment AM-10 (the store half could have shipped test-only).**
+   Measured at af301799: `createRecordStore(repo, validator, lintEngine, config?: RecordStoreConfig)`
+   (`server/src/store/RecordStoreImpl.ts:1048-1056`) — config is OPTIONAL — and there are exactly **three
+   production call sites**: `server/src/server.ts:527` (the one web path),
+   `scripts/applyOwnershipDefaults.ts:282`, `scripts/migrateRecordLifecycles.ts:512`. **38** test files
+   construct stores with no config at all. Consequence: a coder could wire the AM-2 resolver only into a
+   hand-built test store and every pin would be green while production stayed unlocked. AM-10 now requires
+   (a) one pin asserting the PRODUCTION wiring at `server.ts:527` (a fake-resolver pin is vacuous),
+   (b) the two bulk-write scripts wired or declared out-of-scope with a comment, (c) the absent-config
+   default explicit and commented. Written into the spec and into the pre-staged prompt.
 
 ## Due blockers checked
 
