@@ -55,6 +55,12 @@ function envelope(recordId: string, state: string) {
       lifecycleId: 'document-control',
       state,
       status: state,
+      // D2 (fix cycle 1): the fixture carries a REAL updatedAt so the AM-6(a)
+      // no-op pin is NOT vacuous. controlledContent strips updatedAt, so this
+      // is production-faithful (the handler always stamps it) and does not
+      // affect the content lock. A stored updatedAt lets the pin send a FRESH
+      // (different) stamp on a content-equal PUT and prove it does not leak.
+      updatedAt: '2026-11-04T10:00:00.000Z',
     },
   };
 }
@@ -98,17 +104,30 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
     writes = 0; // create fired the hook once; the no-op must add ZERO writes
     const beforeSha = before.meta?.contentSha;
     const beforeUpdated = (before.payload as { updatedAt?: string }).updatedAt;
+    expect(beforeUpdated).toBeDefined(); // fixture carries a stored stamp (D2: non-vacuous)
     const beforeFiles = await listRecordFiles(store);
 
+    // D2 (fix cycle 1): send a FRESH updatedAt (the handler's unconditional
+    // stamp, production-faithful) on a content-equal, state-equal PUT.
+    // controlledContent strips updatedAt → the mandated predicate sees
+    // equality and the no-op fires; a raw deep-equality / JSON.stringify
+    // predicate (the forbidden regression AM-3/bait 11 names) would see the
+    // fresh stamp as a change and WRITE — writes would be 1, so this pin
+    // discriminates the two predicates.
+    const freshStamp = new Date().toISOString();
+    expect(freshStamp).not.toBe(beforeUpdated);
+    const incoming = structuredClone(before);
+    (incoming.payload as { updatedAt: string }).updatedAt = freshStamp;
     const result = await store.update({
-      envelope: structuredClone(before), // content-equal, state-equal
+      envelope: incoming, // content-equal, state-equal, FRESH updatedAt
     });
 
     expect(result.success).toBe(true);
     expect(writes).toBe(0);
     expect(result.envelope).toMatchObject(before);
     expect(result.envelope?.meta?.contentSha).toBe(beforeSha);
-    expect((result.envelope?.payload as { updatedAt?: string }).updatedAt).toBe(beforeUpdated);
+    // The fresh stamp did NOT leak: the response carries the STORED stamp.
+    expect((result.envelope?.payload as { updatedAt: string }).updatedAt).toBe(beforeUpdated);
     // D1/AM-3: the no-op must be SIGNALLED to the handler (explicit no-op
     // marker), so the handler can skip its full index rebuild. Before the
     // fix the store returned a plain success with no marker — this assert
