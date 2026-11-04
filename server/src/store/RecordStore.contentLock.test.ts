@@ -221,6 +221,56 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
     expect(writes).toBe(0);
   });
 
+  it('ordering: content-EQUAL PUT with a lint failure ⇒ Lint failed (typed rejection wins)', async () => {
+    // AM-11 lint-ordering pin (fix cycle 1 / D3): the no-op sits AFTER the
+    // lint wall, so a content-EQUAL PUT that FAILS lint must be refused by
+    // the lint wall — never swallowed into a no-op 200. Uses the store's REAL
+    // lint engine (LintEngine). Setup follows the fix direction verbatim:
+    // "a stored record whose lint fails while controlled content is equal".
+    // The record is stored first (the engine has no spec yet, so create's own
+    // lint pass is clean), then a severity:'error' spec is added that the
+    // stored content-equal envelope fails: the body is the stable pin body.
+    // The content-equal update therefore hits the LINT wall (before the
+    // no-op) and must be refused — controlled content stays byte-equal, so
+    // the content lock and the no-op predicate both stay quiet.
+    const lintEngine = new LintEngine();
+    const lintStore = createRecordStore(
+      createLocalRepoAdapter({ basePath: repoRoot }),
+      makeValidator(),
+      lintEngine,
+      { writeHook: { onUpsert: () => { writes += 1; } } },
+    );
+    const created = await lintStore.create({ envelope: envelope('LINT-1', 'effective') });
+    expect(created.success).toBe(true);
+    writes = 0; // reset: the create's hook write is not under test
+    // Now the stored record FAILS lint (spec added after storage): a rule the
+    // envelope cannot satisfy. The content-equal PUT must trip the lint wall.
+    lintEngine.addSpec('clg-lint-ordering', {
+      lintVersion: 1,
+      schemaId: SCHEMA_ID,
+      rules: [
+        {
+          id: 'clg-pin-body-must-not-be-stable',
+          title: 'pin: body must not be the stable pin body',
+          severity: 'error',
+          scope: 'record',
+          assert: { op: 'not', not: { op: 'equals', path: 'body', value: 'stable body' } },
+          message: { template: 'body must not be the stable pin body (lint ordering pin)' },
+        },
+      ],
+    });
+    const before = await lintStore.get('LINT-1');
+    if (!before) throw new Error('LINT-1 not found after create');
+    const result = await lintStore.update({ envelope: structuredClone(before) });
+    // NEW ordering pin (AM-11 / D3): the lint wall wins over the no-op —
+    // RED-first: if the no-op were (re)moved ahead of lint, this PUT would
+    // be swallowed as a 200 no-op and the asserts below would fail.
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Lint failed with errors');
+    expect(result.lint?.valid).toBe(false);
+    expect(writes).toBe(0);
+  });
+
   it('AM-6 seed branch: content/state-equal PUT on a seed record ⇒ no-op does NOT fire; promotion semantics unchanged', async () => {
     const seedDirName = `seed-cow-clg-${randomUUID().slice(0, 8)}`;
     const seedDir = join(repoRoot, seedDirName);
