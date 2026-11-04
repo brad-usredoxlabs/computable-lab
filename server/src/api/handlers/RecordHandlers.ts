@@ -1312,14 +1312,18 @@ export function createRecordHandlers(
         // ['extraction-draft'] default) capture the SUPERSEDED snapshot
         // (previous-envelope capture, mirroring freezeProtocol's draft-
         // preservation pattern, RecordRevisionService.ts:93-94) and append a
-        // record_revised audit event. capture() is content-addressed
-        // (RecordRevisionService.ts:65-67): a no-op PUT re-returns the
-        // existing REV and mints no duplicate. purpose 'edit' per OQ2.
-        // Best-effort: a revision/audit failure never fails the edit itself.
+        // record_revised audit event. purpose 'edit' per OQ2. Best-effort: a
+        // revision/audit failure never fails the edit itself.
+        // L1-RECORD-LOCK-GUARD-1 (AM-3, fix cycle 2 / F2): gate the whole
+        // revision/audit block on the store's explicit no-op marker — a no-op
+        // PUT wrote nothing, so it must mint NO revision and NO audit event
+        // (same `result.unchanged !== true` idiom as the rebuild gate above).
+        // A real write (unchanged absent) still captures the superseded
+        // snapshot + appends record_revised exactly once.
         {
           const revisionOnEditKinds = security?.getRevisionOnEditKinds?.() ?? [];
           const editedKind = payloadKind(existing.payload);
-          if (editedKind && revisionOnEditKinds.includes(editedKind) && security?.auditService) {
+          if (result.unchanged !== true && editedKind && revisionOnEditKinds.includes(editedKind) && security?.auditService) {
             try {
               const revision = await new RecordRevisionService(store).capture(existing, user.userId ?? 'anonymous', 'edit');
               await security.auditService.append({
