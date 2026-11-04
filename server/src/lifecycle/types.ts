@@ -8,6 +8,7 @@ export interface LifecycleSpec {
     label?: string
     initial?: boolean
     terminal?: boolean
+    contentLocked?: boolean
     description?: string
   }>
   transitions: Array<{
