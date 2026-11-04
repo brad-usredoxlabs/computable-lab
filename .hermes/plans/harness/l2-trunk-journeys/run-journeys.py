@@ -83,25 +83,41 @@ CHAT_HOSTS_INVENTORY = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yam
 # prompt_contains serves all hosts; no per-host prompt strings in code).
 #
 # CHATHOST-CONSOLIDATE-1 (ruling CHATHOST-noerrorframe-probe-seed-l2t0400, Q-C3
-# step 3 — the sanctioned STIMULUS change, DATA only): the old bare noun-phrase
-# probe "CHATHOST-SWEEP probe round trip" read as a TERM to the on-box model and
-# routed into ledger-term lookup (ledger-query.UNRESOLVED_TERM / AMBIGUOUS_TERM —
-# the RIGHT answer to a prompt that is not a term) or the event-drafting
-# pipeline (a zero-event draft that renders the no-events honest wall as a
-# role="alert"). Both are honest renders of a STIMULUS problem, not product
-# defects. The replacement is the NON-LEDGER DETERMINISTIC ASK, IDENTICAL on all
-# six hosts (one shared string — the receipt pin "six ai_request_bodies carry
-# the same ask" holds by construction): a host-agnostic page-description that
-# explicitly forbids drafting, so it provokes the same universal round trip
-# WITHOUT resolving a term or emitting events. The assertion trio
-# (assistant_answer_visible / turns_at_least / no_error_frame) stays
-# BYTE-IDENTICAL — only the stimulus text changes, per the ruling. The trailing
-# bracketed tag keeps the substring the ONE canned CHATHOST-SWEEP block matches
-# on (prompt_contains "CHATHOST-SWEEP probe"), so the fake path and the T4c
-# non-vacuity arm still tie this prompt to that single block.
+# step 3 + D-6 Q4 — the sanctioned STIMULUS change, DATA only). The stimulus must
+# provoke the product's OWN SUCCESS SHAPE for the round trip, not a zero-event
+# draft. Three DATA shapes have been measured against the live on-box model:
+#   (a) the old bare noun-phrase "CHATHOST-SWEEP probe round trip" read as a TERM
+#       and routed into ledger-term lookup (UNRESOLVED_TERM / AMBIGUOUS_TERM) or a
+#       zero-event draft (the no-events honest wall rendered role="alert");
+#   (b) the NON-LEDGER page-description meta-ask ("say what this page is for; do
+#       not draft") can ONLY end in a zero-event turn (a description is not a
+#       draft), so it GUARANTEES the wall on every host where the model does not
+#       volunteer a question — 2 consecutive live sweeps 20261104T123633Z /
+#       20261104T124239Z: each 1/6 green, every INCONCLUSIVE host carrying the
+#       SAME single no-events wall;
+#   (c) THIS candidate — a QUESTION-ELICITING ask. The product's round trip has a
+#       success shape (b) never tested: a turn that ASKS A QUESTION instead of
+#       drafting. A clarification IS the product's proposal (useAiChat.ts done
+#       arm: `askedQuestion` SUPPRESSES the no-events honest wall — the wall fires
+#       ONLY when !hasEvents && !askedQuestion && !surfacedError). So a stimulus
+#       that invites EXACTLY the clarification the product can offer renders a
+#       VISIBLE assistant question row (countable by assistant_answer_visible /
+#       turns_at_least) and NO role="alert" (no_error_frame holds), IDENTICAL on
+#       all six hosts (one shared string — the "six ai_request_bodies carry the
+#       same ask" receipt pin holds by construction). Host-agnostic; forbids
+#       inventing ids/records (no NOT_FOUND / ledger routing) and forbids a
+#       payload write (no draft/apply). The assertion trio
+#       (assistant_answer_visible / turns_at_least / no_error_frame) stays
+#       BYTE-IDENTICAL — only the stimulus text changes, per the ruling. The
+#       trailing bracketed tag keeps the substring the ONE canned CHATHOST-SWEEP
+#       block matches on (prompt_contains "CHATHOST-SWEEP probe"), so the fake
+#       path and the T4c non-vacuity arm still tie this prompt to that single
+#       block.
 CHATHOST_SWEEP_PROMPT = (
-    "In one short sentence, say what this page is for. "
-    "Do not propose any edit and do not draft anything. "
+    "I'm working on this page and want to do the next sensible step here. "
+    "Ask me the one question you need before doing anything — reply with just "
+    "that question. Do not draft or apply any change, and do not invent any "
+    "record or id. "
     "[CHATHOST-SWEEP probe]"
 )
 
