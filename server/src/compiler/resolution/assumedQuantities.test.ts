@@ -99,14 +99,18 @@ describe('loadAssumedQuantities (L2-CLARIFY-TARGET-1 Change 1)', () => {
     }
   });
 
-  it('declared value equals the FROZEN prompt example (submitSuggestionTool.ts:645) — a data drift fails this test', () => {
+  it('the few-shot example no longer carries the assumed volume (R1.3(B): the number is not smuggled to the model)', () => {
+    // R1.3(B) neutralised the smuggling source: the frozen few-shot example
+    // (submitSuggestionTool.ts) no longer hands the model the assumed number
+    // (`volumeUl: 100`). The model had been COPYING it into its documents, so the
+    // declared-required sweep saw the slot "present" and stayed silent (the chip
+    // missed 6/10). The number's ONE home is now the declared data policy.
     const example = readFileSync(new URL('../../ai/submitSuggestionTool.ts', import.meta.url), 'utf8');
-    const volumeLine = /volumeUl:\s*(\d+(?:\.\d+)?)/.exec(example);
-    expect(volumeLine, 'the frozen example line `volumeUl: <n>` must exist in submitSuggestionTool.ts').not.toBeNull();
+    expect(example, 'the few-shot example must not carry a volumeUl number (the smuggling source)').not.toMatch(/volumeUl:\s*\d/);
     const policy = loadAssumedQuantities(REAL_POLICY_URL);
     const entry = assumedQuantityFor('add_material', 'volumeUl', policy);
     expect(entry, 'the (add_material, volumeUl) declaration must exist in the DATA').not.toBeNull();
-    expect(entry!.value).toBe(Number(volumeLine![1]));
+    expect(entry!.value).toBe(100);
   });
 
   it('the loader source carries zero verb/argument/unit literals (the grep gate)', () => {

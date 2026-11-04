@@ -17,6 +17,12 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../shared/hooks/clarificationAnswerPrompt'
 import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+// L2-CLARIFY-TARGET-1 (UI-gate fix1 / R1.5): the typed-answer fallback for a
+// request whose menu yields ZERO options (no declared slot, no options, no
+// picker) — the same component the grouped card falls back to
+// (ChatClarificationCard.tsx:243), so the single-request arm offers ONE
+// vocabulary for the typed answer, never a second control.
+import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAnswerInput'
 // L2-CLARIFY-TARGET-1 (Change 2 + 4, RE-PIN NOTE S3): the declared-slot answer
 // surfaces mount in the TYPED arm too (the n===1 single-fact turn goes through
 // renderTypedClarification, not the grouped card). Same components as the card;
@@ -68,6 +74,16 @@ export interface ChatLogProps {
     answers: AiClarificationAnswer[],
     requests: AiClarificationRequest[],
   ) => void
+  /**
+   * L2-CLARIFY-TARGET-1 UI-gate fix 1 / D2 (ruling Q2): the host's current
+   * well selection as PLAIN WELL-ADDRESS DATA (a sorted `readonly string[]`
+   * mapped at the host seam from `EventEditorContext.state.selection`).
+   * Threaded to the target-well slot (both the single-request arm and the
+   * grouped card). Absent (a non-deck host) -> the slot's context fallback
+   * is used, so the universal pane's public API acquires no event-editor type
+   * and no non-deck caller breaks.
+   */
+  selectedWells?: readonly string[]
 }
 
 /** Shape the exported lane-2 answer helper expects, built from the message's clarification. */
@@ -150,9 +166,28 @@ function requestRendersPrompt(request: AiClarificationRequest): boolean {
  * the rule. For a request WITHOUT `clarifyControl` (every legacy
  * options/picker shape) this reduces to `requestRendersPrompt` — byte-identical
  * behaviour, so the CARD-1 pins are untouched.
+ *
+ * L2-CLARIFY-TARGET-1 (UI-gate fix1 / R1.5) — the ZERO-OPTION typed arm: a
+ * request with NO declared slot, NO options and NO picker (the live 1/10
+ * `kind: 'parameter'` / `menuProvider: 'choice'` shape — a parameter the model
+ * must be TYPED, e.g. a volume) renders its OWN prompt through the
+ * `ParameterAnswerInput` fallback (the SAME surface the grouped card falls
+ * back to, ChatClarificationCard.tsx:243) instead of the render guard bailing
+ * and leaving the question with no actionable control. It must be added to
+ * this SHARED predicate — not just the guard — because the bubble-suppression
+ * arm (:486) keys on the SAME rule: if only the guard changed, the card would
+ * print the prompt AND the bubble would print its verbatim copy → the question
+ * twice (the D2 double-print, re-opened for this shape). For EVERY shape that
+ * was un-renderable before (no slot + no options + no picker) the guard and
+ * the suppression agree: the card owns the print, the bubble suppresses.
  */
 function requestRendersOwnedPrompt(request: AiClarificationRequest): boolean {
-  return request.clarifyControl != null || requestRendersPrompt(request)
+  if (request.clarifyControl != null || requestRendersPrompt(request)) return true
+  // R1.5 zero-option typed arm: no slot, NO options, NO picker → the typed
+  // answer input is the request's OWN answer surface (the grouped card's
+  // exact final fallback). A 'general'/'parameter' question a menu cannot
+  // answer from a list is still answerable by typing — never a dead card.
+  return (request.options ?? []).length === 0
 }
 
 /**
@@ -192,7 +227,7 @@ export function clarificationBubbleText(content: string): string {
   return clarificationAnsweredText(content)
 }
 
-export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit }: ChatLogProps) {
+export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
@@ -340,14 +375,26 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     const hasDeclaredSlot = request.clarifyControl != null
     // advc-c4 D1 (fix run 3) + fix1/D2: the render decision is the SHARED
     // requestRendersOwnedPrompt predicate — the SAME extended rule the
-    // bubble-suppression arm keys on (ONE copy: `clarifyControl != null ||
-    // options/picker`). No second copy of the options/picker check.
+    // bubble-suppression arm keys on (ONE copy: `clarifyControl != null ||`
+    // options/picker || the R1.5 zero-option typed arm). No second copy of the
+    // options/picker check.
     if (!requestRendersOwnedPrompt(request)) return null
     const hasPicker = requestHasPicker(request)
     const promptAlreadyShown = shownPrompts.has(request.prompt)
     if (!promptAlreadyShown) shownPrompts.add(request.prompt)
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
       {!promptAlreadyShown && <p>{request.prompt}</p>}
+      {/* Exactly ONE answer surface per request (the grouped card's law,
+          ChatClarificationCard.tsx:193-249): the DECLARED slot control first
+          (TARGET-1's quantity chip / target-well slot), then the numbered
+          options, then the picker, else the typed parameter box. A request the
+          menu cannot answer from a list (no slot, no options, no picker — the
+          live 1/10 `kind:'parameter'`/`menuProvider:'choice'` shape) must still
+          be answerable by TYPING: the ParameterAnswerInput is the SAME component
+          the grouped card falls back to — one vocabulary for the typed answer,
+          never a second control, never a card with no actionable control (R1.5).
+          The answer rides the existing onClarificationPick sink
+          (clarificationAnswerPrompt — the same wire the options/picker arms use). */}
       {hasDeclaredSlot && onClarificationPick && request.clarifyControl?.kind === 'quantity' ? (
         <ClarifyAssumedChip
           requestId={request.id}
@@ -358,9 +405,9 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
         <ClarifyWellTargetSlot
           requestId={request.id}
           onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
+          selectedWells={selectedWells}
         />
-      ) : null}
-      {options.length > 0 && onClarificationPick ? (
+      ) : options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
           {options.map((option, optionIndex) => {
             const answer = {
@@ -374,12 +421,16 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
             </li>
           })}
         </ol>
-      ) : null}
-      {hasPicker && onClarificationPick ? (
+      ) : hasPicker && onClarificationPick ? (
         <ClarificationPicker
           key={request.id}
           request={request}
           onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
+        />
+      ) : options.length === 0 && !hasPicker && onClarificationPick ? (
+        <ParameterAnswerInput
+          requestId={request.id}
+          onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
         />
       ) : null}
     </div>
@@ -532,6 +583,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
                   turnKey={`${message.id}:${message.clarificationRequests.map((r) => r.id).join('|')}`}
                   shownPrompts={groupedShownPrompts}
                   onClarificationSubmit={onClarificationSubmit}
+                  selectedWells={selectedWells}
                 />
               ) : (
                 message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request, shownPrompts))

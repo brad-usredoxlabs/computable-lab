@@ -418,51 +418,120 @@ describe('L2-CHAT-UI-1 LEG A — browser-gate fix locks (BGATE D1/D2/D3)', () =>
     expect(document.querySelector('.chat-log-clarification .message-log__clarification-picker')).not.toBeNull()
   })
 
-  // advc-c4 D1 (HIGH, fix run 3, ORCH AMENDMENT 2 §3): the bubble-suppression
-  // predicate must follow what the card ACTUALLY RENDERS, not the request
-  // count. The server emits `menuProvider: 'choice'`, `options: []` for any
-  // fact whose argument declares no domain (shorthandChat.ts:883-887,
-  // 903-907 — `volumeUl` is `kind: quantity` with no domain); for that shape
-  // renderTypedClarification returns null (no options, no picker) and the
-  // grouped card offers no answer surface for it either, so NOTHING renders
-  // a prompt. Pre-fix the bubble (content === request.prompt) was still
-  // suppressed by the request-COUNT predicate — the question printed ZERO
-  // times and the assistant row rendered empty (the reviewer's probe:
-  // base = 1 print, HEAD = 0 prints, 0 card divs). With the render-derived
-  // predicate the card renders nothing for this request, so the bubble
-  // KEEPS BASE behaviour: the question prints exactly once, in the bubble.
-  it('D1 (advc-c4 fix3, AMENDMENT 2): the unrenderable choice/options:[] request keeps its bubble question — the prompt is on screen EXACTLY ONCE and the assistant row is not empty', () => {
+  // advc-c4 D1 (HIGH, fix run 3, ORCH AMENDMENT 2 §3) — SUPERSEDED by the
+  // L2-CLARIFY-TARGET-1 UI-gate fix1 ruling R1.5. The original pin locked the
+  // pre-R1.5 behavior for the shape the server emits for a non-domain (quantity)
+  // fact — `menuProvider: 'choice'`, `options: []` (shorthandChat.ts:883-887,
+  // 903-907 — `volumeUl` is `kind: quantity` with no domain):
+  //   renderTypedClarification returned null (no options, no picker, no slot) and
+  //   the grouped card offered no answer surface, so the question printed ZERO
+  //   times in a card and the BUBBLE was the sole owner (printed exactly once,
+  //   row not empty). That "nothing renders" outcome is the defect R1.5 fixes:
+  //   "a clarification request whose menu yields zero options must render its
+  //   typed-answer input (fall back to the existing typed arm)". The fix adds a
+  //   ParameterAnswerInput fallback arm to renderTypedClarification AND extends
+  //   the shared requestRendersOwnedPrompt predicate, so the question now prints
+  //   EXACTLY ONCE on the typed card (the bubble is suppressed — the D2 one-print
+  //   law) and the request is answerable by typing. The invariants the original
+  //   pin locked are preserved: the question is on screen exactly once (no
+  //   double-print, no zero-print) and the assistant row is not empty. Only the
+  //   OWNER of the print moves bubble → card, and a typed input is now rendered.
+  it('D1 (advc-c4 fix3, AMENDMENT 2) as re-scoped by TARGET-1 R1.5: the zero-option choice request renders its typed-answer input — the prompt is on screen EXACTLY ONCE (on the card), the assistant row is not empty, and the request is answerable by typing', () => {
     // The EXACT shape the server emits for a non-domain (quantity) fact:
     // menuProvider 'choice' (no readings, no domain), options: [] (no
     // candidates to offer), and the done arm's content === request.prompt
     // (useAiChat.ts:1543). `volumeUl` (kind: quantity, no domain) is the
-    // deferred 3b gate's shape — its surface is OUT of scope here; this pin
-    // only asserts the question is not lost.
+    // live 1/10 shape the UI-gate report measured with NO answerable surface —
+    // R1.5 mandates the typed input, which this pin now asserts.
     const question = 'The draft omits a required value for "volumeUl" (missing-required). What volume should be used?'
     const request = {
       id: 'req-vol', kind: 'general' as const, prompt: question, entityType: 'general' as const,
       menuProvider: 'choice' as const, options: [] as { id: string; label: string }[],
     }
-    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+    const onClarificationPick = vi.fn()
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
       message('u0', 'user', 'Add DMEM to the plate'),
       { ...message('clar-vol', 'assistant', question), clarificationRequests: [request] },
     ]} />)
     const row = document.querySelector('.chat-log-msg--assistant') as HTMLElement
     const rowText = row.textContent ?? ''
-    // The assistant row is NOT empty: it carries the question.
-    expect(rowText).toContain(question)
-    // The question is on screen EXACTLY ONCE (the bubble paragraph) — no
-    // double-print (the card renders no prompt for this shape) and no
-    // zero-print (the pre-fix regression: count 0, empty row).
+    // R1.5: the request now RENDERS its typed-answer card — a card div is
+    // present (pre-R1.5 this assertion was the opposite: toBeNull()).
+    const card = document.querySelector('.chat-log-clarification') as HTMLElement
+    expect(card).not.toBeNull()
+    expect(card.dataset.testid).toBe('chat-log-request-req-vol')
+    // R1.5: the card carries an ACTIONABLE typed input (the existing typed arm —
+    // ParameterAnswerInput, app/src/event-editor/right-pane/ai/ParameterAnswerInput.tsx)
+    // so the scientist can answer by typing. The component exposes a static
+    // testid (no requestId suffix): input `parameter-answer-input`, submit
+    // `parameter-answer-submit`, scoped by the card's request testid.
+    const typedInput = card.querySelector('input[data-testid="parameter-answer-input"]')
+    expect(typedInput).not.toBeNull()
+    // The input is live (not disabled) and the submit button is on the same card
+    // (the row contract: button with the input, not orphaned off-screen). The
+    // button starts disabled for an empty field — that is ParameterAnswerInput's
+    // own contract, not a rendering defect; typing enables it.
+    expect((typedInput as HTMLInputElement).disabled).toBe(false)
+    const submitBtn = card.querySelector('[data-testid="parameter-answer-submit"]')
+    expect(submitBtn).not.toBeNull()
+    // The typed input is INSIDE the card (owned by this request's render), not a
+    // stray global control.
+    expect(typedInput!.closest('.chat-log-clarification')).toBe(card)
+    // The question is on screen EXACTLY ONCE — now on the card's <p> (the bubble
+    // is suppressed by the shared render-derived predicate — the D2 one-print law),
+    // no double-print (pre-fix regression: count 2) and no zero-print (the
+    // pre-R1.5 regression: count 0, empty row).
     const exactParas = Array.from(row.querySelectorAll('p')).filter((p) => p.textContent === question).length
     expect(exactParas).toBe(1)
+    // The card owns the print, not the bubble: exactly one <p> equals the
+    // question and it lives inside the card.
+    const cardParas = Array.from(card.querySelectorAll('p')).filter((p) => p.textContent === question).length
+    expect(cardParas).toBe(1)
     // The substring counter (advc-c4 D3): a re-print inside a LONGER
     // paragraph would be invisible to the exact-<p> count — the row text
     // carries the sentence exactly once as well.
     expect(rowText.split(question).length - 1).toBe(1)
-    // No card divs for this shape (the single arm renders nothing for a
-    // choice/options:[] request) — the bubble is the owner.
-    expect(document.querySelector('.chat-log-clarification')).toBeNull()
+    // The assistant row is NOT empty: it carries the question (now on the card).
+    expect(rowText).toContain(question)
+  })
+
+  // L2-CLARIFY-TARGET-1 (fix1 / R1.5) — the zero-option request's typed input is
+  // ACTIONABLE end-to-end: typing a value + submitting rides back through the
+  // EXISTING onClarificationPick sink with the canonical wire prompt
+  // `Use <value> for <target>.` (clarificationAnswerPrompt — the SAME wire the
+  // options/picker arms use; no second answer path, no server change). This is
+  // the "answerable by typing" half of R1.5 — the input existing is not enough
+  // if the submit is a no-op.
+  it('R1.5: the zero-option typed input is actionable — typing + submit rides back through onClarificationPick with the canonical wire', () => {
+    const question = 'The draft omits a required value for "volumeUl" (missing-required). What volume should be used?'
+    const request = {
+      id: 'req-vol', kind: 'general' as const, prompt: question, entityType: 'general' as const,
+      menuProvider: 'choice' as const, options: [] as { id: string; label: string }[],
+    }
+    const onClarificationPick = vi.fn()
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
+      message('u0', 'user', 'Add DMEM to the plate'),
+      { ...message('clar-vol', 'assistant', question), clarificationRequests: [request] },
+    ]} />)
+    const card = document.querySelector('.chat-log-clarification') as HTMLElement
+    const input = card.querySelector('input[data-testid="parameter-answer-input"]') as HTMLInputElement
+    const submitBtn = card.querySelector('[data-testid="parameter-answer-submit"]') as HTMLButtonElement
+    // Pre-typing the submit is disabled (ParameterAnswerInput's own contract) —
+    // the control is present but inert until the scientist types.
+    expect(submitBtn.disabled).toBe(true)
+    fireEvent.change(input, { target: { value: '50 uL' } })
+    expect(submitBtn.disabled).toBe(false)
+    fireEvent.click(submitBtn)
+    // The typed value rides back through the EXISTING onClarificationPick sink
+    // (NOT a new answer path): one call, canonical wire `Use 50 uL for general.`
+    // (entityType ?? kind), carrying the request id and the typed value/label.
+    expect(onClarificationPick).toHaveBeenCalledTimes(1)
+    const [prompt, answer] = onClarificationPick.mock.calls[0]
+    expect(prompt).toBe('Use 50 uL for general.')
+    expect(answer).toMatchObject({ requestId: 'req-vol', value: '50 uL', label: '50 uL' })
+    // The field clears after a successful submit (ParameterAnswerInput's
+    // own contract) — the control remains for a follow-up typed answer.
+    expect(input.value).toBe('')
   })
 })
 

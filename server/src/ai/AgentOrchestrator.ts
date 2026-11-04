@@ -98,6 +98,15 @@ import {
   type AcceptedShorthandBinding,
   type AnsweredSlot,
 } from './shorthandChat.js';
+// L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the pre-compile EMISSION demotion
+// (AI path, upstream of the compile). Strips a present declared-quantity slot
+// the scientist's OWN turn never stated, so the existing declared machinery
+// (missing-required-argument sweep + assumed-value stamp) raises it
+// deterministically.
+import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
+// Canonical shorthand re-serialization (the carryShorthandIdentity /
+// foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
+import { stringify as stringifyShorthandYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
@@ -3011,6 +3020,52 @@ export function createAgentOrchestrator(
                 shorthandDoc = carried.doc;
                 shorthandYaml = carried.yaml;
                 console.log(`[agent ${tid}] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity ${JSON.stringify(fallbackCarryIntentId)} wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity`);
+              }
+
+              // L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the ONE seam.
+              // Between parseShorthandForChat (Ajv sole authority) and
+              // shorthandResultFromCompile: a present declared `kind:
+              // quantity` slot whose amount the scientist's OWN turn never
+              // stated is DEMOTED to absence (stripped from the parsed doc,
+              // re-serialized to the yaml the result rides), so the existing
+              // declared machinery — the missing-required-argument sweep +
+              // clarificationsFromUnresolvedFacts' assumed-value stamp —
+              // raises it DETERMINISTICALLY. The 6/10 "smuggled volumeUl: 100
+              // from the frozen few-shot" path: the model copied the number
+              // into the document, the sweep's presence test saw "present"
+              // and stayed silent, the chip never fired. Demote-then-strip
+              // makes the behaviour independent of the model omitting
+              // anything.
+              //
+              // ONE extractor (extractQuantity, reconcileDraftQuantities)
+              // adjudicates "stated" — this seam does not re-parse prose or
+              // write a second quantity grammar. The words are the request's
+              // OWN turn (prompt + appended clarification answers — the same
+              // string the draft was asked from), so a STATED volume
+              // ("Add 200 uL of DMEM to A1") is never stripped and the
+              // stated-volume control fires NO chip (R1.2: "never strip a
+              // volume the scientist actually stated").
+              //
+              // Disclosure rides the EXISTING reconcile-notes channel
+              // (extraSubmissionNotes — the :2830 / :3141 pattern). Compiler
+              // + goldens stay byte-identical BY CONSTRUCTION (R1.7): this
+              // is the AI path upstream of the compile; no MANIFEST treeState
+              // pin is touched.
+              const demotion = demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
+              if (demotion.demoted.length > 0) {
+                shorthandDoc = demotion.doc;
+                shorthandYaml = stringifyShorthandYaml({
+                  intentId: shorthandDoc.intentId,
+                  ...(typeof shorthandDoc.sourcePrompt === 'string'
+                    ? { sourcePrompt: shorthandDoc.sourcePrompt }
+                    : {}),
+                  actions: shorthandDoc.actions,
+                  unresolved: shorthandDoc.unresolved,
+                });
+                for (const note of demotion.notes) {
+                  extraSubmissionNotes.push(note);
+                  console.log(`[agent ${tid}] ${note}`);
+                }
               }
 
               const compiledSh = await compileShorthandDeterministically(shorthandDoc, {

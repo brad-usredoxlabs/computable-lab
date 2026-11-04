@@ -81,6 +81,14 @@ export interface ChatClarificationCardProps {
     answers: AiClarificationAnswer[],
     requests: AiClarificationRequest[],
   ) => void
+  /**
+   * L2-CLARIFY-TARGET-1 UI-gate fix 1 / D2 (ruling Q2): the host's current
+   * well selection as PLAIN WELL-ADDRESS DATA (a sorted `readonly string[]`
+   * mapped at the host seam from `EventEditorContext.state.selection`).
+   * Threaded to the grouped card's target-well slot. Absent (a non-deck host)
+   * -> the slot's context fallback is used.
+   */
+  selectedWells?: readonly string[]
 }
 
 export function ChatClarificationCard({
@@ -89,6 +97,7 @@ export function ChatClarificationCard({
   shownPrompts,
   disabled,
   onClarificationSubmit,
+  selectedWells,
 }: ChatClarificationCardProps) {
   // The one pick per slot, keyed by the request's OWN identity (the same
   // request.id the picker + the panel use). Never prefilled (never-guess).
@@ -198,6 +207,7 @@ export function ChatClarificationCard({
                 requestId={request.id}
                 onAnswer={declaredAnswer}
                 disabled={disabled}
+                selectedWells={selectedWells}
               />
             ) : hasPicker ? (
               <ClarificationPicker

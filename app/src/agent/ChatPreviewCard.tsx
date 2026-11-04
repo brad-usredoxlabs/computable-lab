@@ -139,13 +139,23 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
   // The ?? fallback keeps non-deck callers (no staged seam → the hook's own
   // additions-count fallback already lives in the hook) honest.
   const labwareCount = chat.previewStagedLabwareCount ?? labware.length
+  // L2-CLARIFY-TARGET-1 UI-gate fix 1 / D3 (the inert Discard toggle): the header
+  // count must reflect the rows' REAL dropped state. A dropped row is still in
+  // `previewEvents` — dropping only flips its STATE in `previewEventStates`
+  // (`rejected`) — so counting `events.length` stays "1 event" after a drop and
+  // the label never reflects the row's real state. Count the ACTIVE (non-
+  // dropped) events; a single staged row dropped to zero events reads
+  // "0 events" (the gate's expected post-drop count), and restoring returns it.
+  const activeEventCount = events.filter(
+    (event) => chat.previewEventStates.get(event.eventId) !== 'rejected',
+  ).length
 
   return (
     <section className="chat-preview" data-testid="chat-preview" aria-label="Proposed deck changes">
       <header className="chat-preview__header">
         <span className="chat-preview__title">Proposed deck changes</span>
         <span className="chat-preview__counts">
-          {events.length} event{events.length === 1 ? '' : 's'} · {labwareCount} new labware{labwareCount === 1 ? '' : 's'}
+          {activeEventCount} event{activeEventCount === 1 ? '' : 's'} · {labwareCount} new labware{labwareCount === 1 ? '' : 's'}
         </span>
       </header>
 

@@ -57,7 +57,11 @@ describe('shorthand contract disclosure (generated, three sites)', () => {
     expect(prompt).toContain(block);
     // The ONE canonical shape the schema accepts (Task 11's anchor).
     expect(prompt).toContain('- action: add_material');
-    expect(prompt).toContain('volumeUl: 100');
+    // R1.3(B): the repair prompt's example no longer smuggles the assumed number
+    // to the model (it copied `volumeUl: 100` into documents, silencing the
+    // declared-required sweep). The number's home is the data policy, not the
+    // prompt example — so the example must carry no volume number at all.
+    expect(prompt).not.toMatch(/volumeUl:\s*\d/);
   });
 
   it('set-equality BOTH directions at every site: disclosed verbs == toolActionEnum == types.ts union (bait 1)', () => {

@@ -171,6 +171,19 @@
  * panel's pl-held-clarification-* look (same border/radius/surface variables
  * — protocolTabPanel.css:429-439), no new design language. */
 .chat-clarification-card {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4, defensive): the grouped card is a flex
+     item of the .chat-log-msg bubble (align-items: flex-start — a
+     shrink-to-fit width). max-width:100% alone does not stop a content
+     chain from carrying the item PAST the bubble: the default automatic
+     minimum (min-width:auto) sizes the item to its content min-content, so
+     an unclamped option label overflows the bubble and
+     .sequence-chat-messages' overflow-x:hidden clips it silently.
+     min-width: 0 + border-box make the width clamps actually bind. The
+     measured CHATHOST D4 defect is the SINGLE typed arm (singleCards: 1,
+     groupedCards: 0) carrying the picker's mint row — this clamp is the
+     same discipline for the sibling surface (defensive, not the measured
+     defect). */
+  min-width: 0;
   border: 1px solid var(--cl-border);
   border-radius: 6px;
   background: var(--cl-bg-elev-2);
@@ -213,6 +226,13 @@
   padding-left: 18px;
 }
 .chat-clarification-card__option {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4, defensive): option row wrap discipline —
+     border-box + min-width: 0 + overflow-wrap so a long label wraps inside
+     the row instead of pushing it past the card edge (see the card-root
+     comment for the clip chain). */
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: block;
   width: 100%;
   text-align: left;

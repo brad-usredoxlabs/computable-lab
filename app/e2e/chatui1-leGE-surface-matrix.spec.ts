@@ -133,7 +133,7 @@ function matrixChainCard(): unknown {
  *  so it must not reference module-level helpers). The payloads are the
  *  matrix's own byte-honest documents — NEVER the deck-ghost pinned builders
  *  (blobClarificationResult / fixedShorthandResult). */
-type StubMode = 'shorthand' | 'run' | 'clarify' | 'clarified' | 'chain'
+type StubMode = 'shorthand' | 'run' | 'clarify' | 'clarified' | 'chain' | 'clarify-mint'
 
 function stubAssistStream(page: Page, modes: StubMode | StubMode[]) {
   const queue: StubMode[] = Array.isArray(modes) ? modes : [modes]
@@ -163,6 +163,39 @@ function stubAssistStream(page: Page, modes: StubMode | StubMode[]) {
                 { id: 'opt-2', label: 'BamHI' },
               ],
             },
+          }
+        case 'clarify-mint':
+          // L2-CLARIFY-TARGET-1 (uifix1 D4): the MODERN wire (the existing
+          // 'clarify' mode is the LEGACY option shape) — a done carrying ONLY
+          // clarificationRequests (no legacy `clarification` field). The
+          // single '/m' request, zero options, mint allowed, seeded query is
+          // the measured CHATHOST D4 defect shape (singleCards: 1,
+          // groupedCards: 0): the typed arm renders the picker whose mint row
+          // overflowed the pane. useAiChat's done arm derives the legacy shape
+          // from the requests (one payload, no second source of truth) but the
+          // legacy block arm is suppressed when clarificationRequests is
+          // present — the picker-only card is the ONE answer surface.
+          return {
+            success: true,
+            events: [],
+            notes: [],
+            // NO shorthand: the measured CHATHOST D4 turn is a clarification
+            // turn (the pane carries the picker card, not an intent card).
+            // The done arm's conditional spread leaves the key ABSENT — the
+            // typed arm is the only mounted surface (clarification is a
+            // mountable channel, so no empty-pane wall).
+            clarificationRequests: [
+              {
+                id: 'matrix-clar-d4',
+                kind: 'material',
+                prompt: 'Which medium is the growth plate?',
+                entityType: 'material',
+                menuProvider: '/m',
+                query: 'DMEM',
+                options: [],
+                allowCreateLocal: true,
+              },
+            ],
           }
         case 'clarified':
           return { success: true, events: [], notes: [], clarificationNeeded: 'EcoRI it is.' }
@@ -579,4 +612,71 @@ test('LEG-E leg 6: deck — the universal pane renders NO protocol-edit card (by
   // boundary.
   await expect(pane.locator('[data-testid="workstate-card"]')).toHaveCount(0)
   await expect(pane.locator('[data-testid="chain-card"]')).toHaveCount(0)
+})
+
+// ============================================================================
+// Leg 7 — D4 geometry: the picker option rows stay inside the AI pane at
+// 1440×900 (L2-CLARIFY-TARGET-1 uifix1, the CHATHOST-CONSOLIDATE-1 §D2 defect:
+// "picker option rows run past the pane's right edge and are clipped, on all
+// 6 hosts", measured 1440×900 turn B on the event-editor/deck host — the
+// mint row 150 px WIDER than the card, its Create button 42 px past the
+// 1440 px viewport).
+//
+// EVIDENCE STATUS: RED BY CONSTRUCTION PRE-MERGE — the gate that measured
+// the defect (CHATHOST-CONSOLIDATE-1, rev c9687463, 20261103T180254Z)
+// PRE-DATES fix4's track clamp (merge-base with fix4 6b0d9786 = 31353115 =
+// fix4's parent), and the uifix1 item clamps (this commit) are not in trunk
+// yet. This leg is graded by the ORCHESTRATOR'S post-merge browser gate —
+// this run does NOT run the browser gate (FORBIDDEN). The jsdom sibling pin
+// (app/src/agent/ChatClarification.d4overflow.uifix1.test.tsx) locks the
+// structural contract (markup + declared CSS discipline); this leg is the
+// ACTUAL 1440×900 geometry it rests on.
+// ============================================================================
+test('LEG-E leg 7: deck D4 geometry — the created picker option row + Create button lie fully inside the pane bounding box at 1440×900 (stubbed modern clarificationRequests wire)', async ({ page, request }) => {
+  // The measured host: the event-editor/deck surface (CHATHOST turn B), 1440×900.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // R7: the DISTINCT matrix deck fixture (not the shared EVG-SPK-VERIFY).
+  await resetMatrixDeck(request)
+  await page.goto(`/deck/${MATRIX_EVG}`)
+  await isolateThreads(page)
+  // The MODERN wire — a done carrying ONLY clarificationRequests (the legacy
+  // 'clarify' mode's option shape drives the legacy block arm, not the
+  // picker). The single '/m' request with zero options + mint allowed is the
+  // measured defect shape: the typed arm renders the picker whose mint row
+  // overflowed the pane (singleCards: 1, groupedCards: 0).
+  await stubAssistStream(page, 'clarify-mint')
+  const pane = await openAiPane(page)
+  await composer(page).fill('Plate the DMEM growth medium (matrix leg 7)')
+  await sendButton(page).click()
+  // The typed single-request card renders (the ONE answer surface — the
+  // measured shape: no grouped card alongside it).
+  const wrapper = page.locator('[data-testid="chat-log-request-matrix-clar-d4"]')
+  await expect(wrapper).toBeVisible({ timeout: 15_000 })
+  expect(await page.locator('.chat-clarification-card').count()).toBe(0)
+  // The picker's mint row (the measured defect row) + its Create button are
+  // on screen (the row renders in the picker's closed state — no interaction).
+  const mintRow = page.locator('[data-testid="clarification-mint-row"]')
+  await expect(mintRow).toBeVisible({ timeout: 15_000 })
+  const createBtn = page.locator('[data-testid="clarification-mint-create"]')
+  await expect(createBtn).toBeVisible()
+
+  // THE GEOMETRY (the mandated assertion): the created option row + the
+  // button lie FULLY inside the pane's bounding box — no part of the row or
+  // the button past the pane's right edge. Sub-pixel epsilon (0.5px) only.
+  const paneBox = await pane.boundingBox()
+  const rowBox = await mintRow.boundingBox()
+  const btnBox = await createBtn.boundingBox()
+  expect(paneBox).not.toBeNull()
+  expect(rowBox).not.toBeNull()
+  expect(btnBox).not.toBeNull()
+  const paneRight = paneBox!.x + paneBox!.width
+  expect(rowBox!.x, 'mint row left edge inside the pane').toBeGreaterThanOrEqual(paneBox!.x - 0.5)
+  expect(rowBox!.x + rowBox!.width, 'mint row right edge inside the pane').toBeLessThanOrEqual(paneRight + 0.5)
+  expect(btnBox!.x, 'Create button left edge inside the pane').toBeGreaterThanOrEqual(paneBox!.x - 0.5)
+  expect(btnBox!.x + btnBox!.width, 'Create button right edge inside the pane').toBeLessThanOrEqual(paneRight + 0.5)
+  // The measured failure mode was also a VIEWPORT escape (the button 42 px
+  // past the 1440 px viewport) — the pane sits in the viewport, so contain
+  // the button in the 1440 px viewport as well (the row is inside the pane,
+  // hence the viewport, by the assertion above).
+  expect(btnBox!.x + btnBox!.width, 'Create button right edge inside the 1440 px viewport').toBeLessThanOrEqual(1440)
 })

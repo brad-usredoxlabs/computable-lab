@@ -642,7 +642,6 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             + 'actions:\n'
             + '  - action: add_material\n'
             + '    material: "DMEM"\n'
-            + '    volumeUl: 100\n'
             + '    targetWells: [A1]\n\n'
             + SHORTHAND_CONTRACT_BLOCK,
         },

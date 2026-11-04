@@ -71,15 +71,36 @@ export interface ClarifyWellTargetSlotProps {
   onAnswer: (answer: AiClarificationAnswer) => void
   /** Disabled while the turn is busy (the card's `disabled`). */
   disabled?: boolean
+  /**
+   * L2-CLARIFY-TARGET-1 UI-gate fix 1 / D2 (ruling Q2): the HOST supplies the
+   * deck's current selection as PLAIN WELL-ADDRESS DATA — a sorted
+   * `readonly string[]` mapped at the host seam from
+   * `EventEditorContext.state.selection`. When supplied, it takes PRECEDENCE
+   * over the `useOptionalWellSelection()` context fallback (which the live
+   * deck never mounts, so it returned null and the affordance never rendered).
+   * Absent (a non-deck host) -> the context fallback is used, so no existing
+   * caller or test breaks. The prop's type is the plain string array (never
+   * `WellSelection` / `WellSelectionContextValue`), so the universal pane's
+   * public API acquires no event-editor type. NO surface-name branching: the
+   * slot just prefers the supplied data over its context.
+   */
+  selectedWells?: readonly string[]
 }
 
-export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled }: ClarifyWellTargetSlotProps) {
+export function ClarifyWellTargetSlot({ requestId, onAnswer, disabled, selectedWells }: ClarifyWellTargetSlotProps) {
   const [text, setText] = useState('')
   const optionalSelection = useOptionalWellSelection()
-  const selected =
+  const contextWells =
     optionalSelection && optionalSelection.state.selectedWells.size > 0
       ? Array.from(optionalSelection.state.selectedWells).sort()
       : []
+  // UI-gate fix 1 / D2: the host-supplied selection (plain well-address data)
+  // takes precedence when present and non-empty — that is the data the deck
+  // actually publishes (EventEditorContext.state.selection), which the
+  // context fallback never sees on the live deck. Empty/absent host data falls
+  // back to the context (and to nothing, as before).
+  const selected =
+    selectedWells && selectedWells.length > 0 ? [...selectedWells].sort() : contextWells
   // L2-CLARIFY-TARGET-1 fix run 4 / D2 CONFORM (ruling l2t0937 Q2 option (a)):
   // the affordance FILLS ONLY a value the ONE grammar accepts. The selection
   // earns an ENABLED button when it is exactly ONE full rectangular range —

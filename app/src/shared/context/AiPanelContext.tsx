@@ -159,6 +159,18 @@ function paneRelevantSignature(chat: UseAiChatReturn, flow: WorkstateProposalFlo
     chat.previewLabwareAdditions.length,
     String(chat.previewStagedLabwareCount),
     chat.unresolvedRefs.length,
+    // L2-CLARIFY-TARGET-1 UI-gate fix 1 / D3 (the inert row Discard toggle): the
+    // staged-preview per-event STATE is pane-relevant — dropping/restoring a row
+    // flips its entry here (`pending` <-> `rejected`) while `previewEvents` is
+    // unchanged. Without it the signature never changes on a toggle, the
+    // registration bump never fires, the pane (a consumer that re-renders ONLY
+    // on that bump) keeps rendering the stale pending row, and the `Discard`
+    // verb can never become `Restore`. Serialize the entries deterministically
+    // (sorted by eventId) so a state flip changes the signature exactly once.
+    [...(chat.previewEventStates ?? new Map<string, string>()).entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([eventId, state]) => `${eventId}:${state}`)
+      .join(','),
     chat.honestWall ?? '',
     chat.adoptionError ?? '',
     chat.messages.length,
