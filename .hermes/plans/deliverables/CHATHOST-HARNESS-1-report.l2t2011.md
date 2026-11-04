@@ -1302,3 +1302,30 @@ weakened).
 - blocker_watch_paths: ["/home/brad/.hermes/cl/lanes/2/decisions/CHATHOST-noerrorframe-probe-seed-l2t0400-ruling.md"]
 
 CHATHOST-STIMULUS BLOCKED nondeterministic on on-box model first-turn (draft-vs-question): event-editor, project-deck-tab, artifact-host flip green<->honest no-events wall across the 3 live sweeps (A=5/6 B=6/6 C=3/6); question-eliciting generic ask proved the 6/6 shape is reachable (sweep B) but not 2-consecutive; candidate 2 (per-host ask) not triggered because the residual hosts CAN answer the ask.
+
+## CHATHOST-ADVC12-RESIDUES — advc cycle-12 residue fix (D2 + D3 only)
+
+Scope = exactly the two advc-c12 defects quoted in
+`/home/brad/.hermes/cl/lanes/2/reviews/CHATHOST-CONSOLIDATE-1-advc-alertseed-c12-l2t0750.md`
+(D2 minor: report :1078-1079 claim contradicted by the receipt; D3 minor: the (k2)
+selfcheck arm is vacuously green when the capture is absent). D1 (the BLOCKED-marker
+classification) is OUT of this unit's scope — the stimulus DATA move was already taken
+by the CHATHOST-STIMULUS unit above it.
+
+### D3 — the (k2) `alert_texts`-capture revert arm: vacuously green when the capture is absent
+
+Mechanism (reviewer-proven, confirmed at the source): `_d6_src` ends with `"\n"`;
+`splitlines()` + `"\n".join()` drops that trailing newline, so the pre-fix
+`_alt_mut_removed = (_alt_mut_src != _d6_src)` was TRUE even when NO line was removed —
+the NO-OP branch (`mutation was a NO-OP`) never fired, and the arm then drove a copy
+byte-identical to the source and asserted `"alert_texts" not in _alt_mut_ev` on it, which
+is trivially true when the feature does not exist.
+
+Fix (`.hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py`, the (k2) block
+only): the skip loop now tracks `_alt_skipped_any` — set when the loop actually consumed
+a line (the `evidence.alert_texts` line and/or any line skipped through to the closing
+`)).catch(() => []);`). `_alt_mut_removed` is now `_alt_skipped_any`, independent of the
+source's trailing newline. The NO-OP branch therefore fires when the capture block is
+absent and the arm goes RED in that case. The (k1) positive arm and the mutation's
+driving/grading logic (`error_frames == 2`, `"alert_texts" not in ev`) are untouched;
+nothing in `ui-drive.cjs` / `run-journeys.py` / `chat-hosts.yaml` was changed.

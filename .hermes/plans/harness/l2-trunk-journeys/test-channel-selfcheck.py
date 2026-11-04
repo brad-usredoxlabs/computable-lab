@@ -2006,20 +2006,30 @@ def main():
         # no alert_texts field at all, everything else identical). The
         # mutation spans from the line carrying `evidence.alert_texts`
         # through the line that closes the statement (`.catch(() => []);`).
+        # advc c12 D3: removal detection must be INDEPENDENT of the source's
+        # trailing newline. The pre-fix `_alt_mut_src != _d6_src` was TRUE even
+        # when NO line was removed (_d6_src ends with "\n"; splitlines() +
+        # join() drops it), so the NO-OP branch below never fired and the arm
+        # drove a copy identical to the source — vacuously green when the
+        # capture block is absent. Detection now = the skip loop actually
+        # consumed a line.
         _alt_lines = _d6_src.splitlines()
         _alt_mut_lines = []
         _alt_skip = False
+        _alt_skipped_any = False
         for _alt_ln in _alt_lines:
             if "evidence.alert_texts" in _alt_ln:
                 _alt_skip = True
+                _alt_skipped_any = True
                 continue
             if _alt_skip:
                 if ")).catch(() => []);" in _alt_ln:
                     _alt_skip = False
+                _alt_skipped_any = True
                 continue
             _alt_mut_lines.append(_alt_ln)
         _alt_mut_src = "\n".join(_alt_mut_lines)
-        _alt_mut_removed = _alt_mut_src != _d6_src
+        _alt_mut_removed = _alt_skipped_any
         if _alt_mut_removed:
             _alt_mut_p, _alt_mut_ev = _alt_drive(_alt_mut_src, "mut")
             _alt_mut_ok = (_alt_mut_removed
