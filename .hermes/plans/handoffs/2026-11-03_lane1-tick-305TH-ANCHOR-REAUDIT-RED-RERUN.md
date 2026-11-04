@@ -114,3 +114,49 @@ second BEST-effort lane-1 browser gate while lane 2's reviewer occupies the visi
 - AS-L1T305-2: "byte-identical product tree" is asserted from `git diff --name-only` emptiness, i.e. no
   tracked non-docs path differs — sufficient for baseline transfer, since both bars are test suites over
   tracked source.
+
+## 6. NEW ENVIRONMENT FINDING (MAJOR, first-hand) + the coder worktree is now PRE-WARMED
+
+Attempting to remove the ~20-minute cold-start from the next LONG run exposed that **`cl-integration-1` is a
+HYBRID checkout**: a clean `git worktree add` of the same commit CANNOT run the item's bars.
+
+- **56 untracked symlinks** exist in the trunk worktree (42 under `server/src`, 9 under `app/src`, plus
+  `server/schema`, `config.yaml`, `cl-lane-stack.sh`, and two node_modules-internal ones). They are
+  **ignored** via `~/.hermes/cl/lanes/1/lane-exclude`, so they are invisible to `git status` and absent from
+  any new worktree. 51 of them point into `/mnt/vast/home/brad/git/computable-lab` (Brad's main checkout).
+- **4 untracked FILES** that are not symlinks also matter: `schema/core/datatypes/revision-ref.schema.yaml`,
+  `schema/registry/labware-definitions/80x2ml-tube-rack.yaml`, `schema/registry/tube-sizes/tube-size-presets.v1.yaml`.
+- Evidence that this is load-bearing, not cosmetic: a clean worktree at the same commit failed
+  `RecordStore.test.ts` / `archivedAssignment.test.ts` / `RevisionStorage.test.ts` at **module-load**
+  (`Failed to load url ../lifecycle/BypassAudit.js` — `RecordStoreImpl.ts:35` imports it) and, once the
+  symlinks were mirrored, still failed `RevisionStorage.test.ts` on
+  `can't resolve reference ./datatypes/revision-ref.schema.yaml`. After mirroring both classes the worktree
+  reproduces the baselines exactly.
+
+**Actions taken (all in `wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010`, branch `cl/lane1-recordlockguard-1-l1t2010`
+@ trunk a7ab041e):** mirrored the 56 symlinks to their identical targets, copied the 4 untracked schema/config
+files, and mirrored the trunk's node_modules layout (`app/node_modules` copied, `server/node_modules` symlinked
+to the main repo — exactly as trunk does). Scripts: `scripts/prep-worktree-recordlock-1.sh` and
+`...-1b.sh`; log `worktree-prep-L1-RECORD-LOCK-GUARD-1-l1t2010.log`.
+
+**Verified in the prepared worktree, by me, just now:**
+
+| bar | prepared worktree | trunk baseline |
+|---|---|---|
+| bar 1 `writeGates + lifecycle + RecordStore` | **3 files / 62 tests PASSED** | 3 / 62 |
+| bar 2 `archivedAssignment + SignatureIntegrity + RevisionStorage` | **3 files / 22 tests PASSED** | 3 / 22 |
+| `tsc --noEmit -p app` error lines | **21** | 21 |
+
+=> The next tick can dispatch with `--worktree /mnt/vast/home/brad/git/wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010`
+and skip install/checkout entirely. Two cautions carried forward: (i) the worktree is at trunk **a7ab041e**;
+if trunk moves with PRODUCT changes before dispatch, re-check `git diff --name-only a7ab041e..trunk -- app
+server schema`; (ii) this hybrid-checkout fact means "product tree identical" claims are about TRACKED files
+only — a fresh clone or CI would fail the same two ways, which is a pre-existing lane-infrastructure defect
+recorded here, NOT created by this tick and NOT in this item's scope to fix.
+
+## 7. Tick close — capacity at exit
+
+Both SHARED appliance-2 slot locks were **FREE** at 20:27-20:34 (lane 2's CARD-1 coder exited), but lane 2's
+own orchestrator tick lives and lane 2 still carries dispatchable queue work + an active `corpus-state.md`,
+so CORPUS PRIORITY (Brad 2026-11-02T17:05) still governs the next claim: **lane 1 does not take the slots
+first**. No worker of mine was live at expiry; nothing to checkpoint.
