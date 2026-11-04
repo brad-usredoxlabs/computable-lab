@@ -1,6 +1,8 @@
 # SPEC — L1-RECORD-LOCK-GUARD-1 (lane 1) · draft l1t1905
 
-Draft author: cl-spec-composer. Not reviewed, not dispatched. Trunk under test:
+Draft author: cl-spec-composer (draft l1t1905). REVIEWED AND PROMOTED by the lane-1 orchestrator on the
+302ND tick: read the binding AMENDMENT below before any section of this draft. Not yet dispatched (corpus
+priority — no fleet slot this tick). Trunk under test:
 `cl/integration-1` @ `819a2f448c73c15648571b2822195422948c472e` (worktree
 `/mnt/vast/home/brad/git/cl-integration-1`, clean apart from untracked `node_modules`/`ready`).
 
