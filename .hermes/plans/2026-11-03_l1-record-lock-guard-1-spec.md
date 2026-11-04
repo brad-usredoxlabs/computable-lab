@@ -111,6 +111,44 @@ If the served payloads do not show those, the YAML did not reload — stop, do n
 ### AM-8 Assumption closure
 AS-L1T1905-2 (§11: "Leg A may keep the approved/effective pair in TS ... debt: true") is CLOSED: debt false once the lock is declared in lifecycle DATA and every consumer reads it. Any trace of the old hardcoded predicate in the diff is a defect, not a fallback.
 
+### AM-9 Lifetime-id corrections + the located meta-schema pin (303RD tick, verified first-hand at ccec9e2d)
+
+AM-5 above names the pre-gate lifecycles loosely. The REAL ids, read from the `id:` field of
+`schema/core/lifecycles/*.yaml`, are: `document-control`, `document-controlled-signing`,
+`lab-sample`, `registry-ops` (plus untouched `lab-vocabulary-control`, `service-request`,
+`tyf-order`). The orchestrator pre-gate after merge must therefore be:
+
+```
+GET :3092/api/lifecycle/document-control/transitions            -> contentLockedStates [approved,effective,superseded,archived]
+GET :3092/api/lifecycle/document-controlled-signing/transitions -> contentLockedStates [approved,effective,superseded,archived]
+GET :3092/api/lifecycle/lab-sample/transitions                  -> contentLockedStates [archived]
+GET :3092/api/lifecycle/registry-ops/transitions                -> contentLockedStates [archived]
+```
+
+Two load-bearing facts measured today (they change AM-6's task from "locate it" to "close it"):
+
+1. **The one existing meta-schema pin covers ONLY `registry-ops`**:
+   `server/src/governance/registryOpsLifecycle.test.ts:666-676` reads
+   `core/lifecycle.meta.schema.yaml` + `core/lifecycles/registry-ops.lifecycle.yaml` and validates
+   with a fresh `createValidator()`. Editing `document-control`, `document-controlled-signing`, or
+   `lab-sample` would be validated by NOTHING today.
+2. **The runtime loader does not validate either**: `server/src/lifecycle/LifecycleLoader.ts:13-39`
+   parses each `*.lifecycle.yaml` and calls `engine.loadLifecycle(spec)` — no Ajv, no meta-schema,
+   and a failing file is only `console.warn`-ed. Consequence: a misspelt field or a `contentLocked`
+   set on a state id that does not exist in the file fails SILENTLY (no lock, green tests).
+
+Required additions to AM-6's pin set (RED-first where meaningful):
+- (d) a meta-schema validation pin for EACH of the four edited YAMLs (extend the registryOps
+  pattern, or loop the four files through one fresh-validator assertion);
+- (e) an engine-level pin: `contentLockedStates(id)` for each of the four ids equals exactly the
+  state set declared in AM-1 (this is the pin that catches a typo'd state id — the loader cannot);
+- (f) a negative pin that `contentLockedStates('service-request')` (or any lifecycle whose YAML
+  declares no `contentLocked`) returns an EMPTY set, not `undefined`, so "declared but empty" and
+  "lifecycle not loaded" stay distinguishable at the handler.
+- Store resolution: `undefined` (lifecycle not loaded) ⇒ fail-open skip, matching today's
+  absent-`lifecycleId` pass-through — but this must be an explicit, commented decision in the diff,
+  not an accident of `undefined?.has(...)` (bait 14).
+
 ## 1. Goal (one sentence)
 
 Make `/record/<id>` refuse to write an approved/effective (or lifecycle-terminal) controlled
