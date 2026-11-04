@@ -712,6 +712,19 @@ export interface ChatMessage {
    * it through `metadata.shorthand` so the card survives a reload.
    */
   shorthand?: string
+  /**
+   * L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2): the requestId-keyed
+   * structured answers this USER message recorded — the SAME
+   * `AiClarificationAnswer[]` shape that rides the wire (`aiClient.ts:45`,
+   * `:142`). Persisted as `metadata.clarificationAnswers` so a cold reload can
+   * (a) render the compact Answered row and (b) RE-SEND the answered requestIds
+   * on subsequent sends of the same thread, letting the shipped server drop
+   * (`AgentOrchestrator.ts:3085-3098`, P9a-pinned) close the re-open leg with
+   * ZERO server change. Keyed on requestId ONLY — never prose, never a regex
+   * over the question. Conditional-spread idiom: key ABSENT when the turn
+   * carried no structured answers, never `undefined`.
+   */
+  clarificationAnswers?: AiClarificationAnswer[]
 }
 
 export interface AiConversationMessage {
