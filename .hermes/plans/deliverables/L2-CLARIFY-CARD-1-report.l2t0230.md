@@ -677,3 +677,4 @@ VERIFY counts (run at this verify-block commit):
    + FIX-1 +4 lines). `git -c core.fileMode=false status --porcelain` → clean except the
    untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` (assignment-excluded,
    never committed).
+CARD1-FIX5-FIX1 DONE c733a565acff96d833684709cf1dca5af54fd9c1
