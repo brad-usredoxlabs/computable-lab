@@ -111,6 +111,30 @@ inside the queue transaction). Queue transaction: append-only temp+rename under 
 `handoff_latest` repointed. Artifacts: `scripts/watch-arm-334th.sh`,
 `scripts/test-leg1-arm-compare.py`, `verify-leg1-fired.sh.bak-l1t0731`.
 
+## Addendum 07:34 EST — dispatch-readiness of the parked item re-verified (no dispatch, item parked)
+
+Everything a future fire needs is intact **at the current trunk**, measured not inherited:
+
+- **Spec anchors still resolve.** `git -c core.fileMode=false diff --stat af301799..2edb698d -- app
+  server schema config` is **EMPTY**, i.e. the product tree is byte-identical to the trees the
+  302ND/303RD/305TH/320TH measured their pins and baselines at. No anchor re-measurement was needed,
+  and every baseline in the LEG-1 prompt (server bar1 3 files/62, bar2 3 files/22, app tsc 21) still
+  holds by product-tree identity.
+- **Live RED baseline re-measured on `:3092`** (read-only GETs, `scripts/recordlock-red-baseline-334th.py`,
+  output kept at `red-baseline-334th-l1t0733.txt`): the four AM-9 ids are real —
+  `document-control`, `document-controlled-signing`, `lab-sample`, `registry-ops` all 200 with
+  `lifecycleId` echoing, and `contentLockedStates` **ABSENT on all four** ⇒ `RED-BASELINE: AS-EXPECTED`.
+- **Worktree fast-forwarded** `80fca81f → 2edb698d` (docs-only; product diff over `app server schema
+  config scripts` empty), so the pre-warmed tree is at trunk again and `verify-leg1-fired.sh` after the
+  ff reads `0 ahead, product diff none, NOT-FIRED`.
+- Prompt pin re-asserted by the arm's own `--selftest`: `SELFTEST prompt pin OK`,
+  `item_state OK (todo|none|none)`, `ledger reachable`, rc 0.
+
+Measurement trap recorded for future ticks: the queue transaction prints **character** counts
+(`len(text)`) while `ls`/reconcile print **bytes**; the list contains non-ASCII (§ — ✓ ·), so
+`1237829 chars == 1241800 bytes`. A tick that compares those two numbers directly will see a phantom
+"3971 B lost" and start hunting a duplicate writer that does not exist. Compare like with like.
+
 ## Next actions (ordered)
 
 1. `scripts/verify-leg1-fired.sh` first (now trustworthy on offsets). **NOT-FIRED is the expected
