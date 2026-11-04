@@ -107,6 +107,22 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 3) — unionClarifi
     const out = unionClarificationAnswers(persisted, fresh)
     expect(out.map((a) => a.requestId)).toEqual(['req-b', 'req-a', 'req-c'])
   })
+
+  it('is SET-LIKE (idempotent): duplicate requestIds INSIDE the persisted set collapse to one (D5 — a re-answer / double-post / rehydrate may persist the same requestId twice)', () => {
+    // The reviewer's exact repro: two persisted entries with the SAME
+    // requestId. Pre-fix the map kept both -> the wire carried
+    // ['req-1','req-1']. The union's stated invariant is "deduped by
+    // requestId": the output must be set-like no matter how the persisted
+    // set was built (re-answer, double-post, rehydrate).
+    const out = unionClarificationAnswers([ans('req-1', 'first'), ans('req-1', 'again')], [])
+    expect(out).toHaveLength(1)
+    expect(out.map((a) => a.requestId)).toEqual(['req-1'])
+    // Idempotent: unioning the output with itself changes nothing.
+    expect(unionClarificationAnswers(out, out)).toEqual(out)
+    // Fresh side still supersedes the deduped entry (last fresh wins).
+    const withFresh = unionClarificationAnswers([ans('req-1', 'first'), ans('req-1', 'again')], [ans('req-1', 'fresh win')])
+    expect(withFresh).toEqual([ans('req-1', 'fresh win')])
+  })
 })
 
 describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 units 2-3) — persist carrier + re-send through sendPrompt', () => {

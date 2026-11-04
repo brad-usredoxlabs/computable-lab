@@ -609,6 +609,12 @@ function legacyClarificationFromRequests(
  * Invariants the pin locks (defect 6 is closed by these, not by any prose):
  *   - keyed on `requestId` ONLY (never prose / never value): two answers with
  *     the same requestId collapse to the LAST one (fresh beats persisted);
+ *   - SET-LIKE (idempotent): the output is deduped by requestId — including
+ *     duplicates INSIDE the persisted set (a re-answer / double-post /
+ *     rehydrate may persist the same requestId twice) and inside `fresh`
+ *     (last-seen wins, first-seen position kept). Unioning the output with
+ *     itself changes nothing; the wire field NAME and POSITION are
+ *     unchanged — only the set's multiplicity is normalized;
  *   - an EMPTY result is the byte-identical fresh-ask wire shape (the caller
  *     passes `[]` straight through, so the fresh-ask turn's wire is unchanged);
  *   - order is stable: persisted answers in their first-seen order, then fresh
@@ -627,21 +633,43 @@ export function unionClarificationAnswers(
   const key = (a: AiClarificationAnswer): string | undefined =>
     typeof a.requestId === 'string' && a.requestId.length > 0 ? a.requestId : undefined
 
+  // D5 (advc c10): the output must be SET-LIKE (idempotent) by requestId. A
+  // thread can persist the SAME requestId twice (re-answer, double-post,
+  // rehydrate), so both sides are deduped BEFORE the merge: last-seen value
+  // wins, first-seen position is kept. Keyless answers stay (they are not
+  // requestId-keyed to begin with).
+  const dedupeById = (answers: AiClarificationAnswer[]): AiClarificationAnswer[] => {
+    const lastAt = new Map<string, number>()
+    answers.forEach((a, i) => {
+      const k = key(a)
+      if (k !== undefined) lastAt.set(k, i)
+    })
+    const out: AiClarificationAnswer[] = []
+    answers.forEach((a, i) => {
+      const k = key(a)
+      if (k !== undefined && lastAt.get(k) !== i) return
+      out.push(a)
+    })
+    return out
+  }
+  const persistedDeduped = dedupeById(persisted)
+  const freshDeduped = dedupeById(fresh)
+
   // A fresh answer with a requestId supersedes the persisted answer for that
   // requestId (in place — it keeps the persisted position, not appended).
   const superseded = new Map<string, AiClarificationAnswer>()
-  for (const a of fresh) {
+  for (const a of freshDeduped) {
     const k = key(a)
     if (k !== undefined) superseded.set(k, a)
   }
-  const persistedKeys = new Set(persisted.map(key))
-  const out: AiClarificationAnswer[] = persisted.map((a) => {
+  const persistedKeys = new Set(persistedDeduped.map(key))
+  const out: AiClarificationAnswer[] = persistedDeduped.map((a) => {
     const k = key(a)
     return k !== undefined && superseded.has(k) ? superseded.get(k)! : a
   })
   // Fresh answers with NO persisted counterpart (a new requestId this turn, or
   // a keyless answer) are appended in their first-seen order.
-  for (const a of fresh) {
+  for (const a of freshDeduped) {
     const k = key(a)
     if (k === undefined || !persistedKeys.has(k)) out.push(a)
   }
