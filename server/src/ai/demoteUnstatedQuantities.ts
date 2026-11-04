@@ -57,7 +57,7 @@
  */
 import type { ScientistIntent } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
-import { extractQuantity } from './reconcileDraftQuantities.js';
+import { extractQuantity, clauseStatesKind } from './reconcileDraftQuantities.js';
 
 /** One slot demoted by {@link demoteUnstatedQuantities} (for the note). */
 export interface DemotedSlot {
@@ -133,6 +133,16 @@ function actionMaterialLabel(action: Dict): string {
   return typeof m === 'string' ? m.trim() : '';
 }
 
+/** The slot's DECLARED kind for material-less adjudication (cycle 7 unit 2 /
+ *  D1): a VOLUME slot is declared with a volume-unit-bearing name (`volume`,
+ *  `volumeUl`); every other declared `kind: quantity` slot (cycles, rpm,
+ *  factor, points, replicates, …) is a COUNT. Derived from the slot's own
+ *  declared NAME (data) — one generic rule in the demote side, never a
+ *  special-case verb/slot table (kind-awareness belongs to this decision). */
+function slotDeclaredKind(contractName: string): 'volume' | 'count' {
+  return /volume/i.test(contractName) ? 'volume' : 'count';
+}
+
 /**
  * R1.2 — demote, for every parsed action × every declared `kind: quantity`
  * argument whose field the sweep's `argumentPresent` would see as present,
@@ -184,12 +194,23 @@ export function demoteUnstatedQuantities(
         // a demotion candidate (an absent slot is already absent — the sweep
         // will raise it; nothing to demote).
         if (!quantitySlotPresent(value)) continue;
-        // Is the amount STATED in the request's own words? The ONE extractor
-        // decides (ONE-grammar law — no second quantity grammar here). With
-        // an empty label it answers via its no-anchor arm: the first
-        // amount-with-unit in the turn's own words = stated.
-        const stated = extractQuantity(words, label);
-        if (stated) continue; // the scientist stated a volume for this material — keep it
+        // Is the amount STATED in the request's own words? ONE grammar
+        // decides (ONE-grammar law — no second quantity grammar here):
+        //   • NAMED material (label ≠ '') — the extractor's OWN label-
+        //     adjacency arm (the 90-char window): the first amount-with-unit
+        //     near THIS material's label = stated. Byte-identical to before
+        //     (separately pinned — the labeled path is NOT changed here).
+        //   • NO material (label = '') — cycle 7 unit 2 (D1): the no-anchor
+        //     arm's first-amount-ANYWHERE over the whole turn over-KEPT an
+        //     UNRELATED action's amount (K1) and a wrong-KIND amount (K2).
+        //     Adjudicate by the slot's DECLARED KIND + the CLAUSE that names
+        //     THIS action's verb: stated only if that clause carries an
+        //     amount-of-that-kind. An amount from another clause/action, or
+        //     of a different kind, no longer satisfies this slot.
+        const stated = label
+          ? extractQuantity(words, label)
+          : clauseStatesKind(words, verb, slotDeclaredKind(contract.name));
+        if (stated) continue; // the scientist stated this slot's kind in this action's clause — keep it
         // Demote: strip the field and disclose.
         delete fields[fieldName];
         actionMutated = true;
