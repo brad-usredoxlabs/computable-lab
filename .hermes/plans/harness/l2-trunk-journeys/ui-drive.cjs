@@ -555,6 +555,19 @@ function shaShort(s) {
     const _lastAssistant = after.texts.length ? after.texts[after.texts.length - 1] : '';
     evidence.last_assistant_text_nonempty = after.turns >= 1 && _lastAssistant.length > 0;
     evidence.error_frames = await page.locator('[role="alert"]').count().catch(() => 0);
+    // CHATHOST-CONSOLIDATE-1: in addition to the COUNT above (BYTE-IDENTICAL —
+    // the no_error_frame grading path is untouched), capture the TEXT of each
+    // rendered alert frame so a sweep can NAME every residual frame by cause
+    // (the ruling's step-2 naming requirement: a route NOT_FOUND cause vs. the
+    // AI's honest ledger/time/schema announcement). The text rides the SAME
+    // `evidence` dict that becomes the receipt's `rendered_evidence`, so it
+    // lands in every per-host receipt automatically. The capture is the
+    // ruling's exact expression: the [role="alert"] node texts, each
+    // truncated to 300 chars. Fail-closed to [] (a page that cannot
+    // evaluate still records a count via the locator above).
+    evidence.alert_texts = await page.evaluate(
+      () => [...document.querySelectorAll('[role="alert"]')]
+        .map(n => (n.textContent || '').slice(0, 300))).catch(() => []);
     // Rendered-outcome evidence for content assertions: the live page text
     // (the re-read panes carry an accepted edit's new label).
     evidence.body_text_tail = await page.evaluate(() => document.body.innerText.slice(-24000));

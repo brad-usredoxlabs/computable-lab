@@ -110,3 +110,27 @@ blessed_records:
       - registry-host
     bless_note: "Re-bless (D-6 l2t0200, CHATHOST-CONSOLIDATE-1): id set unchanged (answer_selector field added to all six rows — pure growth, no host dropped); recorded so the current inventory sha carries a NEWER consistent record. Authorized by .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md."
     blessed_at: "20261104T074841Z"
+# CHATHOST-CONSOLIDATE-1 (alert_texts + probe_seed DATA, live 6/6 close): a
+# second DEFENSIBLE re-bless under the SAME D-6 hygiene rule as the one above.
+# The id set is AGAIN unchanged — the alertseed unit ADDED a `probe_seed:`
+# field to the event-editor and record-host rows only (pure field growth: no
+# host removed, renamed or reordered), so the guard is green with the SAME
+# sha (dcf32649...75156b) and this record is DATA HYGIENE, not a shrink
+# authorization: it *** the current inventory sha as an EVEN NEWER consistent
+# bless record (blessed_sha256 == the current canonical_sha; blessed_ids
+# reproduce it) and cites the AUTHORITING SPEC (the real spec path that exists
+# in the repo — a decisions/ or config/ token would NOT satisfy the guard's
+# spec_cited check; the authorizing ARCHITECT RULING, which lives outside the
+# three spec trees, is named for provenance in the same note).
+# before: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+#         (the first-bless sha; current sha at this append, guard exit 0)
+  - blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+    blessed_ids:
+      - run-workspace
+      - event-editor
+      - project-deck-tab
+      - record-host
+      - artifact-host
+      - registry-host
+    bless_note: "Re-bless (CHATHOST-CONSOLIDATE-1 alertseed unit, live 6/6 close): id set unchanged (probe_seed field ADDED to the event-editor and record-host rows — pure field growth, no host dropped); recorded so the current inventory sha carries a NEWER consistent record. Authorized by .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md; the authorizing architect ruling (decisions/CHATHOST-noerrorframe-probe-seed-l2t0400-ruling.md) is named for provenance."
+    blessed_at: "20261104T115036Z"

@@ -1381,13 +1381,57 @@ def main():
                         bool(_u1_rwp)
                         and (_u1_rwp.get("seed") in ({}, None)),
                         ["run-workspace seed=%r" % ((_u1_rwp or {}).get("seed"),)]))
-        results.append(("U1a: ONLY the artifact route materialises a record (no per-host special-casing)",
-                        sum(1 for h in _u1_hosts
-                            if h.get("id") != "artifact-host"
-                            and (rj.build_chat_host_probe(
-                                h["id"], h.get("surface"), h.get("route") or "").get("seed") or {})
-                            .get("record")) == 0,
-                        ["non-artifact seed count (expect 0)"]))
+        # CHATHOST-CONSOLIDATE-1 (replaces the pre-alertseed "ONLY the
+        # artifact route materialises a record" arm — that model is now
+        # SUPERSEDED: the probe seed is pure ROW DATA, `probe_seed:`, read by
+        # id. artifact-host keeps its pre-existing route-shape seeding (no
+        # probe_seed field), event-editor/record-host carry probe_seed, the
+        # rest stay seedless — ALL decided by the row's DATA, never by a
+        # host-name comparison in the builder).
+        _u1_withseed_ok = True
+        _u1_withseed_ids = []
+        for h in _u1_hosts:
+            if not h.get("probe_seed"):
+                continue
+            _u1_withseed_ids.append(h.get("id"))
+            _u1_p = rj.build_chat_host_probe(h["id"], h.get("surface"),
+                                             h.get("route") or "")
+            _u1_rec = (_u1_p.get("seed") or {}).get("record")
+            _u1_td = _u1_p.get("teardown")
+            if not (_u1_rec == h.get("probe_seed", {}).get("record")
+                    and _u1_td == (h.get("probe_seed", {}).get("teardown")
+                                   or {})):
+                _u1_withseed_ok = False
+        results.append(("U1a: a row WITH probe_seed produces a probe carrying that seed + matching teardown (event-editor/record-host)",
+                        _u1_withseed_ok and len(_u1_withseed_ids) >= 2,
+                        ["with-seed rows=%r" % (_u1_withseed_ids,)]))
+        _u1_nonseeded_rec = sum(
+            1 for h in _u1_hosts if not h.get("probe_seed")
+            and (rj.build_chat_host_probe(
+                h["id"], h.get("surface"), h.get("route") or "").get("seed")
+                or {}).get("record"))
+        results.append(("U1a: a row WITHOUT probe_seed behaves EXACTLY as today (artifact keeps its route-shape record; the other four stay seedless)",
+                        _u1_nonseeded_rec == 1
+                        and (rj.build_chat_host_probe("run-workspace", "x",
+                                                     "/runs/x").get("seed")
+                             in ({}, None)),
+                        ["non-seeded rows materialising records (expect 1 = the /artifact/ route-shape rule)"]))
+        # grep-provability pin (PINS): the BUILDER carries zero id-equality
+        # branches (no `if host ==` / id == comparisons) — the seed is a DATA
+        # lookup keyed by id (the id only keys the row read inside
+        # _inventory_probe_seed, never a branch condition), so adding a
+        # probe_seed row changes NO code.
+        _u1_builder_src = open(os.path.join(HERE, "run-journeys.py")).read()
+        _u1_builder_fn = _u1_builder_src.split("def build_chat_host_probe", 1)[1]
+        _u1_builder_fn = _u1_builder_fn.split("\ndef ", 1)[0]
+        results.append(("U1a: the probe builder is id-branch-free (a data lookup, grep-provable — zero `if host ==` / id-equality branches)",
+                        ("if host_id ==" not in _u1_builder_fn)
+                        and ('if host_id' not in _u1_builder_fn)
+                        and ("== \"artifact-host\"" not in _u1_builder_fn)
+                        and ("== \"event-editor\"" not in _u1_builder_fn)
+                        and ("== \"record-host\"" not in _u1_builder_fn)
+                        and ("_inventory_probe_seed(host_id)" in _u1_builder_fn),
+                        ["builder fn len=%d" % len(_u1_builder_fn)]))
     except Exception as _e:
         results.append(("U1a/U1b: self-check (probe seed + open_ai_tab negative control)",
                         False, ["err=%s" % _e]))
@@ -1880,6 +1924,131 @@ def main():
              "(the pin arms' model of a row lacking the field)",
              _d6_ov.get("log_selector") == "[data-testid='custom-log']",
              ["override log_selector=%r" % (_d6_ov.get("log_selector"),)]))
+        # (k) CHATHOST-CONSOLIDATE-1 PIN: the `alert_texts` CAPTURE line.
+        #     (k1) POSITIVE — drive the REAL driver against a file:// fixture
+        #          that renders TWO role="alert" nodes; the receipt's
+        #          rendered_evidence.alert_texts must SHOW both texts (the
+        #          ruling's exact expression, each truncated to 300 chars),
+        #          proving the capture lands in rendered_evidence (NOT just
+        #          error_frames' count).
+        #     (k2) RED-against-revert (the PINS mutation arm) — a /tmp COPY of
+        #          ui-drive.cjs with the alert_texts CAPTURE line reverted
+        #          (deleted) is driven against the SAME fixture: alert_texts
+        #          is then ABSENT from rendered_evidence while error_frames'
+        #          count is UNCHANGED (the mutation is scoped to the capture
+        #          line, not the count). Reverting the line flips the arm
+        #          RED — the capture line is what produces the field.
+        _ALT_ONE = ("role=alert one: could not place that subject in "
+                    "server-known time")
+        _ALT_TWO = "role=alert two: agent-action envelope rejected by the schema"
+        _ALT_FIXTURE = ("<!doctype html><html><body>\n"
+                        "<div aria-label=\"Conversation\" "
+                        "class=\"sequence-chat-messages\">\n"
+                        "<div class=\"chat-log-msg "
+                        "chat-log-msg--assistant\"><strong>Assistant</strong>"
+                        "<p>here is the rendered answer</p></div>\n"
+                        "</div>\n"
+                        "<div role=\"alert\">%s</div>\n"
+                        "<div role=\"alert\">%s</div>\n"
+                        "</body></html>\n" % (_ALT_ONE, _ALT_TWO))
+
+        def _alt_drive(driver_src, tag):
+            _tda = tempfile.mkdtemp(prefix="sc-alt-%s-" % tag)
+            try:
+                _fixa = os.path.join(_tda, "fixture.html")
+                with open(_fixa, "w") as fh:
+                    fh.write(_ALT_FIXTURE)
+                _dpa = os.path.join(_tda, "ui-drive-%s.cjs" % tag)
+                with open(_dpa, "w") as fh:
+                    fh.write(driver_src)
+                _jpa = os.path.join(_tda, "ALT-%s.yaml" % tag)
+                with open(_jpa, "w") as fh:
+                    fh.write("id: ALT-%s\ntimeout_s: 30\n"
+                             "log_selector: '[aria-label=\"Conversation\"]'\n"
+                             "steps:\n  - step: goto\n    path: %s\n"
+                             % (tag, _fixa))
+                _opa = os.path.join(_tda, "ALT-%s-ui.json" % tag)
+                os.symlink(_D6_NM, os.path.join(_tda, "node_modules"))
+                _pra = subprocess.run(
+                    ["node", _dpa, "--journey", _jpa, "--out", _opa,
+                     "--app-base", "file://"],
+                    cwd=APP_DIR, capture_output=True, text=True, timeout=180)
+                try:
+                    _rea = json.load(open(_opa))
+                except Exception:
+                    _rea = {"_unreadable": True}
+                return _pra, (_rea.get("rendered_evidence") or {})
+            finally:
+                try:
+                    os.unlink(os.path.join(_tda, "node_modules"))
+                except OSError:
+                    pass
+                shutil.rmtree(_tda, ignore_errors=True)
+
+        _alt_real_p, _alt_real_ev = _alt_drive(_d6_src, "real")
+        _alt_real_texts = _alt_real_ev.get("alert_texts")
+        results.append(
+            ("CHATHOST-CONSOLIDATE-1 PIN: alert_texts SHOWS the texts for a "
+             "two-alert DOM (capture rides rendered_evidence)",
+             _alt_real_p.returncode == 0
+             and isinstance(_alt_real_texts, list)
+             and len(_alt_real_texts) == 2
+             and _alt_real_texts[0] == _ALT_ONE[:300]
+             and _alt_real_texts[1] == _ALT_TWO[:300]
+             and _alt_real_ev.get("error_frames") == 2,
+             ["real alert_texts=%r error_frames=%r"
+              % (_alt_real_texts, _alt_real_ev.get("error_frames"))]))
+        # the /tmp MUTATION: revert (REVERT) the alert_texts capture — the
+        # whole multi-line `evidence.alert_texts = await page.evaluate(...)
+        # .catch(() => []);` statement is deleted from a /tmp copy (removing
+        # only the first line would leave a dangling arrow-expression and
+        # break the file's syntax; the revert must be the PRE-feature driver:
+        # no alert_texts field at all, everything else identical). The
+        # mutation spans from the line carrying `evidence.alert_texts`
+        # through the line that closes the statement (`.catch(() => []);`).
+        # advc c12 D3: removal detection must be INDEPENDENT of the source's
+        # trailing newline. The pre-fix `_alt_mut_src != _d6_src` was TRUE even
+        # when NO line was removed (_d6_src ends with "\n"; splitlines() +
+        # join() drops it), so the NO-OP branch below never fired and the arm
+        # drove a copy identical to the source — vacuously green when the
+        # capture block is absent. Detection now = the skip loop actually
+        # consumed a line.
+        _alt_lines = _d6_src.splitlines()
+        _alt_mut_lines = []
+        _alt_skip = False
+        _alt_skipped_any = False
+        for _alt_ln in _alt_lines:
+            if "evidence.alert_texts" in _alt_ln:
+                _alt_skip = True
+                _alt_skipped_any = True
+                continue
+            if _alt_skip:
+                if ")).catch(() => []);" in _alt_ln:
+                    _alt_skip = False
+                _alt_skipped_any = True
+                continue
+            _alt_mut_lines.append(_alt_ln)
+        _alt_mut_src = "\n".join(_alt_mut_lines)
+        _alt_mut_removed = _alt_skipped_any
+        if _alt_mut_removed:
+            _alt_mut_p, _alt_mut_ev = _alt_drive(_alt_mut_src, "mut")
+            _alt_mut_ok = (_alt_mut_removed
+                           and _alt_mut_p.returncode == 0
+                           and "alert_texts" not in _alt_mut_ev
+                           and _alt_mut_ev.get("error_frames") == 2)
+            _alt_mut_note = ("mutated ev has alert_texts=%r error_frames=%r "
+                             "(count untouched, capture gone)"
+                             % (_alt_mut_ev.get("alert_texts"),
+                                _alt_mut_ev.get("error_frames")))
+        else:
+            _alt_mut_ok = False
+            _alt_mut_note = "mutation was a NO-OP (capture line not found — " \
+                            "the line moved; re-point the mutation)"
+        results.append(
+            ("CHATHOST-CONSOLIDATE-1 PIN: REVERTING the alert_texts capture "
+             "line (a /tmp copy) makes the receipt's rendered_evidence lose "
+             "alert_texts (mutation RED) while error_frames is unchanged",
+             _alt_mut_ok, [_alt_mut_note]))
     except Exception as _d6_e:
         results.append(("D6 Q3/Q4 pins (self-check)", False,
                         ["err=%s" % _d6_e]))

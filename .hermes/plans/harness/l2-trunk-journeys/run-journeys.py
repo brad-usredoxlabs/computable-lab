@@ -81,7 +81,45 @@ CHAT_HOSTS_INVENTORY = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yam
 
 # The shared probe prompt (DATA — one canned CHATHOST-SWEEP block keyed by
 # prompt_contains serves all hosts; no per-host prompt strings in code).
-CHATHOST_SWEEP_PROMPT = "CHATHOST-SWEEP probe round trip"
+#
+# CHATHOST-CONSOLIDATE-1 (ruling CHATHOST-noerrorframe-probe-seed-l2t0400, Q-C3
+# step 3 + D-6 Q4 — the sanctioned STIMULUS change, DATA only). The stimulus must
+# provoke the product's OWN SUCCESS SHAPE for the round trip, not a zero-event
+# draft. Three DATA shapes have been measured against the live on-box model:
+#   (a) the old bare noun-phrase "CHATHOST-SWEEP probe round trip" read as a TERM
+#       and routed into ledger-term lookup (UNRESOLVED_TERM / AMBIGUOUS_TERM) or a
+#       zero-event draft (the no-events honest wall rendered role="alert");
+#   (b) the NON-LEDGER page-description meta-ask ("say what this page is for; do
+#       not draft") can ONLY end in a zero-event turn (a description is not a
+#       draft), so it GUARANTEES the wall on every host where the model does not
+#       volunteer a question — 2 consecutive live sweeps 20261104T123633Z /
+#       20261104T124239Z: each 1/6 green, every INCONCLUSIVE host carrying the
+#       SAME single no-events wall;
+#   (c) THIS candidate — a QUESTION-ELICITING ask. The product's round trip has a
+#       success shape (b) never tested: a turn that ASKS A QUESTION instead of
+#       drafting. A clarification IS the product's proposal (useAiChat.ts done
+#       arm: `askedQuestion` SUPPRESSES the no-events honest wall — the wall fires
+#       ONLY when !hasEvents && !askedQuestion && !surfacedError). So a stimulus
+#       that invites EXACTLY the clarification the product can offer renders a
+#       VISIBLE assistant question row (countable by assistant_answer_visible /
+#       turns_at_least) and NO role="alert" (no_error_frame holds), IDENTICAL on
+#       all six hosts (one shared string — the "six ai_request_bodies carry the
+#       same ask" receipt pin holds by construction). Host-agnostic; forbids
+#       inventing ids/records (no NOT_FOUND / ledger routing) and forbids a
+#       payload write (no draft/apply). The assertion trio
+#       (assistant_answer_visible / turns_at_least / no_error_frame) stays
+#       BYTE-IDENTICAL — only the stimulus text changes, per the ruling. The
+#       trailing bracketed tag keeps the substring the ONE canned CHATHOST-SWEEP
+#       block matches on (prompt_contains "CHATHOST-SWEEP probe"), so the fake
+#       path and the T4c non-vacuity arm still tie this prompt to that single
+#       block.
+CHATHOST_SWEEP_PROMPT = (
+    "I'm working on this page and want to do the next sensible step here. "
+    "Ask me the one question you need before doing anything — reply with just "
+    "that question. Do not draft or apply any change, and do not invent any "
+    "record or id. "
+    "[CHATHOST-SWEEP probe]"
+)
 
 # The artifact record schema (the schemaId the artifact-host probe's REAL
 # record materialises against, via the standard seed.record machinery). The
@@ -202,6 +240,30 @@ def _inventory_answer_selector(host_id):
     return None
 
 
+def _inventory_probe_seed(host_id):
+    """CHATHOST-CONSOLIDATE-1: the `probe_seed` DATA of ONE inventory row
+    (the REAL record a record-by-id host must mount for its probe to open —
+    the seed.record + the matching teardown), looked up BY ID — a data
+    lookup, never a host comparison (the no-per-host-code rule: the id keys
+    a row read, it is not a branch condition). Returns the row's `probe_seed`
+    dict ({"record": {...}, "teardown": {...}}) or None when the inventory is
+    unreadable, the row is absent, or the row carries no `probe_seed` (a
+    seedless host — it rides the existing route-shape / no-record path)."""
+    import yaml
+    try:
+        with open(CHAT_HOSTS_INVENTORY) as fh:
+            doc = yaml.safe_load(fh) or {}
+    except Exception:
+        return None
+    for h in doc.get("hosts") or []:
+        if isinstance(h, dict) and h.get("id") == host_id:
+            ps = h.get("probe_seed")
+            if isinstance(ps, dict) and isinstance(ps.get("record"), dict):
+                return ps
+            return None
+    return None
+
+
 def build_chat_host_probe(host_id, surface, route, answer_selector=None):
     """One generic probe journey for a single chat host (DATA from the
     inventory). Reuses the existing step vocabulary (goto -> open_ai_tab ->
@@ -209,16 +271,24 @@ def build_chat_host_probe(host_id, surface, route, answer_selector=None):
     are host-generic, so there is NO per-host code and NO per-host prompt
     string.
 
-    Seed: hosts whose route mounts a record-by-id page materialise a REAL
-    record through the SAME seed.record / teardown.delete_record machinery
-    every journey uses — DATA, not a special case, not a stubbed API. The
-    route-shape rule (not a host-name comparison) is: an artifact route
-    (/artifact/:kind/:artifactId) fetches its record by artifactId on mount,
-    so the probe must mount the REAL host page with a REAL artifact record.
-    recordId == the probe's :artifactId token (the same token the nav path
-    carries), so getRecord(artifactId) resolves it. Every other host rides
-    an honest fallback/empty state for a probe token and needs no record
-    (seed stays {} for those)."""
+    Seed (two tiers, BOTH DATA — no per-host code, no per-host branch):
+      (1) PRIMARY: the inventory row's `probe_seed` DATA (CHATHOST-CONSOLIDATE-1)
+          — the REAL record a record-by-id host must mount for its probe to
+          OPEN (event-editor /deck/:eventGraphId, record-host
+          /record/:recordId). Read BY ID through `_inventory_probe_seed` (a
+          data lookup, exactly the answer_selector pattern). The DATA carries
+          the seed.record (recordId + schemaId + a schema-valid payload) and
+          the matching teardown.delete_record; both flow through the SAME
+          seed_journey / teardown_journey machinery every journey uses — no
+          new seeding/teardown code, no stubbed API.
+      (2) FALLBACK (pre-existing, BYTE-IDENTICAL): a row with NO `probe_seed`
+          rides the route-shape rule — an artifact route
+          (/artifact/:kind/:artifactId) fetches its record by artifactId on
+          mount, so the probe materialises a REAL artifact record whose
+          recordId == the probe's :artifactId token. Every other unseeded
+          host rides an honest fallback/empty state and needs no record
+          (seed stays {} — EXACTLY as today).
+    """
     nav = probe_nav_path(route)
     # D-6 (l2t0150) A-leg: when the caller does not pass the selector
     # explicitly (the default), the builder READS the inventory row's
@@ -230,12 +300,26 @@ def build_chat_host_probe(host_id, surface, route, answer_selector=None):
         answer_selector = _inventory_answer_selector(host_id)
     seed = {}
     teardown = {}
-    if re.match(r"^/artifact/", nav):
-        # recordId == the :artifactId token (last path segment) the page
-        # fetches by. Derived from the nav path the product declared — the
-        # same token goto navigates to — so the read resolves. recordId
-        # rides TOP-LEVEL (the seed.record contract: seed_journey reads
-        # rec["recordId"]), exactly as every journey seed does (J1.yaml).
+    # CHATHOST-CONSOLIDATE-1 PRIMARY tier: the row's `probe_seed` DATA, read
+    # BY ID (a data lookup — the id keys the row read, it is never a branch
+    # condition on the host name). Present only for the record-by-id hosts
+    # whose page fetches a record on mount; its recordId is the SAME probe
+    # token the nav path carries (probe_nav_path substitutes every :param to
+    # CHATHOST-PROBE), so the page's getRecord(token) resolves it. The sweep
+    # drives each host probe SEQUENTIALLY (seed -> steps -> teardown), so the
+    # shared CHATHOST-PROBE token never collides: each host deletes its own
+    # record before the next seeds.
+    _ps = _inventory_probe_seed(host_id)
+    if _ps is not None:
+        seed = {"record": _ps["record"]}
+        teardown = _ps.get("teardown") or {}
+    elif re.match(r"^/artifact/", nav):
+        # FALLBACK tier (BYTE-IDENTICAL, the artifact-host pre-existing
+        # route-shape seeding): recordId == the :artifactId token (last path
+        # segment) the page fetches by. Derived from the nav path the product
+        # declared — the same token goto navigates to — so the read resolves.
+        # recordId rides TOP-LEVEL (the seed.record contract: seed_journey
+        # reads rec["recordId"]), exactly as every journey seed does (J1.yaml).
         rid = nav.rsplit("/", 1)[-1]
         seed = {"record": {"recordId": rid, "schemaId": ARTIFACT_SCHEMA,
                            "payload": _artifact_probe_seed(rid)}}
