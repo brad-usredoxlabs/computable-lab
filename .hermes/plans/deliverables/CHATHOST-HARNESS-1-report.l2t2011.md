@@ -1120,3 +1120,148 @@ amendment ruling on the honest-wall `role="alert"` / `no_error_frame` interactio
 that provokes a non-zero-event answer on the on-box model).
 
 CHATHOST-ALERTSEED BLOCKED live 6/6 not achievable via DATA: 2 consecutive live sweeps (20261104T123633Z, 20261104T124239Z) each 1/6 green; every INCONCLUSIVE host carries the product's honest no-events wall rendered role=alert (HarnessChatPane.tsx:321) on the on-box model's zero-event draft of the sanctioned non-ledger meta-ask; seeds + stimulus DATA all shipped & verified, no_error_frame not weakened -> product-design amendment owed to Brad (ruling Q-C3 step 3).
+
+## CHATHOST-STIMULUS — Candidate 1 (question-eliciting generic ask) — l2t0730+ (bounded continuation after BLOCKED)
+
+**STEP 0 (verified):** `git -c core.fileMode=false status --porcelain` -> CLEAN (before merge). `git merge cl/integration-2` -> docs-only fast-forward (4 spec/handoff files, +1268), tip now `2716a646` (merge), branch `cl/lane2-chathost-grader-l2t0200`.
+
+**Ruling read (binding):** Q-C3 step 3 + "What this ruling does NOT authorise". The sanctioned DATA move is the shared probe prompt; the untried success shape is a turn that ASKS A QUESTION (a clarification IS the product's proposal). D-6 Q4 permits a per-host ask as DATA "if ever needed" (Candidate 2).
+
+**The mechanism (verified at source, not taken on faith):**
+- `useAiChat.ts:1790-1848` (done arm): the no-events honest wall (`setHonestWall`, `role="alert"`) fires ONLY when `result.success && !hasEvents && !askedQuestion && !surfacedError`. `askedQuestion = clarification?.prompt || clarificationNeeded || clarificationRequests.length>0`. So a QUESTION turn SUPPRESSES the wall -> no `role="alert"` -> `no_error_frame` holds.
+- `ui-drive.cjs:240` `readAssistantTexts` counts `.chat-log-msg--assistant` + `.chat-log-intent-card`; a clarification turn renders a non-empty assistant row (the question prompt, ChatLog.tsx:478-500) -> `turns_completed >= 1` (baseline-subtracted) + `last_assistant_text_nonempty` -> `assistant_answer_visible` + `turns_at_least` hold.
+- The prior page-description meta-ask ("say what this page is for; do not draft") can ONLY end zero-event (a description is not a draft) -> GUARANTEED wall wherever the model does not volunteer a question (measured 1/6 each sweep).
+
+**The change** (`run-journeys.py` `CHATHOST_SWEEP_PROMPT` — ONE shared string, uniform on all six; the `CHATHOST-SWEEP probe` marker kept so the single canned block + the T4c pin stay tied). Host-agnostic; invites exactly the clarification the product can offer; forbids inventing ids/records; forbids a payload write. Commit `22102811`:
+```
+I'm working on this page and want to do the next sensible step here. Ask me
+the one question you need before doing anything — reply with just that
+question. Do not draft or apply any change, and do not invent any record or
+id. [CHATHOST-SWEEP probe]
+```
+len 249, single-line, `needle in prompt` = True.
+
+**Fast checks (post-Candidate-1, pre-sweeps):**
+```
+python3 -m py_compile run-journeys.py          -> PYCOMPILE_OK
+node --check ui-drive.cjs                      -> NODECHECK_OK
+python3 test-channel-selfcheck.py              -> SELFCHECK: PASS  (rc 0, 119 OK / 0 RED)
+python3 chat-hosts-shrink-guard.py             -> SHRINK-GUARD green (sha=dcf32649...75156b; no blessed host dropped)  rc 0
+```
+- **RED→GREEN (the selfcheck arm that pins the canned-block tie, §6 T-4
+  "the probe prompt is matched by the ONE CHATHOST-SWEEP canned block
+  (non-vacuous)"):** the arm predicate (test-channel-selfcheck.py:1296-1299) is
+  `needle in rj.CHATHOST_SWEEP_PROMPT` where `needle = prompt_contains =
+  "CHATHOST-SWEEP probe"`.
+  - RED (marker dropped, tie broken): `arm_ok=False`
+  - GREEN (shipped prompt, len 249): `arm_ok=True`
+  - Live selfcheck line: `§6 T-4: the probe prompt is matched by the ONE CHATHOST-SWEEP canned block (non-vacuity) OK` + `SELFCHECK: PASS`.
+- Assertion trio `assistant_answer_visible` / `turns_at_least` / `no_error_frame` BYTE-IDENTICAL (the diff is ONLY `CHATHOST_SWEEP_PROMPT` + its comment; `build_chat_host_probe` `assert.rendered` block untouched). Zero `if host ==` branches (one shared string).
+- **Selfcheck flake note (not a Candidate-1 defect):** one early selfcheck run went
+  `SELFCHECK: FAIL` on the `alert_texts` RED-against-revert arm (the file:// driver
+  mutation pin, which drives `ui-drive.cjs` against a local HTML fixture and does
+  NOT read `CHATHOST_SWEEP_PROMPT`). Re-runs (incl. with the prompt change present)
+  pass `SELFCHECK: PASS` rc 0 repeatedly; the file:// browser drives are flaky under
+  load (a standalone repro showed REAL rc=1 / MUT rc=0 on one run, the reverse on
+  the next). This arm is pre-existing and independent of the prompt DATA change.
+
+**Assertion trio byte-identical (proven, not asserted):** the Candidate-1 commit
+(`22102811`, parent `2716a646`) changes exactly ONE hunk, `@@ -83,25 +83,41 @@` — the
+`CHATHOST_SWEEP_PROMPT` string literal + its comment. Filtering the diff to non-comment
+code lines leaves ONLY the string literal (the old `"In one short sentence, say what this
+page is for…"`, the new question-eliciting text). `no_error_frame` / `assistant_answer_visible`
+/ `turns_at_least` / `check_rendered_assertions` are NOT in the diff (the trio names appear
+only in moved comment lines). `ui-drive.cjs` is unchanged. Zero `if host ==` branches (one
+shared string). `git -c core.fileMode=false diff 2716a646 22102811 -- run-journeys.py` → 1 file.
+
+**Fast checks (final, post-sweeps):** `py_compile run-journeys.py` → PYCOMPILE_OK; `node
+--check ui-drive.cjs` → NODECHECK_OK; `chat-hosts-shrink-guard.py` → `SHRINK-GUARD green
+(current sha=dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b; no blessed host
+dropped)` rc 0 (sha UNCHANGED); `test-channel-selfcheck.py` → `§6 T-4 … (non-vacuous) OK` +
+`SELFCHECK: PASS` rc 0.
+
+### Candidate 1 — LIVE sweeps (3 consecutive, `fake_mode:false`, lane stack :5193/:3093, no restart)
+
+Stack healthy pre-sweep every time (app:5193 200, backend:3093 /api/health ok, AI available).
+No `CHATHOST*` record leftovers before any sweep. Receipts under
+`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/`:
+
+- **SWEEP A** `20261104T130558Z` (SWEEP_A_RC=0) — main `J1 green J2 red J3 green`; chat-host:
+  `run-workspace GREEN, event-editor GREEN, project-deck-tab INCONCLUSIVE, record-host GREEN,
+  artifact-host GREEN, registry-host GREEN` → **5/6**.
+- **SWEEP B** `20261104T131806Z` (SWEEP_B_RC=0) — main `J1 green J2 green J3 green`; chat-host:
+  all six `GREEN` → **6/6**. run-meta `verdict=GREEN-NOT-GATING` (D2: a live-sampler green never
+  owns `latest`).
+- **SWEEP C** `20261104T132205Z` (SWEEP_C_RC=0) — main `J1 green J2 red J3 green`; chat-host:
+  `run-workspace GREEN, event-editor INCONCLUSIVE, project-deck-tab INCONCLUSIVE, record-host GREEN,
+  artifact-host INCONCLUSIVE, registry-host GREEN` → **3/6**.
+
+**Per-host verdict map (the deliverable table — candidate → per-host verdict/alerts):**
+
+```
+host              | A(130558Z)      | B(131806Z)      | C(132205Z)
+------------------+-----------------+-----------------+------------------
+run-workspace     | green  (ef=0)   | green  (ef=0)   | green  (ef=0)
+event-editor      | green  (ef=0)   | green  (ef=0)   | INCONCL(ef=1)
+project-deck-tab  | INCONCL(ef=1)   | green  (ef=0)   | INCONCL(ef=1)
+record-host       | green  (ef=0)   | green  (ef=0)   | green  (ef=0)
+artifact-host     | green  (ef=0)   | green  (ef=0)   | INCONCL(ef=1)
+registry-host     | green  (ef=0)   | green  (ef=0)   | green  (ef=0)
+greens            | 5/6             | 6/6             | 3/6
+```
+(ef = `rendered_evidence.error_frames`; every INCONCL host's single `alert_texts` entry is the
+product's honest no-events wall: `Draft produced no events — it delivered only notes and asked no
+questions. Nothing was proposed and nothing was applied.`, `violations=['rendered: error frame(s)
+surfaced (1)']`. Green hosts have `alert_texts=[]`.)
+
+**Generic-ask property holds in ALL THREE sweeps:** exactly ONE distinct user-ask string across all
+six hosts' `ai_request_bodies` (verified per sweep: `distinct user-ask=1`), = the Candidate-1 shared
+prompt. The one-canned-block / T4c tie is intact (selfcheck T-4 arm OK each run).
+
+### Candidate 1 — DETERMINISM ANALYSIS (why it is not 2-consecutive-6/6)
+
+- **Deterministic GREEN (3/3 sweeps):** `run-workspace`, `record-host`, `registry-host`.
+- **NONDETERMINISTIC (flip green↔INCONCL):** `event-editor` (g,g,inc), `project-deck-tab`
+  (inc,g,inc), `artifact-host` (g,g,inc). The SAME three hosts are green in SWEEP B (6/6) and hit
+  the honest no-events wall in SWEEP C — same ask, same seeded surfaces, only the on-box model's
+  first-turn behaviour differs.
+
+**Root cause (measured, not guessed):** the honest wall (`useAiChat.ts:1790-1848`) fires IFF
+`result.success && !hasEvents && !askedQuestion && !surfacedError`. The question-eliciting ask
+drives the on-box model to a **first-turn choice that is nondeterministic**:
+- When it answers with a visible question / honest non-failure bubble (e.g. SWEEP B project-deck-tab
+  `no proposal: the model's tool call carried no usable draft arguments…`, SWEEP B/C registry-host
+  `What would you like to do on this deck first — …`), a non-empty assistant row renders and the wall
+  is SUPPRESSED → `no_error_frame` holds → GREEN.
+- When it instead opens a zero-event note draft (`Prompt received. Starting compiler pipeline…
+  Skipping compiler preflight; asking AI to call compile_event_graph_draft directly…`), the turn
+  yields ZERO mountable events AND no question → the wall fires `role="alert"` → `error_frames=1` →
+  INCONCLUSIVE.
+This is ON-BOX-MODEL FIRST-TURN NONDETERMINISM, not a stimulus-wording or surface-capability limit.
+
+### Candidate 2 — EVALUATED, NOT TRIGGERED (precondition unmet)
+
+Candidate 2 (per-host `probe_ask:` DATA) is sanctioned ONLY "if the residual hosts are ones whose
+surface cannot answer Candidate 1's ask." That precondition is NOT met here: the residual hosts
+(`event-editor`, `project-deck-tab`, `artifact-host`) CAN answer the ask — all six, including them,
+went GREEN in SWEEP B with the SAME generic ask. The residual is the on-box model's nondeterministic
+first-turn draft-vs-question choice, which a per-host re-wording cannot make deterministic (it would
+only re-word the ask to hosts whose surfaces already answer it). Adding per-host asks would therefore
+stack a losing variant (forbidden) and would NOT reach 2-consecutive-6/6. Per the decision rule, the
+6/6-in-one-sweep + green-not-green-in-others outcome → BLOCKED with the nondeterministic hosts named.
+NO Candidate-2 commit is made (nothing to revert; the Candidate-1 stimulus stays the single shared
+string, uniform on all six).
+
+### CHATHOST-STIMULUS DECISION
+
+Decision-rule branch 2 applies (Candidate 1 = 6/6 in ONE sweep B; green-not-green in A and C). The
+live 6/6 leg is NOT closed: 2-consecutive-6/6 (the DOD determinism claim) is not met because
+`event-editor`, `project-deck-tab`, `artifact-host` are nondeterministic on the on-box model's
+first turn. Candidate 2's precondition is unmet (residual surfaces CAN answer the ask). The honest
+no-events wall remains reachable whenever the model drafts a zero-event note turn. This is the
+product-design decision (should a zero-event note-only drafting turn be the assertive no-events wall,
+or should the product surface a clarification question?) — owed to Brad with this table as the
+evidence pack. no_error_frame / assistant_answer_visible / turns_at_least stay byte-identical (not
+weakened).
+
+CHATHOST-STIMULUS BLOCKED nondeterministic on on-box model first-turn (draft-vs-question): event-editor, project-deck-tab, artifact-host flip green<->honest no-events wall across the 3 live sweeps (A=5/6 B=6/6 C=3/6); question-eliciting generic ask proved the 6/6 shape is reachable (sweep B) but not 2-consecutive; candidate 2 (per-host ask) not triggered because the residual hosts CAN answer the ask.
