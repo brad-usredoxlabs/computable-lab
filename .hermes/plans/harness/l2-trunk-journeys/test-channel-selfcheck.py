@@ -1520,8 +1520,19 @@ def main():
         #     Pre-existing rows (assistant_turns >= 1, turns_completed == 0)
         #     must NOT satisfy it; user-only / empty threads must grade
         #     not-green. Uses the probe's REAL assert.rendered.
+        #
+        #     advc c10 D3: the pre-existing case is graded with the
+        #     {assistant_answer_visible: true} assertion ALONE — against the
+        #     full assert.rendered the sibling turns_at_least backstop
+        #     (turns_completed=0 < 1) would RED it at BASE too, so the arm
+        #     passed both ways and did not test the Q2 change. Alone, it
+        #     grades GREEN at base (assistant_answer_visible read
+        #     assistant_turns=1, nonempty=True — the false positive) and RED
+        #     at head — the arm flips with the Q2 line (verified against a
+        #     /tmp copy with the Q2 line reverted).
         _d6_probe = rj.build_chat_host_probe("d6-semantics", "x", "/x")
         _d6_ar = _d6_probe["assert"]["rendered"]
+        _d6_aav_only = [{"assistant_answer_visible": True}]
         _d6_green_ev = {"assistant_turns": 1, "turns_completed": 1,
                         "last_assistant_text_nonempty": True,
                         "error_frames": 0}
@@ -1535,19 +1546,28 @@ def main():
                         "error_frames": 0}
         _d6_v = {k: rj.check_rendered_assertions(ev, _d6_ar)
                  for k, ev in [("green", _d6_green_ev),
-                               ("preexisting", _d6_pre_ev),
                                ("useronly", _d6_user_ev),
                                ("empty", _d6_empty_ev)]}
+        _d6_pre_alone = rj.check_rendered_assertions(_d6_pre_ev, _d6_aav_only)
+        _d6_pre_specific = any(
+            "no visible non-empty assistant answer" in v and "turns_completed=0" in v
+            for v in _d6_pre_alone)
         results.append(("D6 Q2: green IFF (turns_completed>=1 AND "
-                        "non-empty last row); pre-existing / user-only / "
-                        "empty all grade not-green",
+                        "non-empty last row); user-only / empty all grade "
+                        "not-green",
                         not _d6_v["green"]
-                        and bool(_d6_v["preexisting"])
                         and bool(_d6_v["useronly"])
                         and bool(_d6_v["empty"]),
                         ["violations=%r" % (
                             {k: (v[:1] if v else v) for k, v in _d6_v.items()},
                         )]))
+        results.append(("D6 Q2 pin: pre-existing evidence (assistant_turns=1, "
+                        "turns_completed=0) graded with {assistant_answer_"
+                        "visible:true} ALONE is RED with the specific "
+                        "violation (advc c10 D3 — alone it grades GREEN at "
+                        "base, so the arm flips with the Q2 line)",
+                        _d6_pre_specific,
+                        ["alone violations=%r" % (_d6_pre_alone,)]))
         # (d) PIN 1 — user-only: ONLY a .chat-log-msg--user row renders.
         _d6_rc_uo, _d6_rec_uo, _d6_err_uo = _d6_drive(
             "uonly", _D6_ROWS_USER_ONLY)
