@@ -31,8 +31,12 @@
  *     (ONE-grammar law).
  *   • The material label the extractor reads is the action's `material` noun
  *     label (the same symbolic label the compiler binds). When the action
- *     names no material, there is no label to associate an amount with — the
- *     slot is left untouched (honest no-op, never a guess).
+ *     names no material, the label is EMPTY — and the SAME extractor
+ *     adjudicates with its OWN no-anchor arm (the first amount-with-unit in
+ *     the turn's own words = stated; `reconcileDraftQuantities.ts` :112-113).
+ *     A stated amount is therefore never demoted, whether or not the action
+ *     names a material — and an UNstated amount is still demoted (the no-
+ *     anchor arm finds nothing, so the slot is stripped + disclosed).
  *   • The strip is DISCLOSED through the caller's reconcile-notes channel
  *     (the `extraSubmissionNotes` pattern at AgentOrchestrator.ts:2830-2841
  *     / :3141-3142 / :4168-4172) — never silently.
@@ -121,8 +125,9 @@ function quantitySlotPresent(v: unknown): boolean {
 
 /** The action's material noun label (the symbolic label the extractor
  *  associates an amount with). Absent when the action names no material —
- *  the demotion is a no-op in that case (no label to associate an amount
- *  with; the extractor would have nothing to anchor to). */
+ *  the extractor then adjudicates with its own no-anchor arm (the first
+ *  amount-with-unit in the turn's own words = stated), so a stated amount
+ *  is still kept and an unstated one is still demoted. */
 function actionMaterialLabel(action: Dict): string {
   const m = action.material;
   return typeof m === 'string' ? m.trim() : '';
@@ -159,8 +164,9 @@ export function demoteUnstatedQuantities(
     if (contracts.length === 0) return action; // unknown verb — no contract, no demotion
 
     // The action's material label — the label the extractor associates an
-    // amount with. When the action names no material, no slot is demoted
-    // (honest no-op; the extractor would have nothing to anchor to).
+    // amount with. When the action names no material the label is empty and
+    // the SAME extractor adjudicates with its no-anchor arm (the first
+    // amount-with-unit in the turn's own words = stated).
     const label = actionMaterialLabel(fields);
 
     let actionMutated = false;
@@ -179,8 +185,10 @@ export function demoteUnstatedQuantities(
         // will raise it; nothing to demote).
         if (!quantitySlotPresent(value)) continue;
         // Is the amount STATED in the request's own words? The ONE extractor
-        // decides (ONE-grammar law — no second quantity grammar here).
-        const stated = label ? extractQuantity(words, label) : null;
+        // decides (ONE-grammar law — no second quantity grammar here). With
+        // an empty label it answers via its no-anchor arm: the first
+        // amount-with-unit in the turn's own words = stated.
+        const stated = extractQuantity(words, label);
         if (stated) continue; // the scientist stated a volume for this material — keep it
         // Demote: strip the field and disclose.
         delete fields[fieldName];
