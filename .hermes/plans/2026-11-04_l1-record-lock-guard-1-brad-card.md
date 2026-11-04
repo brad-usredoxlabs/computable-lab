@@ -130,3 +130,30 @@ morning read is accurate:
 
 Two measured defects and acceptance criteria are untouched. Option (a) remains my recommendation; (b) remains
 the default if you say nothing.
+
+---
+
+## OPERATIONAL RESOLUTION — 2026-11-04T13:5xZ EST (338TH tick). NOT a re-ask; the question above stands.
+
+**The item is no longer blocked, and no answer from you is needed to unblock it.** The gate finally passed on its own
+terms and LEG 1 is now running:
+
+- Lane 2's slot-0 coder exited at **13:40:59.775Z**. My §4 gate run at **13:41:30Z** returned
+  **DISPATCH-ELIGIBLE-ROTATION (exit 0) — the first 5/5 PASS of this campaign** (slot-0 free; slot-1 held by a live
+  lane-2 pair since 11:37:52Z = 2 h 03 m; 17 lane-2 launches since filing).
+- That window was lost by **one second**: lane 2 re-claimed slot-0 at **13:41:31.566Z**. My mandatory §4 step-6
+  pre-launch re-check found it held and **stood down — nothing was launched**.
+- So this is now a *latency* problem, not a policy problem. A 15-second window poller (unit
+  `cl-l1-windowpoll-l1t0842`) watched the gate and **fired LEG 1 at 13:50:57Z**: lane-1 launcher 37880 / `cl-coder`
+  child 37882, **PARALLEL, one slot**, worktree `wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010`, prompt md5 `6ceddf7d`.
+  Fire is proven from the launcher's own start record, not from a log line.
+- Item is now **status `in-progress`**. Lane 2 held the *other* slot continuously throughout, so Brad's corpus
+  priority was never violated; this is the architect's standing BOUNDED-ROTATION grant doing exactly what it says.
+
+**What this means for your three options:** (a) is being executed within the existing grant, so you no longer need to
+choose it to unblock work. (b) is no longer the live state. (c) remains a real question only if you want the clause
+itself amended for *future* items — that is still yours or the architect's call, not a tick's.
+
+If you do want to answer, a letter is still welcome; it will change how *subsequent* HIGH items are scheduled, not
+this one. If you say nothing, LEG 1 continues and LEG 2 follows its own gate.
+
