@@ -11,7 +11,7 @@
  * ordering pin can break validation via an undeclared key (updatedAt is
  * stripped by controlledContent, so the content lock does not fire first).
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -42,14 +42,19 @@ const TEST_SCHEMA = {
   required: ['recordId', 'kind'],
 };
 
-function envelope(recordId: string, state: string) {
+// D9 (fix cycle 1): kind is parameterizable so the AM-11(a) append-only
+// ordering pin can carry the NAMED production append-only kind `attestation`
+// (the wall is the generic appendOnlyKinds knob; the ordering proof is
+// kind-independent, so the pin proves the same wall semantics with the real
+// kind). Every other pin uses the default `document-control-guard`.
+function envelope(recordId: string, state: string, kind: string = 'document-control-guard') {
   return {
     recordId,
     schemaId: SCHEMA_ID,
     payload: {
       recordId,
       $schema: SCHEMA_ID,
-      kind: 'document-control-guard',
+      kind,
       title: 'Content-lock guard pin doc',
       body: 'stable body',
       lifecycleId: 'document-control',
@@ -97,7 +102,11 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
     });
   });
 
-  afterEachCleanup(repoRoot);
+  // D8 (fix cycle 1): register the cleanup PER TEST (afterEach) so each
+  // test's temp repo dir is removed after that test. The previous bare call
+  // `afterEachCleanup(repoRoot);` ran ONCE at describe-registration time
+  // with repoRoot still undefined, so the temp dirs were never cleaned.
+  afterEach(() => afterEachCleanup(repoRoot));
 
   it('AM-6(a): no-edit PUT on an effective record ⇒ 0 writes, stored contentSha, stored updatedAt', async () => {
     const before = await stored(store, 'CLG-1', 'effective');
@@ -176,9 +185,9 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
       appRepo,
       makeValidator(),
       new LintEngine(),
-      { writeHook: { onUpsert: () => { writes += 1; } }, appendOnlyKinds: ['document-control-guard'] },
+      { writeHook: { onUpsert: () => { writes += 1; } }, appendOnlyKinds: ['attestation'] },
     );
-    const created = await appStore.create({ envelope: envelope('APP-1', 'effective') });
+    const created = await appStore.create({ envelope: envelope('APP-1', 'effective', 'attestation') });
     expect(created.success).toBe(true);
     writes = 0; // reset: the create's hook write is not under test
     const before = await appStore.get('APP-1');
