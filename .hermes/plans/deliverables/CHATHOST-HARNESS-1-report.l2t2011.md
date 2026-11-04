@@ -1409,14 +1409,30 @@ MIRROR_SILENT_OK
 ```
 5. Unit delta scope — the base of THIS unit's work is the post-merge tip `7763e815` (the
 docs-only `cl/integration-2` merge made in STEP 0; `git merge-base HEAD cl/integration-2`
-= `715a393f`, the pre-merge ancestor, so the unit delta is measured from the merge tip):
+= `891dbda7`, i.e. `cl/integration-2` is now fully merged — the pre-merge ancestor was
+`715a393f` — so the unit delta is measured from the merge tip). The file set is quoted
+WITHOUT line counts, deliberately: this block lives inside the file it measures and the
+command is `..HEAD`, so any `diff --stat` captured here is stale the moment the commit that
+carries it lands — the earlier revision of this block quoted `92 +` / `102 insertions`,
+which is exactly `diff --stat 7763e815..e17f8084` (`e17f8084` created the MEASURE block;
+`7bd3b602` then added items 3-5, this one included, so the capture necessarily predates the
+commit carrying it). A count describes a tree that no longer exists; the file set does not
+drift, so the file set is what is quoted here:
 ```
-git -c core.fileMode=false diff --stat 7763e815..HEAD
+$ git -c core.fileMode=false diff --name-only 7763e815..HEAD      # captured at 6f3e0ee9
+.hermes/plans/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md
+.hermes/plans/handoffs/2026-11-04_0855-lane2-tick-l2t0830.md
+.hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py
+$ git -c core.fileMode=false diff --name-only 7763e815..HEAD -- app/ server/ schema/ config/ .hermes/plans/harness/l2-trunk-journeys/ui-drive.cjs .hermes/plans/harness/l2-trunk-journeys/run-journeys.py .hermes/plans/harness/l2-trunk-journeys/journeys/
+(no output)
+$ git -c core.fileMode=false diff --stat 7763e815..e17f8084        # why counts are not quoted above
  .../CHATHOST-HARNESS-1-report.l2t2011.md           | 92 +++++++++++++++++++++-
  .../l2-trunk-journeys/test-channel-selfcheck.py    | 12 ++-
  2 files changed, 102 insertions(+), 2 deletions(-)
 ```
-exactly `test-channel-selfcheck.py` + the report; zero `app/`, `server/`, `schema/`, `config/`
+exactly `test-channel-selfcheck.py` + the report; the third path is the docs-only lane-2
+handoff carried in by the mandated STEP-0 `cl/integration-2` merge (`.hermes/plans/handoffs/`
+tick note, no product code). Zero `app/`, `server/`, `schema/`, `config/`
 hunks in the unit delta (`git diff --name-only 7763e815..HEAD | grep -E '^(app|server|schema|config)/'`
 -> no matches, exit 1). Note: the wider `d5f92064..HEAD` span ALSO shows prior-cycle work
 (CARD-1 `app/` commits, the sanctioned `config/chat/` additions, the earlier CHATHOST units)
