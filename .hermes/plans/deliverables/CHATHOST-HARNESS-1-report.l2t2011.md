@@ -1343,8 +1343,9 @@ symlinked/copied as the existing arms need), then ONLY the 3-line
 `evidence.alert_texts = await page.evaluate(...).catch(() => []);` block (ui-drive.cjs lines 568-570)
 deleted from the /tmp SOURCE `ui-drive.cjs` (`node --check` on the mutated source: rc 0). Ran:
 `cd /tmp/c12 && python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py` — the ONLY
-RED arms in the full run (121 arms) are the two CHATHOST-CONSOLIDATE-1 PINs, and (k2) now carries the
-NO-OP note:
+RED arms in the full run (119 arms: 117 `OK` + 2 `RED`) are the two CHATHOST-CONSOLIDATE-1 PINs, and
+(k2) now carries the NO-OP note (the log is 123 lines — 119 arm lines, the 2 note lines, a blank, and
+`SELFCHECK: FAIL`; the line count is not the arm count):
 
 ```
 CHATHOST-CONSOLIDATE-1 PIN: alert_texts SHOWS the texts for a two-alert DOM (capture rides rendered_evidence) RED
