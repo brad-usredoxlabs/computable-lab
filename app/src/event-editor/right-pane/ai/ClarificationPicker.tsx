@@ -938,6 +938,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           type="text"
           className="message-log__clarification-search"
           ref={searchAnchorRef}
+          data-testid="clarification-identity-search"
         value={query}
         placeholder={placeholder}
         autoComplete="off"

@@ -130,6 +130,32 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
     expect(screen.getByText('Create material record "1 mM Clofibrate in DMSO" in the lab (new record)')).toBeTruthy()
   })
 
+  // CARD1-FIX4 D2 (advc c10): the RENDERED identity row (the search input,
+  // value={query} seeded from mintNounFromQuery(request.query)) still shows the
+  // query-derived seed — the canonical FOLD — while the mint input shows the
+  // RAW label. The pre-fix mintseed pin asserted only the mint input + preview
+  // and never read the identity row's value, so a regression that seeded the
+  // identity row from the raw label (making the two rows agree) would NOT fail.
+  // This pin reads BOTH rows on the real-shape fixture and pins their DIVERGENCE:
+  // identity row = the lowercase fold; mint input = the raw human-case label.
+  it('D2: the identity (search) row shows the query-derived seed (the fold) while the mint row shows the raw label', () => {
+    resolveMaterial.mockResolvedValue([])
+    render(<ClarificationPicker request={clofibrateRequest} onPick={vi.fn()} />)
+    // The identity/search input is seeded from mintNounFromQuery(request.query)
+    // (ClarificationPicker.tsx:523-524) — the canonical fold. For the bare-noun
+    // D3 case the fold is the lowercase query '1 mm clofibrate in dmso'.
+    const identity = screen.getByTestId('clarification-identity-search') as HTMLInputElement
+    expect(identity.value).toBe('1 mm clofibrate in dmso')
+    // The mint input is seeded from mintLabelFor(request, seedNoun) (the RAW
+    // unresolvedFact.label) — the HUMAN case. The two rows DIFFER: a regression
+    // that made the identity row follow the raw label (or the mint row follow
+    // the fold) would fail exactly one of these two assertions.
+    const mint = screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(mint.value).toBe('1 mM Clofibrate in DMSO')
+    // The divergence IS the pin: the rows are NOT equal.
+    expect(identity.value).not.toBe(mint.value)
+  })
+
   it('clicking Create POSTS the raw label to mintLocalTerm — the exact durable title (server shape -> mintLabelFor -> mintLocalTerm)', async () => {
     resolveMaterial.mockResolvedValue([])
     mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-clofib-001', label: '1 mM Clofibrate in DMSO', iri: 'urn:cl:local:MAT-clofib-001' })
