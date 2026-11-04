@@ -1438,4 +1438,56 @@ hunks in the unit delta (`git diff --name-only 7763e815..HEAD | grep -E '^(app|s
 (CARD-1 `app/` commits, the sanctioned `config/chat/` additions, the earlier CHATHOST units)
 because that span predates this unit's base and those files arrived on the branch before the
 STEP-0 merge — none of that delta is this unit's.
+
+### PAPERWORK C13 — advc c13 D1 + D2 closed (report text only; no code touched)
+
+Two MINOR report-fidelity defects from the c13 review
+(`/home/brad/.hermes/cl/lanes/2/reviews/CHATHOST-CONSOLIDATE-1-advc-residues-c13-l2t0830.md`,
+D1 and D2). Both are fixed in THIS file only: no product code, no test file, no verdict, no
+table, and no assertion-trio change — `test-channel-selfcheck.py` is byte-identical to the
+graded tip.
+
+- D1 (MEASURE item 5): the quoted `diff --stat 7763e815..HEAD` (92 / 12 / 102 insertions) did not
+  reproduce at the tip; it is `diff --stat 7763e815..e17f8084`, captured before `7bd3b602` added
+  the block that contains it. Fixed the way the review allows for a self-referential block: the
+  unit delta is quoted as a FILE SET, and the reason counts are not quoted is stated in place.
+- D2 (D3 proof section): "(121 arms)" -> "(119 arms: 117 `OK` + 2 `RED`)". 121 was a log line
+  count; the mutated log is 123 lines and is now labelled as a LINE count.
+
+Raw commands and the output they produced (run in this worktree; the two selfcheck logs are
+filed at `~/.hermes/cl/receipts/CHATHOST-CONSOLIDATE-1-paperwork-c13/20261104T140315Z/`):
+
+```
+$ python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py > /tmp/c13/unmutated2.log 2>&1; echo "SELFCHECK_RC=$?"
+SELFCHECK_RC=0
+$ grep -c ' OK$' /tmp/c13/unmutated2.log ; grep -c ' RED$' /tmp/c13/unmutated2.log
+119
+0
+$ tail -1 /tmp/c13/unmutated2.log
+SELFCHECK: PASS
+
+$ cd /tmp/c12 && python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py > /tmp/c13/mutated.log 2>&1; echo "MUT_RC=$?"
+MUT_RC=1
+$ grep -c ' OK$' /tmp/c13/mutated.log ; grep -c ' RED$' /tmp/c13/mutated.log ; wc -l < /tmp/c13/mutated.log
+117
+2
+123
+$ tail -1 /tmp/c13/mutated.log
+SELFCHECK: FAIL
+
+$ git -c core.fileMode=false diff --name-only 7763e815..HEAD
+.hermes/plans/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md
+.hermes/plans/handoffs/2026-11-04_0855-lane2-tick-l2t0830.md
+.hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py
+
+$ diff -q .hermes/plans/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md /home/brad/.hermes/cl/lanes/2/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md
+(silent; MIRROR_RC=0)
+```
+
+(`/tmp/c12` is the capture-absent SOURCE mirror: the worktree harness with only
+`ui-drive.cjs:568-570` deleted. One earlier invocation of the un-mutated selfcheck flaked on
+the `D6 Q3 pin 3` arm — browser `goto` rc=1, nothing to do with this unit or with D1/D2 — and
+was re-run; the passing run above is the re-run, and its log is the one filed.)
+
+PAPERWORK-C13 DONE ea1ba9b75b5bb09a7d86fe4f4bdd9257a31a7565
 CHATHOST-ADVC12-RESIDUES DONE e17f80840bf2fe81fa3662fe106eb14ac5df9f59
