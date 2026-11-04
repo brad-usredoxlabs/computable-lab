@@ -116,3 +116,21 @@ Artifacts: `gate-333rd-l1t0653.txt`, `gate-333rd-l1t0653b.txt`, `tick-333rd-list
    an answer of (a) can be executed by taking the slot manually and stopping the unit first.
 3. After the item lands (any outcome): harden `verify-leg1-fired.sh`'s stale `ARM_ISO`, and delete the
    item block's LONG-mode advice (both already recorded; still deliberately deferred, not forgotten).
+
+## Addendum 06:56 EST — fire-path pre-flighted, one failure mode removed
+
+Two first-hand checks after the card/handoff commit (`9e93b1aa`, docs-only):
+
+1. **Fire-readiness re-proved at the new trunk**: the armed worktree
+   `wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010` had **no tracked modifications** (2 untracked entries),
+   `node_modules` present in `.`/`app`/`server`, and `12becda1` was verified an **ancestor** of
+   `9e93b1aa`, so the arm's fire-time `--ff-only` was guaranteed to succeed. `verify-leg1-fired.sh`
+   after the ff: worktree == trunk `9e93b1aa`, 0 ahead, product diff none, NOT-FIRED.
+2. **I performed that ff myself** (`git merge --ff-only 9e93b1aa`) so the arm's fire path no longer
+   has to mutate the worktree at all — it is now at trunk, and the ff step becomes a no-op. Docs-only
+   content moved; product tree unchanged, so every baseline in the LEG-1 prompt still holds.
+3. Arm re-verified healthy **after** the queue append (GUARD2 is the guard my edit could have broken):
+   `armed-dispatch-recordlock-v2.sh --selftest` → `item_state OK (todo|none|none)`, prompt pin OK,
+   ledger reachable, rc 0; live polls continue at 45 s (`06:53:54`, `06:54:39`, both rc 14). The
+   appended `blocker_owner:` line cannot be parsed as `owner:` (the awk matches `^owner: `), which is
+   why GUARD2 still reads `todo|none|none` — asserted by the selftest rather than assumed.
