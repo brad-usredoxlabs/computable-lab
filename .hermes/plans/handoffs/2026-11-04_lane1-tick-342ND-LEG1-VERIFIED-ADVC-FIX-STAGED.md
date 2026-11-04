@@ -102,6 +102,19 @@ lane-2 untouched.
 Tripwire for the next tick: **≥1 commit per 30 min**, and **two back-to-back 15-min windows with 0 patches AND 0
 commits ⇒ stop** (only after verifying commits are preserved), then re-dispatch with an explicit anti-thrash brief.
 
+## Close of tick (13:00 EST) — live worker checkpointed, not killed
+
+The fix run is **healthy and mid-unit**, so it was left running (no kill, no duplicate writer):
+
+- commits above `58cb8a2b`: **3** — `e76e5458` (step 1, RED-first D1 pin; RAW failure `expected undefined to be
+  true`), `2b0717e1` (step 2, `StoreResult.unchanged?: true` + handler skip of `indexManager.rebuild()`),
+  `d8ee620c` (step 3, D2 — AM-6(a) fixture now carries a stored `updatedAt` and the no-op PUT sends a FRESH one,
+  so the pin discriminates `controlledContent` from raw equality). Last commit **12:48:41 EST**.
+- In flight at 13:00: step 4 (D3 lint-ordering pin) — `RecordStore.contentLock.test.ts` modified, uncommitted.
+- Tripwire status: 3 commits / 24 min ⇒ **NOT thrash**; unit `cl-l1-coder-recordlock-fix1-l1t1246` active, slot-0
+  held, `coder-progress.log` = HEALTHY at 12:37:55.
+- Nothing here is a completion claim: no bar has been re-run by me on the post-fix tree, no advc cycle 2, no merge.
+
 ## State left behind
 
 - Queue: **todo 1 / in-progress 1 / superseded 1 / done 109** (no status promoted). Owner line rewritten to the
