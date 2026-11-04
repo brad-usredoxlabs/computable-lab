@@ -295,6 +295,27 @@ export interface AiClarificationRequest {
   clarifyControl?:
     | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
     | { kind: 'wells'; question: string }
+  /**
+   * L2-CLARIFY-CARD-1 (defect 5, ruling l2t1951 Q1) — the VERBATIM
+   * ScientistIntentUnresolvedFact this card maps, mirrored from the server's
+   * AgentClarificationRequest.unresolvedFact (set unconditionally on the
+   * shorthand path, shorthandChat.ts:1013). `label` is REQUIRED on the server
+   * type (scientistIntent/types.ts:117), so whenever the fact is present its
+   * label is present. This is the RAW provenance label (human case) — the
+   * mint input seeds from it, NOT from `query` (the canonical DISPLAY form the
+   * D3 fold produced; feeding the fold back as the durable title is what
+   * ruling §2 rule 3 forbids). Optional: absent when the server stamps no
+   * fact (non-shorthand requests) — key ABSENT via a conditional spread, never
+   * `undefined` (eopt discipline). A PURE structural mirror (label/reason/
+   * candidates/actionLocation ride through untouched); the client SELECTS the
+   * raw field, it never transforms case.
+   */
+  unresolvedFact?: {
+    label: string
+    reason: string
+    candidates?: Array<{ label: string; confidence?: number; ref?: string }>
+    actionLocation?: { actionIndex?: number; action?: string; argument?: string }
+  }
 }
 
 export interface AiClarificationAnswer {
