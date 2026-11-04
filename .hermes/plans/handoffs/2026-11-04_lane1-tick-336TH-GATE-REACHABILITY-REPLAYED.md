@@ -154,3 +154,7 @@ trunk and re-measured: **0 commits ahead**, **product diff over `app server sche
 stray root file `ready`, which is untracked and untouched by this tick). `scripts/verify-leg1-fired.sh`
 re-run *after* the ff → **NOT-FIRED / START_RECORDS=0 / worktree == trunk / 0 ahead / product diff
 none**. Nothing is silently writing, and the fire-ready tree now starts from 5b8fb705.
+- CORRECTION (08:07): the commit carrying this handoff was **amended** to fold in the paragraph above,
+  so its final sha is the current trunk HEAD, not the `5b8fb705` label used in that paragraph (that is
+  the pre-amend sha, now unreferenced). The worktree was re-pointed to the amended commit; measured 0
+  commits ahead, product diff none, `verify-leg1-fired.sh` NOT-FIRED / START_RECORDS=0.
