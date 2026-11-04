@@ -82,6 +82,7 @@ import {
   foldAnswersIntoShorthand,
   foldNullArm,
   dropSatisfiedFacts,
+  dropAnsweredRequestIds,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
   emptyShorthandRepairPrompt,
@@ -3065,6 +3066,34 @@ export function createAgentOrchestrator(
                 const unwiredResult: AgentResult = { success: false, error: unwired };
                 shorthandSummary(unwiredResult);
                 return unwiredResult;
+              }
+
+              // CARD1-D2 (fix5 U2): the re-extract ANSWER turn's answered-fact
+              // drop. When the fold key flipped (eventGraphId null→real), the
+              // held intent is gone and the model re-extracted the SAME fact —
+              // re-derived here. Post-D3 its id is canonical-stable, so it
+              // matches the requestId the client already posted back in
+              // clarificationAnswers (on the wire). Drop it so the follow-up
+              // does not re-open a card for a fact this thread already
+              // answered. Gated on the answer turn (clarificationAnswers
+              // present) so a FRESH ask is byte-identically unchanged (free to
+              // ask); keyed ONLY on the on-wire requestId set — never prose,
+              // never a regex over the question. A fact the thread did NOT
+              // answer keeps its id out of the set and survives. Applied
+              // BEFORE the hold / canonical-labels / result sites so all three
+              // see the same surviving facts.
+              if (Array.isArray(clarificationAnswers) && clarificationAnswers.length > 0) {
+                const answeredIds = new Set(
+                  clarificationAnswers
+                    .map((a) => (typeof a.requestId === 'string' ? a.requestId : ''))
+                    .filter((id) => id.length > 0),
+                );
+                const survivors = dropAnsweredRequestIds(compiledSh.clarifications, answeredIds);
+                if (survivors.length !== compiledSh.clarifications.length) {
+                  const dropped = compiledSh.clarifications.length - survivors.length;
+                  console.log(`[agent ${tid}] D2 re-extract drop: dropped ${dropped} re-derived fact(s) the same thread already answered (requestId on the wire; canonical-stable post-D3) — the follow-up will not re-open their card(s)`);
+                  compiledSh.clarifications = survivors;
+                }
               }
 
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });

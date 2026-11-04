@@ -1496,6 +1496,33 @@ export function dropSatisfiedFacts(
 }
 
 /**
+ * CARD1-D2 (fix5 U2): the answered-requestId drop for the re-extract answer
+ * turn. When the held-intent fold key flips between the ask turn and the
+ * answer turn (the `eventGraphId` null→real flip — `deriveContextCacheKey`
+ * folds it, so `takeHeldShorthandIntent` returns null), the model RE-EXTRACTS
+ * and re-derives the SAME fact. Post-D3 the fact's identity is CANONICAL-STABLE
+ * (`factRequestId` rides `canonicalLabelKey(fact.label)`), so the re-derived
+ * fact mints the SAME id the ask turn already offered — the id the client
+ * posts back in `clarificationAnswers[].requestId` (ALREADY ON THE WIRE).
+ *
+ * This drops, from a re-extract's clarifications, any fact whose
+ * `factRequestId` is in the answered-requestId set the wire carries. Pure and
+ * total: an empty set is a no-op (a fresh ask — no `clarificationAnswers` —
+ * never reaches a non-empty set, so a fresh ask stays free to ask). Keyed ONLY
+ * on the fact's content identity (the on-wire `requestId`), NEVER on prose and
+ * NEVER on a regex over the question. A fact the thread did NOT answer keeps
+ * its id out of the set and survives (the negative case: a different fact /
+ * different thread still asks).
+ */
+export function dropAnsweredRequestIds(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  answeredRequestIds: ReadonlySet<string>,
+): ScientistIntentUnresolvedFact[] {
+  if (answeredRequestIds.size === 0) return [...facts];
+  return facts.filter((fact) => !answeredRequestIds.has(factRequestId(fact)));
+}
+
+/**
  * The permitted fallback (OQ1): one extraction-only re-ask carrying the HELD
  * shorthand + the answers as grounded context. The model still only writes
  * shorthand — never events.
