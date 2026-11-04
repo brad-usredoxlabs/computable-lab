@@ -55,6 +55,32 @@ describe('L1-RECORD-LOCK-GUARD-1 AM-9 content-lock declaration pins', () => {
       const result = metaValidator.validateWithSchema(lifecycle, meta)
       expect(result.errors.map((e) => `${e.path} ${e.message}`), `${id} meta-schema errors`).toEqual([])
       expect(result.valid, `${id} must validate`).toBe(true)
+      // D5 (fix cycle 1): Ajv alone CANNOT catch a typo'd contentLocked key —
+      // the field is optional in the meta-schema, so a misspelled name
+      // (e.g. contentLcked) parses as "absent" and passes silently. Assert the
+      // PARSED structure directly: at least one state carries contentLocked:
+      // true, i.e. the exact key is present and true in the YAML that is the
+      // AM-1 declared set's single source of truth.
+      const states = (lifecycle as { states?: Array<Record<string, unknown>> }).states
+      expect(states, `${id} must declare states`).toBeInstanceOf(Array)
+      expect(
+        (states ?? []).some((s) => s.contentLocked === true),
+        `${id} must declare at least one contentLocked: true state`,
+      ).toBe(true)
+    }
+    // D5 (fix cycle 1): the field must be ABSENT where not declared. The three
+    // untouched lifecycles declare no contentLocked state, so NO state may
+    // carry the field — a stray contentLocked: true here would silently make
+    // the engine lock them (AM-9d presence + absence both pinned).
+    for (const id of UNTOUCHED_LOADED) {
+      const lifecycle = parse(
+        readFileSync(join(LIFECYCLES_DIR, `${id}.lifecycle.yaml`), 'utf-8'),
+      )
+      const states = (lifecycle as { states?: Array<Record<string, unknown>> }).states ?? []
+      expect(
+        states.some((s) => 'contentLocked' in s),
+        `${id} must declare NO contentLocked state (field absent where not declared)`,
+      ).toBe(false)
     }
   })
 
