@@ -76,6 +76,10 @@ const ALLOWED = new Set([
   // The scope-lock pin itself — it names the token to scan for, so it is a
   // legitimate (self-referential) mentioner.
   'server/src/materials/termId.scopeLock.test.ts',
+  // D5 mint pin: a server-side TEST asserting the identity rule (case/space
+  // variant labels mint the SAME id) — the allow-list covers exactly such
+  // server-side tests; app/ stays excluded and the set stays closed.
+  'server/src/api/handlers/VocabHandlers.mint.test.ts',
 ]);
 
 function filesMentioningToken(): string[] {
