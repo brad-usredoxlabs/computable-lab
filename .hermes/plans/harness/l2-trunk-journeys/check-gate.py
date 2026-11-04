@@ -157,6 +157,46 @@ def grade_chat_host_sweep(verdicts, inventory_ids, surfaces=None):
     return ok, missing, not_accept, undeclared
 
 
+def receipt_teardown_grade(receipt):
+    """O-1 (advc c8, CHATHOST-CONSOLIDATE-1 FIX2): CONSUME the probe
+    receipt's OWN teardown claim. A receipt that carries `teardown_ok:
+    false`, or a `side_teardown` with any `*_deleted` flag false, is
+    NOT-ACCEPT at the chat gate — the honest receipt is graded, not just
+    file-checked (the pre-O-1 hole: the gate accepted a probe whose
+    receipt said teardown_ok: false / side_teardown.acl_record_deleted:
+    false). Returns a list of reason strings when the claim is
+    not-accept, else None (honest claim, or NO claim — a receipt without
+    `teardown_ok`/`side_teardown`, the non-probe J1/J2/J3 shape, is graded
+    unchanged). Pure (no I/O). Fail closed: a malformed claim (non-bool
+    `teardown_ok`, non-object `side_teardown`) is not-accept — a claim
+    that cannot be verified honest may not clear the gate."""
+    if not isinstance(receipt, dict):
+        return ["receipt is not a JSON object (%r) — its teardown claim "
+                 "cannot be verified honest (fail closed)"
+                % type(receipt).__name__]
+    reasons = []
+    if "teardown_ok" in receipt:
+        if receipt["teardown_ok"] is not True:
+            reasons.append("teardown_ok: %r (false/malformed — the probe "
+                           "did not prove it left nothing behind; a not-"
+                           "accept receipt may not clear the gate)"
+                           % (receipt["teardown_ok"],))
+    st = receipt.get("side_teardown")
+    if st is not None:
+        if not isinstance(st, dict):
+            reasons.append("side_teardown is not an object (%r) — the "
+                           "per-path claim cannot be verified honest "
+                           "(fail closed)" % (st,))
+        else:
+            for k in sorted(st):
+                if k.endswith("_deleted") and st[k] is not True:
+                    reasons.append("side_teardown.%s: %r (flag false — the "
+                                   "probe side record was NOT observed "
+                                   "removed; it may still exist)"
+                                   % (k, st[k]))
+    return reasons or None
+
+
 def _repo_root():
     # .hermes/plans/harness/l2-trunk-journeys -> four levels up = repo root.
     return os.path.abspath(os.path.join(
@@ -194,8 +234,11 @@ def chat_host_axis():
     Exit 1 = a strict-subset table (a dropped host), any not-accept verdict
              (a bare verdict string or a missing/empty receipts path — D7),
              any undeclared host, a NON-TRUNK app_base (N1/D6), a receipt
-             reference that does not exist (D7), OR an un-authorized inventory
-             shrink (BLOCKER).
+             reference that does not exist (D7), an accepted receipt whose
+             OWN teardown claim is not-accept — teardown_ok: false or any
+             side_teardown *_deleted flag false (O-1, advc c8; a receipt
+             without the claim is graded unchanged), OR an un-authorized
+             inventory shrink (BLOCKER).
     Exit 2 = env error (inventory / run-meta / shrink-guard unreadable —
              fail closed).
     Verdict keys: a host `id` is primary; a UNIQUE `surface:` value (one that
@@ -279,6 +322,36 @@ def chat_host_axis():
                       "that does not exist (fix1 D7: a verdict without a "
                       "request-body receipt artefact is not-accept)"
                       % (h, rp))
+                print("GATE-VERDICT blocking")
+                return 1
+            # O-1 (advc c8, CHATHOST-CONSOLIDATE-1 FIX2): CONSUME the
+            # ACCEPTED receipt's own teardown claim. A receipt that says
+            # teardown_ok: false, or a side_teardown with a *_deleted flag
+            # false, is NOT-ACCEPT — the honest receipt is graded, not just
+            # file-checked. A receipt WITHOUT the claim (no teardown_ok /
+            # no side_teardown — the non-probe J1/J2/J3 shape) is graded
+            # unchanged (the helper returns None). The receipt file was
+            # just proven to exist above, so this read cannot fail closed.
+            try:
+                with open(os.path.join(run_dir, rp)
+                          if os.path.isfile(os.path.join(run_dir, rp))
+                          else (rp if os.path.isfile(rp)
+                                else os.path.join(RECEIPTS_ROOT, rp)),
+                          ) as _rxf:
+                    _rx = json.load(_rxf)
+            except Exception as exc:
+                print("BLOCKER: chat-host %s verdict references receipt %r "
+                      "that CANNOT be read as a receipt (%s; O-1: a "
+                      "not-gradable teardown claim is not-accept — FAIL "
+                      "CLOSED)" % (h, rp, exc))
+                print("GATE-VERDICT blocking")
+                return 1
+            _o1_reasons = receipt_teardown_grade(_rx)
+            if _o1_reasons:
+                print("BLOCKER: chat-host %s receipt %r is NOT-ACCEPT on "
+                      "its OWN teardown claim (O-1 advc c8: the honest "
+                      "receipt is graded — %s)"
+                      % (h, rp, "; ".join(_o1_reasons)))
                 print("GATE-VERDICT blocking")
                 return 1
     ok, missing, not_accept, undeclared = grade_chat_host_sweep(verdicts,
