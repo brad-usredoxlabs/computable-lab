@@ -82,7 +82,18 @@ treeState:
   # No golden fixture/record moved — ONLY this one treeState sha256 pin
   # re-hashed. BEFORE: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
   # AFTER: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e}
+  # CARD1-D3 REBLESS (this item, ruling l2t1430 §3 "Policy home"): the vocabulary
+  # data file gained the ADDITIVE `canonicalLabel` policy block — the material
+  # domain's UNBOUND-acceptance-entity display/identity policy (preMintDisplay /
+  # mintedDisplay / titleAdoption). The label VALUE lives in the minted local-term
+  # record, never here; this block holds only the display/identity POLICY (the
+  # record stays the single vocabulary; NO hardcoded fallback — absent/malformed
+  # fails loud). Purely additive — +14 lines / 0 deletions vs baseline 10062725
+  # (commit e5324baf) — and no golden fixture and no golden record moved: ONLY this
+  # one treeState sha256 pin re-hashed.
+  # BEFORE: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
+  # AFTER: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
