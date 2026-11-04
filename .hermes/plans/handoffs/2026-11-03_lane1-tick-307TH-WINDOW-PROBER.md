@@ -116,3 +116,44 @@ has eight items to serve, so the slot that just freed is lane 2's to claim, not 
 
 No worker ever live; nothing to checkpoint. Lane 2 still holds first refusal on fleet capacity. Served build
 current at cfdc904f; nothing restarted for a docs commit.
+
+---
+
+## ADDENDUM (same tick, 21:0x-21:2x) — B-L1T307-1 RAISED AND RESOLVED: `RULING: extend-scope`
+
+While auditing the kit I ran the split-ruling's S2 gate as written and found it **unsatisfiable**, plus two
+UNNAMED hardcoded copies of the very policy this item centralizes. Both facts first-hand at trunk cfdc904f:
+
+- `server/src/api/routes/protocol-steps.ts:216-219` — `CONTENT_LOCKED_STATES = ['approved','effective',
+  'superseded','archived']` + a route-level 409 `CONTROLLED_RECORD_LOCKED`. Its own docstring claims to mirror
+  `RecordHandlers.ts:798` / `RecordStoreImpl.ts:661` — and the architect confirmed those cited anchors are
+  **already stale** (a filing-rule line and the upsert hook), i.e. the duplicate is measurably drifting.
+- `app/src/event-editor/right-pane/protocol/protocolStepEditing.ts:45` and `:102` — the same four-state array
+  twice, as the client protocol lock gates.
+- The bare-string whole-repo grep returns ~47 legitimate non-policy hits (`signatureAction:'approved'`,
+  `targetState`, ingestion `status`, pill sets, engine-`archived` guards), so it would fail spuriously or be
+  quietly watered down — a criterion weakening I will not do.
+
+Routed as a bounded one-question consult (no fleet slot consumed): unit `cl-l1-arch-policycopies-l1t2135`
+(`systemd-run --user --collect`, survives tick exit), rc=0 after ~14 min, ruling at
+`.hermes/plans/2026-11-03_l1-recordlock-policy-copies-ruling.md` (213 lines), ending **`RULING: extend-scope`**.
+
+What it decided (my read of the file, not the log's summary): **both copies are IN** —
+`protocol-steps.ts:216-227` → leg 1, `protocolStepEditing.ts:45/:102` → leg 2. AM-1..AM-10, criteria 1-5 and
+S1/S3/S4 unchanged; amendments are only the two leg boundaries, AM-1 #7's consumer list, and S2's DEFINITION.
+
+**S2 is now executable.** §3.3 replaces the bare-string grep with a shape-based co-occurrence scan (all four
+states, or the approved+effective pair, inside an 8-line window; test files excluded by class; closed allowlist =
+the `DocumentControlBar.tsx:58-61` display hull only). I installed it **verbatim** at
+`~/.hermes/cl/lanes/1/scripts/s2-policy-scan.py` and ran it pre-migration: **rc=1 with exactly the four policy
+copies flagged** — `protocolStepEditing.ts:45`, `RecordHandlers.ts:1139`, `protocol-steps.ts:216`,
+`RecordStoreImpl.ts:286` — and the display hull correctly allowed. The gate is proven to bite before any code
+exists, so it cannot be a post-hoc rationalization of whatever leg 2 produces.
+
+Both dispatch kits were amended in the same tick and are self-contained:
+`prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2105.txt` (read-first 1b, fifth consumer, server half of the scan)
+and `prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG2-STAGED.txt` (read-first 2, scope item 4, script-form S2).
+**The leg-1 hold is lifted** — the boundary question that could have invalidated it is answered.
+
+Dispatch status unchanged: `dispatch-window-1.py` still `BLOCKED-CORPUS (exit 10)` at 21:2x. No product code, no
+data write, no stack restart, no merge, no slot claimed, no status change.
