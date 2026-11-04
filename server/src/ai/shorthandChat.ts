@@ -48,6 +48,7 @@ import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vo
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import { loadCanonicalLabelPolicy } from '../compiler/resolution/canonicalLabelPolicy.js';
 import {
   assumedQuantityFor,
   assumedWellsFor,
@@ -902,6 +903,19 @@ export function clarificationsFromUnresolvedFacts(
   // (the nounShape/fraction-convention discipline) — only consulted to render
   // a reading option's fractions through the declared template.
   const fractionConfig = loadFractionConvention();
+  // CARD1-D3 FIX-2 (advc c7 DEFECT 1, BLOCKER — the declared policy was DEAD
+  // DATA with zero production call sites): the STAGE A/B display FORM is the
+  // DECLARED `canonicalLabel` policy (the vocabulary DATA block under the
+  // material domain), loaded PER call — the nounShape/assumedValues law,
+  // never process-cached, so a data edit needs no stack restart. The code
+  // only FOLLOWS the declared tokens (the render branch below); it carries
+  // no display rule of its own and NO hardcoded fallback policy:
+  // `loadCanonicalLabelPolicy` THROWS on an absent or malformed block
+  // (naming the path), so this render path STOPS instead of limping on the
+  // pre-FIX-2 `?? identityKey` implicit default — the loader's throw-on-
+  // absent arm is now load-bearing on the render path: deleting the YAML
+  // block fails the render loudly.
+  const canonicalPolicy = loadCanonicalLabelPolicy();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
@@ -925,8 +939,40 @@ export function clarificationsFromUnresolvedFacts(
     // byte-identical and the raw `unresolvedFact` mirror keeps the model's
     // verbatim label (provenance). NEVER `canonicalLabelKey` of a grounded
     // record (the map always resolves STAGE A first).
+    // FIX-2 (advc c7 DEFECT 1): the display FORM is chosen by the DECLARED
+    // policy tokens (loaded per call above), not by an implicit
+    // `?? identityKey` fallback — ruling §6: policy in the YAML block, code
+    // only follows it, no hardcoded fallback policy. The loader has already
+    // thrown on an absent / non-token block, so each arm sees only a declared
+    // token; the unknown-token arms are unreachable for valid DATA and THROW
+    // loudly rather than invent a second display rule (fail-loud parity with
+    // the loader).
     const identityKey = canonicalLabelKey(fact.label);
-    const displayLabel = canonicalLabels?.get(identityKey) ?? identityKey;
+    const groundedTitle = canonicalLabels?.get(identityKey);
+    let displayLabel: string;
+    if (groundedTitle !== undefined) {
+      // STAGE A (a record is grounded): the declared `mintedDisplay` token
+      // (`record-title`) says the record's TITLE is the display form.
+      if (canonicalPolicy.mintedDisplay === 'record-title') {
+        displayLabel = groundedTitle;
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE A display token "${canonicalPolicy.mintedDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    } else {
+      // STAGE B (no grounded record): the declared `preMintDisplay` token
+      // (`identity-case`) says the label's IDENTITY FORM is the display form.
+      if (canonicalPolicy.preMintDisplay === 'identity-case') {
+        displayLabel = identityKey;
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE B display token "${canonicalPolicy.preMintDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    }
     const nounPrompt = mintable
       ? `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
       : `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
