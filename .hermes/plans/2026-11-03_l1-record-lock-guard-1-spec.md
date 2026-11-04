@@ -178,29 +178,36 @@ test-only feature.
 The no-op short-circuit is a THIRD early return inside `updateUnlocked`, and its POSITION is a semantic
 decision that no existing pin constrains. Measured, first-hand:
 
-1. `updateUnlocked` (`server/src/store/RecordStoreImpl.ts`) currently returns early in this order:
-   `appendOnlyWallError` (:741-742 — the hardcoded governance triple `record-revision`/`signature`/
-   `audit-event` plus `config.appendOnlyKinds`) then `contentLockError` (:744-745). The content-equal
-   no-op MUST be placed AFTER `appendOnlyWallError`. Placing it first makes an equal-content PUT on an
-   append-only record return 200 where it returns `APPEND_ONLY: immutable records cannot be updated`
-   today — a governance wall weakened through an unpinned path.
-2. Every existing append-only pin uses a CONTENT-DIFFERENT payload, so none of them constrains the
-   ordering: `server/src/store/AppendOnlyWall.attestation.test.ts:72` updates with a tampered
-   `claims[0].claimStatus`, and `server/src/store/RecordStore.test.ts:665` updates a seed append-only
-   record to `"(edited)"`. A content-EQUAL update on an append-only kind is pinned NOWHERE.
-   => A NEW pin is required: a content-equal PUT on a stored append-only record (`kind: 'attestation'`)
-   still returns `APPEND_ONLY: immutable records cannot be updated` and writes nothing. This is NEW
-   behavior, not a regression, so it cannot be shown RED-before-fix; the report must say so instead of
-   manufacturing a red.
-3. The SEED candidate path (`target.mode === 'seed'`) must be decided EXPLICITLY and pinned: either the
-   no-op does not fire on a seed candidate (QMS7-2 promotion unchanged) or it does and the returned
-   envelope is pinned (which `meta` the caller gets, no promotion audit event appended). Every case in
-   `server/src/api/handlers/RecordHandlers.seedPromotion.test.ts` uses a CHANGED title, so it catches
-   neither choice.
-4. Regression bar 1d (in the LEG-1 dispatch brief): `src/store/AppendOnlyWall.attestation.test.ts`,
-   `src/scripts/migrateRecordLifecycles.test.ts` (the ONLY suite pinning AM-10 site #3),
-   `src/integration/W25CandidateImmutability.test.ts`, `src/api/handlers/RecordHandlers.seedPromotion.test.ts`
-   => 4 files / 28 tests, measured PASSED by me at 53109901. None of the four was in any prior bar.
+1. `updateUnlocked` (`server/src/store/RecordStoreImpl.ts`) already has FOUR typed rejection walls before it
+   writes, in this order: `appendOnlyWallError` (:741-742 — the hardcoded governance triple
+   `record-revision`/`signature`/`audit-event` plus `config.appendOnlyKinds`), `contentLockError` (:744-745),
+   the `expectedSha` mismatch check (:761-765, `SHA mismatch: expected …, got …`), and `validate`/`lint`
+   (:772-777 / :786-791). The lifecycle-bypass previous-payload snapshot sits between them (:747-753);
+   `serializeRecord` is at :796. **The no-op goes IMMEDIATELY BEFORE `serializeRecord`** (which is what AM-3
+   already says) — i.e. after all four walls. Any earlier placement silently turns an existing typed rejection
+   into a 200:
+   - before the append-only wall: an equal-content PUT on an append-only kind returns 200 where it returns
+     `APPEND_ONLY: immutable records cannot be updated` today;
+   - before the SHA check: a failed optimistic-concurrency precondition returns 200 with the stored record;
+   - before validate/lint: schema drift or a lint error stops surfacing on a no-edit save.
+2. Every existing append-only pin uses a CONTENT-DIFFERENT payload, so none of them constrains the ordering:
+   `server/src/store/AppendOnlyWall.attestation.test.ts:72` updates with a tampered `claims[0].claimStatus`,
+   and `server/src/store/RecordStore.test.ts:665` updates a seed append-only record to `"(edited)"`. A
+   content-EQUAL update on an append-only kind is pinned NOWHERE.
+   => A NEW pin is required: a content-equal PUT on a stored append-only record (`kind: 'attestation'`) still
+   returns `APPEND_ONLY: immutable records cannot be updated` and writes nothing. This is NEW behavior, not a
+   regression, so it cannot be shown RED-before-fix; the report must say so instead of manufacturing a red.
+3. The SEED candidate path (`target.mode === 'seed'`) must be decided EXPLICITLY and pinned: either the no-op
+   does not fire on a seed candidate (QMS7-2 promotion unchanged) or it does and the returned envelope is
+   pinned (which `meta` the caller gets, no promotion audit event appended). Every case in
+   `server/src/api/handlers/RecordHandlers.seedPromotion.test.ts` uses a CHANGED title, so it catches neither
+   choice.
+4. Regression bar 1d (in the LEG-1 dispatch brief) runs DIRECTORIES so no un-enumerated suite is missed:
+   `src/store` + `src/scripts` + `src/integration/W25CandidateImmutability.test.ts` +
+   `src/api/handlers/RecordHandlers.seedPromotion.test.ts` => **9 files / 99 tests**, measured PASSED by me at
+   53109901 in 4.8 s. It structurally covers the append-only wall, `LifecycleBypassAudit.test.ts`, and the own
+   suites of BOTH AM-10 script sites (`migrateRecordLifecycles`, `applyOwnershipDefaults`) — none of which was
+   in any prior bar.
 
 No acceptance criterion, AM-1..AM-10, boundary or token changes. This amendment only forbids a placement
 that would weaken an existing wall and names the pins that make the placement non-vacuous.

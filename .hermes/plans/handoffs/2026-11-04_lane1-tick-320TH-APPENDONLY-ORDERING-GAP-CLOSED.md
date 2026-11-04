@@ -2,8 +2,8 @@
 
 One line: **no lawful dispatch again (`dispatch-window-1.py` = BLOCKED-CORPUS, exit 10 verified at open AND at
 close), so the tick closed the THIRD and last fail-open surface in the LEG-1 kit: the new content-equal no-op is a
-THIRD early return inside `updateUnlocked`, and placing it before `appendOnlyWallError` would let an equal-content
-PUT on an append-only kind return 200 where `APPEND_ONLY` is required today — a path no existing pin constrains.**
+THIRD early return inside `updateUnlocked`, and any placement before the function's four existing typed rejection
+walls would turn a governance/schema/concurrency rejection into a 200 — on paths no existing pin constrains.**
 
 ## Reconciled first-hand
 
@@ -28,12 +28,18 @@ PUT on an append-only kind return 200 where `APPEND_ONLY` is required today — 
 
 Measured this tick at 53109901 in the pre-warmed LEG-1 worktree:
 
-1. `server/src/store/RecordStoreImpl.ts` `updateUnlocked` returns early in this order: `appendOnlyWallError`
-   (:741-742 — the hardcoded `record-revision`/`signature`/`audit-event` triple **plus** `config.appendOnlyKinds`,
-   i.e. the very knob AM-2/AM-10 model the new resolver on), **then** `contentLockError` (:744-745).
-2. The AM-3 content-equal no-op is a **third** early return in the same function. Placed first (a natural reading
-   of "BEFORE `serializeRecord`"), an equal-content PUT on an append-only record returns 200 instead of
-   `APPEND_ONLY: immutable records cannot be updated`. That is a governance wall weakened through a path with no pin.
+1. `server/src/store/RecordStoreImpl.ts` `updateUnlocked` already has **FOUR** typed rejection walls before it
+   writes, in this order: `appendOnlyWallError` (:741-742 — the hardcoded `record-revision`/`signature`/
+   `audit-event` triple **plus** `config.appendOnlyKinds`, i.e. the very knob AM-2/AM-10 model the new resolver
+   on), `contentLockError` (:744-745), the `expectedSha` mismatch check (:761-765, `SHA mismatch: expected …,
+   got …`), and `validate`/`lint` (:772-777 / :786-791). The lifecycle-bypass previous-payload snapshot sits
+   between them (:747-753); `serializeRecord` is at :796.
+2. The AM-3 content-equal no-op is a **third** early return in the same function, so its position is a semantic
+   decision. The lawful position is **immediately before `serializeRecord`** (what AM-3 already says). Any earlier
+   position silently converts an existing typed rejection into a 200: before the append-only wall ⇒ an
+   equal-content PUT on an append-only record returns 200 instead of `APPEND_ONLY: immutable records cannot be
+   updated`; before the SHA check ⇒ a failed optimistic-concurrency precondition returns 200 with the stored
+   record; before validate/lint ⇒ schema drift or a lint error stops surfacing on a no-edit save.
 3. **Why no existing pin catches it — this is the load-bearing measurement.** Every append-only pin in the tree
    uses a CONTENT-DIFFERENT payload, so none constrains the ordering:
    `AppendOnlyWall.attestation.test.ts:72` updates with a tampered `claims[0].claimStatus` (content differs);
@@ -43,16 +49,24 @@ Measured this tick at 53109901 in the pre-warmed LEG-1 worktree:
 4. Same class on the SEED path: `RecordHandlers.seedPromotion.test.ts` pins promotion with a CHANGED title in every
    case (R2/R7/R3/first-second), so a no-op that fires on `target.mode === 'seed'` would silently stop QMS7-2
    promotion and no pin would notice.
+5. Scope of the coverage hole, measured: `grep -rl RecordStoreImpl src --include='*.test.ts'` = **35 suites**, and
+   `buildServer` appears in **0** suites — which is why AM-10's production-wiring pin has to be newly written
+   rather than borrowed. `applyOwnershipDefaults.test.ts` and `migrateRecordLifecycles.test.ts` (the own suites of
+   AM-10 sites #2 and #3) were in no bar; so was `store/LifecycleBypassAudit.test.ts`.
 
 APPLIED (brief + spec, no product code):
 
-- **BAR 1d** added to `prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2255.txt`:
-  `AppendOnlyWall.attestation.test.ts`, `scripts/migrateRecordLifecycles.test.ts` (the ONLY suite pinning AM-10
-  site #3), `integration/W25CandidateImmutability.test.ts`, `RecordHandlers.seedPromotion.test.ts`
-  => **4 files / 28 tests PASSED**, measured by me in the worktree at 53109901 in **4.1 s**. None of the four was
-  in any prior bar.
-- **"The SECOND trap"** section added to the LEG-1 brief: the required placement (after `appendOnlyWallError`), the
-  required NEW pin (equal-content PUT on `kind: 'attestation'` still `APPEND_ONLY` + writes nothing — and the
+- **BAR 1d** added to `prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2255.txt`, and deliberately expressed as two
+  DIRECTORIES so no un-enumerated suite can be missed: `vitest run src/store src/scripts
+  src/integration/W25CandidateImmutability.test.ts src/api/handlers/RecordHandlers.seedPromotion.test.ts`
+  => **9 files / 99 tests PASSED**, measured by me in the worktree at 53109901 in **4.8 s**. It structurally covers
+  the append-only wall, `store/LifecycleBypassAudit.test.ts`, and the own suites of BOTH AM-10 script sites
+  (`migrateRecordLifecycles`, `applyOwnershipDefaults`). None of those was in any prior bar. (My first cut was a
+  four-file list, 4 files / 28 tests; the directory form superseded it in the same tick because the file list missed
+  `LifecycleBypassAudit.test.ts` — a wall inside the very function being rewritten.)
+- **"The SECOND trap"** section added to the LEG-1 brief: the required position (immediately before
+  `serializeRecord`, i.e. after all four walls) with the three typed rejections an earlier placement would swallow,
+  the required NEW pin (equal-content PUT on `kind: 'attestation'` still `APPEND_ONLY` + writes nothing — and the
   honest statement that this case is NEW BEHAVIOR and cannot be shown RED-before-fix), and the required explicit
   decision + pin for the seed-candidate path.
 - **AM-11** added to `.hermes/plans/2026-11-03_l1-record-lock-guard-1-spec.md` (committed to trunk **f16bea49**,
