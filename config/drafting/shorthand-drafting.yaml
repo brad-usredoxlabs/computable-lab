@@ -99,7 +99,7 @@ assumedValues:
       label: volume
       value: 100
       unit: uL
-      source: 'shorthand drafting example (server/src/ai/submitSuggestionTool.ts:645)'
+      source: 'declared assumed-values policy (config/drafting/shorthand-drafting.yaml)'
       question: 'How much {label}? The prompt states none — {value} {unit} is assumed; approve it or enter the amount.'
   wells:
     - verb: add_material

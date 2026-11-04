@@ -30,7 +30,12 @@ const DATA = {
   label: 'volume',
   value: 100,
   unit: 'uL',
-  source: 'shorthand drafting example (server/src/ai/submitSuggestionTool.ts:645)',
+  // R1.3 (binding ruling): the chip's provenance `source` moved from the drafting
+  // example to the declared assumed-values policy home (R1.3(B) removed the number
+  // from the example, so citing it would be a lie). This fixture mirrors the data
+  // home; the fold assertions below read only DATA.value / DATA.unit (never source),
+  // so this line does not alter foldAnswersIntoShorthand's seam or its coverage.
+  source: 'declared assumed-values policy (config/drafting/shorthand-drafting.yaml)',
 };
 const DATA_QUESTION_RAW = 'How much {label}? The prompt states none — {value} {unit} is assumed; approve it or enter the amount.';
 const DATA_QUESTION_RENDERED = 'How much volume? The prompt states none — 100 uL is assumed; approve it or enter the amount.';
