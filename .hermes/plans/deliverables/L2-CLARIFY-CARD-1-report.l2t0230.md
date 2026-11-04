@@ -784,3 +784,118 @@ action.
    untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/`
    (assignment-excluded, never committed).
 CARD1-FIX5-FIX2 DONE 2af9d880f93e379606221f64ac66067d9b012e6d
+
+---
+
+## FIX-2 PROSE CORRECTION (advc-c8)
+
+Corrections for the two LOW report-prose defects in the cycle-8 adversarial
+review (`/home/brad/.hermes/cl/lanes/2/reviews/
+L2-CLARIFY-CARD-1-advc-c8-l2t2011.md`, §4 NEW DEFECTS), both in the FIX-2
+section above. ADDITIVE ONLY: earlier sections stand as written; nothing
+deleted or weakened; no code, test, schema, or YAML change — this commit
+touches the report file only. Every figure below was re-measured by this
+run with the command quoted beside it; each figure names the commit(s) it
+was measured at.
+
+### NEW-1 — VERIFY item 5 diffstat not measured at the head it names
+VERIFY item 5 above prints `git ... diff --stat 10062725..HEAD -> 18 files
+changed, 1360 insertions(+), 32 deletions(-)`; the same 1360 figure is
+repeated in the `2af9d880` commit subject. The `..HEAD` at measurement time
+was `bf41e9e6` (the last code commit before the VERIFY commit); the number
+was then committed and HEAD moved again by the DONE marker, so the printed
+figure is the value at a head other than the one it now names. Re-measured
+by this run (all in the worktree):
+
+- `git -c core.fileMode=false diff --shortstat 10062725..bf41e9e6` =
+  18 files changed, 1360 insertions(+), 32 deletions(-) — measured at the
+  head the figure was taken from.
+- `git -c core.fileMode=false diff --shortstat 10062725..be9d9c45` =
+  18 files changed, 1360 insertions(+), 32 deletions(-) — the DEFECT-4
+  commit itself; same 1360 value (the hygiene follow-up `bf41e9e6` reworded
+  test comments + this report, net-zero on the shortstat).
+- `git -c core.fileMode=false diff --shortstat 10062725..2af9d880` =
+  18 files changed, 1465 insertions(+), 32 deletions(-) — the VERIFY
+  commit's own figure, measured pre-append.
+- `git -c core.fileMode=false diff --shortstat 10062725..d7df2ed8` =
+  **18 files changed, 1466 insertions(+), 32 deletions(-)** — the figure
+  at the GRADED TIP (HEAD at this correction's start).
+- Delta diffstat, the range the work order asked for:
+  `git -c core.fileMode=false diff --shortstat cbc9755b..d7df2ed8` =
+  **4 files changed, 295 insertions(+), 9 deletions(-)**.
+
+Corrected statement: at the graded tip, `10062725..d7df2ed8` = 18 files /
+1466 insertions / 32 deletions (and the delta `cbc9755b..d7df2ed8` = 4
+files / +295 / -9). The original 1360/32 figure is NOT retracted in place —
+it stands, measured at `bf41e9e6`/`be9d9c45`, not at `d7df2ed8`. The
+`2af9d880` commit subject (1360) is history and cannot be amended; this
+section supersedes the head figure.
+
+### NEW-2 — DEFECT-1 M6 counts are the DEFECT-1 commit's footprint
+The DEFECT 1 section of FIX-2 above prints "M6 (…) -> 20 failed | 9 passed
+(29) across nounShape/readingCard/uifix3/e2eStubHonesty (…) block present
+-> 29/29 GREEN" beside head figures. Those are the footprint at the
+DEFECT-1 commit `8b077aa0`, where
+`shorthandChat.sameNounDedupe.uifix3.test.ts` carried 6 `it(` blocks.
+Provenance, measured by this run:
+`git show 8b077aa0:server/src/ai/shorthandChat.sameNounDedupe.uifix3.test.ts
+| grep -c 'it('` = **6**; the same command at `d7df2ed8` = **9**. The four
+M6 files' `it(` totals: `8b077aa0` = 9+7+6+7 = **29** (measured per file
+with the same `git show | grep -c`); `d7df2ed8` = 9+7+9+7 = **32**. The
+three DEFECT 2+3 pins (commit `14c67e45`) did not exist when M6 was run, so
+29 is the 6-`it(`-block footprint and 32 the head footprint.
+
+M6 RE-RUN AT THE GRADED TIP by this run (worktree untouched — /tmp
+throwaway copy of the worktree at `d7df2ed8`: rsync excluding
+`node_modules`/`.git`/`__pycache__`, `node_modules` symlinked to the pnpm
+workspace root, the local `server/schema -> ../schema` symlink preserved —
+the reviewer's own /tmp setup; block deletion in the COPY only):
+`schema/scientist-intent/scientist-intent-vocabulary.yaml` lines 950–953
+(the entire `canonicalLabel:` block: `preMintDisplay: identity-case`,
+`mintedDisplay: record-title`,
+`titleAdoption: scientist-phrasing-when-key-equal`) deleted via
+`sed -i '950,953d'` in the copy, then
+`cd <copy>/server && vitest run
+src/ai/shorthandChat.nounShape.test.ts
+src/ai/shorthandChat.readingCard.test.ts
+src/ai/shorthandChat.sameNounDedupe.uifix3.test.ts
+src/ai/shorthandChat.e2eStubHonesty.test.ts` (vitest 1.6.1, resolved via
+the workspace root — same version as the worktree runs):
+
+- block deleted -> **21 failed | 11 passed (32)**; every failure is the
+  loader's exact ABSENT message: `canonical-label policy
+  (…scientist-intent-vocabulary.yaml): the \`canonicalLabel\` block is
+  ABSENT — the D3 ruling forbids a hardcoded fallback policy; declare it in
+  the vocabulary data`, thrown from `loadCanonicalLabelPolicy`
+  (canonicalLabelPolicy.ts) on the render path via
+  `clarificationsFromUnresolvedFacts` (shorthandChat.ts:918).
+- block present (Leg A, the same copy in its pristine `d7df2ed8` state, run
+  before the deletion) -> **32 passed (32)**.
+
+Qualified statement: M6 **@8b077aa0** = 20 failed | 9 passed (29) / block
+present 29/29 (as printed above — the 6-`it(`-block footprint); M6
+**@d7df2ed8** = 21 failed | 11 passed (32) / block present 32/32 (the
+re-measurement above — the head 9-`it(`-block footprint). The conclusion is
+UNCHANGED and is supported by the re-measured head numbers: with the block
+absent the render path FAILS LOUDLY with the ABSENT message, and there is
+no hardcoded fallback policy. The `2af9d880` subject's "M6: … 20 failed |
+9 passed (29)" is history, corrected here by the @-qualified form.
+
+### Method / reproducibility
+- Diffstats: `git -c core.fileMode=false diff --shortstat <A>..<B>` in the
+  worktree, per the command/commit pair quoted above; no figure in this
+  section was taken from the review or from memory.
+- M6 re-run: /tmp copy per NEW-2; the copy was deleted after evidence
+  capture. Worktree `schema/`, `server/`, `app/` byte-untouched by this run.
+- All re-measured figures agree with the cycle-8 review's measurements —
+  no disagreement to flag.
+
+### Post-correction verify (this run)
+1. `git -c core.fileMode=false diff --stat d7df2ed8..HEAD` = the report
+   file only (no `app/**`, `server/**`, `schema/**` hunks).
+2. Every number printed in this section is the output of a command this run
+   executed at the commit it names (diffstats in the worktree at the named
+   pairs; M6 at `d7df2ed8` in the /tmp copy).
+3. `git -c core.fileMode=false status --porcelain` = this report file
+   modified, plus the assignment-excluded untracked
+   `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` only.
