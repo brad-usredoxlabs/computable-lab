@@ -129,3 +129,14 @@ Brad card still **DRAFT**.
    for slot-1 lane-2 should read ≥2 h, and the tick must confirm a free slot existed at some poll between
    11:33:01Z and the poll it examines.
 3. Do not pre-stamp the queue: GUARD2 requires exactly `todo|none|none`.
+
+## Close-of-tick addendum (05:2x EST)
+
+- Trunk is now `894824c8` = `faa4c87b` + this handoff document (1 path, `.hermes/plans/` only). GUARD4's
+  pathspec excludes `.hermes/plans`, so it stays empty; the ff-only pre-fire step stays safe.
+- Task-list transaction completed under `task-list.lock` with temp+rename (no `open('w')`); post-write
+  reconcile: **todo 2 / in-progress 0 / superseded 1 / done 109**, and GUARD2's own parse of
+  `L1-RECORD-LOCK-GUARD-1` still reads `todo|none|none` (the armed unit cannot be knocked out of
+  eligibility by the tick record).
+- At close: slot-0 still `L2-CHATHOST-CONSOLIDATE-1` (3693103), slot-1 still `L2-CLARIFY-TARGET-1`
+  (3600006); unit `cl-l1-armed-dispatch-0228.service` active, MainPID 3297306.
