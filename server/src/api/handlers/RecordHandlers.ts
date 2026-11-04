@@ -26,6 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { RecordRevisionService, RevisionError, contentHash, controlledContent, object, revisionRef, token } from '../../revisions/RecordRevisionService.js';
 import { acceptProtocolGraph } from '../../revisions/ProtocolUseService.js';
 import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
+import { defaultContentLockedStates } from '../../lifecycle/contentLockDefault.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
@@ -1136,7 +1137,18 @@ export function createRecordHandlers(
         
         const previous = payloadObject(existing.payload);
         const proposed = payloadObject(request.body.payload);
-        if (previous.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(previous.state)) && controlledContent(previous) !== controlledContent(proposed)) {
+        // L1-RECORD-LOCK-GUARD-1 (U5): the controlled-content lock now consults
+        // the DECLARED locked-state set through the same resolver channel as
+        // the store and the step routes (`engine.contentLockedStates`, AM-2)
+        // instead of a state-string literal. An undeclared lifecycleId
+        // resolves `undefined` and the gate fails open BY DESIGN.
+        const previousLifecycleId = typeof previous.lifecycleId === 'string' && previous.lifecycleId !== '' ? previous.lifecycleId : undefined;
+        // Same engine-or-default channel as the store (U3) and the step
+        // routes (U5): the injected engine when present, else the shared
+        // default resolver over the worktree's declared lifecycle YAMLs.
+        const resolver = lifecycleEngine ? (id: string) => lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates;
+        const lockedStates = previousLifecycleId ? resolver(previousLifecycleId) : undefined;
+        if (lockedStates && lockedStates.has(String(previous.state)) && controlledContent(previous) !== controlledContent(proposed)) {
           reply.status(409); return { error: 'CONTROLLED_RECORD_LOCKED', message: 'Create a new draft to edit an approved or effective document.' };
         }
         // PROTO-AI-5 G1/G3/G4 — protocol step write gates (executed-step

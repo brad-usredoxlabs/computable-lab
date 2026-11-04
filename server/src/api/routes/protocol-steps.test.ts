@@ -309,7 +309,7 @@ describe('step-endpoint content-lock gate (G2 — mirrors protocolStepEditing.ts
 
   function lock(p: RecordEnvelope): RecordEnvelope {
     const payload = p.payload as Record<string, unknown>
-    return { ...p, payload: { ...payload, lifecycleId: 'protocol-control', state: 'approved' } } as RecordEnvelope
+    return { ...p, payload: { ...payload, lifecycleId: 'document-controlled-signing', state: 'approved' } } as RecordEnvelope
   }
 
   it('PATCH step on a locked protocol → 409 CONTROLLED_RECORD_LOCKED, persists nothing', async () => {

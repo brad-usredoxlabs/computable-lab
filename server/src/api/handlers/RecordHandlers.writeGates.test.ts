@@ -247,7 +247,7 @@ describe('PUT /records/:id — G4 duplicate stepId', () => {
 describe('PUT /records/:id — locked protocol (existing handler lock preserved unchanged)', () => {
   it('content edit on an approved protocol → 409 CONTROLLED_RECORD_LOCKED, persists nothing', async () => {
     const existing = protocolEnvelope('PRT-locked', {
-      lifecycleId: 'protocol-control',
+      lifecycleId: 'document-controlled-signing',
       state: 'approved',
       steps: stepsA,
     });

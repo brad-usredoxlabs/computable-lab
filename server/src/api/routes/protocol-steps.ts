@@ -10,6 +10,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import { StepGraphCompiler } from '../../protocol/StepGraphCompiler.js';
 import { checkRealizationProposal } from './RealizationCompileGate.js';
+import { defaultContentLockedStates } from '../../lifecycle/contentLockDefault.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -212,10 +213,24 @@ function findMalformedCyclingPrograms(equipments: unknown[]): string | null {
  * and the store lock (`RecordStoreImpl.ts:661`) — the SAME semantics and code
  * at every layer; the step endpoints were the one path missing the route-level
  * check (the store refused the write but the endpoint still answered 200).
+ *
+ * L1-RECORD-LOCK-GUARD-1 (U5): the locked set is no longer a state-string
+ * literal — it is resolved from the DECLARED lifecycle data through the same
+ * resolver channel the store and PUT handler use (`engine.contentLockedStates`,
+ * AM-2). For a declared locked lifecycle this is behaviourally identical to
+ * the old hard-coded set (the 409 CONTROLLED_RECORD_LOCKED pre-check fires on
+ * exactly the same states); an undeclared lifecycleId resolves `undefined` and
+ * the gate fails open BY DESIGN (no declared lock to honour).
  */
-const CONTENT_LOCKED_STATES = ['approved', 'effective', 'superseded', 'archived'];
-function contentLocked(payload: Record<string, unknown>): boolean {
-  return Boolean(payload.lifecycleId) && CONTENT_LOCKED_STATES.includes(String(payload.state));
+function contentLocked(
+  payload: Record<string, unknown>,
+  resolve: (lifecycleId: string) => ReadonlySet<string> | undefined,
+): boolean {
+  const lifecycleId = payload.lifecycleId;
+  if (typeof lifecycleId !== 'string' || lifecycleId.length === 0) return false;
+  const lockedStates = resolve(lifecycleId);
+  if (!lockedStates) return false;
+  return lockedStates.has(String(payload.state));
 }
 
 /** The lock denial in the existing 409 CONTROLLED_RECORD_LOCKED shape. */
@@ -388,7 +403,7 @@ export function registerProtocolStepsRoutes(
       // G2 content-lock gate — mirrors the client rule (protocolStepEditing.ts:45)
       // and the PUT handler lock (RecordHandlers.ts:798). Route-level so the
       // response tells the truth, not just the store backstop.
-      if (contentLocked(payload)) {
+      if (contentLocked(payload, (id) => ctx.lifecycleEngine ? ctx.lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates(id))) {
         reply.status(409);
         return controlledLockedReply();
       }
@@ -493,7 +508,7 @@ export function registerProtocolStepsRoutes(
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
       // G2 content-lock gate (see PATCH step above for the mirrored pattern).
-      if (contentLocked(payload)) {
+      if (contentLocked(payload, (id) => ctx.lifecycleEngine ? ctx.lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates(id))) {
         reply.status(409);
         return controlledLockedReply();
       }
@@ -571,7 +586,7 @@ export function registerProtocolStepsRoutes(
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
       // G2 content-lock gate (see PATCH step above for the mirrored pattern).
-      if (contentLocked(payload)) {
+      if (contentLocked(payload, (id) => ctx.lifecycleEngine ? ctx.lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates(id))) {
         reply.status(409);
         return controlledLockedReply();
       }
@@ -773,7 +788,7 @@ export function registerProtocolStepsRoutes(
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
       // G2 content-lock gate (see PATCH step above for the mirrored pattern).
-      if (contentLocked(payload)) {
+      if (contentLocked(payload, (id) => ctx.lifecycleEngine ? ctx.lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates(id))) {
         reply.status(409);
         return controlledLockedReply();
       }
@@ -840,7 +855,7 @@ export function registerProtocolStepsRoutes(
         }
         // G2 content-lock gate: committing a realization PATCHes the step's
         // subGraphRef — a content edit like any other (see PATCH step above).
-        if (contentLocked(payload)) {
+        if (contentLocked(payload, (id) => ctx.lifecycleEngine ? ctx.lifecycleEngine.contentLockedStates(id) : defaultContentLockedStates(id))) {
           reply.status(409);
           return controlledLockedReply();
         }
