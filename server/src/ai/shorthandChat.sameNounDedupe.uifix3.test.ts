@@ -27,12 +27,13 @@
  *    constants in the resolution layer, not hardcoded inline at the emit
  *    site).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { foldSameNounCards, REASON_SPECIFICITY_ORDER } from '../compiler/resolution/clarificationDedupe.js';
-import { clarificationsFromUnresolvedFacts, factRequestId } from './shorthandChat.js';
-import { canonicalLabelKey } from '../materials/termId.js';
+import { clarificationsFromUnresolvedFacts, canonicalLabelsForFacts, dropSatisfiedFacts, factRequestId } from './shorthandChat.js';
+import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
 import type { AgentClarificationRequest } from './types.js';
-import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
+import type { RecordEnvelope, RecordStore } from '../store/types.js';
+import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
 
 const LABEL = '1 mM clofibrate in DMSO';
 
@@ -163,5 +164,119 @@ describe('foldSameNounCards — L2-SUITE-A-uifix3 D4: one noun, one response, on
     const folded = foldSameNounCards(cards);
     expect(folded).toHaveLength(1);
     expect(folded[0]!.unresolvedFact?.reason).toBe('ambiguous-noun');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CARD1-D3 FIX-2 (advc c7 DEFECT 2 + DEFECT 3) — the two previously
+// UNPINNED ruling read/drop legs. Hosted here (a GREEN file, already a
+// canonicalLabelKey scope-lock mentioner) because the only other
+// dropSatisfiedFacts mentions (shorthandChat.cueCascade.test.ts T6/T7) are
+// already RED at baseline and cannot witness the change.
+// ---------------------------------------------------------------------------
+describe('CARD1-D3 FIX-2 — ruling §5 pin 3 DROP half: dropSatisfiedFacts rides the CANONICAL key', () => {
+  // Ruling §5 pin 3: a case/extra-space DRIFT of the answered label still
+  // satisfies the slot — the re-derived fact is DROPPED, not re-asked.
+  it('the exact review-order pin: a drifted-casing re-derived fact is DROPPED (returns [])', () => {
+    // The document's slot value is the MODEL'S DRIFTED text (case + double
+    // space) — NOT string-equal to the answered label, but canonically equal
+    // (that is exactly the D3 premise: the slot is satisfied by the CANONICAL
+    // label, not the raw string). A pre-fix `value !== entry.label` compare
+    // would see a DIFFERENT string and keep the fact (re-ask) — so this pin
+    // is RED on pre-D3 identity.
+    const doc: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 'fx2-drop',
+      actions: [{ action: 'add_material', material: '1 mM Clofibrate  in DMSO' }],
+      unresolved: [],
+    };
+    const drifted = fact('1 mM Clofibrate  in DMSO', 'ambiguous-noun');
+    expect(
+      dropSatisfiedFacts([drifted], [
+        { actionIndex: 0, argument: 'material', label: '1 mM clofibrate in DMSO' },
+      ], doc),
+    ).toEqual([]);
+    // Sanity (non-vacuity of the negative arm): a fact whose slot value is a
+    // DIFFERENT label survives the drop.
+    const other = fact('mystery goop', 'ambiguous-noun');
+    const docOther: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 'fx2-drop',
+      actions: [{ action: 'add_material', material: 'mystery goop' }],
+      unresolved: [],
+    };
+    expect(
+      dropSatisfiedFacts([other], [
+        { actionIndex: 0, argument: 'material', label: '1 mM clofibrate in DMSO' },
+      ], docOther),
+    ).toHaveLength(1);
+  });
+
+  // The NON-STRING slot value keeps the existing `return true` arm (a
+  // non-string can never equal the answered string label — never dropped).
+  it('the non-string arm: a non-string slot value SURVIVES the drop (return true)', () => {
+    const doc: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 'fx2-drop',
+      actions: [{
+        action: 'add_material',
+        // A degenerate document (Ajv rejects this upstream in the real
+        // pipeline): the slot value is NON-STRING, which the type cannot
+        // express — the value-level cast is deliberate (this pin witnesses
+        // the pure function's `return true` arm on such input).
+        material: 42 as unknown as string,
+      }],
+      unresolved: [],
+    };
+    const fact2 = fact('1 mM Clofibrate  in DMSO', 'ambiguous-noun');
+    expect(
+      dropSatisfiedFacts([fact2], [
+        { actionIndex: 0, argument: 'material', label: '1 mM clofibrate in DMSO' },
+      ], doc),
+    ).toHaveLength(1);
+  });
+});
+
+describe('CARD1-D3 FIX-2 — ruling §3 read path (i) STAGE A: the record-title read path', () => {
+  // Ruling §5 pin 6 / §3 read path (i): when a local-term record is GROUNDED
+  // for the fact's identity, the card's displayed label is the record's TITLE
+  // (STAGE A) — never the identity form, never the raw model label — while the
+  // `unresolvedFact` mirror keeps the RAW label verbatim (provenance is never
+  // collapsed).
+  it('STAGE A: the grounded record TITLE rides query + prompt; unresolvedFact.label stays RAW (read-only store seam)', async () => {
+    const RAW = '1 mM Clofibrate  in DMSO'; // model's verbatim (drifted) label
+    const TITLE = '1 mM Clofibrate in DMSO'; // the grounded record's title
+    const recordId = localMaterialIdForLabel(RAW);
+    const get = vi.fn(async (id: string): Promise<RecordEnvelope | null> =>
+      id === recordId ? { payload: { name: TITLE } } as unknown as RecordEnvelope : null);
+    // A read-only fake store (the repeatEcho mockStore shape): `get` resolves
+    // the grounded record; `create` is a throwing stub — the STAGE A seam is
+    // READ-ONLY (the ruling: "ask-time is read-only"; the mint path owns the
+    // write), so any accidental mutation fails the pin loud.
+    const store: RecordStore = {
+      get,
+      create: vi.fn(async () => { throw new Error('STAGE A read path must be READ-ONLY (store.create)'); }),
+    } as unknown as RecordStore;
+    const map = await canonicalLabelsForFacts([fact(RAW, 'ambiguous-noun')], store);
+    expect(map.get(canonicalLabelKey(RAW))).toBe(TITLE);
+    expect(get).toHaveBeenCalledTimes(1); // deduped to ONE GET per identity
+    expect(get.mock.calls[0]![0]).toBe(recordId);
+
+    const card = clarificationsFromUnresolvedFacts(
+      [fact(RAW, 'ambiguous-noun')],
+      map,
+    )[0]!;
+    // STAGE A: the card carries the TITLE form (ruling §3 read path (i)).
+    expect(card.query).toBe(TITLE);
+    expect(card.prompt).toContain(`"${TITLE}"`);
+    // Provenance is never collapsed: the RAW model label survives verbatim.
+    expect(card.unresolvedFact!.label).toBe(RAW);
+    expect(card.unresolvedFact!.label).not.toBe(TITLE);
+    // Read-only (the ruling: "ask-time is read-only" — the mint path owns the
+    // write; the fake's write stubs would have thrown on any mutation).
+    expect(get).toHaveBeenCalledTimes(1);
   });
 });
