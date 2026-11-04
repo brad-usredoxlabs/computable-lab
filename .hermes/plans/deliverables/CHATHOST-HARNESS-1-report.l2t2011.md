@@ -1393,4 +1393,32 @@ GUARD_RC=0
 ```
 sha `dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b` UNCHANGED.
 
+3. Syntax checks (raw):
+```
+python3 -m py_compile .hermes/plans/harness/l2-trunk-journeys/run-journeys.py
+PY_COMPILE_RC=0
+node --check .hermes/plans/harness/l2-trunk-journeys/ui-drive.cjs
+NODE_CHECK_RC=0
+```
+4. Report mirror:
+```
+diff -q .hermes/plans/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md /home/brad/.hermes/cl/lanes/2/deliverables/CHATHOST-HARNESS-1-report.l2t2011.md
+(silent)
+MIRROR_SILENT_OK
+```
+5. Unit delta scope — the base of THIS unit's work is the post-merge tip `7763e815` (the
+docs-only `cl/integration-2` merge made in STEP 0; `git merge-base HEAD cl/integration-2`
+= `715a393f`, the pre-merge ancestor, so the unit delta is measured from the merge tip):
+```
+git -c core.fileMode=false diff --stat 7763e815..HEAD
+ .../CHATHOST-HARNESS-1-report.l2t2011.md           | 92 +++++++++++++++++++++-
+ .../l2-trunk-journeys/test-channel-selfcheck.py    | 12 ++-
+ 2 files changed, 102 insertions(+), 2 deletions(-)
+```
+exactly `test-channel-selfcheck.py` + the report; zero `app/`, `server/`, `schema/`, `config/`
+hunks in the unit delta (`git diff --name-only 7763e815..HEAD | grep -E '^(app|server|schema|config)/'`
+-> no matches, exit 1). Note: the wider `d5f92064..HEAD` span ALSO shows prior-cycle work
+(CARD-1 `app/` commits, the sanctioned `config/chat/` additions, the earlier CHATHOST units)
+because that span predates this unit's base and those files arrived on the branch before the
+STEP-0 merge — none of that delta is this unit's.
 CHATHOST-ADVC12-RESIDUES DONE e17f80840bf2fe81fa3662fe106eb14ac5df9f59
