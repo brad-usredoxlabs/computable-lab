@@ -171,6 +171,51 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
     expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('1 mM Clofibrate in DMSO')
   })
 
+  // CARD1-FIX4 D13 (advc c10): the raw label is TRIMMED before minting
+  // (mintLabelFor reads `unresolvedFact.label.trim()`, ClarificationPicker.tsx:405-410,
+  // and handleMintRow posts `mintLabel.trim()`, :903). ORCHESTRATOR RULING
+  // (final): whitespace is NOT part of a label — the `.trim()` is INTENTIONAL
+  // and is PINNED here. The pre-D13 pin's fixture had no whitespace, so it
+  // could not detect that a padded raw label mints a DIFFERENT string than the
+  // verbatim label. This case feeds a raw label with leading/trailing
+  // whitespace (the REAL builder stamps `unresolvedFact.label` verbatim —
+  // provenance, no trim) and pins that the posted durable title is the
+  // TRIMMED form: "exact string" holds modulo leading/trailing whitespace BY
+  // DESIGN.
+  it('D13: a raw label with leading/trailing whitespace posts the TRIMMED title (the .trim() is intentional and pinned)', async () => {
+    // A copy of the real-shape fixture whose raw label is PADDING whitespace
+    // around the same human-case label. query is the same canonical fold
+    // (canonicalLabelKey trims + folds, so the fold is whitespace-free too).
+    const wsRequest: AiClarificationRequest = {
+      ...clofibrateRequest,
+      id: 'unresolved-c-ws-padded-1',
+      unresolvedFact: {
+        label: '  1 mM Clofibrate in DMSO  ', // leading + trailing whitespace
+        reason: 'unbound',
+        actionLocation: { action: 'add_material', argument: 'material' },
+      },
+    }
+    // THE normalization: mintLabelFor returns the TRIMMED raw label (not the
+    // padded verbatim, not the folded query).
+    expect(mintLabelFor(wsRequest, '1 mm clofibrate in dmso')).toBe('1 mM Clofibrate in DMSO')
+
+    // The rendered mint input shows the TRIMMED title (the seed is the trimmed
+    // raw label — the input never carries the padding).
+    resolveMaterial.mockResolvedValue([])
+    render(<ClarificationPicker request={wsRequest} onPick={vi.fn()} />)
+    const label = screen.getByTestId('clarification-mint-label') as HTMLInputElement
+    expect(label.value).toBe('1 mM Clofibrate in DMSO')
+
+    // AND the end-to-end durable title: clicking Create POSTs the TRIMMED title
+    // to mintLocalTerm — the persisted record name carries no leading/trailing
+    // whitespace. This is the exact string the row's preview mints
+    // (handleMintRow posts `mintLabel.trim()`).
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-clofib-ws', label: '1 mM Clofibrate in DMSO', iri: 'urn:cl:local:MAT-clofib-ws' })
+    fireEvent.click(screen.getByTestId('clarification-mint-create'))
+    await waitFor(() => expect(mintLocalTerm).toHaveBeenCalledTimes(1))
+    expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('1 mM Clofibrate in DMSO')
+  })
+
   it('still falls back to the query seed when the server stamps NO unresolvedFact (non-shorthand / gap requests)', () => {
     // A gap request (forceMaterialClarifications.ts) sets request.query =
     // gap.label (RAW provenance) and NEVER stamps unresolvedFact. The chain
