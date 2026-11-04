@@ -25,6 +25,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
+import { extractQuantity } from './reconcileDraftQuantities.js';
 import {
   requiredArgumentClarifications,
   MISSING_REQUIRED_ARGUMENT_REASON,
@@ -170,5 +171,89 @@ describe('demoteUnstatedQuantities — the pre-compile EMISSION demotion (R1.2)'
     expect(r.demoted.length).toBe(0);
     expect(r.doc).toBe(doc);
     expect(volumeUlFacts(r.doc).length).toBe(0);
+  });
+});
+
+/**
+ * cycle 7 unit 1 (browser-gate c6, defects 4+6) — the no-material mix leg.
+ *
+ * Gate evidence (receipts 2026-11-04_1405-c6-gate, q3-result.json paneTail):
+ * the mix action named NO material (label = ''), so the demotion's
+ * `label ? extractQuantity(...) : null` arm never asked the ONE extractor —
+ * and the turn's OWN words stated BOTH quantities ("Mix 75 uL ... for
+ * 3 cycles"), yet the server demoted BOTH ("carried 75" and "carried 3").
+ * A STATED amount must never be demoted (R1.2). The no-label action is
+ * adjudicated by the extractor's OWN no-anchor arm (reconcileDraftQuantities.ts
+ * :112-113 — the first amount-with-unit in the turn's own words = stated),
+ * and the extractor's ONE unit grammar (ONE-grammar law: it EXTENDS, never a
+ * second grammar) must recognize "N cycles" as a stated count — the declared
+ * `kind: quantity` contract for the mix `cycles` slot can otherwise never be
+ * satisfied in prose.
+ */
+describe('demoteUnstatedQuantities — the no-material mix leg (cycle 7 unit 1, defects 4+6)', () => {
+  // The gate's REAL mix face (shots/q3-mix-row.png): "Mix 75 uL ... for 3
+  // cycles" — the action carries BOTH quantities and names NO material.
+  // The mix verb's DECLARED quantity contracts are `volume` and `cycles`
+  // (schema/scientist-intent/scientist-intent-vocabulary.yaml :91-96 — the
+  // gate note's field "volume" carried 75; `volumeUl` is the add_material
+  // slot, not a mix field).
+  function mixDoc(volume: number, cycles?: number): ScientistIntent {
+    const action: Record<string, unknown> = {
+      action: 'mix',
+      volume,
+    };
+    if (cycles !== undefined) action.cycles = cycles;
+    return {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 't1-c7d1-mix',
+      actions: [action as unknown as ScientistIntent['actions'][number]],
+      unresolved: [],
+    };
+  }
+
+  it('P-a: a material-less mix whose turn STATES both quantities strips NOTHING (no over-strip)', () => {
+    const r = demoteUnstatedQuantities(mixDoc(75, 3), 'Mix 75 uL for 3 cycles');
+    // Today (pre-fix) BOTH are stripped — the gate's raw notes:
+    //   'Demoted unstated quantity: action "mix" argument "volume" ... carried 75'
+    //   'Demoted unstated quantity: action "mix" argument "cycles" ... carried 3'
+    expect(r.demoted.length).toBe(0);
+    expect(r.notes.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(true);
+    expect('cycles' in action).toBe(true);
+  });
+
+  it('P-b: a stated volume WITH a material label is still kept (control — the label-adjacency arm)', () => {
+    const doc = addMaterialDoc(true, 150);
+    const r = demoteUnstatedQuantities(doc, 'Add 150 uL of DMEM to A1');
+    expect(r.demoted.length).toBe(0);
+    expect(r.doc).toBe(doc);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volumeUl' in action).toBe(true);
+    expect(volumeUlFacts(r.doc).length).toBe(0);
+  });
+
+  it('P-c: the ONE grammar recognizes "3 cycles" as a stated count (kind count, unit cycles)', () => {
+    const q = extractQuantity('Mix 75 uL for 3 cycles', '');
+    // The FIRST amount-with-unit in the turn (the no-anchor arm) is the
+    // volume; the cycles count must ALSO be recognized by the same grammar.
+    expect(q).toEqual({ value: 75, unit: 'uL', kind: 'volume' });
+    const c = extractQuantity('Mix for 3 cycles', 'cycles');
+    expect(c).toEqual({ value: 3, unit: 'cycles', kind: 'count' });
+  });
+
+  it('P-d: a material-less mix whose turn states NO amount is STILL demoted + disclosed (no 6/10 regression)', () => {
+    const r = demoteUnstatedQuantities(mixDoc(75), 'Mix on the plate');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('volume');
+    expect(r.demoted[0]!.field).toBe('volume');
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0]).toMatch(/mix/);
+    expect(r.notes[0]).toMatch(/volume/);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(false);
+    expect('cycles' in action).toBe(false); // the slot was ABSENT in the doc — untouched
   });
 });
