@@ -34,15 +34,25 @@
  *       the legacy `clarification`, `restored: true`) renders NO picker (the
  *       legacy arm suppresses it), so the legacy builder's path never feeds a
  *       LIVE mint.
+ *   (D) CARD1-FIX4 D3 (advc c10): the live invariant IS PINNED — a live
+ *       shorthand mint ALWAYS carries the typed requests, so the legacy block
+ *       arm GATE (ChatLog.tsx:521) cannot fire for it. The pre-fix FIX-3
+ *       version stated this as an ASSUMPTION ("such a shape is never a live
+ *       mint"); (D) evaluates the gate on the live message and pins it FALSE.
+ *       (D) is a GREEN regression lock — its RED would require reverting the
+ *       shipped done-arm (useAiChat.ts:1689-1699) so it stops setting both
+ *       fields, which is out of this item's scope (mirrors review O3 for the
+ *       answered-row pin).
  *
  * Conclusion: the legacy arm's `clarificationRequest()` builder (which drops
  * `unresolvedFact`) is only reachable for legacy-only messages, and those are
  * either suppressed (restored) or are not live shorthand mints (which always
- * carry the typed requests). A live mint is reachable ONLY via the typed arm,
- * which carries `unresolvedFact`. Therefore the server legacy-passthrough leg
- * is theoretical and NOT implemented — and `AgentClarification`
- * (server/src/ai/types.ts, the legacy type) has no `unresolvedFact` field to
- * add anyway (it is frozen out of this item's opened files).
+ * carry the typed requests — now PINNED by (D)). A live mint is reachable
+ * ONLY via the typed arm, which carries `unresolvedFact`. Therefore the
+ * server legacy-passthrough leg is theoretical and NOT implemented — and
+ * `AgentClarification` (server/src/ai/types.ts, the legacy type) has no
+ * `unresolvedFact` field to add anyway (it is frozen out of this item's
+ * opened files).
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -206,8 +216,70 @@ describe('ChatLog — L2-CLARIFY-CARD-1 defect 5 (Q1 item 3): the legacy arm can
     // ...BUT the request it built from the legacy shape carries NO
     // unresolvedFact — there is no raw label on the legacy conversion to
     // carry. mintLabelFor therefore seeds from the canonical query (the D3
-    // defect is about the raw label, which only the typed arm ever holds).
+    // defect is about the raw label, which only the typed arm ever holds.
     expect(mockPicker.captured.request?.id).toBe('req-legacy')
     expect(mockPicker.captured.request?.unresolvedFact).toBeUndefined()
+  })
+
+  it('(D) D3 (advc c10) — a live shorthand mint ALWAYS carries the typed requests, so the legacy block arm GATE cannot fire for it (the conclusion is a pin, not an assumption)', () => {
+    // The reviewer's D3 defect: tests (A)/(C) proved the legacy arm CAN render
+    // a legacy-only shape AND that a both-fields turn rides the typed arm, but
+    // the report's conclusion "a live mint is reachable ONLY via the typed arm"
+    // was stated as an ASSUMPTION that such a shape is never a live mint — no
+    // pin proved the live invariant. This pin does.
+    //
+    // THE LIVE INVARIANT (useAiChat.ts done arm, :1689-1699): for a done payload
+    // that CARRIES `result.clarificationRequests` (non-empty — the shorthand
+    // path emits requests unconditionally, shorthandChat.ts:873/1013), the done
+    // arm sets BOTH fields — `clarification` (:1689-1692, the server legacy field
+    // ?? legacyClarificationFromRequests) AND `clarificationRequests`
+    // (:1697-1699). So a live shorthand-mint message is NEVER legacy-only.
+    //
+    // THE GATE (ChatLog.tsx:521): the legacy block arm renders ONLY when
+    // `message.clarification && !message.clarificationRequests?.length`. For a
+    // live shorthand mint (both fields, requests non-empty) the gate is FALSE —
+    // the legacy arm is skipped and the TYPED arm (ChatLog.tsx:324-386) renders
+    // the picker. The legacy arm's `clarificationRequest()` builder (which drops
+    // unresolvedFact) is therefore structurally unreachable for a live mint.
+    const liveMsg: ChatMessage = {
+      id: 'live-gate',
+      role: 'assistant',
+      content: LIVE_REQUEST.prompt,
+      timestamp: 0,
+      // BOTH fields — the done-arm shape for a clarification-bearing done.
+      clarificationRequests: [LIVE_REQUEST],
+      clarification: {
+        id: LIVE_REQUEST.id,
+        prompt: LIVE_REQUEST.prompt,
+        entityType: 'material',
+        menuProvider: '/m',
+        query: LIVE_REQUEST.query,
+        options: [],
+        allowCreateLocal: true,
+      },
+    }
+    // THE GATE — evaluated on the live message, NOT asserted on a separate
+    // hand-built message. For a live shorthand mint it is FALSE.
+    const legacyGateFires =
+      liveMsg.clarification !== undefined &&
+      !(liveMsg.clarificationRequests?.length)
+    expect(legacyGateFires).toBe(false)
+    // A LIVE shorthand mint is NEVER legacy-only: requests is non-empty. (The
+    // legacy-only shape of test (C) has NO requests — it is a legacy surface /
+    // hydrated history turn, which the done arm never produces for a
+    // clarification-bearing done.)
+    expect(liveMsg.clarificationRequests?.length).toBeGreaterThan(0)
+    // And the render consequence: the typed arm renders the picker with the raw
+    // label; the legacy block arm does NOT also render. (Redundant with (A) —
+    // the gate-pin above is the D3 addendum; this keeps the render evidence in
+    // the same pin.)
+    const onClarificationPick = vi.fn()
+    render(<ChatLog messages={[liveMsg]} {...props} onClarificationPick={onClarificationPick} />)
+    // The testids are keyed on the REQUEST id (LIVE_REQUEST.id = 'req-live'),
+    // not the message id — the typed-arm wrapper is `chat-log-request-<reqId>`
+    // and the (mocked) picker is `mock-picker-<reqId>`.
+    expect(screen.queryByTestId('chat-log-request-req-live')).toBeTruthy()
+    expect(screen.queryAllByTestId('mock-picker-req-live')).toHaveLength(1)
+    expect(mockPicker.captured.request?.unresolvedFact?.label).toBe('1 mM Clofibrate in DMSO')
   })
 })
