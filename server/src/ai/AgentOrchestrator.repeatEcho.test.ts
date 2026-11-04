@@ -449,4 +449,112 @@ describe('SH-QC-1S — repeat-prompt echo on the shorthand surface (RED-first)',
     expect(answered.success).toBe(true);
     expect((answered.events ?? []).length).toBeGreaterThan(0);
   });
+
+  // CARD1-D2 (fix5 U2) — the re-ask suppression. The ask turn holds the
+  // re-derived fact under its OWN conversation key; the answer turn's
+  // context flips (runId → eventGraphId) so the fold key CHANGES and the
+  // held intent is LOST (the D2 root cause: takeHeldShorthandIntent null) →
+  // the model re-extracts and re-derives the SAME fact. Post-D3 the fact's
+  // id is canonical-stable, so it matches the requestId the client already
+  // posted back on the wire. The follow-up must NOT re-open the card for a
+  // fact the same thread already answered — keyed ONLY on the on-wire
+  // requestId, never prose / never a regex over the question.
+  // Both pins are SELF-CONTAINED: the re-derived requestId is read from the
+  // ask turn's OWN result (clarificationRequests[0].id), and the held intent
+  // each turn created is CLEARED before the next test runs (the harness
+  // module never auto-clears the held-intent map — leaving it would pollute
+  // the other SH-QC-1S pins).
+  it('P9a (CARD1-D2 positive, RED→GREEN): a same-thread answer suppresses the re-ask — the re-extract answer turn (fold key flipped) does NOT re-open a card for a fact the thread already answered', async () => {
+    const contextA = { ...REPEAT_CONTEXT, runId: 'RUN-d2-ask' } as never;
+    const contextB = { ...REPEAT_CONTEXT, runId: undefined, eventGraphId: 'EVG-d2-answer' } as never;
+    const keyA = deriveContextCacheKey('workspace.deck' as never, contextA);
+    const keyB = deriveContextCacheKey('workspace.deck' as never, contextB);
+    // The fold key flips between the ask and answer turns (the D2 root cause).
+    expect(keyA).not.toBe(keyB);
+
+    // CARD1-D3 FIX-2 (advc c7 DEFECT 4): the answer turn re-extracts a
+    // CASE/SPACE-DRIFTED VARIANT of the same label (the receipt's live
+    // defect was a one-character case re-roll: `1 mM clofibrate…` vs
+    // `1 mM Clofibrate  …` — the pre-D3 receipt id `09df02df…`/`fdc6e54b…`
+    // drift). Here the fixture label `mystery goop` re-derives as
+    // `Mystery  Goop` on the answer turn: case drift + inner double space.
+    // Pre-D3 (RAW-label hash in factRequestId) the ask id and the
+    // re-derived id DIVERGE → the answered-requestId drop misses → the
+    // card re-opens (this pin is RED). Post-D3 the id rides
+    // the canonical LABEL KEY (termId's fold) → both turns mint the
+    // SAME id → the drop fires → GREEN. The pin therefore exercises the
+    // D3+D2 COMPOSITION, not just the drop.
+    const AMBIGUOUS_YAML_DRIFTED = AMBIGUOUS_YAML.replace(
+      'material: mystery goop',
+      'material: Mystery  Goop',
+    );
+    expect(AMBIGUOUS_YAML_DRIFTED).not.toBe(AMBIGUOUS_YAML); // the drift is real
+
+    // Ask turn: the real compile re-derives the `mystery goop` fact and holds
+    // it under keyA. The ask is free to ask (no clarificationAnswers) → the
+    // card is offered. Its on-wire requestId (the re-derived fact's
+    // canonical-stable id) is read from the turn's OWN result.
+    const askModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const { result: ask } = await runRepeatTurn(askModel, { context: contextA });
+    expect(ask.success).toBe(true);
+    expect((ask.clarificationRequests?.length ?? 0)).toBeGreaterThan(0); // the ask card
+    const answeredRequestId = ask.clarificationRequests![0].id;
+
+    // Answer turn: the fold key flipped (keyB) so the held intent is LOST →
+    // the model re-extracts and re-derives the SAME fact under the DRIFTED
+    // casing. The on-wire requestId matches the re-derived fact's
+    // canonical-stable id → the follow-up must NOT re-open the card (the D2
+    // defect). No prose join, no regex over the question.
+    const answerModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML_DRIFTED)] }]);
+    const { result: answered } = await runRepeatTurn(answerModel, {
+      context: contextB,
+      clarificationAnswers: [{
+        requestId: answeredRequestId,
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-material-1', kind: 'material' },
+      }],
+    });
+    expect(answered.success).toBe(true);
+    // NO second card for the already-answered fact (the D2 defect is gone).
+    expect(answered.clarificationRequests ?? []).toHaveLength(0);
+
+    // Clean up: clear the holds these two turns left under the flipped keys
+    // (the answer turn re-holds its re-extract under keyB) so the next test
+    // sees a clean module map.
+    takeHeldShorthandIntent(keyA);
+    takeHeldShorthandIntent(keyB);
+  });
+
+  it('P9b (CARD1-D2 negative, stays GREEN): a requestId that does NOT match the re-derived fact still asks — the drop is keyed on the on-wire requestId, not a blanket suppression', async () => {
+    const contextA = { ...REPEAT_CONTEXT, runId: 'RUN-d2-neg-ask' } as never;
+    const contextB = { ...REPEAT_CONTEXT, runId: undefined, eventGraphId: 'EVG-d2-neg-answer' } as never;
+    const keyA = deriveContextCacheKey('workspace.deck' as never, contextA);
+    const keyB = deriveContextCacheKey('workspace.deck' as never, contextB);
+
+    // Ask turn (real compile) to obtain the re-derived fact's real id from the
+    // turn's OWN result, so the answer turn can post a DELIBERATELY mismatched one.
+    const askModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const { result: ask } = await runRepeatTurn(askModel, { context: contextA });
+    const realId = ask.clarificationRequests?.[0]?.id;
+    expect(realId).toBeDefined();
+
+    // Answer turn: the on-wire requestId is a DIFFERENT fact's id (not the
+    // re-derived one) → the re-derived fact is NOT in the answered set → it
+    // SURVIVES → the card is still offered (a different fact still asks).
+    const answerModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const { result: answered } = await runRepeatTurn(answerModel, {
+      context: contextB,
+      clarificationAnswers: [{
+        requestId: realId === 'unresolved-c-deadbeef00' ? 'unresolved-c-0000000000' : 'unresolved-c-deadbeef00',
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-material-1', kind: 'material' },
+      }],
+    });
+    expect(answered.success).toBe(true);
+    expect((answered.clarificationRequests?.length ?? 0)).toBeGreaterThan(0); // the fact still asks
+
+    // Clean up (self-contained pin): clear the holds these turns left.
+    takeHeldShorthandIntent(keyA);
+    takeHeldShorthandIntent(keyB);
+  });
 });

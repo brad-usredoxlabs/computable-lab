@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalLabelKey,
   labelHash,
   localMaterialIdForLabel,
   localMaterialIdForCurie,
@@ -36,5 +37,33 @@ describe('termId — deterministic local term IDs', () => {
   it('mints a MAT-<CURIE-SLUG> id for an ontology-grounded term', () => {
     expect(localMaterialIdForCurie('CHEBI:5001')).toBe('MAT-CHEBI-5001');
     expect(localMaterialIdForCurie('chebi:16236')).toBe('MAT-CHEBI-16236');
+  });
+
+  // CARD1-D3 (ruling §2, l2t1430): the canonicalLabelKey identity source.
+  it('canonicalLabelKey: NFKC -> trim -> collapse inner whitespace -> toLowerCase("en")', () => {
+    expect(canonicalLabelKey('  1 mM Clofibrate   in DMSO ')).toBe('1 mm clofibrate in dmso');
+    // Punctuation stays verbatim (hyphen/slash/parens are never rewritten).
+    expect(canonicalLabelKey('Trypsin-EDTA / DMEM (FBS-free)')).toBe(
+      'trypsin-edta / dmem (fbs-free)',
+    );
+  });
+
+  it('canonicalLabelKey is NFKC-sensitive (compatibility characters fold to ASCII)', () => {
+    // Fullwidth "ＤＭＳＯ" NFKC-folds to "DMSO"; the identity key must agree.
+    expect(canonicalLabelKey('ＤＭＳＯ')).toBe('dmso');
+  });
+
+  it('STAGE A collapse: case + inner-whitespace variants of one entity mint ONE id', () => {
+    // The D3 red case — one char of case AND a double space used to mint TWO ids
+    // (labelHash hashed the raw trim+lower string, keeping the double space).
+    // The ruling: both variants collapse onto ONE recordId (STAGE A identity).
+    const a = localMaterialIdForLabel('1 mM clofibrate in DMSO');
+    const b = localMaterialIdForLabel('1 mM Clofibrate  in DMSO');
+    expect(b).toBe(a);
+    expect(labelHash('1 mM clofibrate in DMSO')).toBe(labelHash('1 mM Clofibrate  in DMSO'));
+    // The two variants must still differ from a genuinely different label.
+    expect(localMaterialIdForLabel('1 mM clofibrate in DMSO')).not.toBe(
+      localMaterialIdForLabel('1 mM clofibrate in H2O'),
+    );
   });
 });

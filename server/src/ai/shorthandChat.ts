@@ -46,7 +46,9 @@ import type {
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
+import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import { loadCanonicalLabelPolicy } from '../compiler/resolution/canonicalLabelPolicy.js';
 import {
   assumedQuantityFor,
   assumedWellsFor,
@@ -691,6 +693,15 @@ export function clearHeldShorthandIntent(key: string): boolean {
  * AgentClarificationRequest.id (the app echoes it verbatim; no wire SHAPE
  * change). The legacy `unresolved-<n>` positional mint is retired here and
  * kept ONLY as the fold's pinned back-compat fallback (OQ2 ruling).
+ *
+ * CARD1-D3 (ruling §3(ii), l2t1430): the `label` rides the key as the
+ * CANONICAL identity — `canonicalLabelKey(fact.label)` (NFKC -> trim ->
+ * collapse inner whitespace -> toLowerCase("en")) — so a case / extra-space /
+ * NFKC variant of the SAME term mints the SAME id (`1 mM Clofibrate  in DMSO`
+ * === `1 mM clofibrate in DMSO` -> one id). The OTHER key components
+ * (actionIndex, action, argument, reason) are UNCHANGED verbatim (reason is
+ * prose, never canonicalized — ruling §3(i)). Everything else about the
+ * `unresolved-c-<sha1-10hex>` shape is preserved.
  */
 export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
   const key = JSON.stringify([
@@ -698,7 +709,7 @@ export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
     fact.actionLocation?.action ?? null,
     fact.actionLocation?.argument ?? null,
     fact.reason,
-    fact.label,
+    canonicalLabelKey(fact.label),
   ]);
   const digest = createHash('sha1').update(key).digest('hex').slice(0, 10);
   return `unresolved-c-${digest}`;
@@ -861,6 +872,17 @@ export function answeredClarificationLabelsFromBatch(
  */
 export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
+  /**
+   * D3 (CARD1-D3 ruling l2t1430 §2 rule 3 + §3 read path (i)): precomputed
+   * canonical-label map, keyed by `canonicalLabelKey(fact.label)` -> the
+   * record TITLE for facts whose local-term record is GROUNDED in the store
+   * (STAGE A). Built by the async store-GET seam in `shorthandResultFromCompile`
+   * (the ruling's "plumbing a READ-ONLY store reference into the map" — done
+   * one level up so this mapper stays synchronous for its direct unit callers).
+   * Absent / no entry for a key => STAGE B: the label's IDENTITY FORM
+   * (`canonicalLabelKey`), which is the 10-identical-fresh-draws guarantee.
+   */
+  canonicalLabels?: ReadonlyMap<string, string>,
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
   // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE policy, loaded PER call
@@ -881,6 +903,19 @@ export function clarificationsFromUnresolvedFacts(
   // (the nounShape/fraction-convention discipline) — only consulted to render
   // a reading option's fractions through the declared template.
   const fractionConfig = loadFractionConvention();
+  // CARD1-D3 FIX-2 (advc c7 DEFECT 1, BLOCKER — the declared policy was DEAD
+  // DATA with zero production call sites): the STAGE A/B display FORM is the
+  // DECLARED `canonicalLabel` policy (the vocabulary DATA block under the
+  // material domain), loaded PER call — the nounShape/assumedValues law,
+  // never process-cached, so a data edit needs no stack restart. The code
+  // only FOLLOWS the declared tokens (the render branch below); it carries
+  // no display rule of its own and NO hardcoded fallback policy:
+  // `loadCanonicalLabelPolicy` THROWS on an absent or malformed block
+  // (naming the path), so this render path STOPS instead of limping on the
+  // pre-FIX-2 `?? identityKey` implicit default — the loader's throw-on-
+  // absent arm is now load-bearing on the render path: deleting the YAML
+  // block fails the render loudly.
+  const canonicalPolicy = loadCanonicalLabelPolicy();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
@@ -895,9 +930,52 @@ export function clarificationsFromUnresolvedFacts(
       : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
     const mintable = isMintableLabel(fact.label, nounShape);
     const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i)): the DISPLAYED
+    // label token is the canonical label — the record TITLE when a local-term
+    // record for this identity is GROUNDED (STAGE A, resolved by the store-GET
+    // seam upstream and passed on `canonicalLabels`), else the label's IDENTITY
+    // FORM (STAGE B, `canonicalLabelKey`). This is the ONE label token the
+    // ruling scopes the fold to — the sentence template around it stays
+    // byte-identical and the raw `unresolvedFact` mirror keeps the model's
+    // verbatim label (provenance). NEVER `canonicalLabelKey` of a grounded
+    // record (the map always resolves STAGE A first).
+    // FIX-2 (advc c7 DEFECT 1): the display FORM is chosen by the DECLARED
+    // policy tokens (loaded per call above), not by an implicit
+    // `?? identityKey` fallback — ruling §6: policy in the YAML block, code
+    // only follows it, no hardcoded fallback policy. The loader has already
+    // thrown on an absent / non-token block, so each arm sees only a declared
+    // token; the unknown-token arms are unreachable for valid DATA and THROW
+    // loudly rather than invent a second display rule (fail-loud parity with
+    // the loader).
+    const identityKey = canonicalLabelKey(fact.label);
+    const groundedTitle = canonicalLabels?.get(identityKey);
+    let displayLabel: string;
+    if (groundedTitle !== undefined) {
+      // STAGE A (a record is grounded): the declared `mintedDisplay` token
+      // (`record-title`) says the record's TITLE is the display form.
+      if (canonicalPolicy.mintedDisplay === 'record-title') {
+        displayLabel = groundedTitle;
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE A display token "${canonicalPolicy.mintedDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    } else {
+      // STAGE B (no grounded record): the declared `preMintDisplay` token
+      // (`identity-case`) says the label's IDENTITY FORM is the display form.
+      if (canonicalPolicy.preMintDisplay === 'identity-case') {
+        displayLabel = identityKey;
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE B display token "${canonicalPolicy.preMintDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    }
     const nounPrompt = mintable
-      ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
-      : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
+      ? `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+      : `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
     const message = factMessage(fact);
     // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE control for a DECLARED
     // slot — keyed on the vocabulary's declared KIND (data, one source) + an
@@ -962,7 +1040,11 @@ export function clarificationsFromUnresolvedFacts(
       // keeps the domain-map `kind` byte-identically.
       entityType: clarifyControl ? loc!.argument! : kind,
       menuProvider,
-      query: fact.label,
+      // D3 (ruling l2t1430 §3 read path (i)): the request's LABEL rides the
+      // canonical display string (STAGE A record title / STAGE B identity
+      // form) — one entity, one string, everywhere. The `unresolvedFact`
+      // mirror below keeps the RAW model label verbatim (provenance).
+      query: displayLabel,
       // Forced-draft mode offers NO model-authored options; the live /m or /l
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched. A READING fact's
@@ -978,6 +1060,63 @@ export function clarificationsFromUnresolvedFacts(
       ...(clarifyControl !== undefined ? { clarifyControl } : {}),
     };
   });
+}
+
+/**
+ * D3 (CARD1-D3 ruling l2t1430 §3 read path (i)) — the READ-ONLY canonical-label
+ * seam. `canonicalLabel(fact)`, batched: for each unresolved fact, resolve the
+ * fact's local-term record by its identity id
+ * (`localMaterialIdForLabel(fact.label)`) and, when a record EXISTS, return its
+ * TITLE (STAGE A — the record owns the label; the mint-offer seam's
+ * `payload.name` is that title, read verbatim like VocabHandlers' store GET).
+ * Facts with no grounded record are ABSENT from the map, so the caller renders
+ * their IDENTITY FORM (STAGE B, `canonicalLabelKey`) — never a lowercased
+ * record title, never the raw model label.
+ *
+ * READ-ONLY: this helper issues `store.get` ONLY. It never writes, mints, or
+ * otherwise mutates the store (the ruling: "ask-time is read-only"; the mint
+ * path owns the write).
+ *
+ * The map is keyed by `canonicalLabelKey(fact.label)` so the same identity
+ * (case/whitespace-drift variants) resolves to ONE title — the same
+ * `MAT-…` id the mint path derives. Deduped by recordId so a batch naming the
+ * same identity twice issues one GET. Absent store / absent record / malformed
+ * payload => no entry (STAGE B), which is the byte-identical pre-grounding
+ * behavior — the 10-fresh-draws guarantee.
+ */
+export async function canonicalLabelsForFacts(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  store?: RecordStore,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!store) return map;
+  // identityKey -> { recordId, title? } — dedupe by recordId.
+  const byKey = new Map<string, { recordId: string; title: string }>();
+  // First pass: resolve each fact to its identity id + record id, deduping.
+  for (const fact of facts) {
+    if (typeof fact.label !== 'string') continue;
+    const key = canonicalLabelKey(fact.label);
+    if (byKey.has(key)) continue;
+    const recordId = localMaterialIdForLabel(fact.label);
+    byKey.set(key, { recordId, title: '' });
+  }
+  // Second pass: one GET per distinct recordId (all in parallel — read-only).
+  await Promise.all([...byKey.values()].map(async (entry) => {
+    const env = await store.get(entry.recordId).catch(() => null);
+    // The material record's title lives in `payload.name` (VocabHandlers
+    // mint-offer GET precedent: `payloadName` = `payload.name.trim()`). A
+    // non-material / malformed payload yields no title => STAGE B (absent).
+    const payload: unknown = env?.payload;
+    const title =
+      payload && typeof payload === 'object' && typeof (payload as { name?: unknown }).name === 'string'
+        ? (payload as { name: string }).name.trim()
+        : '';
+    if (title) entry.title = title;
+  }));
+  for (const [key, entry] of byKey) {
+    if (entry.title) map.set(key, entry.title);
+  }
+  return map;
 }
 
 /** L2-CLARIFY-TARGET-1 (Change 2): render the DATA-declared question template
@@ -1389,8 +1528,44 @@ export function dropSatisfiedFacts(
     const entry = bySlot.get(`slot:${loc.actionIndex}:${loc.argument}`);
     if (!entry) return true;
     const value = (doc.actions[entry.actionIndex] as Record<string, unknown> | undefined)?.[entry.argument];
-    return value !== entry.label;
+    // CARD1-D3 (ruling §3(iii)): the slot is satisfied by the CANONICAL label,
+    // not the raw string — a case / extra-space / NFKC variant of the answered
+    // label still satisfies the slot (a fact re-derived under a drifted casing
+    // of an already-answered value must be dropped, not re-asked). The
+    // NON-STRING slot value keeps the existing "return true" arm (a non-string
+    // can never equal the answered string label; the old `value !==
+    // entry.label` arm returned true for it). The string comparison now rides
+    // the canonical key both sides.
+    if (typeof value !== 'string') return true;
+    return canonicalLabelKey(String(value ?? '')) !== canonicalLabelKey(entry.label);
   });
+}
+
+/**
+ * CARD1-D2 (fix5 U2): the answered-requestId drop for the re-extract answer
+ * turn. When the held-intent fold key flips between the ask turn and the
+ * answer turn (the `eventGraphId` null→real flip — `deriveContextCacheKey`
+ * folds it, so `takeHeldShorthandIntent` returns null), the model RE-EXTRACTS
+ * and re-derives the SAME fact. Post-D3 the fact's identity is CANONICAL-STABLE
+ * (`factRequestId` rides `canonicalLabelKey(fact.label)`), so the re-derived
+ * fact mints the SAME id the ask turn already offered — the id the client
+ * posts back in `clarificationAnswers[].requestId` (ALREADY ON THE WIRE).
+ *
+ * This drops, from a re-extract's clarifications, any fact whose
+ * `factRequestId` is in the answered-requestId set the wire carries. Pure and
+ * total: an empty set is a no-op (a fresh ask — no `clarificationAnswers` —
+ * never reaches a non-empty set, so a fresh ask stays free to ask). Keyed ONLY
+ * on the fact's content identity (the on-wire `requestId`), NEVER on prose and
+ * NEVER on a regex over the question. A fact the thread did NOT answer keeps
+ * its id out of the set and survives (the negative case: a different fact /
+ * different thread still asks).
+ */
+export function dropAnsweredRequestIds(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  answeredRequestIds: ReadonlySet<string>,
+): ScientistIntentUnresolvedFact[] {
+  if (answeredRequestIds.size === 0) return [...facts];
+  return facts.filter((fact) => !answeredRequestIds.has(factRequestId(fact)));
 }
 
 /**
@@ -1583,10 +1758,21 @@ export function shorthandResultFromCompile(
      * cards-only shape.
      */
     priorLoopAskCounts?: Record<string, number>;
+    /**
+     * D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the precomputed
+     * canonical-label map (STAGE A record titles), built by the read-only
+     * store-GET seam `canonicalLabelsForFacts` upstream (the two
+     * AgentOrchestrator call sites, which hold the read-only store). Forwarded
+     * VERBATIM to `clarificationsFromUnresolvedFacts` so the card's displayed
+     * label is the record title when grounded, else the identity form. Absent
+     * ⇒ STAGE B everywhere (the pre-grounding behavior; every direct test
+     * caller stays byte-unchanged).
+     */
+    canonicalLabels?: ReadonlyMap<string, string>;
   },
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
-    const requests = foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications));
+    const requests = foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications, options?.canonicalLabels));
     const legacy = legacyClarificationFromRequests(requests);
     // L2-FREEFORM-1 H4 (OQ4 ruling): the requestId-identity loop detector.
     // THIS turn's asks advance the ledger unconditionally (count = prior +
@@ -1708,7 +1894,7 @@ export function shorthandResultFromCompile(
     // ambiguous-noun + the producer's unrealized-mixture-blob-material)
     // with the same only-action ships ONE card (the specific reason), not
     // two identical mint cards. Same choke as the no-events arm above.
-    ? foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications))
+    ? foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications, options?.canonicalLabels))
     : [];
   return {
     success: true,

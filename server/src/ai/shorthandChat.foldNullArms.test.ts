@@ -731,7 +731,7 @@ describe('ANSWER-FOLD-NULL-1 fix2 — live-replay characterization (evidence ans
    *  five LABEL cards in card order: the first answer splices the entry, so
    *  the role-gap fact's label matches no entry anymore — the fold refuses
    *  (never-guess) and the whole set nulls. This test pins the MEASURED arm
-   *  line (requestId unresolved-c-11c1711f72, slotType=array) on the replay's
+   *  line (requestId unresolved-c-272e97981e, slotType=array) on the replay's
    *  own document, before and after the nested-carrier fix (the fix must not
    *  change this outcome: a duplicate-label card whose noun slot was already
    *  spliced is not a 1:1 label->noun map). */
@@ -761,8 +761,8 @@ actions:
     { label: 'Thermo trypsin-EDTA', reason: 'composition-role-gap', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
   ];
 
-  it('the replay arm line reproduces exactly: slot-not-string requestId=unresolved-c-11c1711f72 slotType=array (duplicate-label role-gap card after the entry was spliced)', () => {
-    expect(factRequestId(REPLAY_LABEL_CARDS[4]!)).toBe('unresolved-c-11c1711f72');
+  it('the replay arm line reproduces exactly: slot-not-string requestId=unresolved-c-272e97981e slotType=array (duplicate-label role-gap card after the entry was spliced)', () => {
+    expect(factRequestId(REPLAY_LABEL_CARDS[4]!)).toBe('unresolved-c-272e97981e');
     const held: HeldShorthandIntent = {
       yaml: REPLAY_YAML,
       doc: parseShorthandForChat(REPLAY_YAML),
@@ -778,7 +778,7 @@ actions:
     expect(foldAnswersIntoShorthand(held, answers)).toBeNull();
     const report = foldNullArm(held, answers);
     expect(report?.arm).toBe('slot-not-string');
-    expect(report?.requestId).toBe('unresolved-c-11c1711f72');
+    expect(report?.requestId).toBe('unresolved-c-272e97981e');
     expect(report?.slotType).toBe('array');
   });
 });

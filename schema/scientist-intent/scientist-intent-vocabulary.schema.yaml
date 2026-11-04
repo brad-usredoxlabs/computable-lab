@@ -318,6 +318,58 @@ properties:
       a SET DIFF (never two local terms for one entity). Optional so existing
       fixture copies (which declare no levels slots) stay structurally valid.
 
+  canonicalLabel:
+    type: object
+    additionalProperties: false
+    unevaluatedProperties: false
+    required:
+    - preMintDisplay
+    - mintedDisplay
+    - titleAdoption
+    properties:
+      preMintDisplay:
+        type: string
+        enum: [identity-case]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE B): the PRE-MINT display form for
+          an unbound acceptance entity (no local-term record exists yet).
+          `identity-case` renders the label's IDENTITY FORM (canonicalLabelKey —
+          trimmed, whitespace-collapsed, ASCII-lowercased) and nothing else; the
+          model's one-char-case re-roll is not a canonical case to pretend at.
+          The token is DATA (the loader's fail-loud membership set); the VALUE
+          (the actual label) lives in the minted record, never in this block.
+      mintedDisplay:
+        type: string
+        enum: [record-title]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE A): the GROUNDED display form —
+          once a local-term record exists (recordId =
+          localMaterialIdForLabel(fact.label)), the canonical label is the
+          record's TITLE, full stop. The ask-time lookup replaces the raw label
+          everywhere it surfaces (READ of existing machinery; no new store).
+      titleAdoption:
+        type: string
+        enum: [scientist-phrasing-when-key-equal]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE C — the transition): at the mint,
+          the record's title is adopted from the SCIENTIST's own phrasing at the
+          naming moment IF that phrasing normalizes to the same identity key
+          (raw sentence-cased text becomes the record title); otherwise the
+          title stays the identity form. From then on every surface reads
+          STAGE A's title.
+    description: >-
+      CARD1-D3 (ruling l2t1430 §3, "Policy home"): the material domain's
+      canonical-label POLICY for the unbound acceptance entity — the small
+      DATA block that decides how the record-owned label VALUE is DISPLAYED at
+      each stage. One block, no label VALUE (that would be a second
+      vocabulary; the record stays the single vocabulary). Consumed PER call
+      by the clarification render path (the nounShape/assumedValues law —
+      never process-cached, no stack restart on a data edit); there is NO
+      hardcoded fallback policy, so an ABSENT block in a vocabulary copy the
+      render path must use fails loud (the loader throws naming the path).
+      Optional in the meta-schema so existing fixture copies (which declare no
+      canonical-label block) stay structurally valid for the verb machinery;
+      the render path requires it on the copies it reads.
   policies:
     type: object
     additionalProperties: false

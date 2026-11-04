@@ -516,6 +516,16 @@
 
 .message-log__clarification-picker {
   display: grid;
+  /* L2-CLARIFY-CARD-1 (browser-gate tier1, FIX RUN 4 D4): without a column
+     constraint the single implicit track is max-content sized, so the nowrap
+     Create verb + the seeded label force the track (and the mint row's
+     width:100%) WIDER than the card — the reporter measured the mint row 150 px
+     past the card and the Create button 42 px off the viewport. Clamp the
+     single column to the container: min 0 lets the nowrap children shrink
+     instead of growing the track, and max-width keeps the whole picker (and
+     therefore the card content) inside the card at every width. */
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 100%;
   gap: 6px;
   margin-top: 8px;
 }

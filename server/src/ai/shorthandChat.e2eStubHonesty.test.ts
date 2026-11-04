@@ -40,6 +40,7 @@ import {
   factRequestId,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 
 const NOTE = 'Draft compiled deterministically from the scientist-intent shorthand.';
 const GHOST_DOC = `intentId: live-plain-dmem
@@ -252,6 +253,36 @@ function applyMintGate(stub: Record<string, unknown>): {
       foldedNouns.push(noun);
     }
   }
+  // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i) — disclosed
+  // re-pin delta): the shipped card map now RENDERS the label in its
+  // canonical display form — the record title when GROUNDED (STAGE A), else
+  // the label's IDENTITY FORM (STAGE B, `canonicalLabelKey`). The canned
+  // stub predates that render and carries the raw model label; the mock
+  // store here grounds NOTHING (STAGE A empty), so the server emits the
+  // STAGE B identity form for every card. Apply the SAME shipped rule
+  // (STAGE B render) to the surviving stub cards + head so the honesty
+  // contract (canned stub === real payload) holds. `unresolvedFact.label`
+  // stays RAW (provenance) on both sides — only the display token
+  // (`query` + the ONE quoted label in `prompt`) folds to the identity
+  // form. Byte-identical for labels already in identity form ('plate').
+  // The canned app/e2e stub itself stays byte-unchanged.
+  const renderCanonicalDisplay = (card: Record<string, unknown> | undefined): void => {
+    if (!card) return;
+    const fact = card.unresolvedFact as Record<string, unknown> | undefined;
+    const rawLabel = String(fact?.label ?? card.query ?? '');
+    if (!rawLabel) return;
+    const display = canonicalLabelKey(rawLabel);
+    card.query = display;
+    if (typeof card.prompt === 'string') {
+      // The noun template embeds the label exactly once, quoted; swap the
+      // raw token for the canonical display token (literal, no regex — the
+      // label may carry ':' '/' and other specials).
+      card.prompt = (card.prompt as string).replace(`"${rawLabel}"`, `"${display}"`);
+    }
+  };
+  const finalRequests = (copy.clarificationRequests ?? []) as Array<Record<string, unknown>>;
+  for (const card of finalRequests) renderCanonicalDisplay(card);
+  renderCanonicalDisplay(copy.clarification as Record<string, unknown> | undefined);
   return { stub: copy, flipped, collapsedMintCopies, foldedNouns };
 }
 

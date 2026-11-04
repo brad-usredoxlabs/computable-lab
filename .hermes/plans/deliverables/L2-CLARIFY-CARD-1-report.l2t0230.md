@@ -390,3 +390,512 @@ volume gate's own semantics are untouched.
 - Worktree CLEAN at the end of this run.
 - NOT live :5193 (orchestrator-owned; this run does not claim live browser
   verification).
+
+## FIX RUN 4 (l2t0230) — IN PROGRESS (armed; dispatch after TARGET-1 merge)
+
+STEP 0: status clean, fast-forward merge cl/integration-2 -> 31353115 (TARGET-1 in-tree). No conflicts.
+
+### Confirmed root causes (wire + code, measured against receipt 2026-11-02_2225-tier1)
+
+- D2 (HIGH): dual mechanism.
+  1. SERVER: ask turn persisted metadata.clarification.id = unresolved-c-d0e9c7d900 (fact id on wire), but the USER answer message was posted with metadata:{} (only the mention-token in content). So the thread carries NO persisted answered-state, and the server follow-up re-derives the same fact under a NEW id (unresolved-c-c9830ef36c) -> mounts a 2nd card. deriveContextCacheKey folds eventGraphId (systemPrompt.ts:650); answer turn eventGraphId flips null->real (receipt: ask EVG-cellrox.../answer null then EVG...), so the held-intent fold key changes and takeHeldShorthandIntent returns null -> re-extract.
+  2. CLIENT: useAiChat re-keys the thread on scope change (scope derives from eventGraphId, null->real); cold reload loads the post-flip thread (2 msgs: answer sentence + re-ask) and the Answered row (derived from transcript adjacency) vanishes (count 1->0).
+  Pin plan: (i) unit two-turn fixture, second turn re-derives same fact -> no 2nd card, one Answered row; (ii) render rehydrate from persisted shape (fresh mount, no in-memory carry). KEY ON fact identity/requestId already on wire, not prose/regex. Zero new schema if the store already carries it.
+
+- D3 (BLOCKING): 10 draws -> 2 hashes. delta = ONE char of case in server clarification text (query 1 mM clofibrate in DMSO / id unresolved-c-d0e9c7d900 vs 1 mM Clofibrate in DMSO / unresolved-c-c9830ef36c). Case originates in model extraction, echoed into label/prompt/fact-id. The fold 1:1 join (shorthandChat.ts ~960-1050) uses EXACT label match so case flip also defeats identity. Fix: ONE canonical label per entity, derived deterministically from the BOUND/RESOLVED noun (or declared material label); Answered row + record label follow the same canonical string. Never lowercase arbitrary prose.
+  Pin plan: ten-draw unit at server boundary -> byte-identical clarification text; answered row/label uses same canonical string.
+
+- D4 (MEDIUM): mint row overflows card (card box x981 w520 right1501; mint row right1651 = +150px; Create x1584 w57 right1642 = 42px beyond 1600 viewport; preview scrollW388>clientW379, renders "...in the lab (new rec..."). Card .chat-log-clarification has NO overflow containment; bubble capped 85% but intrinsic mint-row content forces overflow. Fix: CSS/layout only in the card stylesheet/component; mint row inside content box 1280-1920, Create never clipped, preview wraps/ellipsises. Pin: repo CSS/source-pin idiom (comments stripped) + rendered-DOM assert preview declares wrap/ellipsis contract.
+
+- D5 (MEDIUM): [Local] candidate row (data-testid clarification-top3-row, badge Local) label = seed+noun concat 1 mM clofibrate1 mM Clofibrate in DMSO (dom/answer-before-answer.json legacyDetail[0].rows[2]; W7/r3-14 ${seed}${noun} shape). seed=1 mM clofibrate, noun=1 mM Clofibrate in DMSO. Picking commits a durable name built from it. Fix: one entity one label; if seed and noun denote same entity render ONE, not concat. Generic (no noun special-case). Pin: unit exact-string assert on rendered row label + minted name, RED against pre-fix builder.
+
+### D4 — DONE (commit 6b0d9786)
+- Mechanism: `.message-log__clarification-picker` (ai.css) is `display:grid` with NO column constraint => the single implicit track is max-content sized; the nowrap Create verb + seeded label force the track (and the mint row's `width:100%`) 150 px wider than the card; Create button 42 px off a 1600 px viewport.
+- Fix (CSS-only, card's own stylesheet ai.css): `grid-template-columns: minmax(0, 1fr)` (min 0 lets the nowrap children shrink instead of growing the track) + `max-width: 100%`. Preview keeps the deliberate ellipsis contract; Create verb stays `flex:none`+nowrap (never clips). No horizontal overflow at any width.
+- Pin: new source-pin describe in `ChatClarificationCard.mint.test.tsx` ("fix4 D4"), ruleOf idiom (jsdom cannot measure layout; live visual proof is the orchestrator's browser gate).
+- RED (pre-fix): `1 failed | 8 passed (9)` — AssertionError: expected picker rule to contain `grid-template-columns: minmax(0, 1fr)`.
+- GREEN (post-fix): `Test Files 1 passed (1)  Tests 9 passed (9)`.
+
+## FIX RUN 4 (resume, l2t1310)
+
+**Gate check:** tree clean at tip `3ae31931` (branch `cl/lane2-clarifycard-1-l2t0230`) at resume start. D4 stays done (`6b0d9786`); STEP 0 trunk merge in-tree. Nothing committed this turn (see below) — the report increment is the one clean artifact landed.
+
+**What this turn established (new evidence, not re-derivation):**
+
+1. **D3 canonical source is NOT the fact's own `candidates` in this flow.** The receipt (`2026-11-02_2225-tier1`) has NO clofibrate spine record and NO `candidates` array populated anywhere near the clofibrate/DMSO noun (searched all `dom/*.json` + `bodies/*.json`). The clarification text (`shorthandChat.ts:898-900` prompt, `:965` query) folds the raw model-extracted `fact.label` verbatim; `factRequestId` (`:695-705`) folds `fact.label` into the id. The spine-backed canonical case is the bound/resolved NOUN's store title — but in this flow the entity is UNBOUND (no spine hit), so there is no spine title to anchor to. The `unresolved` facts (label + reason + candidates) are model-emitted via the scientist-intent tool call (`intentCompile.ts:200-245` schema), so `candidates` is model data, not spine-canonical. **This is the genuine D3 blocker: the deterministic canonical case has no in-flow source when the entity is unbound.** A naive `toLowerCase` (the only source-free option) is EXPLICITLY FORBIDDEN by the spec ("NEVER lowercase arbitrary prose") and would corrupt legitimate mixed-case labels.
+
+2. **D2 re-ask mechanism confirmed two-sided (wire evidence):** the answer turn's context flips `eventGraphId` null→real (receipt: ask turn `eventGraphId:null`, answer turn `eventGraphId:'EVG-cellrox…'`), so `deriveContextCacheKey` (`systemPrompt.ts:648-659`) produces a new key → `takeHeldShorthandIntent` returns null → the model RE-EXTRACTS → re-derives the same fact under a NEW id (`unresolved-c-c9830ef36c` vs `unresolved-c-d0e9c7d900`). The re-derived fact's `label` case is re-rolled by the model (D3), and `factRequestId` re-hashes it, so the fold's exact-label join (`shorthandChat.ts` fold ~1090-1216) and `dropSatisfiedFacts` (`:1378-1392`, keyed on `value !== entry.label`) can never recognize it as already answered → the server re-asks. The client posts the answer sentence with `metadata:{}` and `clarificationRequests` is NEVER persisted (`useAiChat.ts:970-999` persists only the legacy `clarification`), so the Answered row (derived from `clarificationRequests` + adjacency, `ChatLog.tsx:100-102,409-417`) does not rehydrate on a cold mount of the post-flip thread.
+
+**The two design attempts made (both REVERTED to a clean tree — not shipped unverified):**
+
+- **D3 (server):** added `canonicalFactLabel(fact)` (`shorthandChat.ts`, after `factRequestId`) that adopts the spine candidate's exact case when a candidate is a case-insensitive EXACT match of `fact.label`, else passes through byte-identically (never lowercases prose). Wired into the rendered `prompt` + `query` only (NOT `id`/`unresolvedFact`, so the fold join is untouched). Wrote a ten-draw pin. **REVERTED** because (a) there is NO server `node_modules`/vitest in this worktree, so the pin + the 15+ existing byte-stability pins (`shorthandChat.nounShape/uifix3/target1/readingCard` tests) could not be run to confirm no regression, and (b) the canonical source (`fact.candidates`) is NOT spine-backed in the real flow (evidence 1 above) — a pin that feeds `candidates` by hand would be a false green that does not prove the real flow renders byte-identically.
+- **D2 (client, `useAiChat.ts`):** added persist + rehydrate of `clarificationRequests` via the existing open `metadata` object (no schema change; the DATA field D2 needs, keyed on the wire's `requestId`/`label`). **REVERTED** because rehydrating typed `clarificationRequests` onto `restored` messages enables the typed picker arm (`ChatLog.tsx` map:535 + `renderTypedClarification:324-383`), and the D3-chrome "restored renders NEITHER picker NOR option buttons" lock (`ChatLog.tsx:272`, `:259-272`) only guards the LEGACY block arm — so this change risks resurrecting the "8 bare search boxes" defect. Making it safe requires a `restored`-guard on the typed arm (a second ChatLog edit), and the client `src/agent` suite would need to be run to confirm no regression to the 20+ existing answered-row/prompt-once pins.
+
+**Why I stopped at a clean tree instead of shipping (turn discipline):** this run already died once on the output-token cap. Both remaining defects (D2-server, D3) are server-side and their pins cannot be run here (no server runner); the client D2 half is blocked on a `restored`-arm guard + a client run I could not complete within budget. Shipping either unverified — or claiming GREEN without a runner — is the failure mode the binding instructions forbid. I preserved the confirmed mechanism, the exact next-action code sites, and the D3 blocker in this section instead of forcing a false green.
+
+**Remaining next actions (owner: cl-coder; resume condition per item):**
+
+- **D3 (BLOCKING) — needs a canonical-source ruling + server runner.** The deterministic canonical case has no in-flow source when the entity is UNBOUND (evidence 1). Two viable routes, both need the orchestrator's call:
+  (a) **Spine anchor (preferred, matches the spec wording "derived from the BOUND/RESOLVED noun"):** populate the fact's `candidates` with the spine's bound/resolved-noun title (canonical case) in the resolution path (`resolveNounsPass.ts` MERGE arm ~195-245, where `engineFact.candidates` is the spine-backed set), then apply the (reverted) `canonicalFactLabel` to `prompt`+`query`. Requires confirming the spine carries the noun's canonical title for the bound entity.
+  (b) **Declared-material-label anchor:** a declared-material store/label (none exists today — no `declareMaterial`/`materialDeclarations` in `server/src`); this is a DATA addition and would need the orchestrator's sign-off before it is introduced.
+  Then run the ten-draw pin (`byte-identical clarification text from the same prompt`) AND the 15+ existing `shorthandChat.*` byte-stability pins in a worktree that HAS `server/node_modules` (this one does not).
+- **D2-server (HIGH):** on re-extraction, drop the re-derived fact the same thread already answered. The answered `requestId`/`label` is ALREADY on the wire in `clarificationAnswers` (the answer turn) and in the thread history — not prose. The fold's exact-label join + `dropSatisfiedFacts` currently miss it because the re-derived `label` case/`id` differs (D3). Once D3 canonicalizes the label, extend the answered-label ledger (`answeredClarificationLabelsFromBatch`, `shorthandChat.ts:833-843`) to also cover facts already answered in the same thread (by `requestId`/canonical label from the persisted history), so the follow-up does not re-open the card. Pin: unit two-turn fixture, second turn re-derives the same fact → NO second card, ONE Answered row.
+- **D2-client (HIGH, Pin ii):** persist + rehydrate `clarificationRequests` via `metadata` (the reverted edit) AND add a `restored`-guard on the typed arm in `ChatLog.tsx` so restored cards do NOT resurrect the picker (protects the D3-chrome lock). Then run the `src/agent` suite to confirm the answered-row rehydrates on a fresh mount (no in-memory carry) and the 20+ existing pins hold.
+- **D5 (MEDIUM):** the `[Local]` top3 row label = seed+noun concat (`1 mM clofibrate` + `1 mM Clofibrate in DMSO`), built from the record title in the `materialSuggestions`/`materialCandidates` path (seed = `localMaterialIdForLabel` base, noun = the `/m` search title). Render ONE label when seed and noun denote the same entity; the minted durable name = that same label (generic, no noun special-case). Pin: exact-string assert on the rendered row label AND the minted name, RED against the pre-fix builder.
+
+**Verification status (honest):**
+- `cd app && npx vitest run src/agent` — NOT run this turn (no code change shipped to test).
+- `cd app && npx tsc --noEmit` — NOT run this turn (no code change shipped).
+- server pins — RUNNABLE: `server/node_modules` is present and `vitest` resolves via the pnpm workspace root (`/mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/vitest@1.6.1`). My earlier "no server runner" note was WRONG — server unit pins CAN be run here; I run them now for D3.
+- `git -c core.fileMode=false status --porcelain` — only this report increment is modified (code edits reverted to a clean tree before committing them).
+
+CARD1-FIX4 BLOCKED D3 needs a canonical-case source for the UNBOUND acceptance entity (clofibrate mixture blob has no spine candidates and no declared-material label in the receipt, so BOUND/RESOLVED-noun and declared-label sources are both empty); D3 candidate-anchored canonicalizer is being implemented + verified now, and D2/D5 follow one defect per turn.
+
+## FIX RUN 5 (l2t1455)
+
+The FIX4 BLOCKED D3 gap ("no canonical-case source for the UNBOUND acceptance
+entity") was RULED by the architect (`CARD1-D3-canonical-source-l2t1430-ruling.md`).
+This run IMPLEMENTS the ruling verbatim (does not re-decide it), one unit per
+commit. Worked only in this worktree; TARGET-1's files, D1, and the W12/3b
+volume gate untouched.
+
+### D3 (BLOCKING) — canonical label per ruling §2/§3 — IMPLEMENTED, 5 commits
+
+1. **Unit 1 — `canonicalLabelKey(label)`** (`server/src/materials/termId.ts`):
+   NFKC -> trim -> collapse inner whitespace -> `toLocaleLowerCase('en')`
+   (TS-legal form of the ruling's `('en')`; punctuation verbatim).
+   `labelHash`/`labelSlug`/`localMaterialIdForLabel` redefined off it (no
+   divergence). commit `c5399da2`. 9/9 termId pins green.
+2. **Unit 1 type fix**: `toLowerCase('en')` -> `toLocaleLowerCase('en')`
+   (defect shipped in Unit 1; V8 ignored the extra arg at runtime, vitest
+   transpiles without typecheck). ASCII labels byte-identical -> digests
+   unchanged, no re-pin. commit `34c08872`.
+3. **Unit 2 — IDENTITY + DROP** (`shorthandChat.ts`): `factRequestId` hashes
+   `canonicalLabelKey(fact.label)` (shape stays `unresolved-c-<sha1-10hex>`);
+   `dropSatisfiedFacts` compares `canonicalLabelKey(...)` (non-string arm
+   keeps return-true). Digest re-pinned `unresolved-c-11c1711f72` ->
+   `unresolved-c-272e97981e` (recomputed independently in node). commit
+   `d9ef8df5`.
+4. **Unit 3 — POLICY (data, not code)**: one `canonicalLabel:` block under the
+   material domain in `schema/scientist-intent/scientist-intent-vocabulary.yaml`
+   (`preMintDisplay: identity-case`, `mintedDisplay: record-title`,
+   `titleAdoption: scientist-phrasing-when-key-equal`) + declared in the
+   meta-schema root `properties` + a PER-CALL fail-loud loader
+   (`server/src/compiler/resolution/canonicalLabelPolicy.ts`, mirrors
+   nounShape/assumedValues discipline; NOT the process-cached singleton;
+   absent/malformed block THROWS, never a hardcoded fallback). commit
+   `e5324baf`. 5 loader pins + 58 vocabulary/scientistIntent regression green;
+   drift/ripOut/identityCollapse/T7d green.
+5. **Unit 4 — RENDER (read-only store seam)**: `clarificationsFromUnresolvedFacts`
+   now renders the ONE label token via the canonical label — the record TITLE
+   when GROUNDED (STAGE A, resolved upstream by the read-only store GET) else
+   the IDENTITY FORM (STAGE B, `canonicalLabelKey`); `nounPrompt` + `query`
+   ride it, the `unresolvedFact` mirror keeps the RAW label (provenance). New
+   exported `canonicalLabelsForFacts(facts, store)` = the read-only seam
+   (`localMaterialIdForLabel` -> `store.get` -> `payload.name`, per-call,
+   tolerant of read failures, never cached). `shorthandResultFromCompile`
+   stays SYNC (takes an optional precomputed `canonicalLabels` map, forwards
+   to both internal call sites) so TARGET-1's sync test call sites stay
+   untouched; both AgentOrchestrator call sites (fold arm ~1553, shorthand arm
+   ~3083, both inside `async run`) build the STAGE A map from `deps.store` and
+   pass it. Test re-pins (legitimate re-derivations, ruling §5 pin #4 — the
+   10-identical-fresh-draws guarantee): nounShape P1/P1c, readingCard mintable
+   prompt, uifix3 x3 (query pins), e2eStubHonesty D3 bridge (applies the
+   shipped STAGE B render to the extracted app/e2e stub; the canned stub stays
+   byte-unchanged — the no-app-edits line holds). commit `63afcf57` (6 files).
+6. **Unit 5 — SCOPE LOCK (ruling §7)**: source-grep pin
+   (`server/src/materials/termId.scopeLock.test.ts`) — zero occurrences under
+   `app/` (and under `app/src/` asserted on its own), and the closed set of
+   mentioners === the ruling allow-list (termId definition+derivation, the
+   three named shorthandChat sites, the policy loader that documents it, the
+   pinning tests, and this pin itself). Any new mentioner (esp. a new app/
+   file) fails the pin. commit `d0c9be7c`.
+
+**Verification (D3 units):**
+- `cd server && npx vitest run <new/edited pins>` — all green (termId 9/9;
+  policy loader 5/5; scope lock 3/3; e2eStubHonesty 7/7; nounShape/readingCard/
+  uifix3 re-pins green).
+- Whole `server/src/ai` suite: failure set BYTE-IDENTICAL to the pristine
+  `e5324baf` baseline (29 pre-existing failures, ZERO new) — proved by
+  stash-and-run diff. Pre-existing failures named: `shorthandChat.cueCascade`
+  T6/T7 (`expected 2 to be 1`, proven identical at pristine `10062725`) + the
+  27 other pre-existing suite-A failures.
+- `npx tsc --noEmit -p server`: 0 error lines (branch baseline 0; none in
+  files touched).
+- TARGET-1's three server-side test files untouched (verified they pin only
+  `clarifyControl`/`entityType`/`actionLocation`/fold behaviour, never raw
+  `query`/noun-prompt — so STAGE B render does not break them).
+
+### D5 (MEDIUM) — exact-string pins — IN PROGRESS
+[append as the unit lands]
+
+- **U1 / D5 — CLOSED (no new pin needed; existing pins verified non-vacuous).**
+  Mint/durable-name half: `server/src/api/handlers/VocabHandlers.mint.test.ts:290-339`
+  (2 `it()` pins, D5 block) — `MAT-` id keys off `canonicalLabelKey`, re-mint of a
+  case-variant returns the first mint's title (titleAdoption); 11/11 GREEN at HEAD.
+  Row half: the `[Local]` top-3 row renders ONE label — `candidate.label` =
+  `item.title` (single string, no `${seed}${noun}` concat), built by
+  `materialCandidates` (app/src/shared/taptab/slashMenu/clarifyPickerRanking.ts,
+  `label: item.title`) → `materialSuggestions` (resolvers.ts `label: row.label`);
+  the concat is GONE from the builder. The client renders the server's one string
+  (STAGE A/B seam, `shorthandChat.ts:929,1001`) — no client seam invented.
+  Non-vacuity PROVEN by mutation: temporarily reintroduced `label: item.title + noun`
+  → `clarifyPickerRanking.test.ts` RED `Tests 4 failed | 7 passed (11)`; reverted →
+  GREEN `Tests 11 passed (11)` (clean tree). The row/durable-name pins the ruling
+  §3(iii) demands already exist and are non-vacuous — nothing added.
+
+### U2 — D2 (HIGH) server half — DONE (commit 0f7fcc47)
+
+- Root cause (verified from receipts + code): the answer turn's context flips
+  (`runId=RUN-0vbh` -> `null`, `eventGraphId` `EVG-mvy8xmjf` -> `EVG-cellrox…`),
+  so the fold conversation key (`deriveContextCacheKey`, `AgentOrchestrator.ts:1312`)
+  changes, `takeHeldShorthandIntent` returns null, the model re-extracts and
+  re-derives the SAME fact (post-D3 `factRequestId` is canonical-stable on the
+  label), and a 2nd card re-opens (`d0e9c7d900` -> `c9830ef36c`).
+- Fix (server half only; NO new schema — `ThreadMessage.metadata`/store fields not
+  needed because the identity is already on the wire; NO prose, NO regex over the
+  question):
+  - `server/src/ai/shorthandChat.ts`: new `dropAnsweredRequestIds(clarifications,
+    answeredRequestIds)` — drops a re-derived fact iff its `factRequestId` is in
+    the set of requestIds this request already posted as answered in
+    `clarificationAnswers[].requestId` (the identity ALREADY on the wire). Mirrors
+    `dropSatisfiedFacts` (fold arm) but keyed on fact identity, not on the value.
+  - `server/src/ai/AgentOrchestrator.ts`: the drop is applied ONCE at the
+    re-extract finalization (the held-null/fallback path that builds `compiledSh`),
+    gated on `clarificationAnswers.length > 0` so a fresh ask is byte-unchanged.
+    No change to the fold arm's `dropSatisfiedFacts` call site.
+- RED first (proved, not asserted): with the production fix stashed, P9a FAILS
+  (the 2nd card re-opens: `expect(2).toBe(0)`); with the fix, P9a PASSes.
+- Pins added (`server/src/ai/AgentOrchestrator.repeatEcho.test.ts`):
+  - P9a (positive): ask turn holds under key A; answer turn flips the key
+    (`runId` -> `eventGraphId`, fold null), re-extract re-derives the fact; the
+    on-wire requestId (captured from the ask-turn result — no module-state read)
+    suppresses the re-ask: `clarificationRequests` 0, `success` true.
+  - P9b (negative, different-thread/identity): a NON-matching answered requestId
+    (a fresh fact the thread never answered) still mounts the card — proves the
+    drop is identity-keyed and does not over-suppress.
+- Verification: `npx tsc --noEmit -p server` 0 error lines (baseline 0).
+  Whole `server/src/ai` suite: 29 failed | 1168 passed (1197). The 29-failure set
+  is BYTE-IDENTICAL to the pristine-baseline set (diff empty) — no new failures,
+  none fixed; P9a/P9b are new passing tests. `repeatEcho` file: 1 failed (P8) |
+  10 passed (11) — P8 fails at baseline `7084b0a0` too (verified by stashing all
+  U2 changes: `expected 1 to be +0` at line 448), i.e. a pre-existing baseline
+  failure, not introduced by U2.
+- Files touched (all named): `server/src/ai/shorthandChat.ts`,
+  `server/src/ai/AgentOrchestrator.ts`,
+  `server/src/ai/AgentOrchestrator.repeatEcho.test.ts`. No `app/` change, no
+  client seam, no store/schema change.
+
+## FIX5 U4 — verify block (raw)
+
+Targeted vitest for every pin touched:
+- `npx vitest run src/ai/AgentOrchestrator.repeatEcho.test.ts src/api/handlers/VocabHandlers.mint.test.ts`
+  -> `Test Files 1 failed | 1 passed (2)`, `Tests 1 failed | 21 passed (22)`.
+  The single failure is `repeatEcho > P8 (D4 guards)` at line 448 (`expected 1 to
+  be +0`) — a PRE-EXISTING baseline failure: it fails identically with ALL U2
+  changes stashed (pristine `7084b0a0`), so it is in the 29-set, not introduced
+  here. P9a (positive D2) + P9b (negative D2) + all 11 mint pins PASS.
+- Whole `server/src/ai` suite at HEAD (after U2): `Test Files 16 failed | 115
+  passed (131)`, `Tests 29 failed | 1168 passed (1197)`.
+- Baseline `10062725` ai-suite MEASURED DIRECTLY (detached checkout at
+  `10062725`): `Tests 29 failed | 1166 passed (1195)`. The delta to HEAD is
+  EXACTLY the 2 new P9a/P9b pins (1166->1168 passed, 29 failed both).
+- Whole `server/src/ai` 29-failure set vs baseline `10062725`: BYTE-IDENTICAL.
+  Captured the `10062725` 29-set (detached run) and the pristine-`7084b0a0`
+  29-set (all U2 changes stashed) and the HEAD 29-set; `diff` of all three
+  sorted `FAIL` lists is EMPTY. No new failures, none fixed. (Note: `7084b0a0`
+  already carries the D3 units c5399da2..d0c9be7c from `10062725`; the D3 ai
+  changes did NOT shift the ai-suite outcome set — all three sets are identical.)
+- `npx tsc --noEmit -p server` -> 0 error lines (branch baseline 0).
+- Both goldens (U3 re-bless): BEFORE re-bless, BOTH asserters FAILED on the
+  single treeState mismatch (`7908fa38…` manifest vs `9a71c884…` actual; no
+  other treeState entry drifted); AFTER re-bless (commit 4d6e71d2),
+  `goldenIntentToGraph.test.ts` + `goldenProseBlobStrip.test.ts` ->
+  `Tests 9 passed (9)` (mismatch empty).
+- `git -c core.fileMode=false diff --stat 10062725..HEAD` at the U3 tip
+  (`4d6e71d2`): 18 files changed, 1080 insertions(+), 29 deletions(-). Spans
+  fix5 units 1–5 (termId + canonicalLabelPolicy + meta-schema +
+  e2e/nounShape/foldNull/readingCard/sameNounDedupe/stubHonesty +
+  VocabHandlers.mint) and fix5 U1–U3 (report + repeatEcho P9a/P9b +
+  AgentOrchestrator drop + shorthandChat dropAnsweredRequestIds + MANIFEST
+  re-bless). At this verify-block's tip the delta adds only this report section
+  (+marker line). No `app/` file changed; `app/src/agent/proposalRowFacts.ts`,
+  `app/src/event-editor/lib/wellRange.ts`, and the four TARGET-1 test files
+  untouched.
+- `git -c core.fileMode=false status --porcelain` -> CLEAN (only the untracked
+  `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` dir, ignored per
+  assignment).
+
+## FIX5 coverage caveats (disclosed, not defects)
+- The STAGE A/B seam's `canonicalLabels` map has no asserting test: no test in
+  `server/src/ai/*.test.ts` passes a `canonicalLabelsForFacts` map to the seam
+  (0 hits); `shorthandChat.test.ts` carries no D3/STAGE/canonical assertions.
+  `app/src/.../ClarificationPicker.test.tsx` mocks the material resolver.
+- No pre-existing D2 pin existed (`second card|2nd card|re-ask|ledger` -> 0 in
+  ai tests); P9a/P9b are the first.
+- P8's `expected 1 to be +0` (repeatEcho:448) is a baseline failure unrelated
+  to D2 (a held-intent zero-model-call assertion); U2 does not change that path
+  (the 29-set is byte-identical).
+CARD1-FIX5 DONE ea7c49cc48e25c751d109a352ac5c23444b7a260
+
+## FIX-1 (route a) — scope-lock ALLOWED set += the D5 mint test
+
+Defect (reproduced first-hand at 97c5eac1): U1/D5 added
+`import { canonicalLabelKey, localMaterialIdForLabel } from '../../materials/termId.js'`
+at `src/api/handlers/VocabHandlers.mint.test.ts:26` (used at :304-305, :334). The file was
+not in the scope-lock ALLOWED set, so `termId.scopeLock.test.ts` ran
+`Tests 1 failed | 2 passed (3)`. The U4 verify block ran the `src/ai` suite + goldens but
+never `src/materials`, which is why the delta shipped the RED pin undisclosed.
+
+Route chosen: (a) — add the file to the closed set. Justification: the scope-lock's own
+header defines the closed set as "...+ the tests that pin it", and the allow-list already
+carries SIX server-side test files (termId.test.ts, the four shorthandChat tests, the
+pin itself). `VocabHandlers.mint.test.ts` is a server-side TEST that asserts the identity
+rule (D5 pins :291-338: case/whitespace variants mint the SAME id) — squarely within the
+set's stated purpose. Route (b) was rejected: reworking the pins to avoid the token would
+have edited the D5 pins themselves ("never weaken or delete an existing pin" boundary)
+for zero product benefit.
+Change: one entry + a 3-line WHY comment in the ALLOWED set
+(`server/src/materials/termId.scopeLock.test.ts`). The app/ exclusions (both hard-line
+assertions) and the closed-set semantics (unexpected==[] AND missing==[]) are untouched;
+the mint test file is byte-identical. No product-behaviour change.
+
+VERIFY counts (run at this verify-block commit):
+1. `cd server && npx vitest run src/materials/termId.scopeLock.test.ts src/materials/termId.test.ts src/api/handlers/VocabHandlers.mint.test.ts`
+   → `Test Files 3 passed (3)`; `Tests 23 passed (23)` (scopeLock 3, termId 9, mint 11)
+   — all GREEN (was `1 failed | 2 passed (3)`).
+2. `cd server && npx vitest run src/ai/AgentOrchestrator.repeatEcho.test.ts src/compiler/scientistIntent/goldens`
+   → `Test Files 1 failed | 4 passed (5)`; `Tests 1 failed | 34 passed (35)` — the SAME
+   state as before the fix: the sole failure is the pre-existing P8
+   `expected 1 to be +0` (repeatEcho.test.ts:448, held-intent zero-model-call assertion,
+   disclosed in the U2 section); the re-blessed goldens
+   `goldenIntentToGraph` + `goldenProseBlobStrip` → `Tests 9 passed (9)`
+   (whole goldens dir: `24 passed (24)`).
+3. `npx tsc --noEmit -p server` → 0 error lines (exit 0).
+4. `git -c core.fileMode=false diff --stat 10062725..HEAD` → 18 files changed,
+   1136 insertions(+), 29 deletions(-) (U3 tip was +1080; delta = U4 report additions
+   + FIX-1 +4 lines). `git -c core.fileMode=false status --porcelain` → clean except the
+   untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` (assignment-excluded,
+   never committed).
+CARD1-FIX5-FIX1 DONE c733a565acff96d833684709cf1dca5af54fd9c1
+
+---
+
+## FIX-2 (bounded fix run, advc c7 l2t1912)
+
+Work order: four code defects + two report-prose lines; nothing else re-opened.
+Commits: DEFECT 1 = `8b077aa0` (alone, its own commit); DEFECTS 2+3 = `14c67e45`;
+DEFECT 4 = `be9d9c45` + scope-lock hygiene `bf41e9e6`. All in the worktree;
+real YAML block never deleted (mutation proofs in a /tmp throwaway copy /
+local-sed with restore, `git diff` clean after each restore).
+
+### DEFECT 1 (BLOCKER) — the declared canonicalLabel POLICY is now load-bearing
+`server/src/ai/shorthandChat.ts`: `loadCanonicalLabelPolicy()` is called PER CALL
+inside `clarificationsFromUnresolvedFacts` (the nounShape/assumedValues law —
+never process-cached, no module-scope cache) and the display form now branches
+on the DECLARED tokens: grounded record + `mintedDisplay: record-title` ->
+mapped title; no record + `preMintDisplay: identity-case` -> canonical key.
+The implicit `?? identityKey` hardcoded fallback is gone. No token invented,
+no second policy hardcoded. The loader's throw-on-absent arm is load-bearing:
+M6 (reviewer's exact mutation, throwaway /tmp copy, real YAML untouched —
+`canonicalLabel:` block deleted) -> 20 failed | 9 passed (29) across
+nounShape/readingCard/uifix3/e2eStubHonesty (render path fails loudly on the
+ABSENT throw); block present -> 29/29 GREEN; materials+goldens+policy suite
+117/117 GREEN.
+
+### DEFECT 2 (MEDIUM) — ruling §5 pin 3 DROP half now pinned
+Hosted in the GREEN `shorthandChat.sameNounDedupe.uifix3.test.ts` (the
+cueCascade T6/T7 fold pins are RED at baseline and cannot witness). Exact
+review-order pin: `dropSatisfiedFacts([fact('1 mM Clofibrate  in DMSO')],
+[{actionIndex:0, argument:'material', label:'1 mM clofibrate in DMSO'}], doc)`
+-> `[]`; the doc's slot value carries the DRIFTED text (`1 mM Clofibrate  in
+DMSO`) so a pre-D3 string compare sees a different string and KEEPS the fact —
+the pin is RED on pre-D3 identity. The non-string arm (slot value `42` as
+deliberate degenerate doc) keeps `return true`; the different-label negative
+arm survives. M4 proof: revert to `return value !== entry.label;` -> 1 failed
+| 8 passed (9) (the DROP pin); restored -> 9/9 GREEN.
+
+### DEFECT 3 (MEDIUM) — STAGE A record-title read path now pinned
+Same file: ONE pin with a fake `RecordStore` whose `get` returns
+`{payload:{name:'1 mM Clofibrate in DMSO'}}`. Asserts: the card's `query` and
+`prompt` carry the TITLE form; `unresolvedFact.label` stays the RAW label
+(provenance never collapsed); exactly ONE deduped GET on
+`localMaterialIdForLabel(identityKey)`; read-only (a `store.create` stub that
+throws — the STAGE A seam is read-only, mint owns the write). D3 proof: body
+-> `return new Map()` -> 1 failed | 8 passed (9) (the STAGE A pin); restored ->
+9/9 GREEN.
+
+### DEFECT 4 (MEDIUM) — P9a now exercises the case drift the receipt showed
+`AgentOrchestrator.repeatEcho.test.ts` P9a: the answer turn re-extracts a
+CASE/SPACE-DRIFTED variant of the same label (fixture `mystery goop` ->
+`Mystery  Goop` on the answer turn: case drift + inner double space; the
+receipt's live defect was a one-character case re-roll). Fixture stays
+byte-identical; P9a/P9b kept; all existing assertions kept. Pre-D3 identity
+(RAW-label hash in `factRequestId`) the ask id and re-derived id DIVERGE -> the
+answered-requestId drop misses -> card re-opens: M-preD3 proof (factRequestId
+back to RAW hash) -> 2 failed | 9 passed (11) with P9a among the failures;
+restored -> P9a GREEN (only the pre-disclosed P8 red). Follow-up commit: the
+D3 rationale comment named the termId fold token verbatim, which the
+closed-set scanner (termId.scopeLock.test.ts, ruling l2t1430 §7) counts as a
+mentioner — reworded to "the canonical LABEL KEY (termId's fold)"; no
+assertion changed; scope-lock suite back to 99/99 GREEN.
+
+### Out of scope, untouched
+Durable mint-title provenance (adversarial DEFECT 5) and answered-state
+persistence (DEFECT 6): `query`/`mintLabelFor` wiring and store/metadata
+shapes untouched. `app/` zero changes. TARGET-1 files and
+`applyAgentAction.ts` untouched. MANIFEST treeState blocker: refuted, no
+action.
+
+### DEFECTS 7 + 8 (LOW) — report-prose corrections (state only; old sections not rewritten)
+- DEFECT 7: report :675-676 and the `c733a565` commit message say "18 files
+  changed, 1136 insertions(+), 29 deletions(-)". Re-measured:
+  `git -c core.fileMode=false diff --shortstat 10062725..cbc9755b` =
+  **18 files changed, 1177 insertions(+), 29 deletions(-)** — matches the
+  reviewer's measurement. The old claim stands corrected by this statement;
+  it is NOT rewritten in place.
+- DEFECT 8: report :581 calls `7084b0a0` "pristine". `7084b0a0` is a FIX5
+  commit that already carries the D3 units; the pristine base is
+  **`10062725`**. The underlying claim (P8 failing at the pristine base)
+  stands — the reviewer measured it at the real pristine base; only the word
+  was wrong.
+
+### VERIFY (run at this head; counts pasted)
+1. `cd server && npx vitest run src/materials src/api/handlers/VocabHandlers.mint.test.ts`
+   -> 12 files / 99 tests all GREEN (the scope-lock ALLOWED entry for the mint
+   test stays; the closed set is not loosened).
+2. `cd server && npx vitest run src/compiler/scientistIntent/goldens` ->
+   4 files / 24 tests all GREEN. (The work order's "28/28, 5 files" does not
+   match the directory at this head: it contains 4 test files (24 tests) plus
+   `MANIFEST.yaml`, the refuted treeState blocker (out of scope); 24/24 is the
+   measured full-directory result, all green.)
+3. `cd server && npx vitest run src/ai` -> **29 failed | 1171 passed (1200)**.
+   Baseline `cbc9755b` measured this run: 29 failed | 1168 passed (1197), same
+   16 failing files. Delta = **+3 passed** — exactly the three new uifix3
+   `it` blocks (the DROP pin, the non-string/negative arm pin, the STAGE A
+   pin); P9a is an edit to an existing test, so repeatEcho's count is
+   unchanged at 11. The 29-failure set is the baseline set — no new failing
+   test name. P8's pre-existing failure stays disclosed, not "fixed".
+4. `npx tsc --noEmit -p server` -> 0 error lines (exit 0). `npx tsc --noEmit
+   -p app` not required (no app change).
+5. `git -c core.fileMode=false diff --stat 10062725..HEAD` ->
+   **18 files changed, 1360 insertions(+), 32 deletions(-)**.
+   `git -c core.fileMode=false status --porcelain` -> clean except the
+   untracked `.hermes/plans/harness/l2-suite-a/lib/__pycache__/`
+   (assignment-excluded, never committed).
+CARD1-FIX5-FIX2 DONE 2af9d880f93e379606221f64ac66067d9b012e6d
+
+---
+
+## FIX-2 PROSE CORRECTION (advc-c8)
+
+Corrections for the two LOW report-prose defects in the cycle-8 adversarial
+review (`/home/brad/.hermes/cl/lanes/2/reviews/
+L2-CLARIFY-CARD-1-advc-c8-l2t2011.md`, §4 NEW DEFECTS), both in the FIX-2
+section above. ADDITIVE ONLY: earlier sections stand as written; nothing
+deleted or weakened; no code, test, schema, or YAML change — this commit
+touches the report file only. Every figure below was re-measured by this
+run with the command quoted beside it; each figure names the commit(s) it
+was measured at.
+
+### NEW-1 — VERIFY item 5 diffstat not measured at the head it names
+VERIFY item 5 above prints `git ... diff --stat 10062725..HEAD -> 18 files
+changed, 1360 insertions(+), 32 deletions(-)`; the same 1360 figure is
+repeated in the `2af9d880` commit subject. The `..HEAD` at measurement time
+was `bf41e9e6` (the last code commit before the VERIFY commit); the number
+was then committed and HEAD moved again by the DONE marker, so the printed
+figure is the value at a head other than the one it now names. Re-measured
+by this run (all in the worktree):
+
+- `git -c core.fileMode=false diff --shortstat 10062725..bf41e9e6` =
+  18 files changed, 1360 insertions(+), 32 deletions(-) — measured at the
+  head the figure was taken from.
+- `git -c core.fileMode=false diff --shortstat 10062725..be9d9c45` =
+  18 files changed, 1360 insertions(+), 32 deletions(-) — the DEFECT-4
+  commit itself; same 1360 value (the hygiene follow-up `bf41e9e6` reworded
+  test comments + this report, net-zero on the shortstat).
+- `git -c core.fileMode=false diff --shortstat 10062725..2af9d880` =
+  18 files changed, 1465 insertions(+), 32 deletions(-) — the VERIFY
+  commit's own figure, measured pre-append.
+- `git -c core.fileMode=false diff --shortstat 10062725..d7df2ed8` =
+  **18 files changed, 1466 insertions(+), 32 deletions(-)** — the figure
+  at the GRADED TIP (HEAD at this correction's start).
+- Delta diffstat, the range the work order asked for:
+  `git -c core.fileMode=false diff --shortstat cbc9755b..d7df2ed8` =
+  **4 files changed, 295 insertions(+), 9 deletions(-)**.
+
+Corrected statement: at the graded tip, `10062725..d7df2ed8` = 18 files /
+1466 insertions / 32 deletions (and the delta `cbc9755b..d7df2ed8` = 4
+files / +295 / -9). The original 1360/32 figure is NOT retracted in place —
+it stands, measured at `bf41e9e6`/`be9d9c45`, not at `d7df2ed8`. The
+`2af9d880` commit subject (1360) is history and cannot be amended; this
+section supersedes the head figure.
+
+### NEW-2 — DEFECT-1 M6 counts are the DEFECT-1 commit's footprint
+The DEFECT 1 section of FIX-2 above prints "M6 (…) -> 20 failed | 9 passed
+(29) across nounShape/readingCard/uifix3/e2eStubHonesty (…) block present
+-> 29/29 GREEN" beside head figures. Those are the footprint at the
+DEFECT-1 commit `8b077aa0`, where
+`shorthandChat.sameNounDedupe.uifix3.test.ts` carried 6 `it(` blocks.
+Provenance, measured by this run:
+`git show 8b077aa0:server/src/ai/shorthandChat.sameNounDedupe.uifix3.test.ts
+| grep -c 'it('` = **6**; the same command at `d7df2ed8` = **9**. The four
+M6 files' `it(` totals: `8b077aa0` = 9+7+6+7 = **29** (measured per file
+with the same `git show | grep -c`); `d7df2ed8` = 9+7+9+7 = **32**. The
+three DEFECT 2+3 pins (commit `14c67e45`) did not exist when M6 was run, so
+29 is the 6-`it(`-block footprint and 32 the head footprint.
+
+M6 RE-RUN AT THE GRADED TIP by this run (worktree untouched — /tmp
+throwaway copy of the worktree at `d7df2ed8`: rsync excluding
+`node_modules`/`.git`/`__pycache__`, `node_modules` symlinked to the pnpm
+workspace root, the local `server/schema -> ../schema` symlink preserved —
+the reviewer's own /tmp setup; block deletion in the COPY only):
+`schema/scientist-intent/scientist-intent-vocabulary.yaml` lines 950–953
+(the entire `canonicalLabel:` block: `preMintDisplay: identity-case`,
+`mintedDisplay: record-title`,
+`titleAdoption: scientist-phrasing-when-key-equal`) deleted via
+`sed -i '950,953d'` in the copy, then
+`cd <copy>/server && vitest run
+src/ai/shorthandChat.nounShape.test.ts
+src/ai/shorthandChat.readingCard.test.ts
+src/ai/shorthandChat.sameNounDedupe.uifix3.test.ts
+src/ai/shorthandChat.e2eStubHonesty.test.ts` (vitest 1.6.1, resolved via
+the workspace root — same version as the worktree runs):
+
+- block deleted -> **21 failed | 11 passed (32)**; every failure is the
+  loader's exact ABSENT message: `canonical-label policy
+  (…scientist-intent-vocabulary.yaml): the \`canonicalLabel\` block is
+  ABSENT — the D3 ruling forbids a hardcoded fallback policy; declare it in
+  the vocabulary data`, thrown from `loadCanonicalLabelPolicy`
+  (canonicalLabelPolicy.ts) on the render path via
+  `clarificationsFromUnresolvedFacts` (shorthandChat.ts:918).
+- block present (Leg A, the same copy in its pristine `d7df2ed8` state, run
+  before the deletion) -> **32 passed (32)**.
+
+Qualified statement: M6 **@8b077aa0** = 20 failed | 9 passed (29) / block
+present 29/29 (as printed above — the 6-`it(`-block footprint); M6
+**@d7df2ed8** = 21 failed | 11 passed (32) / block present 32/32 (the
+re-measurement above — the head 9-`it(`-block footprint). The conclusion is
+UNCHANGED and is supported by the re-measured head numbers: with the block
+absent the render path FAILS LOUDLY with the ABSENT message, and there is
+no hardcoded fallback policy. The `2af9d880` subject's "M6: … 20 failed |
+9 passed (29)" is history, corrected here by the @-qualified form.
+
+### Method / reproducibility
+- Diffstats: `git -c core.fileMode=false diff --shortstat <A>..<B>` in the
+  worktree, per the command/commit pair quoted above; no figure in this
+  section was taken from the review or from memory.
+- M6 re-run: /tmp copy per NEW-2; the copy was deleted after evidence
+  capture. Worktree `schema/`, `server/`, `app/` byte-untouched by this run.
+- All re-measured figures agree with the cycle-8 review's measurements —
+  no disagreement to flag.
+
+### Post-correction verify (this run)
+1. `git -c core.fileMode=false diff --stat d7df2ed8..HEAD` = the report
+   file only (no `app/**`, `server/**`, `schema/**` hunks).
+2. Every number printed in this section is the output of a command this run
+   executed at the commit it names (diffstats in the worktree at the named
+   pairs; M6 at `d7df2ed8` in the /tmp copy).
+3. `git -c core.fileMode=false status --porcelain` = this report file
+   modified, plus the assignment-excluded untracked
+   `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` only.

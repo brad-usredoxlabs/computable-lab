@@ -82,12 +82,14 @@ import {
   foldAnswersIntoShorthand,
   foldNullArm,
   dropSatisfiedFacts,
+  dropAnsweredRequestIds,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
   emptyShorthandRepairPrompt,
   parseShorthandForChat,
   factRequestId,
   shorthandResultFromCompile,
+  canonicalLabelsForFacts,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
   partitionReadingAnswers,
@@ -1550,12 +1552,21 @@ export function createAgentOrchestrator(
               // no ledger (conditional spread — exactOptionalPropertyTypes:
               // absent, never undefined).
               const foldH4Seed = held.loopAskCounts;
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — the surviving facts' local-term record
+              // titles (STAGE A) via the store, built per call (never
+              // process-cached); absent store ⇒ empty map ⇒ STAGE B identity
+              // form for every surviving card.
+              const foldCanonicalLabels = await canonicalLabelsForFacts(survivingFacts, deps.store);
               const foldResult = shorthandResultFromCompile(
                 { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
-                { ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}) },
+                {
+                  ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}),
+                  canonicalLabels: foldCanonicalLabels,
+                },
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {
@@ -3057,6 +3068,34 @@ export function createAgentOrchestrator(
                 return unwiredResult;
               }
 
+              // CARD1-D2 (fix5 U2): the re-extract ANSWER turn's answered-fact
+              // drop. When the fold key flipped (eventGraphId null→real), the
+              // held intent is gone and the model re-extracted the SAME fact —
+              // re-derived here. Post-D3 its id is canonical-stable, so it
+              // matches the requestId the client already posted back in
+              // clarificationAnswers (on the wire). Drop it so the follow-up
+              // does not re-open a card for a fact this thread already
+              // answered. Gated on the answer turn (clarificationAnswers
+              // present) so a FRESH ask is byte-identically unchanged (free to
+              // ask); keyed ONLY on the on-wire requestId set — never prose,
+              // never a regex over the question. A fact the thread did NOT
+              // answer keeps its id out of the set and survives. Applied
+              // BEFORE the hold / canonical-labels / result sites so all three
+              // see the same surviving facts.
+              if (Array.isArray(clarificationAnswers) && clarificationAnswers.length > 0) {
+                const answeredIds = new Set(
+                  clarificationAnswers
+                    .map((a) => (typeof a.requestId === 'string' ? a.requestId : ''))
+                    .filter((id) => id.length > 0),
+                );
+                const survivors = dropAnsweredRequestIds(compiledSh.clarifications, answeredIds);
+                if (survivors.length !== compiledSh.clarifications.length) {
+                  const dropped = compiledSh.clarifications.length - survivors.length;
+                  console.log(`[agent ${tid}] D2 re-extract drop: dropped ${dropped} re-derived fact(s) the same thread already answered (requestId on the wire; canonical-stable post-D3) — the follow-up will not re-open their card(s)`);
+                  compiledSh.clarifications = survivors;
+                }
+              }
+
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
               // L2-FREEFORM-1 H4 (OQ4 ruling): seed the requestId-identity
               // loop detector BEFORE the hold — the held intent's live count
@@ -3080,6 +3119,12 @@ export function createAgentOrchestrator(
                   ...(Object.keys(h4HoldCounts).length > 0 ? { loopAskCounts: h4HoldCounts } : {}),
                 });
               }
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — this compile's unresolved facts'
+              // local-term record titles (STAGE A) via the store, built per
+              // call (never process-cached); absent store ⇒ empty map ⇒ STAGE
+              // B identity form for every card.
+              const shCanonicalLabels = await canonicalLabelsForFacts(compiledSh.clarifications ?? [], deps.store);
               const shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
@@ -3088,7 +3133,10 @@ export function createAgentOrchestrator(
                 // L2-FREEFORM-1 H4: the loop detector's seed (conditional
                 // spread — exactOptionalPropertyTypes: absent on every turn
                 // with no seed).
-                { ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}) },
+                {
+                  ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}),
+                  canonicalLabels: shCanonicalLabels,
+                },
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
