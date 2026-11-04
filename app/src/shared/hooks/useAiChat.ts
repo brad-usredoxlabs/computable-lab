@@ -593,6 +593,101 @@ function legacyClarificationFromRequests(
   }
 }
 
+/**
+ * L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 unit 3 — the re-send leg),
+ * extracted as a PURE, exported seam so the union is testable in isolation and
+ * byte-stable.
+ *
+ * Every send of a thread must RE-SEND the requestId-keyed answers the thread
+ * has already recorded (the answer user messages, live or rehydrated from
+ * `metadata.clarificationAnswers` after a cold reload) UNIONED with this turn's
+ * fresh answers, deduped by requestId — a fresh answer supersedes a persisted
+ * one for the same requestId. The shipped server drop
+ * (`AgentOrchestrator.ts:3085-3098`, P9a-pinned) then closes the re-open leg
+ * with ZERO server change.
+ *
+ * Invariants the pin locks (defect 6 is closed by these, not by any prose):
+ *   - keyed on `requestId` ONLY (never prose / never value): two answers with
+ *     the same requestId collapse to the LAST one (fresh beats persisted);
+ *   - SET-LIKE (idempotent): the output is deduped by requestId — including
+ *     duplicates INSIDE the persisted set (a re-answer / double-post /
+ *     rehydrate may persist the same requestId twice) and inside `fresh`
+ *     (last-seen wins, first-seen position kept). Unioning the output with
+ *     itself changes nothing; the wire field NAME and POSITION are
+ *     unchanged — only the set's multiplicity is normalized;
+ *   - an EMPTY result is the byte-identical fresh-ask wire shape (the caller
+ *     passes `[]` straight through, so the fresh-ask turn's wire is unchanged);
+ *   - order is stable: persisted answers in their first-seen order, then fresh
+ *     answers that were NOT already persisted (a fresh answer that supersedes
+ *     a persisted one keeps the PERSISTED position — it is a replacement, not
+ *     an append).
+ *
+ * @param persisted the answers the thread has already recorded, in
+ *   first-seen order (the rehydrated / prior answer user messages);
+ * @param fresh the answers submitted on THIS turn (the live answer).
+ */
+export function unionClarificationAnswers(
+  persisted: AiClarificationAnswer[],
+  fresh: AiClarificationAnswer[],
+): AiClarificationAnswer[] {
+  const key = (a: AiClarificationAnswer): string | undefined =>
+    typeof a.requestId === 'string' && a.requestId.length > 0 ? a.requestId : undefined
+
+  // D5 (advc c10): the output must be SET-LIKE (idempotent) by requestId. A
+  // thread can persist the SAME requestId twice (re-answer, double-post,
+  // rehydrate), so both sides are deduped BEFORE the merge: last-seen value
+  // wins, FIRST-SEEN POSITION is kept. Keyless answers stay (they are not
+  // requestId-keyed to begin with).
+  //
+  // CARD1-FIX4C D3 (advc c11, binding ruling): FIRST-SEEN POSITION, LAST
+  // VALUE — a key's entry is kept at the position of its FIRST occurrence,
+  // carrying the value of its LAST occurrence; the later duplicate is dropped
+  // in place (not moved to the tail). The wire field NAME and POSITION are
+  // unchanged. ([req-1(v1), req-2, req-1(v2)] -> [req-1(v2), req-2].)
+  const dedupeById = (answers: AiClarificationAnswer[]): AiClarificationAnswer[] => {
+    const firstAt = new Map<string, number>()
+    const lastVal = new Map<string, AiClarificationAnswer>()
+    for (let i = 0; i < answers.length; i++) {
+      const a = answers[i]
+      const k = key(a)
+      if (k === undefined) continue
+      if (!firstAt.has(k)) firstAt.set(k, i) // FIRST-seen position
+      lastVal.set(k, a) // LAST-seen value
+    }
+    const out: AiClarificationAnswer[] = []
+    for (let i = 0; i < answers.length; i++) {
+      const a = answers[i]
+      const k = key(a)
+      if (k === undefined) { out.push(a); continue } // keyless stays
+      if (firstAt.get(k) !== i) continue // drop the LATER duplicate in place
+      out.push(lastVal.get(k)!) // FIRST-seen position, LAST value
+    }
+    return out
+  }
+  const persistedDeduped = dedupeById(persisted)
+  const freshDeduped = dedupeById(fresh)
+
+  // A fresh answer with a requestId supersedes the persisted answer for that
+  // requestId (in place — it keeps the persisted position, not appended).
+  const superseded = new Map<string, AiClarificationAnswer>()
+  for (const a of freshDeduped) {
+    const k = key(a)
+    if (k !== undefined) superseded.set(k, a)
+  }
+  const persistedKeys = new Set(persistedDeduped.map(key))
+  const out: AiClarificationAnswer[] = persistedDeduped.map((a) => {
+    const k = key(a)
+    return k !== undefined && superseded.has(k) ? superseded.get(k)! : a
+  })
+  // Fresh answers with NO persisted counterpart (a new requestId this turn, or
+  // a keyless answer) are appended in their first-seen order.
+  for (const a of freshDeduped) {
+    const k = key(a)
+    if (k === undefined || !persistedKeys.has(k)) out.push(a)
+  }
+  return out
+}
+
 export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -917,6 +1012,18 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
               // intent card survives a reload (key ABSENT when never
               // persisted — never undefined).
               ...(typeof m.metadata?.shorthand === 'string' ? { shorthand: m.metadata.shorthand } : {}),
+              // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 persist leg,
+              // read side): ride the requestId-keyed structured answers back so
+              // a cold reload (a) renders the compact Answered row (the answer
+              // user message rehydrates with its answers) and (b) can RE-SEND
+              // the answered requestIds on subsequent sends (the re-send leg
+              // below unions them into `clarificationAnswers`, closing the
+              // re-open leg with the shipped server drop — zero server change).
+              // requestId-keyed only; never prose. Key ABSENT when never
+              // persisted (the conditional-spread idiom), never `undefined`.
+              ...(Array.isArray(m.metadata?.clarificationAnswers) && m.metadata.clarificationAnswers.length > 0
+                ? { clarificationAnswers: m.metadata.clarificationAnswers as AiClarificationAnswer[] }
+                : {}),
               // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
               // mark the RESTORED message. Its answer inputs (the picker's
               // search field, the option buttons) do NOT survive a reload in
@@ -974,6 +1081,14 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       if (m.labwareAdditions && m.labwareAdditions.length > 0)
         metadata.labwareAdditions = m.labwareAdditions
       if (m.clarification) metadata.clarification = m.clarification
+      // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 persist leg): persist the
+      // requestId-keyed structured answers the ANSWER user message recorded so a
+      // cold reload re-sends them (the re-send leg) and renders the Answered row.
+      // Keyed on requestId only — never prose; the key is ABSENT (never
+      // `undefined`) when the turn carried no structured answers, so a plain
+      // prompt message persists byte-identically.
+      if (m.clarificationAnswers && m.clarificationAnswers.length > 0)
+        metadata.clarificationAnswers = m.clarificationAnswers
       // L2-CHAT-UI-1 LEG A (A3): persist the shorthand so the intent card
       // survives a reload (the hydration ride below reads it back).
       if (m.shorthand) metadata.shorthand = m.shorthand
@@ -1122,6 +1237,18 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
               })),
             }
           : {}),
+        // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 persist leg): the
+        // ANSWER user message carries the requestId-keyed structured answers it
+        // just posted (the same `options.clarificationAnswers` that rides the
+        // wire). The persist-sync effect below writes it to
+        // `metadata.clarificationAnswers` so a cold reload can re-send the
+        // answered requestIds (closing the re-open leg, zero server change)
+        // and render the Answered row. Keyed on requestId only; key ABSENT
+        // (never `undefined`) when the turn carried no structured answers — a
+        // plain prompt message persists unchanged.
+        ...(options?.clarificationAnswers && options.clarificationAnswers.length > 0
+          ? { clarificationAnswers: options.clarificationAnswers }
+          : {}),
       }
 
       const assistantId = generateMessageId()
@@ -1238,6 +1365,21 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       // proposed" — the same delivered-change arm as deckLayoutDelivered.
       let navActionDelivered = false
 
+      // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 re-send leg): every
+      // send of this thread RE-SENDS the requestId-keyed answers the thread has
+      // already recorded (the answer user messages, live or rehydrated from
+      // `metadata.clarificationAnswers` after a cold reload), UNIONED with this
+      // turn's fresh answers — deduped by requestId, fresh-supersedes-persisted.
+      // The pure, exported seam (unionClarificationAnswers above) owns the
+      // dedup; an empty result is the byte-identical fresh-ask wire shape. The
+      // shipped server drop (`AgentOrchestrator.ts:3085-3098`, P9a-pinned) then
+      // closes the re-open leg with ZERO server change — the follow-up
+      // re-derives the fact and the drop removes it because its requestId is on
+      // the wire again.
+      const freshAnswers = options?.clarificationAnswers ?? []
+      const persistedAnswers = messages.flatMap((m) => m.clarificationAnswers ?? [])
+      const resendAnswers = unionClarificationAnswers(persistedAnswers, freshAnswers)
+
         for await (const event of streamAssist(
           prompt,
           ctx.surface,
@@ -1249,7 +1391,9 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
           // ANSWER-CHANNEL: the structured answers ride THIS turn only. The
           // sentence still goes as the user's visible message (prompt above);
           // the answers are the machine-readable half the server folds.
-          options?.clarificationAnswers,
+          // (defect 6: the union above re-sends the thread's answered ids so
+          // the server drop survives a cold reload.)
+          resendAnswers,
         )) {
           accumulated.push(event)
 

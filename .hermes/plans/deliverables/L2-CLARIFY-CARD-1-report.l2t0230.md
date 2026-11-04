@@ -899,3 +899,450 @@ no hardcoded fallback policy. The `2af9d880` subject's "M6: … 20 failed |
 3. `git -c core.fileMode=false status --porcelain` = this report file
    modified, plus the assignment-excluded untracked
    `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` only.
+
+## CARD1-FIX3 (defects 5/6)
+
+Bounded continuation run (FIX-3 resume) over the dead run's LABELLED PRESERVATION commit
+`ec2b46d9` ("FIX5 FIX-3 PARTIAL (PRESERVED, NOT GATED, NOT ACCEPTED)"), which the orchestrator
+measured as landing defect 5 (Q1, `56f69cc6`), Q2 unit 2 (persist carrier
+`metadata.clarificationAnswers`, conditional spread, key ABSENT never `undefined`), Q2 unit 3
+(exported seam `unionClarificationAnswers(persisted, fresh)` in
+`app/src/shared/hooks/useAiChat.ts` wired into `sendPrompt`), the unit 1 render pin
+(`app/src/agent/ChatLog.answeredrow.reload.card1.test.tsx`) and the unit 2/3 pin
+(`app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts`). This run added:
+
+- R1 (test-only): `app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts` — the dead
+  run's single RED case (`a follow-up on a thread with NO answered request re-sends the
+  byte-identical fresh-ask wire shape`, asserting `sa.mock.calls[0][7] === []`) failed because the
+  `streamAssist` module mock was not cleared between cases, so `mock.calls[0]` was the previous
+  case's deliberately-sent clofibrate answer. Fixed with a `beforeEach` that installs a FRESH
+  `vi.fn()` on `aiClient.streamAssist` per case (product code untouched, case kept, assertion
+  unchanged). Committed `01244ada`.
+- R2 (new pin): `app/src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts` — Q2 unit 4,
+  the two-turn + reload pin at the server boundary. One case: drive the REAL `useAiChat` hook —
+  ask (seeded `clarification` event, fact label `Clofibrate dosing`, requestId
+  `unresolved_fact-2`), answer it (turn 1) — then simulate a reload by unmounting and mounting a
+  fresh hook on the same `threadId` (the thread hydrates back from the same `getThread` payload,
+  whose answer message carries the persisted `metadata.clarificationAnswers`), then send a
+  follow-up (turn 2) and assert the outgoing `clarificationAnswers` (streamAssist arg index 7)
+  carries the answered requestId `{requestId: 'unresolved_fact-2', ...}`. The case then EXERCISES
+  THE SHIPPED PREDICATE DIRECTLY: it imports `dropAnsweredRequestIds` + `factRequestId` from
+  `server/src/ai/shorthandChat.ts` (non-literal dynamic import + `process.cwd` patched to the
+  repo root for the import window, restored after) and asserts the follow-up's answers seed the
+  server's `answeredIds` (built at `server/src/ai/AgentOrchestrator.ts:3085-3090`, which the drop
+  at `:3091` consumes, P9a-pinned) so the shipped `dropAnsweredRequestIds(compiledSh.clarifications,
+  answeredIds)` removes the answered fact — i.e. the follow-up carries no re-opened card for that
+  requestId. `server/**` takes zero change. Committed `60b826ae`.
+
+Targeted vitest run (exact command and raw tail):
+
+    $ cd app && npx vitest run src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts \
+        src/agent/ChatLog.answeredrow.reload.card1.test.tsx
+      Test Files  2 passed (2)
+             Tests  10 passed (10)
+      Duration  3.67s (transform 425ms, setup 414ms, collect 1.11s, tests 233ms, environment 2.60s, prepare 445ms)
+
+    $ npx vitest run src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts
+      Test Files  1 passed (1)
+             Tests  1 passed (1)
+      Duration  3.62s (transform 52ms, setup 52ms, collect 1.02s, tests 1.11s, environment 2.60s, prepare 445ms)
+
+Mutation evidence for R2 (RED against the pre-fix shape, restored immediately, in place):
+temporarily removed the two Q2 legs from `app/src/shared/hooks/useAiChat.ts` (the persist carrier
+spread in the answer message's `metadata` and the `unionClarificationAnswers` merge in
+`sendPrompt`), re-ran both card1fix5 pin files, then `git -c core.fileMode=false checkout --`
+the file and re-ran (GREEN, restored; `grep -c MUTATION-R2` = 0 afterwards):
+
+    $ npx vitest run src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts \
+        src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts   # pre-fix shape
+      Test Files  2 failed (2)
+             Tests  2 failed | 7 passed (9)
+
+The two failing pins are exactly the composition legs: the persist-carrier case (follow-up does
+not carry the answered requestId — no persisted carrier) and the shipped-drop composition case
+(the drop's contract cannot be driven from the outgoing set). All other cases (unit 3 in-file
+union seam, render pin, fresh-ask byte-identity) still pass pre-fix, as they do not depend on the
+removed legs. Post-restore run: `2 passed (2) / 10 passed (10)` + `1 passed (1)`.
+
+Typecheck (raw): `cd app && npx tsc --noEmit -p .` → exactly **10 error lines**, the same set as
+the trunk baseline (verified by checking out `b4e62eeb` to a throwaway worktree, symlinking
+`node_modules`, and diffing the error lists — identical). NONE of the 10 are in the changed files
+(`useAiChat.ts`, `useAiChat.card1fix5.persistResend.test.ts`,
+`useAiChat.card1fix5.reloadBoundary.test.ts`, `ai.ts`, `ChatLog.tsx`):
+
+    1 src/event-editor/deck/LawnSurface.moveAcross.test.tsx
+    1 src/event-editor/deck/PreviewActionBar.test.tsx
+    2 src/event-editor/editorHistory.test.ts
+    1 src/event-editor/EventEditorContext.tsx
+    1 src/event-editor/focus/LabwareFocus.instrument.test.tsx
+    1 src/event-editor/viewer/ViewerToolbar.tsx
+    1 src/event-editor/viewer/Viewer.tsx
+    1 src/ingestion/components/IngestionUploadModal.tsx
+    1 src/ingestion/protocol-review/ExtractionProgressPanel.test.tsx
+
+Diff (raw) — CARD1-FIX4C D9 (advc c11): the ORIGINAL command in this block was
+`git -c core.fileMode=false diff --stat b4e62eeb..HEAD`, which NO LONGER
+reproduces because HEAD has moved past the FIX-3 code tip (the FIX-3 report
+stamp `eee7b38d` and the entire FIX-4 section landed after). The NUMBERS below
+are real and reproduce EXACTLY at the commit this block actually names — the
+FIX-3 CODE TIP `60b826ae` (measured at that commit, before the report file was
+added by the stamp). This is the one reproducible command+output pair; the
+superseding current-tip numbers are in the FIX-4 §D9 block below
+(`eee7b38d..d077510b`). Measured this run, real output:
+
+    $ git -c core.fileMode=false diff --stat b4e62eeb..60b826ae
+     .../ChatLog.answeredrow.reload.card1.test.tsx      | 165 +++++++++++++
+     app/src/agent/ChatLog.legacyarm.card1.test.tsx     | 213 +++++++++++++++++
+     .../ai/ClarificationPicker.mintseed.card1.test.tsx | 144 +++++++++++
+     .../right-pane/ai/ClarificationPicker.tsx          |  23 +-
+     .../useAiChat.card1fix5.persistResend.test.ts      | 202 ++++++++++++++++
+     .../useAiChat.card1fix5.reloadBoundary.test.ts     | 264 +++++++++++++++++++++
+     app/src/shared/hooks/useAiChat.ts                  | 106 ++++++++-
+     app/src/types/ai.ts                                |  34 +++
+     8 files changed, 1149 insertions(+), 2 deletions(-)
+
+    (SUPERSEDED for the current tip by the FIX-4 §D9 block below. Do NOT
+     re-derive these numbers from HEAD: `b4e62eeb..HEAD` at this run's HEAD =
+     12 files, 2214 insertions, 2 deletions — a different range, not the
+     FIX-3-raw pair above.)
+
+Every path is inside the original brief's opened-files list (the four APP product names + their
+test files). The report file itself is added by the stamp commit that follows this section.
+
+Assumptions:
+1. The ruling file `decisions/CARD1-MINT-ANSWER-STATE-ruling-l2t1951.md` is ABSENT from the
+   worktree, the main repo's `.hermes/plans/decisions/`, and the git history of both (searched by
+   name and `--diff-filter=A`); the binding points were taken verbatim from the continuation
+   brief's restatement (Q2 unit 4 quoted in full there). Flagged for the orchestrator; nothing in
+   this run re-derived any ruling content.
+2. The app's vitest (jsdom) environment can drive the shipped server predicate: `process.cwd()`
+   is not a writable in jsdom workers, so the test monkey-patches `process.cwd` for the import
+   window only (restored in `finally`); the import is non-literal so the app's `tsc --noEmit`
+   program does not pull the server graph in (verified: error count unchanged at the baseline 10,
+   zero `server/` paths in the error list).
+3. The reload simulation follows the existing `useAiChat.hydrationClobber.test.tsx` precedent:
+   the same stubbed `getThread` payload is re-fetched on the second mount, and the thread's
+   persisted `metadata` (the answer message) is what rehydrates the answered set — no new fetch
+   surface, no mock of `aiThreadClient` beyond what that precedent already uses.
+4. The `clarificationAnswers` wire position asserted (streamAssist arg index 7) is the same
+   position the dead run's unit 2/3 pin asserts; the pin does not reorder or rename any wire
+   field.
+5. The tsc "baseline 10" was reproduced against `b4e62eeb` (the brief's diff base), not merely
+   trusted: a throwaway worktree of `b4e62eeb` produced the identical 10-error set.
+6. The mutation evidence was captured in place (not a /tmp copy) and the file restored
+   immediately; `git status` after restore showed only the new test file untracked.
+7. The last CODE commit is `60b826ae` (R2); this stamp commit carries the marker and names it.
+
+CARD1-FIX5-FIX3 DONE 60b826aee84a53a64a242ad70fd21dc881bfd872
+
+## CARD1-FIX4 (advc c10)
+
+Continuation run l2t0310 (FIX-4 RESUME 2). The predecessor run closed the six c10 defects D1–D6
+and died on the output cap while writing this section. This run: closed the remaining defects
+D7–D14, wrote and committed this section by itself, and committed the DONE marker. Zero server
+hunks, zero schema changes, zero frozen-file changes.
+
+### Six closed defects (D1–D6, committed by the predecessor; re-verified green this run)
+
+- **D1** `db45e47e` — Q1 mint-seed proof bound to the REAL server-emitted shape (realshape pin
+  drives the real `clarificationsFromUnresolvedFacts`; hand-built fixture corrected to the exact
+  real shape). RED: reverting `mintLabelFor` to `mintNounFromQuery(query)||query.trim()` fails the
+  pin (`expected '1 mm clofibrate in dmso' to be '1 mM Clofibrate in DMSO'`); GREEN restored.
+  Re-proven this run in a /tmp copy — see D7.
+- **D2** `31fb300b` — Q1 rendered identity row pinned: the pin reads BOTH rows (identity/search
+  input = the query-derived fold, mint input = the RAW human-case label) and pins their DIVERGENCE;
+  a regression making either row follow the other's source fails exactly one assertion.
+- **D3** `40e0b0bd` — legacy-arm reachability pinned: (D) evaluates the legacy block-arm gate
+  (ChatLog.tsx:521) on a live shorthand-mint message and pins it FALSE, plus pins that a live
+  shorthand mint is never legacy-only. GREEN regression lock (its RED would require reverting the
+  shipped done-arm — out of scope).
+- **D4** `14230e86` — answered-fact drop drives the REAL seam (AgentOrchestrator.ts:3085-3098)
+  through a real 2-turn ask→answer; wire-keyed drop → ZERO cards. RED: mutating the on-wire id so
+  it does not match the fact's canonical id → `expected 1 to be +0`.
+- **D5** `0ddb9239` — `unionClarificationAnswers` set-like by requestId (dedupe inside the
+  persisted set and inside fresh). RED pre-fix (`['req-1','req-1']` → length 2; 1 failed | 8
+  passed, unfiltered); GREEN post-fix (9/9); idempotence + fresh-supersede pins.
+  (CARD1-FIX4C: the "8 skipped" wording was a filter mislabel — the unfiltered run was
+  1 failed | 8 passed; corrected.)
+- **D6** `e8f7636a` (+ fixup `1cd4fd69`) — reloadBoundary `process.cwd` restore in try/finally;
+  reject-path pin proves the getter is restored to the ORIGINAL function (RED when the
+  finally-restore is removed). Fixup restores the implicit-any binding so tsc holds the 10-line
+  baseline (retype → 12; fixup → 10).
+
+### D7 — Q1 RED-before-fix evidence (reproduced this run, in a /tmp copy)
+
+Copy: `/tmp/card1fix4-d7-1cd4fd69` — a filesystem copy of the worktree (git HEAD `d077510b`;
+node_modules symlinks intact). The D1 fix (the `mintLabelFor` real-shape seed path,
+`ClarificationPicker.tsx:405-410`) was reverted in the COPY ONLY (to
+`return mintNounFromQuery(request.query) || query.trim()`), the D1 pin was run, then the copy's
+file was restored and re-run. The copy restored to the same tree state at `d077510b` (copy-side
+`git diff --stat` empty after restore). The REAL tree's `ClarificationPicker.tsx` was never
+touched by this exercise.
+
+RED (copy, pre-fix shape) — verbatim:
+
+    $ npx vitest run src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts
+         → expected '1 mm clofibrate in dmso' to be '1 mM Clofibrate in DMSO' // Object.is equality
+      ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+      FAIL  .../ClarificationPicker.realshape.card1.test.ts > CARD1-FIX4 D1 — the Q1 mint-seed pin
+            is bound to the REAL server-emitted shape > the REAL builder emits a raw-label /
+            folded-query payload and the REAL mintLabelFor returns the raw label (not the fold)
+      AssertionError: expected '1 mm clofibrate in dmso' to be '1 mM Clofibrate in DMSO' // Object.is equality
+       Test Files  1 failed (1)
+            Tests  1 failed (1)
+    (broader, same copy: both mintseed + realshape files → 6 failed | 1 passed (7); the one pass
+     is the query-seed fallback case, which needs no raw label)
+
+GREEN (copy, D1 fix restored) — verbatim:
+
+    $ npx vitest run src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts
+      ✓ src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts  (1 test) 657ms
+       Test Files  1 passed (1)
+            Tests  1 passed (1)
+
+The /tmp copy was deleted after capture; the real tree remains the committed `d077510b` state.
+
+### D8 — server verify block (zero server delta)
+
+    $ cd server && npx vitest run src/ai
+      Test Files  16 failed | 115 passed (131)
+           Tests  29 failed | 1171 passed (1200)
+        Duration  30.13s
+    (P8 present in the failing set: src/ai/AgentOrchestrator.repeatEcho.test.ts >
+     "P8 (D4 guards): the retry arm never touches heldIntents ..." — a documented baseline member)
+
+Identical to the documented baseline **29 failed | 1171 passed (1200)**. This branch carries ZERO
+server hunks (the D9 name-status lists 9 files, all `app/src/**`), so the server result is
+unchanged BY CONSTRUCTION — that is the point.
+
+### D9 — reproducible diffstat (app-only, pinned to the code tip)
+
+The code tip is `d077510b`; the report commit lands after it, so the code-only numbers are pinned
+to that sha (not to a moving HEAD). Exact command reproducing the numbers below at that tip:
+
+    $ git -c core.fileMode=false diff --stat eee7b38d..d077510b
+
+    app/src/agent/ChatLog.legacyarm.card1.test.tsx     |  84 +++++++-
+    .../ai/ClarificationPicker.mintseed.card1.test.tsx | 113 +++++++++-
+    .../ai/ClarificationPicker.realshape.card1.test.ts | 103 +++++++++
+    .../right-pane/ai/ClarificationPicker.tsx          |   1 +
+    .../aiClient.card1fix5.clarificationWire.test.ts   | 146 +++++++++++++
+    .../useAiChat.card1fix5.persistResend.test.ts      |  16 ++
+    .../hooks/useAiChat.card1fix5.realDrop.test.ts     | 231 +++++++++++++++++++++
+    .../useAiChat.card1fix5.reloadBoundary.test.ts     |  47 ++++-
+    app/src/shared/hooks/useAiChat.ts                  |  36 +++-
+    9 files changed, 754 insertions(+), 23 deletions(-)
+
+    $ git -c core.fileMode=false diff --name-status eee7b38d..d077510b
+    M	app/src/agent/ChatLog.legacyarm.card1.test.tsx
+    M	app/src/event-editor/right-pane/ai/ClarificationPicker.mintseed.card1.test.tsx
+    A	app/src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts
+    M	app/src/event-editor/right-pane/ai/ClarificationPicker.tsx
+    A	app/src/shared/api/aiClient.card1fix5.clarificationWire.test.ts
+    M	app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts
+    A	app/src/shared/hooks/useAiChat.card1fix5.realDrop.test.ts
+    M	app/src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts
+    M	app/src/shared/hooks/useAiChat.ts
+
+(`ClarificationPicker.tsx +1` is the `data-testid=clarification-identity-search` test affordance
+from D2; `useAiChat.ts 36` includes the D5 dedupe. No `server/**`, no schema, no frozen file.)
+
+### D10 + D11 — FIX-3 descriptions corrected (wording fixed; the code matches the tests)
+
+The CARD1-FIX3 section described the R1/R2 tests imprecisely. The code is authoritative; the
+correct descriptions (superseding the FIX-3 bullets):
+
+- **R1 (persistResend isolation, `01244ada`) — D11:** the `beforeEach`
+  (persistResend.test.ts:135-138) calls `mockClear()` on the EXISTING module-level
+  `streamAssist` mock (installed once at module scope by `vi.mock('../api/aiClient', ...)`,
+  :35-37). It does NOT install a fresh `vi.fn()` per case — the FIX-3 bullet's "installs a FRESH
+  vi.fn()" phrasing is wrong. The effect is the one the bullet intended: `mock.calls[0]` is this
+  case's call, not the previous case's deliberately-sent answer.
+- **R2 (two-turn + reload pin, `60b826ae`) — D10:** the test is keyed by `requestId` ONLY.
+  Fixture: `ASK_FACT = { label: '1 mM Clofibrate in DMSO', reason: 'unresolved material' }`
+  (reloadBoundary.test.ts:131); `rA = factRequestId(ASK_FACT)` (:182); the ask leg is modeled by
+  the `requestId` itself — the ask card's id is the canonical-stable `factRequestId` (post-D3) of
+  the unresolved fact. There is NO seeded `clarification` event, no `requestId 'unresolved_fact-2'`
+  and no fact label `'Clofibrate dosing'` in the test; the FIX-3 R2 bullet's description is
+  superseded by this one.
+
+### D12 — the "byte-identical wire" pin asserts the WIRE (new test, `3bf34334`)
+
+`persistResend.test.ts:178/:216` asserts the in-process `streamAssist` argument
+(`sa.mock.calls[0][7]`), which proves the hook passes the set but not that the outgoing fetch
+body carries it. New pin `app/src/shared/api/aiClient.card1fix5.clarificationWire.test.ts` drives
+the REAL `streamAssist` (the `aiClient.eventEditorSurface.test.ts` pattern, already used for the
+absent-key case) and asserts the outgoing body: (a) a NON-EMPTY answer set → the body carries
+`clarificationAnswers` byte-for-byte (requestId-keyed, the server drop's read field); (b) an EMPTY
+set → the field is ABSENT (conditional spread, never `undefined`) and the serialized body is
+byte-identical to the fresh-ask shape (no spurious key, no comma drift); (c) an UNSET (undefined)
+arg → likewise absent. The existing argument-level assertion is KEPT (persistResend untouched).
+GREEN:
+
+    $ npx vitest run src/shared/api/aiClient.card1fix5.clarificationWire.test.ts
+      ✓ src/shared/api/aiClient.card1fix5.clarificationWire.test.ts  (3 tests) 17ms
+       Test Files  1 passed (1)
+            Tests  3 passed (3)
+
+### D13 — trim intent stated and pinned (`d077510b`)
+
+ORCHESTRATOR RULING (final, do not re-litigate): whitespace is not part of a label — the
+`.trim()` on `rawLabel` (`ClarificationPicker.tsx:405-410`) is KEPT as INTENTIONAL
+normalization. New pin (mintseed case): a raw label with leading/trailing whitespace
+(`'  1 mM Clofibrate in DMSO  '`) posts the TRIMMED title `'1 mM Clofibrate in DMSO'` to
+`mintLocalTerm`, and the rendered mint input shows the trimmed title. The "exact string" claim
+therefore holds **modulo leading/trailing whitespace, by design**. The pre-D13 pin's fixture had
+no whitespace — D13's exact charge: it could not detect a regression that dropped the trim.
+Proven RED (mutation, load-bearing, in place): removing the `rawLabel` `.trim()` (verbatim
+label) fails exactly the D13 pin — `expected "  1 mM Clofibrate in DMSO  " to be
+"1 mM Clofibrate in DMSO"`, `1 failed | 5 passed (6)`; restored → `6 passed (6)`. The `.trim()`
+itself is unchanged; only the pin was added.
+
+### D14 — D2 disposition recorded (released by the D3 ruling, not deferred)
+
+ORCHESTRATOR RULING: D2's server half was **released by the D3 ruling**, not deferred.
+`CARD1-D3-canonical-source-l2t1430-ruling.md` §4 (verbatim):
+
+    "D2's server half was already blocked ON this ruling (its re-ask is caused by the id
+    drift rule 1 removes; the ledger extension proceeds as the coder's report already scoped)."
+
+The zero server delta in this branch (D8) is therefore CORRECT, and the ledger extension
+proceeds as previously scoped. No new work is owed for D2 here.
+
+### Verification block (item 10, real output, this run)
+
+1. The six card/fix5 files:
+
+    $ cd app && npx vitest run src/agent/ChatLog.legacyarm.card1.test.tsx \
+        src/event-editor/right-pane/ai/ClarificationPicker.mintseed.card1.test.tsx \
+        src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts \
+        src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts \
+        src/shared/hooks/useAiChat.card1fix5.realDrop.test.ts \
+        src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts
+      ✓ src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts  (1 test) 1911ms
+      ✓ src/shared/hooks/useAiChat.card1fix5.realDrop.test.ts  (1 test) 3541ms
+      ✓ src/event-editor/right-pane/ai/ClarificationPicker.mintseed.card1.test.tsx  (6 tests) 82ms
+      ✓ src/agent/ChatLog.legacyarm.card1.test.tsx  (4 tests) 37ms
+      ✓ src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts  (9 tests) 187ms
+      ✓ src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts  (2 tests) 811ms
+       Test Files  6 passed (6)
+            Tests  23 passed (23)
+        Duration  10.35s
+
+   (6 files / 22 baseline tests + 1 new D13 test = 23.)
+2. `cd app && npx tsc --noEmit -p .` → **10** error lines, identical to the documented baseline
+   (all in `src/event-editor/**` + `src/ingestion/**`; none in a file touched by this branch).
+3. `cd server && npx vitest run src/ai` → the D8 block: `Tests 29 failed | 1171 passed (1200)`,
+   identical to the documented baseline (zero server delta).
+4. `git -c core.fileMode=false status --porcelain` → empty (after deleting the untracked
+   `.hermes/plans/harness/l2-suite-a/lib/__pycache__/`; no `__probe_*` file, no `.only`, no
+   generated `.pyc` in the tree at DONE).
+5. `git -c core.fileMode=false diff --stat eee7b38d..d077510b` + `--name-status` → the D9 block
+   (verbatim, app-only).
+
+### Scope diff
+
+9 files, all `app/src/**` (D9 name-status): 6 modified + 3 added. No `server/**`, no schema
+file, no frozen file (`proposalRowFacts.ts`, `wellRange.ts`, and the four TARGET-1 test files are
+untouched). The `useAiChat.ts` product delta is the D5 set-like dedupe; the `ClarificationPicker.tsx`
+delta is the D2 test affordance; D12/D13 are test-only.
+
+CARD1-FIX4 DONE d077510bd100998c93c3a5ccf30875d91e3d89f1
+
+## CARD1-FIX4C (advc c11)
+
+Continuation run l2t0230. Cycle 11 closed D1, D2, D4, D5(set-like), D6, D7, D8, D10–D14 with the
+reviewer's own mutation controls; this run fixes ONLY the three residuals in the c11 report
+SECTION 4. No defect was re-opened, re-derived or "improved"; no product behaviour changed outside
+defect 3's binding ruling. One commit per defect (test-only done-arm pin → report diffstat → dedupe
+position), then this final commit. Zero server hunks, zero schema changes, zero frozen-file changes.
+All three defects are closed and re-verified green.
+
+### D1 (MEDIUM) — the D3 live-invariant pin was a tautology (now drives the real done-arm)
+
+`app/src/agent/ChatLog.legacyarm.card1.test.tsx` — the pre-FIX4C pin (D) hand-built `liveMsg` with
+both fields and re-implemented the gate expression in-test, so a regression in the real done-arm
+(`useAiChat.ts:1689-1711`, which sets `clarification` and conditionally `clarificationRequests`
+from `result`) left it GREEN.
+
+- New pin (D1) **drives the real path**: `vi.mock('../shared/api/aiClient')` stubs
+  `streamAssist` to yield a `done` whose `result.clarificationRequests` is non-empty and whose
+  legacy `result.clarification` is ABSENT (the shorthand path's real shape); the pin
+  `renderHook(useAiChat, ...)` + `result.current.sendPrompt(...)` and asserts the RESULTING
+  assistant message carries BOTH a non-empty `clarification` (derived via
+  `legacyClarificationFromRequests` when the legacy field is absent) AND a non-empty
+  `clarificationRequests`.
+- Pin (D) now reads that REAL done-arm message (not a hand-built literal) and pins the legacy
+  block-arm gate (`ChatLog.tsx:521`) FALSE on it — so a regression that stops the done-arm setting
+  `clarificationRequests` turns the gate TRUE → (D) RED.
+- **Proven RED (mutation in a /tmp copy):** dropping the done-arm's `clarificationRequests` spread
+  (`useAiChat.ts:1709-1711`) → **2 failed | 3 passed (5)**, exactly the new (D1)
+  (`expected undefined to be truthy`) + (D) (`expected true to be false`) pins; restored → 5/5
+  GREEN. (The derived legacy `clarification` survives the mutation — line 327 passed; only the
+  typed requests were lost, which is exactly the regression this pin guards.)
+- **Test-only; `useAiChat.ts` unmodified** at the D1 commit (sha256 `31f82420…`, matching the
+  reviewer's restore hash). Commit `01dd1442`.
+
+### D2 (LOW) — the FIX-3 "Diff (raw)" block was stale (`b4e62eeb..HEAD` no longer reproduces)
+
+`.hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md` `## CARD1-FIX3`, `Diff (raw)`
+block. The ORIGINAL command was `git -c core.fileMode=false diff --stat b4e62eeb..HEAD` → "8 files
+changed, 1149 insertions(+), 2 deletions(-)", which NO LONGER reproduces because HEAD moved past
+the FIX-3 code tip (the FIX-3 report stamp `eee7b38d` added the report file).
+
+- The block's numbers are REAL — they reproduce EXACTLY at the commit the block actually names,
+  the **FIX-3 CODE TIP `60b826ae`** (measured before the report stamp). The block now runs
+  `git -c core.fileMode=false diff --stat b4e62eeb..60b826ae`, pastes the real measured output
+  verbatim (8 files, 1149 insertions, 2 deletions — byte-for-byte), and is marked **SUPERSEDED**
+  for the current tip by the FIX-4 §D9 block (`eee7b38d..d077510b`).
+- **Exactly one reproducible command+output pair retained**; the stale `..HEAD` range is documented
+  as not-to-be-re-derived (it is 12 files, 2214/2 at this run's HEAD). **Report-only (no code).**
+  Commit `4e80b712`.
+
+### D3 (LOW) — `dedupeById` kept LAST-occurrence position (now FIRST-SEEN POSITION, LAST VALUE)
+
+`app/src/shared/hooks/useAiChat.ts` `dedupeById` (in `unionClarificationAnswers`) kept the
+LAST-occurrence position (`[req-1(v1), req-2, req-1(v2)]` → `[req-2, req-1(v2)]`), contradicting
+both the c10 rule and its own comment (first-seen position, last value).
+
+- **Binding ruling:** FIRST-SEEN POSITION, LAST VALUE — drop the later duplicate and replace the
+  kept (first) entry's value in place. Wire field name and position unchanged.
+- Fix (two-pass): record first-seen index + last-seen value per `requestId`; emit at the
+  FIRST-seen position carrying the LAST value, dropping later duplicates in place. Keyless answers
+  stay. Set-like (idempotent) behaviour preserved.
+- New pin (`useAiChat.card1fix5.persistResend.test.ts`, D5 seam): interleaved persisted
+  `[req-1(v1), req-2, req-1(v2)]` → `[req-1(v2), req-2]` (first-seen position, last value).
+  **RED captured pre-fix:** `expected [ 'req-2', 'req-1' ] to deeply equal [ 'req-1', 'req-2' ]`
+  (1 failed | 9 passed, unfiltered). **GREEN post-fix:** 10/10, existing set-like pin still green.
+  Commit `579d6867` (last code commit).
+- Also corrected the report's `"1 failed | 8 skipped"` → `"1 failed | 8 passed"` (unfiltered) at
+  the D5 entry (a filter mislabel; the unfiltered run was 1 failed | 8 passed).
+
+### Verification (real output, all run at this commit)
+
+1. `cd app && npx vitest run src/agent/ChatLog.legacyarm.card1.test.tsx src/event-editor/right-pane/ai/ClarificationPicker.mintseed.card1.test.tsx src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts src/shared/api/aiClient.card1fix5.clarificationWire.test.ts src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts src/shared/hooks/useAiChat.card1fix5.realDrop.test.ts src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts` → **7 passed (7) files, 28 passed (28) tests** (≥ the 7 files / 26 tests the orchestrator measured at fd9c5d4b; the +2 are the new D1 + D3 pins). The one `realDrop` 5002ms timeout under the first parallel run was a load flake — re-run (standalone and in the suite) is green.
+2. `cd app && npx tsc --noEmit -p .` → **exactly 10 error lines**, none in a file touched this run (all pre-existing: `EventEditorContext.tsx`, `LawnSurface.moveAcross.test.tsx`, `PreviewActionBar.test.tsx`, `editorHistory.test.ts` (×2), `LabwareFocus.instrument.test.tsx`, `Viewer.tsx`, `ViewerToolbar.tsx`, `IngestionUploadModal.tsx`, `ExtractionProgressPanel.test.tsx`).
+3. `git -c core.fileMode=false diff --stat fd9c5d4b..HEAD` + `--name-status` (app-only):
+
+    .../L2-CLARIFY-CARD-1-report.l2t0230.md            | 119 ++++++++++++---
+    app/src/agent/ChatLog.legacyarm.card1.test.tsx     | 184 ++++++++++++++++++---
+    .../useAiChat.card1fix5.persistResend.test.ts      |  34 ++++
+    app/src/shared/hooks/useAiChat.ts                  |  30 +++-
+    4 files changed, 331 insertions(+), 36 deletions(-)
+
+    $ git -c core.fileMode=false diff --name-status fd9c5d4b..HEAD
+    M	.hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md
+    M	app/src/agent/ChatLog.legacyarm.card1.test.tsx
+    M	app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts
+    M	app/src/shared/hooks/useAiChat.ts
+
+4. `diff -q .hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md /home/brad/.hermes/cl/lanes/2/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md` → empty (the two copies are identical; both updated by this commit).
+
+### Scope diff (fd9c5d4b..HEAD, this run)
+
+4 files, all `app/src/**` + the report: 4 modified. `ChatLog.legacyarm.card1.test.tsx` (D1 pin),
+`useAiChat.card1fix5.persistResend.test.ts` (D3 pin), `useAiChat.ts` (D3 dedupe fix), and this
+report. No `server/**`, no schema file, no frozen file (`proposalRowFacts.ts`, `wellRange.ts`,
+and the four TARGET-1 test files are untouched).
+
+CARD1-FIX4C DONE 579d686727e68d64c2519e76e1ae3439fa79590c

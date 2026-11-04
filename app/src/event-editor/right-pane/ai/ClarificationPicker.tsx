@@ -387,7 +387,28 @@ function objectLiteralField(body: string, key: string, kind: 'object' | 'string'
 }
 
 export function mintLabelFor(request: AiClarificationRequest, query: string): string {
-  return mintNounFromQuery(request.query) || query.trim()
+  // L2-CLARIFY-CARD-1 (defect 5, ruling l2t1951 Q1): the MINT SEED reads the
+  // RAW provenance label FIRST (request.unresolvedFact.label — the server's
+  // verbatim ScientistIntentUnresolvedFact, human case), NOT request.query
+  // (the canonical DISPLAY form the D3 fold produced). Feeding the fold back
+  // as the durable title is what ruling §2 rule 3 forbids. The rendered
+  // identity row (the search input's seedNoun) and the preview keep
+  // request.query; only this mint input seeds from the raw label. The client
+  // SELECTS the raw field — it never transforms case. Type-guarded (the wire
+  // declares unresolvedFact? OPTIONAL — types.ts:621), never assumed.
+  //
+  // The fallback is NOT a casing hole: the only OTHER mint-capable request
+  // family is the gap request (forceMaterialClarifications.ts:521-523/:537-539,
+  // request.query = gap.label — RAW provenance; that path never rides the D3
+  // canonical fold), so on every mint-capable shape the chain ends at a
+  // raw-case string, never at a fold.
+  const rawLabel =
+    request.unresolvedFact &&
+    typeof request.unresolvedFact.label === 'string' &&
+    request.unresolvedFact.label.trim()
+      ? request.unresolvedFact.label.trim()
+      : ''
+  return rawLabel || mintNounFromQuery(request.query) || query.trim()
 }
 
 /** Append `more` to `base`, dedupe by key, keep `pinBottom` rows last. */
@@ -917,6 +938,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           type="text"
           className="message-log__clarification-search"
           ref={searchAnchorRef}
+          data-testid="clarification-identity-search"
         value={query}
         placeholder={placeholder}
         autoComplete="off"

@@ -295,6 +295,27 @@ export interface AiClarificationRequest {
   clarifyControl?:
     | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
     | { kind: 'wells'; question: string }
+  /**
+   * L2-CLARIFY-CARD-1 (defect 5, ruling l2t1951 Q1) — the VERBATIM
+   * ScientistIntentUnresolvedFact this card maps, mirrored from the server's
+   * AgentClarificationRequest.unresolvedFact (set unconditionally on the
+   * shorthand path, shorthandChat.ts:1013). `label` is REQUIRED on the server
+   * type (scientistIntent/types.ts:117), so whenever the fact is present its
+   * label is present. This is the RAW provenance label (human case) — the
+   * mint input seeds from it, NOT from `query` (the canonical DISPLAY form the
+   * D3 fold produced; feeding the fold back as the durable title is what
+   * ruling §2 rule 3 forbids). Optional: absent when the server stamps no
+   * fact (non-shorthand requests) — key ABSENT via a conditional spread, never
+   * `undefined` (eopt discipline). A PURE structural mirror (label/reason/
+   * candidates/actionLocation ride through untouched); the client SELECTS the
+   * raw field, it never transforms case.
+   */
+  unresolvedFact?: {
+    label: string
+    reason: string
+    candidates?: Array<{ label: string; confidence?: number; ref?: string }>
+    actionLocation?: { actionIndex?: number; action?: string; argument?: string }
+  }
 }
 
 export interface AiClarificationAnswer {
@@ -691,6 +712,19 @@ export interface ChatMessage {
    * it through `metadata.shorthand` so the card survives a reload.
    */
   shorthand?: string
+  /**
+   * L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2): the requestId-keyed
+   * structured answers this USER message recorded — the SAME
+   * `AiClarificationAnswer[]` shape that rides the wire (`aiClient.ts:45`,
+   * `:142`). Persisted as `metadata.clarificationAnswers` so a cold reload can
+   * (a) render the compact Answered row and (b) RE-SEND the answered requestIds
+   * on subsequent sends of the same thread, letting the shipped server drop
+   * (`AgentOrchestrator.ts:3085-3098`, P9a-pinned) close the re-open leg with
+   * ZERO server change. Keyed on requestId ONLY — never prose, never a regex
+   * over the question. Conditional-spread idiom: key ABSENT when the turn
+   * carried no structured answers, never `undefined`.
+   */
+  clarificationAnswers?: AiClarificationAnswer[]
 }
 
 export interface AiConversationMessage {
