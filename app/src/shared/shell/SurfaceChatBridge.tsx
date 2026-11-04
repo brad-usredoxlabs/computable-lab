@@ -158,16 +158,14 @@ function useDoorRequiredRecheckDeadline(required: boolean): boolean {
 }
 
 /**
- * The bounded SCOPE-SETTLE window (L2-THREADSCOPE-FLIP-1, C-2): a SEPARATE
- * deadline from useDoorRequiredRecheckDeadline — that state drives the
- * loud-fail throw (and its `required` argument is the YAML's
- * `required_providers` fact), so coupling them would change door behaviour.
- * It reuses DOOR_REQUIRED_RECHECK_DEADLINE_MS (the existing bounded deadline —
- * no second constant). Armed only while `active` (the scope is genuinely
- * undecided: the door declares deck AND the slice carries no scope value
- * yet), so a provider-less door or an already-settled scope adds zero
- * latency — the release is either the scope value arriving or this window
- * elapsing (then no-scope is the settled answer), never an indefinite wait.
+ * The bounded SCOPE-SETTLE window (L2-THREADSCOPE-FLIP-1, C-2) — a SEPARATE
+ * deadline from useDoorRequiredRecheckDeadline (that state drives the loud-fail
+ * throw; coupling them would change door behaviour). Reuses
+ * DOOR_REQUIRED_RECHECK_DEADLINE_MS (the existing bounded deadline — no second
+ * constant). Armed only while `active` (the door declares deck AND the slice
+ * carries no scope value yet); release is the scope value arriving or this
+ * window elapsing (no-scope is then the settled answer) — never an indefinite
+ * wait.
  */
 function useScopeSettleDeadline(active: boolean): boolean {
   const [elapsed, setElapsed] = useState(false)

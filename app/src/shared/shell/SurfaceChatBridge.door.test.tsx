@@ -248,7 +248,10 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     vi.useFakeTimers()
     // The routed-deck ordering (DeckChatSlice.tsx:151): the bundle is published
     // scope-less first (state.eventGraphId unresolved), then re-published WITH
-    // the scope. The slice's PRESENCE is never the signal — its scope value is.
+    // the scope — the slice's PRESENCE is never the signal, its scope value is.
+    // Encoded shape (documented default 'settled', spec §3a): the options carry
+    // scopeStatus 'provisional' while the scope is undecided, NO key once
+    // settled — the absence IS the settled default.
     function LateScopeDeckPublisher() {
       const [loaded, setLoaded] = useState(false)
       useEffect(() => {
@@ -273,24 +276,25 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     const first = surfaceChatCalls[0]!
     expect(first.scopeStatus).toBe('provisional')
     expect(first.scope).toBeUndefined()
-    // The settle EVENT: the slice's scope value arrives (a beat later). The
-    // status is data now — settled with the value, no timer involvement.
+    // The settle EVENT: the slice's scope value arrives (a beat later) — the
+    // status is data: settled (the scopeStatus key absent: the default), no timer.
     act(() => {
       vi.advanceTimersByTime(50)
     })
     const settled = surfaceChatCalls[surfaceChatCalls.length - 1]!
-    expect(settled.scopeStatus).toBe('settled')
+    expect(settled.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in settled).toBe(false)
     expect(settled.scope).toBe('EG-1')
   })
 
   it('scopeStatus P-b: a non-deck surface is settled on the FIRST flush with zero timer advancement (no global deadline)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.useFakeTimers()
-    // record-host declares NO providers (config/chat/chat-hosts.yaml) and its
-    // base scope is the page-local record id — the scope is decided at first
-    // flush. A global (provider-agnostic) deadline hook would hold this door
-    // for DOOR_REQUIRED_RECHECK_DEADLINE_MS — the zero-advance assertion is
-    // the guard against that.
+    // record-host declares NO providers (config/chat/chat-hosts.yaml); its base
+    // scope is the page-local record id — decided at first flush. A GLOBAL
+    // (provider-agnostic) deadline hook would arm a timer and hold this door
+    // for DOOR_REQUIRED_RECHECK_DEADLINE_MS — the zero-advance assertion below
+    // is the guard against that.
     const recordBase: AiContext = {
       surface: 'literature',
       summary: 'Record REC-1',
@@ -302,7 +306,10 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
       </AiPanelProvider>,
     )
     const first = surfaceChatCalls[0]!
-    expect(first.scopeStatus).toBe('settled')
+    // Settled on the FIRST flush: no provisional marker (the documented
+    // default 'settled'), with the page-local scope forwarded.
+    expect(first.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in first).toBe(false)
     expect(first.scope).toBe('REC-1')
     // Zero timer advancement: the settle deadline must not have been armed for
     // a provider-less door (no added latency — the P4 no-regression shape).
@@ -330,13 +337,15 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     // value is not — presence is not the signal).
     expect(surfaceChatCalls[0]!.scopeStatus).toBe('provisional')
     // Bounded release: at the deadline the status resolves to a DECIDED value.
-    // Exact resolved shape: scopeStatus 'settled' with NO scope key (absent —
-    // the server's "_" bucket), no throw.
+    // Exact resolved shape: settled-absent — NO scopeStatus key (the
+    // documented default 'settled'), NO scope key (absent — the server's "_"
+    // bucket), no throw.
     act(() => {
       vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS)
     })
     const decided = surfaceChatCalls[surfaceChatCalls.length - 1]!
-    expect(decided.scopeStatus).toBe('settled')
+    expect(decided.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in decided).toBe(false)
     expect(decided.scope).toBeUndefined()
     expect('scope' in decided).toBe(false)
   })
