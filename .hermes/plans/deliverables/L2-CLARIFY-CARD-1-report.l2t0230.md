@@ -1061,7 +1061,9 @@ hunks, zero schema changes, zero frozen-file changes.
   it does not match the fact's canonical id → `expected 1 to be +0`.
 - **D5** `0ddb9239` — `unionClarificationAnswers` set-like by requestId (dedupe inside the
   persisted set and inside fresh). RED pre-fix (`['req-1','req-1']` → length 2; 1 failed | 8
-  skipped); GREEN post-fix (9/9); idempotence + fresh-supersede pins.
+  passed, unfiltered); GREEN post-fix (9/9); idempotence + fresh-supersede pins.
+  (CARD1-FIX4C: the "8 skipped" wording was a filter mislabel — the unfiltered run was
+  1 failed | 8 passed; corrected.)
 - **D6** `e8f7636a` (+ fixup `1cd4fd69`) — reloadBoundary `process.cwd` restore in try/finally;
   reject-path pin proves the getter is restored to the ORIGINAL function (RED when the
   finally-restore is removed). Fixup restores the implicit-any binding so tsc holds the 10-line
@@ -1246,3 +1248,101 @@ untouched). The `useAiChat.ts` product delta is the D5 set-like dedupe; the `Cla
 delta is the D2 test affordance; D12/D13 are test-only.
 
 CARD1-FIX4 DONE d077510bd100998c93c3a5ccf30875d91e3d89f1
+
+## CARD1-FIX4C (advc c11)
+
+Continuation run l2t0230. Cycle 11 closed D1, D2, D4, D5(set-like), D6, D7, D8, D10–D14 with the
+reviewer's own mutation controls; this run fixes ONLY the three residuals in the c11 report
+SECTION 4. No defect was re-opened, re-derived or "improved"; no product behaviour changed outside
+defect 3's binding ruling. One commit per defect (test-only done-arm pin → report diffstat → dedupe
+position), then this final commit. Zero server hunks, zero schema changes, zero frozen-file changes.
+All three defects are closed and re-verified green.
+
+### D1 (MEDIUM) — the D3 live-invariant pin was a tautology (now drives the real done-arm)
+
+`app/src/agent/ChatLog.legacyarm.card1.test.tsx` — the pre-FIX4C pin (D) hand-built `liveMsg` with
+both fields and re-implemented the gate expression in-test, so a regression in the real done-arm
+(`useAiChat.ts:1689-1711`, which sets `clarification` and conditionally `clarificationRequests`
+from `result`) left it GREEN.
+
+- New pin (D1) **drives the real path**: `vi.mock('../shared/api/aiClient')` stubs
+  `streamAssist` to yield a `done` whose `result.clarificationRequests` is non-empty and whose
+  legacy `result.clarification` is ABSENT (the shorthand path's real shape); the pin
+  `renderHook(useAiChat, ...)` + `result.current.sendPrompt(...)` and asserts the RESULTING
+  assistant message carries BOTH a non-empty `clarification` (derived via
+  `legacyClarificationFromRequests` when the legacy field is absent) AND a non-empty
+  `clarificationRequests`.
+- Pin (D) now reads that REAL done-arm message (not a hand-built literal) and pins the legacy
+  block-arm gate (`ChatLog.tsx:521`) FALSE on it — so a regression that stops the done-arm setting
+  `clarificationRequests` turns the gate TRUE → (D) RED.
+- **Proven RED (mutation in a /tmp copy):** dropping the done-arm's `clarificationRequests` spread
+  (`useAiChat.ts:1709-1711`) → **2 failed | 3 passed (5)**, exactly the new (D1)
+  (`expected undefined to be truthy`) + (D) (`expected true to be false`) pins; restored → 5/5
+  GREEN. (The derived legacy `clarification` survives the mutation — line 327 passed; only the
+  typed requests were lost, which is exactly the regression this pin guards.)
+- **Test-only; `useAiChat.ts` unmodified** at the D1 commit (sha256 `31f82420…`, matching the
+  reviewer's restore hash). Commit `01dd1442`.
+
+### D2 (LOW) — the FIX-3 "Diff (raw)" block was stale (`b4e62eeb..HEAD` no longer reproduces)
+
+`.hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md` `## CARD1-FIX3`, `Diff (raw)`
+block. The ORIGINAL command was `git -c core.fileMode=false diff --stat b4e62eeb..HEAD` → "8 files
+changed, 1149 insertions(+), 2 deletions(-)", which NO LONGER reproduces because HEAD moved past
+the FIX-3 code tip (the FIX-3 report stamp `eee7b38d` added the report file).
+
+- The block's numbers are REAL — they reproduce EXACTLY at the commit the block actually names,
+  the **FIX-3 CODE TIP `60b826ae`** (measured before the report stamp). The block now runs
+  `git -c core.fileMode=false diff --stat b4e62eeb..60b826ae`, pastes the real measured output
+  verbatim (8 files, 1149 insertions, 2 deletions — byte-for-byte), and is marked **SUPERSEDED**
+  for the current tip by the FIX-4 §D9 block (`eee7b38d..d077510b`).
+- **Exactly one reproducible command+output pair retained**; the stale `..HEAD` range is documented
+  as not-to-be-re-derived (it is 12 files, 2214/2 at this run's HEAD). **Report-only (no code).**
+  Commit `4e80b712`.
+
+### D3 (LOW) — `dedupeById` kept LAST-occurrence position (now FIRST-SEEN POSITION, LAST VALUE)
+
+`app/src/shared/hooks/useAiChat.ts` `dedupeById` (in `unionClarificationAnswers`) kept the
+LAST-occurrence position (`[req-1(v1), req-2, req-1(v2)]` → `[req-2, req-1(v2)]`), contradicting
+both the c10 rule and its own comment (first-seen position, last value).
+
+- **Binding ruling:** FIRST-SEEN POSITION, LAST VALUE — drop the later duplicate and replace the
+  kept (first) entry's value in place. Wire field name and position unchanged.
+- Fix (two-pass): record first-seen index + last-seen value per `requestId`; emit at the
+  FIRST-seen position carrying the LAST value, dropping later duplicates in place. Keyless answers
+  stay. Set-like (idempotent) behaviour preserved.
+- New pin (`useAiChat.card1fix5.persistResend.test.ts`, D5 seam): interleaved persisted
+  `[req-1(v1), req-2, req-1(v2)]` → `[req-1(v2), req-2]` (first-seen position, last value).
+  **RED captured pre-fix:** `expected [ 'req-2', 'req-1' ] to deeply equal [ 'req-1', 'req-2' ]`
+  (1 failed | 9 passed, unfiltered). **GREEN post-fix:** 10/10, existing set-like pin still green.
+  Commit `579d6867` (last code commit).
+- Also corrected the report's `"1 failed | 8 skipped"` → `"1 failed | 8 passed"` (unfiltered) at
+  the D5 entry (a filter mislabel; the unfiltered run was 1 failed | 8 passed).
+
+### Verification (real output, all run at this commit)
+
+1. `cd app && npx vitest run src/agent/ChatLog.legacyarm.card1.test.tsx src/event-editor/right-pane/ai/ClarificationPicker.mintseed.card1.test.tsx src/event-editor/right-pane/ai/ClarificationPicker.realshape.card1.test.ts src/shared/api/aiClient.card1fix5.clarificationWire.test.ts src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts src/shared/hooks/useAiChat.card1fix5.realDrop.test.ts src/shared/hooks/useAiChat.card1fix5.reloadBoundary.test.ts` → **7 passed (7) files, 28 passed (28) tests** (≥ the 7 files / 26 tests the orchestrator measured at fd9c5d4b; the +2 are the new D1 + D3 pins). The one `realDrop` 5002ms timeout under the first parallel run was a load flake — re-run (standalone and in the suite) is green.
+2. `cd app && npx tsc --noEmit -p .` → **exactly 10 error lines**, none in a file touched this run (all pre-existing: `EventEditorContext.tsx`, `LawnSurface.moveAcross.test.tsx`, `PreviewActionBar.test.tsx`, `editorHistory.test.ts` (×2), `LabwareFocus.instrument.test.tsx`, `Viewer.tsx`, `ViewerToolbar.tsx`, `IngestionUploadModal.tsx`, `ExtractionProgressPanel.test.tsx`).
+3. `git -c core.fileMode=false diff --stat fd9c5d4b..HEAD` + `--name-status` (app-only):
+
+    .../L2-CLARIFY-CARD-1-report.l2t0230.md            | 119 ++++++++++++---
+    app/src/agent/ChatLog.legacyarm.card1.test.tsx     | 184 ++++++++++++++++++---
+    .../useAiChat.card1fix5.persistResend.test.ts      |  34 ++++
+    app/src/shared/hooks/useAiChat.ts                  |  30 +++-
+    4 files changed, 331 insertions(+), 36 deletions(-)
+
+    $ git -c core.fileMode=false diff --name-status fd9c5d4b..HEAD
+    M	.hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md
+    M	app/src/agent/ChatLog.legacyarm.card1.test.tsx
+    M	app/src/shared/hooks/useAiChat.card1fix5.persistResend.test.ts
+    M	app/src/shared/hooks/useAiChat.ts
+
+4. `diff -q .hermes/plans/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md /home/brad/.hermes/cl/lanes/2/deliverables/L2-CLARIFY-CARD-1-report.l2t0230.md` → empty (the two copies are identical; both updated by this commit).
+
+### Scope diff (fd9c5d4b..HEAD, this run)
+
+4 files, all `app/src/**` + the report: 4 modified. `ChatLog.legacyarm.card1.test.tsx` (D1 pin),
+`useAiChat.card1fix5.persistResend.test.ts` (D3 pin), `useAiChat.ts` (D3 dedupe fix), and this
+report. No `server/**`, no schema file, no frozen file (`proposalRowFacts.ts`, `wellRange.ts`,
+and the four TARGET-1 test files are untouched).
+
+CARD1-FIX4C DONE 579d686727e68d64c2519e76e1ae3439fa79590c
