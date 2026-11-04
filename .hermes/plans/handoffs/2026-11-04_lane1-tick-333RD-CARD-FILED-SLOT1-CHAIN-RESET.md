@@ -134,3 +134,16 @@ Two first-hand checks after the card/handoff commit (`9e93b1aa`, docs-only):
    ledger reachable, rc 0; live polls continue at 45 s (`06:53:54`, `06:54:39`, both rc 14). The
    appended `blocker_owner:` line cannot be parsed as `owner:` (the awk matches `^owner: `), which is
    why GUARD2 still reads `todo|none|none` — asserted by the selftest rather than assumed.
+
+## Addendum 07:12:30 EST — the 18.1-min window OPENED with both slots held
+
+Watched the one instant the gate could next pass: slot-0's chain (start 10:11:52.898Z) reached the §3
+≥2 h threshold at **12:11:52Z = 07:11:52 EST**. The arm's own poll at **07:11:58 EST** (6 s after)
+reads **ROTATION-DEFERRED rc 14** with `free_slots=[] held_slots=[0,1]` — i.e. at the first instant
+check 3 became satisfiable, **check 4 still failed because slot-1 had not freed**. So the residual
+chance is unchanged and narrower than 18 min: slot-1 must free at one of the arm's 45 s polls between
+now and **12:30:00Z (07:30:00 EST)** while slot-0 stays live/continuous.
+
+Status at checkpoint: arm `active/running`, MainPID 3762406, 4 polls/min logged, unit will exit 8
+(`BUDGET-EXPIRED`) at 07:30:00 EST if it never fires. No lane-1 action is lawful or useful in that
+interval; the next tick's first command is still `verify-leg1-fired.sh`.
