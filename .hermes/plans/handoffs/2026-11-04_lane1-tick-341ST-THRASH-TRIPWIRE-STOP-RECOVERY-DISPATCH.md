@@ -68,6 +68,17 @@ so I did **not** wait for the ~11:15 commit deadline and did **not** redispatch 
    **First 4 minutes observed**: scratch file deleted ✓, `vitest run src/store` run ✓, no re-survey of the tree, and it
    was diagnosing the store-test result — i.e. the opposite of the previous signature.
 
+### Close of tick (11:22:44 EST) — the recovery worked
+
+- **U3 is COMMITTED: `52fead04`** — `server/src/lifecycle/contentLockDefault.ts` (+50),
+  `server/src/store/RecordStore.contentLock.test.ts` (+262), `server/src/store/RecordStoreImpl.ts` (+87/−4),
+  `server/src/store/types.ts` (+12), plus a 1-line lawful fixture repair in `RecordStore.test.ts`
+  (5 files, +408/−5). `git log --name-only 9a0de2a5..HEAD` contains **no** `cl-debug.test.ts` / `tmp-dbg.test.ts`
+  — both scratch files were deleted and never committed (OB-L1T340-3 discharged).
+- It is now on **U4**: `server.ts`, `scripts/applyOwnershipDefaults.ts`, `scripts/migrateRecordLifecycles.ts` are modified
+  and uncommitted, in progress. Unit `cl-l1-coder-recordlock-u4u6-l1t1108.service` **active**, slot-0 held by it.
+- Writes-only signature for the new run: 22 writes / 2 full reads in the first 12 minutes — no re-read loop.
+
 ## State left behind
 
 - Queue unchanged: **todo 1 / in-progress 1 / superseded 1 / done 109**; `L1-RECORD-LOCK-GUARD-1` remains
