@@ -69,8 +69,6 @@ afterEach(() => {
   selectedWellsMock.current = null
 })
 
-const baseProps = { isStreaming: false, prompt: '', onPromptChange: vi.fn(), onSend: vi.fn(), onCancel: vi.fn(), onReview: vi.fn() }
-
 /** A stub of the registered chat: only the fields the pane actually consumes. */
 function stubChat(overrides: Partial<UseAiChatReturn> = {}): UseAiChatReturn {
   const base = {
