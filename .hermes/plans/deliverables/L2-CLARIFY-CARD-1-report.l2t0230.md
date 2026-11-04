@@ -585,3 +585,54 @@ volume gate untouched.
   `server/src/ai/AgentOrchestrator.ts`,
   `server/src/ai/AgentOrchestrator.repeatEcho.test.ts`. No `app/` change, no
   client seam, no store/schema change.
+
+## FIX5 U4 — verify block (raw)
+
+Targeted vitest for every pin touched:
+- `npx vitest run src/ai/AgentOrchestrator.repeatEcho.test.ts src/api/handlers/VocabHandlers.mint.test.ts`
+  -> `Test Files 1 failed | 1 passed (2)`, `Tests 1 failed | 21 passed (22)`.
+  The single failure is `repeatEcho > P8 (D4 guards)` at line 448 (`expected 1 to
+  be +0`) — a PRE-EXISTING baseline failure: it fails identically with ALL U2
+  changes stashed (pristine `7084b0a0`), so it is in the 29-set, not introduced
+  here. P9a (positive D2) + P9b (negative D2) + all 11 mint pins PASS.
+- Whole `server/src/ai` suite at HEAD (after U2): `Test Files 16 failed | 115
+  passed (131)`, `Tests 29 failed | 1168 passed (1197)`.
+- Baseline `10062725` ai-suite MEASURED DIRECTLY (detached checkout at
+  `10062725`): `Tests 29 failed | 1166 passed (1195)`. The delta to HEAD is
+  EXACTLY the 2 new P9a/P9b pins (1166->1168 passed, 29 failed both).
+- Whole `server/src/ai` 29-failure set vs baseline `10062725`: BYTE-IDENTICAL.
+  Captured the `10062725` 29-set (detached run) and the pristine-`7084b0a0`
+  29-set (all U2 changes stashed) and the HEAD 29-set; `diff` of all three
+  sorted `FAIL` lists is EMPTY. No new failures, none fixed. (Note: `7084b0a0`
+  already carries the D3 units c5399da2..d0c9be7c from `10062725`; the D3 ai
+  changes did NOT shift the ai-suite outcome set — all three sets are identical.)
+- `npx tsc --noEmit -p server` -> 0 error lines (branch baseline 0).
+- Both goldens (U3 re-bless): BEFORE re-bless, BOTH asserters FAILED on the
+  single treeState mismatch (`7908fa38…` manifest vs `9a71c884…` actual; no
+  other treeState entry drifted); AFTER re-bless (commit 4d6e71d2),
+  `goldenIntentToGraph.test.ts` + `goldenProseBlobStrip.test.ts` ->
+  `Tests 9 passed (9)` (mismatch empty).
+- `git -c core.fileMode=false diff --stat 10062725..HEAD` at the U3 tip
+  (`4d6e71d2`): 18 files changed, 1080 insertions(+), 29 deletions(-). Spans
+  fix5 units 1–5 (termId + canonicalLabelPolicy + meta-schema +
+  e2e/nounShape/foldNull/readingCard/sameNounDedupe/stubHonesty +
+  VocabHandlers.mint) and fix5 U1–U3 (report + repeatEcho P9a/P9b +
+  AgentOrchestrator drop + shorthandChat dropAnsweredRequestIds + MANIFEST
+  re-bless). At this verify-block's tip the delta adds only this report section
+  (+marker line). No `app/` file changed; `app/src/agent/proposalRowFacts.ts`,
+  `app/src/event-editor/lib/wellRange.ts`, and the four TARGET-1 test files
+  untouched.
+- `git -c core.fileMode=false status --porcelain` -> CLEAN (only the untracked
+  `.hermes/plans/harness/l2-suite-a/lib/__pycache__/` dir, ignored per
+  assignment).
+
+## FIX5 coverage caveats (disclosed, not defects)
+- The STAGE A/B seam's `canonicalLabels` map has no asserting test: no test in
+  `server/src/ai/*.test.ts` passes a `canonicalLabelsForFacts` map to the seam
+  (0 hits); `shorthandChat.test.ts` carries no D3/STAGE/canonical assertions.
+  `app/src/.../ClarificationPicker.test.tsx` mocks the material resolver.
+- No pre-existing D2 pin existed (`second card|2nd card|re-ask|ledger` -> 0 in
+  ai tests); P9a/P9b are the first.
+- P8's `expected 1 to be +0` (repeatEcho:448) is a baseline failure unrelated
+  to D2 (a held-intent zero-model-call assertion); U2 does not change that path
+  (the 29-set is byte-identical).
