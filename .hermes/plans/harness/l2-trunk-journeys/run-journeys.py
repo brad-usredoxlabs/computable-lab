@@ -125,7 +125,12 @@ def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
     host. Mirrors check-gate.py's loader (id + surface required, no duplicate
     ids) so the sweep grades against the exact same set the gate uses. The
     inventory is the single source of truth: a missing/malformed file raises
-    so the sweep fails closed."""
+    so the sweep fails closed. D-6 (l2t0150) A-leg: each row ALSO carries the
+    `answer_selector` render-probe selector (the host's assistant-answer DOM
+    selector — DATA, not a per-host code branch); chat_host_answer_selectors
+    reads it and the probe builder passes it through as the probe's
+    `log_selector`. The gate's loader copy (check-gate.py) does not read the
+    field — a field the gate ignores is inert to the gate."""
     import yaml
     with open(path) as fh:
         doc = yaml.safe_load(fh)
@@ -145,6 +150,29 @@ def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
     if len(ids) != len(set(ids)):
         raise ValueError("chat-host inventory %s has duplicate host ids" % path)
     return ids, surfaces
+
+
+def chat_host_answer_selectors(path=CHAT_HOSTS_INVENTORY):
+    """D-6 (l2t0150) A-leg: the per-row `answer_selector` DATA (the host's
+    assistant-answer render selector) IN FILE ORDER, aligned with
+    load_chat_host_inventory's (ids, surfaces). Pure data lookup — the host
+    id is never compared in code. A row missing a usable `answer_selector`
+    raises so the sweep fails closed (the probe's `log_selector` is then
+    unknown, and the selector-proof arms would be vacuous)."""
+    import yaml
+    with open(path) as fh:
+        doc = yaml.safe_load(fh)
+    hosts = (doc or {}).get("hosts") or []
+    out = []
+    for h in hosts:
+        sel = (h or {}).get("answer_selector")
+        if not isinstance(sel, str) or not sel.strip():
+            raise ValueError("chat-host inventory %s host %r has no usable "
+                             "`answer_selector` (the render-probe selector "
+                             "is DATA — one row field per host)"
+                             % (path, (h or {}).get("id")))
+        out.append(sel.strip())
+    return out
 
 
 def probe_nav_path(route):
@@ -175,7 +203,27 @@ def probe_nav_path(route):
     return base.rstrip("/") or "/"
 
 
-def build_chat_host_probe(host_id, surface, route):
+def _inventory_answer_selector(host_id):
+    """D-6 (l2t0150) A-leg: the `answer_selector` DATA of ONE inventory
+    row (the host's assistant-answer render selector), looked up BY ID —
+    a data lookup, never a host comparison (the no-per-host-code rule:
+    the id keys a row read, it is not a branch condition). None when the
+    inventory is unreadable or the row carries no usable selector (the
+    caller then rides the driver's documented fail-closed default)."""
+    import yaml
+    try:
+        with open(CHAT_HOSTS_INVENTORY) as fh:
+            doc = yaml.safe_load(fh) or {}
+    except Exception:
+        return None
+    for h in doc.get("hosts") or []:
+        if isinstance(h, dict) and h.get("id") == host_id:
+            sel = h.get("answer_selector")
+            return sel.strip() if isinstance(sel, str) and sel.strip() else None
+    return None
+
+
+def build_chat_host_probe(host_id, surface, route, answer_selector=None):
     """One generic probe journey for a single chat host (DATA from the
     inventory). Reuses the existing step vocabulary (goto -> open_ai_tab ->
     ask -> screenshot) — the universal HarnessChatPane composer/affordances
@@ -193,6 +241,14 @@ def build_chat_host_probe(host_id, surface, route):
     an honest fallback/empty state for a probe token and needs no record
     (seed stays {} for those)."""
     nav = probe_nav_path(route)
+    # D-6 (l2t0150) A-leg: when the caller does not pass the selector
+    # explicitly (the default), the builder READS the inventory row's
+    # `answer_selector` DATA by id — a data lookup, never a branch on the
+    # id. An explicit pass-through (including an empty string, which the
+    # pin arms use to model a row that lacks the field) is respected as
+    # given.
+    if answer_selector is None:
+        answer_selector = _inventory_answer_selector(host_id)
     seed = {}
     teardown = {}
     if re.match(r"^/artifact/", nav):
@@ -217,6 +273,16 @@ def build_chat_host_probe(host_id, surface, route):
         # id/steps/assert/log_selector only), so this breaks no existing pin.
         "chat_host_probe": True,
         "surface": surface,
+        # D-6 (l2t0150) A-leg: the host's assistant-answer render selector,
+        # read BY ID from the inventory row's `answer_selector` DATA (data
+        # lookup — the id keys the row read, it is never a branch condition),
+        # injected as the probe's `log_selector` so the driver grades
+        # assistant rows at the host's ACTUAL log root (scope=log,
+        # aria-label="Conversation") instead of its legacy default selectors.
+        # Absent when the row carries no usable selector (the driver's
+        # documented fail-closed default then applies, and the pin arms
+        # fail closed, never green).
+        "log_selector": (answer_selector or "").strip() or None,
         "seed": seed,
         "teardown": teardown,
         "steps": [
@@ -1286,6 +1352,9 @@ def run_chat_host_sweep(args, run_dir):
           flush=True)
     # Per-host route DATA (the `route:` field) for probe navigation — read
     # alongside the id/surface the loader already validated, in file order.
+    # The host's `answer_selector` DATA is read BY THE BUILDER (by id — a
+    # data lookup, never a code branch) and injected as the probe's
+    # `log_selector`: no per-host pass-through to wire here.
     routes = []
     with open(CHAT_HOSTS_INVENTORY) as fh:
         _doc = yaml.safe_load(fh) or {}
