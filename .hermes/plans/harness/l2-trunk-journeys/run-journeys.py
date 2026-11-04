@@ -127,10 +127,12 @@ def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
     inventory is the single source of truth: a missing/malformed file raises
     so the sweep fails closed. D-6 (l2t0150) A-leg: each row ALSO carries the
     `answer_selector` render-probe selector (the host's assistant-answer DOM
-    selector — DATA, not a per-host code branch); chat_host_answer_selectors
-    reads it and the probe builder passes it through as the probe's
-    `log_selector`. The gate's loader copy (check-gate.py) does not read the
-    field — a field the gate ignores is inert to the gate."""
+    selector — DATA, not a per-host code branch); the probe builder reads it
+    by id through `_inventory_answer_selector` (ONE read path — the data
+    lookup that keys the inventory row, never a host branch) and passes it
+    through as the probe's `log_selector`. The gate's loader copy
+    (check-gate.py) does not read the field — a field the gate ignores is
+    inert to the gate."""
     import yaml
     with open(path) as fh:
         doc = yaml.safe_load(fh)
@@ -150,29 +152,6 @@ def load_chat_host_inventory(path=CHAT_HOSTS_INVENTORY):
     if len(ids) != len(set(ids)):
         raise ValueError("chat-host inventory %s has duplicate host ids" % path)
     return ids, surfaces
-
-
-def chat_host_answer_selectors(path=CHAT_HOSTS_INVENTORY):
-    """D-6 (l2t0150) A-leg: the per-row `answer_selector` DATA (the host's
-    assistant-answer render selector) IN FILE ORDER, aligned with
-    load_chat_host_inventory's (ids, surfaces). Pure data lookup — the host
-    id is never compared in code. A row missing a usable `answer_selector`
-    raises so the sweep fails closed (the probe's `log_selector` is then
-    unknown, and the selector-proof arms would be vacuous)."""
-    import yaml
-    with open(path) as fh:
-        doc = yaml.safe_load(fh)
-    hosts = (doc or {}).get("hosts") or []
-    out = []
-    for h in hosts:
-        sel = (h or {}).get("answer_selector")
-        if not isinstance(sel, str) or not sel.strip():
-            raise ValueError("chat-host inventory %s host %r has no usable "
-                             "`answer_selector` (the render-probe selector "
-                             "is DATA — one row field per host)"
-                             % (path, (h or {}).get("id")))
-        out.append(sel.strip())
-    return out
 
 
 def probe_nav_path(route):
