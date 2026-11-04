@@ -59,25 +59,43 @@ vi.mock('../../lib/groundMaterialRef', () => ({
 }))
 
 // THE server request shape for the unbound-entity D3 case: the canonical
-// display `query` is the lowercase identity key; the raw `unresolvedFact.label`
+// display `query` is the LOWERCASE FOLD KEY; the raw `unresolvedFact.label`
 // is human case (the provenance the mint title must follow).
+//
+// CARD1-FIX4 D1 (advc c10): this fixture is now the EXACT shape the REAL
+// `clarificationsFromUnresolvedFacts` (server/src/ai/shorthandChat.ts:873)
+// emits for this fact — not a hand-built guess. The pre-fix FIX-3 fixture
+// hand-built `query: '1 mM clofibrate in dmso'`, which is NOT what the server
+// emits: the `query` is the canonical FOLD (`canonicalLabelKey(label)` =
+// NFKC->trim->collapse->toLowerCase), and `'1 mM Clofibrate in DMSO'` folds to
+// `'1 mm clofibrate in dmso'` (note the `1 mm`, not `1 mM`). The byte-accurate
+// fold is the reviewer's D1 point: a hand-built guess that "looks" folded but
+// doesn't match the real fold would hide a server-side fold change.
+// `actionLocation` is carried verbatim (it is the fact's content key — the id
+// is a sha1 over [actionIndex, action, argument, reason, canonicalLabelKey]).
+// `id` is the REAL content hash (unresolved-c-<sha1-10hex>); it is stable for
+// this exact fact and is re-verified against the live builder by
+// ClarificationPicker.realshape.card1.test.ts (the D1 real-shape pin).
 const clofibrateRequest: AiClarificationRequest = {
-  id: 'clr-clofib-1',
+  id: 'unresolved-c-541c08ee67',
   kind: 'material',
-  prompt: 'The draft names "1 mM Clofibrate in DMSO" and the lab spine could not bind it. Choose what it is, or create a local term.',
+  prompt: 'The draft names "1 mm clofibrate in dmso" and the lab spine could not bind it (unbound). Choose what it is, or create a local term.',
   entityType: 'material',
   menuProvider: '/m',
-  // The canonical DISPLAY form — the unbound entity's lowercase identity key
-  // (shorthandChat.ts:928/1001: displayLabel = canonicalLabels?.get(identityKey)
-  // ?? identityKey). A bare noun, so mintNounFromQuery returns it verbatim.
-  query: '1 mM clofibrate in dmso',
+  // The canonical FOLD (the display form) — the real builder emits the
+  // canonicalLabelKey of the raw label, which for '1 mM Clofibrate in DMSO'
+  // is '1 mm clofibrate in dmso'. A bare noun, so mintNounFromQuery returns it
+  // verbatim (the pre-fix seed).
+  query: '1 mm clofibrate in dmso',
   options: [],
   allowCreateLocal: true,
   // The verbatim ScientistIntentUnresolvedFact (shorthandChat.ts:1013 sets it
-  // unconditionally) — the RAW provenance label in HUMAN case.
+  // unconditionally) — the RAW provenance label in HUMAN case + the fact's
+  // content-key actionLocation.
   unresolvedFact: {
     label: '1 mM Clofibrate in DMSO',
-    reason: 'the lab spine could not bind the noun (unbound)',
+    reason: 'unbound',
+    actionLocation: { action: 'add_material', argument: 'material' },
   },
 }
 
@@ -93,8 +111,10 @@ afterEach(() => {
 describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-title seed', () => {
   it('mintLabelFor seeds from the RAW unresolvedFact.label (human case), not the canonical lowercase query', () => {
     // seedNoun is what the component passes (mintNounFromQuery(request.query))
-    // — for a bare-noun query it is the query itself.
-    const seedNoun = '1 mM clofibrate in dmso'
+    // — for a bare-noun query it is the query itself. The REAL builder folds
+    // the raw label to '1 mm clofibrate in dmso' (canonicalLabelKey), so THAT
+    // is the seed the component computes from the real payload.
+    const seedNoun = '1 mm clofibrate in dmso'
     // Post-fix: the raw provenance label wins (human case). Pre-fix this
     // returned the lowercase query — the D3 fold fed back as the durable title.
     expect(mintLabelFor(clofibrateRequest, seedNoun)).toBe('1 mM Clofibrate in DMSO')
