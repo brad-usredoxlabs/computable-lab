@@ -109,6 +109,11 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
     expect(result.envelope).toMatchObject(before);
     expect(result.envelope?.meta?.contentSha).toBe(beforeSha);
     expect((result.envelope?.payload as { updatedAt?: string }).updatedAt).toBe(beforeUpdated);
+    // D1/AM-3: the no-op must be SIGNALLED to the handler (explicit no-op
+    // marker), so the handler can skip its full index rebuild. Before the
+    // fix the store returned a plain success with no marker — this assert
+    // is RED-first for D1.
+    expect(result.unchanged).toBe(true);
     expect(await listRecordFiles(store)).toEqual(beforeFiles); // no rewrite
   });
 
