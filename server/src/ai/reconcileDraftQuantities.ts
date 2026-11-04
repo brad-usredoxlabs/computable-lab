@@ -39,9 +39,10 @@ function asString(value: unknown): string {
 
 /** Volume-unit spellings a biologist actually types (µL, ul, ml, L, …). */
 const VOLUME_UNIT_RE = /(?:µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL])\b/;
-/** Count words after a number: cells, beads, particles, units, spheres… */
+/** Count words after a number: cells, beads, particles, units, spheres,
+ *  cycles (mix/pipette cycles — a count the turn can state in prose)… */
 const COUNT_WORD_RE =
-  /\b(cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliter(s)?|microlitres?)\b/;
+  /\b(cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/;
 
 export function isVolumeUnit(unit: string): boolean {
   return VOLUME_UNIT_RE.test(unit.trim());
@@ -85,8 +86,11 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
   const label = materialLabel.trim();
   // Number (digits, comma or dot thousand group) + optional filler words + a
   // unit word. The number class deliberately EXCLUDES whitespace so "10,000"
-  // stays one token and cannot swallow the words after it.
-  const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?)\b/gi;
+  // stays one token and cannot swallow the words after it. `cycles` joins the
+  // unit alternation (cycle 7 unit 1: "3 cycles" is a stated count — the
+  // declared `kind: quantity` contract for the mix `cycles` slot must be
+  // satisfiable in prose; ONE grammar: this list EXTENDS, never a second).
+  const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
 
   let best: StatedQuantity | null = null;
   let bestDist = Infinity;
