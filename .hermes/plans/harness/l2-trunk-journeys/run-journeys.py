@@ -683,6 +683,116 @@ def teardown_journey(journey, api_base):
     return True
 
 
+def _data_repo_records_root():
+    """The live data-repo records/ root the running server writes its records
+    to. `DATA_REPO` (CL_DATA_REPO) is the canonical env override; when the
+    server's data root is NOT under it (a lane-2 run whose CL_DATA_REPO still
+    points at the default /home/brad/.computable-lab/... while the :3093 stack
+    writes /home/brad/.computable-lab-lane2/...), the harness would delete
+    from the wrong tree and the probe leftovers would survive. So when
+    CL_DATA_REPO is unset (the default), probe the known lane data roots and
+    use the one that ACTUALLY carries the probe side-records (i.e. the live
+    repo). Explicit CL_DATA_REPO always wins (caller-controlled). Returns
+    (records_root, source_note)."""
+    import glob
+    explicit = os.environ.get("CL_DATA_REPO")
+    if explicit:
+        return os.path.join(explicit, "records"), \
+            "CL_DATA_REPO=%s" % explicit
+    # Default DATA_REPO first (canonical), then the known lane data dirs.
+    candidates = [DATA_REPO, "/home/brad/.computable-lab-lane2/worktrees/main"]
+    for cand in candidates:
+        rec = os.path.join(cand, "records")
+        # Does this tree carry a probe side-record (the study workspace dir)?
+        if glob.glob(os.path.join(rec, "studies", "STU-CHATHOST-PROBE")):
+            return rec, "auto: live data root %s (carries probe side-records)" % cand
+    # Nothing carried a probe record — fall back to the canonical DATA_REPO.
+    return os.path.join(DATA_REPO, "records"), \
+        "CL_DATA_REPO unset, no live probe side-records found; using default DATA_REPO=%s" % DATA_REPO
+
+
+def _delete_probe_side_records(journey, api_base):
+    """CHATHOST-CONSOLIDATE-1 FIX-1 (advc c7 D-2): symmetric teardown for the
+    probe's SIDE records that the seed causes. Materialising the artifact
+    record via the public API auto-mints the owner access-policy side record
+    (`ACL-<recordId>`, a REAL record — deleted through the same public
+    DELETE /api/records path as the artifact) and the artifact's studyId
+    sidecar `records/studies/STU-<recordId>/workspace.yaml` (a NON-record the
+    product writes directly to the filesystem; it has no delete endpoint, so
+    it is removed from the live data-repo filesystem root).
+
+    Deletes ONLY paths that derive from the probe's own recordId token —
+    NEVER a broad glob: the ACL id is derived per the product's own minting
+    rule (AuthorizationService: `ACL-${sanitizeRecordIdPart(rid)}`, sanitize =
+    `[^A-Za-z0-9_-]` -> `-`, uppercased), and the study sidecar path is
+    `records/studies/STU-<rid>/`. A path is only removed when its
+    CHATHOST-PROBE-derived identity is verified (ACL record's
+    `resourceRef.id` == rid; the study dir name == the seed's studyId).
+    No side record is touched unless the journey declared a probe seed
+    (seed.record); a seedless probe has no side records, so the result is
+    vacuously clean. Returns (acl_clean, sidecar_clean, notes) — the booleans
+    mean "no probe side record remains" (deleted OR absent), so a clean
+    teardown is honest whether the side record was just removed or was never
+    created; the per-path `notes` carry the exact outcome for the receipt."""
+    seed = journey.get("seed") or {}
+    rec = seed.get("record") or {}
+    rid = rec.get("recordId")
+    if not rid:
+        return True, True, ["no probe seed.record — no side records to remove (vacuously clean)"]
+    notes = []
+    # (a) the auto-minted owner access-policy side record (a REAL record).
+    acl_rid = "ACL-" + re.sub(r"[^A-Za-z0-9_-]", "-", rid).upper()
+    acl_clean = False
+    st, body = _api(api_base, "GET", "/api/records/" + acl_rid)
+    if st == 200:
+        # Verify this ACL actually belongs to OUR probe record before deleting
+        # (never delete a record we cannot prove derives from the seed).
+        payload = (body.get("record") or body).get("payload") or \
+            body.get("payload") or {}
+        rr = (payload.get("resourceRef") or {})
+        if rr.get("id") == rid:
+            st2, _b2 = _api(api_base, "DELETE", "/api/records/" + acl_rid)
+            acl_clean = st2 in (200, 204, 404)
+            notes.append("access-policy side record %s: %s (DELETE -> %s)"
+                         % (acl_rid, "removed" if acl_clean else "STILL PRESENT", st2))
+        else:
+            notes.append("access-policy side record %s: NOT removed (resourceRef.id "
+                         "%r != seed recordId %r — refused to touch it)"
+                         % (acl_rid, rr.get("id"), rid))
+    else:
+        acl_clean = True    # absent -> nothing left behind
+        notes.append("access-policy side record %s: absent (GET -> %s)" % (acl_rid, st))
+    # (b) the artifact's study workspace sidecar (NON-record, filesystem only).
+    study_id = (rec.get("payload") or {}).get("studyId")
+    sidecar_clean = True
+    if study_id:
+        rec_root, src = _data_repo_records_root()
+        sdir = os.path.join(rec_root, "studies", study_id)
+        # The path is BUILT from the seed's own studyId (never a broad glob);
+        # re-verify the identity before removing.
+        if os.path.basename(sdir) == study_id:
+            if os.path.isdir(sdir):
+                try:
+                    import shutil
+                    shutil.rmtree(sdir)
+                    sidecar_clean = True
+                    notes.append("study workspace sidecar records/studies/%s: removed (rmtree; source=%s)"
+                                 % (study_id, src))
+                except OSError as exc:
+                    sidecar_clean = False
+                    notes.append("study workspace sidecar records/studies/%s: STILL PRESENT (OSError: %s)"
+                                 % (study_id, exc))
+            else:
+                sidecar_clean = True    # absent -> nothing left behind
+                notes.append("study workspace sidecar records/studies/%s: absent on disk (source=%s)"
+                             % (study_id, src))
+        else:
+            sidecar_clean = False
+            notes.append("study workspace sidecar: path identity could not be verified "
+                         "(%s) — refused to remove" % sdir)
+    return acl_clean, sidecar_clean, notes
+
+
 # ---------------------------------------------------------------------------
 # Interception-ban ATTESTATION grading (N4) — PURE over the ui receipt dict.
 # The construction ban (ui-drive never CALLS route APIs) has two runtime
@@ -861,6 +971,26 @@ def _classify_probe_verdict(violations, bodies, body_text_tail, is_probe):
     wall). A probe with no captured body and/or no product error text stays
     exactly as graded (red) — an unexplained failure is never mislabelled
     inconclusive. Returns (verdict, inconclusive-record-or-None)."""
+    if is_probe and not bodies:
+        # CHATHOST-CONSOLIDATE-1 FIX-1 (advc c7 D-1, BLOCKER): a chat-host
+        # probe must NEVER grade green without at least one captured outgoing
+        # request body — the captured body IS the round-trip artifact (brief
+        # req #4: "... and a captured outgoing request body"; "must never
+        # green a host that did not round-trip"). The rendered criteria
+        # (turns / visible answer / error frames) do not depend on `bodies`,
+        # and the probe declares no expected_wire, so "no rendered
+        # violations" with zero bodies was a reachable latent GREEN
+        # (_classify_probe_verdict([], [], '', True) -> ('green', None)).
+        # Add the explicit wire violation so GREEN is impossible without a
+        # captured body. PROBE ARM ONLY — non-probe journeys (J1/J2/J3 and
+        # any non-probe journey) are unchanged. Appended IN PLACE so the
+        # caller's receipt violations list carries it (receipt honesty).
+        vlist = list(violations or [])
+        vlist.append("wire: no captured outgoing request body")
+        if isinstance(violations, list):
+            violations[:] = vlist
+        else:
+            violations = vlist
     verdict = "green" if not violations else "red"
     inconclusive = None
     if verdict == "red" and is_probe:
@@ -967,6 +1097,22 @@ def run_journey(journey, run_dir, app_base, api_base):
 
     teardown_ok = teardown_journey(journey, api_base)
 
+    # CHATHOST-CONSOLIDATE-1 FIX-1 (advc c7 D-2): seed/teardown SYMMETRY.
+    # delete_record removes the artifact, but the seed ALSO causes two
+    # side records (the auto-minted owner access-policy record and the
+    # artifact's study workspace sidecar). Remove those too (probe journeys
+    # only — the chat_host_probe marker; J1/J2/J3 and other journeys
+    # unchanged), and record the honest per-path outcomes in the receipt.
+    side_teardown = None
+    if journey.get("chat_host_probe"):
+        acl_del, sidecar_del, side_notes = _delete_probe_side_records(journey, api_base)
+        teardown_ok = teardown_ok and acl_del and sidecar_del
+        side_teardown = {
+            "acl_record_deleted": acl_del,
+            "study_workspace_sidecar_deleted": sidecar_del,
+            "notes": side_notes,
+        }
+
     # CHATHOST-CONSOLIDATE-1 (harness leg, requirement 3): classify the verdict
     # through the PURE helper — green stays the only accept path; a chat-host
     # probe that completed the round trip but could not be graded green gets
@@ -994,6 +1140,14 @@ def run_journey(journey, run_dir, app_base, api_base):
         "duration_s": round(time.time() - t0, 1),
         "ui_receipt_path": out_path,
     }
+    if side_teardown is not None:
+        # CHATHOST-CONSOLIDATE-1 FIX-1 (advc c7 D-2): the symmetric teardown
+        # of the probe's SIDE records (the auto-minted owner access-policy
+        # record + the artifact's study workspace sidecar) — honest per-path
+        # outcome so a `teardown_ok: true` means the probe left nothing
+        # behind. ABSENT (not set) on non-probe journeys (J1/J2/J3) so their
+        # receipt shape is unchanged; present on every chat-host probe.
+        receipt["side_teardown"] = side_teardown
     if inconclusive:
         receipt["inconclusive"] = inconclusive
     with open(os.path.join(run_dir, "%s.json" % jid), "w") as fh:
