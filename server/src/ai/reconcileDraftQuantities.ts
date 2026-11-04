@@ -44,18 +44,6 @@ const VOLUME_UNIT_RE = /(?:µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL])\b/;
 const COUNT_WORD_RE =
   /\b(cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/;
 
-/** Number (digits, comma or dot thousand group) + optional filler words + a
- *  unit word. The number class deliberately EXCLUDES whitespace so "10,000"
- *  stays one token and cannot swallow the words after it. `cycles` joins the
- *  unit alternation (cycle 7 unit 1: "3 cycles" is a stated count — the
- *  declared `kind: quantity` contract for the mix `cycles` slot must be
- *  satisfiable in prose; ONE grammar: this list EXTENDS, never a second).
- *  Module-scoped so BOTH `extractQuantity` (first amount near a label) and
- *  `statedQuantities` (every amount in a clause) share this ONE token grammar
- *  (cycle 7 unit 2 / D1 — no second grammar). Each consumer resets lastIndex
- *  before scanning (the /g flag is shared). */
-const tokenRe = /(\d[\d,.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
-
 export function isVolumeUnit(unit: string): boolean {
   return VOLUME_UNIT_RE.test(unit.trim());
 }
@@ -84,6 +72,11 @@ export interface StatedQuantity {
   kind: 'volume' | 'count';
 }
 
+/** The ONE amount-with-unit grammar, shared by `extractQuantity` and
+ *  `clauseStatesKind` (ONE-grammar law — this list EXTENDS, never a second).
+ *  Stateful /g: reset lastIndex before each scan. */
+const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
+
 /**
  * Find the `N <unit>` the biologist attached to a material in a sentence.
  * Returns null when no amount-with-unit is associated with that material.
@@ -96,11 +89,10 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
   if (!sentence) return null;
   const haystack = sentence;
   const label = materialLabel.trim();
-  tokenRe.lastIndex = 0; // the /g grammar is shared with statedQuantities — rescan from the start
-
   let best: StatedQuantity | null = null;
   let bestDist = Infinity;
   let match: RegExpExecArray | null;
+  tokenRe.lastIndex = 0; // stateful /g — fresh scan each call
 
   while ((match = tokenRe.exec(haystack)) !== null) {
     const amount = parseAmount(match[1]!);
@@ -132,59 +124,28 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
   return best;
 }
 
-/**
- * Enumerate EVERY amount-with-unit in a snippet under the ONE `tokenRe` grammar
- * (ONE-grammar law — `extractQuantity` above returns only the FIRST; this
- * collects all, so a consumer can confirm a LATER token of a specific kind).
- * cycle 7 unit 2 (D1): the material-less demotion must confirm the slot's
- * DECLARED KIND appears in the action's own CLAUSE — a single first-amount
- * answer cannot do that (K2: the first is a volume, the slot wants a count).
- * The labeled `extractQuantity` path and its 90-char association rule are
- * UNTOUCHED.
- */
-export function statedQuantities(text: string): StatedQuantity[] {
-  const haystack = text ?? '';
-  const out: StatedQuantity[] = [];
-  tokenRe.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = tokenRe.exec(haystack)) !== null) {
-    const amount = parseAmount(match[1]!);
-    if (amount === null) continue;
-    const unitRaw = match[2]!;
-    const volumeUnitMatch = unitRaw.match(/^[µμuU][lL]$|^[mM][lL]$|^[lL]$/);
-    const countWord = COUNT_WORD_RE.test(unitRaw) ? unitRaw : null;
-    if (!volumeUnitMatch && !countWord) continue;
-    const kind: 'volume' | 'count' = volumeUnitMatch ? 'volume' : 'count';
-    const unit = kind === 'volume'
-      ? normalizeVolumeUnit(unitRaw)
-      : countWord!.toLowerCase();
-    out.push({ value: amount, unit, kind });
-  }
-  return out;
-}
-
-/** Split a turn into clauses at sentence/segment boundaries (a clause is the
- *  unit that associates an amount with the action whose verb names it). */
-function splitClauses(words: string): string[] {
+/** True when a CLAUSE naming the action's verb carries an amount-with-unit of
+ *  `kind` (the material-less association rule, cycle 7 unit 2 / D1). Reuses
+ *  the ONE grammar via `tokenRe` — no second grammar, no special-case table. */
+export function clauseStatesKind(words: string, verb: string, kind: 'volume' | 'count'): boolean {
+  const stem = (verb.split('_')[0] ?? verb).trim();
+  if (!stem || !words) return false;
+  const verbRe = new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}\\b`, 'i');
   return words
     .split(/(?<=[.!?])\s+|[,;]+/)
     .map((c) => c.trim())
-    .filter((c) => c.length > 0);
-}
-
-/**
- * True when a CLAUSE that mentions the action's verb names an amount-with-unit
- * of `kind` (the material-less association rule, cycle 7 unit 2 / D1). `verb`
- * is the action verb ('mix', 'add_material', …); the stem before the first
- * `_` is matched case-insensitively, so 'add_material' matches "Add". Reuses
- * the ONE grammar via {@link statedQuantities} — no second grammar, no
- * special-case verb table.
- */
-export function clauseStatesKind(words: string, verb: string, kind: 'volume' | 'count'): boolean {
-  const stem = (verb.split('_')[0] ?? verb).trim();
-  if (!stem) return false;
-  const re = new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i');
-  return splitClauses(words).some((clause) => re.test(clause) && statedQuantities(clause).some((q) => q.kind === kind));
+    .filter((c) => c.length > 0)
+    .some((clause) => {
+      if (!verbRe.test(clause)) return false;
+      tokenRe.lastIndex = 0; // stateful /g — fresh scan each clause
+      let m: RegExpExecArray | null;
+      while ((m = tokenRe.exec(clause)) !== null) {
+        if (parseAmount(m[1]!) === null) continue;
+        const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
+        if (volumeUnit === (kind === 'volume')) return true;
+      }
+      return false;
+    });
 }
 
 export interface QuantityReconciliation {
