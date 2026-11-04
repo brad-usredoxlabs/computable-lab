@@ -1264,4 +1264,41 @@ or should the product surface a clarification question?) — owed to Brad with t
 evidence pack. no_error_frame / assistant_answer_visible / turns_at_least stay byte-identical (not
 weakened).
 
+### Durable blocker fields (recovery)
+
+- blocker_portion: the live 6/6 rendered-leg acceptance (CHATHOST-CONSOLIDATE-1 DOD: TWO
+  CONSECUTIVE `run-journeys.py --all --chat-hosts` fake_mode:false sweeps each 6/6 green). Not
+  reachable via DATA on the on-box model because 3 of 6 hosts flip green<->INCONCLUSIVE on the
+  model's first turn.
+- blocker_evidence: receipts `~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/{20261104T130558Z(A 5/6),
+  20261104T131806Z(B 6/6), 20261104T132205Z(C 3/6)}`; per-host verdict/alerts table above; wall
+  `useAiChat.ts:1790-1848` (fires IFF `result.success && !hasEvents && !askedQuestion &&
+  !surfacedError`); generic-ask property `distinct user-ask=1` in all 3 sweeps.
+- blocker_completed: Candidate 1 (question-eliciting generic ask) SHIPPED + committed (22102811);
+  3 live sweeps measured; per-host table + determinism analysis + Candidate-2 precondition eval in
+  this report; assertion trio byte-identical (proven by diff); selfcheck PASS (T-4 arm, RED->GREEN
+  captured); shrink-guard sha dcf32649...75156b unchanged; py_compile + node --check green; report
+  mirrored byte-identical (sha 4487a99f...); no CHATHOST* seed leftovers; lane stack untouched
+  (:5193/:3093 healthy, :3001/:5174 not touched).
+- blocker_independent_work: none remaining in this item — the live leg is the blocked portion; the
+  code track (grader fix) already merged separately. Candidate 2's precondition is unmet, so no
+  further DATA stimulus work is executable without a product-design decision.
+- blocker_recommendation: a product-design amendment to Brad — decide whether a zero-event
+  note-only DRAFTING turn (model drafted but the compiler yielded no mountable events and asked no
+  question) should render the assertive no-events wall (HarnessChatPane.tsx:321 / useAiChat.ts:1839-1848)
+  or instead surface a clarification question; this makes the 3 nondeterministic hosts' wall
+  unreachable and lets the 6/6 leg close on the existing generic-ask DATA. The per-host verdict/
+  alerts table above is the evidence pack.
+- blocker_owner: Brad (product-design decision — intent/product-behaviour change, outside DATA).
+  Architect/orchestrator may route; a harness-only DATA fix is not available (candidate 2 not
+  triggered).
+- blocker_resume_condition: a product-design ruling that (a) changes the zero-event-note-drafting
+  turn's wall/clarification behaviour in the product (so no host can land on the no-events wall for a
+  well-formed ask), OR (b) amends the DOD to accept a per-sweep 6/6 with the nondeterminism documented
+  (relaxing the 2-consecutive greens). After (a), re-run `run-journeys.py --all --chat-hosts`
+  (fake_mode:false) x2 consecutive and re-stamp.
+- blocker_kind: architecture (product-design / on-box-model first-turn nondeterminism) — needs Brad.
+- blocker_next_check: on-change
+- blocker_watch_paths: ["/home/brad/.hermes/cl/lanes/2/decisions/CHATHOST-noerrorframe-probe-seed-l2t0400-ruling.md"]
+
 CHATHOST-STIMULUS BLOCKED nondeterministic on on-box model first-turn (draft-vs-question): event-editor, project-deck-tab, artifact-host flip green<->honest no-events wall across the 3 live sweeps (A=5/6 B=6/6 C=3/6); question-eliciting generic ask proved the 6/6 shape is reachable (sweep B) but not 2-consecutive; candidate 2 (per-host ask) not triggered because the residual hosts CAN answer the ask.
