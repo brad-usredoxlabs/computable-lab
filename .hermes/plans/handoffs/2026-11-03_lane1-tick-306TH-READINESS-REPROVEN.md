@@ -124,6 +124,40 @@ consult (no code, no repo edits beyond one decision file):
 `split-parallel`, amend the staged prompt to leg 1 only (criteria unchanged) and dispatch it at PARALLEL mode
 the moment ONE slot is free — lane 2's corpus work then no longer blocks lane-1 progress.
 
+## ARCHITECT RULING LANDED THIS TICK — `RULING: split-parallel` (read next tick)
+
+`arch-recordlock-dispatchshape-l1t2052.log` ended `ARCH-EXITED rc=0 2026-11-03T20:47:43-05:00`; the ruling file
+`.hermes/plans/2026-11-03_l1-recordlock-dispatchshape-ruling.md` (161 lines) ends `RULING: split-parallel`.
+My own read of it, not the log's summary:
+
+- **Leg 1 = server/DATA, PARALLEL mode, one slot**: meta-schema `contentLocked`, `lifecycle/types.ts`,
+  `LifecycleEngine.contentLockedStates()`, `LifecycleHandlers` echo, the four lifecycle YAMLs,
+  `RecordStoreConfig.contentLockedStates`, `RecordStoreImpl` no-op + resolver, all three `createRecordStore`
+  sites, `RecordHandlers:1139` consumer, RED pins AM-6 (a)(b)(c) + AM-9 (d)(e)(f) + the AM-10 wiring pin,
+  server bars 1/2/4. Budget ~90-100K total / ~28-30K output — inside the 131072/32768 parallel cap.
+- **Leg 2 = client, one slot, ONLY after leg 1 merges + stack restart + AM-5 pre-gate passes**: `client.ts`
+  accessor, new `shared/records/lifecycleLock.ts`, `RecordRegistryPage` swap, `RecordEditPanel` Save gate +
+  draft-copy, app pins. ~60-70K / ~18-22K.
+- **No AM amendments**; AM-1..AM-10 hold verbatim. Four binding sequencing rules added: S1 acceptance graded
+  once after both legs (a leg-1-only land is never an acceptance pass), S2 whole-repo four-state grep gate
+  AFTER leg 2 only (running it between legs is a guaranteed false BLOCK — `app/` still holds the old pair),
+  S3 leg 2's resume condition is literally "AM-5 pre-gate passed on served :3092", S4 no state literal in TS.
+- AM-3 trap explicitly does NOT straddle the leg seam: the no-op and the surviving transition are adjacent in
+  the same store function, both in leg 1.
+
+**LEG-1 DISPATCH KIT IS READY** (prepared this tick, NOT dispatched — corpus priority still governs the slot):
+`prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2105.txt` (trunk stamp df218cec, server-only boundary, S1-S4
+verbatim, report path `record-lock-guard-1-LEG1-report-l1t2105.md`, end marker `RECORD-LOCK-GUARD-1-LEG1
+DONE <sha>`). Dispatch at `--mode parallel` into the SAME pre-warmed worktree
+`wt/L1-RECORD-LOCK-GUARD-1-lane1-l1t2010`, the first moment a slot is legitimately lane 1's.
+
+**Path correction found while preparing it (first-hand):** the three production `createRecordStore` sites are
+`server/src/server.ts:527`, `server/src/scripts/applyOwnershipDefaults.ts:282`,
+`server/src/scripts/migrateRecordLifecycles.ts:512` — under `server/src/scripts/`, not top-level `scripts/`
+(the 305TH handoff and the staged LONG prompt both had the prefix wrong). All three already pass a config
+object literal (`baseDir`/`seedDir`/`author`/`email`, `appendOnlyKinds` at two of them), so the resolver is one
+more key on an existing object with `appendOnlyKinds` as precedent. Corrected in the leg-1 prompt.
+
 ## Tick close — served-vs-trunk bookkeeping note
 
 The tick's own docs commit (this handoff) moved trunk one commit past 8d722d17 while the served build
