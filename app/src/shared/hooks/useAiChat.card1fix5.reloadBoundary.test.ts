@@ -162,8 +162,18 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 4) — two-turn + r
     // resolved by vitest at runtime — the pin still exercises the SAME
     // function the shipped drop consumes.
     const spec = '../../../../server/src/ai/' + 'shorthandChat'
-    const m = await import(/* @vite-ignore */ spec)
-    process.cwd = realCwd
+    // D6 (advc c10): the cwd getter is restored in `finally`, not immediately
+    // after the import — if the dynamic import REJECTS (missing server graph,
+    // resolver failure), a bare patch+restore would leave the patched getter
+    // in place for every subsequent test in this worker. The `finally` makes
+    // the restoration unconditional (the reviewer measured the pre-fix shape:
+    // the restore line never ran on a rejected import).
+    let m: Record<string, unknown>
+    try {
+      m = await import(/* @vite-ignore */ spec)
+    } finally {
+      process.cwd = realCwd
+    }
     const dropAnsweredRequestIds: (
       facts: readonly (typeof ASK_FACT)[],
       answered: ReadonlySet<string>,
@@ -260,5 +270,38 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 4) — two-turn + r
     expect(survivors).toHaveLength(1)
     expect(survivors[0]).toEqual(OTHER_FACT)
     expect(survivors.some((f) => factRequestId(f) === rA)).toBe(false)
+  })
+
+  it('D6 (advc c10): a REJECTING dynamic import still restores the process.cwd getter (the try/finally the main test now uses — not a post-import restore)', async () => {
+    // The reviewer's hygiene defect: the pre-fix shape patched the getter,
+    // imported, then restored on the line AFTER the import — a REJECTING
+    // import left the patched getter in place for every subsequent test in
+    // the worker. This pin drives that path directly: an unresolvable
+    // specifier inside the SAME try/finally the fix uses. WITHOUT the finally
+    // restoration (the pre-fix shape) the assertion below is RED — the getter
+    // is still the patched one after the import rejects.
+    const originalCwd = process.cwd
+    const patchedCwd: () => string = () => originalCwd() + '/..'
+    process.cwd = patchedCwd
+    // THE non-literal (variable) specifier, mirroring the main test's `spec`:
+    // Vite folds STRING-LITERAL concatenations and resolves them at transform
+    // time (so a literal miss fails the suite's transform, not the test). A
+    // VARIABLE specifier is opaque to the transform (the `@vite-ignore` leaves
+    // it for the runtime resolver), so the rejection lands at RUNTIME — which
+    // is exactly the path the finally-restore must survive.
+    const badSpec = '../../../../server/src/ai/' + 'card1fix4-does-not-exist'
+    let rejected = false
+    try {
+      await import(/* @vite-ignore */ badSpec)
+    } catch {
+      rejected = true
+    } finally {
+      // THE fix: unconditional restoration. Pre-fix this line did not exist
+      // on the reject path (the restore ran only after a successful import).
+      process.cwd = originalCwd
+    }
+    expect(rejected).toBe(true) // the import actually rejected (the path is proven)
+    expect(process.cwd).toBe(originalCwd) // the getter is back to the ORIGINAL function
+    expect(process.cwd()).toBe(originalCwd()) // and the ORIGINAL behavior (string) too
   })
 })
