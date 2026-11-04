@@ -541,3 +541,145 @@ literals):
 
 Test result raw (server): 3 files, 11/11 pass (assumedValue 6, wellTarget 4,
 sameNounDedupe 1).
+
+## cycle 7 unit 1 (defects 4+6) — no-material mix over-strip (browser-gate c6)
+
+Lane 2 / item L2-CLARIFY-TARGET-1, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base tip 4ae12b8c (clean). Fixes gate-c6 defects
+4 + 6 ONLY (stated quantities demoted as unstated): the server stripped BOTH
+explicitly stated mix quantities — receipts
+/home/brad/.hermes/cl/receipts/L2-CLARIFY-TARGET-1/2026-11-04_1405-c6-gate/
+q3-result.json paneTail:
+  "Demoted unstated quantity: action \"mix\" argument \"volume\" (field \"volume\") carried 75 — the scientist's turn stated no amount..."
+  "Demoted unstated quantity: action \"mix\" argument \"cycles\" (field \"cycles\") carried 3 — ..."
+while the turn's own words were "Mix 75 uL ... for 3 cycles".
+
+Two measured root causes (both in owned files):
+1. demoteUnstatedQuantities.ts:183 `const stated = label ? extractQuantity(words, label) : null;`
+   — a material-less mix (label = '') never called the extractor, so any
+   present declared-quantity slot was treated as unstated and stripped
+   (contradicting the module's own :34-35 doc, which was itself stale).
+2. reconcileDraftQuantities.ts tokenRe (ONE grammar) had no `cycles` unit
+   alternation — "3 cycles" was never recognized as stated by EITHER arm, so
+   the declared `kind: quantity` contract for the mix `cycles` slot
+   (schema/scientist-intent/scientist-intent-vocabulary.yaml :94-96) could
+   never be satisfied in prose.
+
+Owned files (exactly 3, per diff cl/integration-2...HEAD):
+  server/src/ai/demoteUnstatedQuantities.ts
+  server/src/ai/reconcileDraftQuantities.ts (ONLY the tokenRe unit alternation
+    + COUNT_WORD_RE + their comments)
+  server/src/ai/demoteUnstatedQuantities.test.ts
+
+Commits (RED-first, per step):
+  8095f588 (a) RED pins — P-a/P-b/P-c/P-d (demoteUnstatedQuantities.test.ts)
+  f0519d5d (b) Fix A + doc correction — demoteUnstatedQuantities.ts
+  9c81b044 (c) Fix B + grammar comment — reconcileDraftQuantities.ts
+
+Fix A (one expression): :183 → `const stated = extractQuantity(words, label);`
+A no-label action is now adjudicated by the extractor's OWN no-anchor arm
+(reconcileDraftQuantities.ts :112-113 — "no label to anchor on: accept the
+first amount-with-unit"), which answers "did the turn state ANY amount with a
+unit?". Stated → kept; unstated → still demoted + disclosed.
+
+Corrected doc wording (the stale "honest no-op" contract, all 3 sites):
+  module header (:32-40):
+    "When the action names no material, the label is EMPTY — and the SAME
+     extractor adjudicates with its OWN no-anchor arm (the first
+     amount-with-unit in the turn's own words = stated;
+     reconcileDraftQuantities.ts :112-113). A stated amount is therefore
+     never demoted, whether or not the action names a material — and an
+     UNstated amount is still demoted (the no-anchor arm finds nothing, so
+     the slot is stripped + disclosed)."
+  actionMaterialLabel doc:
+    "Absent when the action names no material — the extractor then
+     adjudicates with its own no-anchor arm (the first amount-with-unit in
+     the turn's own words = stated), so a stated amount is still kept and an
+     unstated one is still demoted."
+  call-site comment:
+    "When the action names no material the label is empty and the SAME
+     extractor adjudicates with its no-anchor arm (the first
+     amount-with-unit in the turn's own words = stated)."
+
+Fix B (ONE grammar extended, never a second): tokenRe unit alternation +
+COUNT_WORD_RE gain `cycles?` (maps to the EXISTING `count` kind arm via
+COUNT_WORD_RE — no third kind added).
+
+Pins (all non-vacuous, demoteUnstatedQuantities.test.ts, new describe block
+'the no-material mix leg (cycle 7 unit 1, defects 4+6)'):
+  P-a gate shape: mix{volume:75, cycles:3} NO material, words 'Mix 75 uL for
+      3 cycles' → demoted.length 0, notes empty, both fields kept.
+      (mix field is the DECLARED `volume` slot — vocabulary.yaml :91-93 —
+      matching the gate note's field "volume"; `volumeUl` is add_material's
+      slot, not a mix field.)
+  P-b control: add_material DMEM + volumeUl 150, words 'Add 150 uL of DMEM
+      to A1' (WITH label) → kept, no-op, no fact. (label-adjacency arm intact)
+  P-c extractor direct: extractQuantity('Mix 75 uL for 3 cycles','') →
+      {value:75,unit:'uL',kind:'volume'} (no-anchor arm, first amount) AND
+      extractQuantity('Mix for 3 cycles','cycles') → {value:3,
+      unit:'cycles',kind:'count'} — the kind/unit mapping pin.
+  P-d regression guard for Fix A: mix{volume:75} NO material, words 'Mix on
+      the plate' (no amount stated) → STILL demoted (1, field 'volume') +
+      disclosed via notes; an UNstated amount must not become an over-KEEP.
+
+RAW RED (pre-fix code, corrected pins; run: npx vitest run
+src/ai/demoteUnstatedQuantities.test.ts from server/):
+  ❯ src/ai/demoteUnstatedQuantities.test.ts  (11 tests | 2 failed) 28ms
+   ❯ P-a: a material-less mix whose turn STATES both quantities strips NOTHING (no over-strip)
+     → expected 2 to be +0 // Object.is equality
+   ❯ P-c: the ONE grammar recognizes "3 cycles" as a stated count (kind count, unit cycles)
+     → expected null to deeply equal { value: 3, unit: 'cycles', …(1) }
+  FAIL P-a  AssertionError: expected 2 to be +0   (both stated quantities
+          stripped — the gate's raw over-strip; P-a's demoted[0..1] were
+          action "mix" field "volume" carried 75 and field "cycles" carried 3)
+  FAIL P-c  AssertionError: expected null to deeply equal { value: 3, unit: 'cycles', kind: 'count' }
+  Tests  2 failed | 9 passed (11)
+  (P-b + P-d GREEN pre-fix: P-d is the guard — with the pre-fix
+  never-ask-the-extractor behaviour a no-label doc is left untouched, so P-d
+  is GREEN only after Fix A AND must stay GREEN after Fix B; it is the
+  over-KEEP regression guard.)
+
+RAW GREEN (post-fix, same command):
+  ✓ src/ai/demoteUnstatedQuantities.test.ts  (11 tests) 38ms
+  Test Files  1 passed (1)   Tests  11 passed (11)
+  (npx vitest run src/ai/demoteUnstatedQuantities.test.ts
+   src/ai/reconcileDraftQuantities.test.ts: 2 files, 23/23 pass — the 12
+   pre-existing reconcile cases unedited, all GREEN.)
+
+Hazard check (cycles word feeding the reconcile leg — the known risk):
+  Full `npx vitest run src/ai` (132 files): baseline at stashed HEAD (no fix)
+  = 20 failed / 43 failed tests; with the fix = 19 failed / 40 failed tests.
+  Per-test diff of the two runs: the ONLY delta is the 3 c7d1 RED pins now
+  passing. The 40 remaining failures are a PRE-EXISTING identical set on
+  this branch (AgentOrchestrator.* golden/bypass/draftProseSuppression/
+  freeformLegs/shorthandChat.*, attachedProtocol, chatbotCompile.e2e,
+  createRecordIntent, submitSuggestionTool.tubeSchema, ChatbotCompileDeckSlot,
+  shorthandChat.cueCascade/foldNullArms/reviseReuse — unrelated to quantity
+  extraction; e.g. freeformLegs fails on 'Cannot read properties of
+  undefined (reading allowCreateLocal)' in a noun-mint card, zero quantity
+  involvement). No RECONCILE-leg consumer regression.
+  Named 'N cycles' prompt consumers run individually GREEN (12/12):
+  IntentCompileFromPromptHandlers.answeredBinding.test.ts (7),
+  AgentOrchestrator.emptyShorthand.test.ts (4, the P7 '75ul, 3 cycles'
+  empty-shorthand pin), FireAssayHumanPromptBaseline.test.ts (1, the
+  '(5 cycles, 125uL)' protocol eval).
+
+tsc: `npx tsc --noEmit` from server/ = **0 error TS lines** (bar met;
+orchestrator baseline on this branch: 0).
+
+git: `git -c core.fileMode=false diff --name-only cl/integration-2...HEAD`
+= exactly the three owned files (source commits a/b/c above); `git
+-c core.fileMode=false status --porcelain --untracked-files=no` = empty after
+the report commit.
+
+No UI, no card, no chip CSS, no compiler/golden/AgentOrchestrator/schema/harness
+touch. No merge, no lane-stack restart (:5193/:3093), no browser gate, no
+:3001/:5174. No npm install (node_modules symlinks untouched).
+
+Remaining blockers (owners): none for this unit. Defects 1,2,3,5 are
+separate runs — untouched. Acceptance (browser re-gate of the Q3 mix face
+`75 uL · 3 cycles`) is the independent browser reviewer's lane; implementation
+complete ≠ acceptance complete. Note for the gate re-run: YAML/vocabulary
+unchanged, so no lane-stack reload was needed for the fix itself; the
+pre-existing 40 src/ai failures predate this run and are outside its scope.
+
