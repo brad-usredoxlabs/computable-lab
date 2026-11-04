@@ -227,6 +227,18 @@ export interface RecordStoreConfig {
    * kind is hardcoded beyond the triple already hardcoded here.
    */
   appendOnlyKinds?: string[];
+  /**
+   * Content-lock policy resolver (L1-RECORD-LOCK-GUARD-1, AM-2): given a
+   * record's lifecycleId, return the declared set of states the lifecycle
+   * YAML marks `contentLocked: true`, or `undefined` when that lifecycle is
+   * not loaded by the resolver (explicit fail-open — see
+   * lifecycle/contentLockDefault.ts). Production wires the server's OWN
+   * loaded LifecycleEngine (server.ts, AM-10); test harnesses and CLI
+   * scripts fall back to the shared default engine. The store must NOT
+   * re-invent a state list — the policy is declared lifecycle DATA read
+   * through this resolver (AM-7 bait 15).
+   */
+  contentLockedStates?: (lifecycleId: string) => ReadonlySet<string> | undefined;
 }
 
 /**
