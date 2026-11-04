@@ -11,7 +11,7 @@
  * ordering pin can break validation via an undeclared key (updatedAt is
  * stripped by controlledContent, so the content lock does not fire first).
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,10 @@ import { AjvValidator } from '../validation/AjvValidator.js';
 import { LintEngine } from '../lint/LintEngine.js';
 import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
 import { createRecordStore } from './RecordStoreImpl.js';
+import { createRecordHandlers } from '../api/handlers/RecordHandlers.js';
+import { controlledContent } from '../revisions/RecordRevisionService.js';
+import type { RecordStore, RecordEnvelope } from './types.js';
+import type { IndexManager } from '../index/IndexManager.js';
 
 const SCHEMA_ID = 'https://cl-test.local/store-content-lock.schema.yaml';
 // Minimal structural schema so the store's validate wall passes for the
@@ -331,6 +335,133 @@ describe('L1-RECORD-LOCK-GUARD-1 LEG 1 U3 — store no-op + declared content loc
     const refused = await store.update({ envelope: tampered });
     expect(refused.success).toBe(false);
     expect(refused.error).toContain('CONTROLLED_RECORD_LOCKED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L1-RECORD-LOCK-GUARD-1 (AM-3, fix cycle 2 / F1+F2) — handler-side no-op pins.
+//
+// The store-level no-op marker is pinned above (AM-6(a): `result.unchanged ===
+// true`). These pins close the CONSUMPTION side (one gate, two halves): the
+// handler must gate BOTH post-write side effects on that marker —
+//   F1: the index rebuild (RecordHandlers.ts:1302 `result.unchanged !== true`),
+//   F2: the revision/audit block (the `record_revised` capture + append),
+// so a content-equal/state-equal PUT mints NO rebuild, NO revision, NO audit
+// event, while a real content-changing write still does 1x each.
+//
+// Harness: a mock RecordStore that reproduces the store's explicit no-op marker
+// using the SAME predicate the real store uses (state equality +
+// `controlledContent` — the real predicate, not a hand-rolled diff). The marker
+// itself is pinned on the REAL store above; here we pin that the handler
+// consumes it. Reverting EITHER gate clause turns these RED.
+// ---------------------------------------------------------------------------
+
+const XDR_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml';
+
+function xdrPayload(): Record<string, unknown> {
+  return {
+    kind: 'extraction-draft',
+    recordId: 'XDR-PIN',
+    source_artifact: { kind: 'file', id: 'VPF-PIN' },
+    candidates: [
+      { target_kind: 'protocol', draft: { kind: 'protocol', title: 'MEANT draft v1', steps: [] }, confidence: 0.8 },
+      { target_kind: 'protocol', draft: { kind: 'protocol', title: 'Terminal candidate', steps: [] }, confidence: 0.7, status: 'promoted' },
+    ],
+    status: 'pending_review',
+  };
+}
+
+function replyOf() {
+  let statusValue = 200;
+  const reply: any = {
+    status: (code: number) => { statusValue = code; return reply; },
+    code: (code: number) => { statusValue = code; return reply; },
+    send: (body: unknown) => body,
+  };
+  Object.defineProperty(reply, 'statusValue', { get: () => statusValue });
+  return reply;
+}
+
+/** Handler harness: mock store (reproducing the no-op marker) + indexManager
+ *  spy + auditService.append spy, driven through createRecordHandlers. */
+function handlerHarness() {
+  const existingEnvelope: RecordEnvelope = {
+    recordId: 'XDR-PIN',
+    schemaId: XDR_SCHEMA_ID,
+    payload: xdrPayload(),
+    meta: { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', createdBy: 'USR-REVIEWER', contentSha: 'sha-stored' },
+  } as RecordEnvelope;
+  const records = new Map<string, RecordEnvelope>([[existingEnvelope.recordId, existingEnvelope]]);
+  const store = {
+    get: async (id: string) => (records.has(id) ? structuredClone(records.get(id)!) : null),
+    list: async () => [...records.values()].map((r) => structuredClone(r)),
+    create: async ({ envelope }: { envelope: RecordEnvelope }) => {
+      records.set(envelope.recordId, structuredClone(envelope));
+      return { success: true, envelope: structuredClone(envelope) };
+    },
+    update: async ({ envelope }: { envelope: RecordEnvelope }) => {
+      const stored = records.get(envelope.recordId)!;
+      const incoming = envelope.payload as Record<string, unknown>;
+      const storedPayload = stored.payload as Record<string, unknown>;
+      // SAME predicate the real store uses (state equality + controlledContent).
+      const isNoop = String(incoming.state ?? undefined) === String(storedPayload.state ?? undefined)
+        && controlledContent(incoming) === controlledContent(storedPayload);
+      if (isNoop) return { success: true, envelope: structuredClone(stored), unchanged: true };
+      const updated = { ...envelope, meta: { ...envelope.meta, contentSha: 'sha-new' } };
+      records.set(envelope.recordId, structuredClone(updated));
+      return { success: true, envelope: structuredClone(updated) };
+    },
+    delete: async () => ({ success: true }),
+    validate: async () => ({ valid: true }),
+    lint: async () => ({ valid: true }),
+    exists: async () => false,
+    getByPath: async () => null,
+    getWithValidation: async () => ({ success: true }),
+  } as unknown as RecordStore;
+
+  const rebuild = vi.fn();
+  const indexManager = { rebuild } as unknown as IndexManager;
+  const auditAppend = vi.fn(async () => {});
+  const security = {
+    auditService: { append: auditAppend },
+    getRevisionOnEditKinds: () => ['extraction-draft'],
+  };
+  const handlers = createRecordHandlers(store, indexManager, undefined, undefined, undefined, undefined, security as never);
+  return { handlers, rebuild, auditAppend, existingEnvelope };
+}
+
+describe('L1-RECORD-LOCK-GUARD-1 (AM-3, fix cycle 2 / F1+F2) — handler-side no-op pins', () => {
+  it('content-equal/state-equal PUT on extraction-draft (no-op) ⇒ 0 index rebuilds AND 0 audit appends', async () => {
+    const { handlers, rebuild, auditAppend, existingEnvelope } = handlerHarness();
+    const res = await handlers.updateRecord(
+      { params: { id: 'XDR-PIN' }, body: { payload: structuredClone(existingEnvelope.payload) }, headers: {} } as never,
+      replyOf(),
+    ) as { success?: boolean };
+    expect(res.success).toBe(true);
+    // F1: the rebuild gate consumes the marker — a no-op wrote nothing, so no
+    // wasted full index rebuild. (Reverting `result.unchanged !== true` at the
+    // rebuild gate ⇒ rebuild fires 1x ⇒ this goes RED.)
+    expect(rebuild, 'no-op must not rebuild the index').toHaveBeenCalledTimes(0);
+    // F2: the revision/audit block is gated on the marker — a no-op mints no
+    // record_revised audit event. (Reverting the block's gate clause ⇒ append
+    // fires 1x ⇒ this goes RED.)
+    expect(auditAppend, 'no-op must not append a record_revised audit event').toHaveBeenCalledTimes(0);
+  });
+
+  it('content-CHANGING PUT on extraction-draft (real write) ⇒ still 1 index rebuild AND 1 audit append', async () => {
+    const { handlers, rebuild, auditAppend, existingEnvelope } = handlerHarness();
+    const nextPayload = structuredClone(existingEnvelope.payload) as Record<string, unknown>;
+    const candidates = nextPayload.candidates as Array<Record<string, unknown>>;
+    candidates[0] = { ...candidates[0]!, draft: { kind: 'protocol', title: 'MEANT draft v2 (reviewed)', steps: [] } };
+    const res = await handlers.updateRecord(
+      { params: { id: 'XDR-PIN' }, body: { payload: nextPayload }, headers: {} } as never,
+      replyOf(),
+    ) as { success?: boolean };
+    expect(res.success).toBe(true);
+    // Control arm (AM-3): the gate only suppresses the NO-OP. A real write
+    // (unchanged absent) still rebuilds once and appends record_revised once.
+    expect(rebuild, 'a real write still rebuilds the index once').toHaveBeenCalledTimes(1);
+    expect(auditAppend, 'a real write still appends record_revised once').toHaveBeenCalledTimes(1);
   });
 });
 
