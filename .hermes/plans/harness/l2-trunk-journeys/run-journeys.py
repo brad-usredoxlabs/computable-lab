@@ -210,6 +210,13 @@ def build_chat_host_probe(host_id, surface, route):
         "title": "chat-host sweep probe: %s (%s)" % (host_id, surface),
         "file": "probe-%s.yaml" % host_id,
         "timeout_s": 300,
+        # CHATHOST-CONSOLIDATE-1: the marker + the machine SURFACE (DATA from
+        # the inventory) let run_journey apply the honest INCONCLUSIVE verdict
+        # (a distinct non-accept) to THIS probe family only — never to
+        # J1/J2/J3. Extra journey fields are inert to ui-drive.cjs (it reads
+        # id/steps/assert/log_selector only), so this breaks no existing pin.
+        "chat_host_probe": True,
+        "surface": surface,
         "seed": seed,
         "teardown": teardown,
         "steps": [
@@ -232,11 +239,16 @@ def emit_chat_host_verdicts(run_dir, host_ids, receipts=None):
     run dir. PURE over the on-disk receipts (the gate re-verifies existence).
     Honest + fail-closed, mirroring the sweep's real outcome per host:
       - a host whose `<host>.json` receipt exists AND grades green
-            -> {"verdict": "accept", "receipts": "<host>.json"};
+             -> {"verdict": "accept", "receipts": "<host>.json"};
+      - a host that WAS swept and graded inconclusive (CHATHOST-CONSOLIDATE-1:
+             the round trip provably happened but the surface could not be
+             graded green) -> {"verdict": "inconclusive", "receipts": ...} —
+             a DISTINCT verdict the receipt says so, never silently red and
+             never silently green;
       - a host that WAS swept but graded red/transport-error
-            -> {"verdict": "red", ...} (a non-accept the gate grades RED);
+             -> {"verdict": "red", ...} (a non-accept the gate grades RED);
       - a host NEVER swept (no receipt file)
-            -> OMITTED (so the gate's strict-subset check names it).
+             -> OMITTED (so the gate's strict-subset check names it).
     A strict-subset table (a dropped host) is the spec's RED case. Receipts
     default to the per-host `<host>.json` files that run_journey writes into
     `run_dir`."""
@@ -248,9 +260,14 @@ def emit_chat_host_verdicts(run_dir, host_ids, receipts=None):
             continue                      # never swept -> omit -> gate names it
         with open(p) as fh:
             rec = json.load(fh)
-        verdicts[hid] = {"verdict": "accept" if rec.get("verdict") == "green"
-                         else "red",
-                         "receipts": rx}
+        v = rec.get("verdict")
+        if v == "green":
+            mapped = "accept"
+        elif v == "inconclusive":
+            mapped = "inconclusive"
+        else:
+            mapped = "red"
+        verdicts[hid] = {"verdict": mapped, "receipts": rx}
     return verdicts
 
 # ---------------------------------------------------------------------------
@@ -802,6 +819,67 @@ def write_stub_receipt(run_dir, jid, verdict, violations, failure, note=None,
     return receipt
 
 
+def _extract_product_error(body_text_tail):
+    """CHATHOST-CONSOLIDATE-1 (harness leg): the product's own honest
+    no-events / error line(s) from a rendered body tail — the text the product
+    actually surfaced when a turn produced no mountable events (the universal
+    honest no-events wall) or when a surface-level error (e.g. a missing
+    backing record) is reported. Pure over the tail string; returns "" when the
+    tail carries none of the known product strings, so a real, unexplained
+    failure is NOT mislabelled inconclusive."""
+    if not body_text_tail:
+        return ""
+    lines = [ln.strip() for ln in str(body_text_tail).splitlines() if ln.strip()]
+    needles = (
+        "did not propose any changes",
+        "produced no events",
+        "did not produce events",
+        "No events generated",
+        "NOT_FOUND",
+        "Couldn't open this record",
+    )
+    seen, out = set(), []
+    for ln in lines:
+        if any(n in ln for n in needles) and ln not in seen:
+            seen.add(ln)
+            out.append(ln)
+    return " | ".join(out)
+
+
+def _classify_probe_verdict(violations, bodies, body_text_tail, is_probe):
+    """CHATHOST-CONSOLIDATE-1 (harness leg, requirement 3) — the verdict
+    classification for one driven journey, PURE over the graded facts.
+    `turns_completed >= 1`, a non-empty visible assistant answer and
+    `error_frames == 0` remain the ONLY path to green (no weakening). A
+    chat-host probe (is_probe) that graded red but provably completed the
+    round trip (a real outgoing request body captured) while the product
+    surfaced its OWN honest no-events / error text gets the DISTINCT
+    inconclusive verdict: the live surface genuinely could not be graded
+    green through the rendered-answer counters (the on-box model produced no
+    mountable events for the out-of-domain probe prompt, so the counter sees
+    a prose answer it does not count + the product's own role=alert honest
+    wall). A probe with no captured body and/or no product error text stays
+    exactly as graded (red) — an unexplained failure is never mislabelled
+    inconclusive. Returns (verdict, inconclusive-record-or-None)."""
+    verdict = "green" if not violations else "red"
+    inconclusive = None
+    if verdict == "red" and is_probe:
+        prod_err = _extract_product_error(body_text_tail)
+        if bodies and prod_err:
+            inconclusive = {
+                "reason": ("round trip completed (captured outgoing AI request "
+                           "body) but the live surface could not be graded "
+                           "green: the rendered-answer counter does not count "
+                           "the prose (no mountable events) answer, and the "
+                           "product surfaced its own honest no-events / "
+                           "error text"),
+                "product_error": prod_err,
+                "ai_request_bodies_captured": len(bodies),
+            }
+            verdict = "inconclusive"
+    return verdict, inconclusive
+
+
 def run_journey(journey, run_dir, app_base, api_base):
     """Run one journey via ui-drive.cjs, then grade its receipt. Returns
     (journey_id, verdict, dict) with verdict in green/red/transport-error."""
@@ -889,12 +967,20 @@ def run_journey(journey, run_dir, app_base, api_base):
 
     teardown_ok = teardown_journey(journey, api_base)
 
+    # CHATHOST-CONSOLIDATE-1 (harness leg, requirement 3): classify the verdict
+    # through the PURE helper — green stays the only accept path; a chat-host
+    # probe that completed the round trip but could not be graded green gets
+    # the distinct inconclusive verdict. (See _classify_probe_verdict.)
+    verdict, inconclusive = _classify_probe_verdict(
+        violations, bodies, ev.get("body_text_tail"),
+        bool(journey.get("chat_host_probe")))
+
     receipt = {
         "journey": jid,
         "title": journey.get("title", ""),
         "app_base": app_base,
         "api_base": api_base,
-        "verdict": "green" if not violations else "red",
+        "verdict": verdict,
         "violations": violations,
         "seed_note": note,
         "teardown_ok": teardown_ok,
@@ -908,9 +994,11 @@ def run_journey(journey, run_dir, app_base, api_base):
         "duration_s": round(time.time() - t0, 1),
         "ui_receipt_path": out_path,
     }
+    if inconclusive:
+        receipt["inconclusive"] = inconclusive
     with open(os.path.join(run_dir, "%s.json" % jid), "w") as fh:
         json.dump(receipt, fh, indent=2)
-    return jid, ("green" if not violations else "red"), receipt
+    return jid, verdict, receipt
 
 
 def overall_verdict(reds, terr, complete, trunk, advisory, fake_mode):
