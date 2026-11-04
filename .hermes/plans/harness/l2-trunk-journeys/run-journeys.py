@@ -81,7 +81,29 @@ CHAT_HOSTS_INVENTORY = os.path.join(REPO_ROOT, "config", "chat", "chat-hosts.yam
 
 # The shared probe prompt (DATA — one canned CHATHOST-SWEEP block keyed by
 # prompt_contains serves all hosts; no per-host prompt strings in code).
-CHATHOST_SWEEP_PROMPT = "CHATHOST-SWEEP probe round trip"
+#
+# CHATHOST-CONSOLIDATE-1 (ruling CHATHOST-noerrorframe-probe-seed-l2t0400, Q-C3
+# step 3 — the sanctioned STIMULUS change, DATA only): the old bare noun-phrase
+# probe "CHATHOST-SWEEP probe round trip" read as a TERM to the on-box model and
+# routed into ledger-term lookup (ledger-query.UNRESOLVED_TERM / AMBIGUOUS_TERM —
+# the RIGHT answer to a prompt that is not a term) or the event-drafting
+# pipeline (a zero-event draft that renders the no-events honest wall as a
+# role="alert"). Both are honest renders of a STIMULUS problem, not product
+# defects. The replacement is the NON-LEDGER DETERMINISTIC ASK, IDENTICAL on all
+# six hosts (one shared string — the receipt pin "six ai_request_bodies carry
+# the same ask" holds by construction): a host-agnostic page-description that
+# explicitly forbids drafting, so it provokes the same universal round trip
+# WITHOUT resolving a term or emitting events. The assertion trio
+# (assistant_answer_visible / turns_at_least / no_error_frame) stays
+# BYTE-IDENTICAL — only the stimulus text changes, per the ruling. The trailing
+# bracketed tag keeps the substring the ONE canned CHATHOST-SWEEP block matches
+# on (prompt_contains "CHATHOST-SWEEP probe"), so the fake path and the T4c
+# non-vacuity arm still tie this prompt to that single block.
+CHATHOST_SWEEP_PROMPT = (
+    "In one short sentence, say what this page is for. "
+    "Do not propose any edit and do not draft anything. "
+    "[CHATHOST-SWEEP probe]"
+)
 
 # The artifact record schema (the schemaId the artifact-host probe's REAL
 # record materialises against, via the standard seed.record machinery). The
