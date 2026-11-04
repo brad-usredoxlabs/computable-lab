@@ -1621,6 +1621,86 @@ def main():
                      "assistant_turns", "last_assistant_text_nonempty",
                      "turns_completed", "bubbles_matched")},
                  _d6_vab[:2], _d6_err_ab[:200])]))
+        # (f2) PIN 3b — advc c10 D1: the fallback claim is pinned on the
+        #      SURFACE property, not a false universal. (i) The real
+        #      fallback root is a MessageLog surface: ReviewAiPanel.tsx
+        #      wraps <MessageLog> in .review-ai__log, and MessageLog.tsx
+        #      carries NO chat-log row class — so the assistant set can
+        #      never match inside it, and the fallback cannot rescue a
+        #      chat-log selector ON THE REAL SURFACES. (ii) The property is
+        #      falsifiable: the reviewer's c10 repro — a fallback root that
+        #      DID carry a .chat-log-msg--assistant row — counts it
+        #      (turns:1), proving the fallback is a root substitution that
+        #      grades whatever the fallback root contains. A pin that only
+        #      checks "chrome-only fixture -> 0" (the c10 finding: passes
+        #      both ways for the stronger claim) is NOT a pin.
+        _d6_panel = os.path.join(REPO_ROOT, "app", "src", "ingestion",
+                                 "protocol-review", "ReviewAiPanel.tsx")
+        _d6_mlog = os.path.join(REPO_ROOT, "app", "src", "event-editor",
+                                "right-pane", "ai", "MessageLog.tsx")
+        _d6_panel_src = ""
+        _d6_mlog_src = ""
+        try:
+            with open(_d6_panel) as fh:
+                _d6_panel_src = fh.read()
+        except OSError:
+            pass
+        try:
+            with open(_d6_mlog) as fh:
+                _d6_mlog_src = fh.read()
+        except OSError:
+            pass
+        _d6_fallback_surface = (
+            bool(_d6_panel_src) and bool(_d6_mlog_src)
+            # the fallback root wraps the MessageLog component
+            and re.search(
+                r'<div className="review-ai__log">\s*<MessageLog\b',
+                _d6_panel_src) is not None
+            # the MessageLog surface renders its rows as message-log__bubble
+            and "message-log__bubble--assistant" in _d6_mlog_src
+            and "message-log__bubble--user" in _d6_mlog_src
+            # and carries NO chat-log row class anywhere (the reviewer's
+            # c10 grep: MessageLog.tsx has no chat-log-intent-card either)
+            and "chat-log-msg--assistant" not in _d6_mlog_src
+            and "chat-log-intent-card" not in _d6_mlog_src)
+        results.append(
+            ("D6 Q3 pin 3b: the REAL fallback root (.review-ai__log -> "
+             "MessageLog) carries no .chat-log-msg--assistant / "
+             ".chat-log-intent-card rows — no chat-log rescue ON THE REAL "
+             "SURFACES (advc c10 D1)",
+             _d6_fallback_surface,
+             ["panel wraps MessageLog in .review-ai__log=%r MessageLog has "
+              "message-log rows=%r chat-log classes absent=%r"
+              % (bool(re.search(
+                      r'<div className="review-ai__log">\s*<MessageLog\b',
+                      _d6_panel_src or "")),
+                 "message-log__bubble--assistant" in _d6_mlog_src,
+                 "chat-log-msg--assistant" not in _d6_mlog_src
+                 and "chat-log-intent-card" not in _d6_mlog_src)]))
+        _D6_REVIEW_LOG_WITH_ANSWER = (
+            '<div class="review-ai__log">'
+            '<div class="chat-log-msg chat-log-msg--assistant">'
+            "<strong>Assistant</strong>"
+            "<p>answer inside review log</p></div></div>")
+        _d6_rc_rs, _d6_rec_rs, _d6_err_rs = _d6_drive(
+            "rescue", _D6_ROWS_ASSISTANT_ANSWER,
+            log_selector=".no-such-log-root",
+            review_log=_D6_REVIEW_LOG_WITH_ANSWER)
+        _d6_ev_rs = (_d6_rec_rs.get("rendered_evidence") or {})
+        results.append(
+            ("D6 Q3 pin 3b (falsifiable): a fallback root that DID carry a "
+             "chat-log assistant row IS counted (turns>=1) — the fallback "
+             "grades whatever the fallback root contains, so the no-rescue "
+             "claim holds ONLY on the real MessageLog surface",
+             _d6_rc_rs == 0
+             and _d6_ev_rs.get("assistant_turns", 0) >= 1
+             and _d6_ev_rs.get("bubbles_matched", 0) >= 1,
+             ["rc=%s ev=%r stderr=%s"
+              % (_d6_rc_rs,
+                 {k: _d6_ev_rs.get(k) for k in (
+                     "assistant_turns", "bubbles_matched",
+                     "last_assistant_text_nonempty")},
+                 _d6_err_rs[:200])]))
         # (g) POSITIVE CONTROL (the fix is not over-strict): a real
         #     assistant row with body text, fresh (turns_completed=1),
         #     no error frame -> the probe's own assert.rendered is CLEAN

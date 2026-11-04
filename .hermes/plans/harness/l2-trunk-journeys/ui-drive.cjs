@@ -211,9 +211,16 @@ function shaShort(s) {
     // rows actually matched by the selector (the Q3 umbrella selector-proof:
     // a grader that sees only pane chrome is distinguishable from one that
     // saw a row). The log_selector resolution and the doc-root fallback
-    // (.review-ai__log) are unchanged; the fallback is a ROOT substitution
-    // only — it can never rescue a selector that matched zero assistant
-    // rows.
+    // (.review-ai__log) are unchanged. The fallback is a ROOT substitution:
+    // it grades whatever the fallback ROOT contains, so a fallback root that
+    // carried chat-log rows WOULD count them. On the REAL surfaces it
+    // carries none — the fallback root is a MessageLog surface
+    // (ReviewAiPanel.tsx:294 wraps <MessageLog> in .review-ai__log;
+    // MessageLog.tsx:143-144 renders message-log__bubble--assistant and the
+    // file carries no chat-log rows) — so the fallback cannot rescue a
+    // chat-log selector ON THE REAL SURFACES. Selfcheck pin 3b pins that
+    // surface property (falsifiable: it goes RED if the fallback root ever
+    // carries a chat-log row class).
     return page.evaluate((sel) => {
       const empty = { turns: 0, texts: [], intent_cards: 0, bubbles_matched: 0 };
       const root = document.querySelector(sel) || document.querySelector('.review-ai__log');
