@@ -168,7 +168,7 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 4) — two-turn + r
     // in place for every subsequent test in this worker. The `finally` makes
     // the restoration unconditional (the reviewer measured the pre-fix shape:
     // the restore line never ran on a rejected import).
-    let m: Record<string, unknown>
+    let m: any // eslint-disable-line @typescript-eslint/no-explicit-any — non-literal dynamic import; the original used the import's implicit `any`
     try {
       m = await import(/* @vite-ignore */ spec)
     } finally {
