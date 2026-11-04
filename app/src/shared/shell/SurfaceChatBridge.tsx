@@ -157,6 +157,28 @@ function useDoorRequiredRecheckDeadline(required: boolean): boolean {
   return required && elapsed
 }
 
+/**
+ * The bounded SCOPE-SETTLE window (L2-THREADSCOPE-FLIP-1, C-2): a SEPARATE
+ * deadline from useDoorRequiredRecheckDeadline — that state drives the
+ * loud-fail throw (and its `required` argument is the YAML's
+ * `required_providers` fact), so coupling them would change door behaviour.
+ * It reuses DOOR_REQUIRED_RECHECK_DEADLINE_MS (the existing bounded deadline —
+ * no second constant). Armed only while `active` (the scope is genuinely
+ * undecided: the door declares deck AND the slice carries no scope value
+ * yet), so a provider-less door or an already-settled scope adds zero
+ * latency — the release is either the scope value arriving or this window
+ * elapsing (then no-scope is the settled answer), never an indefinite wait.
+ */
+function useScopeSettleDeadline(active: boolean): boolean {
+  const [elapsed, setElapsed] = useState(false)
+  useEffect(() => {
+    if (!active) return
+    const t = window.setTimeout(() => setElapsed(true), DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+    return () => window.clearTimeout(t)
+  }, [active])
+  return active && elapsed
+}
+
 export interface SurfaceChatBridgeProps {
   /** The door-registry host id (the door naming itself — a data lookup, never compared). */
   host: ChatHostId
@@ -166,6 +188,15 @@ export interface SurfaceChatBridgeProps {
    * supplies the full context.
    */
   base?: CollectorBase
+  /**
+   * The door's page-local scope-pending hint (L2-THREADSCOPE-FLIP-1, spec
+   * §3a): a route/loaded-record-state fact the page knows and the slice store
+   * cannot (e.g. a project deck tab that has not loaded its graph yet). Lets a
+   * door NARROW the provisional window without touching the collector; absent
+   * means the window opens whenever the door declares deck and the slice has
+   * no scope value yet. Never a host-id comparison (V-8).
+   */
+  scopePending?: boolean
 }
 
 export function SurfaceChatBridge(props: SurfaceChatBridgeProps) {
@@ -174,7 +205,7 @@ export function SurfaceChatBridge(props: SurfaceChatBridgeProps) {
   return <SurfaceChatRegistrar {...props} />
 }
 
-function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
+function SurfaceChatRegistrar({ host, base, scopePending }: SurfaceChatBridgeProps) {
   const entry = doorRegistry.byId.get(host)
   if (!entry) {
     // A literal host id that is not in the registry: a loud error (the
@@ -217,6 +248,33 @@ function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
 
   const endpoint = collected.endpoint
   const scope = collected.scope
+  // L2-THREADSCOPE-FLIP-1 (C-2): the scope SETTLE state as DATA. The bridge
+  // must distinguish "scope not yet decided" (provisional) from "decided to
+  // be absent" (settled) — today both collapse into the same absence and a
+  // live session persists under the provisional no-scope binding (the
+  // server "_" bucket) while a cold mount resolves the EVG id and mints a NEW
+  // thread. All inputs are already live here (no new timing source, no
+  // host-id comparison — V-8): the door declares deck (the YAML's
+  // required_providers ∪ optional_providers — a DATA fact, the door's
+  // declared providers can still change the scope), the deciding input is the
+  // slice's SCOPE VALUE (deckSlice?.scope — a published-but-scope-less slice
+  // is STILL provisional: DeckChatSlice publishes the bundle before
+  // state.eventGraphId resolves; the slice's PRESENCE is never the signal),
+  // and the window is bounded by the existing DOOR_REQUIRED_RECHECK_DEADLINE_MS
+  // in a SEPARATE hook (its state must not drive the loud-fail throw). A
+  // provider-less door declares no deck => settled on the first flush,
+  // deadline never armed (zero added latency). A door whose slice never
+  // carries a scope settles when the window elapses — settled with whatever
+  // the collector says (studyId, or absent) — bounded, never an indefinite
+  // wait, and the existing loud-fail keeps its own timer untouched.
+  const declaresDeck =
+    entry.required_providers.includes('deck') ||
+    entry.optional_providers.includes('deck')
+  const expectsScope = declaresDeck && (scopePending ?? true)
+  const deckScope = deckSlice?.scope
+  const settleWindowElapsed = useScopeSettleDeadline(expectsScope && deckScope == null)
+  const scopeStatus: 'settled' | 'provisional' =
+    expectsScope && deckScope == null && !settleWindowElapsed ? 'provisional' : 'settled'
   // §2.5 step 3: the ghost handlers wire ONLY when the host declares ghost_mount
   // (the collector only returns handlers in that case — belt and braces).
   const handlers = entry.ghost_mount ? collected.handlers : undefined
@@ -228,6 +286,11 @@ function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
     aiContext: collected.aiContext,
     endpoint,
     ...(scope !== undefined && isThreadSegmentSafe(scope) ? { scope } : {}),
+    // The settle state travels WITH the value (the unit-2 gate holds the
+    // hydration/mint/sync on 'provisional'). Absent on the settled default —
+    // the conditional spread keeps the key ABSENT, never `undefined` (the
+    // same idiom as the scope line above).
+    ...(scopeStatus === 'provisional' ? { scopeStatus } : {}),
     ...(handlers ? handlers : {}),
   })
 
