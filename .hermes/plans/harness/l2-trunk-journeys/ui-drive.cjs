@@ -218,7 +218,19 @@ function shaShort(s) {
       const empty = { turns: 0, texts: [], intent_cards: 0, bubbles_matched: 0 };
       const root = document.querySelector(sel) || document.querySelector('.review-ai__log');
       if (!root) return empty;
-      const bubbles = Array.from(root.querySelectorAll('.chat-log-msg--assistant, .chat-log-intent-card, .chat-log__bubble, .message-log__bubble'));
+      // D-6 Q1: the ruling's EXACT set — the assistant-authored row class
+      // plus the confirmed intent-card render class (ChatLog.tsx:484). The
+      // legacy `.message-log__bubble` / `.chat-log__bubble` are DROPPED:
+      // `.message-log__bubble` is a USER-row base class (MessageLog.tsx:143
+      // `message-log__bubble message-log__bubble--user`) — keeping it would
+      // count user rows as assistant turns, EXACTLY the flattery the ruling
+      // forbids ("explicitly exclude the sibling user/system classes"). The
+      // --user / --system sibling classes are never in this set (raw
+      // `.chat-log-msg` is deliberately NOT added — it would match them).
+      // A shorthand assistant row renders the card INSIDE the row
+      // (ChatLog.tsx:484), so it matches BOTH selectors (the row + the
+      // nested card) — a monotone-safe over-count that never flips a pin.
+      const bubbles = Array.from(root.querySelectorAll('.chat-log-msg--assistant, .chat-log-intent-card'));
       const texts = bubbles.map((b) => {
         const c = b.cloneNode(true);
         c.querySelectorAll('strong').forEach((s) => s.remove());
