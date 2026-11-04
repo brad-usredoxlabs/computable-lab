@@ -636,20 +636,32 @@ export function unionClarificationAnswers(
   // D5 (advc c10): the output must be SET-LIKE (idempotent) by requestId. A
   // thread can persist the SAME requestId twice (re-answer, double-post,
   // rehydrate), so both sides are deduped BEFORE the merge: last-seen value
-  // wins, first-seen position is kept. Keyless answers stay (they are not
+  // wins, FIRST-SEEN POSITION is kept. Keyless answers stay (they are not
   // requestId-keyed to begin with).
+  //
+  // CARD1-FIX4C D3 (advc c11, binding ruling): FIRST-SEEN POSITION, LAST
+  // VALUE — a key's entry is kept at the position of its FIRST occurrence,
+  // carrying the value of its LAST occurrence; the later duplicate is dropped
+  // in place (not moved to the tail). The wire field NAME and POSITION are
+  // unchanged. ([req-1(v1), req-2, req-1(v2)] -> [req-1(v2), req-2].)
   const dedupeById = (answers: AiClarificationAnswer[]): AiClarificationAnswer[] => {
-    const lastAt = new Map<string, number>()
-    answers.forEach((a, i) => {
+    const firstAt = new Map<string, number>()
+    const lastVal = new Map<string, AiClarificationAnswer>()
+    for (let i = 0; i < answers.length; i++) {
+      const a = answers[i]
       const k = key(a)
-      if (k !== undefined) lastAt.set(k, i)
-    })
+      if (k === undefined) continue
+      if (!firstAt.has(k)) firstAt.set(k, i) // FIRST-seen position
+      lastVal.set(k, a) // LAST-seen value
+    }
     const out: AiClarificationAnswer[] = []
-    answers.forEach((a, i) => {
+    for (let i = 0; i < answers.length; i++) {
+      const a = answers[i]
       const k = key(a)
-      if (k !== undefined && lastAt.get(k) !== i) return
-      out.push(a)
-    })
+      if (k === undefined) { out.push(a); continue } // keyless stays
+      if (firstAt.get(k) !== i) continue // drop the LATER duplicate in place
+      out.push(lastVal.get(k)!) // FIRST-seen position, LAST value
+    }
     return out
   }
   const persistedDeduped = dedupeById(persisted)

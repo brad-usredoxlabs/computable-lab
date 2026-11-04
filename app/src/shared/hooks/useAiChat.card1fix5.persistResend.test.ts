@@ -123,6 +123,40 @@ describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 unit 3) — unionClarifi
     const withFresh = unionClarificationAnswers([ans('req-1', 'first'), ans('req-1', 'again')], [ans('req-1', 'fresh win')])
     expect(withFresh).toEqual([ans('req-1', 'fresh win')])
   })
+
+  it('dedupes an INTERLEAVED duplicate at the FIRST-SEEN POSITION (last value, not last-occurrence position) (D5 position contract, CARD1-FIX4C D3 advc c11)', () => {
+    // DEFECT 3 (cycle 11, LOW): dedupeById kept the LAST-occurrence POSITION
+    // ([req-1(v1), req-2, req-1(v2)] -> [req-2, req-1(v2)]), while the c10 rule
+    // AND the code comment both say FIRST-SEEN POSITION with LAST VALUE.
+    // Orchestrator ruling (binding): implement FIRST-SEEN POSITION, LAST VALUE —
+    // drop the later duplicate and replace the kept (first) entry's value in
+    // place. The wire field name and POSITION are unchanged and the existing
+    // set-like pin stays GREEN. This pin is RED against the pre-fix
+    // last-occurrence-position dedupe (it asserts first-seen order).
+    //
+    // The reviewer's exact probe: persisted = [req-1(v1), req-2, req-1(v2)].
+    // First-seen order: req-1 first (position 0), req-2 second (position 1);
+    // last value: req-1 -> v2. So the output is [req-1(v2), req-2].
+    const out = unionClarificationAnswers(
+      [ans('req-1', 'v1'), ans('req-2', 'B'), ans('req-1', 'v2')],
+      [],
+    )
+    expect(out.map((a) => a.requestId)).toEqual(['req-1', 'req-2']) // FIRST-SEEN position
+    expect(out[0].value).toBe('v2') // LAST value wins
+    expect(out[1]).toEqual(ans('req-2', 'B')) // the non-duplicate keeps its position + value
+    expect(out).toHaveLength(2)
+    // Idempotent (set-like): unioning the output with itself changes nothing.
+    expect(unionClarificationAnswers(out, out)).toEqual(out)
+    // Fresh side still supersedes the deduped entry at its first-seen position
+    // (in-place replacement, not an append).
+    const withFresh = unionClarificationAnswers(
+      [ans('req-1', 'v1'), ans('req-2', 'B'), ans('req-1', 'v2')],
+      [ans('req-1', 'fresh')],
+    )
+    expect(withFresh.map((a) => a.requestId)).toEqual(['req-1', 'req-2'])
+    expect(withFresh[0]).toEqual(ans('req-1', 'fresh')) // fresh value, persisted POSITION
+    expect(withFresh[1]).toEqual(ans('req-2', 'B'))
+  })
 })
 
 describe('L2-CLARIFY-CARD-1 defect 6 (ruling l2t1951 Q2 units 2-3) — persist carrier + re-send through sendPrompt', () => {
