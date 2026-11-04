@@ -47,7 +47,10 @@ declaration, exactly as the four named consumers do. A protocol under `document-
 controlled-signing` (the declared four) locks identically to today; AM-1 #5 already declares `approved/
 effective/superseded/archived` locked for those two lifecycles, so every existing 409 pin (incl.
 `archivedAssignment.test.ts:453-457`, a bar-2 file that expects 409 on a locked approved→effective content
-smuggle) stays green without amendment. No record uses `service-request`/`tyf-order`/`lab-vocabulary-control`
+smuggle) stays green without amendment. **EXCEPTION — see §2.E (orchestrator erratum, measured 2026-11-04):
+two `*.test.*` fixtures build their locked protocol on the UNDECLARED id `protocol-control` and DO need a
+fixture repair; the sentence above is correct for every production-shaped pin, not for those two.** No record
+uses `service-request`/`tyf-order`/`lab-vocabulary-control`
 for a controlled protocol, and even if one did, "locked per the record's lifecycle" is the item's whole thesis.
 
 ## 2. AMENDMENTS (quoted)
@@ -94,6 +97,36 @@ Timing clause KEPT VERBATIM. The phrase "holds the old pair" now names TWO app c
 warning (still do not run the gate between legs). The gate's DEFINITION is replaced by §3 below; the bare
 four-state-string grep is not satisfiable as worded, so §3 is the executable, satisfiable form both the
 leg-2 coder and the adversarial reviewer run verbatim.
+
+### E. ORCHESTRATOR ERRATUM (2026-11-04) — §1's "every existing 409 pin stays green without amendment" is FALSE for two test fixtures
+
+This is an orchestrator correction of a MEASURED fact in §1, not a change of ruling, boundary or acceptance
+criterion. Ruling §1 above is amended by the bracketed exception sentence; nothing else in §1 changes.
+
+Measured by me at trunk `03c420e1` (fresh process, this tick), not inherited from any handoff:
+
+1. `grep -rn "protocol-control" schema/ config/ server/src app/src` outside `*.test.*` = **0 hits**. The only
+   two hits in the whole tree are the fixtures themselves:
+   `server/src/api/handlers/RecordHandlers.writeGates.test.ts:250` and
+   `server/src/api/routes/protocol-steps.test.ts:312`.
+2. Declared lifecycles are exactly the seven files in `schema/core/lifecycles/`: `document-control`,
+   `document-controlled-signing`, `lab-sample`, `lab-vocabulary-control`, `registry-ops`, `service-request`,
+   `tyf-order`. **`protocol-control` is not one of them** — it is a fixture-only id.
+3. Both fixtures set `lifecycleId: 'protocol-control', state: 'approved'` and assert
+   `409 CONTROLLED_RECORD_LOCKED` + zero writes (`writeGates.test.ts:248-267`;
+   `protocol-steps.test.ts:312-329` PATCH and the POST sibling). Today a hardcoded state list makes that
+   lock fire. After the migration the declared-set resolver answers `undefined` for an undeclared lifecycle and
+   the gate **fail-opens by design (AM-14)** — so these two pins would expect 409 and receive 200. They go RED
+   for the wrong reason, which reads as "the migration broke the lock".
+4. LAWFUL repair (already written into the LEG-1 brief, `prompts/coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2255.txt`
+   §"FIXTURE TRAP"): set those fixtures' `lifecycleId` to the DECLARED locked lifecycle
+   `document-controlled-signing`, keep `state: 'approved'`, leave every assertion byte-identical. Forbidden:
+   adding a `protocol-control` lifecycle YAML, special-casing an undeclared id in product code, or restoring a
+   state literal to make the pin pass.
+
+Consequence for the gates: **no pin is deleted, weakened or re-scoped** — two fixtures are re-pointed at a
+declared lifecycle, which is exactly what a real controlled protocol uses. The adversarial reviewer should
+require the fixture diff to be limited to those two `lifecycleId` strings.
 
 ## 3. THE SATISFIABLE S2 — SHAPE-BASED PREDICATE SCAN + CLOSED EXCLUSION TABLE
 
