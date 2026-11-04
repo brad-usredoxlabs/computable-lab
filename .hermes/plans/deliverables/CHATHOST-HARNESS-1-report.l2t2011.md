@@ -1076,7 +1076,14 @@ verified all six hosts' `ai_request_bodies` carry the **IDENTICAL** ask string (
 1. **The seeds WORK (Q-A satisfied).** `event-editor` + `record-host` no longer carry the `NOT_FOUND`
    route alert (`"Failed to load: event graph CHATHOST-PROBE: NOT_FOUND"` / `"Couldn't open this record…
    NOT_FOUND"`); their residual is now the no-events wall, not a route failure. In Sweep B `event-editor`
-   went GREEN outright (the model drafted a mountable placeholder that turn).
+   went GREEN on an HONEST NO-DRAFT turn, not on a draft: the receipt's single assistant row
+   (`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261104T124239Z/event-editor.json`,
+   `rendered_evidence.assistant_texts`, `assistant_turns=1`) is
+   `"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw
+   event draft was refused again and the AI did not produce a shorthand document."` — the model drafted NO
+   placeholder; that row did not trip the no-events wall (`error_frames=0`, `alert_texts=[]`), so the
+   rendered leg graded GREEN. (advc c12 D2: the earlier "drafted a mountable placeholder" wording is
+   corrected to this receipt's actual green mechanism.)
 2. **The stimulus is correctly DATA (no per-host branch):** one shared string on all six, the marker
    preserved, assertion trio byte-identical, selfcheck + shrink-guard green.
 3. **The residual is the product's HONEST no-events wall, rendered `role="alert"`, on the hosts where the
@@ -1329,3 +1336,59 @@ source's trailing newline. The NO-OP branch therefore fires when the capture blo
 absent and the arm goes RED in that case. The (k1) positive arm and the mutation's
 driving/grading logic (`error_frames == 2`, `"alert_texts" not in ev`) are untouched;
 nothing in `ui-drive.cjs` / `run-journeys.py` / `chat-hosts.yaml` was changed.
+**D3 proof — capture-absent SOURCE, (k2) arm goes RED (the required behaviour).** Harness dir
+copied to `/tmp/c12/.hermes/plans/harness/l2-trunk-journeys` (same depth; `config/`, `app/`, `.git`,
+root `node_modules`, and the cited spec file `.hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md`
+symlinked/copied as the existing arms need), then ONLY the 3-line
+`evidence.alert_texts = await page.evaluate(...).catch(() => []);` block (ui-drive.cjs lines 568-570)
+deleted from the /tmp SOURCE `ui-drive.cjs` (`node --check` on the mutated source: rc 0). Ran:
+`cd /tmp/c12 && python3 .hermes/plans/harness/l2-trunk-journeys/test-channel-selfcheck.py` — the ONLY
+RED arms in the full run (121 arms) are the two CHATHOST-CONSOLIDATE-1 PINs, and (k2) now carries the
+NO-OP note:
+
+```
+CHATHOST-CONSOLIDATE-1 PIN: alert_texts SHOWS the texts for a two-alert DOM (capture rides rendered_evidence) RED
+      note: real alert_texts=None error_frames=2
+CHATHOST-CONSOLIDATE-1 PIN: REVERTING the alert_texts capture line (a /tmp copy) makes the receipt's rendered_evidence lose alert_texts (mutation RED) while error_frames is unchanged RED
+      note: mutation was a NO-OP (capture line not found — the line moved; re-point the mutation)
+SELFCHECK: FAIL
+SELFCHECK_RC=1
+```
+
+Pre-fix (the reviewer's proof, reproduced by the mechanism): with the same capture-absent source the
+(k2) arm printed `OK` (it drove a byte-identical copy) — the `_alt_skipped_any` fix is what flips it
+RED via the NO-OP branch. The un-mutated selfcheck re-measured below (D3 section tail) is
+`SELFCHECK: PASS` rc 0 with both PINs OK.
+### D2 — report :1078-1079: the Sweep-B `event-editor` green mechanism, corrected to the receipt
+
+The old sentence claimed Sweep B's green was "the model drafted a mountable placeholder that
+turn". Read the receipt directly
+(`~/.hermes/cl/receipts/L2-TRUNK-JOURNEYS/20261104T124239Z/event-editor.json`):
+`verdict=green`, `rendered_evidence.assistant_turns=1`, `error_frames=0`, `alert_texts=[]`, and the
+single `assistant_texts` row is
+`"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw
+event draft was refused again and the AI did not produce a shorthand document."`
+The model drafted NO placeholder — it emitted an honest "cannot draft" row, and the green is because
+that row did not trip the no-events wall. The report sentence at the old :1078-1079 position is
+corrected in-place to that mechanism (the corrected text now cites the receipt path, the
+`assistant_texts` value, `assistant_turns=1`, `error_frames=0`, `alert_texts=[]`). No other claim in
+the file asserts a Sweep-B placeholder draft (grep for "drafted a mountable placeholder that turn" ->
+0 hits after the fix; the :1057 Sweep-A artifact-host line is a separate, supported claim left
+untouched).
+
+### MEASURE AFTER THE FIX (raw)
+
+1. Un-mutated selfcheck (worktree, post-fix):
+```
+CHATHOST-CONSOLIDATE-1 PIN: alert_texts SHOWS the texts for a two-alert DOM (capture rides rendered_evidence) OK
+CHATHOST-CONSOLIDATE-1 PIN: REVERTING the alert_texts capture line (a /tmp copy) makes the receipt's rendered_evidence lose alert_texts (mutation RED) while error_frames is unchanged OK
+SELFCHECK: PASS
+SELFCHECK_RC=0
+```
+(119 `OK` arms, 0 `RED` arms; full log at `/tmp/c12-selfcheck-unmutated.log`.)
+2. Shrink-guard:
+```
+SHRINK-GUARD green (current sha=dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b; no blessed host dropped)
+GUARD_RC=0
+```
+sha `dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b` UNCHANGED.
