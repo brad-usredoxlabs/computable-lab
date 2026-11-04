@@ -759,9 +759,22 @@ def _delete_probe_side_records(journey, api_base):
             notes.append("access-policy side record %s: NOT removed (resourceRef.id "
                          "%r != seed recordId %r — refused to touch it)"
                          % (acl_rid, rr.get("id"), rid))
+    elif st == 404:
+        # ONLY 404 proves the record absent — absent -> nothing left behind.
+        acl_clean = True
+        notes.append("access-policy side record %s: absent (GET -> 404)"
+                     % acl_rid)
     else:
-        acl_clean = True    # absent -> nothing left behind
-        notes.append("access-policy side record %s: absent (GET -> %s)" % (acl_rid, st))
+        # CHATHOST-CONSOLIDATE-1 FIX2 (advc c8 D-1): EVERY other non-200 GET
+        # (403, 500, -1 transport error, ...) is NOT an observed absence —
+        # _api returns -1 on transport error and 403/500 on server errors,
+        # so the record may STILL EXIST and the read merely failed. An
+        # unobserved absence is not clean: a surviving side record must not
+        # be reported clean (and must not make teardown_ok true).
+        acl_clean = False
+        notes.append("access-policy side record %s: NOT observed absent "
+                     "(GET -> %s; only 404 proves absence — the record may "
+                     "still exist and the read failed)" % (acl_rid, st))
     # (b) the artifact's study workspace sidecar (NON-record, filesystem only).
     study_id = (rec.get("payload") or {}).get("studyId")
     sidecar_clean = True

@@ -964,6 +964,118 @@ def main():
             results.append(("CHATHOST gate: an accept verdict whose receipt FILE is missing is RED (fix1 D7)",
                             p.returncode == 1 and "does not exist" in p.stdout,
                             ["rc=%d out=%s" % (p.returncode, p.stdout.strip()[:160])]))
+            # ---- (7e-o1) O-1 (advc c8): the gate CONSUMES the probe receipt's
+            # OWN teardown claim — a receipt that says teardown_ok: false, or a
+            # side_teardown with a *_deleted flag false, is NOT-ACCEPT at the
+            # gate (the honest receipt is graded, not just file-checked).
+            # Receipts carrying NO teardown claim (no `teardown_ok` / no
+            # `side_teardown` — the non-probe J1/J2/J3 shape) are graded
+            # unchanged.
+            # (7e-o1p) the PURE grader pins (no I/O).
+            try:
+                _o1_flag = {"side_teardown": {
+                    "acl_record_deleted": False,
+                    "study_workspace_sidecar_deleted": True}}
+                results.append(("FIX2 O-1 pure: receipt_teardown_grade({'teardown_ok': False}) names a reason",
+                                bool(cg.receipt_teardown_grade(
+                                    {"teardown_ok": False})),
+                                ["got=%r" % (cg.receipt_teardown_grade(
+                                    {"teardown_ok": False}),)]))
+                results.append(("FIX2 O-1 pure: a side_teardown flag false -> a reason naming the flag",
+                                isinstance(cg.receipt_teardown_grade(_o1_flag), list)
+                                and any("acl_record_deleted" in r
+                                        for r in cg.receipt_teardown_grade(_o1_flag)),
+                                ["got=%r" % (cg.receipt_teardown_grade(_o1_flag),)]))
+                results.append(("FIX2 O-1 pure: teardown_ok true + all-true side_teardown -> honest (None)",
+                                cg.receipt_teardown_grade({
+                                    "teardown_ok": True,
+                                    "side_teardown": {
+                                        "acl_record_deleted": True,
+                                        "study_workspace_sidecar_deleted": True}})
+                                is None,
+                                []))
+                results.append(("FIX2 O-1 pure: a receipt WITHOUT side_teardown (J1/J2/J3 shape) -> unchanged (None)",
+                                cg.receipt_teardown_grade(
+                                    {"journey": "run-workspace", "verdict": "green"})
+                                is None,
+                                []))
+            except Exception as _e:
+                results.append(("FIX2 O-1 pure: the receipt_teardown_grade pins (helper present + behaviour)",
+                                False, ["err=%s" % _e]))
+            # (7e-o1) drive THE REAL gate over a fixture run whose receipt
+            # FILES carry the honest teardown claims the probe writes.
+            with tempfile.TemporaryDirectory() as td_o1:
+                run_o1 = os.path.join(td_o1, "20261104T000000Z")
+                os.makedirs(run_o1)
+                rx_o1 = os.path.join(run_o1, "receipts")
+                os.makedirs(rx_o1)
+                env_o1 = dict(os.environ, CL_RECEIPTS=td_o1,
+                              CL_CHAT_HOSTS=inv_path,
+                              CL_CHAT_HOSTS_MANIFEST=man_path)
+
+                def _o1_gate(rec_fn):
+                    for h in inv_ids:
+                        with open(os.path.join(rx_o1, "%s.json" % h),
+                                  "w") as rfh:
+                            json.dump(rec_fn(h), rfh)
+                    with open(os.path.join(run_o1, "run-meta.json"),
+                              "w") as fh:
+                        json.dump({"app_base": "http://localhost:5193",
+                                   "chat_host_verdicts": full_accept}, fh)
+                    os.symlink(run_o1, os.path.join(td_o1, "latest"))
+                    p = subprocess.run(
+                        [sys.executable, os.path.join(HERE, "check-gate.py"),
+                         "--chat-hosts"], capture_output=True, text=True,
+                        env=env_o1)
+                    os.unlink(os.path.join(td_o1, "latest"))
+                    return p
+
+                # (7e-o1a) THE RED pin (pre-O-1 this fixture cleared the gate
+                # — the hole the reviewer recorded): every receipt says
+                # teardown_ok: false -> the gate must NOT accept.
+                p_o1a = _o1_gate(lambda h: {"verdict": "green",
+                                            "teardown_ok": False})
+                results.append(("FIX2 O-1 gate: a sweep whose receipts say teardown_ok: false is NOT-ACCEPT (exit 1, reason named)",
+                                p_o1a.returncode == 1 and "NOT-ACCEPT" in p_o1a.stdout
+                                and "teardown_ok" in p_o1a.stdout,
+                                ["rc=%d out=%s"
+                                 % (p_o1a.returncode,
+                                    p_o1a.stdout.strip()[:220])]))
+                # (7e-o1b) the reviewer's exact other case: a side_teardown
+                # flag false (acl_record_deleted: false) -> NOT-ACCEPT.
+                p_o1b = _o1_gate(lambda h: {
+                    "verdict": "green", "teardown_ok": True,
+                    "side_teardown": {
+                        "acl_record_deleted": False,
+                        "study_workspace_sidecar_deleted": True}})
+                results.append(("FIX2 O-1 gate: a side_teardown flag false (acl_record_deleted: false) is NOT-ACCEPT (exit 1, flag named)",
+                                p_o1b.returncode == 1 and "NOT-ACCEPT" in p_o1b.stdout
+                                and "acl_record_deleted" in p_o1b.stdout,
+                                ["rc=%d out=%s"
+                                 % (p_o1b.returncode,
+                                    p_o1b.stdout.strip()[:220])]))
+                # (7e-o1c) honest receipts (teardown_ok true + all-true
+                # side_teardown) still clear the gate.
+                p_o1c = _o1_gate(lambda h: {
+                    "verdict": "green", "teardown_ok": True,
+                    "side_teardown": {
+                        "acl_record_deleted": True,
+                        "study_workspace_sidecar_deleted": True}})
+                results.append(("FIX2 O-1 gate: an honest sweep (teardown_ok true + side_teardown all-true) still clears the gate (rc 0)",
+                                p_o1c.returncode == 0
+                                and "GATE-VERDICT green" in p_o1c.stdout,
+                                ["rc=%d out=%s"
+                                 % (p_o1c.returncode,
+                                    p_o1c.stdout.strip()[:220])]))
+                # (7e-o1d) receipts WITHOUT a teardown claim (the non-probe
+                # J1/J2/J3 shape) are graded UNCHANGED.
+                p_o1d = _o1_gate(lambda h: {"verdict": "green"})
+                results.append(("FIX2 O-1 gate: receipts WITHOUT side_teardown (J1/J2/J3 shape) are graded unchanged (rc 0)",
+                                p_o1d.returncode == 0
+                                and "GATE-VERDICT green" in p_o1d.stdout,
+                                ["rc=%d out=%s"
+                                 % (p_o1d.returncode,
+                                    p_o1d.stdout.strip()[:220])]))
         # (7f) Change 3 shrink-guard (PURE): the current inventory vs the
         # blessed manifest is green; a SHRUNKEN inventory is RED + names the
         # host; pure GROWTH is allowed. The guard returns a 4-tuple
@@ -1278,6 +1390,90 @@ def main():
                         ["non-artifact seed count (expect 0)"]))
     except Exception as _e:
         results.append(("U1a/U1b: self-check (probe seed + open_ai_tab negative control)",
+                        False, ["err=%s" % _e]))
+
+    # ---- (T5) CHATHOST-CONSOLIDATE-1 FIX2 (advc c8 D-1): probe side-record
+    # teardown HONESTY — `_delete_probe_side_records` must report
+    # acl_clean = False when the ACL GET returns ANY non-200 status except
+    # 404: 403/500 (server errors) and -1 (transport error) mean the record
+    # may STILL EXIST and the read merely failed — an unobserved absence is
+    # not clean. ONLY 404 proves the record absent. Drives the driver's OWN
+    # function over a stubbed `_api` (no server contact — the existing
+    # self-check style); the stub is restored in `finally`.
+    try:
+        _d1_journey = {"seed": {"record": {
+            "recordId": "CHATHOST-PROBE",
+            # studyId absent -> the filesystem sidecar arm is skipped, so
+            # these arms isolate the ACL branch.
+            "payload": {}}}}
+        _d1_orig_api = rj._api
+
+        def _d1_stub_factory(get_status, delete_status=200,
+                             ref_rid="CHATHOST-PROBE"):
+            def _stub(api_base, method, path, body=None, timeout=30,
+                      user_id="USR-BRAD"):
+                if method == "GET" and path.startswith("/api/records/ACL-"):
+                    if get_status == 404:
+                        return 404, {}
+                    return get_status, {"record": {"payload": {
+                        "resourceRef": {"id": ref_rid}}}}
+                if method == "DELETE":
+                    return delete_status, {}
+                return 200, {}
+            return _stub
+        try:
+            # 403 (server error) -> NOT observed absent -> acl_clean False
+            # (pre-fix this branch set acl_clean = True for EVERY non-200).
+            rj._api = _d1_stub_factory(403)
+            _d1_a403 = rj._delete_probe_side_records(_d1_journey, "http://stub")
+            # 500 -> likewise NOT observed absent -> False.
+            rj._api = _d1_stub_factory(500)
+            _d1_a500 = rj._delete_probe_side_records(_d1_journey, "http://stub")
+            # -1 (transport error: the record may still exist) -> False.
+            rj._api = _d1_stub_factory(-1)
+            _d1_aneg1 = rj._delete_probe_side_records(_d1_journey, "http://stub")
+            # 404 -> ABSENT is legitimately clean -> True.
+            rj._api = _d1_stub_factory(404)
+            _d1_a404 = rj._delete_probe_side_records(_d1_journey, "http://stub")
+            # 200 + matching resourceRef + DELETE 200 -> removed -> True.
+            rj._api = _d1_stub_factory(200, delete_status=200,
+                                       ref_rid="CHATHOST-PROBE")
+            _d1_a200 = rj._delete_probe_side_records(_d1_journey, "http://stub")
+            # 200 + FOREIGN resourceRef -> refused (pre-existing contract).
+            rj._api = _d1_stub_factory(200, delete_status=200,
+                                       ref_rid="OTHER-REC")
+            _d1_af = rj._delete_probe_side_records(_d1_journey, "http://stub")
+        finally:
+            rj._api = _d1_orig_api
+        results.append(("FIX2 D-1 (advc c8): ACL GET 403 -> acl_clean False + note names 403 (not observed absent)",
+                        _d1_a403[0] is False
+                        and any("403" in n and "NOT observed absent" in n
+                                for n in _d1_a403[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_a403[0], _d1_a403[2])]))
+        results.append(("FIX2 D-1 (advc c8): ACL GET 500 -> acl_clean False + note names 500",
+                        _d1_a500[0] is False
+                        and any("500" in n and "NOT observed absent" in n
+                                for n in _d1_a500[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_a500[0], _d1_a500[2])]))
+        results.append(("FIX2 D-1 (advc c8): ACL GET -1 (transport error) -> acl_clean False + note names -1",
+                        _d1_aneg1[0] is False
+                        and any("-1" in n and "NOT observed absent" in n
+                                for n in _d1_aneg1[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_aneg1[0], _d1_aneg1[2])]))
+        results.append(("FIX2 D-1 (advc c8): ACL GET 404 -> acl_clean True (absent IS legitimately clean)",
+                        _d1_a404[0] is True
+                        and any("absent" in n and "404" in n for n in _d1_a404[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_a404[0], _d1_a404[2])]))
+        results.append(("FIX2 D-1 (advc c8): ACL GET 200 + matching resourceRef + DELETE 200 -> acl_clean True (removed)",
+                        _d1_a200[0] is True
+                        and any("removed" in n for n in _d1_a200[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_a200[0], _d1_a200[2])]))
+        results.append(("FIX2 D-1 (advc c8): ACL GET 200 + FOREIGN resourceRef -> acl_clean False (refused to touch)",
+                        _d1_af[0] is False
+                        and any("refused" in n for n in _d1_af[2]),
+                        ["acl_clean=%r notes=%r" % (_d1_af[0], _d1_af[2])]))
+    except Exception as _e:
+        results.append(("FIX2 D-1 (advc c8): _delete_probe_side_records stubbed _api arms",
                         False, ["err=%s" % _e]))
 
     ok = True
