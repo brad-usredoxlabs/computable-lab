@@ -472,6 +472,24 @@ describe('SH-QC-1S — repeat-prompt echo on the shorthand surface (RED-first)',
     // The fold key flips between the ask and answer turns (the D2 root cause).
     expect(keyA).not.toBe(keyB);
 
+    // CARD1-D3 FIX-2 (advc c7 DEFECT 4): the answer turn re-extracts a
+    // CASE/SPACE-DRIFTED VARIANT of the same label (the receipt's live
+    // defect was a one-character case re-roll: `1 mM clofibrate…` vs
+    // `1 mM Clofibrate  …` — the pre-D3 receipt id `09df02df…`/`fdc6e54b…`
+    // drift). Here the fixture label `mystery goop` re-derives as
+    // `Mystery  Goop` on the answer turn: case drift + inner double space.
+    // Pre-D3 (RAW-label hash in factRequestId) the ask id and the
+    // re-derived id DIVERGE → the answered-requestId drop misses → the
+    // card re-opens (this pin is RED). Post-D3 the id rides
+    // canonicalLabelKey(fact.label) → both turns mint the SAME id → the
+    // drop fires → GREEN. The pin therefore exercises the D3+D2
+    // COMPOSITION, not just the drop.
+    const AMBIGUOUS_YAML_DRIFTED = AMBIGUOUS_YAML.replace(
+      'material: mystery goop',
+      'material: Mystery  Goop',
+    );
+    expect(AMBIGUOUS_YAML_DRIFTED).not.toBe(AMBIGUOUS_YAML); // the drift is real
+
     // Ask turn: the real compile re-derives the `mystery goop` fact and holds
     // it under keyA. The ask is free to ask (no clarificationAnswers) → the
     // card is offered. Its on-wire requestId (the re-derived fact's
@@ -483,10 +501,11 @@ describe('SH-QC-1S — repeat-prompt echo on the shorthand surface (RED-first)',
     const answeredRequestId = ask.clarificationRequests![0].id;
 
     // Answer turn: the fold key flipped (keyB) so the held intent is LOST →
-    // the model re-extracts and re-derives the SAME fact. The on-wire
-    // requestId matches the re-derived fact → the follow-up must NOT re-open
-    // the card (the D2 defect). No prose join, no regex over the question.
-    const answerModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    // the model re-extracts and re-derives the SAME fact under the DRIFTED
+    // casing. The on-wire requestId matches the re-derived fact's
+    // canonical-stable id → the follow-up must NOT re-open the card (the D2
+    // defect). No prose join, no regex over the question.
+    const answerModel = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML_DRIFTED)] }]);
     const { result: answered } = await runRepeatTurn(answerModel, {
       context: contextB,
       clarificationAnswers: [{
