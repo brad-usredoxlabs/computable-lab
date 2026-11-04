@@ -66,8 +66,9 @@ fails; if both free, check 4 fails (strict B). The 45 s poll is the minimum cade
   run by me at 03:04:11 — also proves the pre-warmed worktree's `node_modules` still works.
 - Product tree continuity: `git diff --name-only 42df75eb..6b7a9d45 -- app server schema config scripts` = **0 paths**.
 - **Rule 2 (claims ledger)**: independently re-derived `git diff --name-only 348137c0..HEAD -- . ':!.hermes/plans'`
-  = **0 paths** ⇒ all 12 quotable rows stand. The 324TH's freshness block is already written at `6b7a9d45`, which is
-  still HEAD, so **no new ledger block was needed** and none was written. The `/record` lock + write-immutability row
+  = **0 paths** ⇒ all 12 quotable rows stand. The 324TH's freshness block is already written at `6b7a9d45`; this
+  tick's only commit is docs-only (`.hermes/plans`), so a **one-line HEAD-independent addendum** was appended rather
+  than restating row verdicts. The `/record` lock + write-immutability row
   stays **UNVERIFIED-and-DEFECTIVE**; its ENVIRONMENT FACT stays FALSIFIED on that surface.
 
 ## Brad card — due 06:53 EST, filing cadence measured
