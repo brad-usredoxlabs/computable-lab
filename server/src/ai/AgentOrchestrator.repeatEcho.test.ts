@@ -481,9 +481,9 @@ describe('SH-QC-1S — repeat-prompt echo on the shorthand surface (RED-first)',
     // Pre-D3 (RAW-label hash in factRequestId) the ask id and the
     // re-derived id DIVERGE → the answered-requestId drop misses → the
     // card re-opens (this pin is RED). Post-D3 the id rides
-    // canonicalLabelKey(fact.label) → both turns mint the SAME id → the
-    // drop fires → GREEN. The pin therefore exercises the D3+D2
-    // COMPOSITION, not just the drop.
+    // the canonical LABEL KEY (termId's fold) → both turns mint the
+    // SAME id → the drop fires → GREEN. The pin therefore exercises the
+    // D3+D2 COMPOSITION, not just the drop.
     const AMBIGUOUS_YAML_DRIFTED = AMBIGUOUS_YAML.replace(
       'material: mystery goop',
       'material: Mystery  Goop',
