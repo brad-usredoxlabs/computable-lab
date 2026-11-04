@@ -543,3 +543,45 @@ volume gate untouched.
   → `clarifyPickerRanking.test.ts` RED `Tests 4 failed | 7 passed (11)`; reverted →
   GREEN `Tests 11 passed (11)` (clean tree). The row/durable-name pins the ruling
   §3(iii) demands already exist and are non-vacuous — nothing added.
+
+### U2 — D2 (HIGH) server half — DONE (commit 0f7fcc47)
+
+- Root cause (verified from receipts + code): the answer turn's context flips
+  (`runId=RUN-0vbh` -> `null`, `eventGraphId` `EVG-mvy8xmjf` -> `EVG-cellrox…`),
+  so the fold conversation key (`deriveContextCacheKey`, `AgentOrchestrator.ts:1312`)
+  changes, `takeHeldShorthandIntent` returns null, the model re-extracts and
+  re-derives the SAME fact (post-D3 `factRequestId` is canonical-stable on the
+  label), and a 2nd card re-opens (`d0e9c7d900` -> `c9830ef36c`).
+- Fix (server half only; NO new schema — `ThreadMessage.metadata`/store fields not
+  needed because the identity is already on the wire; NO prose, NO regex over the
+  question):
+  - `server/src/ai/shorthandChat.ts`: new `dropAnsweredRequestIds(clarifications,
+    answeredRequestIds)` — drops a re-derived fact iff its `factRequestId` is in
+    the set of requestIds this request already posted as answered in
+    `clarificationAnswers[].requestId` (the identity ALREADY on the wire). Mirrors
+    `dropSatisfiedFacts` (fold arm) but keyed on fact identity, not on the value.
+  - `server/src/ai/AgentOrchestrator.ts`: the drop is applied ONCE at the
+    re-extract finalization (the held-null/fallback path that builds `compiledSh`),
+    gated on `clarificationAnswers.length > 0` so a fresh ask is byte-unchanged.
+    No change to the fold arm's `dropSatisfiedFacts` call site.
+- RED first (proved, not asserted): with the production fix stashed, P9a FAILS
+  (the 2nd card re-opens: `expect(2).toBe(0)`); with the fix, P9a PASSes.
+- Pins added (`server/src/ai/AgentOrchestrator.repeatEcho.test.ts`):
+  - P9a (positive): ask turn holds under key A; answer turn flips the key
+    (`runId` -> `eventGraphId`, fold null), re-extract re-derives the fact; the
+    on-wire requestId (captured from the ask-turn result — no module-state read)
+    suppresses the re-ask: `clarificationRequests` 0, `success` true.
+  - P9b (negative, different-thread/identity): a NON-matching answered requestId
+    (a fresh fact the thread never answered) still mounts the card — proves the
+    drop is identity-keyed and does not over-suppress.
+- Verification: `npx tsc --noEmit -p server` 0 error lines (baseline 0).
+  Whole `server/src/ai` suite: 29 failed | 1168 passed (1197). The 29-failure set
+  is BYTE-IDENTICAL to the pristine-baseline set (diff empty) — no new failures,
+  none fixed; P9a/P9b are new passing tests. `repeatEcho` file: 1 failed (P8) |
+  10 passed (11) — P8 fails at baseline `7084b0a0` too (verified by stashing all
+  U2 changes: `expected 1 to be +0` at line 448), i.e. a pre-existing baseline
+  failure, not introduced by U2.
+- Files touched (all named): `server/src/ai/shorthandChat.ts`,
+  `server/src/ai/AgentOrchestrator.ts`,
+  `server/src/ai/AgentOrchestrator.repeatEcho.test.ts`. No `app/` change, no
+  client seam, no store/schema change.
