@@ -43,6 +43,19 @@
  *       shipped done-arm (useAiChat.ts:1689-1699) so it stops setting both
  *       fields, which is out of this item's scope (mirrors review O3 for the
  *       answered-row pin).
+ *   (D1) CARD1-FIX4C D1 (advc c11): the tautology is GONE. (D1) DRIVES THE
+ *       REAL DONE-ARM — a `done` stream event carrying
+ *       `result.clarificationRequests` (and NO legacy `result.clarification`,
+ *       the shorthand path's real shape) is fed through `useAiChat`
+ *       (streamAssist mocked at the aiClient seam; no backend call) and the
+ *       RESULTING message is asserted to carry BOTH a non-empty `clarification`
+ *       (derived via legacyClarificationFromRequests when the legacy field is
+ *       absent) AND a non-empty `clarificationRequests`. The gate pin (D) then
+ *       reads THAT real done-arm message (not a hand-built literal), so a
+ *       regression that stopped the done-arm setting `clarificationRequests`
+ *       turns the gate TRUE → (D) RED. Proven RED (mutation in a /tmp copy):
+ *       dropping the done-arm's `clarificationRequests` spread fails (D1) and
+ *       (D).
  *
  * Conclusion: the legacy arm's `clarificationRequest()` builder (which drops
  * `unresolvedFact`) is only reachable for legacy-only messages, and those are
@@ -54,10 +67,12 @@
  * `unresolvedFact` field to add anyway (it is frozen out of this item's
  * opened files).
  */
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiClarificationRequest, ChatMessage } from '../types/ai'
+import type { AiContext } from '../types/aiContext'
 import { ChatLog } from './ChatLog'
+import { useAiChat } from '../shared/hooks/useAiChat'
 
 // Capture the request the (mocked) picker receives, and render the typed-arm's
 // OWN wrapper testid so the arm is distinguishable from the legacy block.
@@ -81,12 +96,36 @@ vi.mock('../event-editor/right-pane/ai/ClarificationPicker', () => ({
   requestHasPicker: () => true,
 }))
 
+// CARD1-FIX4C D1: mock the aiClient seam so a useAiChat-driven turn can feed a
+// REAL `done` event carrying result.clarificationRequests (the done-arm's input)
+// and assert the resulting message. (A)/(B)/(C) above never call streamAssist —
+// they render ChatLog from hand-built messages — so this mock does not disturb
+// them. The same module-level mock idiom the persistResend pin uses.
+const mockAiClient = vi.hoisted(() => ({
+  streamAssist: vi.fn(),
+  getAiHealth: vi.fn().mockResolvedValue({ available: true }),
+}))
+vi.mock('../shared/api/aiClient', () => mockAiClient)
+
+beforeEach(() => {
+  mockAiClient.streamAssist.mockReset()
+  mockAiClient.getAiHealth.mockClear()
+})
+
 afterEach(() => {
   cleanup()
   mockPicker.captured.request = null
 })
 
 const props = { isStreaming: false, prompt: '', onPromptChange: vi.fn(), onSend: vi.fn(), onCancel: vi.fn(), onReview: vi.fn() }
+
+// The AiContext the useAiChat-driven (D1) turn renders in (the event-editor
+// surface; contextPayload builds from it — no real backend call is made).
+const mockAiContext: AiContext = {
+  surface: 'event-editor',
+  summary: 'Test summary',
+  surfaceContext: {},
+}
 
 // The live shorthand mint turn — the done-payload shape (useAiChat done arm):
 // BOTH the typed `clarificationRequests` (carrying the verbatim
@@ -221,7 +260,82 @@ describe('ChatLog — L2-CLARIFY-CARD-1 defect 5 (Q1 item 3): the legacy arm can
     expect(mockPicker.captured.request?.unresolvedFact).toBeUndefined()
   })
 
-  it('(D) D3 (advc c10) — a live shorthand mint ALWAYS carries the typed requests, so the legacy block arm GATE cannot fire for it (the conclusion is a pin, not an assumption)', () => {
+  it('(D1) CARD1-FIX4C D1 (advc c11) — the REAL done-arm, driven through useAiChat from a `done` carrying result.clarificationRequests, sets BOTH `clarification` (derived when the legacy field is absent) AND a non-empty `clarificationRequests` on the resulting message', async () => {
+    // DEFECT 1 (cycle 11, MEDIUM): the pre-FIX4C pin (D) was a TAUTOLOGY — it
+    // hand-built `liveMsg` with both fields and re-implemented the gate
+    // expression inside the test, so a regression in the REAL done-arm
+    // (useAiChat.ts:1689-1711, which sets `clarification` and conditionally
+    // `clarificationRequests` from `result`) would have left it GREEN.
+    //
+    // THIS pin drives the REAL path: a `done` stream event carrying
+    // `result.clarificationRequests` (the shorthand path emits requests
+    // unconditionally — the legacy `clarification` field is ABSENT, so the
+    // done arm must derive it via legacyClarificationFromRequests) is fed
+    // through `useAiChat` (streamAssist mocked at the aiClient seam; no real
+    // backend call). We then assert the RESULTING message — the one the done
+    // arm actually produced — carries BOTH fields. The gate pin (D) below
+    // reads THIS real message, not a hand-built literal.
+    //
+    // DONE EVENT (the done-arm's input): a clarification-bearing done that
+    // carries `result.clarificationRequests` and NO legacy `result.clarification`
+    // (the shorthand path's real shape — the server sets the typed requests,
+    // not the legacy field, so the arm must derive the legacy shape).
+    const DONE_EVENT = {
+      type: 'done',
+      result: {
+        success: true,
+        events: [],
+        notes: [],
+        // The shorthand path emits the typed requests unconditionally
+        // (shorthandChat.ts:873/1013) — the verbatim unresolvedFact rides here.
+        clarificationRequests: [LIVE_REQUEST],
+        // NO legacy `clarification` — the done arm must derive it.
+      },
+    }
+    const sa = mockAiClient.streamAssist as ReturnType<typeof vi.fn>
+    sa.mockImplementation(async function* () {
+      yield DONE_EVENT
+    })
+
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext: mockAiContext,
+        onAcceptEvent: vi.fn(),
+        onAddLabwareFromRecord: vi.fn(),
+      }),
+    )
+
+    result.current.sendPrompt('Use 1 mM Clofibrate in DMSO.')
+    // flush the turn to FULL completion (isStreaming false).
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    // THE REAL done-arm MESSAGE: the assistant turn the done arm just produced
+    // (the LAST assistant message — the user message precedes it).
+    const assistant = result.current.messages.filter((m) => m.role === 'assistant').pop()
+    expect(assistant).toBeTruthy()
+
+    // THE INVARIANT: the real message carries BOTH fields. (1) `clarification`
+    // is NON-EMPTY — the server legacy field was ABSENT, so the done arm
+    // DERIVED it via legacyClarificationFromRequests(result.clarificationRequests)
+    // (useAiChat.ts:1689-1692); a regression that dropped that derivation
+    // leaves `clarification` undefined → RED. (2) `clarificationRequests` is
+    // NON-EMPTY — the done arm conditionally spreads it from `result` when
+    // non-empty (useAiChat.ts:1697-1699); a regression that dropped that spread
+    // leaves it absent → RED.
+    expect(assistant?.clarification).toBeTruthy()
+    expect(assistant?.clarification?.id).toBe(LIVE_REQUEST.id)
+    expect(assistant?.clarificationRequests).toBeTruthy()
+    expect(assistant?.clarificationRequests?.length).toBeGreaterThan(0)
+    // The typed requests ride VERBATIM (the raw unresolvedFact label survives
+    // the real done-arm round-trip) — the typed arm's mint row reaches the raw
+    // label through THIS real message.
+    expect(assistant?.clarificationRequests?.[0]?.id).toBe(LIVE_REQUEST.id)
+    expect(assistant?.clarificationRequests?.[0]?.unresolvedFact?.label).toBe('1 mM Clofibrate in DMSO')
+  })
+
+  it('(D) D3 (advc c10) — a live shorthand mint ALWAYS carries the typed requests, so the legacy block arm GATE cannot fire for it (the conclusion is a pin, not an assumption)', async () => {
     // The reviewer's D3 defect: tests (A)/(C) proved the legacy arm CAN render
     // a legacy-only shape AND that a both-fields turn rides the typed arm, but
     // the report's conclusion "a live mint is reachable ONLY via the typed arm"
@@ -241,40 +355,62 @@ describe('ChatLog — L2-CLARIFY-CARD-1 defect 5 (Q1 item 3): the legacy arm can
     // the legacy arm is skipped and the TYPED arm (ChatLog.tsx:324-386) renders
     // the picker. The legacy arm's `clarificationRequest()` builder (which drops
     // unresolvedFact) is therefore structurally unreachable for a live mint.
-    const liveMsg: ChatMessage = {
-      id: 'live-gate',
-      role: 'assistant',
-      content: LIVE_REQUEST.prompt,
-      timestamp: 0,
-      // BOTH fields — the done-arm shape for a clarification-bearing done.
-      clarificationRequests: [LIVE_REQUEST],
-      clarification: {
-        id: LIVE_REQUEST.id,
-        prompt: LIVE_REQUEST.prompt,
-        entityType: 'material',
-        menuProvider: '/m',
-        query: LIVE_REQUEST.query,
-        options: [],
-        allowCreateLocal: true,
+    //
+    // CARD1-FIX4C D1 (advc c11): this gate pin now reads the REAL done-arm
+    // message (produced by driving a `done` through useAiChat — see (D1) above)
+    // instead of a hand-built literal. The message is the done arm's actual
+    // output, so a regression that stopped the done-arm setting
+    // `clarificationRequests` (leaving the message legacy-only) turns the gate
+    // TRUE → this pin RED. The hand-built literal is gone.
+    const DONE_EVENT = {
+      type: 'done',
+      result: {
+        success: true,
+        events: [],
+        notes: [],
+        clarificationRequests: [LIVE_REQUEST],
+        // NO legacy `clarification` — the done arm derives it (see (D1)).
       },
     }
-    // THE GATE — evaluated on the live message, NOT asserted on a separate
-    // hand-built message. For a live shorthand mint it is FALSE.
+    const sa = mockAiClient.streamAssist as ReturnType<typeof vi.fn>
+    sa.mockImplementation(async function* () {
+      yield DONE_EVENT
+    })
+
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext: mockAiContext,
+        onAcceptEvent: vi.fn(),
+        onAddLabwareFromRecord: vi.fn(),
+      }),
+    )
+
+    result.current.sendPrompt('Use 1 mM Clofibrate in DMSO.')
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    // THE REAL MESSAGE the done arm produced — the gate is evaluated on THIS
+    // message, NOT a hand-built literal.
+    const liveMsg = result.current.messages.filter((m) => m.role === 'assistant').pop()
+    expect(liveMsg).toBeTruthy()
+    // THE GATE — evaluated on the real done-arm message. For a live shorthand
+    // mint it is FALSE.
     const legacyGateFires =
-      liveMsg.clarification !== undefined &&
-      !(liveMsg.clarificationRequests?.length)
+      liveMsg?.clarification !== undefined &&
+      !(liveMsg?.clarificationRequests?.length)
     expect(legacyGateFires).toBe(false)
     // A LIVE shorthand mint is NEVER legacy-only: requests is non-empty. (The
     // legacy-only shape of test (C) has NO requests — it is a legacy surface /
     // hydrated history turn, which the done arm never produces for a
     // clarification-bearing done.)
-    expect(liveMsg.clarificationRequests?.length).toBeGreaterThan(0)
+    expect(liveMsg?.clarificationRequests?.length).toBeGreaterThan(0)
     // And the render consequence: the typed arm renders the picker with the raw
     // label; the legacy block arm does NOT also render. (Redundant with (A) —
     // the gate-pin above is the D3 addendum; this keeps the render evidence in
     // the same pin.)
     const onClarificationPick = vi.fn()
-    render(<ChatLog messages={[liveMsg]} {...props} onClarificationPick={onClarificationPick} />)
+    render(<ChatLog messages={[liveMsg as ChatMessage]} {...props} onClarificationPick={onClarificationPick} />)
     // The testids are keyed on the REQUEST id (LIVE_REQUEST.id = 'req-live'),
     // not the message id — the typed-arm wrapper is `chat-log-request-<reqId>`
     // and the (mocked) picker is `mock-picker-<reqId>`.
