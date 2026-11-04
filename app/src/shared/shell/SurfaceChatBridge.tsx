@@ -10,7 +10,14 @@
  *   2. LOUD-FAILS (throws ChatDoorMisconfiguredError naming the host + every
  *      missing required slice) if a `required_providers` slice is not published —
  *      never a silent empty pane (the LEG-F defect: a door mounted one provider
- *      too high is a loud error, not a deaf pane);
+ *      too high is a loud error, not a deaf pane). The verification is a
+ *      COMMIT-TIME re-check at a bounded deterministic deadline (D1 fix): a
+ *      required provider that publishes a beat later (the deck slice from
+ *      inside EventEditorProvider; StrictMode's double-mount / a keyed
+ *      remount's transient clear) must not throw during the initial
+ *      render/publish window, but a provider that is NEVER published still
+ *      throws loudly after the window — not a silent pane, not an indefinite
+ *      wait;
  *   3. collects the AiContext through the ONE collector (collectSurfaceContext:
  *      merges published slices into the base, resolves the posted surface);
  *   4. wires the ghost/adoption/deck-layout handlers from the published `deck`
@@ -26,7 +33,7 @@
  * gated on the optional provider — the same posture the old bridge had; host
  * pages render provider-free in tests and keep the pane's honest empty state).
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import { useOptionalAiPanel } from '../context/AiPanelContext'
 import { useSurfaceSlices } from '../context/SurfaceSliceStore'
@@ -111,6 +118,45 @@ export class ChatDoorMisconfiguredError extends Error {
   }
 }
 
+/**
+ * The bounded re-check window for a door's required providers (D1 fix, §2.5
+ * step 2). A required slice that is merely PUBLISHING LATE (the deck slice
+ * commits a beat after the door's first render; StrictMode's double-mount and
+ * a keyed remount's clear-on-unmount re-render the door on a transiently empty
+ * slice ref) must not throw during this window — the loud-fail is reserved for
+ * a genuinely misconfigured door. A required slice that is NEVER published
+ * still throws ChatDoorMisconfiguredError (named host + missing ids) once this
+ * deadline has passed, so the check is bounded and deterministic — never a
+ * silent empty pane, never an indefinite wait.
+ */
+export const DOOR_REQUIRED_RECHECK_DEADLINE_MS = 5000
+
+/**
+ * The bounded required-provider re-check (§2.5 step 2, D1 ordering fix).
+ *
+ * It reports, as of the CURRENT commit, whether the door's bounded re-check
+ * window has elapsed: false during the initial render/publish window (the door
+ * renders normally and keeps re-checking on every re-render — each slice
+ * version bump re-renders it) and true once DOOR_REQUIRED_RECHECK_DEADLINE_MS
+ * has passed since the door's mount. The caller re-reads the LIVE slice store
+ * on the re-render that the deadline state flip triggers and throws
+ * ChatDoorMisconfiguredError if a required slice is still unpublished — the
+ * loud-fail contract, evaluated at a bounded deterministic deadline instead of
+ * in the render body.
+ *
+ * No host-name comparison (V-8): `required` is the host entry's DATA fact
+ * (whether it declares any required_providers), never a host id.
+ */
+function useDoorRequiredRecheckDeadline(required: boolean): boolean {
+  const [elapsed, setElapsed] = useState(false)
+  useEffect(() => {
+    if (!required) return
+    const t = window.setTimeout(() => setElapsed(true), DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+    return () => window.clearTimeout(t)
+  }, [required])
+  return required && elapsed
+}
+
 export interface SurfaceChatBridgeProps {
   /** The door-registry host id (the door naming itself — a data lookup, never compared). */
   host: ChatHostId
@@ -140,16 +186,21 @@ function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
   const { getSlice } = useSurfaceSlices()
   const deckSlice = getSlice('deck') as CollectorDeckSlice | undefined
 
-  // §2.5 step 2: verify every required slice is published — LOUD (throw), never
-  // a silent empty pane. (A render-body throw propagates to the test / error
-  // boundary; it is the acceptance (b) "unit test mounts the registrar with a
-  // required provider absent and asserts the loud error".)
-  const missing = entry.required_providers.filter(
-    (id) => (id === 'deck' ? deckSlice == null : getSlice(id) == null),
-  )
-  if (missing.length > 0) {
-    throw new ChatDoorMisconfiguredError(host, missing)
-  }
+  // §2.5 step 2 (D1 ordering fix): the required-slice verification is a
+  // BOUNDED RE-CHECK (see useDoorRequiredRecheckDeadline), not a render-body
+  // throw. The deck slice is published by DeckChatSlice from INSIDE
+  // EventEditorProvider — a sibling that commits a beat after this registrar's
+  // first render (and StrictMode's double-mount / a keyed remount's
+  // clear-on-unmount re-renders the registrar on a transiently EMPTY ref —
+  // SurfaceSliceStore.tsx:151-159 documents this exact window). A render-body
+  // throw therefore fired on every ordinary page load of the two deck doors
+  // (gate D1) before the provider's stable commit. The loud-fail CONTRACT is
+  // unchanged: once the bounded deadline has elapsed the live slice store is
+  // re-checked (the throw at the bottom of this component) and a
+  // still-missing required slice STILL throws ChatDoorMisconfiguredError
+  // (named host + missing ids) — never a silent empty pane, and no
+  // indefinite wait.
+  const recheckDeadlineMet = useDoorRequiredRecheckDeadline(entry.required_providers.length > 0)
 
   const collected = useMemo(
     () =>
@@ -210,6 +261,24 @@ function SurfaceChatRegistrar({ host, base }: SurfaceChatBridgeProps) {
     })
     return () => setFocus(null)
   }, [setFocus, focusSurface, focusLabel, detail])
+
+  // §2.5 step 2 — the loud door-misconfiguration check, evaluated at the
+  // BOUNDED re-check deadline (not in the first render, which precedes the
+  // deck slice's publish). The live store is read here, on the re-render the
+  // deadline flip triggers: a required slice that is merely late does not
+  // throw (it re-checks on every slice version bump and clears itself once
+  // published); a required slice that is NEVER published throws the named
+  // error after the window. This is the LAST statement of the component (after
+  // every hook), so the re-render that throws never violates the rules of
+  // hooks. The contract test (SurfaceChatBridge.door.test.tsx) pins both legs.
+  if (recheckDeadlineMet) {
+    const missing = entry.required_providers.filter(
+      (id) => (id === 'deck' ? deckSlice == null : getSlice(id) == null),
+    )
+    if (missing.length > 0) {
+      throw new ChatDoorMisconfiguredError(host, missing)
+    }
+  }
 
   return null
 }

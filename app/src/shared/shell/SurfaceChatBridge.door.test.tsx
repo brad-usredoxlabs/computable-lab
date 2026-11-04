@@ -9,10 +9,27 @@
  * parity pins: labwares, events, `selectedWells` object form, the deck
  * fields).
  *
+ * D1 (browser-gate fix run): the loud-fail is a BOUNDED RE-CHECK, not a
+ * first-render throw. The deck slice is published by DeckChatSlice from inside
+ * EventEditorProvider — a sibling that commits a beat AFTER the door's first
+ * render (and StrictMode's double-mount / a keyed remount's clear-on-unmount
+ * re-renders the door on a transiently empty slice ref — SurfaceSliceStore.tsx
+ * documents that exact window). So the two legs are:
+ *   (a) NEGATIVE — a required provider that is NEVER published still throws the
+ *       named ChatDoorMisconfiguredError, but only after the bounded re-check
+ *       deadline has elapsed (advance DOOR_REQUIRED_RECHECK_DEADLINE_MS with
+ *       fake timers); the assertion is unchanged (names the host + the slice).
+ *   (b) POSITIVE (the D1 ordering pin, RED on pre-fix code) — a door whose
+ *       declared required provider publishes AFTER the first render (a later
+ *       sibling whose render-phase write lands after the registrar's first
+ *       render, mirroring the real ordering) renders with ZERO thrown
+ *       ChatDoorMisconfiguredError during the initial render/publish window and
+ *       recovers with the deck fields merged.
+ *
  * Written against the one registrar's CONTRACT; RED until the STEP-3 product
  * (SurfaceSliceStore + collectSurfaceContext + the registrar rewrite) lands.
  */
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiContext } from '../../types/aiContext'
 
@@ -61,7 +78,11 @@ vi.mock('../../agent/useSurfaceChat', () => ({
 
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { usePublishSurfaceSlice, type DeckSliceBundle } from '../../shared/context/SurfaceSliceStore'
-import { SurfaceChatBridge, ChatDoorMisconfiguredError } from './SurfaceChatBridge'
+import {
+  SurfaceChatBridge,
+  ChatDoorMisconfiguredError,
+  DOOR_REQUIRED_RECHECK_DEADLINE_MS,
+} from './SurfaceChatBridge'
 
 function baseRunContext(): AiContext {
   return {
@@ -96,6 +117,9 @@ function deckSliceFixture(): DeckSliceBundle {
   }
 }
 
+// A deck publisher that renders BEFORE the registrar in the tree — the
+// well-ordered case (the ref is populated by the registrar's first render).
+// Used by the parity leg.
 function DeckPublisher() {
   usePublishSurfaceSlice('deck', deckSliceFixture())
   return null
@@ -106,10 +130,12 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     cleanup()
     surfaceChatCalls.length = 0
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('throws ChatDoorMisconfiguredError naming the host AND the missing required slice (no deck slice published)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
     let thrown: unknown
     try {
       render(
@@ -117,6 +143,17 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
           <SurfaceChatBridge host="run-workspace" base={{ context: baseRunContext() }} />
         </AiPanelProvider>,
       )
+      // D1: the loud-fail is a BOUNDED RE-CHECK, not a first-render throw — the
+      // first render (deadline not yet met) must NOT throw. Flush the
+      // registrar's effects so the deadline timer is scheduled...
+      act(() => {})
+      // ...then advance PAST the bounded window. The deadline state flip
+      // schedules a re-render; wrapping the advance in act runs the timer and
+      // flushes the re-render atomically. A required provider that is NEVER
+      // published STILL throws loudly here (the unchanged contract).
+      act(() => {
+        vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+      })
     } catch (e) {
       thrown = e
     }
@@ -124,6 +161,53 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     const msg = String((thrown as Error).message)
     expect(msg).toContain('run-workspace')
     expect(msg).toContain('deck')
+  })
+
+  it('D1 ordering: a required provider that publishes AFTER the first render throws ZERO ChatDoorMisconfiguredError in the initial window, then recovers with the deck fields', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // The REAL D1 ordering, modelled as a LATER sibling: React renders the
+    // registrar first (its render reads the slice ref -> EMPTY, because the
+    // deck publisher is still below it), then the deck publisher performs its
+    // render-phase write. The effect-phase bump then re-renders the registrar
+    // INSIDE the initial publish window with the populated ref — exactly the
+    // ordering the gate's first render saw on /runs/<runId> and /deck/<id>.
+    function LateDeckPublisher() {
+      usePublishSurfaceSlice('deck', deckSliceFixture())
+      return null
+    }
+    // A pre-fix render-body throw would escape render() here (the first render
+    // reads an empty ref and the door declares `deck` required) — so reaching
+    // this point un-thrown is itself the zero-throw pin.
+    render(
+      <AiPanelProvider>
+        <SurfaceChatBridge host="run-workspace" base={{ context: baseRunContext() }} />
+        <LateDeckPublisher />
+      </AiPanelProvider>,
+    )
+    // The first render committed with the ref EMPTY (the publisher is a later
+    // sibling — the real D1 ordering): the first forwarded context carries NO
+    // deck fields (proves the late ordering, not a vacuous "deck present").
+    expect(surfaceChatCalls.length).toBeGreaterThan(0)
+    const first = surfaceChatCalls[0]!
+    expect(first.aiContext.surfaceContext.eventGraphId).toBeUndefined()
+    // Flush the publisher's effect-phase bump: the registrar re-renders inside
+    // the initial publish window (deadline not yet met) and re-wires with the
+    // deck fields merged (the recovered parity shape) — still ZERO thrown.
+    act(() => {})
+    const recovered = surfaceChatCalls[surfaceChatCalls.length - 1]!
+    expect(recovered.aiContext.surfaceContext.eventGraphId).toBe('EG-1')
+    expect(recovered.aiContext.surfaceContext.selectedWells).toEqual({ labwareId: 'LWI-1', wells: ['A1', 'A2'] })
+    expect(recovered.endpoint).toBe('event-editor')
+    expect(recovered.scope).toBe('EG-1')
+    // Advance PAST the bounded re-check deadline: the required slice is now
+    // published, so the re-check passes — still zero thrown errors (not an
+    // indefinite wait, not a silent empty pane).
+    expect(() => {
+      act(() => {
+        vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+      })
+    }).not.toThrow()
   })
 
   it('publishes the deck slice -> the forwarded AiContext carries the deck fields (parity)', () => {
