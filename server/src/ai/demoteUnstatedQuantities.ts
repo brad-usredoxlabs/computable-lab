@@ -25,18 +25,26 @@
  *     its DECLARED `satisfiedBy` alias list (data) — the SAME shape the
  *     sweep's `argumentPresent` reads. Both the slot and its declared
  *     aliases are checked generically.
- *   • WHETHER the amount is STATED is the ONE existing quantity extractor,
- *     `extractQuantity` (`reconcileDraftQuantities.ts`) — the label-adjacency
- *     window. This module does NOT invent a second quantity grammar
- *     (ONE-grammar law).
- *   • The material label the extractor reads is the action's `material` noun
- *     label (the same symbolic label the compiler binds). When the action
- *     names no material, the label is EMPTY — and the SAME extractor
- *     adjudicates with its OWN no-anchor arm (the first amount-with-unit in
- *     the turn's own words = stated; `reconcileDraftQuantities.ts` :112-113).
+ *   • WHETHER the amount is STATED is the ONE quantity grammar in
+ *     `reconcileDraftQuantities.ts` (the shared `tokenRe`) — this module does
+ *     NOT invent a second quantity grammar (ONE-grammar law).
+ *   • The material label is the action's `material` noun label (the same
+ *     symbolic label the compiler binds). Adjudication is therefore PER
+ *     ACTION, in two arms (cycle 7 unit 2 / D1):
+ *       - NAMED material (label ≠ '') — the extractor's label-adjacency arm
+ *         (`extractQuantity`): the first amount-with-unit within the ~90-char
+ *         window of THIS material's label = stated.
+ *       - NO material (label = '') — `clauseStatesKind`: stated only if the
+ *         CLAUSE that names THIS action's verb carries an amount-with-unit of
+ *         the slot's DECLARED KIND (a volume slot, or a count slot — e.g.
+ *         cycles). An UNRELATED action's amount (a different clause) or a
+ *         wrong-KIND amount no longer satisfies the slot, so an invented
+ *         number on a material-less action is demoted (not over-kept) even
+ *         when another part of the turn states an amount.
  *     A stated amount is therefore never demoted, whether or not the action
- *     names a material — and an UNstated amount is still demoted (the no-
- *     anchor arm finds nothing, so the slot is stripped + disclosed).
+ *     names a material — and an UNstated amount IS demoted (no clause names
+ *     the action's verb with an amount of that kind, so the slot is stripped
+ *     + disclosed).
  *   • The strip is DISCLOSED through the caller's reconcile-notes channel
  *     (the `extraSubmissionNotes` pattern at AgentOrchestrator.ts:2830-2841
  *     / :3141-3142 / :4168-4172) — never silently.
@@ -124,10 +132,13 @@ function quantitySlotPresent(v: unknown): boolean {
 }
 
 /** The action's material noun label (the symbolic label the extractor
- *  associates an amount with). Absent when the action names no material —
- *  the extractor then adjudicates with its own no-anchor arm (the first
- *  amount-with-unit in the turn's own words = stated), so a stated amount
- *  is still kept and an unstated one is still demoted. */
+ *  associates an amount with). Non-empty → the extractor's label-adjacency
+ *  arm decides (stated = an amount near THIS label). EMPTY (the action names
+ *  no material) → the demote side adjudicates by CLAUSE + DECLARED KIND
+ *  (`clauseStatesKind`): stated only if the clause naming THIS action's verb
+ *  carries an amount-of-that-kind (cycle 7 unit 2 / D1). A stated amount is
+ *  never demoted; an UNstated one is (no clause matches → stripped +
+ *  disclosed). */
 function actionMaterialLabel(action: Dict): string {
   const m = action.material;
   return typeof m === 'string' ? m.trim() : '';
@@ -174,9 +185,9 @@ export function demoteUnstatedQuantities(
     if (contracts.length === 0) return action; // unknown verb — no contract, no demotion
 
     // The action's material label — the label the extractor associates an
-    // amount with. When the action names no material the label is empty and
-    // the SAME extractor adjudicates with its no-anchor arm (the first
-    // amount-with-unit in the turn's own words = stated).
+    // amount with. When the action names NO material the label is empty and
+    // the demote side adjudicates by CLAUSE + DECLARED KIND (`clauseStatesKind`)
+    // instead of the label-adjacency arm (cycle 7 unit 2 / D1).
     const label = actionMaterialLabel(fields);
 
     let actionMutated = false;
