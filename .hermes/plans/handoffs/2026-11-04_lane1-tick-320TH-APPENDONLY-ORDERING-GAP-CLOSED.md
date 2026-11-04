@@ -21,6 +21,10 @@ walls would turn a governance/schema/concurrency rejection into a 200 — on pat
   orchestrator tick** (3086508) and a **live lane-2 adversarial reviewer** (3090726). Lane-2 queue **todo=5
   in-progress=3**, `corpus-state.md` **ACTIVE** (prompt-2 SPECS-QUEUED; prompts 3-8 LOCKED) ⇒ the free slot is
   lane 2's first refusal under **CORPUS PRIORITY (Brad 2026-11-02T17:05)**. **Lane 1 dispatched nothing.**
+- **The rule bound empirically during the tick**: at open (01:00) slot-0 was FREE; by 01:05:07 EST lane 2 had
+  claimed it (`L2-CHATHOST-CONSOLIDATE-1`, launcher 3123886), so at close BOTH slots were HELD. The 01:05 stamp is
+  ~4 minutes after the free slot appeared — the same outcome the 314TH measured (lane 2 claimed a free slot-0 within
+  ~3 min). No lane-1 claim was lawful at any point in the tick.
 - Due blocker **L1-PARAMS-EMITTER-RIDER**: trigger still UNMET — `git log -1 -- scripts/fame-gatefix/` =
   `136a3d27` @ 2026-11-02 17:09:38. Not opened (28th consecutive tick unchanged).
 
