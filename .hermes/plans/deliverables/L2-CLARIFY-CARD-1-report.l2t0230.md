@@ -980,9 +980,17 @@ the trunk baseline (verified by checking out `b4e62eeb` to a throwaway worktree,
     1 src/ingestion/components/IngestionUploadModal.tsx
     1 src/ingestion/protocol-review/ExtractionProgressPanel.test.tsx
 
-Diff (raw):
+Diff (raw) — CARD1-FIX4C D9 (advc c11): the ORIGINAL command in this block was
+`git -c core.fileMode=false diff --stat b4e62eeb..HEAD`, which NO LONGER
+reproduces because HEAD has moved past the FIX-3 code tip (the FIX-3 report
+stamp `eee7b38d` and the entire FIX-4 section landed after). The NUMBERS below
+are real and reproduce EXACTLY at the commit this block actually names — the
+FIX-3 CODE TIP `60b826ae` (measured at that commit, before the report file was
+added by the stamp). This is the one reproducible command+output pair; the
+superseding current-tip numbers are in the FIX-4 §D9 block below
+(`eee7b38d..d077510b`). Measured this run, real output:
 
-    $ git -c core.fileMode=false diff --stat b4e62eeb..HEAD
+    $ git -c core.fileMode=false diff --stat b4e62eeb..60b826ae
      .../ChatLog.answeredrow.reload.card1.test.tsx      | 165 +++++++++++++
      app/src/agent/ChatLog.legacyarm.card1.test.tsx     | 213 +++++++++++++++++
      .../ai/ClarificationPicker.mintseed.card1.test.tsx | 144 +++++++++++
@@ -992,6 +1000,11 @@ Diff (raw):
      app/src/shared/hooks/useAiChat.ts                  | 106 ++++++++-
      app/src/types/ai.ts                                |  34 +++
      8 files changed, 1149 insertions(+), 2 deletions(-)
+
+    (SUPERSEDED for the current tip by the FIX-4 §D9 block below. Do NOT
+     re-derive these numbers from HEAD: `b4e62eeb..HEAD` at this run's HEAD =
+     12 files, 2214 insertions, 2 deletions — a different range, not the
+     FIX-3-raw pair above.)
 
 Every path is inside the original brief's opened-files list (the four APP product names + their
 test files). The report file itself is added by the stamp commit that follows this section.
