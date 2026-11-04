@@ -31,6 +31,7 @@ import { createRecordStore } from '../store/RecordStoreImpl.js';
 import { createRepoAdapter } from '../repo/createRepoAdapter.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { createLintEngine } from '../lint/LintEngine.js';
+import { defaultContentLockedStates } from '../lifecycle/contentLockDefault.js';
 import { OwnershipPolicyService, type ResolvedKindRule } from '../security/OwnershipPolicyService.js';
 import { ACCESS_POLICY_SCHEMA_ID } from '../security/AuthorizationService.js';
 import type { Visibility } from '../security/AccessControlService.js';
@@ -282,6 +283,10 @@ async function main(): Promise<void> {
   const store = createRecordStore(repoAdapter, createValidator(), createLintEngine(), {
     baseDir: recordsDir,
     ...(seedDir ? { seedDir } : {}),
+    // L1-RECORD-LOCK-GUARD-1 (AM-10): this script builds no engine of its
+    // own, so the shared engine-backed default (declared lifecycle YAML)
+    // is passed explicitly — never leave the key absent silently.
+    contentLockedStates: defaultContentLockedStates,
   });
 
   const report = await applyOwnershipDefaults({

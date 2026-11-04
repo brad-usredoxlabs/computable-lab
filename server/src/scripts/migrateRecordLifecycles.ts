@@ -513,6 +513,10 @@ async function main(): Promise<void> {
     baseDir: recordsDir,
     ...(seedDir ? { seedDir } : {}),
     appendOnlyKinds: appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
+    // L1-RECORD-LOCK-GUARD-1 (AM-10): wire the script's own engine — the
+    // same one that drives the migration — into the store's content-lock
+    // resolver (never a second hardcoded set).
+    contentLockedStates: (id) => engine.contentLockedStates(id),
   })
 
   const report = await migrateRecordLifecycles({

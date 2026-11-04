@@ -23,16 +23,20 @@ states:
   description: "Document has been submitted and is awaiting reviewer assessment."
 - id: approved
   label: "Approved"
+  contentLocked: true
   description: "Document has been reviewed and approved."
 - id: effective
   label: "Effective"
+  contentLocked: true
   description: "Document is the current active version in use."
 - id: superseded
   label: "Superseded"
+  contentLocked: true
   terminal: true
   description: "Document has been replaced by a newer version."
 - id: archived
   label: "Archived"
+  contentLocked: true
   terminal: true
   description: "Document has been retired from use."
 

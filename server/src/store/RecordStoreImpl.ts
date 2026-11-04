@@ -11,6 +11,7 @@
  */
 
 import { controlledContent, withRecordLock } from '../revisions/RecordRevisionService.js';
+import { defaultContentLockedStates } from '../lifecycle/contentLockDefault.js';
 import type { ValidationResult, LintResult } from '../types/common.js';
 import type { RecordEnvelope, RecordMeta } from '../types/RecordEnvelope.js';
 import type { RepoAdapter } from '../repo/types.js';
@@ -55,6 +56,11 @@ const DEFAULT_CONFIG: Required<Omit<RecordStoreConfig, 'writeHook'>> = {
   email: 'store@computable-lab.com',
   seedDir: '',
   appendOnlyKinds: [],
+  // Explicit absent-config content-lock default (L1-RECORD-LOCK-GUARD-1):
+  // the shared engine-backed resolver over the declared lifecycle YAML.
+  // Named here — and re-asserted in the constructor — so the field is never
+  // `undefined` at runtime (no `undefined?.has()` accident; bait 14).
+  contentLockedStates: defaultContentLockedStates,
 };
 
 /**
@@ -71,6 +77,13 @@ export interface LifecycleBypassAuditCollaborator {
 
 export class RecordStoreImpl implements RecordStore {
   private config: ResolvedConfig;
+  /**
+   * Content-lock policy resolver (AM-2/AM-10). Always set in the
+   * constructor — the absent-config default is the EXPLICIT shared
+   * defaultContentLockedStates (declared lifecycle DATA), never `undefined`,
+   * so no consumer can hit an `undefined?.has()` accident (bait 14).
+   */
+  private readonly contentLockedStates: (lifecycleId: string) => ReadonlySet<string> | undefined;
   private readonly repo: RepoAdapter;
   private readonly validator: AjvValidator;
   private readonly lintEngine: LintEngine;
@@ -90,6 +103,12 @@ export class RecordStoreImpl implements RecordStore {
     this.validator = validator;
     this.lintEngine = lintEngine;
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Explicit absent-config default: the shared engine-backed resolver over
+    // the declared lifecycle YAML (AM-2 — the store never re-invents a set;
+    // AM-10 — production injects the server's own loaded engine instead).
+    // `config.contentLockedStates` is optional in the type, so this line is
+    // what makes the field non-undefined at runtime.
+    this.contentLockedStates = config.contentLockedStates ?? defaultContentLockedStates;
   }
 
   /**
@@ -278,12 +297,22 @@ export class RecordStoreImpl implements RecordStore {
   }
 
   /**
-   * The content lock (lifecycleId + controlled state + changed controlled
-   * content). Shared verbatim between the working-copy path and the
-   * seed-candidate path.
+   * The content lock (lifecycleId + declared contentLocked state + changed
+   * controlled content). Shared verbatim between the working-copy path and
+   * the seed-candidate path. L1-RECORD-LOCK-GUARD-1: the locked-state test
+   * reads the DECLARED lifecycle data (contentLockedStates resolver, AM-2)
+   * instead of a hardcoded state list — the ONE policy channel. The
+   * resolver returns `undefined` for a lifecycle its engine has not loaded:
+   * EXPLICIT fail-open (no declared policy, unchanged pass-through — bait
+   * 14), never a second hardcoded set.
    */
   private contentLockError(storedPayload: Record<string, unknown> | undefined, incomingPayload: unknown): StoreResult | null {
-    if (storedPayload?.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(storedPayload.state)) && controlledContent(storedPayload) !== controlledContent(incomingPayload)) {
+    const lifecycleId = storedPayload?.lifecycleId;
+    if (!lifecycleId || typeof lifecycleId !== 'string') return null;
+    const lockedStates = this.contentLockedStates(lifecycleId);
+    if (lockedStates === undefined) return null; // explicit fail-open: not loaded by the resolver
+    if (!lockedStates.has(String(storedPayload.state))) return null;
+    if (controlledContent(storedPayload) !== controlledContent(incomingPayload)) {
       return { success: false, error: 'CONTROLLED_RECORD_LOCKED: create a new draft before editing controlled content' };
     }
     return null;
@@ -789,6 +818,60 @@ export class RecordStoreImpl implements RecordStore {
           error: 'Lint failed with errors',
         };
       }
+    }
+    
+    // L1-RECORD-LOCK-GUARD-1 (AM-3/AM-11): STORE-level no-op short-circuit.
+    // Placed AFTER every typed rejection above (append-only, content lock,
+    // expectedSha, validation, lint) and IMMEDIATELY before serializeRecord:
+    // an earlier placement would silently turn a typed rejection into a 200
+    // (AM-11 ordering pins: APPEND_ONLY / SHA mismatch / validation / lint
+    // must all still win).
+    //
+    // Predicate (AM-3): state equality AND controlled-content equality.
+    // controlledContent() strips state, so a content-only predicate would
+    // match every lifecycle transition (approved->effective, ...) and
+    // freeze the state machine — state equality is mandatory: a transition
+    // changes state and therefore bypasses the short-circuit and still
+    // writes. What is caught is exactly the no-edit save (the handler's
+    // unconditional updatedAt stamp makes the envelope look new while the
+    // controlled content is byte-equal): returning the STORED envelope with
+    // the stored sha means no file rewrite, no meta.contentSha drift, and
+    // the handler's new updatedAt stamp does not leak into the response.
+    //
+    // Working copies only (AM-3, seed branch): for a seed candidate the
+    // no-op does NOT fire — a seed PUT is a CANDIDATE PROMOTION and its
+    // behavior (promotion + 'seed_record_promoted' audit) is unchanged;
+    // only an already-durable working copy can be a no-op.
+    //
+    // No rejection token is added: the result is a plain success carrying
+    // the stored envelope, with no commit / promotion / validation / lint
+    // (nothing new happened, so nothing new is reported).
+    if (target.mode === 'working'
+      && storedPayload !== undefined
+      && envelope.payload !== undefined
+      && String(storedPayload.state) === String((envelope.payload as Record<string, unknown>).state)
+      && controlledContent(storedPayload) === controlledContent(envelope.payload)) {
+      const stored = parseRecord(target.content, target.path);
+      if (stored.success && stored.envelope) {
+        return {
+          success: true,
+          envelope: {
+            ...stored.envelope,
+            meta: {
+              ...stored.envelope.meta,
+              path: target.path,
+              commitSha: target.sha,
+              contentSha: target.sha,
+            },
+          },
+          // AM-3 (fix cycle 1 / D1): explicit no-op signal — the handler
+          // uses it to skip the full index rebuild (no write happened).
+          // Absent on every real write (optional-and-true, never false).
+          unchanged: true,
+        };
+      }
+      // Stored content no longer parses (corrupt file): fall through and let
+      // the normal write path surface its own failure rather than guessing.
     }
     
     // Serialize to YAML

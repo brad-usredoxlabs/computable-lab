@@ -79,7 +79,15 @@ export function createLifecycleHandlers(options: LifecycleHandlerOptions) {
       // hardcoding state strings. Additive field; recordId-less calls work
       // (the fact is lifecycle-scoped, not record-scoped).
       const terminalStates = [...(engine.terminalStates(lifecycleId) ?? [])];
-      return reply.send({ lifecycleId, state, transitions, terminalStates });
+      // L1-RECORD-LOCK-GUARD-1 (AM-1 #4): same read-only echo for the declared
+      // content-lock set — the ids the lifecycle YAML declares `contentLocked:
+      // true`. Additive field for leg 2's client predicate (AM-4). ALWAYS an
+      // array: `contentLockedStates()` returns undefined when the lifecycle is
+      // not loaded, and `?? []` yields `[]` — so it serializes as an EMPTY
+      // array, NOT as an absent field (matching terminalStates, which is also
+      // always an array via `?? []`).
+      const contentLockedStates = [...(engine.contentLockedStates(lifecycleId) ?? [])];
+      return reply.send({ lifecycleId, state, transitions, terminalStates, contentLockedStates });
     },
   };
 }

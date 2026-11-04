@@ -136,6 +136,27 @@ export class LifecycleEngine {
     return terminal
   }
 
+  /**
+   * L1-RECORD-LOCK-GUARD-1: the ids of the states the lifecycle YAML declares
+   * `contentLocked: true` (the declared content-lock policy, e.g. document-control
+   * locks approved/effective/superseded/archived). A plain read-only report of
+   * YAML facts — NO content-lock state list is invented or hardcoded in TS
+   * (AM-1/AM-7 bait 15: one declared policy, one resolver). Byte-for-byte mirror
+   * of terminalStates(): undefined when the lifecycle is not loaded (explicit,
+   * commented fail-open, AM-9/AM-10bait 14), so "declared but empty" (loaded
+   * lifecycle with no contentLocked states) stays distinguishable from "not
+   * loaded" (undefined).
+   */
+  contentLockedStates(lifecycleId: string): ReadonlySet<string> | undefined {
+    const spec = this.specs.get(lifecycleId)
+    if (!spec) return undefined
+    const locked = new Set<string>()
+    for (const state of spec.states) {
+      if (state.contentLocked === true) locked.add(state.id)
+    }
+    return locked
+  }
+
   canTransition(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
     const machine = this.machines.get(lifecycleId)
     if (!machine) throw new Error(`Lifecycle not loaded: ${lifecycleId}`)

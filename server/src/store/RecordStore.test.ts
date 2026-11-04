@@ -676,7 +676,7 @@ recordId: ${SEED_ID}
 $schema: https://test.com/test.schema.yaml
 kind: labware
 title: ${SEED_TITLE}
-lifecycleId: test-controlled-lifecycle
+lifecycleId: document-control
 state: approved
 `;
       const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-r4c', 'lbw-cow-plate-96.yaml', content);
