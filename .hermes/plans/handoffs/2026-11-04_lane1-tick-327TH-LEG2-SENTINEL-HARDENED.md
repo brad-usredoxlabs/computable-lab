@@ -135,3 +135,44 @@ No coder dispatched, no slot claimed, no product code, no merge, no data write, 
   If the architect prefers a different stamp convention, this brief is the only artifact to change.
 - **AS-L1T327-2**: the ~05:59:51 maturity estimate assumes lane 2 does not re-claim slot-1 first — the exact failure
   mode the 326TH observed three times. It is an estimate, not a prediction.
+
+---
+
+## SECOND FINDING (same tick) — the AM-5 pre-gate's "served HEAD" was a falsified provenance claim
+
+`scripts/pregate-recordlock-1.py` computed `served HEAD` as: pid listening on :3092 -> `/proc/<pid>/cwd` ->
+`git rev-parse HEAD` in that path. That is the **checkout's current HEAD**, not the tree the process booted from, so it
+**moves under a running server on every commit**.
+
+Demonstrated directly, this tick: I committed the 327TH handoff (docs-only) and the tool immediately reported
+`served HEAD = 8ec5fdd8` for a process that has been running since **2026-11-03 08:26:05** and was never restarted.
+Every handoff sentence of the form "served HEAD == trunk HEAD" therefore recorded a statement about the checkout, not
+about the build — and the `stale` guard was vacuous in that direction.
+
+Fix — measure the boot, and scope the comparison to what the backend actually loads:
+
+- process start epoch from `/proc/<pid>/stat` field 22 + `/proc/stat` btime (`HZ` via `SC_CLK_TCK`);
+- `boot-time rev` = `git rev-list -1 --before=<start>`, explicitly labelled **approximate**;
+- **`PRODUCT_PATHS = [server, schema]` only** — `app/` is excluded because `:5192` is Vite-served from source with HMR,
+  and `records/` is external data under `CL_DATA_DIR`; neither is a backend boot snapshot;
+- `stale := product_head(boot) != product_head(trunk)`; if unmeasurable it reports **UNPROVEN** with a problem — never
+  fresh. Output now says `checkout HEAD` (not `served HEAD`) and prints both product heads.
+
+**A real trap was dodged while doing this.** My first cut compared `app+server+schema+records` and flagged STALE on this
+host — because `b1dd259f` (PIN-HARDEN-1 fix3, 2026-11-03 14:03:29) touches **app/ only**
+(`git diff --stat 9e455216..b1dd259f -- app server schema records` = 3 app files). A naive product comparison would cry
+wolf on every frontend merge. Re-scoped, the answer is: boot product head == trunk product head ==
+**`9e455216`** (the cellrender change, 07:57:56 — the build that is actually running), so **the backend is genuinely
+current**. The 290TH's "no stack restart: no schema/lint/ui/lifecycle YAML changed" reasoning was correct for the
+backend; that handoff's *instrument*, not its conclusion, was the defect.
+
+SELFTEST (all runs mine, this tick):
+
+| case | result |
+|---|---|
+| live `--expect-red` | rc 0, RED 7/7 ABSENT, boot_product == trunk_product, no stale flag |
+| simulated boot 2026-11-03 06:00 EST | boot_head `fbb36e7c`, boot_product `957f7d01` != trunk `9e455216` ⇒ **STALE detected** |
+| start-time unmeasurable | boot_product `None` ⇒ **UNPROVEN**, not fresh |
+
+Operational rule for future ticks: after a `server/` or `schema/` merge a restart **is** required and this check now
+proves it was done; after an `app/`-only merge it is not required, and the check correctly stays quiet.
