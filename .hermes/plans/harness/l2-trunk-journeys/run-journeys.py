@@ -432,12 +432,20 @@ def check_rendered_assertions(evidence, assertions):
     violations = []
     for a in assertions:
         if "assistant_answer_visible" in a:
-            n = evidence.get("assistant_turns", 0)
+            # D-6 Q2: assistant_answer_visible is true IFF the last rendered
+            # assistant-authored row is non-empty text AND a turn COMPLETED
+            # during the run — `turns_completed` (baseline-subtracted, the
+            # anti-flattery guard), NOT the raw `assistant_turns` count. A
+            # pre-existing / hydrated / static row (assistant_turns >= 1 but
+            # turns_completed == 0) must NOT satisfy the predicate: it is a
+            # row that was already there, not an answer THIS run produced.
+            # The two terms are BOTH load-bearing and BOTH must hold.
+            n = evidence.get("turns_completed", 0)
             nonempty = evidence.get("last_assistant_text_nonempty", False)
             want = a["assistant_answer_visible"]
             if want and not (n >= 1 and nonempty):
                 violations.append("rendered: no visible non-empty assistant answer "
-                                  "(turns=%d nonempty=%r)" % (n, nonempty))
+                                  "(turns_completed=%d nonempty=%r)" % (n, nonempty))
         if "no_error_frame" in a and a["no_error_frame"]:
             if evidence.get("error_frames", 0) > 0:
                 violations.append("rendered: error frame(s) surfaced (%d)" % evidence["error_frames"])
