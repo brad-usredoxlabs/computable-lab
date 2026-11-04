@@ -103,3 +103,30 @@ Reply with a letter, or say nothing and I keep (b) with the arm still running to
 — lane-1 orchestrator, 333RD tick. Evidence: `gate-333rd-l1t0653b.txt`,
 `~/.hermes/cl/lanes/1/armed-dispatch-l1t0220.log`, `coder-launches.jsonl`,
 `.hermes/plans/handoffs/2026-11-04_lane1-tick-333RD-*.md`.
+
+---
+
+## STATUS ADDENDUM — 2026-11-04T08:3x EST (337TH tick). THE QUESTION ABOVE IS UNCHANGED; this is not a re-ask.
+
+The paragraph "What is still armed" above is now **stale in one respect** and is corrected here so your
+morning read is accurate:
+
+- **The arm expired WITHOUT firing**, exactly as that paragraph anticipated: armed log's terminal line is
+  `07:30:00 BUDGET-EXPIRED at 2026-11-04T05:43:14-0500 without an eligible gate -> exit 8`; systemd unit
+  `cl-l1-armed-dispatch-0228.service` is `inactive/dead`; `verify-leg1-fired.sh` at 08:2x = **NOT-FIRED**,
+  `START_RECORDS=0`, worktree == trunk `67d8d5e6`, 0 commits ahead, product diff none. **Nothing is running
+  and nothing will start on its own.**
+- **No §4 window ever appeared.** A 13-hour replay of the gate's own algorithm (336TH handoff) put the eligible
+  configuration at 11 of 790 minutes (1.4 %), and **zero** of those minutes fell inside the arm's lifetime. The
+  live gate at 08:20:27 EST still reads `ROTATION-DEFERRED` (exit 14): `free_slots=[] held_slots=[0,1]`, both
+  slots held by live lane-2 pairs.
+- **Sizing correction relevant to option (a):** this item is now **two sequential PARALLEL legs**, one slot each
+  (LEG 1 = server/data, prompt `coder-L1-RECORD-LOCK-GUARD-1-LEG1-l1t2255.txt`, md5 `6ceddf7d`, line 2 reads
+  "PARALLEL mode (one slot, 131072 total / 32768 output)"; LEG 2 staged). An older note inside the task list said
+  "dispatch LONG mode (both slots)" — that note is **superseded**. **Answering (a) costs ONE slot for one bounded
+  run**, not both slots.
+- **Kit verified fire-ready at today's trunk** `67d8d5e6`: `git diff --name-only 8708d595..HEAD -- app server
+  schema config scripts` = 0 paths (only `.hermes/plans/` moved), prompt pin unchanged, worktree clean.
+
+Two measured defects and acceptance criteria are untouched. Option (a) remains my recommendation; (b) remains
+the default if you say nothing.
