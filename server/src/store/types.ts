@@ -56,6 +56,15 @@ export interface StoreResult {
    * spreads, never assigned undefined (exactOptionalPropertyTypes).
    */
   promotion?: SeedPromotion;
+  /**
+   * L1-RECORD-LOCK-GUARD-1 (AM-3, fix cycle 1 / D1): present (true) ONLY when
+   * the write was a true no-op: nothing was written, promoted, validated,
+   * linted, indexed or audited — the stored envelope was returned as-is with
+   * its stored sha, and no write hook fired. Handlers gate post-write side
+   * effects (e.g. the index rebuild) on this marker. Literal `true` only,
+   * never `false`: absence means a real write happened.
+   */
+  unchanged?: true;
 }
 
 /**

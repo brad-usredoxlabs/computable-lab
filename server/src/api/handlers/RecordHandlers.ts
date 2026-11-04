@@ -1295,8 +1295,11 @@ export function createRecordHandlers(
           };
         }
         
-        // Update index after successful update
-        if (indexManager && result.envelope) {
+        // Update index after successful update — EXCEPT on the store's
+        // explicit no-op (AM-3, fix cycle 1 / D1): a no-op wrote nothing, so
+        // a full index rebuild would be wasted work for zero benefit;
+        // real writes keep the existing rebuild behaviour unchanged.
+        if (indexManager && result.envelope && result.unchanged !== true) {
           try {
             await indexManager.rebuild(); // For now, rebuild to ensure consistency
           } catch (indexErr) {

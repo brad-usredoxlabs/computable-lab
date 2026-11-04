@@ -864,6 +864,10 @@ export class RecordStoreImpl implements RecordStore {
               contentSha: target.sha,
             },
           },
+          // AM-3 (fix cycle 1 / D1): explicit no-op signal — the handler
+          // uses it to skip the full index rebuild (no write happened).
+          // Absent on every real write (optional-and-true, never false).
+          unchanged: true,
         };
       }
       // Stored content no longer parses (corrupt file): fall through and let
