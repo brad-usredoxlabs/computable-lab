@@ -119,3 +119,12 @@ written against either.
    in-progress until `VERDICT: accept`.
 4. Dispatch readiness is now CLOSED as a work class: kit re-proved, both briefs' citations repaired. Future ticks
    should spend on capacity observation and due-blocker triggers only, not on further kit archaeology.
+
+## Close of tick (measured after the commit)
+
+This handoff was committed to trunk as **`e983afc2`**, so at close trunk HEAD = `e983afc2` while the **served**
+backend (pid 954410) still runs `9ab8bb07`. The gap is my own `.hermes/plans/` commit only:
+`git diff --name-only 9ab8bb07..e983afc2 -- app server schema config scripts` = **0 paths**, so the served build
+IS the product tree the kit was proved against and no restart is owed. The pregate's equality assertion will read
+`served HEAD != trunk HEAD` until the next docs-only advance — that is expected, and the fail-safe form (product
+diff, not sha equality) is what the LEG-1 brief asks the coder to check.
