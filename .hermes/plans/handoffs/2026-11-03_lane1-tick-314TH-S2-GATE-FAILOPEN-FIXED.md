@@ -97,3 +97,13 @@ no task status change (todo 2 / done 109).
    `DocumentControlBar.tsx:58-61` display hull**, then `probe-recordlock-2.py --live`, then browser re-gate on the
    exact served revision (`:5192`); item stays in-progress until `VERDICT: accept`.
 4. When lane 2 lands SEQ-ANSWER-CONTRACT-1: re-run the `l1t1645` probe suite on `:3092`.
+
+## Tick close (23:07) — the fleet picture moved, and it confirms the call
+
+Re-probe of `dispatch-window-1.py` at close: **still BLOCKED-CORPUS (exit 10)**, but the shape changed — slot-0 is
+now **HELD by lane-2 `L2-CLARIFY-CARD-1` (launcher 2865802, claimed 04:04:33Z = 23:04:33 EST)**, i.e. lane 2 took
+the slot that had been free-with-a-dead-pidfile within ~3 minutes of it opening, while this tick was doing harness
+work. Slot-1 remains `CHATHOST-CONSOLIDATE-1` (2583809). That is the empirical justification for not dispatching:
+the free capacity really was lane 2's first refusal, not lane 1's fallback.
+Stack `:3092` / `:5192` = **200 / 200** at close; nothing restarted. No worker of any kind left running by lane 1.
+Trunk docs-only: `bf104d6d` (handoff) + this close note.
