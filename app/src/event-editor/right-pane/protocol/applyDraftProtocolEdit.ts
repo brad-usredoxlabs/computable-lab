@@ -29,6 +29,7 @@ import {
   applyOps,
   type ProtocolEditOp,
 } from './protocolEditOps'
+import { primeContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 
 /** The commit message an accepted chat edit carries on its revision. */
 export const CHAT_ACCEPT_COMMIT_MESSAGE = 'chat-accepted edit'
@@ -127,6 +128,10 @@ export async function applyDraftProtocolEdit(
   }
   const draftBody = asRecord(candidate.draft)
   if (!draftBody) throw new Error('This candidate has no draft body to edit.')
+
+  // Prime the lock-status cache before the sync gate fires inside applyOps.
+  const lockLid = typeof draftBody.lifecycleId === 'string' ? draftBody.lifecycleId : undefined
+  if (lockLid) await primeContentLockedStates(lockLid)
 
   // PURE applyOps (imported, byte-untouched module): the kind-'protocol' wall
   // (editableProtocolSteps) and the controlled/lifecycle lock fire HERE as

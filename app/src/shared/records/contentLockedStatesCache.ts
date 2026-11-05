@@ -9,20 +9,21 @@
  *
  * Mirrors the `useMaterialProfiles.ts` cache precedent: fetch once per
  * lifecycleId, share across every surface instance. The declared set is the
- * server's; no state literals live here. Fail-open echoes the accessor: a
- * lookup error stores [] and resolves [], so a broken transitions lookup
- * degrades to "no declared set" rather than wedging the editor — the
- * terminal-state half of the lock is enforced independently.
+ * server's; no state literals live here. Fail-closed: an unresolved or failed
+ * set causes the sync gate to throw a named error rather than degrading to
+ * an empty set — the lock cannot be bypassed by an empty cache.
  */
 import { apiClient } from '../api/client'
 
 const cache = new Map<string, string[]>()
 const inflight = new Map<string, Promise<string[]>>()
+const resolved = new Set<string>()
 
 /**
  * Prime the synchronous read cache for one lifecycleId.
  * Cache hit -> the stored set. Concurrent calls dedupe onto one fetch.
- * On ANY lookup error the cache stores [] and resolves [] (fail-open).
+ * On success the lifecycleId is marked resolved. On error the fetch resolves []
+ * but the lifecycleId is NOT marked resolved — the sync gate will fail closed.
  */
 export function primeContentLockedStates(lifecycleId: string): Promise<string[]> {
   const hit = cache.get(lifecycleId)
@@ -33,10 +34,10 @@ export function primeContentLockedStates(lifecycleId: string): Promise<string[]>
     .getLifecycleContentLockedStates(lifecycleId)
     .then((states) => {
       cache.set(lifecycleId, states)
+      resolved.add(lifecycleId)
       return states
     })
     .catch(() => {
-      cache.set(lifecycleId, [])
       return [] as string[]
     })
     .finally(() => {
@@ -54,10 +55,17 @@ export function getContentLockedStatesSync(lifecycleId: string): string[] {
 /** Test-only: seed the sync read cache without a fetch (production plumbing, not a state literal). */
 export function seedContentLockedStates(lifecycleId: string, states: string[]): void {
   cache.set(lifecycleId, states)
+  resolved.add(lifecycleId)
 }
 
 /** Test-only: clear the module cache between tests. */
 export function __resetContentLockedStatesCache(): void {
   cache.clear()
   inflight.clear()
+  resolved.clear()
+}
+
+/** Returns whether the declared-set for this lifecycleId has been successfully resolved. */
+export function isContentLockedSetResolved(lifecycleId: string): boolean {
+  return resolved.has(lifecycleId)
 }
