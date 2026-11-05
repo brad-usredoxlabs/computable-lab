@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { __resetContentLockedStatesCache } from '../../shared/records/contentLockedStatesCache'
 
 // Mock the API client
 vi.mock('../../shared/api/client', () => ({
@@ -58,6 +59,7 @@ const projection = {
 describe('RecordEditPanel — content-locked rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetContentLockedStatesCache()
     ;(apiClient.getRecordEditorProjection as ReturnType<typeof vi.fn>).mockResolvedValue(projection)
   })
 
@@ -124,8 +126,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
     })
     ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved'])
     ;(apiClient.createDraftCopy as ReturnType<typeof vi.fn>).mockResolvedValue({
-      recordId: 'DOC-TEST-DRAFT',
-      status: 'success',
+      record: { recordId: 'DOC-TEST-DRAFT', schemaId: 'controlled-document', payload: {} },
     })
 
     render(<RecordEditPanel recordId="DOC-TEST" title="Test Document" />)

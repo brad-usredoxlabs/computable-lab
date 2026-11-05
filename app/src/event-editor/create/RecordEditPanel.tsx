@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
 import { isContentLocked } from '../../shared/records/lifecycleLock'
-import { getContentLockedStatesSync, primeContentLockedStates } from '../../shared/records/contentLockedStatesCache'
+import { primeContentLockedStates } from '../../shared/records/contentLockedStatesCache'
 // Import via the barrel — index.ts pulls in taptab.css; a direct
 // `./TapTabEditor` import renders the editor unstyled.
 import {
@@ -47,6 +47,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const [createRunError, setCreateRunError] = useState<string | null>(null)
   const [contentLocked, setContentLocked] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [draftRevisionId, setDraftRevisionId] = useState<string | null>(null)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -163,9 +164,9 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     setSaving(true)
     try {
       const result = await apiClient.createDraftCopy(recordId, {})
-      if (result.recordId) {
+      if (result.record?.recordId) {
         setSavedAt(Date.now())
-        setDraftRevisionId(result.recordId)
+        setDraftRevisionId(result.record.recordId)
       }
     } catch (err) {
       setError(describeApiError(err))
@@ -203,7 +204,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               blocks={projection.blocks}
               slots={slots}
               data={formData}
-              disabled={isSaving}
+              disabled={isSaving || contentLocked}
               onUpdate={handleEditorUpdate}
               enableOntologyCopilot
             />
@@ -227,15 +228,29 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               Close
             </button>
           ) : null}
-          {savedAt ? <span className="record-create-panel__hint">Saved ✓</span> : null}
-          <button
-            type="submit"
-            className="record-create-panel__btn record-create-panel__btn--primary"
-            disabled={isSaving || loading || Boolean(loadError) || !useProjection}
-            data-testid="record-edit-save"
-          >
-            {isSaving ? 'Saving…' : 'Save'}
-          </button>
+          {savedAt || draftRevisionId ? <span className="record-create-panel__hint">{draftRevisionId ? 'Draft revision created' : 'Saved ✓'}</span> : null}
+          {contentLocked
+            ? (
+              <button
+                type="button"
+                className="record-create-panel__btn record-create-panel__btn--primary"
+                onClick={() => void handleCreateDraftRevision()}
+                disabled={saving}
+                data-testid="record-edit-create-draft-revision"
+              >
+                {saving ? 'Creating...' : 'Create draft revision'}
+              </button>
+            )
+            : (
+              <button
+                type="submit"
+                className="record-create-panel__btn record-create-panel__btn--primary"
+                disabled={isSaving || loading || Boolean(loadError) || !useProjection}
+                data-testid="record-edit-save"
+              >
+                {isSaving ? 'Saving…' : 'Save'}
+              </button>
+            )}
           {recordKind === 'protocol' ? (
             <button
               type="button"
