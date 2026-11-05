@@ -52,3 +52,5 @@ git rev-parse HEAD
 All three verification checks pass against measured baselines.
 The D5 fixture fix is confirmed correct: 6/6 tests pass, typecheck at baseline 10,
 zero `scope: undefined` literals in the door test file.
+
+L2-THREADSCOPE-FLIP-1-u8d5b UNIT unit DONE 7f5c0ebdf81a8ad561b190178610a0a5b0302562
