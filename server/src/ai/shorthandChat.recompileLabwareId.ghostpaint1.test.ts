@@ -188,11 +188,8 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
 
     // Non-degeneracy: the compiled events differ in material identity
     // (arm 1 resolves to formulation 'Formulated Clofibrate DMSO', arm 2 to concept 'Clofibrate')
-    const d1 = ev1!.details as Record<string, unknown>;
-    const d2 = ev2!.details as Record<string, unknown>;
-    expect(d1!.material).toBe('Formulated Clofibrate DMSO');
-    expect(d2!.material).toBe('Clofibrate');
-    expect(d1!.material).not.toBe(d2!.material);
+    expect((ev1!.details as Record<string, unknown>).material).toBe('Formulated Clofibrate DMSO');
+    expect((ev2!.details as Record<string, unknown>).material).toBe('Clofibrate');
   });
 
   it('B3: two distinct placements write nothing', () => {
