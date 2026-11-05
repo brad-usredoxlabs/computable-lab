@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
 import { isRecordWriteLocked } from '../../shared/records/lifecycleLock'
-import { primeContentLockedStates } from '../../shared/records/contentLockedStatesCache'
+import { primeContentLockedStates, isContentLockedSetResolved } from '../../shared/records/contentLockedStatesCache'
 // Import via the barrel — index.ts pulls in taptab.css; a direct
 // `./TapTabEditor` import renders the editor unstyled.
 import {
@@ -51,6 +51,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const [saving, setSaving] = useState(false)
   const [draftRevisionId, setDraftRevisionId] = useState<string | null>(null)
   const [lockPending, setLockPending] = useState(false)
+  const [contentLockedUnresolved, setContentLockedUnresolved] = useState(false)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -62,6 +63,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     setProjection(null)
     setProjectionError(null)
     setSavedAt(null)
+    setContentLockedUnresolved(false)
 
     Promise.all([
       apiClient.getRecord(recordId),
@@ -82,7 +84,12 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
         if (lifecycleId) {
             setLockPending(true)
             let lockCount = 2
-            const lockDone = () => { if (!cancelled && --lockCount === 0) setLockPending(false) }
+            const lockDone = () => {
+                if (!cancelled && --lockCount === 0) {
+                    setLockPending(false)
+                    setContentLockedUnresolved(!isContentLockedSetResolved(lifecycleId))
+                }
+            }
 
             primeContentLockedStates(lifecycleId)
               .then((states) => { if (!cancelled) setContentLockedStates(states) })
@@ -256,7 +263,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               <button
                 type="submit"
                 className="record-create-panel__btn record-create-panel__btn--primary"
-                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending}
+                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending || contentLockedUnresolved}
                 data-testid="record-edit-save"
               >
                 {isSaving ? 'Saving…' : 'Save'}
