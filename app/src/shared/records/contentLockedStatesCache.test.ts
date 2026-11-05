@@ -11,6 +11,7 @@ import { apiClient } from '../api/client'
 import {
   __resetContentLockedStatesCache,
   getContentLockedStatesSync,
+  isContentLockedSetResolved,
   primeContentLockedStates,
   seedContentLockedStates,
 } from './contentLockedStatesCache'
@@ -56,13 +57,24 @@ describe('LEG2b-i: contentLockedStatesCache', () => {
     expect(getContentLockedStatesSync(LIFECYCLE)).toEqual(['effective', 'archived'])
   })
 
-  it('fail-open: a lookup error stores and resolves [] (echo of the accessor)', async () => {
+  it('fail-closed: a lookup error leaves the lifecycle unresolved and retries on the next prime', async () => {
     fetchSpy.mockRejectedValueOnce(new Error('transitions endpoint down'))
     await expect(primeContentLockedStates(LIFECYCLE)).resolves.toEqual([])
     expect(getContentLockedStatesSync(LIFECYCLE)).toEqual([])
-    // The stored [] is final for the session: no retry fetch on a later prime.
+    // Fail-closed: the lifecycle is NOT resolved, so a second prime retries.
+    expect(isContentLockedSetResolved(LIFECYCLE)).toBe(false)
     await expect(primeContentLockedStates(LIFECYCLE)).resolves.toEqual([])
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    // Second fetch because the lifecycle was never marked resolved.
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    // A successful fetch resolves the lifecycle.
+    fetchSpy.mockResolvedValueOnce(jsonResponse(200, {
+      transitions: [], terminalStates: [], contentLockedStates: ['effective'],
+    }))
+    await expect(primeContentLockedStates(LIFECYCLE)).resolves.toEqual(['effective'])
+    expect(isContentLockedSetResolved(LIFECYCLE)).toBe(true)
+    // A fourth prime is a cache hit after resolution: still 3 fetches total.
+    await expect(primeContentLockedStates(LIFECYCLE)).resolves.toEqual(['effective'])
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
   })
 
   it('the LEG 2a accessor is the source this cache primes from', async () => {
