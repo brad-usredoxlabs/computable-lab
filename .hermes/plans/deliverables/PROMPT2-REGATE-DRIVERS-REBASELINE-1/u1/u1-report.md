@@ -46,4 +46,4 @@ apply clicked, event count grew, cold reload persists.
 - No product files edited. No TypeScript changed.
 - Zero /api/ai/** interception (observation-only request capture).
 
-L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1-u1 UNIT unit DONE
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1-u1 UNIT unit DONE 4dcb55be04656064b6f6ec7c34d9c9029c46e43f
