@@ -16,9 +16,11 @@ Leg-2A (first unit) shipped +155/-11 across 9 files. Advc review identified 3 de
 
 ## TRUE Changed-File List (9 files total across both legs)
 
-1. `app/src/components/deck/DeckSlot.tsx` — mechanical pass-through of placedLabwareIds (leg-2A)
-2. `app/src/components/lawn/LawnSurface.tsx` — mechanical pass-through (leg-2A)
-3. `app/src/components/labware/LabwareFocus.tsx` — mechanical pass-through (leg-2A)
+(corrected against `git diff --name-only 94e2e578..HEAD` at cycle-2 paperwork fix)
+
+1. `app/src/event-editor/deck/DeckSlot.tsx` — mechanical pass-through of placedLabwareIds (leg-2A)
+2. `app/src/event-editor/deck/LawnSurface.tsx` — mechanical pass-through (leg-2A)
+3. `app/src/event-editor/focus/LabwareFocus.tsx` — mechanical pass-through (leg-2A)
 4. `app/src/event-editor/lib/previewProjection.ts` — signature + fallback arm status handling (leg-2A + this fix)
 5. `app/src/event-editor/lib/previewProjection.ghostpaint1.test.ts` — A1-A5 pins + new A6 (leg-2A + this fix)
 6. `app/src/event-editor/lib/previewProjection.test.ts` — two-arg fix at :65 (this fix)
@@ -28,7 +30,11 @@ Leg-2A (first unit) shipped +155/-11 across 9 files. Advc review identified 3 de
 
 ## Commits
 
-- 85046b21 — L2-PROMPT2-GHOSTPAINT-1 unit fix-1: D1/D2/D3 code fixes + A6 test pin
+- 85046b21 — L2-PROMPT2-GHOSTPAINT-1 unit fix-1: D1 remove default param, D2 add _protocolStepStatus to fallback arm, D3 pass event labwareIds, A6 pin
+- db3970ce — L2-PROMPT2-GHOSTPAINT-1 unit fix-1: deliverable report (D4/D5), remove misplaced record
+- 986e14cd — L2-PROMPT2-GHOSTPAINT-1 unit fix-1: update report exit marker sha
+- 6afda9cb — L2-PROMPT2-GHOSTPAINT-1 unit fix-1: finalize report sha
+- d9b324cd — L2-PROMPT2-GHOSTPAINT-1 c2 paperwork: corrected changed-file list + commit list
 
 ## Defect -> Fix Table
 
@@ -69,3 +75,4 @@ grep -n "resolvePlacedVesselAttribution(\[\]" src/event-editor/lib/previewProjec
 Baseline: 21 passed (before A6). After A6: 22 passed. Full lib: 109 -> 110.
 
 L2-PROMPT2-GHOSTPAINT-1 UNIT fix-1 DONE 986e14cd
+L2-PROMPT2-GHOSTPAINT-1 UNIT c2-paperwork DONE d9b324cd
