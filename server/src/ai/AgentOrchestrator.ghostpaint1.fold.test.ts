@@ -84,13 +84,26 @@ describe('L2-PROMPT2-GHOSTPAINT-1 fold-path: production seam proof', () => {
       folded!.doc,
       ['LBW-96-1'],
       { store: store as never, searchLabwareByHint: lookup } as ShorthandCompileDeps,
+      DECK,
     );
     expect(compiledFold).not.toBeNull();
 
     const result = shorthandResultFromCompile(compiledFold!, held.yaml, 'fold-recompile', DECK);
     expect(result.success).toBe(true);
     const events = result.events as unknown[];
+
+    // gp-fix4: run the same doc through the unfolded compile path and assert
+    // the fold count EQUALS the unfolded count (parity — reviewer measured 16)
+    const unfolded = await import('./shorthandChat.js');
+    const unfoldedCompiled = await unfolded.compileShorthandDeterministically(
+      folded!.doc, { store: store as never, searchLabwareByHint: lookup } as import('./shorthandChat.js').ShorthandCompileDeps,
+    );
+    const unfoldedResult = unfolded.shorthandResultFromCompile(
+      unfoldedCompiled!, held.yaml, 'unfolded', DECK,
+    );
+    const unfoldedEvents = (unfoldedResult.events ?? []) as unknown[];
     expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events.length).toBe(unfoldedEvents.length);
 
     const details = (events[0] as Record<string, unknown>).details as Record<string, unknown>;
     expect(details.labwareId).toBe('LBW-96-1');

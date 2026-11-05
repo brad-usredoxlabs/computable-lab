@@ -1192,6 +1192,7 @@ function entryLabelCarrier(entry: unknown, label: string): EntryLabelCarrier | n
 export function applySoleDeckPlacement(
   doc: ScientistIntent,
   placementLabwareIds: readonly string[],
+  deck?: readonly DeckLabwareSummary[],
 ): ScientistIntent {
   const distinct = new Set(
     placementLabwareIds.filter((id): id is string => typeof id === 'string' && id.length > 0),
@@ -1199,6 +1200,19 @@ export function applySoleDeckPlacement(
   if (distinct.size !== 1) return structuredClone(doc);
   const sole = distinct.values().next().value;
   if (!sole) return structuredClone(doc);
+
+  // Resolve the sole placement id against the deck: if a deck entry has
+  // labwareId === sole, inject the NAME (the compile's name-only lookup
+  // then resolves it back to that recordId — parity with the unfolded path).
+  // If no deck entry matches, fall back to the raw id (preserves today's
+  // behavior for callers that don't pass a deck).
+  let injectToken: string = sole;
+  if (Array.isArray(deck) && deck.length > 0) {
+    const deckEntry = deck.find(lw => typeof lw?.labwareId === 'string' && lw.labwareId === sole);
+    if (deckEntry && typeof deckEntry.name === 'string' && deckEntry.name.length > 0) {
+      injectToken = deckEntry.name;
+    }
+  }
 
   const out = structuredClone(doc);
   for (const action of out.actions) {
@@ -1214,10 +1228,12 @@ export function applySoleDeckPlacement(
     if (typeof a.labwareHint === 'string' && a.labwareHint.length > 0) continue;
     const params = a.params as Record<string, unknown> | undefined;
     if (params && typeof params.labware_id === 'string' && params.labware_id.length > 0) continue;
+    // D4: also skip when params.labware is already set (the expander reads it)
+    if (params && typeof params.labware === 'string' && params.labware.length > 0) continue;
     // Inject: the labware slot is optional; direct assignment on a fresh clone
     // is safe under exactOptionalPropertyTypes (the clone has no pre-existing
     // undefined labware).
-    a.labware = sole;
+    a.labware = injectToken;
   }
   return out;
 }

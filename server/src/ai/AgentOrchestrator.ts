@@ -1103,13 +1103,17 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
  * Applies applySoleDeckPlacement to inject the sole deck placement's labwareId
  * into well-bearing actions, then compiles deterministically.
  * Shared by production (run() fold path) and tests.
+ * The optional deck parameter enables resolving the placement id to a deck
+ * name before injection so the compile's name-only lookup resolves it back
+ * to the record id — parity with the unfolded path (gp-fix4).
  */
 export async function compileFoldedShorthand(
   doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
   placementLabwareIds: readonly string[],
   deps: ShorthandCompileDeps,
+  deckLabwares?: readonly import('../ai/shorthandChat.js').DeckLabwareSummary[],
 ): Promise<ScientistIntentCompileResult | null> {
-  const docForCompile = applySoleDeckPlacement(doc, placementLabwareIds);
+  const docForCompile = applySoleDeckPlacement(doc, placementLabwareIds, deckLabwares);
   return compileShorthandDeterministically(docForCompile, deps);
 }
 
@@ -1387,6 +1391,8 @@ export function createAgentOrchestrator(
       // deck placements (the request's carrier, NOT shorthandDeckLabwares) so
       // the fold arm can inject the sole id into a well-bearing action before
       // compile. Zero or multiple placements write nothing.
+      // gp-fix4: shorthandDeckLabwares also flows to compileFoldedShorthand so
+      // applySoleDeckPlacement resolves the placement id to the deck name.
       const placementLabwareIds = Array.isArray(context?.deckPlacements)
         ? context.deckPlacements.map(p => p?.labwareId).filter((v): v is string => typeof v === 'string' && v.length > 0)
         : [];
@@ -1479,6 +1485,8 @@ export function createAgentOrchestrator(
             // placement's labwareId into well-bearing actions that carry no
             // identity. The expander emits a top-level labwareId from
             // params.labware, which the binder copies down into details.labwareId.
+            // gp-fix4: forward the deck so applySoleDeckPlacement can resolve
+            // the raw placement id to the deck name before injection.
             const compiledFold = await compileFoldedShorthand(folded.doc, placementLabwareIds, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
@@ -1504,7 +1512,7 @@ export function createAgentOrchestrator(
                 const answeredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
                 return answeredLabels.length > 0 ? { answeredClarificationLabels: answeredLabels } : {};
               })(),
-            });
+            }, shorthandDeckLabwares);
             if (compiledFold) {
               // WELLSET-RESOLVER-1 (the writer leg, fold arm): persist the
               // recompile's snapshotAfter back to the cache (the same
