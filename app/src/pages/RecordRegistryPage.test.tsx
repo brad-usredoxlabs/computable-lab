@@ -625,10 +625,10 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
 
     // Resolve the deferred content-locked states AFTER the UI has rendered
     // with the terminal states but before the content-locked prime settled.
-    resolveContentLocked()
-    // Give React time to re-render with the new state.
-    await vi.dynamicImportSettled()
-    await new Promise((r) => setTimeout(r, 100))
+    await act(async () => {
+      resolveContentLocked()
+      await vi.dynamicImportSettled()
+    })
 
     // The record IS approved → it should be content-locked.
     // The "Create draft revision" button must be visible (not Save).
