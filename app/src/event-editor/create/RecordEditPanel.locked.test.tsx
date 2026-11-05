@@ -224,6 +224,37 @@ describe('RecordEditPanel — content-locked rendering', () => {
     expect(screen.queryByTestId('record-edit-save')).toBeNull()
   })
 
+  it('DEFECT 4: content-locked fetch rejects -> Save is not usable (fail-closed)', async () => {
+    const payload = {
+      kind: 'controlled-document',
+      id: 'DOC-DEF4',
+      state: 'approved',
+      lifecycleId: 'doc-lifecycle',
+      title: 'Test',
+    }
+    ;(apiClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordId: 'DOC-DEF4',
+      schemaId: 'controlled-document',
+      payload,
+    })
+    // Content-locked fetch REJECTS — the cache never marks this lifecycleId resolved
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('content-locked fetch failed'))
+    // Terminal states resolve normally (empty — not a terminal state)
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
+
+    render(<RecordEditPanel recordId="DOC-DEF4" title="Test Document" />)
+
+    // Wait for loading to finish so lockPending can settle
+    await waitFor(() => expect(screen.queryByText(/Loading record/)).toBeNull())
+    // Both fetches settle (content-locked catches to [], terminal resolves to []).
+    // At this point lockPending is false. contentLockedStates=[], terminalStates=[],
+    // so contentLocked=false -> Save button renders.
+    // fail-closed: after settlement, Save must NOT be enabled.
+    // Currently (the defect): Save is present and ENABLED.
+    const saveBtn = await screen.findByTestId('record-edit-save')
+    expect(saveBtn).toBeDisabled()
+  })
+
   it('DEFECT 5: Save button disabled while lock facts are still loading (transient fail-open guard)', async () => {
     const payload = {
       kind: 'controlled-document',
