@@ -146,3 +146,84 @@ describe('record provider (tier 1) — vendor-product kind carries its level', (
     expect(envelope.candidate.levelDeclared).toBe(true);
   });
 });
+
+describe('record provider (tier 1) — formulationDeclared fact', () => {
+  /** material-spec record with formulation { concentration, solvent_ref } */
+  function recordsWithFormulation(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'MAT-SPEC-FORM-1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+        payload: {
+          kind: 'material-spec',
+          id: 'MAT-SPEC-FORM-1',
+          name: 'Test clofibrate stock',
+          formulation: {
+            concentration: { value: 1, unit: 'mM' },
+            solvent_ref: { recordId: 'MAT-DMSO', label: 'DMSO' },
+          },
+        },
+      },
+    ];
+  }
+
+  /** material-spec record without formulation block */
+  function recordsWithoutFormulation(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'MAT-SPEC-NO-FORM-1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+        payload: {
+          kind: 'material-spec',
+          id: 'MAT-SPEC-NO-FORM-1',
+          name: 'Test stock without formulation',
+        },
+      },
+    ];
+  }
+
+  /** material-spec record with formulation but missing solvent_ref */
+  function recordsFormulationNoSolvent(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'MAT-SPEC-NO-SOLVENT-1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+        payload: {
+          kind: 'material-spec',
+          id: 'MAT-SPEC-NO-SOLVENT-1',
+          name: 'Test stock concentration only',
+          formulation: {
+            concentration: { value: 1, unit: 'mM' },
+          },
+        },
+      },
+    ];
+  }
+
+  it('a material-spec record with concentration AND solvent_ref yields formulationDeclared: true', async () => {
+    const store = new RecordsFixtureStore(recordsWithFormulation());
+    const provider = createRecordProvider(store);
+    const hits = await provider('test', 20, new AbortController().signal);
+    const hit = hits.find((h) => h.curie === 'local:MAT-SPEC-FORM-1');
+    expect(hit).toBeDefined();
+    expect(hit!.formulationDeclared).toBe(true);
+  });
+
+  it('a record without formulation yields the key absent (not false, not undefined)', async () => {
+    const store = new RecordsFixtureStore(recordsWithoutFormulation());
+    const provider = createRecordProvider(store);
+    const hits = await provider('test', 20, new AbortController().signal);
+    const hit = hits.find((h) => h.curie === 'local:MAT-SPEC-NO-FORM-1');
+    expect(hit).toBeDefined();
+    expect('formulationDeclared' in hit!).toBe(false);
+  });
+
+  it('a record with formulation but no solvent_ref yields the key absent', async () => {
+    const store = new RecordsFixtureStore(recordsFormulationNoSolvent());
+    const provider = createRecordProvider(store);
+    const hits = await provider('test', 20, new AbortController().signal);
+    const hit = hits.find((h) => h.curie === 'local:MAT-SPEC-NO-SOLVENT-1');
+    expect(hit).toBeDefined();
+    expect('formulationDeclared' in hit!).toBe(false);
+  });
+});
