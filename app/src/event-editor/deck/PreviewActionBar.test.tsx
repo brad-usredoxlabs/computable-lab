@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   materializeAcceptedOntologyBindings: vi.fn(),
   rewriteAcceptedOntologyRefs: vi.fn(),
   state: null as EventEditorState | null,
+  // L2-CLARIFY-TARGET-1 D2: knob to control useOptionalAiPanel for chat-preview
+  // visibility tests. Default null so ALL existing legs run unchanged.
+  aiPanelMock: null as { chat: { hasPreview: boolean } | null } | null,
 }))
 
 vi.mock('../EventEditorContext', () => ({
@@ -27,6 +30,10 @@ vi.mock('../EventEditorContext', () => ({
       openFixIt: mocks.openFixIt,
     },
   }),
+}))
+
+vi.mock('../../shared/context/AiPanelContext', () => ({
+  useOptionalAiPanel: () => mocks.aiPanelMock,
 }))
 
 vi.mock('../../shared/shell', () => ({
