@@ -129,12 +129,18 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
  *  scientist actually stated): EITHER (A) VALUE-MATCH — the turn carries an
  *  amount-with-unit of `kind` whose amount EQUALS `slotValue` (the
  *  scientist's number, present in their own words, whatever clause owns it)
- *  — OR (B) the clause rule (cycle 7 unit 2 / D1) — a CLAUSE naming the
- *  action's verb carries an amount-with-unit of `kind`. Clause boundary
- *  (c8 D2): sentence punctuation, `,`/`;`, a newline, and the `then`/`and`
- *  junction. Over-KEEP of an unrelated same-number amount is the accepted
- *  friction-first trade; over-STRIP of a stated amount is a defect. Reuses
- *  the ONE grammar via `tokenRe` — no second grammar, no special-case table. */
+ *  — OR (B) the clause rule (cycle 7 unit 2 / D1; cycle 11 / c10 D1+D2) — a
+ *  CLAUSE naming the action's verb carries an amount-with-unit of `kind`,
+ *  and when `slotValue` is provided that amount's parsed value EQUALS
+ *  `slotValue` (the value-INDEPENDENT clause arm over-KEPT a not-in-turn
+ *  number — c10 D2; with no `slotValue` the clause arm is byte-identical to
+ *  the c9 any-same-kind behavior). Clause boundary (c8 D2 + c10 D1):
+ *  sentence punctuation (with OR without following whitespace), `,`/`;`, a
+ *  newline, a tab, `&`, and the case-insensitive `then`/`and`/`plus`/`to`
+ *  junction. Over-KEEP of an unrelated SAME-NUMBER amount (the VALUE-MATCH
+ *  arm) is the accepted friction-first trade; over-KEEP of a number NOT in
+ *  the turn and over-STRIP of a stated amount are defects. Reuses the ONE
+ *  grammar via `tokenRe` — no second grammar, no special-case table. */
 export function clauseStatesKind(
   words: string,
   verb: string,
@@ -145,7 +151,7 @@ export function clauseStatesKind(
   if (!stem || !words) return false;
   const verbRe = new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}\\b`, 'i');
   const clauses = words
-    .split(/(?<=[.!?])\s+|[,;]+|\n+|\b(?:then|and)\b/)
+    .split(/(?<=[.!?])\s*|[,;]+|\n+|\t+|&|\b(?:then|and|plus|to)\b/i)
     .map((c) => c.trim())
     .filter((c) => c.length > 0);
   const statedInClause = clauses.some((clause) => {
@@ -153,7 +159,14 @@ export function clauseStatesKind(
     tokenRe.lastIndex = 0; // stateful /g — fresh scan each clause
     let m: RegExpExecArray | null;
     while ((m = tokenRe.exec(clause)) !== null) {
-      if (parseAmount(m[1]!) === null) continue;
+      const amount = parseAmount(m[1]!);
+      if (amount === null) continue;
+      // c10 D2 (cycle 11): when the slot's value is known, the clause arm is
+      // the VALUE-MATCH restricted to the verb clause — a same-kind amount
+      // keeps the slot only when its parsed value EQUALS the slot value.
+      // `slotValue === undefined` keeps the clause arm byte-identical to the
+      // c9 any-same-kind behavior (the labeled path is untouched).
+      if (slotValue !== undefined && amount !== slotValue) continue;
       const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
       if (volumeUnit === (kind === 'volume')) return true;
     }

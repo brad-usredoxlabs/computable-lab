@@ -36,14 +36,17 @@
  *         an amount-with-unit within the ~90-char window of THIS label
  *         (byte-identical, cycle 7).
  *       - NO material (label = '') — `clauseStatesKind`, DEFAULT-KEEP
- *         (cycle 9 unit 1 / c8): stated if EITHER the turn carries an
- *         amount-with-unit of the slot's DECLARED KIND whose amount EQUALS
- *         the slot value (the VALUE-MATCH arm — the scientist's number in
- *         their own words), OR the CLAUSE naming THIS action's verb carries
- *         an amount of the declared kind (the clause arm; its boundary now
- *         includes newlines and the `then`/`and` junction, c8 D2). An
- *         UNRELATED number (a different value in another clause) or a
- *         wrong-KIND amount no longer satisfies the slot.
+ *         (cycle 9 unit 1 / c8; cycle 11 / c10 D1+D2): stated if EITHER the
+ *         turn carries an amount-with-unit of the slot's DECLARED KIND whose
+ *         amount EQUALS the slot value (the VALUE-MATCH arm — the
+ *         scientist's number in their own words), OR the CLAUSE naming THIS
+ *         action's verb carries an amount of the declared kind whose value
+ *         EQUALS the slot value (the clause arm — the VALUE-MATCH restricted
+ *         to the verb clause; its boundary now includes newlines, tabs, `&`,
+ *         no-whitespace sentence punctuation and the case-insensitive
+ *         `then`/`and`/`plus`/`to` junctions, c8 D2 + c10 D1). An UNRELATED
+ *         number (a different value anywhere in the turn) or a wrong-KIND
+ *         amount no longer satisfies the slot.
  *     A stated amount is therefore never demoted, whether or not the action
  *     names a material — and an UNstated amount is still demoted: the slot's
  *     number never appears with the right kind in the turn's own words (or
@@ -211,12 +214,13 @@ export function demoteUnstatedQuantities(
         // (ONE-grammar law — no second quantity grammar here):
         //   • NAMED material — the extractor's label-adjacency arm (the
         //     ~90-char window near THIS label); byte-identical.
-        //   • NO material — `clauseStatesKind`, DEFAULT-KEEP (cycle 9 unit 1):
-        //     the VALUE-MATCH arm (a same-KIND amount whose value EQUALS the
-        //     slot) or the clause arm (the CLAUSE naming THIS action's verb
-        //     carries an amount of the slot's DECLARED KIND). An unrelated
-        //     number (K1) or a wrong-KIND amount (K2) no longer satisfies
-        //     the slot.
+        //   • NO material — `clauseStatesKind`, DEFAULT-KEEP (cycle 9 unit 1 /
+        //     c8; cycle 11 / c10 D1+D2): the VALUE-MATCH arm (a same-KIND
+        //     amount whose value EQUALS the slot) or the clause arm (the
+        //     CLAUSE naming THIS action's verb carries an amount of the slot's
+        //     DECLARED KIND whose value EQUALS the slot — the VALUE-MATCH
+        //     restricted to the verb clause). An unrelated number (K1) or a
+        //     wrong-KIND amount (K2) no longer satisfies the slot.
         // The slot's numeric value (a bare number slot, or the quantity
         // object's `value`) feeds the VALUE-MATCH arm's comparison.
         const qObj = typeof value === 'object' && value !== null && !Array.isArray(value)
