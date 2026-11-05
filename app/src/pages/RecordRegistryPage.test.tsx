@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
 import RecordRegistryPage from './RecordRegistryPage'
 import { seedContentLockedStates, __resetContentLockedStatesCache } from '../shared/records/contentLockedStatesCache'
 
@@ -681,8 +681,10 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
 
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
-    await vi.dynamicImportSettled()
-    await new Promise((r) => setTimeout(r, 100))
+    await act(async () => {
+      await vi.dynamicImportSettled()
+      await new Promise((r) => setTimeout(r, 100))
+    })
     // Seed the cache (simulating a later successful prime from another path).
     // The fix ensures page state was NOT committed with [], so the sync
     // fallback ?? getContentLockedStatesSync sees this seeded set.
