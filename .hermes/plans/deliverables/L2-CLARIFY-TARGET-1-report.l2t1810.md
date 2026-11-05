@@ -880,5 +880,5 @@ The corrected statements:
      outcomes (c12 O1).
 Byte-identity claim corrected. Docs and comments updated accordingly.
 
-L2-CLARIFY-TARGET-1 c13-DOCFIX DONE cf573282
+L2-CLARIFY-TARGET-1 c13-DOCFIX DONE 490d6451
 
