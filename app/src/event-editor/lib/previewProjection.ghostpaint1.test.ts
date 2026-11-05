@@ -19,7 +19,6 @@ import type { EventEditorPreview } from '../EventEditorContext'
 import type { PlateEvent } from '../../types/events'
 
 // ── Fixture ──────────────────────────────────────────────────────────
-// The corpus2 prompt-2 shape: add_material with wells but NO labwareId
 const labwareLess: PlateEvent = {
   eventId: 'evt-add_material-ghost',
   event_type: 'add_material',
@@ -40,30 +39,18 @@ function preview(events: PlateEvent[]): EventEditorPreview {
   }
 }
 
-// ── Tests ────────────────────────────────────────────────────────────
-
 describe('GHOSTPAINT1 A1 — sole placed vessel buckets the wells', () => {
   it('attributes wells to the single placed labware', () => {
-    const index = buildPreviewWellIndex(
-      preview([labwareLess]),
-      ['lbw-seed-plate-96-flat'],
-    )
+    const index = buildPreviewWellIndex(preview([labwareLess]), ['lbw-seed-plate-96-flat'])
     expect([...index.byLabware.keys()]).toEqual(['lbw-seed-plate-96-flat'])
-    expect(
-      previewWellsForLabware(index, 'lbw-seed-plate-96-flat').size,
-    ).toBe(2)
-    expect([...previewAffectedLabwareIds(index)]).toEqual([
-      'lbw-seed-plate-96-flat',
-    ])
+    expect(previewWellsForLabware(index, 'lbw-seed-plate-96-flat').size).toBe(2)
+    expect([...previewAffectedLabwareIds(index)]).toEqual(['lbw-seed-plate-96-flat'])
   })
 })
 
 describe('GHOSTPAINT1 A2 — two distinct placed ids ⇒ empty', () => {
   it('does not attribute when multiple placed labwares exist', () => {
-    const index = buildPreviewWellIndex(
-      preview([labwareLess]),
-      ['plate-A', 'plate-B'],
-    )
+    const index = buildPreviewWellIndex(preview([labwareLess]), ['plate-A', 'plate-B'])
     expect(index.byLabware.size).toBe(0)
   })
 })
@@ -79,19 +66,11 @@ describe('GHOSTPAINT1 A4 — explicit labwareId overrides placed vessel', () => 
   it('buckets under explicit labwareId, not the placed vessel', () => {
     const explicitEvent: PlateEvent = {
       ...labwareLess,
-      details: {
-        ...labwareLess.details,
-        labwareId: 'plate-B',
-      },
+      details: { ...labwareLess.details, labwareId: 'plate-B' },
     } as unknown as PlateEvent
-    const index = buildPreviewWellIndex(
-      preview([explicitEvent]),
-      ['plate-A'],
-    )
+    const index = buildPreviewWellIndex(preview([explicitEvent]), ['plate-A'])
     expect([...index.byLabware.keys()]).toEqual(['plate-B'])
-    expect(
-      previewWellsForLabware(index, 'plate-B').size,
-    ).toBe(2)
+    expect(previewWellsForLabware(index, 'plate-B').size).toBe(2)
   })
 })
 
@@ -104,13 +83,9 @@ describe('GHOSTPAINT1 A5 — well-less details ⇒ no bucket', () => {
         material: '1 mM Clofibrate in DMSO',
         volumeUl: 1,
         volume: { value: 1, unit: 'uL' },
-        // no wells key
       },
     } as unknown as PlateEvent
-    const index = buildPreviewWellIndex(
-      preview([wellLessEvent]),
-      ['lbw-seed-plate-96-flat'],
-    )
+    const index = buildPreviewWellIndex(preview([wellLessEvent]), ['lbw-seed-plate-96-flat'])
     expect(index.byLabware.size).toBe(0)
   })
 })
