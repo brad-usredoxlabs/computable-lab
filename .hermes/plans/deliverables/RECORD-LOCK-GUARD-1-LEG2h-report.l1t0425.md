@@ -70,4 +70,4 @@ The Modal case is placed LAST in its describe block to avoid starving earlier se
 ## Commit
 a9470fb8 L1-RECORD-LOCK-GUARD-1-LEG2H unit 2h: consumer priming pins (a) Modal + (b) applyDraftProtocolEdit
 
-L1-RECORD-LOCK-GUARD-1-LEG2H UNIT 2h DONE 767b30b1bebacfda5a2717e8245a1faae1e9da5c
+L1-RECORD-LOCK-GUARD-1-LEG2H UNIT 2h DONE b4a37c892605727ce000438db869499387738413
