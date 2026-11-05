@@ -42,6 +42,15 @@ vi.mock('../EventEditorContext', () => ({
       commitPreview: vi.fn(),
     },
   }),
+  useOptionalEventEditor: () => ({
+    state: mocks.state,
+    actions: {
+      setPreview: vi.fn(),
+      clearPreview: vi.fn(),
+      appendEvent: vi.fn(),
+      commitPreview: vi.fn(),
+    },
+  }),
 }))
 
 // ChatLog's import graph reaches pdfjs-dist; stub it (the established
