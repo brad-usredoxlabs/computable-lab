@@ -97,10 +97,10 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     const folded = foldAnswersIntoShorthand(held, [answer]);
     expect(folded).not.toBeNull();
 
-    // applySoleDeckPlacement injects labware onto the folded doc
-    const docWithLabware = applySoleDeckPlacement(folded!.doc, ['LBW-96-1']);
+    // applySoleDeckPlacement injects the deck NAME onto the folded doc
+    const docWithLabware = applySoleDeckPlacement(folded!.doc, ['LBW-96-1'], DECK);
     const action = docWithLabware.actions[0] as unknown as Record<string, unknown>;
-    expect(action.labware).toBe('LBW-96-1');
+    expect(action.labware).toBe('Plate Alpha');
     expect(action.targetWells).toEqual(['E2:H5']);
 
     // After compile + result mapping, the event carries details.labwareId
@@ -132,12 +132,12 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     expect(folded1).not.toBeNull();
     expect(folded2).not.toBeNull();
 
-    const doc1 = applySoleDeckPlacement(folded1!.doc, ['LBW-96-1']);
-    const doc2 = applySoleDeckPlacement(folded2!.doc, ['LBW-96-1']);
+    const doc1 = applySoleDeckPlacement(folded1!.doc, ['LBW-96-1'], DECK);
+    const doc2 = applySoleDeckPlacement(folded2!.doc, ['LBW-96-1'], DECK);
 
-    // Both docs carry the same labware injection
-    expect((doc1.actions[0] as unknown as Record<string, unknown>).labware).toBe('LBW-96-1');
-    expect((doc2.actions[0] as unknown as Record<string, unknown>).labware).toBe('LBW-96-1');
+    // Both docs carry the same labware injection (deck NAME)
+    expect((doc1.actions[0] as unknown as Record<string, unknown>).labware).toBe('Plate Alpha');
+    expect((doc2.actions[0] as unknown as Record<string, unknown>).labware).toBe('Plate Alpha');
 
     const store = mockStore();
     const lookup = composeLabwareHintLookupWithDeck(DECK, undefined);
@@ -215,8 +215,8 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     expect(resolvePlacedVesselAttribution([], ['LBW-96-1'])).toBe('LBW-96-1');
     const held1 = makeHeld();
     const folded1 = foldAnswersIntoShorthand(held1, [makeAnswerFor(held1, 'MAT-clofibrate-formulation')]);
-    const doc1 = applySoleDeckPlacement(folded1!.doc, ['LBW-96-1']);
-    expect((doc1.actions[0] as unknown as Record<string, unknown>).labware).toBe('LBW-96-1');
+    const doc1 = applySoleDeckPlacement(folded1!.doc, ['LBW-96-1'], DECK);
+    expect((doc1.actions[0] as unknown as Record<string, unknown>).labware).toBe('Plate Alpha');
 
     // Vector 2: zero placements → both return null/undefined
     expect(resolvePlacedVesselAttribution([], [])).toBeNull();
@@ -243,7 +243,40 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     expect(resolvePlacedVesselAttribution([], [null, 'LBW-96-1'])).toBe('LBW-96-1');
     const held5 = makeHeld();
     const folded5 = foldAnswersIntoShorthand(held5, [makeAnswerFor(held5, 'MAT-clofibrate-formulation')]);
-    const doc5 = applySoleDeckPlacement(folded5!.doc, ['LBW-96-1']);
-    expect((doc5.actions[0] as unknown as Record<string, unknown>).labware).toBe('LBW-96-1');
+    const doc5 = applySoleDeckPlacement(folded5!.doc, ['LBW-96-1'], DECK);
+    expect((doc5.actions[0] as unknown as Record<string, unknown>).labware).toBe('Plate Alpha');
+  });
+
+  it('B7: unresolved placement id writes nothing — event is not dropped', async () => {
+    // Anti-regression pin: when DECK is passed but the placement id is NOT on it,
+    // the helper must write NOTHING (never inject the raw id). The compile should
+    // still return the well-bearing event — a missing labwareId is tolerable; a
+    // dropped event is not.
+    const held = makeHeld();
+    const answer = makeAnswerFor(held, 'MAT-clofibrate-formulation');
+    const folded = foldAnswersIntoShorthand(held, [answer]);
+    expect(folded).not.toBeNull();
+
+    // Pass a placement id that is NOT on DECK
+    const doc = applySoleDeckPlacement(folded!.doc, ['LBW-NOT-ON-DECK'], DECK);
+    const action = doc.actions[0] as unknown as Record<string, unknown>;
+    // No injection when the id is not on the deck
+    expect(action.labware).toBeUndefined();
+
+    // The compile still produces the well-bearing event
+    const store = mockStore();
+    const lookup = composeLabwareHintLookupWithDeck(DECK, undefined);
+    const compiled = await compileShorthandDeterministically(doc, {
+      store: store as never,
+      ...(lookup ? { searchLabwareByHint: lookup } : {}),
+    });
+    expect(compiled).not.toBeNull();
+    const result = shorthandResultFromCompile(compiled!, held.yaml, 'test', DECK);
+    expect(result.success).toBe(true);
+    const events = (result.events ?? []) as unknown as Array<Record<string, unknown>>;
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    // details.labwareId is absent (no deck match), but the event exists
+    expect(events[0]!.details).toBeDefined();
+    expect((events[0]!.details as Record<string, unknown>).labwareId).toBeUndefined();
   });
 });

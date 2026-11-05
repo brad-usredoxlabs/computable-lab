@@ -1204,13 +1204,12 @@ export function applySoleDeckPlacement(
   // Resolve the sole placement id against the deck: if a deck entry has
   // labwareId === sole, inject the NAME (the compile's name-only lookup
   // then resolves it back to that recordId — parity with the unfolded path).
-  // If no deck entry matches, fall back to the raw id (preserves today's
-  // behavior for callers that don't pass a deck).
-  let injectToken: string = sole;
+  // Unresolved placement id => no injection, never an unresolvable token.
+  let injectName: string | undefined;
   if (Array.isArray(deck) && deck.length > 0) {
     const deckEntry = deck.find(lw => typeof lw?.labwareId === 'string' && lw.labwareId === sole);
     if (deckEntry && typeof deckEntry.name === 'string' && deckEntry.name.length > 0) {
-      injectToken = deckEntry.name;
+      injectName = deckEntry.name;
     }
   }
 
@@ -1230,10 +1229,12 @@ export function applySoleDeckPlacement(
     if (params && typeof params.labware_id === 'string' && params.labware_id.length > 0) continue;
     // D4: also skip when params.labware is already set (the expander reads it)
     if (params && typeof params.labware === 'string' && params.labware.length > 0) continue;
-    // Inject: the labware slot is optional; direct assignment on a fresh clone
-    // is safe under exactOptionalPropertyTypes (the clone has no pre-existing
-    // undefined labware).
-    a.labware = injectToken;
+    if (injectName) {
+      // Inject: the labware slot is optional; direct assignment on a fresh clone
+      // is safe under exactOptionalPropertyTypes (the clone has no pre-existing
+      // undefined labware).
+      a.labware = injectName;
+    }
   }
   return out;
 }
