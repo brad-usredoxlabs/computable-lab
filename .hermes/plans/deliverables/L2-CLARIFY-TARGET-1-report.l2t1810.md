@@ -541,3 +541,346 @@ literals):
 
 Test result raw (server): 3 files, 11/11 pass (assumedValue 6, wellTarget 4,
 sameNounDedupe 1).
+
+## cycle 7 unit 1 (defects 4+6) — no-material mix over-strip (browser-gate c6)
+
+Lane 2 / item L2-CLARIFY-TARGET-1, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base tip 4ae12b8c (clean). Fixes gate-c6 defects
+4 + 6 ONLY (stated quantities demoted as unstated): the server stripped BOTH
+explicitly stated mix quantities — receipts
+/home/brad/.hermes/cl/receipts/L2-CLARIFY-TARGET-1/2026-11-04_1405-c6-gate/
+q3-result.json paneTail:
+  "Demoted unstated quantity: action \"mix\" argument \"volume\" (field \"volume\") carried 75 — the scientist's turn stated no amount..."
+  "Demoted unstated quantity: action \"mix\" argument \"cycles\" (field \"cycles\") carried 3 — ..."
+while the turn's own words were "Mix 75 uL ... for 3 cycles".
+
+Two measured root causes (both in owned files):
+1. demoteUnstatedQuantities.ts:183 `const stated = label ? extractQuantity(words, label) : null;`
+   — a material-less mix (label = '') never called the extractor, so any
+   present declared-quantity slot was treated as unstated and stripped
+   (contradicting the module's own :34-35 doc, which was itself stale).
+2. reconcileDraftQuantities.ts tokenRe (ONE grammar) had no `cycles` unit
+   alternation — "3 cycles" was never recognized as stated by EITHER arm, so
+   the declared `kind: quantity` contract for the mix `cycles` slot
+   (schema/scientist-intent/scientist-intent-vocabulary.yaml :94-96) could
+   never be satisfied in prose.
+
+Owned files (exactly 3, per diff cl/integration-2...HEAD):
+  server/src/ai/demoteUnstatedQuantities.ts
+  server/src/ai/reconcileDraftQuantities.ts (ONLY the tokenRe unit alternation
+    + COUNT_WORD_RE + their comments)
+  server/src/ai/demoteUnstatedQuantities.test.ts
+
+Commits (RED-first, per step):
+  8095f588 (a) RED pins — P-a/P-b/P-c/P-d (demoteUnstatedQuantities.test.ts)
+  f0519d5d (b) Fix A + doc correction — demoteUnstatedQuantities.ts
+  9c81b044 (c) Fix B + grammar comment — reconcileDraftQuantities.ts
+
+Fix A (one expression): :183 → `const stated = extractQuantity(words, label);`
+A no-label action is now adjudicated by the extractor's OWN no-anchor arm
+(reconcileDraftQuantities.ts :112-113 — "no label to anchor on: accept the
+first amount-with-unit"), which answers "did the turn state ANY amount with a
+unit?". Stated → kept; unstated → still demoted + disclosed.
+
+Corrected doc wording (the stale "honest no-op" contract, all 3 sites):
+  module header (:32-40):
+    "When the action names no material, the label is EMPTY — and the SAME
+     extractor adjudicates with its OWN no-anchor arm (the first
+     amount-with-unit in the turn's own words = stated;
+     reconcileDraftQuantities.ts :112-113). A stated amount is therefore
+     never demoted, whether or not the action names a material — and an
+     UNstated amount is still demoted (the no-anchor arm finds nothing, so
+     the slot is stripped + disclosed)."
+  actionMaterialLabel doc:
+    "Absent when the action names no material — the extractor then
+     adjudicates with its own no-anchor arm (the first amount-with-unit in
+     the turn's own words = stated), so a stated amount is still kept and an
+     unstated one is still demoted."
+  call-site comment:
+    "When the action names no material the label is empty and the SAME
+     extractor adjudicates with its no-anchor arm (the first
+     amount-with-unit in the turn's own words = stated)."
+
+Fix B (ONE grammar extended, never a second): tokenRe unit alternation +
+COUNT_WORD_RE gain `cycles?` (maps to the EXISTING `count` kind arm via
+COUNT_WORD_RE — no third kind added).
+
+Pins (all non-vacuous, demoteUnstatedQuantities.test.ts, new describe block
+'the no-material mix leg (cycle 7 unit 1, defects 4+6)'):
+  P-a gate shape: mix{volume:75, cycles:3} NO material, words 'Mix 75 uL for
+      3 cycles' → demoted.length 0, notes empty, both fields kept.
+      (mix field is the DECLARED `volume` slot — vocabulary.yaml :91-93 —
+      matching the gate note's field "volume"; `volumeUl` is add_material's
+      slot, not a mix field.)
+  P-b control: add_material DMEM + volumeUl 150, words 'Add 150 uL of DMEM
+      to A1' (WITH label) → kept, no-op, no fact. (label-adjacency arm intact)
+  P-c extractor direct: extractQuantity('Mix 75 uL for 3 cycles','') →
+      {value:75,unit:'uL',kind:'volume'} (no-anchor arm, first amount) AND
+      extractQuantity('Mix for 3 cycles','cycles') → {value:3,
+      unit:'cycles',kind:'count'} — the kind/unit mapping pin.
+  P-d regression guard for Fix A: mix{volume:75} NO material, words 'Mix on
+      the plate' (no amount stated) → STILL demoted (1, field 'volume') +
+      disclosed via notes; an UNstated amount must not become an over-KEEP.
+
+RAW RED (pre-fix code, corrected pins; run: npx vitest run
+src/ai/demoteUnstatedQuantities.test.ts from server/):
+  ❯ src/ai/demoteUnstatedQuantities.test.ts  (11 tests | 2 failed) 28ms
+   ❯ P-a: a material-less mix whose turn STATES both quantities strips NOTHING (no over-strip)
+     → expected 2 to be +0 // Object.is equality
+   ❯ P-c: the ONE grammar recognizes "3 cycles" as a stated count (kind count, unit cycles)
+     → expected null to deeply equal { value: 3, unit: 'cycles', …(1) }
+  FAIL P-a  AssertionError: expected 2 to be +0   (both stated quantities
+          stripped — the gate's raw over-strip; P-a's demoted[0..1] were
+          action "mix" field "volume" carried 75 and field "cycles" carried 3)
+  FAIL P-c  AssertionError: expected null to deeply equal { value: 3, unit: 'cycles', kind: 'count' }
+  Tests  2 failed | 9 passed (11)
+  (P-b + P-d GREEN pre-fix: P-d is the guard — with the pre-fix
+  never-ask-the-extractor behaviour a no-label doc is left untouched, so P-d
+  is GREEN only after Fix A AND must stay GREEN after Fix B; it is the
+  over-KEEP regression guard.)
+
+RAW GREEN (post-fix, same command):
+  ✓ src/ai/demoteUnstatedQuantities.test.ts  (11 tests) 38ms
+  Test Files  1 passed (1)   Tests  11 passed (11)
+  (npx vitest run src/ai/demoteUnstatedQuantities.test.ts
+   src/ai/reconcileDraftQuantities.test.ts: 2 files, 23/23 pass — the 12
+   pre-existing reconcile cases unedited, all GREEN.)
+
+Hazard check (cycles word feeding the reconcile leg — the known risk):
+  Full `npx vitest run src/ai` (132 files): baseline at stashed HEAD (no fix)
+  = 20 failed / 43 failed tests; with the fix = 19 failed / 40 failed tests.
+  Per-test diff of the two runs: the ONLY delta is the 3 c7d1 RED pins now
+  passing. The 40 remaining failures are a PRE-EXISTING identical set on
+  this branch (AgentOrchestrator.* golden/bypass/draftProseSuppression/
+  freeformLegs/shorthandChat.*, attachedProtocol, chatbotCompile.e2e,
+  createRecordIntent, submitSuggestionTool.tubeSchema, ChatbotCompileDeckSlot,
+  shorthandChat.cueCascade/foldNullArms/reviseReuse — unrelated to quantity
+  extraction; e.g. freeformLegs fails on 'Cannot read properties of
+  undefined (reading allowCreateLocal)' in a noun-mint card, zero quantity
+  involvement). No RECONCILE-leg consumer regression.
+  Named 'N cycles' prompt consumers run individually GREEN (12/12):
+  IntentCompileFromPromptHandlers.answeredBinding.test.ts (7),
+  AgentOrchestrator.emptyShorthand.test.ts (4, the P7 '75ul, 3 cycles'
+  empty-shorthand pin), FireAssayHumanPromptBaseline.test.ts (1, the
+  '(5 cycles, 125uL)' protocol eval).
+
+tsc: `npx tsc --noEmit` from server/ = **0 error TS lines** (bar met;
+orchestrator baseline on this branch: 0).
+
+git: `git -c core.fileMode=false diff --name-only cl/integration-2...HEAD`
+= exactly the three owned files (source commits a/b/c above); `git
+-c core.fileMode=false status --porcelain --untracked-files=no` = empty after
+the report commit.
+
+No UI, no card, no chip CSS, no compiler/golden/AgentOrchestrator/schema/harness
+touch. No merge, no lane-stack restart (:5193/:3093), no browser gate, no
+:3001/:5174. No npm install (node_modules symlinks untouched).
+
+Remaining blockers (owners): none for this unit. Defects 1,2,3,5 are
+separate runs — untouched. Acceptance (browser re-gate of the Q3 mix face
+`75 uL · 3 cycles`) is the independent browser reviewer's lane; implementation
+complete ≠ acceptance complete. Note for the gate re-run: YAML/vocabulary
+unchanged, so no lane-stack reload was needed for the fix itself; the
+pre-existing 40 src/ai failures predate this run and are outside its scope.
+
+## cycle 9 (c8 D1/D2) — material-less arm inverts to DEFAULT-KEEP
+
+Lane 2 / item L2-CLARIFY-TARGET-1-C9, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base 80649c80 (orchestrator-verified HEAD).
+Advc-c8 VERDICT fix: D1 MAJOR over-STRIP (e1/e2/e3 — HEAD stripped stated
+quantities BASE eef23b72 kept, violating R1.2 "Never strip a volume the
+scientist actually stated"), D2 MINOR no-separator over-KEEP (a2/a3/a6 —
+the clause splitter only knew `.!? , ;`). Note: the coder brief named the
+report as `L2-CLARIFY-TARGET-1-report.l2t0935.md`; that file does not exist
+in this worktree — this section is appended to the worktree's tracked
+report (`l2t1810.md`), the same file the cycle-7 sections use.
+
+Rule shipped (one sentence): a material-less declared-quantity slot is
+STATED (hence kept) when EITHER the turn carries an amount-with-unit of the
+slot's declared kind whose amount EQUALS the slot value (VALUE-MATCH arm —
+the scientist's number present in their own words) OR the clause rule holds
+(a clause naming the action's verb stem carries an amount of the declared
+kind); strip only on positive disassociation.
+
+Mechanism (3 owned files, 150+/45- vs 80649c80): `clauseStatesKind`
+(reconcileDraftQuantities.ts) gains an optional `slotValue` param; its
+clause splitter becomes `/(?<=[.!?])\s+|[,;]+|\n+|\b(?:then|and)\b/` (D2,
+incl. newline for a3); the VALUE-MATCH scan reuses the ONE grammar
+(`tokenRe` + `parseAmount`, lastIndex reset) — zero new grammars, zero
+verb/slot tables. `demoteUnstatedQuantities.ts` passes the slot's numeric
+value (bare-number slot or the quantity object's `value`) into the
+material-less arm; the labelled `extractQuantity` arm is byte-identical.
+Test file: six c8 probes added as pins + `mixDocSlots` hoisted to module
+scope (shared by the cycle-7 K1/K2 describe and the new describe; body
+unchanged, K1/K2/P-a..P-d pins untouched).
+
+RED (measured at 80649c80, 19:09 EST — `npx vitest run src/ai/demoteUnstatedQuantities.test.ts src/ai/reconcileDraftQuantities.test.ts`):
+2 files / 31 tests: 6 failed | 25 passed. e1/e2/e3 RED = demoted 1 (expected
+0, field stripped) — the over-STRIP; a2/a3/a6 RED = demoted 0 (expected 1)
+— the over-KEEP. Raw: e1/e2 `AssertionError: expected 1 to be +0`, e3 same
+at :338, a2/a3/a6 `AssertionError: expected +0 to be 1`. All 25
+pre-existing tests GREEN at RED time (no pin was already GREEN — none is a
+by-construction guard). Full raw at /tmp/c9-red-raw.txt (session 19:09).
+
+GREEN (19:19 EST, same command):
+```
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-CLARIFY-TARGET-1-lane2-l2t1810/server
+ ✓ src/ai/reconcileDraftQuantities.test.ts  (12 tests) 4ms
+ ✓ src/ai/demoteUnstatedQuantities.test.ts  (19 tests) 46ms
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+```
+Invariants verified GREEN: K1 + K2 demote, P-a/P-b/P-c stated-keeps,
+P-d "Mix on the plate" still demoted; the contract line
+demoteUnstatedQuantities.test.ts:185 ("A STATED amount must never be
+demoted (R1.2)") is true of the code again.
+
+Hazard check — full `npx vitest run src/ai` (132 files): 19 failed / 40
+failed tests — the SAME pre-existing set the cycle-7 hazard check above
+documented (only my six pins moved, all to passing). A grep across
+`server/src/ai` `--include="*.test.ts"` for `demoteUnstatedQuantities|
+clauseStatesKind|extractQuantity` found no test file outside the two
+ai suites importing the changed symbols; the production caller
+(`AgentOrchestrator.ts`) uses the unchanged public entry point
+`demoteUnstatedQuantities(doc, words)`, and the `clauseStatesKind`
+signature change is additive (optional trailing param).
+
+tsc: `cd app && npx tsc --noEmit` = 10 error lines (branch baseline 10 —
+bar met); 0 error lines in touched files (I touched no app/ files).
+`cd server && npx tsc --noEmit` = 0 error lines.
+
+git: `git -c core.fileMode=false diff --name-only 80649c80..HEAD` = exactly
+the 3 owned files; `git -c core.fileMode=false status --porcelain
+--untracked-files=no` = empty (the two pre-existing untracked
+non-assignment paths are excluded by that flag and were not created by
+this run).
+
+Over-KEEP tradeoff (accepted, friction-first — stated per the ruling):
+because the VALUE-MATCH arm keys on "the slot's number appears with the
+right kind ANYWHERE in the turn", a same-number same-kind amount that
+actually belongs to a DIFFERENT clause keeps this action's slot. That
+over-KEEP is the accepted friction-first trade: R1.2 and Brad's standing
+friction-first ruling forbid asking about a quantity that is already in
+the record, and the scientist's own number is the strongest statedness
+signal available. The inverse error class — over-STRIP of any
+e1/e2/e3-class shape (a stated amount demoted) — remains a DEFECT and is
+pinned by e1/e2/e3.
+
+Commits (this cycle, all `-c core.fileMode=false`): 8d908ec6 step 1 RED
+pins + helper hoist (assertions unchanged); d7d2e4cd step 2 rule + GREEN;
+this report commit step 3. No merge, no lane-stack restart, never
+:3001/:5174, no npm install. No UI change. Implementation complete;
+acceptance (browser re-gate) remains the independent reviewer's lane.
+
+## cycle 11 (c10 D1+D2) — splitter variants + value-dependent clause arm
+
+Lane 2 / item L2-CLARIFY-TARGET-1-C11, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base 0fa1d58a (cycle 9 DONE,
+orchestrator-verified 2026-11-04 20:10 EST in this worktree).
+Advc-c10 VERDICT: fix with TWO MINOR residuals, both pinned pre-existing
+at 80649c80, both labeled defects by the acceptance criterion "over-KEEP
+of a number NOT in the turn is a defect": (D1) the clause splitter
+(reconcileDraftQuantities.ts:148) survived boundary variants —
+`to`/`plus`/`&` connectors, capital `And`/`Then`, a tab, a no-whitespace
+sentence boundary; (D2) the material-less CLAUSE arm was value-INDEPENDENT
+(demoteUnstatedQuantities.ts:44-47 doc + `clauseStatesKind`'s boolean
+return) — a not-in-turn slot value was kept whenever the verb's clause
+carried ANY same-kind amount.
+
+Rules shipped (one sentence each):
+1. Splitter: the clause boundary now also fires on `&`, tabs, sentence
+   punctuation WITH OR WITHOUT following whitespace, and the
+   case-insensitive `then`/`and`/`plus`/`to` junction — pinned literal
+   `/(?<=[.!?])\s*|[,;]+|\n+|\t+|&|\b(?:then|and|plus|to)\b/i` (the `i`
+   flag on the literal; `(?i)` is not JS syntax, and the punct/`&`/`\t`/
+   `\n` alternatives are case-inert so the flag only widens the junction).
+   The clause-fragment join rule is intact: a fragment that loses its verb
+   still cannot orphan an amount (K1/P-a pins pass unedited).
+2. Clause arm value-DEPENDENT: in `clauseStatesKind`, when `slotValue` is
+   provided a clause amount keeps the slot ONLY when
+   `parseAmount(match).value === slotValue` (the VALUE-MATCH arm
+   restricted to the verb clause; the whole-turn VALUE-MATCH arm is
+   unchanged and does the rest). `slotValue === undefined` makes the
+   added value-check inert but clause SEGMENTATION differs from c9
+   (splitter changed); (corrected — see Correction (c13-D1) below). Doc
+   claims in both owned files updated to state the new contract.
+
+Step 1 (RED) — 8c0527890ff6f9fa5eb04cd784eb996130b26ea5: new describe
+with P-1 (slot value EQUAL to a clause amount KEEPS, both kinds), P-2
+(slot value NOT equal to any amount in the turn DEMOTED even when the
+verb clause carries a different same-kind amount — kills the
+value-independent clause arm), P-3 (each c10 §4 probe shape verbatim:
+`to`/`plus`/`&`/`.mix`/`AND`/`Then`/tab — slot volume:50 demoted). No
+existing assertion body edited (P-4 = the 31 baseline tests incl.
+K1/K2/P-a..P-d and e1/e2/e3/a2/a3/a6, run unedited in the matrix).
+Raw RED at HEAD+step1 (2 failed | 32 passed of 34):
+  P-2 "Mix 75 uL" volume:50  → expected +0 to be 1 (demoted=0 at HEAD)
+  P-3 "Add 200 uL of DMEM to A1 to mix" → expected +0 to be 1
+  (P-1 GREEN at HEAD — the value-equal keep already held via the clause
+  arm; it is the guard pin against the step-2 change.)
+
+Step 2 (GREEN) — 58401b99b7c362466a33de1be54fbcdaab98c688: the splitter
+regex + value-dependent clause arm as pinned above; doc claims updated.
+Raw matrix at exit:
+  ✓ src/ai/reconcileDraftQuantities.test.ts  (12 tests)
+  ✓ src/ai/demoteUnstatedQuantities.test.ts  (22 tests)
+  Test Files  2 passed (2)
+       Tests  34 passed (34)
+tsc: `cd server && npx tsc --noEmit` = 0 error lines (baseline 0).
+git (after step 2): `git -c core.fileMode=false diff --name-only
+0fa1d58a..HEAD` = exactly the 3 owned files; `git -c core.fileMode=false
+status --porcelain --untracked-files=no` = empty.
+
+c10 §4 probe table re-run against the fixed code (all rows now correct):
+  vol30  "Mix the sample and incubate 30 min"        demoted=1 (no over-keep)
+  vol200 "Add 200 uL of DMEM to A1, then mix"        demoted=0 (accepted same-number trade)
+  vol200 "Add 200 uL of DMEM to A1 and mix"          demoted=0 (accepted same-number trade)
+  vol50  "Add 200 uL of DMEM to A1 to mix"           demoted=1
+  vol50  "Add 200 uL of DMEM to A1 plus mix"         demoted=1
+  vol50  "Add 200 uL of DMEM to A1 & mix"            demoted=1
+  vol50  "Add 200 uL of DMEM to A1.mix"              demoted=1
+  vol50  "Add 200 uL of DMEM to A1 AND mix"          demoted=1
+  vol50  "Add 200 uL of DMEM to A1 Then mix"         demoted=1
+  vol50  "Add 200 uL of DMEM to A1\tmix"             demoted=1
+  vol50/999/0.5 "Mix 75 uL"                          demoted=1 (value-independent arm dead)
+
+Over-KEEP tradeoff still in force (unchanged, friction-first): a
+same-number same-kind amount anywhere in the turn (the VALUE-MATCH arm)
+still keeps the slot — the vol200 rows above. Over-KEEP of a number NOT
+in the turn (both c10 residuals) and over-STRIP of a stated amount
+(e1/e2/e3, P-1) are defects — now pinned.
+
+No merge, no lane-stack restart, never :3001/:5174, no npm install. No
+UI change. The DONE marker names the step-2 commit (the last code change;
+HEAD~1 once this report append lands as the step-3 commit).
+Implementation complete; acceptance (adversarial + browser re-gate)
+remains the independent reviewer's lane.
+
+TARGET1-C11 DONE 58401b99b7c362466a33de1be54fbcdaab98c688
+
+Correction (c13-D1) — advc-c12 review identified a false claim: the doc
+comment and in-code comment stated the `slotValue === undefined` clause
+arm is "byte-identical to cycle 9". That is incorrect — the same commit
+(cycle 11, 58401b99) changed the splitter regex (:154), which alters
+clause segmentation on the undefined path. Measured:
+  csk("Mix 1.5 uL",'mix','volume',undefined): true @0fa1d58a -> false @HEAD (dead path)
+  csk("Add 200 uL of DMEM to A1 to mix",'mix','volume',undefined): true @0fa1d58a -> false @HEAD (dead path)
+The corrected statements:
+  1. When `slotValue` is provided, the value-check restricts the clause
+     arm to VALUE-MATCH (true, unchanged).
+  2. When `slotValue` is undefined, the added value-check is inert but
+     clause segmentation differs from c9 (splitter changed — c12 D1).
+     A decimal can fragment via the no-whitespace punctuation arm.
+  3. This path is unreachable from production: the sole caller
+     (demoteUnstatedQuantities.ts:236) always computes and supplies a
+     defined `slotValue` from the slot's value. grep -rn clauseStatesKind
+     server/src/ai/*.test.ts = 0 — no test exercises this branch; the
+     branch is on the material-less arm, not the labeled extractQuantity path.
+  4. The report's cycle-11 attribution of D1 closure partly to the
+     splitter overstates it: with `slotValue` defined, the value-dependent
+     clause arm alone closes D1; the splitter is inert for production
+     outcomes (c12 O1).
+Byte-identity claim corrected. Docs and comments updated accordingly.
+
+L2-CLARIFY-TARGET-1 c13-DOCFIX DONE e00e7fad
+
