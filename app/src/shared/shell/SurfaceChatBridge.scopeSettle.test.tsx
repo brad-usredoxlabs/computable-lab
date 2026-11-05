@@ -117,17 +117,20 @@ describe('SurfaceChatBridge — scope-settle pin matrix (unit 3: P2/P3/P5/P6)', 
     await act(async () => { void sink.chat!.sendPrompt('hold me') })
     await flush()
     expect(posts()).toHaveLength(0)               // NOTHING written under provisional
+    // Picker methods during provisional hold — assert they write nothing
+    await act(async () => { await sink.chat!.listThreads!() })
+    await act(async () => { sink.chat!.newThread!() })
+    await act(async () => { sink.chat!.switchThread!('switched-id') })
+    await flush()
+    expect(Object.keys(map())).toEqual([])         // no no-scope key minted by picker
+    expect(gets()).toHaveLength(0)                 // no scope-less list GET
+    // Scope settles — the ONLY subsequent GET carries the settled scope
     await act(async () => { vi.advanceTimersByTime(50) }); await flush()  // scope arrives
     const g = gets(); expect(g).toHaveLength(1)
     expect(g[0]!.h['x-cl-thread-scope']).toBe('EVG-1')
     expect(Object.keys(map())).toEqual(['EVG-1'])
     const p = posts(); expect(p.length).toBeGreaterThanOrEqual(1)
     for (const x of p) expect(x.h['x-cl-thread-scope']).toBe('EVG-1')  // no scope-less write
-    // KNOWN GAP (escalated, report unit 3): the picker's listThreads READ is
-    // not scope-gated by the unit-2 gate (a read path, not a write), so a
-    // picker-open still mints the no-scope key + a scope-less list GET. C-4
-    // binds WRITES, so this pin asserts the writes only; the read gap is
-    // reported, not force-fixed here (unit 3 = "no hook changes").
   })
 
   it('P6 (guard, §3a hint): project-deck-tab with scopePending={false} settles on the first flush — GET with the base scope, one map key, NO settle timer armed (zero added latency)', async () => {
