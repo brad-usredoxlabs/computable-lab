@@ -118,6 +118,15 @@ function deckSliceFixture(): DeckSliceBundle {
   }
 }
 
+// A deck slice with NO scope key at all — the shipped shape for an unsaved deck
+// (`scope?: string` is ABSENT when unsaved; key omission is required under
+// exactOptionalPropertyTypes).
+function scopelessDeckSliceFixture(): DeckSliceBundle {
+  const rest = { ...deckSliceFixture() }
+  delete rest.scope
+  return rest
+}
+
 // A deck publisher that renders BEFORE the registrar in the tree — the
 // well-ordered case (the ref is populated by the registrar's first render).
 // Used by the parity leg.
@@ -260,7 +269,7 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
       }, [])
       usePublishSurfaceSlice(
         'deck',
-        loaded ? deckSliceFixture() : ({ ...deckSliceFixture(), scope: undefined }),
+        loaded ? deckSliceFixture() : scopelessDeckSliceFixture(),
       )
       return null
     }
@@ -324,7 +333,7 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     // is armed; the loud-fail throw is untouched (the slice IS published — only
     // its scope value is absent), so the status alone decides.
     function ScopelessDeckPublisher() {
-      usePublishSurfaceSlice('deck', { ...deckSliceFixture(), scope: undefined })
+      usePublishSurfaceSlice('deck', scopelessDeckSliceFixture())
       return null
     }
     render(
