@@ -12,3 +12,30 @@ Changed files:
 Commit: 1c2a66ead472cd21da8bea208f16f71bdde38ec6
 
 L2-CLARIFY-TARGET-1-D2 UNIT D2-2 DONE 1c2a66ead472cd21da8bea208f16f71bdde38ec6
+
+--- D2-fix2 (advc delta-review defect 1, binding fallback) ---
+
+Change: PreviewActionBar.tsx line 152 — added `&& pendingDecisions.length === 0` to
+chatCommitSurface so Accept stays visible when hasPreview is true but there are
+unsigned ontology terms. The card's Apply hardcodes termDecisions: {} so it would
+be permanently blocked; the deck bar's Accept is the only commit path.
+
+Ruling 24f95c54 fix direction (b): keep bar's Accept rendered when
+pendingDecisions.length > 0.
+
+Test changes:
+- New test leg: "keeps Accept visible when chat.hasPreview is true but ontology
+  terms need sign-off (D2-fix2 binding fallback)" — verifies Accept and Discard
+  are rendered when hasPreview=true AND pendingDecisions > 0.
+- Updated existing "hides Accept and Discard" test to use empty ontologyBindings
+  so it correctly asserts hidden state when hasPreview=true AND no pending terms.
+
+Evidence:
+- RED (before fix): 1 failed test — expected Accept button to be truthy but got null
+- GREEN (after fix): 10 passed (10 total)
+- Files changed: 2 (PreviewActionBar.tsx +4, PreviewActionBar.test.tsx +21)
+- git diff HEAD~1 --stat: 2 files changed, 24 insertions(+), 2 deletions(-)
+
+Commit: 1a4bffbf
+
+L2-CLARIFY-TARGET-1 UNIT D2-fix2 DONE 1a4bffbf
