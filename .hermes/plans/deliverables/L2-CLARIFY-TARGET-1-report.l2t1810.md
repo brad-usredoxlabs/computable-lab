@@ -857,3 +857,28 @@ remains the independent reviewer's lane.
 
 TARGET1-C11 DONE 58401b99b7c362466a33de1be54fbcdaab98c688
 
+Correction (c13-D1) — advc-c12 review identified a false claim: the doc
+comment and in-code comment stated the `slotValue === undefined` clause
+arm is "byte-identical to cycle 9". That is incorrect — the same commit
+(cycle 11, 58401b99) changed the splitter regex (:154), which alters
+clause segmentation on the undefined path. Measured:
+  csk("Mix 1.5 uL",'mix','volume',undefined): true @0fa1d58a -> false @HEAD (dead path)
+  csk("Add 200 uL of DMEM to A1 to mix",'mix','volume',undefined): true @0fa1d58a -> false @HEAD (dead path)
+The corrected statements:
+  1. When `slotValue` is provided, the value-check restricts the clause
+     arm to VALUE-MATCH (true, unchanged).
+  2. When `slotValue` is undefined, the added value-check is inert but
+     clause segmentation differs from c9 (splitter changed — c12 D1).
+     A decimal can fragment via the no-whitespace punctuation arm.
+  3. This path is unreachable from production: the sole caller
+     (demoteUnstatedQuantities.ts:236) always computes and supplies a
+     defined `slotValue` from the slot's value. The branch remains as
+     the labeled-path contract pin.
+  4. The report's cycle-11 attribution of D1 closure partly to the
+     splitter overstates it: with `slotValue` defined, the value-dependent
+     clause arm alone closes D1; the splitter is inert for production
+     outcomes (c12 O1).
+Byte-identity claim corrected. Docs and comments updated accordingly.
+
+L2-CLARIFY-TARGET-1 c13-DOCFIX DONE
+
