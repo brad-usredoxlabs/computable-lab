@@ -873,8 +873,9 @@ The corrected statements:
      A decimal can fragment via the no-whitespace punctuation arm.
   3. This path is unreachable from production: the sole caller
      (demoteUnstatedQuantities.ts:236) always computes and supplies a
-     defined `slotValue` from the slot's value. The branch remains as
-     the labeled-path contract pin.
+     defined `slotValue` from the slot's value. grep -rn clauseStatesKind
+     server/src/ai/*.test.ts = 0 — no test exercises this branch; the
+     branch is on the material-less arm, not the labeled extractQuantity path.
   4. The report's cycle-11 attribution of D1 closure partly to the
      splitter overstates it: with `slotValue` defined, the value-dependent
      clause arm alone closes D1; the splitter is inert for production
