@@ -636,4 +636,61 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     expect(draftBtn).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
   })
+
+  it('failed content-locked prime does not commit [] into page state — sync fallback still works (DEFECT 1 regression)', async () => {
+    // DEFECT 1: a failed prime resolves [] but does NOT mark resolved.
+    // The old code committed [lifecycleId] = [] into page state, which is
+    // truthy and shadows the cache forever (the ?? fallback never fires).
+    // The fix gates commit on isContentLockedSetResolved() so a failed prime
+    // leaves the lifecycle out of the map — the sync fallback still works.
+    __resetContentLockedStatesCache()
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    }
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      return { records: [], total: 0 }
+    })
+    mocked.mockGetLifecycleTerminalStates.mockResolvedValue([])
+    // Mock rejects: simulates a transport failure
+    mocked.mockGetLifecycleContentLockedStates.mockRejectedValue(new Error('Transport failure'))
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    await vi.dynamicImportSettled()
+    await new Promise((r) => setTimeout(r, 100))
+    // Seed the cache (simulating a later successful prime from another path).
+    // The fix ensures page state was NOT committed with [], so the sync
+    // fallback ?? getContentLockedStatesSync sees this seeded set.
+    seedContentLockedStates('document-controlled-signing', ['approved', 'effective'])
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(draftBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+  })
 })

@@ -15,7 +15,7 @@ import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
 import { isContentLocked } from '../shared/records/lifecycleLock';
-import { getContentLockedStatesSync, primeContentLockedStates } from '../shared/records/contentLockedStatesCache';
+import { getContentLockedStatesSync, isContentLockedSetResolved, primeContentLockedStates } from '../shared/records/contentLockedStatesCache';
 import './RecordRegistryPage.css';
 
 // Exported for the test suites: the tab/kinds DATA is the single source for
@@ -229,10 +229,10 @@ export default function RecordRegistryPage() {
       });
     });
 
-    // DEFECT 6 fix: prime content-locked states and commit resolved sets into
-    // page state so the predicate recomputes when they arrive — mirrors the
-    // terminal-states pattern. Fail-open: a rejected prime simply leaves that
-    // lifecycle out of the map (no invented policy).
+    // Prime content-locked states: gate commit on isContentLockedSetResolved so
+    // a failed prime (which resolves [] via catch) does not shadow the cache.
+    // Only genuinely resolved sets are committed — a transport failure leaves the
+    // lifecycle out of the map so the ?? sync fallback still works.
     let contentCancelled = false;
     Promise.all(
       [...pending].map(async (lifecycleId) => {
@@ -245,7 +245,12 @@ export default function RecordRegistryPage() {
       }),
     ).then((results) => {
       if (contentCancelled) return;
-      const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+      const entries = results.filter((r): r is readonly [string, string[]] => {
+        if (r === null) return false;
+        // Gate: only commit when the cache marks this lifecycle as resolved.
+        // A failed prime resolves [] but does NOT mark resolved — skip it.
+        return isContentLockedSetResolved(r[0]);
+      });
       if (entries.length === 0) return;
       setContentLockedStatesByLifecycle((prev) => {
         const next = { ...prev };
