@@ -1096,6 +1096,9 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
 
   useEffect(() => {
     if (!endpoint || !hydratedRef.current || !activeThread) return
+    // §3b site 3 / C-4: no appendThreadMessage while provisional — the settle
+    // flip re-runs this effect (messages in deps) and persists normally.
+    if (scopeStatusRef.current === 'provisional') return
     // LEG F fix run 1 (advc D1): persist into the binding the hydration
     // effect last ADVANCED — during a deferred in-flight re-key that is the
     // turn's MINTED (pre-flip) scope, so both roles of the surviving turn
@@ -1152,7 +1155,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, activeThread?.scope, activeThread?.id, messages])
+  }, [endpoint, activeThread?.scope, activeThread?.id, messages, scopeStatus])
 
 
   // ------------------------------------------------------------------
