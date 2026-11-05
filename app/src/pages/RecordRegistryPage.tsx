@@ -14,6 +14,8 @@ import type { SchemaNode } from '../browser/SchemaTree';
 import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
+import { isContentLocked } from '../shared/records/lifecycleLock';
+import { getContentLockedStatesSync, primeContentLockedStates } from '../shared/records/contentLockedStatesCache';
 import './RecordRegistryPage.css';
 
 // Exported for the test suites: the tab/kinds DATA is the single source for
@@ -188,6 +190,8 @@ export default function RecordRegistryPage() {
       if (lifecycleId && !terminalFetchedRef.current.has(lifecycleId)) pending.add(lifecycleId);
     }
     if (pending.size === 0) return;
+    // Prime the content-locked states cache in parallel with terminal states.
+    void Promise.allSettled([...pending].map((lifecycleId) => primeContentLockedStates(lifecycleId)));
     let cancelled = false;
     void Promise.all(
       [...pending].map(async (lifecycleId) => {
@@ -555,17 +559,15 @@ export default function RecordRegistryPage() {
   // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
   // In-place Save is replaced by a draft-copy; the server issues fresh
   // authorship (no inherited reviewer/approver/signature assignments).
+  const selectedLifecycleId = (selectedRecord?.payload as { lifecycleId?: string } | undefined)?.lifecycleId ?? '';
   const contentLocked =
     editorMode === 'edit' &&
-    ((selectedRecord?.payload as { state?: string } | undefined)?.state === 'approved' ||
-      (selectedRecord?.payload as { state?: string } | undefined)?.state === 'effective');
+    isContentLocked(selectedRecord?.payload as { state?: string } | undefined, getContentLockedStatesSync(selectedLifecycleId));
 
   // QMS7-6 (OQ-2 ruling A): an archived/terminal record opens READ-ONLY via
   // the SAME single data-driven predicate the list filter uses — the row is
   // lifecycle-bearing AND its lifecycle's DECLARED terminal set contains its
-  // payload.state. One mechanism, zero new state strings (bait 1). This
-  // intentionally does NOT extend to approved/effective: those stay with the
-  // existing reviewed contentLocked branch above (ruling: do not touch it).
+  // payload.state. One mechanism, zero new state strings (bait 1).
   // Server-side the same content edit already fails 409 CONTROLLED_RECORD_LOCKED
   // (RecordHandlers.ts, QMS7-4) — the UI simply does not offer a doomed Save.
   const terminalLocked =
