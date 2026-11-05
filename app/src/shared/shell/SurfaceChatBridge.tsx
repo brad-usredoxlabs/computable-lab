@@ -270,12 +270,12 @@ function SurfaceChatRegistrar({ host, base, scopePending }: SurfaceChatBridgePro
     entry.optional_providers.includes('deck')
   const expectsScope = declaresDeck && (scopePending ?? true)
   const deckScope = deckSlice?.scope
-  // Provisional only while the slice has NOT published yet. Once the slice
-  // publishes (even without scope), the answer is settled — the deck is loaded
-  // and whatever scope it carries is final. A cold-mount transient window is
-  // bounded by the deadline; an unsaved deck publishes immediately with no
-  // scope, which must settle on the first flush.
-  const scopeUndecided = expectsScope && deckSlice == null
+  // Provisional only while the slice's SCOPE VALUE is absent. A published-but-scope-less
+  // slice is STILL provisional (DeckChatSlice publishes the bundle before
+  // state.eventGraphId resolves — the slice's PRESENCE is never the signal).
+  // A cold-mount transient window is bounded by the deadline; the scope value
+  // arriving or the deadline firing both settle.
+  const scopeUndecided = expectsScope && !deckScope
   const settleWindowElapsed = useScopeSettleDeadline(scopeUndecided)
   const scopeStatus: 'settled' | 'provisional' =
     scopeUndecided && !settleWindowElapsed ? 'provisional' : 'settled'
