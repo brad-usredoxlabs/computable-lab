@@ -228,7 +228,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
     const payload = {
       kind: 'controlled-document',
       id: 'DOC-DEF5',
-      state: 'approved',
+      state: 'draft',
       lifecycleId: 'doc-lifecycle',
       title: 'Test',
     }
@@ -237,21 +237,45 @@ describe('RecordEditPanel — content-locked rendering', () => {
       schemaId: 'controlled-document',
       payload,
     })
-    // Content-locked resolves quickly
-    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved'])
-    // Terminal states hangs forever — never resolves
+    // Hang BOTH halves — neither resolves, so lockPending stays true
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}))
     ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}))
 
     render(<RecordEditPanel recordId="DOC-DEF5" title="Test Document" />)
 
-    // Before lock facts fully resolve, the Save button should already be disabled
-    // (lockPending should gate it).  We check that the Save button is NOT present
-    // because contentLocked will become true from the content-locked half resolving.
+    // Wait for record load to finish (loading=false) so the Save button is rendered
+    // with useProjection=true. At this point lockPending is still true because
+    // both lock fetches are hung — the Save button must be disabled by lockPending.
+    // Deleting the `|| lockPending` wire would make this RED because Save would
+    // be present + enabled in this window.
+    await waitFor(() => expect(screen.queryByText(/Loading record/)).toBeNull())
+    const saveBtn = screen.getByTestId('record-edit-save')
+    expect(saveBtn).toBeDisabled()
+  })
+
+  it('DEFECT 5 settle: Save button enabled after lock facts resolve (unlocked)', async () => {
+    const payload = {
+      kind: 'controlled-document',
+      id: 'DOC-SETTLE',
+      state: 'draft',
+      lifecycleId: 'doc-lifecycle',
+      title: 'Test',
+    }
+    ;(apiClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordId: 'DOC-SETTLE',
+      schemaId: 'controlled-document',
+      payload,
+    })
+    // Both halves resolve to empty arrays (unlocked)
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
+
+    render(<RecordEditPanel recordId="DOC-SETTLE" title="Test Document" />)
+
+    // After lock facts settle, lockPending becomes false and Save is enabled
     await waitFor(() => {
-      const saveBtn = screen.queryByTestId('record-edit-save')
-      // Either Save is hidden (contentLocked took over) or it exists but is disabled
-      // In the lockPending scenario, contentLocked should resolve first and hide Save
-      expect(saveBtn).toBeNull()
+      const saveBtn = screen.getByTestId('record-edit-save')
+      expect(saveBtn).not.toBeDisabled()
     })
   })
 })
