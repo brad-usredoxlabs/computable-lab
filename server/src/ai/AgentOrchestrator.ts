@@ -93,6 +93,7 @@ import {
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
   partitionReadingAnswers,
+  applySoleDeckPlacement,
   scientistAnswersFromReadingAnswers,
   answeredClarificationLabelsFromBatch,
   type AcceptedShorthandBinding,
@@ -1364,6 +1365,13 @@ export function createAgentOrchestrator(
        * everything else falls through to the store lookup byte-identically.
        */
       const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      // GHOSTPAINT-1 Leg 2B: extract distinct non-empty labware ids from
+      // deck placements (the request's carrier, NOT shorthandDeckLabwares) so
+      // the fold arm can inject the sole id into a well-bearing action before
+      // compile. Zero or multiple placements write nothing.
+      const placementLabwareIds = Array.isArray(context?.deckPlacements)
+        ? context.deckPlacements.map(p => p?.labwareId).filter((v): v is string => typeof v === 'string' && v.length > 0)
+        : [];
       // REVISE-GHOST-1 (OQ-1 ruling): the conversation's accepted {label, ref}
       // bindings ride the NEXT compile as an EXACT-MATCH reuse hint (applied
       // at the ai/ seam inside compileShorthandDeterministically, BEFORE
@@ -1449,7 +1457,12 @@ export function createAgentOrchestrator(
             // the answer fold is where a binding becomes ACCEPTED.
             const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
             rememberAcceptedShorthandBindings(conversationKey, foldBindings);
-            const compiledFold = await compileShorthandDeterministically(folded.doc, {
+            // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
+            // placement's labwareId into well-bearing actions that carry no
+            // identity. The expander emits a top-level labwareId from
+            // params.labware, which the binder copies down into details.labwareId.
+            const docForCompile = applySoleDeckPlacement(folded.doc, placementLabwareIds);
+            const compiledFold = await compileShorthandDeterministically(docForCompile, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
