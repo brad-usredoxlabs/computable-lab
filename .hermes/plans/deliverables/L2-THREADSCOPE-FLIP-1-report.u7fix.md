@@ -17,7 +17,6 @@
 
 ### D3: Report marker formatting
 - D3 defect was the "UNIT unit" duplication in the exit marker line
-- The launcher contract wins: use the launcher marker format without duplication
 
 ## Verification
 
@@ -30,5 +29,4 @@ git status: only owned files modified
 - app/src/shared/hooks/useAiChat.threadscope.test.ts (D2)
 - .hermes/plans/deliverables/L2-THREADSCOPE-FLIP-1-report.u7fix.md (this report)
 
-L2-THREADSCOPE-FLIP-1 UNIT u7-fix DONE 7ec50ef3
-L2-THREADSCOPE-FLIP-1-u7fix UNIT u7-fix DONE 7ec50ef3
+L2-THREADSCOPE-FLIP-1-u7fix2 UNIT u7fix2 DONE 7ec50ef3c6858bfcd495fd3c57f81577555b01cd

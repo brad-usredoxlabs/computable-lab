@@ -227,7 +227,7 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
     posts.forEach((p) => {
       expect(p.headers?.['x-cl-thread-scope']).toBe(scope)
     })
-    // persistedIdsRef guard (filter at :1122-1124, add at :1128) prevents
+    // persistedIdsRef guard (filter at :1124-1126, add at :1130) prevents
     // re-persisting the same messages if the effect re-runs.
 
     vi.mocked(streamAssist).mockClear()
