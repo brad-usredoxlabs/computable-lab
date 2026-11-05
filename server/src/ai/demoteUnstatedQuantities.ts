@@ -231,9 +231,15 @@ export function demoteUnstatedQuantities(
           : qObj !== null && typeof qObj.value === 'number' && Number.isFinite(qObj.value)
             ? qObj.value
             : undefined;
-        const stated = label
-          ? extractQuantity(words, label)
-          : clauseStatesKind(words, verb, slotDeclaredKind(contract.name), slotValue);
+        const labelResult = label ? extractQuantity(words, label) : null;
+        // When the label-adjacency arm found an amount → STATED (keep).
+        // When the label is present but the window found nothing (e.g. whitespace
+        // mismatch between normalized label and raw turn), fall through to the
+        // clause test WITH slotValue — the VALUE-MATCH arm (value-equality)
+        // prevents over-keep of an unrelated amount.
+        // When there is no label, the full adjudicator runs (VALUE-MATCH + clause).
+        const stated = labelResult
+          ?? clauseStatesKind(words, verb, slotDeclaredKind(contract.name), slotValue);
         if (stated) continue; // the scientist stated an amount for this slot — keep it
         // Demote: strip the field and disclose.
         delete fields[fieldName];
