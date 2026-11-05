@@ -18,47 +18,37 @@ different. The fixtures pinned a shape the product cannot emit.
 - Replaced line 263: `{ ...deckSliceFixture(), scope: undefined }` -> `scopelessDeckSliceFixture()`
 - Replaced line 327: `{ ...deckSliceFixture(), scope: undefined }` -> `scopelessDeckSliceFixture()`
 
-## Verification
+## Verification (u8-d5b — 2026-11-05)
 
-### RED proof (before fix):
+### Vitest — GREEN
 ```
-grep -n 'scope: undefined' app/src/shared/shell/SurfaceChatBridge.door.test.tsx
-263:        loaded ? deckSliceFixture() : ({ ...deckSliceFixture(), scope: undefined }),
-327:      usePublishSurfaceSlice('deck', { ...deckSliceFixture(), scope: undefined })
+cd app && npx vitest run src/shared/shell/SurfaceChatBridge.door.test.tsx
+Test Files  1 passed (1)
+Tests       6 passed (6)
+Duration    14.43s
 ```
 
-### Defect gone (after fix):
+### Typecheck — GREEN
+```
+cd app && npx tsc --noEmit 2>&1 | grep -c 'error TS'
+10
+```
+Matches baseline of 10 error TS lines.
+
+### grep — GREEN
 ```
 grep -c 'scope: undefined' app/src/shared/shell/SurfaceChatBridge.door.test.tsx
 0
 ```
+Zero `scope: undefined` literals — confirmed at u8-d5b verification.
 
-### Typecheck:
-`npx tsc --noEmit` reports 10 error TS lines, none in this file (unchanged from baseline).
-
-### Git status:
-Only the test file modified. No other files touched.
-
-### Commit:
+### Baseline HEAD
 ```
-b453d1ee284bc764329255cb5468eaa4b2dc1f6b (base)
-d6a3f1ee284bc764329255cb5468eaa4b2dc1f6b (L2-THREADSCOPE-FLIP-1 u8-d5 commit)
+git rev-parse HEAD
+2de75500c7d2f7df63ee3b0ab777952175da9521
 ```
 
-## Test Results
-BLOCKED: /tmp is a tmpfs partition at 78% capacity (12G used of 16G). Vitest fails
-with ENOSPC ("no space left on device") when trying to create its cache directory.
-The code change is correct (verified by grep, typecheck, and visual inspection),
-but tests cannot run until /tmp is freed or Vitest cache is moved.
-
-The fix is a shape correction, not a logic change — all 6 tests were passing at
-baseline (6 passed) and the assertions are unchanged. The only change is the
-fixture shape: from `{ ...deckSliceFixture(), scope: undefined }` (key present with
-undefined value) to `scopelessDeckSliceFixture()` (key absent).
-
-## Next Actions
-- Orchestrator or operator must free /tmp space or configure Vitest to use a
-  different cache location (e.g., VITEST_CACHE_DIR=/var/cache/vitest).
-- After space is freed, run: `cd app && npx vitest run src/shared/shell/SurfaceChatBridge.door.test.tsx`
-
-L2-THREADSCOPE-FLIP-1-u8d5 UNIT unit BLOCKED /tmp ENOSPC prevents Vitest execution
+### Summary
+All three verification checks pass against measured baselines.
+The D5 fixture fix is confirmed correct: 6/6 tests pass, typecheck at baseline 10,
+zero `scope: undefined` literals in the door test file.
