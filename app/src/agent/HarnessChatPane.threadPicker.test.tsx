@@ -162,6 +162,17 @@ function Host({ endpoint }: { endpoint?: ApplianceEndpoint }) {
   return <HarnessChatPane />
 }
 
+/** Same as Host but accepts scopeStatus to control the provisional gate. */
+function HostWithScopeStatus({ endpoint, scopeStatus }: { endpoint?: ApplianceEndpoint; scopeStatus?: 'settled' | 'provisional' }) {
+  const chat = useAiChat({
+    aiContext,
+    ...(endpoint ? { endpoint } : {}),
+    ...(scopeStatus ? { scopeStatus } : {}),
+  })
+  useRegisterAiChat(chat, null)
+  return <HarnessChatPane />
+}
+
 const stubChat = (): UseAiChatReturn => ({
   messages: [] as ChatMessage[],
   isStreaming: false,
@@ -325,5 +336,41 @@ describe('HarnessChatPane — the thread picker (L2-THREAD-SCOPED-1 leg C)', () 
     expect(screen.queryByRole('button', { name: /new thread/i })).toBeNull()
     // The pane itself still renders (its existing chrome is untouched).
     expect(screen.getByTestId('harness-chat-pane')).toBeInTheDocument()
+  })
+
+  it('re-fetches threads when scopeStatus flips from provisional to settled (L2-THREADPICKER-REFETCH-1)', async () => {
+    // Pre-existing thread rows on the server.
+    threadContents['tid-a'] = ['Existing thread turn']
+
+    // Mount with scopeStatus='provisional' — the ref-guard blocks the fetch,
+    // so the list should be empty.
+    const { rerender } = render(
+      <AiPanelProvider>
+        <HostWithScopeStatus endpoint="browser" scopeStatus="provisional" />
+      </AiPanelProvider>,
+    )
+
+    // Picker chrome renders but shows no threads (provisional guard).
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('thread-picker')).toBeInTheDocument()
+    })
+    // The ref-guard returns [] synchronously, so no GET /threads fires.
+    expect(listCalls()).toHaveLength(0)
+
+    // Flip to 'settled' — the identity of listThreadsForChat MUST change
+    // (scopeStatus in deps), so the consumer's useEffect re-runs and fires
+    // the fetch.
+    rerender(
+      <AiPanelProvider>
+        <HostWithScopeStatus endpoint="browser" scopeStatus="settled" />
+      </AiPanelProvider>,
+    )
+
+    // A SECOND fetch fires after the settle flip.
+    await vi.waitFor(() => expect(listCalls()).toHaveLength(1))
+    // The thread rows from the settled fetch are now rendered.
+    await vi.waitFor(() =>
+      expect(screen.getByRole('option', { name: /existing thread turn/i })).toBeInTheDocument(),
+    )
   })
 })
