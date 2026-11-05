@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
 import RecordRegistryPage from './RecordRegistryPage'
 import { seedContentLockedStates, __resetContentLockedStatesCache } from '../shared/records/contentLockedStatesCache'
 
@@ -564,5 +564,135 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     const note = await screen.findByTestId('draft-revision-note')
     expect(note.textContent).toMatch(/Created draft revision DOC-NEWDRAFT from DOC-DEMO-SOP/)
     expect(note.textContent).toMatch(/signatures and approvals do not carry over/i)
+  })
+
+  it('content-locked states arriving AFTER terminal states still locks the Save button (race condition)', async () => {
+    // DEFECT 6: the terminal-states fetch settles first, triggering a
+    // re-render while the content-locked prime is still in flight.
+    // Without the fix, contentLocked reads [] and shows Save instead of
+    // "Create draft revision".
+    __resetContentLockedStatesCache()
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    }
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      return { records: [], total: 0 }
+    })
+
+    // Terminal states resolve immediately (simulating the race where they
+    // settle before content-locked states).
+    mocked.mockGetLifecycleTerminalStates.mockResolvedValue([])
+
+    // Content-locked states resolve via a deferred promise — we resolve it
+    // AFTER the terminal states, so the initial render sees an empty cache.
+    let resolveContentLocked = (() => {}) as () => void
+    const contentLockedPromise = new Promise<string[]>((resolve) => {
+      resolveContentLocked = () => resolve(['approved', 'effective'])
+    })
+    mocked.mockGetLifecycleContentLockedStates.mockReturnValue(contentLockedPromise)
+
+    // Draft-copy mock for the locked path
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+
+    // Resolve the deferred content-locked states AFTER the UI has rendered
+    // with the terminal states but before the content-locked prime settled.
+    await act(async () => {
+      resolveContentLocked()
+      await vi.dynamicImportSettled()
+    })
+
+    // The record IS approved → it should be content-locked.
+    // The "Create draft revision" button must be visible (not Save).
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(draftBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+  })
+
+  it('failed content-locked prime does not commit [] into page state — sync fallback still works (DEFECT 1 regression)', async () => {
+    // DEFECT 1: a failed prime resolves [] but does NOT mark resolved.
+    // The old code committed [lifecycleId] = [] into page state, which is
+    // truthy and shadows the cache forever (the ?? fallback never fires).
+    // The fix gates commit on isContentLockedSetResolved() so a failed prime
+    // leaves the lifecycle out of the map — the sync fallback still works.
+    __resetContentLockedStatesCache()
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    }
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      return { records: [], total: 0 }
+    })
+    mocked.mockGetLifecycleTerminalStates.mockResolvedValue([])
+    // Mock rejects: simulates a transport failure
+    mocked.mockGetLifecycleContentLockedStates.mockRejectedValue(new Error('Transport failure'))
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    await act(async () => {
+      await vi.dynamicImportSettled()
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    // Seed the cache (simulating a later successful prime from another path).
+    // The fix ensures page state was NOT committed with [], so the sync
+    // fallback ?? getContentLockedStatesSync sees this seeded set.
+    seedContentLockedStates('document-controlled-signing', ['approved', 'effective'])
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(draftBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
   })
 })
