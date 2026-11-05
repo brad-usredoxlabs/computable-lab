@@ -182,20 +182,6 @@ function RegistrarOnly({ scopeStatus }: { scopeStatus?: 'settled' | 'provisional
 }
 
 /**
- * Sibling-topology wrapper: scopeStatus lives in state so AiPanelProvider
- * does NOT re-render when it changes. The only thing that changes is the
- * RegistrarOnly — exactly the path the real app takes.
- */
-function SiblingScopeStatusWrapper({ scopeStatus }: { scopeStatus?: 'settled' | 'provisional' }) {
-  return (
-    <AiPanelProvider>
-      <RegistrarOnly scopeStatus={scopeStatus} />
-      <HarnessChatPane />
-    </AiPanelProvider>
-  )
-}
-
-/**
  * Registrar that holds scopeStatus in its own state — the parent (AiPanelProvider)
  * is NOT re-rendered when scopeStatus flips.
  */
