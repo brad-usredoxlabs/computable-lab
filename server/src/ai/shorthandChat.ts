@@ -1175,6 +1175,71 @@ function entryLabelCarrier(entry: unknown, label: string): EntryLabelCarrier | n
 }
 
 /**
+ * GHOSTPAINT-1 Leg 2B: applySoleDeckPlacement helper.
+ *
+ * When a folded document carries an action that names wells but has no labware
+ * identity, and the deck placements hold exactly one distinct non-empty
+ * labwareId, inject that id into the action's labware slot BEFORE the compile.
+ * The existing expander reads params.labware (simpleVerbs.ts:526) and emits a
+ * TOP-LEVEL labwareId, which the existing binder copies DOWN into
+ * details.labwareId (shorthandChat.ts:378-391).
+ *
+ * Zero or multiple placements write nothing. Actions that already carry
+ * labware, labware_id (in params), or labwareHint are never touched.
+ *
+ * PURE: returns a structuredClone-fresh doc; never mutates the argument.
+ */
+export function applySoleDeckPlacement(
+  doc: ScientistIntent,
+  placementLabwareIds: readonly string[],
+  deck?: readonly DeckLabwareSummary[],
+): ScientistIntent {
+  const distinct = new Set(
+    placementLabwareIds.filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+  if (distinct.size !== 1) return structuredClone(doc);
+  const sole = distinct.values().next().value;
+  if (!sole) return structuredClone(doc);
+
+  // Resolve the sole placement id against the deck: if a deck entry has
+  // labwareId === sole, inject the NAME (the compile's name-only lookup
+  // then resolves it back to that recordId — parity with the unfolded path).
+  // Unresolved placement id => no injection, never an unresolvable token.
+  let injectName: string | undefined;
+  if (Array.isArray(deck) && deck.length > 0) {
+    const deckEntry = deck.find(lw => typeof lw?.labwareId === 'string' && lw.labwareId === sole);
+    if (deckEntry && typeof deckEntry.name === 'string' && deckEntry.name.length > 0) {
+      injectName = deckEntry.name;
+    }
+  }
+
+  const out = structuredClone(doc);
+  for (const action of out.actions) {
+    const a = action as unknown as Record<string, unknown>;
+    // Guard: action must name wells
+    const hasWells = Array.isArray(a.sourceWells) && a.sourceWells.length > 0
+      || typeof a.sourceWells === 'string' && a.sourceWells.length > 0
+      || Array.isArray(a.targetWells) && a.targetWells.length > 0
+      || typeof a.targetWells === 'string' && a.targetWells.length > 0;
+    if (!hasWells) continue;
+    // Guard: action must carry NO labware identity
+    if (typeof a.labware === 'string' && a.labware.length > 0) continue;
+    if (typeof a.labwareHint === 'string' && a.labwareHint.length > 0) continue;
+    const params = a.params as Record<string, unknown> | undefined;
+    if (params && typeof params.labware_id === 'string' && params.labware_id.length > 0) continue;
+    // D4: also skip when params.labware is already set (the expander reads it)
+    if (params && typeof params.labware === 'string' && params.labware.length > 0) continue;
+    if (injectName) {
+      // Inject: the labware slot is optional; direct assignment on a fresh clone
+      // is safe under exactOptionalPropertyTypes (the clone has no pre-existing
+      // undefined labware).
+      a.labware = injectName;
+    }
+  }
+  return out;
+}
+
+/**
  * Fold clarification answers onto the held intent DETERMINISTICALLY. An answer
  * maps 1:1 when its requestId is the join id of a held unresolved fact AND the
  * fact carries an actionLocation (actionIndex + argument) AND the answer names

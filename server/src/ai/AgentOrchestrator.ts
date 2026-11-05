@@ -93,10 +93,12 @@ import {
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
   partitionReadingAnswers,
+  applySoleDeckPlacement,
   scientistAnswersFromReadingAnswers,
   answeredClarificationLabelsFromBatch,
   type AcceptedShorthandBinding,
   type AnsweredSlot,
+  type ShorthandCompileDeps,
 } from './shorthandChat.js';
 // L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the pre-compile EMISSION demotion
 // (AI path, upstream of the compile). Strips a present declared-quantity slot
@@ -108,6 +110,7 @@ import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
 // foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
 import { stringify as stringifyShorthandYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
@@ -1094,6 +1097,26 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   fetch?: typeof fetch;
 }
 
+
+/**
+ * GHOSTPAINT-1 Leg 2B: exported helper that wraps the fold-seam compile.
+ * Applies applySoleDeckPlacement to inject the sole deck placement's labwareId
+ * into well-bearing actions, then compiles deterministically.
+ * Shared by production (run() fold path) and tests.
+ * The optional deck parameter enables resolving the placement id to a deck
+ * name before injection so the compile's name-only lookup resolves it back
+ * to the record id — parity with the unfolded path (gp-fix4).
+ */
+export async function compileFoldedShorthand(
+  doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
+  placementLabwareIds: readonly string[],
+  deps: ShorthandCompileDeps,
+  deckLabwares?: readonly import('../ai/shorthandChat.js').DeckLabwareSummary[],
+): Promise<ScientistIntentCompileResult | null> {
+  const docForCompile = applySoleDeckPlacement(doc, placementLabwareIds, deckLabwares);
+  return compileShorthandDeterministically(docForCompile, deps);
+}
+
 export function createAgentOrchestrator(
   inferenceClient: InferenceClient,
   toolBridge: ToolBridge,
@@ -1364,6 +1387,15 @@ export function createAgentOrchestrator(
        * everything else falls through to the store lookup byte-identically.
        */
       const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      // GHOSTPAINT-1 Leg 2B: extract distinct non-empty labware ids from
+      // deck placements (the request's carrier, NOT shorthandDeckLabwares) so
+      // the fold arm can inject the sole id into a well-bearing action before
+      // compile. Zero or multiple placements write nothing.
+      // gp-fix4: shorthandDeckLabwares also flows to compileFoldedShorthand so
+      // applySoleDeckPlacement resolves the placement id to the deck name.
+      const placementLabwareIds = Array.isArray(context?.deckPlacements)
+        ? context.deckPlacements.map(p => p?.labwareId).filter((v): v is string => typeof v === 'string' && v.length > 0)
+        : [];
       // REVISE-GHOST-1 (OQ-1 ruling): the conversation's accepted {label, ref}
       // bindings ride the NEXT compile as an EXACT-MATCH reuse hint (applied
       // at the ai/ seam inside compileShorthandDeterministically, BEFORE
@@ -1449,7 +1481,13 @@ export function createAgentOrchestrator(
             // the answer fold is where a binding becomes ACCEPTED.
             const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
             rememberAcceptedShorthandBindings(conversationKey, foldBindings);
-            const compiledFold = await compileShorthandDeterministically(folded.doc, {
+            // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
+            // placement's labwareId into well-bearing actions that carry no
+            // identity. The expander emits a top-level labwareId from
+            // params.labware, which the binder copies down into details.labwareId.
+            // gp-fix4: forward the deck so applySoleDeckPlacement can resolve
+            // the raw placement id to the deck name before injection.
+            const compiledFold = await compileFoldedShorthand(folded.doc, placementLabwareIds, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
@@ -1474,7 +1512,7 @@ export function createAgentOrchestrator(
                 const answeredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
                 return answeredLabels.length > 0 ? { answeredClarificationLabels: answeredLabels } : {};
               })(),
-            });
+            }, shorthandDeckLabwares);
             if (compiledFold) {
               // WELLSET-RESOLVER-1 (the writer leg, fold arm): persist the
               // recompile's snapshotAfter back to the cache (the same
