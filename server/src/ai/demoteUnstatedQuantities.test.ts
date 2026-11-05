@@ -367,3 +367,65 @@ describe('demoteUnstatedQuantities — material-less DEFAULT-KEEP (cycle 9 unit 
     expect('volume' in action).toBe(false);
   });
 });
+
+/**
+ * cycle 11 (advc-c10 §9, both residuals pinned pre-existing at 80649c80):
+ * over-KEEP of a number NOT in the turn is a defect (orchestrator
+ * acceptance criterion). Two arms close it: (1) the clause splitter extends
+ * to the c10 §4 probe shapes — case-insensitive `and`/`then` + `plus`/`to`
+ * junctions, `&`, tab, and no-whitespace sentence punctuation; (2) the
+ * material-less CLAUSE arm becomes value-DEPENDENT — a same-kind amount in
+ * the verb's clause keeps the slot ONLY when its parsed value EQUALS the
+ * slot value (the value-match restricted to the verb clause; the whole-turn
+ * VALUE-MATCH arm already does the rest). P-1 = value-equal keep guard;
+ * P-2 = the value-independent clause arm is dead; P-3 = each splitter
+ * variant shape no longer over-KEeps an unrelated amount (RED at HEAD, all
+ * demoted=0); P-4 = the K1/K2/P-a..P-d + cycle-9 e1/e2/e3/a2/a3/a6 pins
+ * above pass UNEDITED (the matrix run, not a new assertion).
+ */
+describe('demoteUnstatedQuantities — splitter variants + value-dependent clause arm (cycle 11, c10 D1/D2)', () => {
+  it('P-1: a slot value EQUAL to a same-kind clause amount KEEPS (value-equal clause arm; both kinds)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Mix 50 uL');
+    expect(r.demoted.length).toBe(0);
+    expect(r.notes.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect(action['volume']).toBe(50);
+    const rc = demoteUnstatedQuantities(mixDocSlots({ cycles: 3 }), 'Mix for 3 cycles');
+    expect(rc.demoted.length).toBe(0);
+    expect((rc.doc.actions[0]! as unknown as Record<string, unknown>)['cycles']).toBe(3);
+  });
+
+  it('P-2: a slot value NOT equal to ANY amount in the turn is DEMOTED even when the verb clause carries a different same-kind amount (value-independent clause arm killed)', () => {
+    // c10 §4 probe: "Mix 75 uL" kept volume:50 / 999 / 0.5 at HEAD.
+    for (const v of [50, 999, 0.5]) {
+      const r = demoteUnstatedQuantities(mixDocSlots({ volume: v }), 'Mix 75 uL');
+      expect(r.demoted.length, `volume:${v}`).toBe(1);
+      expect(r.demoted[0]!.action, `volume:${v}`).toBe('mix');
+      expect(r.demoted[0]!.argument, `volume:${v}`).toBe('volume');
+      const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+      expect('volume' in action, `volume:${v}`).toBe(false);
+    }
+  });
+
+  it('P-3: each splitter variant shape (to/plus/& connectors, capital AND/Then, tab, no-whitespace sentence) no longer over-KEEPS an unrelated amount', () => {
+    // c10 §4 probe table verbatim — slot volume:50 is NOT in any of these
+    // turns; at HEAD each over-KEPT (demoted=0).
+    const words = [
+      'Add 200 uL of DMEM to A1 to mix',
+      'Add 200 uL of DMEM to A1 plus mix',
+      'Add 200 uL of DMEM to A1 & mix',
+      'Add 200 uL of DMEM to A1.mix',
+      'Add 200 uL of DMEM to A1 AND mix',
+      'Add 200 uL of DMEM to A1 Then mix',
+      'Add 200 uL of DMEM to A1\tmix',
+    ];
+    for (const w of words) {
+      const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), w);
+      expect(r.demoted.length, w).toBe(1);
+      expect(r.demoted[0]!.action, w).toBe('mix');
+      expect(r.demoted[0]!.argument, w).toBe('volume');
+      const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+      expect('volume' in action, w).toBe(false);
+    }
+  });
+});
