@@ -191,7 +191,10 @@ export default function RecordRegistryPage() {
     }
     if (pending.size === 0) return;
     // Prime the content-locked states cache in parallel with terminal states.
-    void Promise.allSettled([...pending].map((lifecycleId) => primeContentLockedStates(lifecycleId)));
+    // Fail-open: tests may lack the mock, server may be unreachable.
+    void Promise.allSettled([...pending].map(async (lifecycleId) => {
+      try { await primeContentLockedStates(lifecycleId); } catch { /* fail open */ }
+    }));
     let cancelled = false;
     void Promise.all(
       [...pending].map(async (lifecycleId) => {
