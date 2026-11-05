@@ -47,8 +47,8 @@ actions:
     targetWells: [A1]
 `;
 
-/** Deck used in all tests — name matches the labwareId so deckLabwareExactMatches resolves by name. */
-const DECK = [{ labwareId: 'LBW-96-1', name: 'LBW-96-1', slot: 'A1' }];
+/** Deck used in all tests — production shape (name !== labwareId). */
+const DECK = [{ labwareId: 'LBW-96-1', name: 'Plate Alpha', slot: 'A1' }];
 
 /** Seed records for the mock store — material resolution. */
 const SEED_RECORDS = [

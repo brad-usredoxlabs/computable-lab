@@ -31,7 +31,7 @@ actions:
     targetWells: [E2:H5]
 `;
 
-const DECK = [{ labwareId: 'LBW-96-1', name: 'LBW-96-1', slot: 'A1' }];
+const DECK = [{ labwareId: 'LBW-96-1', name: 'Plate Alpha', slot: 'A1' }];
 
 const SEED_RECORDS = [
   {
