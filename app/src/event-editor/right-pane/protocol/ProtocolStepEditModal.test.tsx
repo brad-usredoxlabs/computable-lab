@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ProtocolStepEditModal } from './ProtocolStepEditModal'
 import { apiClient } from '../../../shared/api/client'
-import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
+import { seedContentLockedStates, __resetContentLockedStatesCache } from '../../../shared/records/contentLockedStatesCache'
 
 const richDocument = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Mix gently.', marks: [{ type: 'bold' }] }] }] }
 const editor = vi.hoisted(() => ({
@@ -14,7 +14,7 @@ vi.mock('@tiptap/react', () => ({
   EditorContent: () => <div>Rich editor</div>,
 }))
 vi.mock('../../../editor/taptab/RichTextToolbar', () => ({ RichTextToolbar: () => <div>Formatting toolbar</div> }))
-vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
+vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn(), getLifecycleContentLockedStates: vi.fn() } }))
 
 // Seed the cache so content-locked gates resolve against the declared set
 seedContentLockedStates('document-controlled-signing', ['effective'])
@@ -112,5 +112,19 @@ describe('ProtocolStepEditModal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('controlled protocol is locked')
     expect(screen.getByRole('button', { name: 'Save step' })).toBeDisabled()
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
+  })
+
+  it('primes content-lock cache via getLifecycleContentLockedStates when the record carries lifecycleId', async () => {
+    // Reset cache so the fetch wire is exercised, not a stale cache hit.
+    __resetContentLockedStatesCache()
+    const lifecycleId = 'document-controlled-signing'
+    const payloadWithLifecycle = { ...payload, lifecycleId }
+    vi.mocked(apiClient.getRecord).mockResolvedValue({ ...record, payload: payloadWithLifecycle } as never)
+    vi.mocked(apiClient.getLifecycleContentLockedStates).mockResolvedValue(['effective'] as never)
+    showEditor()
+    // Wait for the async load effect to complete (fetches record + primes cache).
+    await screen.findByLabelText('Step name')
+    // The fetch must fire with the record's lifecycleId.
+    expect(apiClient.getLifecycleContentLockedStates).toHaveBeenCalledWith(lifecycleId)
   })
 })

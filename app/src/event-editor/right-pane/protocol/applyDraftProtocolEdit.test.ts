@@ -18,10 +18,13 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 const getRecordMock = vi.fn()
 const updateRecordMock = vi.fn()
 
+const getLifecycleContentLockedStatesMock = vi.fn()
+
 vi.mock('../../../shared/api/client', () => ({
   apiClient: {
     getRecord: (...args: unknown[]) => getRecordMock(...args),
     updateRecord: (...args: unknown[]) => updateRecordMock(...args),
+    getLifecycleContentLockedStates: (...args: unknown[]) => getLifecycleContentLockedStatesMock(...args),
   },
 }))
 
@@ -31,7 +34,7 @@ import { ApiError } from '../../../shared/api/errors'
 // LEG 2b-i (additive priming only): the sync gates now read the declared
 // content-locked set from the shared cache; prime it so this suite's
 // lock-gate path stays covered by the same declared set.
-import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
+import { seedContentLockedStates, __resetContentLockedStatesCache } from '../../../shared/records/contentLockedStatesCache'
 
 beforeAll(() => {
   seedContentLockedStates('document-controlled-signing', ['effective'])
@@ -240,5 +243,23 @@ describe('applyDraftProtocolEdit (W2-9 T3)', () => {
     expect(e).toBeInstanceOf(Error)
     expect((e as Error).message).toMatch(/no candidate at candidates\[5\]/)
     expect(updateRecordMock).not.toHaveBeenCalled()
+  })
+
+  it('primes the content-lock cache via getLifecycleContentLockedStates when the draft body carries lifecycleId', async () => {
+    // Reset so the cache is unprimed — the fail-closed gate would throw
+    // 'Lock status ... unavailable' if nothing primes it before applyOps.
+    __resetContentLockedStatesCache()
+    const payloadWithLifecycle = { ...xdrPayload() }
+    ;(payloadWithLifecycle.candidates[0].draft as Record<string, unknown>).lifecycleId = 'document-controlled-signing'
+    getRecordMock.mockResolvedValue({ ...xdrEnvelope(), payload: payloadWithLifecycle })
+    getLifecycleContentLockedStatesMock.mockResolvedValue(['effective'] as never)
+    const outcome = await applyDraftProtocolEdit(XDR_ID, 0, [
+      { op: 'step_update', stepId: 'step-lyse', label: 'Lyse samples (bench wording)' },
+    ])
+    // The fetch must have fired with the draft's lifecycleId.
+    expect(getLifecycleContentLockedStatesMock).toHaveBeenCalledWith('document-controlled-signing')
+    // The edit must still land (the gate does not block when primed).
+    expect(outcome.wrote).toBe(true)
+    expect(updateRecordMock).toHaveBeenCalledTimes(1)
   })
 })
