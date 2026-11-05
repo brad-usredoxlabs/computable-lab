@@ -263,7 +263,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               <button
                 type="submit"
                 className="record-create-panel__btn record-create-panel__btn--primary"
-                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending || false && contentLockedUnresolved}
+                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending || contentLockedUnresolved}
                 data-testid="record-edit-save"
               >
                 {isSaving ? 'Saving…' : 'Save'}
