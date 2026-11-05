@@ -48,7 +48,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
       ?? state.labwares[previewPlacement.labwareId]
       ?? null
     : null
-  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview, [...new Set(state.placements.map((p) => p.labwareId))]), [state.preview, state.placements])
   const committedAffected =
     placement != null && previewIndex.byLabware.has(placement.labwareId)
   // L2-SUITE-A-uifix1 D4: the per-well footprint DATA source — committed

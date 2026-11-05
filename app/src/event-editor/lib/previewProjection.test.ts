@@ -35,7 +35,7 @@ describe('buildPreviewWellIndex status layering', () => {
     const index = buildPreviewWellIndex(preview([
       taggedEvent('e1', 'past'),
       taggedEvent('e2', 'current'),
-    ]))
+    ]), [])
     expect(index.byLabware.get('plate-1')).toEqual(new Set(['A1', 'B1']))
     const status = previewStepStatusForLabware(index, 'plate-1')
     expect(status.get('A1')).toBe('current') // current wins
@@ -47,7 +47,7 @@ describe('buildPreviewWellIndex status layering', () => {
       // past touches A1; current also touches A1
       { ...taggedEvent('e1', 'past'), details: { labwareId: 'plate-1', wells: ['A1'] } },
       { ...taggedEvent('e2', 'current'), details: { labwareId: 'plate-1', wells: ['A1'] } },
-    ] as unknown as PlateEvent[]))
+    ] as unknown as PlateEvent[]), [])
     const status = previewStepStatusForLabware(index, 'plate-1')
     expect(status.get('A1')).toBe('current')
     expect(status.get('A1')).not.toBe('past')
@@ -56,13 +56,13 @@ describe('buildPreviewWellIndex status layering', () => {
   it('produces an empty status map for a labware with no status tag', () => {
     const index = buildPreviewWellIndex(preview([
       { eventId: 'e1', event_type: 'transfer', details: { labwareId: 'plate-1', wells: ['A1'] } } as unknown as PlateEvent,
-    ]))
+    ]), [])
     expect(index.statusByLabware.size).toBe(0)
     expect(previewStepStatusForLabware(index, 'plate-1').size).toBe(0)
   })
 
   it('returns an empty status map for unknown labware', () => {
-    const index = buildPreviewWellIndex(null)
+    const index = buildPreviewWellIndex(null, [])
     expect(previewStepStatusForLabware(index, 'missing').size).toBe(0)
   })
 })

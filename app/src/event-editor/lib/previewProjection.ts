@@ -1,6 +1,7 @@
 import { getAffectedWells } from '../../types/events'
 import type { PlateEvent } from '../../types/events'
 import type { WellId } from '../../types/plate'
+import { resolvePlacedVesselAttribution } from '../../graph/lib/placedVesselAttribution'
 import type { EventEditorPlacement } from '../types'
 import type { EventEditorPreview } from '../EventEditorContext'
 
@@ -25,7 +26,10 @@ export interface PreviewWellIndex {
 
 const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
 
-export function buildPreviewWellIndex(preview: EventEditorPreview | null): PreviewWellIndex {
+export function buildPreviewWellIndex(
+  preview: EventEditorPreview | null,
+  placedLabwareIds: readonly string[],
+): PreviewWellIndex {
   const byLabware = new Map<string, Set<WellId>>()
   const eventsByLabware = new Map<string, PlateEvent[]>()
   const statusByLabware = new Map<string, Map<WellId, 'current' | 'past'>>()
@@ -53,6 +57,29 @@ export function buildPreviewWellIndex(preview: EventEditorPreview | null): Previ
           // 'current' < 'past' so the live step always wins the attribute.
           if ((statusMap.get(w) ?? 'past') >= status) statusMap.set(w, status)
         }
+      }
+    }
+    // GHOSTPAINT1 Unit 1: when the event has wells but NO explicit labware
+    // references, attribute to the SOLE placed vessel via the shared helper.
+    if (labwareIds.length === 0 && wells.length > 0) {
+      const vessel = resolvePlacedVesselAttribution(labwareIds, placedLabwareIds)
+      if (vessel) {
+        if (!byLabware.has(vessel)) byLabware.set(vessel, new Set())
+        const set = byLabware.get(vessel)!
+        let statusMap: Map<WellId, 'current' | 'past'> | undefined
+        if (status) {
+          if (!statusByLabware.has(vessel)) statusByLabware.set(vessel, new Map())
+          statusMap = statusByLabware.get(vessel)!
+        }
+        for (const w of wells) {
+          set.add(w)
+          if (statusMap && status) {
+            // 'current' < 'past' so the live step always wins the attribute.
+            if ((statusMap.get(w) ?? 'past') >= status) statusMap.set(w, status)
+          }
+        }
+        if (!eventsByLabware.has(vessel)) eventsByLabware.set(vessel, [])
+        eventsByLabware.get(vessel)!.push(event)
       }
     }
   }

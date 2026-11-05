@@ -169,7 +169,7 @@ export function LabwareFocus() {
     )
   }, [labware, state.labwares, state.events, state.preview])
 
-  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview, [...new Set(state.placements.map((p) => p.labwareId))]), [state.preview, state.placements])
   const previewWells = useMemo(
     () =>
       labware ? new Set<WellId>(previewWellsForLabware(previewIndex, labware.labwareId)) : EMPTY_SET,
