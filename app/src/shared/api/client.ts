@@ -4680,6 +4680,25 @@ export const apiClient = {
   },
 
   /**
+   * L1-RECORD-LOCK-GUARD (LEG2a): lifecycle-scoped content-locked-state facts
+   * (server echo of the lifecycle YAML); same endpoint + 404 -> [] as the
+   * terminal-states accessor. Typed accessor only — no policy, no fallback.
+   */
+  async getLifecycleContentLockedStates(lifecycleId: string): Promise<string[]> {
+    try {
+      const response = await request<{ contentLockedStates?: string[] }>(
+        `/lifecycle/${encodeURIComponent(lifecycleId)}/transitions`,
+      )
+      return response.contentLockedStates ?? []
+    } catch (error) {
+      if (ApiError.isApiError(error) && error.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
+  /**
    * Search records by query and kinds.
    * Calls POST /ai/search-records with { query, kinds }.
    * Returns combined local and web (Exa) search results.
