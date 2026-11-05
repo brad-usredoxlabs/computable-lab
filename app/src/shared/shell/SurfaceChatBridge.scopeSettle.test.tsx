@@ -123,7 +123,7 @@ describe('SurfaceChatBridge — scope-settle pin matrix (unit 3: P2/P3/P5/P6)', 
     await act(async () => { sink.chat!.switchThread!('switched-id') })
     await flush()
     expect(Object.keys(map())).toEqual([])         // no no-scope key minted by picker
-    expect(gets()).toHaveLength(0)                 // no scope-less list GET
+    expect(io()).toHaveLength(0)                 // no thread call at all — the LIST GET included
     // Scope settles — the ONLY subsequent GET carries the settled scope
     await act(async () => { vi.advanceTimersByTime(50) }); await flush()  // scope arrives
     const g = gets(); expect(g).toHaveLength(1)
