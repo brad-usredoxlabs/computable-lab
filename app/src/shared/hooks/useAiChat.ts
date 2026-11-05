@@ -1095,11 +1095,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         console.warn('Failed to hydrate AI thread', err)
       })
       .finally(() => {
-        if (!cancelled) hydratedRef.current = true
-        // Bump hydrationSeq so the sync effect re-runs and can persist any
-        // in-memory messages that arrived during the GET. This is the fix for
-        // the unobservable completion when the thread is empty (D1 / bait #4).
-        setHydrationSeq((n) => n + 1)
+        if (!cancelled) {
+          hydratedRef.current = true
+          // Bump hydrationSeq so the sync effect re-runs and can persist any
+          // in-memory messages that arrived during the GET. This is the fix for
+          // the unobservable completion when the thread is empty (D1 / bait #4).
+          setHydrationSeq((n) => n + 1)
+        }
       })
     return () => {
       cancelled = true
