@@ -133,8 +133,10 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
  *  CLAUSE naming the action's verb carries an amount-with-unit of `kind`,
  *  and when `slotValue` is provided that amount's parsed value EQUALS
  *  `slotValue` (the value-INDEPENDENT clause arm over-KEPT a not-in-turn
- *  number — c10 D2; with no `slotValue` the clause arm is byte-identical to
- *  the c9 any-same-kind behavior). Clause boundary (c8 D2 + c10 D1):
+ *  number — c10 D2; with no `slotValue` the added value-check is inert
+ *  but clause segmentation differs from c9 (splitter changed — c12 D1);
+ *  that path is unreachable from production (sole caller always supplies
+ *  `slotValue`). Clause boundary (c8 D2 + c10 D1):
  *  sentence punctuation (with OR without following whitespace), `,`/`;`, a
  *  newline, a tab, `&`, and the case-insensitive `then`/`and`/`plus`/`to`
  *  junction. Over-KEEP of an unrelated SAME-NUMBER amount (the VALUE-MATCH
@@ -164,8 +166,10 @@ export function clauseStatesKind(
       // c10 D2 (cycle 11): when the slot's value is known, the clause arm is
       // the VALUE-MATCH restricted to the verb clause — a same-kind amount
       // keeps the slot only when its parsed value EQUALS the slot value.
-      // `slotValue === undefined` keeps the clause arm byte-identical to the
-      // c9 any-same-kind behavior (the labeled path is untouched).
+      // `slotValue === undefined` makes the added value-check inert; but
+      // clause segmentation differs from c9 (splitter changed — c12 D1) so
+      // a decimal can fragment via the no-whitespace punctuation arm.
+      // Production never reaches this path (sole caller supplies slotValue).
       if (slotValue !== undefined && amount !== slotValue) continue;
       const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
       if (volumeUnit === (kind === 'volume')) return true;
