@@ -170,7 +170,10 @@ function useDoorRequiredRecheckDeadline(required: boolean): boolean {
 function useScopeSettleDeadline(active: boolean): boolean {
   const [elapsed, setElapsed] = useState(false)
   useEffect(() => {
-    if (!active) return
+    if (!active) {
+      setElapsed(false)
+      return
+    }
     const t = window.setTimeout(() => setElapsed(true), DOOR_REQUIRED_RECHECK_DEADLINE_MS)
     return () => window.clearTimeout(t)
   }, [active])
