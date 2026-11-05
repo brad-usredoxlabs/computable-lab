@@ -132,7 +132,7 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
   it('P-d: sync POSTs gated while provisional mid-session (§3b site 3 / C-4)', async () => {
     // streamAssist mock: yield a done event to complete the stream
     vi.mocked(streamAssist).mockImplementation(async function* (_prompt, _surface, _ctx) {
-      yield { type: 'done', result: { success: true, events: [], notes: '' } }
+      yield { type: 'done', result: { success: true, events: [], notes: [] } }
     })
 
     statusRef.current = undefined
