@@ -394,6 +394,52 @@ describe('demoteUnstatedQuantities — material-less DEFAULT-KEEP (cycle 9 unit 
  * demoted=0); P-4 = the K1/K2/P-a..P-d + cycle-9 e1/e2/e3/a2/a3/a6 pins
  * above pass UNEDITED (the matrix run, not a new assertion).
  */
+/**
+ * L2-PROMPT2-VOLUME-N1-MISREAD-1 — the N1 defect: the prompt states "1uL" but the
+ * material label "1 mM Clofibrate in DMSO" (with space) doesn't match "1mM clofibrate
+ * in DMSO" (no space) in the raw turn, so extractQuantity returns null. The fix
+ * falls through to clauseStatesKind (kind-only) which finds "1uL" in the add clause.
+ */
+describe('N1: stated volume with label-adjacency miss (PROMPT2 re-gate)', () => {
+  it('the prompt states 1uL — volumeUl:100 is NOT demoted when clause carries the stated amount', () => {
+    // Exact shape from the re-gate: the model emitted volumeUl:100 (assumed),
+    // the turn says "Add 1uL of 1mM clofibrate in DMSO to wells E2-H5."
+    // The material label "1 mM Clofibrate in DMSO" (normalized, with space)
+    // is NOT literally present in the turn ("1mM" has no space) → extractQuantity
+    // returns null → fall through to clauseStatesKind (kind-only) → finds "1uL"
+    // in the add clause → STATED → keep.
+    const doc: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 't1-n1',
+      actions: [{
+        action: 'add_material',
+        material: '1 mM Clofibrate in DMSO',
+        targetWells: ['E2','E3','E4','E5','F2','F3','F4','F5','G2','G3','G4','G5','H2','H3','H4','H5'],
+        volumeUl: 100,
+      } as unknown as ScientistIntent['actions'][number]],
+      unresolved: [],
+    };
+    const r = demoteUnstatedQuantities(doc, 'Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.');
+    // The 1uL IS stated in the clause → NOT demoted.
+    expect(r.demoted.length).toBe(0);
+    expect(r.doc).toBe(doc);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volumeUl' in action).toBe(true);
+    expect(volumeUlFacts(r.doc).length).toBe(0);
+  });
+
+  it('a genuinely unstated volume STILL demotes — the smuggled-100 guard holds', () => {
+    // "Add DMEM to A1" states no volume → volumeUl:100 must still be demoted.
+    const r = demoteUnstatedQuantities(addMaterialDoc(true, 100), 'Add DMEM to A1');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.argument).toBe('volumeUl');
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volumeUl' in action).toBe(false);
+    expect(volumeUlFacts(r.doc).length).toBe(1);
+  });
+});
+
 describe('demoteUnstatedQuantities — splitter variants + value-dependent clause arm (cycle 11, c10 D1/D2)', () => {
   it('P-1: a slot value EQUAL to a same-kind clause amount KEEPS (value-equal clause arm; both kinds)', () => {
     const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Mix 50 uL');
