@@ -925,6 +925,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const switchThread = useCallback(
     (id: string) => {
       if (!endpoint) return
+      if (scopeStatusRef.current === 'provisional') return
       writeTabThreadMapEntry(scope, id)
       resetChatState()
       setActiveThread({ scope: scope ?? '', id })
@@ -934,6 +935,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
 
   const newThread = useCallback(() => {
     if (!endpoint) return
+    if (scopeStatusRef.current === 'provisional') return
     const id = mintTabThreadEntry(scope)
     resetChatState()
     setActiveThread({ scope: scope ?? '', id })
@@ -945,6 +947,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // request; the list is scope-scoped, so the id is incidental.)
   const listThreadsForChat = useCallback((): Promise<ThreadSummary[]> => {
     if (!endpoint) return Promise.resolve([])
+    if (scopeStatusRef.current === 'provisional') return Promise.resolve([])
     return listThreads(endpoint, { ...(scope ? { scope } : {}) }).then((r) => r.threads)
   }, [endpoint, scope])
 
