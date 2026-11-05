@@ -41,4 +41,4 @@ Note: errors are pre-existing in unrelated files
 sha: 386260411b67bc28ff5a52893b968baf55519ac4
 Message: "unit 2f-b: fix DEFECT 2 and DEFECT 5 in RecordEditPanel"
 
-L1-RECORD-LOCK-GUARD-1-LEG2FB UNIT 2f-b DONE 85c34b8606943ad73d00e98c2f55d00fae022a15
+L1-RECORD-LOCK-GUARD-1-LEG2FB UNIT 2f-b DONE 515fc2ac41dcbcba524f296438b7a055eaa142e9
