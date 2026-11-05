@@ -270,9 +270,15 @@ function SurfaceChatRegistrar({ host, base, scopePending }: SurfaceChatBridgePro
     entry.optional_providers.includes('deck')
   const expectsScope = declaresDeck && (scopePending ?? true)
   const deckScope = deckSlice?.scope
-  const settleWindowElapsed = useScopeSettleDeadline(expectsScope && deckScope == null)
+  // Provisional only while the slice has NOT published yet. Once the slice
+  // publishes (even without scope), the answer is settled — the deck is loaded
+  // and whatever scope it carries is final. A cold-mount transient window is
+  // bounded by the deadline; an unsaved deck publishes immediately with no
+  // scope, which must settle on the first flush.
+  const scopeUndecided = expectsScope && deckSlice == null
+  const settleWindowElapsed = useScopeSettleDeadline(scopeUndecided)
   const scopeStatus: 'settled' | 'provisional' =
-    expectsScope && deckScope == null && !settleWindowElapsed ? 'provisional' : 'settled'
+    scopeUndecided && !settleWindowElapsed ? 'provisional' : 'settled'
   // §2.5 step 3: the ghost handlers wire ONLY when the host declares ghost_mount
   // (the collector only returns handlers in that case — belt and braces).
   const handlers = entry.ghost_mount ? collected.handlers : undefined
