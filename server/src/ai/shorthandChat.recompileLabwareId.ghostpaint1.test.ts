@@ -57,6 +57,11 @@ const SEED_RECORDS = [
     schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
     payload: { kind: 'material', name: 'Formulated Clofibrate DMSO', title: 'Formulated Clofibrate DMSO', synonyms: ['Formulated Clofibrate DMSO'] },
   },
+  {
+    recordId: 'MAT-clofibrate-concept',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+    payload: { kind: 'material', name: 'Clofibrate', title: 'Clofibrate', synonyms: ['Clofibrate'] },
+  },
 ];
 
 function mockStore() {
@@ -81,9 +86,9 @@ function makeHeld(yaml: string = LABWARELESS_YAML): HeldShorthandIntent {
 }
 
 /** Build a clarification answer matching the given held intent's fact. */
-function makeAnswerFor(held: HeldShorthandIntent, refId: string): { requestId: string; label: string; ref: { id: string } } {
+function makeAnswerFor(held: HeldShorthandIntent, refId: string, label?: string) {
   const requestId = factRequestId(held.clarifications[0]!);
-  return { requestId, label: 'Formulated Clofibrate DMSO', ref: { id: refId } };
+  return { requestId, label: label ?? 'Formulated Clofibrate DMSO', ref: { id: refId } };
 }
 
 // ---------------------------------------------------------------------------
@@ -120,12 +125,15 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
   });
 
   it('B2: concept-vs-formulation parity — both produce the same details.labwareId', async () => {
-    // Two different material refs, same deck placement → same labwareId
+    // Two different material refs (concept vs formulation), same deck placement → same labwareId
     const held1 = makeHeld();
     const held2 = makeHeld();
 
     const answer1 = makeAnswerFor(held1, 'MAT-clofibrate-formulation');
-    const answer2 = makeAnswerFor(held2, 'MAT-clofibrate-formulation');
+    const answer2 = makeAnswerFor(held2, 'MAT-clofibrate-concept', 'Formulated Clofibrate DMSO');
+
+    // Guard: the two answer refs must differ — this test would be degenerate otherwise
+    expect(answer1.ref.id).not.toBe(answer2.ref.id);
 
     const folded1 = foldAnswersIntoShorthand(held1, [answer1]);
     const folded2 = foldAnswersIntoShorthand(held2, [answer2]);
