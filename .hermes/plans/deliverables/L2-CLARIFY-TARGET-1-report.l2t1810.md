@@ -683,3 +683,92 @@ complete ≠ acceptance complete. Note for the gate re-run: YAML/vocabulary
 unchanged, so no lane-stack reload was needed for the fix itself; the
 pre-existing 40 src/ai failures predate this run and are outside its scope.
 
+## cycle 9 (c8 D1/D2) — material-less arm inverts to DEFAULT-KEEP
+
+Lane 2 / item L2-CLARIFY-TARGET-1-C9, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base 80649c80 (orchestrator-verified HEAD).
+Advc-c8 VERDICT fix: D1 MAJOR over-STRIP (e1/e2/e3 — HEAD stripped stated
+quantities BASE eef23b72 kept, violating R1.2 "Never strip a volume the
+scientist actually stated"), D2 MINOR no-separator over-KEEP (a2/a3/a6 —
+the clause splitter only knew `.!? , ;`). Note: the coder brief named the
+report as `L2-CLARIFY-TARGET-1-report.l2t0935.md`; that file does not exist
+in this worktree — this section is appended to the worktree's tracked
+report (`l2t1810.md`), the same file the cycle-7 sections use.
+
+Rule shipped (one sentence): a material-less declared-quantity slot is
+STATED (hence kept) when EITHER the turn carries an amount-with-unit of the
+slot's declared kind whose amount EQUALS the slot value (VALUE-MATCH arm —
+the scientist's number present in their own words) OR the clause rule holds
+(a clause naming the action's verb stem carries an amount of the declared
+kind); strip only on positive disassociation.
+
+Mechanism (3 owned files, 150+/45- vs 80649c80): `clauseStatesKind`
+(reconcileDraftQuantities.ts) gains an optional `slotValue` param; its
+clause splitter becomes `/(?<=[.!?])\s+|[,;]+|\n+|\b(?:then|and)\b/` (D2,
+incl. newline for a3); the VALUE-MATCH scan reuses the ONE grammar
+(`tokenRe` + `parseAmount`, lastIndex reset) — zero new grammars, zero
+verb/slot tables. `demoteUnstatedQuantities.ts` passes the slot's numeric
+value (bare-number slot or the quantity object's `value`) into the
+material-less arm; the labelled `extractQuantity` arm is byte-identical.
+Test file: six c8 probes added as pins + `mixDocSlots` hoisted to module
+scope (shared by the cycle-7 K1/K2 describe and the new describe; body
+unchanged, K1/K2/P-a..P-d pins untouched).
+
+RED (measured at 80649c80, 19:09 EST — `npx vitest run src/ai/demoteUnstatedQuantities.test.ts src/ai/reconcileDraftQuantities.test.ts`):
+2 files / 31 tests: 6 failed | 25 passed. e1/e2/e3 RED = demoted 1 (expected
+0, field stripped) — the over-STRIP; a2/a3/a6 RED = demoted 0 (expected 1)
+— the over-KEEP. Raw: e1/e2 `AssertionError: expected 1 to be +0`, e3 same
+at :338, a2/a3/a6 `AssertionError: expected +0 to be 1`. All 25
+pre-existing tests GREEN at RED time (no pin was already GREEN — none is a
+by-construction guard). Full raw at /tmp/c9-red-raw.txt (session 19:09).
+
+GREEN (19:19 EST, same command):
+```
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-CLARIFY-TARGET-1-lane2-l2t1810/server
+ ✓ src/ai/reconcileDraftQuantities.test.ts  (12 tests) 4ms
+ ✓ src/ai/demoteUnstatedQuantities.test.ts  (19 tests) 46ms
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+```
+Invariants verified GREEN: K1 + K2 demote, P-a/P-b/P-c stated-keeps,
+P-d "Mix on the plate" still demoted; the contract line
+demoteUnstatedQuantities.test.ts:185 ("A STATED amount must never be
+demoted (R1.2)") is true of the code again.
+
+Hazard check — full `npx vitest run src/ai` (132 files): 19 failed / 40
+failed tests — the SAME pre-existing set the cycle-7 hazard check above
+documented (only my six pins moved, all to passing). A grep across
+`server/src/ai` `--include="*.test.ts"` for `demoteUnstatedQuantities|
+clauseStatesKind|extractQuantity` found no test file outside the two
+ai suites importing the changed symbols; the production caller
+(`AgentOrchestrator.ts`) uses the unchanged public entry point
+`demoteUnstatedQuantities(doc, words)`, and the `clauseStatesKind`
+signature change is additive (optional trailing param).
+
+tsc: `cd app && npx tsc --noEmit` = 10 error lines (branch baseline 10 —
+bar met); 0 error lines in touched files (I touched no app/ files).
+`cd server && npx tsc --noEmit` = 0 error lines.
+
+git: `git -c core.fileMode=false diff --name-only 80649c80..HEAD` = exactly
+the 3 owned files; `git -c core.fileMode=false status --porcelain
+--untracked-files=no` = empty (the two pre-existing untracked
+non-assignment paths are excluded by that flag and were not created by
+this run).
+
+Over-KEEP tradeoff (accepted, friction-first — stated per the ruling):
+because the VALUE-MATCH arm keys on "the slot's number appears with the
+right kind ANYWHERE in the turn", a same-number same-kind amount that
+actually belongs to a DIFFERENT clause keeps this action's slot. That
+over-KEEP is the accepted friction-first trade: R1.2 and Brad's standing
+friction-first ruling forbid asking about a quantity that is already in
+the record, and the scientist's own number is the strongest statedness
+signal available. The inverse error class — over-STRIP of any
+e1/e2/e3-class shape (a stated amount demoted) — remains a DEFECT and is
+pinned by e1/e2/e3.
+
+Commits (this cycle, all `-c core.fileMode=false`): 8d908ec6 step 1 RED
+pins + helper hoist (assertions unchanged); d7d2e4cd step 2 rule + GREEN;
+this report commit step 3. No merge, no lane-stack restart, never
+:3001/:5174, no npm install. No UI change. Implementation complete;
+acceptance (browser re-gate) remains the independent reviewer's lane.
+
