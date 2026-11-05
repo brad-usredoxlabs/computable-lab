@@ -30,6 +30,7 @@
  * (SurfaceSliceStore + collectSurfaceContext + the registrar rewrite) lands.
  */
 import { act, cleanup, render } from '@testing-library/react'
+import { useEffect, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiContext } from '../../types/aiContext'
 
@@ -67,11 +68,11 @@ vi.mock('pdfjs-dist', () => {
 // the forwarded options — the parity pin's idiom; the real useAiChat hydration
 // is the host-page pins' concern, not this one's).
 const surfaceChatCalls = vi.hoisted(
-  () => [] as Array<{ aiContext: AiContext; endpoint?: string; scope?: string }>,
+  () => [] as Array<{ aiContext: AiContext; endpoint?: string; scope?: string; scopeStatus?: 'settled' | 'provisional' }>,
 )
 vi.mock('../../agent/useSurfaceChat', () => ({
   useSurfaceChat: vi.fn((opts: unknown) => {
-    surfaceChatCalls.push(opts as { aiContext: AiContext; endpoint?: string; scope?: string })
+    surfaceChatCalls.push(opts as { aiContext: AiContext; endpoint?: string; scope?: string; scopeStatus?: 'settled' | 'provisional' })
     return { chat: {}, flow: {} }
   }),
 }))
@@ -232,5 +233,120 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     // The deck slice's endpoint + scope are forwarded (the deck thread store).
     expect(opts.endpoint).toBe('event-editor')
     expect(opts.scope).toBe('EG-1')
+  })
+
+  // ---------------------------------------------------------------------------
+  // L2-THREADSCOPE-FLIP-1 unit 1 — the scope SETTLE state as DATA (scopeStatus).
+  // The bridge must distinguish "scope not yet decided" (provisional) from
+  // "decided to be absent" (settled), keyed off the deck slice's SCOPE VALUE
+  // (never the slice's presence) and bounded by DOOR_REQUIRED_RECHECK_DEADLINE_MS.
+  // The existing three legs above are untouched.
+  // ---------------------------------------------------------------------------
+
+  it('scopeStatus P-a: a deck door whose slice is scope-less on the first flush is provisional; the scope value arriving settles it', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // The routed-deck ordering (DeckChatSlice.tsx:151): the bundle is published
+    // scope-less first (state.eventGraphId unresolved), then re-published WITH
+    // the scope — the slice's PRESENCE is never the signal, its scope value is.
+    // Encoded shape (documented default 'settled', spec §3a): the options carry
+    // scopeStatus 'provisional' while the scope is undecided, NO key once
+    // settled — the absence IS the settled default.
+    function LateScopeDeckPublisher() {
+      const [loaded, setLoaded] = useState(false)
+      useEffect(() => {
+        const t = window.setTimeout(() => setLoaded(true), 50)
+        return () => window.clearTimeout(t)
+      }, [])
+      usePublishSurfaceSlice(
+        'deck',
+        loaded ? deckSliceFixture() : ({ ...deckSliceFixture(), scope: undefined }),
+      )
+      return null
+    }
+    render(
+      <AiPanelProvider>
+        <SurfaceChatBridge host="run-workspace" base={{ context: baseRunContext() }} />
+        <LateScopeDeckPublisher />
+      </AiPanelProvider>,
+    )
+    // First flush: the slice is published but scope-less (a LATER sibling's
+    // render-phase write lands after the registrar's first render — the D1
+    // ordering) => the scope is NOT YET DECIDED.
+    const first = surfaceChatCalls[0]!
+    expect(first.scopeStatus).toBe('provisional')
+    expect(first.scope).toBeUndefined()
+    // The settle EVENT: the slice's scope value arrives (a beat later) — the
+    // status is data: settled (the scopeStatus key absent: the default), no timer.
+    act(() => {
+      vi.advanceTimersByTime(50)
+    })
+    const settled = surfaceChatCalls[surfaceChatCalls.length - 1]!
+    expect(settled.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in settled).toBe(false)
+    expect(settled.scope).toBe('EG-1')
+  })
+
+  it('scopeStatus P-b: a non-deck surface is settled on the FIRST flush with zero timer advancement (no global deadline)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // record-host declares NO providers (config/chat/chat-hosts.yaml); its base
+    // scope is the page-local record id — decided at first flush. A GLOBAL
+    // (provider-agnostic) deadline hook would arm a timer and hold this door
+    // for DOOR_REQUIRED_RECHECK_DEADLINE_MS — the zero-advance assertion below
+    // is the guard against that.
+    const recordBase: AiContext = {
+      surface: 'literature',
+      summary: 'Record REC-1',
+      surfaceContext: { recordId: 'REC-1', studyId: 'STU-9' },
+    }
+    render(
+      <AiPanelProvider>
+        <SurfaceChatBridge host="record-host" base={{ context: recordBase, scope: 'REC-1' }} />
+      </AiPanelProvider>,
+    )
+    const first = surfaceChatCalls[0]!
+    // Settled on the FIRST flush: no provisional marker (the documented
+    // default 'settled'), with the page-local scope forwarded.
+    expect(first.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in first).toBe(false)
+    expect(first.scope).toBe('REC-1')
+    // Zero timer advancement: the settle deadline must not have been armed for
+    // a provider-less door (no added latency — the P4 no-regression shape).
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('scopeStatus P-c: no settle within the deadline resolves to a DECIDED settled-absent (never provisional forever)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // A scope-less deck slice that NEVER gains a scope (the run deck's bounded
+    // release path, spec §3a): the door declares deck (required) so the window
+    // is armed; the loud-fail throw is untouched (the slice IS published — only
+    // its scope value is absent), so the status alone decides.
+    function ScopelessDeckPublisher() {
+      usePublishSurfaceSlice('deck', { ...deckSliceFixture(), scope: undefined })
+      return null
+    }
+    render(
+      <AiPanelProvider>
+        <SurfaceChatBridge host="run-workspace" base={{ context: baseRunContext() }} />
+        <ScopelessDeckPublisher />
+      </AiPanelProvider>,
+    )
+    // Provisional while the window is open (the slice is published, its scope
+    // value is not — presence is not the signal).
+    expect(surfaceChatCalls[0]!.scopeStatus).toBe('provisional')
+    // Bounded release: at the deadline the status resolves to a DECIDED value.
+    // Exact resolved shape: settled-absent — NO scopeStatus key (the
+    // documented default 'settled'), NO scope key (absent — the server's "_"
+    // bucket), no throw.
+    act(() => {
+      vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+    })
+    const decided = surfaceChatCalls[surfaceChatCalls.length - 1]!
+    expect(decided.scopeStatus).toBeUndefined()
+    expect('scopeStatus' in decided).toBe(false)
+    expect(decided.scope).toBeUndefined()
+    expect('scope' in decided).toBe(false)
   })
 })

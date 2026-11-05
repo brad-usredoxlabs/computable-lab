@@ -442,6 +442,15 @@ export interface UseAiChatOptions {
    * rehydrates (the first deck's messages are never carried into the second).
    */
   scope?: string
+  /**
+   * L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): the registrar's scope-DECISION
+   * status. 'provisional': the scope is undecided — the lazy-mint and
+   * hydration effects RETURN EARLY (no mint/activation/GET): nothing
+   * persists under a provisional no-scope bucket. ABSENT / 'settled'
+   * (default) = pre-unit-2 behaviour. Provisional is an IO gate ONLY —
+   * an active thread is never cleared (C-4); settle re-hydrates once (C-3).
+   */
+  scopeStatus?: 'settled' | 'provisional'
   /** Handler called for each accepted preview event. */
   proposalScopeKey?: string
   onSequenceProposal?: (proposal: Record<string, unknown>, userRequest?: string) => void
@@ -688,7 +697,7 @@ export function unionClarificationAnswers(
   return out
 }
 
-export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras, onDeckLayout }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -889,6 +898,16 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   const activeThreadRef = useRef(activeThread)
   activeThreadRef.current = activeThread
 
+  // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): scope-DECISION status
+  // (absent / 'settled' = default). While provisional the lazy-mint and
+  // hydration effects RETURN EARLY — nothing persists under the provisional
+  // no-scope bucket (persistence is activation-keyed: the sync effect's
+  // `!activeThread` guard, :1112). The ref keeps the status readable from
+  // the hydration effect WITHOUT joining its deps (a settle flip must not
+  // re-run hydration — C-3). Mid-session widening holds IO ONLY (C-4).
+  const scopeStatusRef = useRef<'settled' | 'provisional'>(scopeStatus ?? 'settled')
+  scopeStatusRef.current = scopeStatus ?? 'settled'
+
   const resetChatState = useCallback(() => {
     setMessages([])
     persistedIdsRef.current = new Set()
@@ -906,6 +925,7 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   const switchThread = useCallback(
     (id: string) => {
       if (!endpoint) return
+      if (scopeStatusRef.current === 'provisional') return
       writeTabThreadMapEntry(scope, id)
       resetChatState()
       setActiveThread({ scope: scope ?? '', id })
@@ -915,6 +935,7 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
 
   const newThread = useCallback(() => {
     if (!endpoint) return
+    if (scopeStatusRef.current === 'provisional') return
     const id = mintTabThreadEntry(scope)
     resetChatState()
     setActiveThread({ scope: scope ?? '', id })
@@ -926,6 +947,7 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   // request; the list is scope-scoped, so the id is incidental.)
   const listThreadsForChat = useCallback((): Promise<ThreadSummary[]> => {
     if (!endpoint) return Promise.resolve([])
+    if (scopeStatusRef.current === 'provisional') return Promise.resolve([])
     return listThreads(endpoint, { ...(scope ? { scope } : {}) }).then((r) => r.threads)
   }, [endpoint, scope])
 
@@ -934,17 +956,36 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
   // Runs again when the scope CHANGES (the state still holds the previous
   // scope's pair) — the in-effect re-key reset below then clears the chat
   // for the new (scope, threadId) key.
+  // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): PROVISIONAL HOLD. While the
+  // scope is undecided, minting would resolve the no-scope "_" bucket and
+  // persist a live session under it before the scope is known (the c7
+  // cold-mount split). RETURN EARLY — the settle flip RE-RUNS this effect
+  // (scopeStatus in deps) and takes the normal path; a mid-session
+  // widening returns early WITHOUT clearing the active thread (C-4).
   useEffect(() => {
     if (!endpoint) return
+    if (scopeStatus === 'provisional') return
     const id = resolveTabThreadId(scope)
-    setActiveThread({ scope: scope ?? '', id })
-  }, [endpoint, scope])
+    const next = { scope: scope ?? '', id }
+    // Stable activation (C-3): a settle re-run that resolves to the
+    // ALREADY-ACTIVE pair does not re-activate → the hydration effect
+    // (keyed on activeThread) does not re-run (no double-fetch).
+    const prev = activeThreadRef.current
+    if (prev && prev.scope === next.scope && prev.id === next.id) return
+    setActiveThread(next)
+  }, [endpoint, scope, scopeStatus])
 
   useEffect(() => {
     if (!endpoint) {
       hydratedRef.current = true
       return
     }
+    // L2-THREADSCOPE-FLIP-1 unit 2 (C-2): PROVISIONAL HOLD — via the ref
+    // (OUT of the deps array so a settle flip never re-runs this effect and
+    // double-hydrates). No (scope, id) pair to hydrate while undecided;
+    // `!activeThread` below covers the held-activation path, this is the
+    // explicit IO gate for mid-session widening.
+    if (scopeStatusRef.current === 'provisional') return
     // The tab thread resolves in the lazy-mint effect (one render later) —
     // skip until then so the hydration GET carries the resolved (scope, id)
     // pair (avoids a duplicate pre-mint GET; both would mint the SAME id
@@ -1055,6 +1096,9 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
 
   useEffect(() => {
     if (!endpoint || !hydratedRef.current || !activeThread) return
+    // §3b site 3 / C-4: no appendThreadMessage while provisional — the settle
+    // flip re-runs this effect (messages in deps) and persists normally.
+    if (scopeStatusRef.current === 'provisional') return
     // LEG F fix run 1 (advc D1): persist into the binding the hydration
     // effect last ADVANCED — during a deferred in-flight re-key that is the
     // turn's MINTED (pre-flip) scope, so both roles of the surviving turn
@@ -1111,7 +1155,7 @@ export function useAiChat({ aiContext, endpoint, scope, onAcceptEvent, onAddLabw
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, activeThread?.scope, activeThread?.id, messages])
+  }, [endpoint, activeThread?.scope, activeThread?.id, messages, scopeStatus])
 
 
   // ------------------------------------------------------------------
