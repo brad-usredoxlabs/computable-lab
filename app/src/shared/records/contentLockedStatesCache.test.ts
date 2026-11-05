@@ -21,7 +21,7 @@ describe('LEG2b-i: contentLockedStatesCache', () => {
   const fetchSpy = vi.fn()
   const jsonResponse = (status: number, body: unknown) => ({ ok: status < 400, status, statusText: '', json: async () => body }) as Response
 
-  beforeAll(() => {
+  beforeEach(() => {
     fetchSpy.mockReset()
     vi.stubGlobal('fetch', fetchSpy)
   })
