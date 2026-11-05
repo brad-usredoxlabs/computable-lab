@@ -594,7 +594,7 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
 
     // Content-locked states resolve via a deferred promise — we resolve it
     // AFTER the terminal states, so the initial render sees an empty cache.
-    let resolveContentLocked: (() => void) | null = null
+    let resolveContentLocked = (() => {}) as () => void
     const contentLockedPromise = new Promise<string[]>((resolve) => {
       resolveContentLocked = () => resolve(['approved', 'effective'])
     })
@@ -625,7 +625,7 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
 
     // Resolve the deferred content-locked states AFTER the UI has rendered
     // with the terminal states but before the content-locked prime settled.
-    resolveContentLocked?.()
+    resolveContentLocked()
     // Give React time to re-render with the new state.
     await vi.dynamicImportSettled()
     await new Promise((r) => setTimeout(r, 100))
