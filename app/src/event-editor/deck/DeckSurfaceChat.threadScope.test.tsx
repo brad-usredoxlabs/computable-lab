@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorState } from '../EventEditorContext'
 import { AiPanelProvider } from '../../shared/context/AiPanelContext'
 import { DeckChatSlice } from './DeckChatSlice'
-import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
+import { SurfaceChatBridge, DOOR_REQUIRED_RECHECK_DEADLINE_MS } from '../../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../../agent/HarnessChatPane'
 
 const mocks = vi.hoisted(() => ({
@@ -34,6 +34,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../EventEditorContext', () => ({
   useEventEditor: () => ({
+    state: mocks.state,
+    actions: {
+      setPreview: vi.fn(),
+      clearPreview: vi.fn(),
+      appendEvent: vi.fn(),
+      commitPreview: vi.fn(),
+    },
+  }),
+  useOptionalEventEditor: () => ({
     state: mocks.state,
     actions: {
       setPreview: vi.fn(),
@@ -310,6 +319,9 @@ describe('deck door — deck scope on the wire (FIX1 D1, acceptance (5); T-3 ret
   })
 
   it('an unsaved deck (no eventGraphId) sends NO scope header — the reserved "_" semantics (amendment edge (i))', async () => {
+    // §P7 AMENDMENT (single-case exception, ruling ~/.hermes/cl/lanes/2/decisions/THREADSCOPE-P7-unsaveddeck-l2t0110-ruling.md):
+    // the bare waitFor assumed a first-flush GET; per C-2/P3 an unsaved deck settles at the bounded deadline.
+    // Timing premise corrected; the outcome assertions below are UNCHANGED and still pin the hold (mutant D).
     mocks.state = deckState('')
     // Force the "no record identity" shape the reducer holds pre-save.
     ;(mocks.state as unknown as { eventGraphId: string | null }).eventGraphId = null
@@ -321,12 +333,14 @@ describe('deck door — deck scope on the wire (FIX1 D1, acceptance (5); T-3 ret
       </AiPanelProvider>,
     )
 
-    await waitFor(() => expect(getThreadCalls().length).toBeGreaterThan(0))
+    // HOLD (C-2/P3): the unsaved deck settles at the bounded deadline, not on first flush.
+    expect(getThreadCalls()).toHaveLength(0)
+    await waitFor(() => expect(getThreadCalls().length).toBeGreaterThan(0), { timeout: DOOR_REQUIRED_RECHECK_DEADLINE_MS + 2000 })
     for (const c of threadCalls()) {
       expect(c.headers['x-cl-thread-scope']).toBeUndefined()
     }
     // The non-instance surface lands under the "" map key (reserved "_").
     expect(readMap()['']).toBeTruthy()
     expect(readMap()['EVG-seam-A']).toBeUndefined()
-  })
+  }, DOOR_REQUIRED_RECHECK_DEADLINE_MS + 10000)
 })

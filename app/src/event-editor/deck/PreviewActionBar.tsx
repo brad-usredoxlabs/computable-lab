@@ -145,18 +145,26 @@ export function PreviewActionBar() {
     }
   }
 
+  // L2-CLARIFY-TARGET-1 D2: when the pane chat has a staged proposal
+  // (chat.hasPreview === true), the commit verbs render on the chat
+  // surface — rendering them here too is dead chrome (SOP rule 12).
+  // "View changes" always renders regardless.
+  const chatCommitSurface = aiPanel?.chat?.hasPreview === true
+
   return (
     <div className="preview-bar" role="region" aria-label="Preview actions">
       <span className="preview-bar__summary">
         <span className="preview-bar__dot" aria-hidden />
         {summary}
       </span>
-      <button
-        type="button"
-        className="preview-bar__btn preview-bar__btn--ghost"
-        onClick={handleDiscard}
-        title="Discard the proposed preview"
-      >Discard</button>
+      {chatCommitSurface ? null : (
+        <button
+          type="button"
+          className="preview-bar__btn preview-bar__btn--ghost"
+          onClick={handleDiscard}
+          title="Discard the proposed preview"
+        >Discard</button>
+      )}
       <button
         type="button"
         className="preview-bar__btn"
@@ -169,17 +177,19 @@ export function PreviewActionBar() {
           <span className="preview-bar__error-message">{acceptError}</span>
         </div>
       ) : null}
-      <button
-        type="button"
-        className="preview-bar__btn preview-bar__btn--primary"
-        onClick={() => { void handleAccept() }}
-        disabled={accepting}
-        title={
-          acceptBlocked
-            ? `${pendingDecisions.length} ontology term${pendingDecisions.length === 1 ? '' : 's'} need decision — review & sign off first`
-            : 'Commit the preview to the deck and event graph'
-        }
-      >{accepting ? 'Accepting...' : acceptBlocked ? 'Review terms to accept' : 'Accept'}</button>
+      {chatCommitSurface ? null : (
+        <button
+          type="button"
+          className="preview-bar__btn preview-bar__btn--primary"
+          onClick={() => { void handleAccept() }}
+          disabled={accepting}
+          title={
+            acceptBlocked
+              ? `${pendingDecisions.length} ontology term${pendingDecisions.length === 1 ? '' : 's'} need decision — review & sign off first`
+              : 'Commit the preview to the deck and event graph'
+          }
+        >{accepting ? 'Accepting...' : acceptBlocked ? 'Review terms to accept' : 'Accept'}</button>
+      )}
       {showChanges ? (
         <ProposedGraphModal
           preview={activePreview}

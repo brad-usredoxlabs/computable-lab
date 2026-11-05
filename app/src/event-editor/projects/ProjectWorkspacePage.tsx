@@ -104,6 +104,10 @@ export function ProjectWorkspacePage() {
  */
 function ProjectWorkspaceDoor({ studyId }: { studyId: string }) {
   const ws = useWorkspace()
+  // L2-THREADSCOPE-FLIP-1 §3a scopePending hint: the route param is read in
+  // the parent (:61); re-read it here (same route) so this door can narrow
+  // the settle window without touching the collector.
+  const { eventGraphId } = useParams<{ eventGraphId?: string }>()
   const activeTab = ws.state.activeTabId
     ? ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
     : null
@@ -129,7 +133,22 @@ function ProjectWorkspaceDoor({ studyId }: { studyId: string }) {
   // DeckChatSlice (inside the EventEditorProvider) publishes into the SAME
   // app-level slice store, so the page-level registrar — mounted ABOVE the
   // provider — still sees it (the store, not a context: §9 bait #3).
-  return <SurfaceChatBridge host="project-deck-tab" base={{ context: aiContext, scope: studyId }} />
+  // L2-THREADSCOPE-FLIP-1 §3a: `scopePending` narrows the settle window so
+  // this OPTIONAL-deck door does NOT hold hydration for the full 5 s deadline
+  // on a non-deck tab or a fresh (eventGraphId-less) canvas. Pending only
+  // while a deck record is named and not yet loaded:
+  //   !ws.ready                     — workspace state not loaded yet
+  //   eventGraphId != null          — route names a deck graph not yet loaded
+  //   deck tab + tab.eventGraphId   — the active deck tab names its graph
+  // (The route param is re-read in this door; the parent (:61) reads the same
+  //  route value. `ws` is the workspace context; `activeTab` its active tab.)
+  return (
+    <SurfaceChatBridge
+      host="project-deck-tab"
+      base={{ context: aiContext, scope: studyId }}
+      scopePending={!ws.ready || eventGraphId != null || (activeTab?.kind === 'deck' && activeTab.eventGraphId != null)}
+    />
+  )
 }
 
 interface WorkspaceShellHostProps {

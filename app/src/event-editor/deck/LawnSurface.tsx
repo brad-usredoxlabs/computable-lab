@@ -71,7 +71,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
     [state.placements, surfaceId],
   )
 
-  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview, [...new Set(state.placements.map((p) => p.labwareId))]), [state.preview, state.placements])
   // L2-SUITE-A-uifix1 D4: the per-well footprint data source (committed +
   // preview events' details.wells) — the lawn tiles mark the actual wells
   // the events touch, staged OR accepted (same index as the slot surface).
