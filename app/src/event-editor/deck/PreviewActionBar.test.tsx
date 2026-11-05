@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   materializeAcceptedOntologyBindings: vi.fn(),
   rewriteAcceptedOntologyRefs: vi.fn(),
   state: null as EventEditorState | null,
+  // L2-CLARIFY-TARGET-1 D2: knob to control useOptionalAiPanel for chat-preview
+  // visibility tests. Default null so ALL existing legs run unchanged.
+  aiPanelMock: null as { chat: { hasPreview: boolean } | null } | null,
 }))
 
 vi.mock('../EventEditorContext', () => ({
@@ -27,6 +30,10 @@ vi.mock('../EventEditorContext', () => ({
       openFixIt: mocks.openFixIt,
     },
   }),
+}))
+
+vi.mock('../../shared/context/AiPanelContext', () => ({
+  useOptionalAiPanel: () => mocks.aiPanelMock,
 }))
 
 vi.mock('../../shared/shell', () => ({
@@ -268,5 +275,35 @@ describe('PreviewActionBar Accept persistence', () => {
     expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
     await waitFor(() => expect(mocks.persistAcceptedEventGraph).toHaveBeenCalled())
+  })
+})
+
+describe('PreviewActionBar commit verb visibility (L2-CLARIFY-TARGET-1 D2)', () => {
+  it('hides Accept and Discard when chat.hasPreview is true', () => {
+    mocks.aiPanelMock = { chat: { hasPreview: true } }
+    renderBar()
+
+    expect(screen.queryByRole('button', { name: /^Accept$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Discard$/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+  })
+
+  it('shows Accept and Discard when chat.hasPreview is false', () => {
+    mocks.aiPanelMock = { chat: { hasPreview: false } }
+    renderBar()
+
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Discard$/ })).toBeTruthy()
+    // Accept is shown as "Review terms to accept" (blocked until terms decided)
+    expect(screen.getByRole('button', { name: /review terms to accept/i })).toBeTruthy()
+  })
+
+  it('shows Accept and Discard when aiPanel is null', () => {
+    mocks.aiPanelMock = null
+    renderBar()
+
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Discard$/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /review terms to accept/i })).toBeTruthy()
   })
 })
