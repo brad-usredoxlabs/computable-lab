@@ -103,4 +103,4 @@ npx tsc --noEmit -p . 2>&1 | grep -c 'error TS'
 
 The prior cycle shipped a red P7 test instead of STOP+report; STOP stands unamended.
 
-L2-THREADSCOPE-FLIP-1 UNIT p7close DONE 4f96dc3a85cc1915b838e93281b49ae1c701faee
+L2-THREADSCOPE-FLIP-1 UNIT p7close DONE 57252a03
