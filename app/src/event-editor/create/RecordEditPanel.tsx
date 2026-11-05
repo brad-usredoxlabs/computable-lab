@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
+import { isContentLocked } from '../../shared/records/lifecycleLock'
+import { getContentLockedStatesSync, primeContentLockedStates } from '../../shared/records/contentLockedStatesCache'
 // Import via the barrel — index.ts pulls in taptab.css; a direct
 // `./TapTabEditor` import renders the editor unstyled.
 import {
@@ -43,6 +45,8 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [createRunError, setCreateRunError] = useState<string | null>(null)
+  const [contentLocked, setContentLocked] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -66,8 +70,18 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     ])
       .then(([record, proj]) => {
         if (cancelled) return
-        setFormData((record.payload ?? {}) as Record<string, unknown>)
+        const payload = (record.payload ?? {}) as Record<string, unknown>
+        setFormData(payload)
         if (proj) setProjection(proj)
+        // Prime declared content-locked set from the lifecycle
+        const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId
+        if (lifecycleId) {
+          primeContentLockedStates(lifecycleId).then((states) => {
+            if (!cancelled) {
+              setContentLocked(isContentLocked(record.payload, states))
+            }
+          })
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError(describeApiError(err))
@@ -144,6 +158,21 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
       setIsCreatingRun(false)
     }
   }, [recordId, title, onClose])
+
+  const handleCreateDraftRevision = useCallback(async () => {
+    setSaving(true)
+    try {
+      const result = await apiClient.createDraftCopy(recordId, {})
+      if (result.recordId) {
+        setSavedAt(Date.now())
+        setDraftRevisionId(result.recordId)
+      }
+    } catch (err) {
+      setError(describeApiError(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [recordId])
 
   const useProjection = projection !== null && !loading && !loadError
 
