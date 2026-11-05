@@ -5,8 +5,9 @@ import { ProtocolSelectionProvider, useProtocolSelection } from '../../protocol/
 import { ProtocolNavPanel } from './ProtocolNavPanel'
 import { ChatContextHeader } from '../ai/ChatContextHeader'
 import { apiClient } from '../../../shared/api/client'
+import { __resetContentLockedStatesCache } from '../../../shared/records/contentLockedStatesCache'
 
-vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
+vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn(), getLifecycleContentLockedStates: vi.fn() } }))
 vi.mock('./ProtocolIdentity', () => ({ ProtocolIdentity: () => <div>Zymo Opentrons</div> }))
 vi.mock('./ProtocolStepEditModal', () => ({ ProtocolStepEditModal: ({ mode }: { mode: string }) => <div role="dialog">{mode}</div> }))
 const steps = [
@@ -32,6 +33,8 @@ function mount() {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetContentLockedStatesCache()
+  vi.mocked(apiClient.getLifecycleContentLockedStates).mockResolvedValue([])
   vi.mocked(apiClient.getRecord).mockResolvedValue(structuredClone(record))
   vi.mocked(apiClient.updateRecord).mockImplementation(async (_id, updated) => ({
     record: { ...record, payload: updated, meta: { contentSha: 'after-delete' } },
@@ -69,5 +72,29 @@ describe('step actions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Conflict')
     expect(screen.getByTestId('protocol-nav-step-s1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('deletes a protocol with lifecycleId when the declared set is unlocked', async () => {
+    const lifecyclePayload = { ...payload, lifecycleId: 'doc-lifecycle' }
+    const lifecycleRecord = { ...record, payload: lifecyclePayload }
+    vi.mocked(apiClient.getRecord).mockResolvedValue(structuredClone(lifecycleRecord))
+    vi.mocked(apiClient.getLifecycleContentLockedStates).mockResolvedValue([])
+
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete step 1' }))
+    await waitFor(() => expect(screen.queryByTestId('protocol-nav-step-s1')).toBeNull())
+    expect(apiClient.updateRecord).toHaveBeenCalled()
+  })
+
+  it('blocks step deletion when the protocol is content-locked', async () => {
+    const lifecyclePayload = { ...payload, lifecycleId: 'doc-lifecycle', state: 'approved' }
+    const lifecycleRecord = { ...record, payload: lifecyclePayload }
+    vi.mocked(apiClient.getRecord).mockResolvedValue(structuredClone(lifecycleRecord))
+    vi.mocked(apiClient.getLifecycleContentLockedStates).mockResolvedValue(['approved'])
+
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete step 1' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('locked')
+    expect(apiClient.updateRecord).not.toHaveBeenCalled()
   })
 })

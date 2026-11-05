@@ -37,6 +37,7 @@
 
 import { apiClient } from '../../../shared/api/client'
 import { ApiError } from '../../../shared/api/errors'
+import { primeContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 import {
   addInstrumentRole,
   addLabwareRole,
@@ -376,6 +377,9 @@ export async function applyProtocolEdit(
   const meta = record.meta as { contentSha?: string; commitSha?: string } | undefined
   const expectedSha = meta?.contentSha ?? meta?.commitSha
   if (!expectedSha) throw new Error('The protocol has no save token. Reload it before editing.')
+  // Prime the content-lock cache so the fail-closed gate does not throw
+  // 'Lock status ... unavailable' when applyOps checks editableProtocolSteps.
+  if (typeof payload.lifecycleId === 'string') await primeContentLockedStates(payload.lifecycleId)
   const updated = applyOps(payload, ops, options)
   // Double-accept idempotence: an already-landed proposal is a no-op, never a
   // second mutation — nothing is written when the record already says this.

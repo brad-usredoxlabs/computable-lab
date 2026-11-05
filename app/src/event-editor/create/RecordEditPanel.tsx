@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
+import { isRecordWriteLocked } from '../../shared/records/lifecycleLock'
+import { primeContentLockedStates, isContentLockedSetResolved } from '../../shared/records/contentLockedStatesCache'
 // Import via the barrel — index.ts pulls in taptab.css; a direct
 // `./TapTabEditor` import renders the editor unstyled.
 import {
@@ -43,6 +45,13 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [createRunError, setCreateRunError] = useState<string | null>(null)
+  const [contentLockedStates, setContentLockedStates] = useState<string[]>([])
+  const [terminalStates, setTerminalStates] = useState<string[]>([])
+  const contentLocked = isRecordWriteLocked(formData, contentLockedStates, terminalStates)
+  const [saving, setSaving] = useState(false)
+  const [draftRevisionId, setDraftRevisionId] = useState<string | null>(null)
+  const [lockPending, setLockPending] = useState(false)
+  const [contentLockedUnresolved, setContentLockedUnresolved] = useState(false)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -54,6 +63,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     setProjection(null)
     setProjectionError(null)
     setSavedAt(null)
+    setContentLockedUnresolved(false)
 
     Promise.all([
       apiClient.getRecord(recordId),
@@ -66,8 +76,31 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     ])
       .then(([record, proj]) => {
         if (cancelled) return
-        setFormData((record.payload ?? {}) as Record<string, unknown>)
+        const payload = (record.payload ?? {}) as Record<string, unknown>
+        setFormData(payload)
         if (proj) setProjection(proj)
+        // Prime declared content-locked and terminal sets from the lifecycle
+        const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId
+        if (lifecycleId) {
+            setLockPending(true)
+            let lockCount = 2
+            const lockDone = () => {
+                if (!cancelled && --lockCount === 0) {
+                    setLockPending(false)
+                    setContentLockedUnresolved(!isContentLockedSetResolved(lifecycleId))
+                }
+            }
+
+            primeContentLockedStates(lifecycleId)
+              .then((states) => { if (!cancelled) setContentLockedStates(states) })
+              .catch(() => { if (!cancelled) setContentLockedStates([]) })
+              .finally(lockDone)
+
+            apiClient.getLifecycleTerminalStates(lifecycleId)
+              .then((termStates) => { if (!cancelled) setTerminalStates(termStates) })
+              .catch(() => { if (!cancelled) setTerminalStates([]) })
+              .finally(lockDone)
+          }
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError(describeApiError(err))
@@ -145,6 +178,21 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     }
   }, [recordId, title, onClose])
 
+  const handleCreateDraftRevision = useCallback(async () => {
+    setSaving(true)
+    try {
+      const result = await apiClient.createDraftCopy(recordId, {})
+      if (result.record?.recordId) {
+        window.dispatchEvent(new CustomEvent('cl:records-changed'))
+        setDraftRevisionId(result.record.recordId)
+      }
+    } catch (err) {
+      setError(describeApiError(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [recordId])
+
   const useProjection = projection !== null && !loading && !loadError
 
   return (
@@ -174,7 +222,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               blocks={projection.blocks}
               slots={slots}
               data={formData}
-              disabled={isSaving}
+              disabled={isSaving || contentLocked}
               onUpdate={handleEditorUpdate}
               enableOntologyCopilot
             />
@@ -198,15 +246,29 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               Close
             </button>
           ) : null}
-          {savedAt ? <span className="record-create-panel__hint">Saved ✓</span> : null}
-          <button
-            type="submit"
-            className="record-create-panel__btn record-create-panel__btn--primary"
-            disabled={isSaving || loading || Boolean(loadError) || !useProjection}
-            data-testid="record-edit-save"
-          >
-            {isSaving ? 'Saving…' : 'Save'}
-          </button>
+          {savedAt || draftRevisionId ? <span className="record-create-panel__hint">{draftRevisionId ? 'Draft revision created' : 'Saved ✓'}</span> : null}
+          {contentLocked
+            ? (
+              <button
+                type="button"
+                className="record-create-panel__btn record-create-panel__btn--primary"
+                onClick={() => void handleCreateDraftRevision()}
+                disabled={saving}
+                data-testid="record-edit-create-draft-revision"
+              >
+                {saving ? 'Creating...' : 'Create draft revision'}
+              </button>
+            )
+            : (
+              <button
+                type="submit"
+                className="record-create-panel__btn record-create-panel__btn--primary"
+                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending || contentLockedUnresolved}
+                data-testid="record-edit-save"
+              >
+                {isSaving ? 'Saving…' : 'Save'}
+              </button>
+            )}
           {recordKind === 'protocol' ? (
             <button
               type="button"

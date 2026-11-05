@@ -1,10 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../../shared/api/client', () => ({
+  apiClient: { getLifecycleContentLockedStates: vi.fn() },
+}))
+
+import { apiClient } from '../../../shared/api/client'
+import {
+  __resetContentLockedStatesCache,
+  primeContentLockedStates,
+  seedContentLockedStates,
+} from '../../../shared/records/contentLockedStatesCache'
 import {
   addInstrumentRole,
   addLabwareRole,
   deleteInstrumentRole,
   deleteLabwareRole,
   deleteProtocolStep,
+  editableProtocolSteps,
   insertProtocolStep,
   protocolResourceSummaries,
   updateInstrumentRole,
@@ -104,6 +116,13 @@ describe('protocol declared resources (rail sections)', () => {
   })
 })
 
+// LEG 2b-i (additive priming only): the sync gates read the declared
+// content-locked set from the shared cache; prime the controlled document's
+// declared set BEFORE the lock pins run. Existing assertions are untouched.
+beforeAll(() => {
+  seedContentLockedStates('document-controlled-signing', ['effective'])
+})
+
 describe('declared-role editing (labware + equipment)', () => {
   const withRoles = () => ({
     kind: 'protocol',
@@ -179,5 +198,21 @@ describe('declared-role editing (labware + equipment)', () => {
     const controlled = { ...withRoles(), lifecycleId: 'document-controlled-signing', state: 'effective' }
     expect(() => addLabwareRole(controlled, { roleId: 'x' })).toThrow('locked')
     expect(() => deleteInstrumentRole(controlled, 'plate_reader')).toThrow('locked')
+  })
+})
+
+describe('unprimed cache fail-closed (D1)', () => {
+  it('unprimed + controlled effective payload throws (not returns steps)', () => {
+    __resetContentLockedStatesCache()
+    const controlled = { ...original, lifecycleId: 'document-controlled-signing', state: 'effective' }
+    expect(() => editableProtocolSteps(controlled)).toThrow()
+  })
+
+  it('primed-failure does not stick an empty array — sync gate still throws', async () => {
+    __resetContentLockedStatesCache()
+    vi.mocked(apiClient.getLifecycleContentLockedStates).mockRejectedValue(new Error('fetch failed'))
+    await primeContentLockedStates('document-controlled-signing')
+    const controlled = { ...original, lifecycleId: 'document-controlled-signing', state: 'effective' }
+    expect(() => editableProtocolSteps(controlled)).toThrow()
   })
 })

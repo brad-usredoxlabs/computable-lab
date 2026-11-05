@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import RecordRegistryPage from './RecordRegistryPage'
+import { seedContentLockedStates, __resetContentLockedStatesCache } from '../shared/records/contentLockedStatesCache'
 
 // ---------------------------------------------------------------------------
 // Mocks — use vi.hoisted to define variables before vi.mock hoisting
@@ -42,6 +43,8 @@ const mocked = vi.hoisted(() => ({
   mockGetValidTransitions: vi.fn().mockResolvedValue({ transitions: [] }),
   mockGetRecord: vi.fn(),
   mockCreateDraftCopy: vi.fn(),
+  mockGetLifecycleContentLockedStates: vi.fn().mockResolvedValue([]),
+  mockGetLifecycleTerminalStates: vi.fn().mockResolvedValue([]),
   mockOnSelect: null as ((record: { recordId: string; schemaId: string; payload: Record<string, unknown>; isNew: boolean }) => void) | null,
   mockOnUpdate: null as ((payload: Record<string, unknown>, dirty: boolean) => void) | null,
 }))
@@ -57,6 +60,8 @@ vi.mock('../shared/api/client', () => ({
     getValidTransitions: mocked.mockGetValidTransitions,
     getRecord: mocked.mockGetRecord,
     createDraftCopy: mocked.mockCreateDraftCopy,
+    getLifecycleContentLockedStates: mocked.mockGetLifecycleContentLockedStates,
+    getLifecycleTerminalStates: mocked.mockGetLifecycleTerminalStates,
     createSignature: vi.fn(),
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
     // EDITOR-9 fix-1: the page resolves tab kind -> schema $id from the
@@ -516,6 +521,12 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
       if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
       return { records: [], total: 0 }
     })
+    // contentLockedStates echo: the server declares approved + effective as locked.
+    mocked.mockGetLifecycleContentLockedStates.mockResolvedValue(['approved', 'effective'])
+    // Seed the sync cache so the synchronous contentLocked predicate sees the
+    // declared set at render time (prime runs async, but isContentLocked is
+    // evaluated synchronously).
+    seedContentLockedStates('document-controlled-signing', ['approved', 'effective'])
     mocked.mockCreateDraftCopy.mockResolvedValue({
       success: true,
       record: {

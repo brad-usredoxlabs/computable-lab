@@ -1,4 +1,6 @@
 import type { ProtocolRoleSummary, ProtocolResources, ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
+import { isContentLocked } from '../../../shared/records/lifecycleLock'
+import { getContentLockedStatesSync, isContentLockedSetResolved } from '../../../shared/records/contentLockedStatesCache'
 
 type Payload = Record<string, unknown>
 type Step = Record<string, unknown> & { stepId: string }
@@ -42,7 +44,10 @@ export function protocolResourceSummaries(payload: Payload): ProtocolResources {
 
 export function editableProtocolSteps(payload: Payload): Step[] {
   if (payload.kind !== 'protocol') throw new Error('These steps are inherited. Edit the source protocol to change its instructions.')
-  if (payload.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(payload.state))) {
+  if (payload.lifecycleId && !isContentLockedSetResolved(String(payload.lifecycleId))) {
+    throw new Error('Lock status for this lifecycle is unavailable. Reload and try again.')
+  }
+  if (payload.lifecycleId && isContentLocked(payload, getContentLockedStatesSync(String(payload.lifecycleId)))) {
     throw new Error('This controlled protocol is locked. Create a draft copy before editing its steps.')
   }
   if (!Array.isArray(payload.steps)) throw new Error('The protocol has no steps to edit.')
@@ -99,7 +104,10 @@ type RoleListKey = 'labwareRoles' | 'instrumentRoles'
 /** The kind/lock gates of `editableProtocolSteps`, without the steps requirement. */
 function assertRolesEditable(payload: Payload, listKey: RoleListKey): void {
   if (payload.kind !== 'protocol') throw new Error(`These roles are inherited. Edit the source protocol to change its ${listKey}.`)
-  if (payload.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(payload.state))) {
+  if (payload.lifecycleId && !isContentLockedSetResolved(String(payload.lifecycleId))) {
+    throw new Error('Lock status for this lifecycle is unavailable. Reload and try again.')
+  }
+  if (payload.lifecycleId && isContentLocked(payload, getContentLockedStatesSync(String(payload.lifecycleId)))) {
     throw new Error('This controlled protocol is locked. Create a draft copy before editing its declared roles.')
   }
 }
