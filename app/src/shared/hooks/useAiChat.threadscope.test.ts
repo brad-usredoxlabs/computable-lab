@@ -61,15 +61,16 @@ const aiContext: AiContext = { surface: 'run-workspace', summary: 'test', surfac
 // The status the registrar currently reports; flipping it + rerender() is
 // the settle / mid-session-widening flip under test.
 const statusRef: { current?: 'provisional' } = {}
-type GateProps = { aiContext: AiContext; endpoint: 'browser'; scopeStatus?: 'provisional' }
-const gateProps = (): GateProps => ({
+type GateProps = { aiContext: AiContext; endpoint: 'browser'; scopeStatus?: 'provisional'; scope?: string }
+const gateProps = (overrides?: Partial<GateProps>): GateProps => ({
   aiContext,
   endpoint: 'browser',
   ...(statusRef.current ? { scopeStatus: statusRef.current } : {}),
+  ...overrides,
 })
-const renderGate = () => renderHook(
-  (p: GateProps) => useAiChat({ aiContext: p.aiContext, endpoint: p.endpoint, ...(p.scopeStatus ? { scopeStatus: p.scopeStatus } : {}) }),
-  { initialProps: gateProps() },
+const renderGate = (overrides?: Partial<GateProps>) => renderHook(
+  (p: GateProps) => useAiChat({ aiContext: p.aiContext, endpoint: p.endpoint, ...(p.scopeStatus ? { scopeStatus: p.scopeStatus } : {}), ...(p.scope ? { scope: p.scope } : {}) }),
+  { initialProps: gateProps(overrides) },
 )
 
 describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
@@ -181,6 +182,9 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
    * prev reference → no re-render → the sync effect never re-runs. The
    * fix bumps a hydrationSeq state in .finally so the sync effect sees a
    * dep change and persists the in-memory held turn.
+   * Scope assertion (D2): every released POST carries the settled scope header
+   * x-cl-thread-scope: EVG-1, proving the pin distinguishes a scoped release
+   * from an empty-scope POST.
    */
   it('P-e (C-2 release, empty thread): a turn that COMPLETED during the hold is persisted on release', async () => {
     // streamAssist: complete the stream IMMEDIATELY (before release)
@@ -188,9 +192,10 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
       yield { type: 'done', result: { success: true, events: [], notes: [] } }
     })
 
+    const scope = 'EVG-1'
     // Start provisional — no mint, no hydration, no activation
     statusRef.current = 'provisional'
-    const { result, rerender } = renderGate()
+    const { result, rerender } = renderGate({ scope })
     await act(async () => {})
     expect(result.current.threadId).toBeUndefined()
     expect(getThreadCalls()).toHaveLength(0)
@@ -207,20 +212,23 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
     // Release: flip to settled — the lazy-mint effect runs, hydration fires,
     // and the sync effect must persist the held turn
     statusRef.current = undefined
-    rerender(gateProps())
+    rerender(gateProps({ scope }))
 
     // Wait for the thread to resolve and persistence to complete
     await waitFor(() => expect(result.current.threadId).toBeDefined(), { timeout: 3000 })
     // Wait for POSTs — the held turn (user + assistant = 2 messages) must persist
     await waitFor(() => expect(appendCalls()).toHaveLength(2), { timeout: 3000 })
 
-    // The POSTs happen — the bug is that nothing POSTs at all. The scope header
-    // is absent for an empty-scope thread (that is correct — threadHeaders
-    // only emits x-cl-thread-scope when scope is non-empty). The invariant is
-    // exactly 2 posts (no double-POST: the persistedIdsRef guard at :1110
-    // prevents re-persisting the same messages if the effect re-runs).
+    // Scope header assertion: every POST carries the settled scope header,
+    // proving the release binds to the correct thread (D2 — the capture at
+    // :26 is now exercised by a real assertion).
     const posts = appendCalls()
     expect(posts.length).toBe(2)
+    posts.forEach((p) => {
+      expect(p.headers?.['x-cl-thread-scope']).toBe(scope)
+    })
+    // persistedIdsRef guard (filter at :1122-1124, add at :1128) prevents
+    // re-persisting the same messages if the effect re-runs.
 
     vi.mocked(streamAssist).mockClear()
   })
