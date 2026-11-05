@@ -68,4 +68,4 @@ grep -n "resolvePlacedVesselAttribution(\[\]" src/event-editor/lib/previewProjec
 ### Test count delta
 Baseline: 21 passed (before A6). After A6: 22 passed. Full lib: 109 -> 110.
 
-L2-PROMPT2-GHOSTPAINT-1 UNIT fix-1 DONE db3970ce
+L2-PROMPT2-GHOSTPAINT-1 UNIT fix-1 DONE 986e14cd
