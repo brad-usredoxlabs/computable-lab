@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 import {
   addInstrumentRole,
   addLabwareRole,
@@ -102,6 +103,13 @@ describe('protocol declared resources (rail sections)', () => {
     expect(() => deleteProtocolStep(inherited, 's1')).toThrow()
     expect(protocolResourceSummaries(inherited).labwares).toEqual([{ roleId: 'plate' }])
   })
+})
+
+// LEG 2b-i (additive priming only): the sync gates read the declared
+// content-locked set from the shared cache; prime the controlled document's
+// declared set BEFORE the lock pins run. Existing assertions are untouched.
+beforeAll(() => {
+  seedContentLockedStates('document-controlled-signing', ['effective'])
 })
 
 describe('declared-role editing (labware + equipment)', () => {

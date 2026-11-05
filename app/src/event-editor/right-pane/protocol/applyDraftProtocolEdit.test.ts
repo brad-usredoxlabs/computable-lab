@@ -13,7 +13,7 @@
  * silent no-op. Provenance is NEVER constructible via ops: post-apply payload
  * deep-equals the provenance sub-trees.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getRecordMock = vi.fn()
 const updateRecordMock = vi.fn()
@@ -28,6 +28,14 @@ vi.mock('../../../shared/api/client', () => ({
 import { applyDraftProtocolEdit, CHAT_ACCEPT_COMMIT_MESSAGE } from './applyDraftProtocolEdit'
 import { STALE_PROTOCOL_WRITE_MESSAGE } from './protocolEditOps'
 import { ApiError } from '../../../shared/api/errors'
+// LEG 2b-i (additive priming only): the sync gates now read the declared
+// content-locked set from the shared cache; prime it so this suite's
+// lock-gate path stays covered by the same declared set.
+import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
+
+beforeAll(() => {
+  seedContentLockedStates('document-controlled-signing', ['effective'])
+})
 // vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
 // RegExp arg AND with a string arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is
 // not a constructor'). Rejection sites are awaited in try/catch and matched on the message.
