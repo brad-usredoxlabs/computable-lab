@@ -50,6 +50,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const contentLocked = isRecordWriteLocked(formData, contentLockedStates, terminalStates)
   const [saving, setSaving] = useState(false)
   const [draftRevisionId, setDraftRevisionId] = useState<string | null>(null)
+  const [lockPending, setLockPending] = useState(false)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -79,16 +80,20 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
         // Prime declared content-locked and terminal sets from the lifecycle
         const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId
         if (lifecycleId) {
-          Promise.all([
-            primeContentLockedStates(lifecycleId),
-            apiClient.getLifecycleTerminalStates(lifecycleId),
-          ]).then(([states, termStates]) => {
-            if (!cancelled) {
-              setContentLockedStates(states)
-              setTerminalStates(termStates)
-            }
-          })
-        }
+            setLockPending(true)
+            let lockCount = 2
+            const lockDone = () => { if (!cancelled && --lockCount === 0) setLockPending(false) }
+
+            primeContentLockedStates(lifecycleId)
+              .then((states) => { if (!cancelled) setContentLockedStates(states) })
+              .catch(() => { if (!cancelled) setContentLockedStates([]) })
+              .finally(lockDone)
+
+            apiClient.getLifecycleTerminalStates(lifecycleId)
+              .then((termStates) => { if (!cancelled) setTerminalStates(termStates) })
+              .catch(() => { if (!cancelled) setTerminalStates([]) })
+              .finally(lockDone)
+          }
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError(describeApiError(err))
@@ -251,7 +256,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
               <button
                 type="submit"
                 className="record-create-panel__btn record-create-panel__btn--primary"
-                disabled={isSaving || loading || Boolean(loadError) || !useProjection}
+                disabled={isSaving || loading || Boolean(loadError) || !useProjection || lockPending}
                 data-testid="record-edit-save"
               >
                 {isSaving ? 'Saving…' : 'Save'}
