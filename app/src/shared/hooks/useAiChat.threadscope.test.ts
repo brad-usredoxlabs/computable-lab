@@ -11,6 +11,7 @@ import { act } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { AiContext } from '../../types/aiContext'
 import * as threadTabIds from '../api/threadTabIds'
+import { streamAssist } from '../api/aiClient'
 
 vi.mock('../api/aiClient', () => ({ streamAssist: vi.fn(), getAiHealth: vi.fn().mockResolvedValue({ available: true }) }))
 vi.mock('../api/client', () => ({
@@ -126,5 +127,44 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
     expect(getThreadCalls()).toHaveLength(1)
     expect(appendCalls()).toHaveLength(0)
     expect(result.current.threadId).toBe(settledId)
+  })
+
+  it('P-d: sync POSTs gated while provisional mid-session (§3b site 3 / C-4)', async () => {
+    // streamAssist mock: yield a done event to complete the stream
+    vi.mocked(streamAssist).mockImplementation(async function* () {
+      yield { type: 'done', result: {} }
+    })
+
+    statusRef.current = undefined
+    const { result, rerender } = renderGate()
+    await waitFor(() => expect(result.current.threadId).toBeDefined())
+    await act(async () => {})
+    expect(appendCalls()).toHaveLength(0)
+
+    // First send (settled) — stream completes, user + assistant messages POST
+    act(() => { result.current.sendPrompt('First message') })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 3000 })
+    await act(async () => {})
+    await waitFor(() => expect(appendCalls()).toHaveLength(2), { timeout: 3000 })
+    const firstSendCount = appendCalls().length
+
+    // Flip to provisional MID-SESSION — the active thread is kept (C-4)
+    statusRef.current = 'provisional'
+    rerender(gateProps())
+    await act(async () => {})
+    expect(result.current.threadId).toBeDefined()
+
+    // Send while provisional — stream completes but sync effect must NOT POST
+    act(() => { result.current.sendPrompt('Second message provisional') })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 3000 })
+    await act(async () => {})
+    expect(appendCalls()).toHaveLength(firstSendCount) // zero new POSTs while provisional
+
+    // Settle — the second message must POST exactly once (user + assistant = 2 more)
+    statusRef.current = undefined
+    rerender(gateProps())
+    await waitFor(() => expect(appendCalls()).toHaveLength(firstSendCount + 2), { timeout: 3000 })
+
+    vi.mocked(streamAssist).mockClear()
   })
 })
