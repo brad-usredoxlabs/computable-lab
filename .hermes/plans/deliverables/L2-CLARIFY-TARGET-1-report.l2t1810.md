@@ -800,8 +800,9 @@ Rules shipped (one sentence each):
    provided a clause amount keeps the slot ONLY when
    `parseAmount(match).value === slotValue` (the VALUE-MATCH arm
    restricted to the verb clause; the whole-turn VALUE-MATCH arm is
-   unchanged and does the rest). `slotValue === undefined` keeps the
-   clause arm byte-identical to cycle 9 (labeled path untouched). Doc
+   unchanged and does the rest). `slotValue === undefined` makes the
+   added value-check inert but clause SEGMENTATION differs from c9
+   (splitter changed); (corrected — see Correction (c13-D1) below). Doc
    claims in both owned files updated to state the new contract.
 
 Step 1 (RED) — 8c0527890ff6f9fa5eb04cd784eb996130b26ea5: new describe
