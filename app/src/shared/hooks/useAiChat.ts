@@ -853,6 +853,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // thread (reviewer bait #11).
   const persistedIdsRef = useRef<Set<string>>(new Set())
   const hydratedRef = useRef(false)
+  /** Hydration sequence counter — bumps when hydration completes so the sync
+   * effect (deps at :1158) can observe hydration completion even when the
+   * GET returns an empty thread (no state update from setMessages). The ref
+   * stays as the cheap guard that the hydration effect itself uses to prevent
+   * mid-GET sync runs; this counter is the observable signal for post-GET.
+   * L2-THREADSCOPE-FLIP-1 D1 / bait #4: the `.finally` arm (:1089) flips
+   * hydratedRef.current = true without any setState, so a turn that completed
+   * during the hold against an empty thread was never POSTed. */
+  const [hydrationSeq, setHydrationSeq] = useState(0)
   /** The last (scope, threadId) key the hydration effect ran for (reset-on-re-key). */
   const lastThreadKeyRef = useRef<string | null>(null)
   // L2-CHAT-UI-1 LEG F (in-flight-turn guard): TRUE from the moment a send
@@ -1086,7 +1095,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         console.warn('Failed to hydrate AI thread', err)
       })
       .finally(() => {
-        if (!cancelled) hydratedRef.current = true
+        if (!cancelled) {
+          hydratedRef.current = true
+          // Bump hydrationSeq so the sync effect re-runs and can persist any
+          // in-memory messages that arrived during the GET. This is the fix for
+          // the unobservable completion when the thread is empty (D1 / bait #4).
+          setHydrationSeq((n) => n + 1)
+        }
       })
     return () => {
       cancelled = true
@@ -1155,7 +1170,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, activeThread?.scope, activeThread?.id, messages, scopeStatus])
+  }, [endpoint, activeThread?.scope, activeThread?.id, messages, scopeStatus, hydrationSeq])
 
 
   // ------------------------------------------------------------------

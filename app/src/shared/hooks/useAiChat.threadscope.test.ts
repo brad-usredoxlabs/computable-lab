@@ -23,11 +23,17 @@ import { useAiChat } from './useAiChat'
 const TAB_ID_KEY = 'cl.ai-thread-tab-ids'
 const readMap = (): Record<string, string> =>
   JSON.parse(sessionStorage.getItem(TAB_ID_KEY) ?? '{}') as Record<string, string>
-const capture: Array<{ url: string; method: string }> = []
+// Capture fetch calls with headers so we can verify the scope header
+const capture: Array<{ url: string; method: string; headers?: Record<string, string> }> = []
 vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input)
   const method = (init?.method ?? 'GET').toUpperCase()
-  capture.push({ url, method })
+  const headers: Record<string, string> = {}
+  if (init?.headers) {
+    const h = init.headers as Record<string, string>
+    for (const k of Object.keys(h)) headers[k] = h[k]
+  }
+  capture.push({ url, method, headers })
   const isThread = url.includes('/api/ai/threads/')
   return { ok: true, status: 200, json: async () => isThread
     ? { endpoint: 'browser', userId: 'USR-TEST', messages: [], mentions: [], updatedAt: '1970-01-01T00:00:00.000Z' }
@@ -55,15 +61,16 @@ const aiContext: AiContext = { surface: 'run-workspace', summary: 'test', surfac
 // The status the registrar currently reports; flipping it + rerender() is
 // the settle / mid-session-widening flip under test.
 const statusRef: { current?: 'provisional' } = {}
-type GateProps = { aiContext: AiContext; endpoint: 'browser'; scopeStatus?: 'provisional' }
-const gateProps = (): GateProps => ({
+type GateProps = { aiContext: AiContext; endpoint: 'browser'; scopeStatus?: 'provisional'; scope?: string }
+const gateProps = (overrides?: Partial<GateProps>): GateProps => ({
   aiContext,
   endpoint: 'browser',
   ...(statusRef.current ? { scopeStatus: statusRef.current } : {}),
+  ...overrides,
 })
-const renderGate = () => renderHook(
-  (p: GateProps) => useAiChat({ aiContext: p.aiContext, endpoint: p.endpoint, ...(p.scopeStatus ? { scopeStatus: p.scopeStatus } : {}) }),
-  { initialProps: gateProps() },
+const renderGate = (overrides?: Partial<GateProps>) => renderHook(
+  (p: GateProps) => useAiChat({ aiContext: p.aiContext, endpoint: p.endpoint, ...(p.scopeStatus ? { scopeStatus: p.scopeStatus } : {}), ...(p.scope ? { scope: p.scope } : {}) }),
+  { initialProps: gateProps(overrides) },
 )
 
 describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
@@ -164,6 +171,64 @@ describe('useAiChat — provisional scopeStatus gate (unit 2)', () => {
     statusRef.current = undefined
     rerender(gateProps())
     await waitFor(() => expect(appendCalls()).toHaveLength(firstSendCount + 2), { timeout: 3000 })
+
+    vi.mocked(streamAssist).mockClear()
+  })
+
+  /**
+   * P-e (C-2 release, empty thread): a turn that COMPLETED during the hold
+   * is persisted on release. This is the D1 defect: when the thread is empty
+   * the hydration GET returns no messages so setMessages returns the same
+   * prev reference → no re-render → the sync effect never re-runs. The
+   * fix bumps a hydrationSeq state in .finally so the sync effect sees a
+   * dep change and persists the in-memory held turn.
+   * Scope assertion (D2): every released POST carries the settled scope header
+   * x-cl-thread-scope: EVG-1, proving the pin distinguishes a scoped release
+   * from an empty-scope POST.
+   */
+  it('P-e (C-2 release, empty thread): a turn that COMPLETED during the hold is persisted on release', async () => {
+    // streamAssist: complete the stream IMMEDIATELY (before release)
+    vi.mocked(streamAssist).mockImplementation(async function* (_prompt, _surface, _ctx) {
+      yield { type: 'done', result: { success: true, events: [], notes: [] } }
+    })
+
+    const scope = 'EVG-1'
+    // Start provisional — no mint, no hydration, no activation
+    statusRef.current = 'provisional'
+    const { result, rerender } = renderGate({ scope })
+    await act(async () => {})
+    expect(result.current.threadId).toBeUndefined()
+    expect(getThreadCalls()).toHaveLength(0)
+
+    // Send while provisional — the turn is held in memory
+    act(() => { result.current.sendPrompt('Held message') })
+    // Wait for the stream to COMPLETE — isStreaming goes false BEFORE release
+    await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 3000 })
+    await act(async () => {})
+    // Messages are in memory but nothing has POSTed
+    expect(result.current.messages.length).toBeGreaterThanOrEqual(2)
+    expect(appendCalls()).toHaveLength(0)
+
+    // Release: flip to settled — the lazy-mint effect runs, hydration fires,
+    // and the sync effect must persist the held turn
+    statusRef.current = undefined
+    rerender(gateProps({ scope }))
+
+    // Wait for the thread to resolve and persistence to complete
+    await waitFor(() => expect(result.current.threadId).toBeDefined(), { timeout: 3000 })
+    // Wait for POSTs — the held turn (user + assistant = 2 messages) must persist
+    await waitFor(() => expect(appendCalls()).toHaveLength(2), { timeout: 3000 })
+
+    // Scope header assertion: every POST carries the settled scope header,
+    // proving the release binds to the correct thread (D2 — the capture at
+    // :26 is now exercised by a real assertion).
+    const posts = appendCalls()
+    expect(posts.length).toBe(2)
+    posts.forEach((p) => {
+      expect(p.headers?.['x-cl-thread-scope']).toBe(scope)
+    })
+    // persistedIdsRef guard (filter at :1124-1126, add at :1130) prevents
+    // re-persisting the same messages if the effect re-runs.
 
     vi.mocked(streamAssist).mockClear()
   })
