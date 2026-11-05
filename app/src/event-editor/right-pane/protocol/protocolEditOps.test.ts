@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from '../../../shared/api/client'
 import { ApiError } from '../../../shared/api/errors'
-import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
+import { seedContentLockedStates, __resetContentLockedStatesCache } from '../../../shared/records/contentLockedStatesCache'
 import {
   STALE_PROTOCOL_WRITE_MESSAGE,
   applyOps,
@@ -12,7 +12,7 @@ import {
 // RegExp arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is not a constructor').
 // Rejection sites are awaited in try/catch and matched on the message instead.
 
-vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
+vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn(), getLifecycleContentLockedStates: vi.fn() } }))
 
 // Seed the cache so content-locked gates resolve against the declared set
 seedContentLockedStates('document-controlled-signing', ['effective'])
@@ -447,5 +447,24 @@ describe('applyProtocolEdit — one atomic write under the human lock', () => {
     expect(e).toBeInstanceOf(Error)
     expect((e as Error).message).toMatch(/op 0.*executed/s)
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
+  })
+
+  it('primes the content-lock cache before applyOps when payload carries lifecycleId', async () => {
+    // Reset so the cache is unprimed — the fail-closed gate would throw
+    // 'Lock status ... unavailable' if nothing primes it before applyOps.
+    __resetContentLockedStatesCache()
+    const payloadWithLifecycle = { ...basePayload(), lifecycleId: 'document-controlled-signing' }
+    vi.mocked(apiClient.getRecord).mockResolvedValue(record(payloadWithLifecycle, 'sha-1') as never)
+    vi.mocked(apiClient.getLifecycleContentLockedStates).mockResolvedValue(['effective'] as never)
+    vi.mocked(apiClient.updateRecord).mockResolvedValue({ record: record(payloadWithLifecycle, 'sha-2') } as never)
+    const ops: ProtocolEditOp[] = [
+      { op: 'step_update', stepId: 's1', label: 'Lyse cells' },
+    ]
+    const outcome = await applyProtocolEdit('PRT-1', ops)
+    // The prime must have fetched the transitions before applyOps ran.
+    expect(apiClient.getLifecycleContentLockedStates).toHaveBeenCalledWith('document-controlled-signing')
+    // The update must still land (the gate does not block when primed).
+    expect(outcome.wrote).toBe(true)
+    expect(apiClient.updateRecord).toHaveBeenCalledTimes(1)
   })
 })
