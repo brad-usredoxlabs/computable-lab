@@ -197,4 +197,61 @@ describe('RecordEditPanel — content-locked rendering', () => {
     // Draft-revision button MUST be present
     await waitFor(() => expect(screen.queryByTestId('record-edit-create-draft-revision')).toBeTruthy())
   })
+
+  it('DEFECT 2: terminal fetch rejects but content-locked resolves -> locked UI still locks (no fail-open)', async () => {
+    const payload = {
+      kind: 'controlled-document',
+      id: 'DOC-DEF2',
+      state: 'approved',
+      lifecycleId: 'doc-lifecycle',
+      title: 'Test',
+    }
+    ;(apiClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordId: 'DOC-DEF2',
+      schemaId: 'controlled-document',
+      payload,
+    })
+    // Content-locked resolves successfully
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved'])
+    // Terminal states fetch REJECTS
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('terminal fetch failed'))
+
+    render(<RecordEditPanel recordId="DOC-DEF2" title="Test Document" />)
+
+    // The record is content-locked (state 'approved' is in locked set)
+    // even though terminal states failed.  Save button must NOT appear.
+    await waitFor(() => expect(screen.queryByTestId('record-edit-create-draft-revision')).toBeTruthy())
+    expect(screen.queryByTestId('record-edit-save')).toBeNull()
+  })
+
+  it('DEFECT 5: Save button disabled while lock facts are still loading (transient fail-open guard)', async () => {
+    const payload = {
+      kind: 'controlled-document',
+      id: 'DOC-DEF5',
+      state: 'approved',
+      lifecycleId: 'doc-lifecycle',
+      title: 'Test',
+    }
+    ;(apiClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordId: 'DOC-DEF5',
+      schemaId: 'controlled-document',
+      payload,
+    })
+    // Content-locked resolves quickly
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved'])
+    // Terminal states hangs forever — never resolves
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}))
+
+    render(<RecordEditPanel recordId="DOC-DEF5" title="Test Document" />)
+
+    // Before lock facts fully resolve, the Save button should already be disabled
+    // (lockPending should gate it).  We check that the Save button is NOT present
+    // because contentLocked will become true from the content-locked half resolving.
+    await waitFor(() => {
+      const saveBtn = screen.queryByTestId('record-edit-save')
+      // Either Save is hidden (contentLocked took over) or it exists but is disabled
+      // In the lockPending scenario, contentLocked should resolve first and hide Save
+      expect(saveBtn).toBeNull()
+    })
+  })
 })
