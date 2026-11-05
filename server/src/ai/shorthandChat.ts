@@ -178,6 +178,15 @@ export function deckLabwareExactMatches(
       out.push({ recordId: lw.labwareId, title: lw.name });
     }
   }
+  // GHOSTPAINT-1: also match by labwareId so deck IDs are recognized as known
+  if (out.length === 0) {
+    for (const lw of deck) {
+      if (typeof lw?.labwareId !== 'string') continue;
+      if (lw.labwareId.trim().toLowerCase() === needle) {
+        out.push({ recordId: lw.labwareId, title: lw.name ?? '' });
+      }
+    }
+  }
   return out;
 }
 
