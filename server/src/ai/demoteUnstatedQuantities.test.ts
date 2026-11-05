@@ -268,17 +268,6 @@ describe('demoteUnstatedQuantities — the no-material mix leg (cycle 7 unit 1, 
  * CLAUSE naming THIS action's verb. K1 = unrelated clause; K2 = wrong kind.
  */
 describe('demoteUnstatedQuantities — the no-material over-KEEP guard (cycle 7 unit 2, D1)', () => {
-  function mixDocSlots(slots: Record<string, number>): ScientistIntent {
-    const action: Record<string, unknown> = { action: 'mix', ...slots };
-    return {
-      kind: 'scientist-intent',
-      version: '0.1.0',
-      intentId: 't1-c7d2-mix',
-      actions: [action as unknown as ScientistIntent['actions'][number]],
-      unresolved: [],
-    };
-  }
-
   it('K1: an UNRELATED action\'s volume (different clause) must NOT keep this mix\'s invented volume', () => {
     // The mix names no material (label=''). The 200 uL belongs to the ADD action
     // (a different clause); the mix's own volume:50 was never stated → DEMOTED.
@@ -301,5 +290,80 @@ describe('demoteUnstatedQuantities — the no-material over-KEEP guard (cycle 7 
     expect(r.notes.length).toBe(1);
     const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
     expect('cycles' in action).toBe(false);
+  });
+});
+
+/**
+ * cycle 9 unit 1 (advc-c8: D1 MAJOR over-STRIP e1/e2/e3, D2 MINOR
+ * no-separator over-KEEP a2/a3/a6) — the material-less arm inverts to
+ * DEFAULT-KEEP (ruling l2t1200 R1.2 "Never strip a volume the scientist
+ * actually stated"): a material-less declared-quantity slot is STATED when
+ * EITHER the clause rule holds (the clause naming THIS verb carries an
+ * amount of the declared kind; clause boundary now extends to `then`/`and`
+ * junctions) OR the VALUE-MATCH arm holds (the turn carries an
+ * amount-with-unit of the declared KIND whose amount EQUALS the slot value —
+ * the scientist's number is present in their own words).
+ */
+// A material-less mix doc carrying the given quantity slots (module scope,
+// hoisted from the cycle 7 K1/K2 describe so BOTH describes can build docs;
+// body unchanged from the cycle 7 helper).
+function mixDocSlots(slots: Record<string, number>): ScientistIntent {
+  const action: Record<string, unknown> = { action: 'mix', ...slots };
+  return {
+    kind: 'scientist-intent',
+    version: '0.1.0',
+    intentId: 't1-c7d2-mix',
+    actions: [action as unknown as ScientistIntent['actions'][number]],
+    unresolved: [],
+  };
+}
+
+describe('demoteUnstatedQuantities — material-less DEFAULT-KEEP (cycle 9 unit 1, c8 D1/D2)', () => {
+  it('e1: a PARAPHRASED stated volume (verb word differs from the clause verb) keeps the slot (no over-strip)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 75 }), 'Combine 75 uL of buffer');
+    expect(r.demoted.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect(action['volume']).toBe(75);
+  });
+
+  it('e2: a stated volume in a SIBLING sentence keeps the slot (no over-strip)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 75 }), 'Mix the plate. Add 75 uL.');
+    expect(r.demoted.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect(action['volume']).toBe(75);
+  });
+
+  it('e3: a stated COUNT in a differently-worded turn keeps the slot (no over-strip)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ cycles: 3 }), 'Vortex for 3 cycles');
+    expect(r.demoted.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect(action['cycles']).toBe(3);
+  });
+
+  it('a2: an UNRELATED volume with NO clause separator still demotes (over-KEEP guard, then-split)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Add 200 uL of DMEM to A1 then mix');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('volume');
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(false);
+  });
+
+  it('a3: an UNRELATED volume joined only by a NEWLINE still demotes (over-KEEP guard, sentence split)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Add 200 uL of DMEM to A1\nmix');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('volume');
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(false);
+  });
+
+  it('a6: an UNRELATED volume joined by `and` still demotes (over-KEEP guard, and-split)', () => {
+    const r = demoteUnstatedQuantities(mixDocSlots({ volume: 50 }), 'Add 200 uL of DMEM to A1 and mix');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.action).toBe('mix');
+    expect(r.demoted[0]!.argument).toBe('volume');
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(false);
   });
 });
