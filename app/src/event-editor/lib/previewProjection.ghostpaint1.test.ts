@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPreviewWellIndex,
   previewAffectedLabwareIds,
+  previewStepStatusForLabware,
   previewWellsForLabware,
 } from './previewProjection'
 import type { EventEditorPreview } from '../EventEditorContext'
@@ -87,5 +88,25 @@ describe('GHOSTPAINT1 A5 — well-less details ⇒ no bucket', () => {
     } as unknown as PlateEvent
     const index = buildPreviewWellIndex(preview([wellLessEvent]), ['lbw-seed-plate-96-flat'])
     expect(index.byLabware.size).toBe(0)
+  })
+})
+
+describe('GHOSTPAINT1 A6 — fallback arm carries _protocolStepStatus layering', () => {
+  it('applies step-status to the sole placed vessel when the event is labware-less', () => {
+    const statusEvent: PlateEvent = {
+      eventId: 'evt-add_material-status',
+      event_type: 'add_material',
+      details: {
+        material: '1 mM Clofibrate in DMSO',
+        volumeUl: 1,
+        volume: { value: 1, unit: 'uL' },
+        wells: ['E2', 'E3'],
+      },
+      _protocolStepStatus: 'current' as const,
+    } as unknown as PlateEvent
+    const index = buildPreviewWellIndex(preview([statusEvent]), ['lbw-seed-plate-96-flat'])
+    const status = previewStepStatusForLabware(index, 'lbw-seed-plate-96-flat')
+    expect(status.get('E2')).toBe('current')
+    expect(status.get('E3')).toBe('current')
   })
 })

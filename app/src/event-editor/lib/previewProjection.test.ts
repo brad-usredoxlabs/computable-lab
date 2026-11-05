@@ -62,7 +62,7 @@ describe('buildPreviewWellIndex status layering', () => {
   })
 
   it('returns an empty status map for unknown labware', () => {
-    const index = buildPreviewWellIndex(null)
+    const index = buildPreviewWellIndex(null, [])
     expect(previewStepStatusForLabware(index, 'missing').size).toBe(0)
   })
 })
