@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
-import { isContentLocked } from '../../shared/records/lifecycleLock'
+import { isRecordWriteLocked } from '../../shared/records/lifecycleLock'
 import { primeContentLockedStates } from '../../shared/records/contentLockedStatesCache'
 // Import via the barrel — index.ts pulls in taptab.css; a direct
 // `./TapTabEditor` import renders the editor unstyled.
@@ -45,7 +45,9 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [createRunError, setCreateRunError] = useState<string | null>(null)
-  const [contentLocked, setContentLocked] = useState(false)
+  const [contentLockedStates, setContentLockedStates] = useState<string[]>([])
+  const [terminalStates, setTerminalStates] = useState<string[]>([])
+  const contentLocked = isRecordWriteLocked(formData, contentLockedStates, terminalStates)
   const [saving, setSaving] = useState(false)
   const [draftRevisionId, setDraftRevisionId] = useState<string | null>(null)
 
@@ -74,12 +76,16 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
         const payload = (record.payload ?? {}) as Record<string, unknown>
         setFormData(payload)
         if (proj) setProjection(proj)
-        // Prime declared content-locked set from the lifecycle
+        // Prime declared content-locked and terminal sets from the lifecycle
         const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId
         if (lifecycleId) {
-          primeContentLockedStates(lifecycleId).then((states) => {
+          Promise.all([
+            primeContentLockedStates(lifecycleId),
+            apiClient.getLifecycleTerminalStates(lifecycleId),
+          ]).then(([states, termStates]) => {
             if (!cancelled) {
-              setContentLocked(isContentLocked(record.payload, states))
+              setContentLockedStates(states)
+              setTerminalStates(termStates)
             }
           })
         }
@@ -165,7 +171,7 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
     try {
       const result = await apiClient.createDraftCopy(recordId, {})
       if (result.record?.recordId) {
-        setSavedAt(Date.now())
+        window.dispatchEvent(new CustomEvent('cl:records-changed'))
         setDraftRevisionId(result.record.recordId)
       }
     } catch (err) {

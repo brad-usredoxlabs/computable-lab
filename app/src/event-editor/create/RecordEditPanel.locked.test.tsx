@@ -130,7 +130,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
     })
   })
 
-  it('clicking draft button calls createDraftCopy and shows confirmation', async () => {
+  it('clicking draft button calls createDraftCopy and dispatches cl:records-changed', async () => {
     const payload = {
       kind: 'controlled-document',
       id: 'DOC-TEST',
@@ -149,6 +149,8 @@ describe('RecordEditPanel — content-locked rendering', () => {
       record: { recordId: 'DOC-TEST-DRAFT', schemaId: 'controlled-document', payload: {} },
     })
 
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+
     render(<RecordEditPanel recordId="DOC-TEST" title="Test Document" />)
 
     const draftBtn = await screen.findByTestId('record-edit-create-draft-revision')
@@ -160,6 +162,13 @@ describe('RecordEditPanel — content-locked rendering', () => {
 
     // Should show confirmation hint
     await waitFor(() => expect(screen.getByText(/Draft revision created/i)).toBeTruthy())
+
+    // D4: must dispatch cl:records-changed
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.any(CustomEvent))
+    const calls = dispatchSpy.mock.calls.filter((args) => (args[0] as CustomEvent).type === 'cl:records-changed')
+    expect(calls.length).toBe(1)
+
+    dispatchSpy.mockRestore()
   })
 
   it('hides Save and shows draft-revision when state is terminal but NOT content-locked (D2)', async () => {
