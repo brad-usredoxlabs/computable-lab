@@ -79,5 +79,5 @@ SHA256 of RecordEditPanel.tsx verified: ecb41de4badcaf2169b695ddd7f65606a77006a1
 ```
 (Only untracked node_modules symlinks. No dirty files.)
 
-RECORD-LOCK-GUARD-1-LEG2fix3 DONE 42dec86f
-L1-RECORD-LOCK-GUARD-1-LEG2fix3 UNIT unit DONE 42dec86f
+RECORD-LOCK-GUARD-1-LEG2fix3 DONE f2bc0ca6
+L1-RECORD-LOCK-GUARD-1-LEG2fix3 UNIT unit DONE f2bc0ca6
