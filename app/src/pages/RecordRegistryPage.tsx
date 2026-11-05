@@ -182,6 +182,9 @@ export default function RecordRegistryPage() {
   // empty and browsing FAILS OPEN (rows remain visible).
   const [terminalStatesByLifecycle, setTerminalStatesByLifecycle] = useState<Record<string, string[]>>({});
   const terminalFetchedRef = useRef<Set<string>>(new Set());
+  // DEFECT 6 fix: content-locked states committed to page state so the
+  // predicate recomputes when they arrive — mirrors terminalStatesByLifecycle.
+  const [contentLockedStatesByLifecycle, setContentLockedStatesByLifecycle] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     const pending = new Set<string>();
@@ -190,11 +193,8 @@ export default function RecordRegistryPage() {
       if (lifecycleId && !terminalFetchedRef.current.has(lifecycleId)) pending.add(lifecycleId);
     }
     if (pending.size === 0) return;
-    // Prime the content-locked states cache in parallel with terminal states.
-    // Fail-open: tests may lack the mock, server may be unreachable.
-    void Promise.allSettled([...pending].map(async (lifecycleId) => {
-      try { await primeContentLockedStates(lifecycleId); } catch { /* fail open */ }
-    }));
+    // Prime content-locked states, committing the resolved sets into page
+    // state so the predicate recomputes when they arrive (DEFECT 6 fix).
     let cancelled = false;
     void Promise.all(
       [...pending].map(async (lifecycleId) => {
@@ -228,8 +228,34 @@ export default function RecordRegistryPage() {
         return next;
       });
     });
+
+    // DEFECT 6 fix: prime content-locked states and commit resolved sets into
+    // page state so the predicate recomputes when they arrive — mirrors the
+    // terminal-states pattern. Fail-open: a rejected prime simply leaves that
+    // lifecycle out of the map (no invented policy).
+    let contentCancelled = false;
+    Promise.all(
+      [...pending].map(async (lifecycleId) => {
+        try {
+          const states = await primeContentLockedStates(lifecycleId);
+          return [lifecycleId, states] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (contentCancelled) return;
+      const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+      if (entries.length === 0) return;
+      setContentLockedStatesByLifecycle((prev) => {
+        const next = { ...prev };
+        for (const [lifecycleId, states] of entries) next[lifecycleId] = states;
+        return next;
+      });
+    });
     return () => {
       cancelled = true;
+      contentCancelled = true;
     };
   }, [records]);
 
@@ -565,7 +591,10 @@ export default function RecordRegistryPage() {
   const selectedLifecycleId = (selectedRecord?.payload as { lifecycleId?: string } | undefined)?.lifecycleId ?? '';
   const contentLocked =
     editorMode === 'edit' &&
-    isContentLocked(selectedRecord?.payload as { state?: string } | undefined, getContentLockedStatesSync(selectedLifecycleId));
+    isContentLocked(
+      selectedRecord?.payload as { state?: string } | undefined,
+      contentLockedStatesByLifecycle[selectedLifecycleId] ?? getContentLockedStatesSync(selectedLifecycleId),
+    );
 
   // QMS7-6 (OQ-2 ruling A): an archived/terminal record opens READ-ONLY via
   // the SAME single data-driven predicate the list filter uses — the row is
