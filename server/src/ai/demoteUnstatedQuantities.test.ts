@@ -398,16 +398,16 @@ describe('demoteUnstatedQuantities — material-less DEFAULT-KEEP (cycle 9 unit 
  * L2-PROMPT2-VOLUME-N1-MISREAD-1 — the N1 defect: the prompt states "1uL" but the
  * material label "1 mM Clofibrate in DMSO" (with space) doesn't match "1mM clofibrate
  * in DMSO" (no space) in the raw turn, so extractQuantity returns null. The fix
- * falls through to clauseStatesKind (kind-only) which finds "1uL" in the add clause.
+ * falls through to clauseStatesKind with slotValue: value-equality (1 === 1) keeps it.
  */
 describe('N1: stated volume with label-adjacency miss (PROMPT2 re-gate)', () => {
-  it('the prompt states 1uL — volumeUl:100 is NOT demoted when clause carries the stated amount', () => {
-    // Exact shape from the re-gate: the model emitted volumeUl:100 (assumed),
-    // the turn says "Add 1uL of 1mM clofibrate in DMSO to wells E2-H5."
-    // The material label "1 mM Clofibrate in DMSO" (normalized, with space)
-    // is NOT literally present in the turn ("1mM" has no space) → extractQuantity
-    // returns null → fall through to clauseStatesKind (kind-only) → finds "1uL"
-    // in the add clause → STATED → keep.
+  it('the prompt states 1uL — volumeUl:1 IS NOT demoted when value-equality confirms the match', () => {
+    // Exact shape from the served revision: the model emitted volumeUl:1 (the
+    // scientist's own value), the turn says "Add 1uL of 1mM clofibrate in DMSO
+    // to wells E2-H5." The material label "1 mM Clofibrate in DMSO" (normalized,
+    // with space) is NOT literally present in the turn ("1mM" has no space) →
+    // extractQuantity returns null → fall through to clauseStatesKind with
+    // slotValue (1 === 1) → STATED → keep.
     const doc: ScientistIntent = {
       kind: 'scientist-intent',
       version: '0.1.0',
@@ -416,7 +416,7 @@ describe('N1: stated volume with label-adjacency miss (PROMPT2 re-gate)', () => 
         action: 'add_material',
         material: '1 mM Clofibrate in DMSO',
         targetWells: ['E2','E3','E4','E5','F2','F3','F4','F5','G2','G3','G4','G5','H2','H3','H4','H5'],
-        volumeUl: 100,
+        volumeUl: 1,
       } as unknown as ScientistIntent['actions'][number]],
       unresolved: [],
     };
@@ -426,6 +426,7 @@ describe('N1: stated volume with label-adjacency miss (PROMPT2 re-gate)', () => 
     expect(r.doc).toBe(doc);
     const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
     expect('volumeUl' in action).toBe(true);
+    expect(action['volumeUl']).toBe(1);
     expect(volumeUlFacts(r.doc).length).toBe(0);
   });
 
@@ -434,6 +435,59 @@ describe('N1: stated volume with label-adjacency miss (PROMPT2 re-gate)', () => 
     const r = demoteUnstatedQuantities(addMaterialDoc(true, 100), 'Add DMEM to A1');
     expect(r.demoted.length).toBe(1);
     expect(r.demoted[0]!.argument).toBe('volumeUl');
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volumeUl' in action).toBe(false);
+    expect(volumeUlFacts(r.doc).length).toBe(1);
+  });
+
+  it('over-keep guard — labelled near-miss: DMEM 50 uL vs "500 uL of water" is DEMOTED', () => {
+    // The labelled path with value-equality: the doc carries volumeUl:50 for DMEM,
+    // but the turn states "500 uL of water" (a different material, different value).
+    // With value-equality: 50 !== 500 → DEMOTED.
+    // Without value-equality (kind-only): any volume in clause → STATED → over-KEPT.
+    const doc: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 't1-overkeep',
+      actions: [{
+        action: 'add_material',
+        material: 'DMEM',
+        targetWells: ['A1'],
+        volumeUl: 50,
+      } as unknown as ScientistIntent['actions'][number]],
+      unresolved: [],
+    };
+    const r = demoteUnstatedQuantities(doc, 'Add 500 uL of water to A1');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.argument).toBe('volumeUl');
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0]).toMatch(/Demoted unstated quantity/);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volumeUl' in action).toBe(false);
+    expect(volumeUlFacts(r.doc).length).toBe(1);
+  });
+
+  it('100-vs-stated-1 — volumeUl:100 vs "Add 1uL…" is DEMOTED with disclosed fact', () => {
+    // The model smuggled 100 uL when the scientist stated 1 uL.
+    // Value-equality: 100 !== 1 → DEMOTED with a disclosed assumed-value fact.
+    const doc: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 't1-100vs1',
+      actions: [{
+        action: 'add_material',
+        material: '1 mM Clofibrate in DMSO',
+        targetWells: ['E2','E3','E4','E5','F2','F3','F4','F5','G2','G3','G4','G5','H2','H3','H4','H5'],
+        volumeUl: 100,
+      } as unknown as ScientistIntent['actions'][number]],
+      unresolved: [],
+    };
+    const r = demoteUnstatedQuantities(doc, 'Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.');
+    expect(r.demoted.length).toBe(1);
+    expect(r.demoted[0]!.argument).toBe('volumeUl');
+    expect(r.demoted[0]!.value).toBe(100);
+    expect(r.notes.length).toBe(1);
+    expect(r.notes[0]).toMatch(/Demoted unstated quantity/);
     const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
     expect('volumeUl' in action).toBe(false);
     expect(volumeUlFacts(r.doc).length).toBe(1);
