@@ -325,4 +325,26 @@ describe('PreviewActionBar commit verb visibility (L2-CLARIFY-TARGET-1 D2)', () 
     expect(screen.getByRole('button', { name: /^Discard$/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /review terms to accept/i })).toBeTruthy()
   })
+
+  it('after sign-off with hasPreview, shows Accept and persists on click (D2-fix3 post-sign-off commit path)', async () => {
+    // D2-fix3: after signing off all decisionNeeded terms, the bar must still
+    // show Accept (chatCommitSurface must not hide it post-sign-off) and clicking
+    // Accept must call persistAcceptedEventGraph exactly once.
+    mocks.aiPanelMock = { chat: { hasPreview: true } }
+    // Preview has 1 decisionNeeded term (draftOnly binding)
+    renderBar()
+    expect(preview.ontologyBindings!.filter((b) => b.draftOnly)).toHaveLength(1)
+
+    // Open "View changes", sign off the term, close
+    fireEvent.click(screen.getByRole('button', { name: /review terms to accept/i }))
+    fireEvent.click(screen.getByTestId('term-approve-all'))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    // Accept button must be present (not hidden by chatCommitSurface)
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
+
+    // Clicking Accept must persist exactly once
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    await waitFor(() => expect(mocks.persistAcceptedEventGraph).toHaveBeenCalledTimes(1))
+  })
 })

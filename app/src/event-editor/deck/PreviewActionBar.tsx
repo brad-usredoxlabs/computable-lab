@@ -149,10 +149,11 @@ export function PreviewActionBar() {
   // (chat.hasPreview === true), the commit verbs render on the chat
   // surface — rendering them here too is dead chrome (SOP rule 12).
   // "View changes" always renders regardless.
-  // L2-CLARIFY-TARGET-1 D2-fix2 (ruling 24f95c54): keep Accept visible
-  // when there are unsigned ontology terms, because the card's Apply
-  // path hardcodes termDecisions: {} and would be permanently blocked.
-  const chatCommitSurface = aiPanel?.chat?.hasPreview === true && pendingDecisions.length === 0
+  // L2-CLARIFY-TARGET-1 D2-fix3: keep Accept visible for the whole life
+  // of a term-heavy preview (while terms are unsigned AND after sign-off),
+  // so the signed decisions are committable from the bar when the card's
+  // Apply path hardcodes termDecisions: {} and blocks the card.
+  const chatCommitSurface = aiPanel?.chat?.hasPreview === true && decisionNeeded.length === 0
 
   return (
     <div className="preview-bar" role="region" aria-label="Preview actions">
