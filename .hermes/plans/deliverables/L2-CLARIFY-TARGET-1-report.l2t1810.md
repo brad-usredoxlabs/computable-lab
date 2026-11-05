@@ -772,3 +772,88 @@ this report commit step 3. No merge, no lane-stack restart, never
 :3001/:5174, no npm install. No UI change. Implementation complete;
 acceptance (browser re-gate) remains the independent reviewer's lane.
 
+## cycle 11 (c10 D1+D2) — splitter variants + value-dependent clause arm
+
+Lane 2 / item L2-CLARIFY-TARGET-1-C11, worktree l2t1810, branch
+cl/lane2-target1-1-l2t1810. Base 0fa1d58a (cycle 9 DONE,
+orchestrator-verified 2026-11-04 20:10 EST in this worktree).
+Advc-c10 VERDICT: fix with TWO MINOR residuals, both pinned pre-existing
+at 80649c80, both labeled defects by the acceptance criterion "over-KEEP
+of a number NOT in the turn is a defect": (D1) the clause splitter
+(reconcileDraftQuantities.ts:148) survived boundary variants —
+`to`/`plus`/`&` connectors, capital `And`/`Then`, a tab, a no-whitespace
+sentence boundary; (D2) the material-less CLAUSE arm was value-INDEPENDENT
+(demoteUnstatedQuantities.ts:44-47 doc + `clauseStatesKind`'s boolean
+return) — a not-in-turn slot value was kept whenever the verb's clause
+carried ANY same-kind amount.
+
+Rules shipped (one sentence each):
+1. Splitter: the clause boundary now also fires on `&`, tabs, sentence
+   punctuation WITH OR WITHOUT following whitespace, and the
+   case-insensitive `then`/`and`/`plus`/`to` junction — pinned literal
+   `/(?<=[.!?])\s*|[,;]+|\n+|\t+|&|\b(?:then|and|plus|to)\b/i` (the `i`
+   flag on the literal; `(?i)` is not JS syntax, and the punct/`&`/`\t`/
+   `\n` alternatives are case-inert so the flag only widens the junction).
+   The clause-fragment join rule is intact: a fragment that loses its verb
+   still cannot orphan an amount (K1/P-a pins pass unedited).
+2. Clause arm value-DEPENDENT: in `clauseStatesKind`, when `slotValue` is
+   provided a clause amount keeps the slot ONLY when
+   `parseAmount(match).value === slotValue` (the VALUE-MATCH arm
+   restricted to the verb clause; the whole-turn VALUE-MATCH arm is
+   unchanged and does the rest). `slotValue === undefined` keeps the
+   clause arm byte-identical to cycle 9 (labeled path untouched). Doc
+   claims in both owned files updated to state the new contract.
+
+Step 1 (RED) — 8c0527890ff6f9fa5eb04cd784eb996130b26ea5: new describe
+with P-1 (slot value EQUAL to a clause amount KEEPS, both kinds), P-2
+(slot value NOT equal to any amount in the turn DEMOTED even when the
+verb clause carries a different same-kind amount — kills the
+value-independent clause arm), P-3 (each c10 §4 probe shape verbatim:
+`to`/`plus`/`&`/`.mix`/`AND`/`Then`/tab — slot volume:50 demoted). No
+existing assertion body edited (P-4 = the 31 baseline tests incl.
+K1/K2/P-a..P-d and e1/e2/e3/a2/a3/a6, run unedited in the matrix).
+Raw RED at HEAD+step1 (2 failed | 32 passed of 34):
+  P-2 "Mix 75 uL" volume:50  → expected +0 to be 1 (demoted=0 at HEAD)
+  P-3 "Add 200 uL of DMEM to A1 to mix" → expected +0 to be 1
+  (P-1 GREEN at HEAD — the value-equal keep already held via the clause
+  arm; it is the guard pin against the step-2 change.)
+
+Step 2 (GREEN) — 58401b99b7c362466a33de1be54fbcdaab98c688: the splitter
+regex + value-dependent clause arm as pinned above; doc claims updated.
+Raw matrix at exit:
+  ✓ src/ai/reconcileDraftQuantities.test.ts  (12 tests)
+  ✓ src/ai/demoteUnstatedQuantities.test.ts  (22 tests)
+  Test Files  2 passed (2)
+       Tests  34 passed (34)
+tsc: `cd server && npx tsc --noEmit` = 0 error lines (baseline 0).
+git (after step 2): `git -c core.fileMode=false diff --name-only
+0fa1d58a..HEAD` = exactly the 3 owned files; `git -c core.fileMode=false
+status --porcelain --untracked-files=no` = empty.
+
+c10 §4 probe table re-run against the fixed code (all rows now correct):
+  vol30  "Mix the sample and incubate 30 min"        demoted=1 (no over-keep)
+  vol200 "Add 200 uL of DMEM to A1, then mix"        demoted=0 (accepted same-number trade)
+  vol200 "Add 200 uL of DMEM to A1 and mix"          demoted=0 (accepted same-number trade)
+  vol50  "Add 200 uL of DMEM to A1 to mix"           demoted=1
+  vol50  "Add 200 uL of DMEM to A1 plus mix"         demoted=1
+  vol50  "Add 200 uL of DMEM to A1 & mix"            demoted=1
+  vol50  "Add 200 uL of DMEM to A1.mix"              demoted=1
+  vol50  "Add 200 uL of DMEM to A1 AND mix"          demoted=1
+  vol50  "Add 200 uL of DMEM to A1 Then mix"         demoted=1
+  vol50  "Add 200 uL of DMEM to A1\tmix"             demoted=1
+  vol50/999/0.5 "Mix 75 uL"                          demoted=1 (value-independent arm dead)
+
+Over-KEEP tradeoff still in force (unchanged, friction-first): a
+same-number same-kind amount anywhere in the turn (the VALUE-MATCH arm)
+still keeps the slot — the vol200 rows above. Over-KEEP of a number NOT
+in the turn (both c10 residuals) and over-STRIP of a stated amount
+(e1/e2/e3, P-1) are defects — now pinned.
+
+No merge, no lane-stack restart, never :3001/:5174, no npm install. No
+UI change. The DONE marker names the step-2 commit (the last code change;
+HEAD~1 once this report append lands as the step-3 commit).
+Implementation complete; acceptance (adversarial + browser re-gate)
+remains the independent reviewer's lane.
+
+TARGET1-C11 DONE 58401b99b7c362466a33de1be54fbcdaab98c688
+
