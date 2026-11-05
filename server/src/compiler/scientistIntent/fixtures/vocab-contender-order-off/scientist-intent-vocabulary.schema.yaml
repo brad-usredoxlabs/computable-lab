@@ -186,6 +186,24 @@ properties:
                   declared token list from wellsetValueTokens DATA into the
                   line, so the teaching text must NEVER re-list token
                   literals (one authority for the token value).
+              satisfiedBy:
+                type: array
+                items:
+                  type: string
+                  pattern: "^[a-z][a-zA-Z0-9_]*$"
+                description: >-
+                  L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING
+                  (a)) DECLARATION SLOT — a list of ALTERNATIVE argument names
+                  whose presence satisfies this contract. The resolve_nouns
+                  pass's §5.2 required-argument sweep treats the contract as
+                  PRESENT when argumentPresent(fields[contract.name]) OR any
+                  name in this list passes argumentPresent (e.g. a declared
+                  quantity satisfied by a stated quantity-OBJECT alias). The
+                  list names OTHER declared args of the SAME verb (no dangling
+                  aliases — pinned by the satisfiedBy-alias test, the in-tree
+                  pattern for cross-sibling membership the lint DSL cannot
+                  express). Interpreted generically — no consumer branches on a
+                  verb or arg NAME.
 
   wellsetValueTokens:
     type: array
@@ -300,6 +318,58 @@ properties:
       a SET DIFF (never two local terms for one entity). Optional so existing
       fixture copies (which declare no levels slots) stay structurally valid.
 
+  canonicalLabel:
+    type: object
+    additionalProperties: false
+    unevaluatedProperties: false
+    required:
+    - preMintDisplay
+    - mintedDisplay
+    - titleAdoption
+    properties:
+      preMintDisplay:
+        type: string
+        enum: [identity-case]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE B): the PRE-MINT display form for
+          an unbound acceptance entity (no local-term record exists yet).
+          `identity-case` renders the label's IDENTITY FORM (canonicalLabelKey —
+          trimmed, whitespace-collapsed, ASCII-lowercased) and nothing else; the
+          model's one-char-case re-roll is not a canonical case to pretend at.
+          The token is DATA (the loader's fail-loud membership set); the VALUE
+          (the actual label) lives in the minted record, never in this block.
+      mintedDisplay:
+        type: string
+        enum: [record-title]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE A): the GROUNDED display form —
+          once a local-term record exists (recordId =
+          localMaterialIdForLabel(fact.label)), the canonical label is the
+          record's TITLE, full stop. The ask-time lookup replaces the raw label
+          everywhere it surfaces (READ of existing machinery; no new store).
+      titleAdoption:
+        type: string
+        enum: [scientist-phrasing-when-key-equal]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE C — the transition): at the mint,
+          the record's title is adopted from the SCIENTIST's own phrasing at the
+          naming moment IF that phrasing normalizes to the same identity key
+          (raw sentence-cased text becomes the record title); otherwise the
+          title stays the identity form. From then on every surface reads
+          STAGE A's title.
+    description: >-
+      CARD1-D3 (ruling l2t1430 §3, "Policy home"): the material domain's
+      canonical-label POLICY for the unbound acceptance entity — the small
+      DATA block that decides how the record-owned label VALUE is DISPLAYED at
+      each stage. One block, no label VALUE (that would be a second
+      vocabulary; the record stays the single vocabulary). Consumed PER call
+      by the clarification render path (the nounShape/assumedValues law —
+      never process-cached, no stack restart on a data edit); there is NO
+      hardcoded fallback policy, so an ABSENT block in a vocabulary copy the
+      render path must use fails loud (the loader throws naming the path).
+      Optional in the meta-schema so existing fixture copies (which declare no
+      canonical-label block) stay structurally valid for the verb machinery;
+      the render path requires it on the copies it reads.
   policies:
     type: object
     additionalProperties: false
@@ -372,6 +442,14 @@ properties:
             description: >-
               Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
               no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
+          contenderOrder:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items: { type: string, enum: [exact_name, declared_substance] }
+            description: >-
+              Contender-narrowing order as DATA (policy, not TS branches); each pass fail-safe;
+              ABSENT means no narrowing declared (legacy behavior preserved).
       hintAuthority:
         type: object
         additionalProperties: false
