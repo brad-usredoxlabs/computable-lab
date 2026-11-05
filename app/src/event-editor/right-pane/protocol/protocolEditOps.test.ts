@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from '../../../shared/api/client'
 import { ApiError } from '../../../shared/api/errors'
+import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 import {
   STALE_PROTOCOL_WRITE_MESSAGE,
   applyOps,
@@ -12,6 +13,9 @@ import {
 // Rejection sites are awaited in try/catch and matched on the message instead.
 
 vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
+
+// Seed the cache so content-locked gates resolve against the declared set
+seedContentLockedStates('document-controlled-signing', ['effective'])
 
 /**
  * Fixture protocol: draft, editable, three steps (one executed), declared

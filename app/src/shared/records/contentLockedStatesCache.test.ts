@@ -6,7 +6,7 @@
  * seed path below proves the sync read without any fetch at all). This suite
  * is self-contained: it pins the cache module only, never the sync gates.
  */
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from '../api/client'
 import {
   __resetContentLockedStatesCache,

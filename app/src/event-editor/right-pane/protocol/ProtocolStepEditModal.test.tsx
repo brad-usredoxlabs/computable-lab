@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ProtocolStepEditModal } from './ProtocolStepEditModal'
 import { apiClient } from '../../../shared/api/client'
+import { seedContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 
 const richDocument = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Mix gently.', marks: [{ type: 'bold' }] }] }] }
 const editor = vi.hoisted(() => ({
@@ -14,6 +15,9 @@ vi.mock('@tiptap/react', () => ({
 }))
 vi.mock('../../../editor/taptab/RichTextToolbar', () => ({ RichTextToolbar: () => <div>Formatting toolbar</div> }))
 vi.mock('../../../shared/api/client', () => ({ apiClient: { getRecord: vi.fn(), updateRecord: vi.fn() } }))
+
+// Seed the cache so content-locked gates resolve against the declared set
+seedContentLockedStates('document-controlled-signing', ['effective'])
 
 const payload = {
   kind: 'protocol', title: 'Zymo Opentrons', state: 'draft', version: '0.1.1',
