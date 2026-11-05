@@ -1,12 +1,12 @@
 /**
  * L2-PROMPT2-GHOSTPAINT-1 fold-path test: proves the production answer-fold
- * carries details.labwareId via applySoleDeckPlacement at AgentOrchestrator.ts:1464.
+ * carries details.labwareId via applySoleDeckPlacement in compileFoldedShorthand.
  *
  * This test exercises the exported compileFoldedShorthand helper shared between
- * production and test — mutating the applySoleDeckPlacement call inside it
- * makes the test RED.
+ * production (AgentOrchestrator.ts fold path) and test — mutating
+ * applySoleDeckPlacement inside compileFoldedShorthand makes this test RED.
  */
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compileFoldedShorthand } from './AgentOrchestrator.js';
 import {
   foldAnswersIntoShorthand,
@@ -15,6 +15,7 @@ import {
   shorthandResultFromCompile,
   composeLabwareHintLookupWithDeck,
   type HeldShorthandIntent,
+  type ShorthandCompileDeps,
 } from './shorthandChat.js';
 import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
 
@@ -70,48 +71,29 @@ function makeAnswerFor(held: HeldShorthandIntent) {
 // ---------------------------------------------------------------------------
 
 describe('L2-PROMPT2-GHOSTPAINT-1 fold-path: production seam proof', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('production fold path carries details.labwareId with sole placement', async () => {
-    // Drive the SAME helper production code uses — compileFoldedShorthand
-    // contains applySoleDeckPlacement at the fold seam.
     const held = makeHeld();
     const answer = makeAnswerFor(held);
     const store = mockStore();
 
-    // Fold the answer into the held intent (this is what production does at :1446-1447)
     const folded = foldAnswersIntoShorthand(held, [answer]);
     expect(folded).not.toBeNull();
 
-    // Call the exported production helper that wraps applySoleDeckPlacement + compile
     const lookup = composeLabwareHintLookupWithDeck(DECK, undefined);
     const compiledFold = await compileFoldedShorthand(
       folded!.doc,
       ['LBW-96-1'],
-      {
-        store: store as never,
-        ...(lookup ? { searchLabwareByHint: lookup } : {}),
-      },
+      { store: store as never, searchLabwareByHint: lookup } as ShorthandCompileDeps,
     );
     expect(compiledFold).not.toBeNull();
 
-    // Map to result (as production does at :1583-1592)
     const result = shorthandResultFromCompile(compiledFold!, held.yaml, 'fold-recompile', DECK);
-
     expect(result.success).toBe(true);
     const events = result.events as unknown[];
     expect(events.length).toBeGreaterThanOrEqual(1);
 
-    // The fold-path event must carry the sole placement's labwareId
     const details = (events[0] as Record<string, unknown>).details as Record<string, unknown>;
     expect(details.labwareId).toBe('LBW-96-1');
-
-    // The event also carries the expected wells
     expect((events[0] as Record<string, unknown>).event_type).toBe('add_material');
   });
 
@@ -127,10 +109,7 @@ describe('L2-PROMPT2-GHOSTPAINT-1 fold-path: production seam proof', () => {
     const compiledFold = await compileFoldedShorthand(
       folded!.doc,
       ['LBW-96-1', 'LBW-384-2'],
-      {
-        store: store as never,
-        ...(lookup ? { searchLabwareByHint: lookup } : {}),
-      },
+      { store: store as never, searchLabwareByHint: lookup } as ShorthandCompileDeps,
     );
     expect(compiledFold).not.toBeNull();
 
@@ -138,7 +117,6 @@ describe('L2-PROMPT2-GHOSTPAINT-1 fold-path: production seam proof', () => {
     const events = result.events as unknown[];
     if (events.length > 0) {
       const details = (events[0] as Record<string, unknown>).details as Record<string, unknown>;
-      // Should NOT have labwareId when placements are ambiguous
       expect(details.labwareId).toBeUndefined();
     }
   });
@@ -155,10 +133,7 @@ describe('L2-PROMPT2-GHOSTPAINT-1 fold-path: production seam proof', () => {
     const compiledFold = await compileFoldedShorthand(
       folded!.doc,
       [],
-      {
-        store: store as never,
-        ...(lookup ? { searchLabwareByHint: lookup } : {}),
-      },
+      { store: store as never, searchLabwareByHint: lookup } as ShorthandCompileDeps,
     );
     expect(compiledFold).not.toBeNull();
 

@@ -98,6 +98,7 @@ import {
   answeredClarificationLabelsFromBatch,
   type AcceptedShorthandBinding,
   type AnsweredSlot,
+  type ShorthandCompileDeps,
 } from './shorthandChat.js';
 // L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the pre-compile EMISSION demotion
 // (AI path, upstream of the compile). Strips a present declared-quantity slot
@@ -109,6 +110,7 @@ import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
 // foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
 import { stringify as stringifyShorthandYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
@@ -1095,6 +1097,22 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   fetch?: typeof fetch;
 }
 
+
+/**
+ * GHOSTPAINT-1 Leg 2B: exported helper that wraps the fold-seam compile.
+ * Applies applySoleDeckPlacement to inject the sole deck placement's labwareId
+ * into well-bearing actions, then compiles deterministically.
+ * Shared by production (run() fold path) and tests.
+ */
+export async function compileFoldedShorthand(
+  doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
+  placementLabwareIds: readonly string[],
+  deps: ShorthandCompileDeps,
+): Promise<ScientistIntentCompileResult | null> {
+  const docForCompile = applySoleDeckPlacement(doc, placementLabwareIds);
+  return compileShorthandDeterministically(docForCompile, deps);
+}
+
 export function createAgentOrchestrator(
   inferenceClient: InferenceClient,
   toolBridge: ToolBridge,
@@ -1461,8 +1479,7 @@ export function createAgentOrchestrator(
             // placement's labwareId into well-bearing actions that carry no
             // identity. The expander emits a top-level labwareId from
             // params.labware, which the binder copies down into details.labwareId.
-            const docForCompile = applySoleDeckPlacement(folded.doc, placementLabwareIds);
-            const compiledFold = await compileShorthandDeterministically(docForCompile, {
+            const compiledFold = await compileFoldedShorthand(folded.doc, placementLabwareIds, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
