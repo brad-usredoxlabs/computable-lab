@@ -565,4 +565,75 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     expect(note.textContent).toMatch(/Created draft revision DOC-NEWDRAFT from DOC-DEMO-SOP/)
     expect(note.textContent).toMatch(/signatures and approvals do not carry over/i)
   })
+
+  it('content-locked states arriving AFTER terminal states still locks the Save button (race condition)', async () => {
+    // DEFECT 6: the terminal-states fetch settles first, triggering a
+    // re-render while the content-locked prime is still in flight.
+    // Without the fix, contentLocked reads [] and shows Save instead of
+    // "Create draft revision".
+    __resetContentLockedStatesCache()
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    }
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      return { records: [], total: 0 }
+    })
+
+    // Terminal states resolve immediately (simulating the race where they
+    // settle before content-locked states).
+    mocked.mockGetLifecycleTerminalStates.mockResolvedValue([])
+
+    // Content-locked states resolve via a deferred promise — we resolve it
+    // AFTER the terminal states, so the initial render sees an empty cache.
+    let resolveContentLocked: (() => void) | null = null
+    const contentLockedPromise = new Promise<string[]>((resolve) => {
+      resolveContentLocked = () => resolve(['approved', 'effective'])
+    })
+    mocked.mockGetLifecycleContentLockedStates.mockReturnValue(contentLockedPromise)
+
+    // Draft-copy mock for the locked path
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+
+    // Resolve the deferred content-locked states AFTER the UI has rendered
+    // with the terminal states but before the content-locked prime settled.
+    resolveContentLocked?.()
+    // Give React time to re-render with the new state.
+    await vi.dynamicImportSettled()
+    await new Promise((r) => setTimeout(r, 100))
+
+    // The record IS approved → it should be content-locked.
+    // The "Create draft revision" button must be visible (not Save).
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(draftBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+  })
 })
