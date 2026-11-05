@@ -143,4 +143,40 @@ describe('SurfaceChatBridge — scope-settle pin matrix (unit 3: P2/P3/P5/P6)', 
     expect(g[0]!.h['x-cl-thread-id']).toBe(map()['STU-x'])
     expect(vi.getTimerCount()).toBe(0)  // zero added latency: the deadline is never armed
   })
+
+  it('P7 (C-2 two-window): each provisional window gets its own bounded release', async () => {
+    vi.useFakeTimers()
+    // ToggleableDeck starts scope-less, then gains scope on a flag, then loses it again.
+    // The component stays mounted the whole time — two provisional windows on ONE door instance.
+    const toggle = { scopeless: true }
+    function ToggleableDeck() {
+      usePublishSurfaceSlice('deck', toggle.scopeless ? bundle() : bundle('EVG-1'))
+      return null
+    }
+    const { rerender } = render(<Door host="event-editor" base={{ context: base }}><ToggleableDeck /></Door>)
+    // Window 1: scope-less — deadline is armed
+    await flush()
+    expect(io()).toHaveLength(0)
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    // Advance past deadline: settles absent
+    await act(async () => { vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS) })
+    await flush()
+    expect(gets()).toHaveLength(1)  // settled-absent GET from window-1 deadline
+    // Scope arrives: settled scope
+    toggle.scopeless = false
+    rerender(<Door host="event-editor" base={{ context: base }}><ToggleableDeck /></Door>)
+    await flush()
+    // Window 2: scope leaves again — second provisional window
+    cap.length = 0
+    toggle.scopeless = true
+    rerender(<Door host="event-editor" base={{ context: base }}><ToggleableDeck /></Door>)
+    await flush()
+    // Second window must NOT settle immediately — no IO before its deadline
+    expect(io()).toHaveLength(0)
+    expect(vi.getTimerCount()).toBeGreaterThan(0)  // a new timer IS armed for window 2
+    // Only AFTER advancing the second deadline does IO fire
+    await act(async () => { vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS) })
+    await flush()
+    expect(gets()).toHaveLength(1)
+  })
 })
