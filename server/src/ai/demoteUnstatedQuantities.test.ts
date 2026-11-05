@@ -224,6 +224,17 @@ describe('demoteUnstatedQuantities — the no-material mix leg (cycle 7 unit 1, 
     expect('cycles' in action).toBe(true);
   });
 
+  it('P-d1: the gate REAL face — well-addressed mix clause states both "75 uL" and "3 cycles" (D1)', () => {
+    // Browser-gate cycle-1 defect D1: "Mix 75 uL in wells B1 and B2 for 3 cycles"
+    // demoted cycles:3 because the tokenRe filler window ate the "2" from B2
+    // as an amount. The filler must start with a letter, not a digit.
+    const r = demoteUnstatedQuantities(mixDoc(75, 3), 'Mix 75 uL in wells B1 and B2 for 3 cycles');
+    expect(r.demoted.length).toBe(0);
+    const action = r.doc.actions[0]! as unknown as Record<string, unknown>;
+    expect('volume' in action).toBe(true);
+    expect('cycles' in action).toBe(true);
+  });
+
   it('P-b: a stated volume WITH a material label is still kept (control — the label-adjacency arm)', () => {
     const doc = addMaterialDoc(true, 150);
     const r = demoteUnstatedQuantities(doc, 'Add 150 uL of DMEM to A1');

@@ -74,8 +74,10 @@ export interface StatedQuantity {
 
 /** The ONE amount-with-unit grammar, shared by `extractQuantity` and
  *  `clauseStatesKind` (ONE-grammar law — this list EXTENDS, never a second).
- *  Stateful /g: reset lastIndex before each scan. */
-const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
+ *  Filler window requires a leading LETTER so a well-address digit (B2) can
+ *  never be read as an amount — embedded digits in filler words (HepG2) are
+ *  still allowed. Stateful /g: reset lastIndex before each scan. */
+const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z][a-zA-Z0-9]{0,23}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
 
 /**
  * Find the `N <unit>` the biologist attached to a material in a sentence.
