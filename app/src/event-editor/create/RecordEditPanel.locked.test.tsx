@@ -20,6 +20,7 @@ vi.mock('../../shared/api/client', () => ({
     createPlannedRun: vi.fn(),
     createDraftCopy: vi.fn(),
     getLifecycleContentLockedStates: vi.fn(),
+    getLifecycleTerminalStates: vi.fn(),
   },
 }))
 
@@ -29,7 +30,7 @@ vi.mock('../../editor/taptab', async () => {
     '../../editor/taptab/recordSerializer',
   )
   return {
-    ProjectionTapTabEditor: React.forwardRef((_props: unknown, ref: unknown) => {
+    ProjectionTapTabEditor: React.forwardRef((_props: { disabled?: boolean }, ref: unknown) => {
       const holder = {
         doc: null as unknown,
         setDoc(d: unknown) { holder.doc = d },
@@ -37,6 +38,8 @@ vi.mock('../../editor/taptab', async () => {
       }
       ;(globalThis as { __qms6eTaptabHandle?: unknown }).__qms6eTaptabHandle = holder
       if (ref && typeof ref === 'object') (ref as { current: unknown }).current = holder
+      // Record last props for disabled-pin assertions
+      ;(globalThis as any).__qms6eTaptabProps = _props
       return null as never
     }),
     serializeDocument: actual.serializeDocument,
@@ -79,6 +82,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
       payload,
     })
     ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved', 'effective'])
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue(['archived', 'retired'])
 
     render(<RecordEditPanel recordId="DOC-TEST" title="Test Document" />)
 
@@ -86,6 +90,13 @@ describe('RecordEditPanel — content-locked rendering', () => {
 
     // Save button must NOT be present
     expect(screen.queryByTestId('record-edit-save')).toBeNull()
+
+    // D5 pin: editor must be disabled when locked
+    await waitFor(() => {
+      const props = (globalThis as any).__qms6eTaptabProps
+      expect(props).not.toBeUndefined()
+      expect(props.disabled).toBe(true)
+    })
   })
 
   it('shows Save button and no draft button when state is NOT in content-locked set', async () => {
@@ -102,6 +113,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
       payload,
     })
     ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved', 'effective'])
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue(['archived', 'retired'])
 
     render(<RecordEditPanel recordId="DOC-TEST" title="Test Document" />)
 
@@ -109,6 +121,13 @@ describe('RecordEditPanel — content-locked rendering', () => {
 
     // Draft button must NOT be present
     expect(screen.queryByTestId('record-edit-create-draft-revision')).toBeNull()
+
+    // D5 pin: editor must NOT be disabled when unlocked
+    await waitFor(() => {
+      const props = (globalThis as any).__qms6eTaptabProps
+      expect(props).not.toBeUndefined()
+      expect(props.disabled).toBe(false)
+    })
   })
 
   it('clicking draft button calls createDraftCopy and shows confirmation', async () => {
@@ -125,6 +144,7 @@ describe('RecordEditPanel — content-locked rendering', () => {
       payload,
     })
     ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue(['approved'])
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
     ;(apiClient.createDraftCopy as ReturnType<typeof vi.fn>).mockResolvedValue({
       record: { recordId: 'DOC-TEST-DRAFT', schemaId: 'controlled-document', payload: {} },
     })
@@ -140,5 +160,32 @@ describe('RecordEditPanel — content-locked rendering', () => {
 
     // Should show confirmation hint
     await waitFor(() => expect(screen.getByText(/Draft revision created/i)).toBeTruthy())
+  })
+
+  it('hides Save and shows draft-revision when state is terminal but NOT content-locked (D2)', async () => {
+    const payload = {
+      kind: 'lab-vocabulary-control',
+      id: 'VOC-TEST',
+      state: 'archived',
+      lifecycleId: 'voc-lifecycle',
+      title: 'Vocabulary',
+    }
+    ;(apiClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordId: 'VOC-TEST',
+      schemaId: 'lab-vocabulary-control',
+      payload,
+    })
+    // State is NOT in content-locked set
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
+    // State IS in terminal set
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue(['archived'])
+
+    render(<RecordEditPanel recordId="VOC-TEST" title="Vocabulary Test" />)
+
+    // Save button must NOT be present (terminal state locks writes)
+    await waitFor(() => expect(screen.queryByTestId('record-edit-save')).toBeNull())
+
+    // Draft-revision button MUST be present
+    await waitFor(() => expect(screen.queryByTestId('record-edit-create-draft-revision')).toBeTruthy())
   })
 })
