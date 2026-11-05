@@ -153,6 +153,10 @@ function paneRelevantSignature(chat: UseAiChatReturn, flow: WorkstateProposalFlo
   const last = chat.messages[chat.messages.length - 1]
   return [
     String(chat.isStreaming),
+    // thread-scope settle visibility (L2-THREADPICKER-REFETCH-1): the threadId
+    // is absent until the lazy-mint resolves (mint is provisionally-gated),
+    // so its appearance changes the signature exactly once on settle.
+    chat.threadId ?? '',
     String(chat.isAccepting),
     String(chat.hasPreview),
     chat.previewEvents.length,

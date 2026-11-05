@@ -28,7 +28,8 @@
  * #7) is pinned by Leg B's useAiChat.threadScoped.test.ts (hook + client
  * level, where mint-once lives); this file pins the picker seam on top.
  */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UseAiChatReturn } from '../shared/hooks/useAiChat'
 import type { ChatMessage } from '../types/ai'
@@ -160,6 +161,40 @@ function Host({ endpoint }: { endpoint?: ApplianceEndpoint }) {
   })
   useRegisterAiChat(chat, null)
   return <HarnessChatPane />
+}
+
+/** Same as Host but accepts scopeStatus to control the provisional gate. */
+function HostWithScopeStatus({ endpoint, scopeStatus }: { endpoint?: ApplianceEndpoint; scopeStatus?: 'settled' | 'provisional' }) {
+  const chat = useAiChat({
+    aiContext,
+    ...(endpoint ? { endpoint } : {}),
+    ...(scopeStatus ? { scopeStatus } : {}),
+  })
+  useRegisterAiChat(chat, null)
+  return <HarnessChatPane />
+}
+
+/** Registers a real chat but renders NOTHING — the pane must arrive via the provider. */
+function RegistrarOnly({ scopeStatus }: { scopeStatus?: 'settled' | 'provisional' }) {
+  const chat = useAiChat({ aiContext, endpoint: 'browser', ...(scopeStatus ? { scopeStatus } : {}) })
+  useRegisterAiChat(chat, null)
+  return null
+}
+
+/**
+ * Registrar that holds scopeStatus in its own state — the parent (AiPanelProvider)
+ * is NOT re-rendered when scopeStatus flips.
+ */
+function RegistrarWithScopeStatusState() {
+  const [status, setStatus] = useState<'provisional' | 'settled'>('provisional')
+  return (
+    <>
+      <RegistrarOnly scopeStatus={status} />
+      <button data-testid="flip-settle" onClick={() => setStatus('settled')}>
+        Flip to settled
+      </button>
+    </>
+  )
 }
 
 const stubChat = (): UseAiChatReturn => ({
@@ -325,5 +360,80 @@ describe('HarnessChatPane — the thread picker (L2-THREAD-SCOPED-1 leg C)', () 
     expect(screen.queryByRole('button', { name: /new thread/i })).toBeNull()
     // The pane itself still renders (its existing chrome is untouched).
     expect(screen.getByTestId('harness-chat-pane')).toBeInTheDocument()
+  })
+
+  it('re-fetches threads when scopeStatus flips from provisional to settled (L2-THREADPICKER-REFETCH-1)', async () => {
+    // Pre-existing thread rows on the server.
+    threadContents['tid-a'] = ['Existing thread turn']
+
+    // Mount with scopeStatus='provisional' — the ref-guard blocks the fetch,
+    // so the list should be empty.
+    const { rerender } = render(
+      <AiPanelProvider>
+        <HostWithScopeStatus endpoint="browser" scopeStatus="provisional" />
+      </AiPanelProvider>,
+    )
+
+    // Picker chrome renders but shows no threads (provisional guard).
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('thread-picker')).toBeInTheDocument()
+    })
+    // The ref-guard returns [] synchronously, so no GET /threads fires.
+    expect(listCalls()).toHaveLength(0)
+
+    // Flip to 'settled' — the identity of listThreadsForChat MUST change
+    // (scopeStatus in deps), so the consumer's useEffect re-runs and fires
+    // the fetch.
+    rerender(
+      <AiPanelProvider>
+        <HostWithScopeStatus endpoint="browser" scopeStatus="settled" />
+      </AiPanelProvider>,
+    )
+
+    // A SECOND fetch fires after the settle flip.
+    await vi.waitFor(() => expect(listCalls()).toHaveLength(1))
+    // The thread rows from the settled fetch are now rendered.
+    await vi.waitFor(() =>
+      expect(screen.getByRole('option', { name: /existing thread turn/i })).toBeInTheDocument(),
+    )
+  })
+
+  it('sibling pane re-fetches threads when the settle flips provisional->settled (L2-THREADPICKER-REFETCH-1 D2)', async () => {
+    threadContents['tid-a'] = ['Existing thread turn']
+
+    // Sibling topology: RegistrarWithScopeStatusState + HarnessChatPane as
+    // siblings under AiPanelProvider. The state lives INSIDE the registrar,
+    // so AiPanelProvider does NOT re-render when scopeStatus flips — the
+    // pane must re-render via the registration-store bump.
+    render(
+      <AiPanelProvider>
+        <RegistrarWithScopeStatusState />
+        <HarnessChatPane />
+      </AiPanelProvider>,
+    )
+
+    // Picker renders in sibling topology but shows no threads (provisional guard).
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('thread-picker')).toBeInTheDocument()
+    })
+    // No list calls because the ref-guard blocks the fetch.
+    expect(listCalls()).toHaveLength(0)
+
+    // Flip scopeStatus to settled — only the registrar re-renders, the
+    // provider does NOT. The pane must re-render via the registration-store
+    // bump (paneRelevantSignature includes threadId).
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('flip-settle'))
+    })
+
+    // A list call fires after the settle flip.
+    await vi.waitFor(() => expect(listCalls()).toHaveLength(1))
+    // The thread row is rendered.
+    await vi.waitFor(() =>
+      expect(screen.getByRole('option', { name: /existing thread turn/i })).toBeInTheDocument(),
+    )
+    // Stability window (advc D3): no additional fetches after 500 ms.
+    await new Promise((r) => setTimeout(r, 500))
+    expect(listCalls()).toHaveLength(1)
   })
 })

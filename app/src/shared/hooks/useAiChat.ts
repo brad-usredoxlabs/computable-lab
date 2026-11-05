@@ -958,7 +958,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     if (!endpoint) return Promise.resolve([])
     if (scopeStatusRef.current === 'provisional') return Promise.resolve([])
     return listThreads(endpoint, { ...(scope ? { scope } : {}) }).then((r) => r.threads)
-  }, [endpoint, scope])
+  }, [endpoint, scope, scopeStatus])
 
   // Lazy mint: resolve the tab's id for the current scope (mint-once; a
   // reload or a return to a previously-visited scope reuses the stored id).
