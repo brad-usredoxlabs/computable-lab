@@ -124,21 +124,29 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     expect(details.labwareId).toBe('LBW-96-1');
   });
 
-  it('B2: concept-vs-formulation parity — both produce the same details.labwareId', async () => {
-    // Two different material refs (concept vs formulation), same deck placement → same labwareId
+  it('B2: concept-vs-formulation parity — different materials, same labwareId', async () => {
+    // Two different material refs AND labels (concept vs formulation), same deck placement
+    // → events differ in material identity but agree on details.labwareId
     const held1 = makeHeld();
     const held2 = makeHeld();
 
+    // arm 1: formulation path — resolves to 'Formulated Clofibrate DMSO'
     const answer1 = makeAnswerFor(held1, 'MAT-clofibrate-formulation');
-    const answer2 = makeAnswerFor(held2, 'MAT-clofibrate-concept', 'Formulated Clofibrate DMSO');
+    // arm 2: concept path — resolves to 'Clofibrate' (distinct material name)
+    const answer2 = makeAnswerFor(held2, 'MAT-clofibrate-concept', 'Clofibrate');
 
     // Guard: the two answer refs must differ — this test would be degenerate otherwise
     expect(answer1.ref.id).not.toBe(answer2.ref.id);
+    expect(answer1.label).not.toBe(answer2.label);
 
     const folded1 = foldAnswersIntoShorthand(held1, [answer1]);
     const folded2 = foldAnswersIntoShorthand(held2, [answer2]);
     expect(folded1).not.toBeNull();
     expect(folded2).not.toBeNull();
+
+    // The folded docs carry different materials (non-degenerate pipeline input)
+    expect((folded1!.doc.actions[0] as unknown as Record<string, unknown>).material)
+      .not.toBe((folded2!.doc.actions[0] as unknown as Record<string, unknown>).material);
 
     const doc1 = applySoleDeckPlacement(folded1!.doc, ['LBW-96-1'], DECK);
     const doc2 = applySoleDeckPlacement(folded2!.doc, ['LBW-96-1'], DECK);
@@ -150,28 +158,41 @@ describe('L2-PROMPT2-GHOSTPAINT-1 leg 2B: applySoleDeckPlacement', () => {
     const store = mockStore();
     const lookup = composeLabwareHintLookupWithDeck(DECK, undefined);
 
+    // Production parity: pass reuseBindings from folded bindings
     const compiled1 = await compileShorthandDeterministically(doc1, {
       store: store as never,
       ...(lookup ? { searchLabwareByHint: lookup } : {}),
+      ...(folded1!.bindings.length > 0 ? { reuseBindings: folded1!.bindings } : {}),
     });
     const compiled2 = await compileShorthandDeterministically(doc2, {
       store: store as never,
       ...(lookup ? { searchLabwareByHint: lookup } : {}),
+      ...(folded2!.bindings.length > 0 ? { reuseBindings: folded2!.bindings } : {}),
     });
 
     expect(compiled1).not.toBeNull();
     expect(compiled2).not.toBeNull();
 
-    const result1 = shorthandResultFromCompile(compiled1!, held1.yaml, 'concept', DECK);
-    const result2 = shorthandResultFromCompile(compiled2!, held2.yaml, 'formulation', DECK);
+    const result1 = shorthandResultFromCompile(compiled1!, held1.yaml, 'formulation', DECK);
+    const result2 = shorthandResultFromCompile(compiled2!, held2.yaml, 'concept', DECK);
 
     const ev1 = (result1.events ?? [])[0] as unknown as Record<string, unknown>;
     const ev2 = (result2.events ?? [])[0] as unknown as Record<string, unknown>;
+
+    // Both arms resolve to the same labwareId from the sole deck placement
     expect((ev1!.details as Record<string, unknown>).labwareId).toBe('LBW-96-1');
     expect((ev2!.details as Record<string, unknown>).labwareId).toBe('LBW-96-1');
     expect((ev1!.details as Record<string, unknown>).labwareId).toBe(
       (ev2!.details as Record<string, unknown>).labwareId,
     );
+
+    // Non-degeneracy: the compiled events differ in material identity
+    // (arm 1 resolves to formulation 'Formulated Clofibrate DMSO', arm 2 to concept 'Clofibrate')
+    const d1 = ev1!.details as Record<string, unknown>;
+    const d2 = ev2!.details as Record<string, unknown>;
+    expect(d1!.material).toBe('Formulated Clofibrate DMSO');
+    expect(d2!.material).toBe('Clofibrate');
+    expect(d1!.material).not.toBe(d2!.material);
   });
 
   it('B3: two distinct placements write nothing', () => {
