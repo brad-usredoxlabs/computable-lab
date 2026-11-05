@@ -124,28 +124,51 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
   return best;
 }
 
-/** True when a CLAUSE naming the action's verb carries an amount-with-unit of
- *  `kind` (the material-less association rule, cycle 7 unit 2 / D1). Reuses
+/** True when a material-less action's declared-`kind` slot is STATED — the
+ *  DEFAULT-KEEP rule (cycle 9 unit 1 / c8; R1.2: never strip a volume the
+ *  scientist actually stated): EITHER (A) VALUE-MATCH — the turn carries an
+ *  amount-with-unit of `kind` whose amount EQUALS `slotValue` (the
+ *  scientist's number, present in their own words, whatever clause owns it)
+ *  — OR (B) the clause rule (cycle 7 unit 2 / D1) — a CLAUSE naming the
+ *  action's verb carries an amount-with-unit of `kind`. Clause boundary
+ *  (c8 D2): sentence punctuation, `,`/`;`, a newline, and the `then`/`and`
+ *  junction. Over-KEEP of an unrelated same-number amount is the accepted
+ *  friction-first trade; over-STRIP of a stated amount is a defect. Reuses
  *  the ONE grammar via `tokenRe` — no second grammar, no special-case table. */
-export function clauseStatesKind(words: string, verb: string, kind: 'volume' | 'count'): boolean {
+export function clauseStatesKind(
+  words: string,
+  verb: string,
+  kind: 'volume' | 'count',
+  slotValue?: number,
+): boolean {
   const stem = (verb.split('_')[0] ?? verb).trim();
   if (!stem || !words) return false;
   const verbRe = new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}\\b`, 'i');
-  return words
-    .split(/(?<=[.!?])\s+|[,;]+/)
+  const clauses = words
+    .split(/(?<=[.!?])\s+|[,;]+|\n+|\b(?:then|and)\b/)
     .map((c) => c.trim())
-    .filter((c) => c.length > 0)
-    .some((clause) => {
-      if (!verbRe.test(clause)) return false;
-      tokenRe.lastIndex = 0; // stateful /g — fresh scan each clause
-      let m: RegExpExecArray | null;
-      while ((m = tokenRe.exec(clause)) !== null) {
-        if (parseAmount(m[1]!) === null) continue;
-        const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
-        if (volumeUnit === (kind === 'volume')) return true;
-      }
-      return false;
-    });
+    .filter((c) => c.length > 0);
+  const statedInClause = clauses.some((clause) => {
+    if (!verbRe.test(clause)) return false;
+    tokenRe.lastIndex = 0; // stateful /g — fresh scan each clause
+    let m: RegExpExecArray | null;
+    while ((m = tokenRe.exec(clause)) !== null) {
+      if (parseAmount(m[1]!) === null) continue;
+      const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
+      if (volumeUnit === (kind === 'volume')) return true;
+    }
+    return false;
+  });
+  if (statedInClause) return true;
+  if (slotValue === undefined) return false;
+  tokenRe.lastIndex = 0; // stateful /g — fresh scan of the whole turn
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(words)) !== null) {
+    if (parseAmount(m[1]!) !== slotValue) continue;
+    const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
+    if (volumeUnit === (kind === 'volume')) return true;
+  }
+  return false;
 }
 
 export interface QuantityReconciliation {

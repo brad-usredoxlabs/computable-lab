@@ -31,18 +31,24 @@
  *     (ONE-grammar law).
  *   • The material label the extractor reads is the action's `material` noun
  *     label (the same symbolic label the compiler binds). Adjudication is
- *     therefore PER ACTION, in two arms (cycle 7 unit 2 / D1):
+ *     therefore PER ACTION, in two arms:
  *       - NAMED material (label ≠ '') — the extractor's label-adjacency arm:
- *         an amount-with-unit within the ~90-char window of THIS label.
- *       - NO material (label = '') — `clauseStatesKind`: stated only if the
- *         CLAUSE that names THIS action's verb carries an amount-with-unit of
- *         the slot's DECLARED KIND (a volume slot, or a count slot such as
- *         cycles). An UNRELATED action's amount (a different clause) or a
+ *         an amount-with-unit within the ~90-char window of THIS label
+ *         (byte-identical, cycle 7).
+ *       - NO material (label = '') — `clauseStatesKind`, DEFAULT-KEEP
+ *         (cycle 9 unit 1 / c8): stated if EITHER the turn carries an
+ *         amount-with-unit of the slot's DECLARED KIND whose amount EQUALS
+ *         the slot value (the VALUE-MATCH arm — the scientist's number in
+ *         their own words), OR the CLAUSE naming THIS action's verb carries
+ *         an amount of the declared kind (the clause arm; its boundary now
+ *         includes newlines and the `then`/`and` junction, c8 D2). An
+ *         UNRELATED number (a different value in another clause) or a
  *         wrong-KIND amount no longer satisfies the slot.
  *     A stated amount is therefore never demoted, whether or not the action
- *     names a material — and an UNstated amount is still demoted: no clause
- *     names the action's verb with an amount of that kind, so the slot is
- *     stripped + disclosed.
+ *     names a material — and an UNstated amount is still demoted: the slot's
+ *     number never appears with the right kind in the turn's own words (or
+ *     every right-kind amount is a different value owned by another clause),
+ *     so the slot is stripped + disclosed.
  *   • The strip is DISCLOSED through the caller's reconcile-notes channel
  *     (the `extraSubmissionNotes` pattern at AgentOrchestrator.ts:2830-2841
  *     / :3141-3142 / :4168-4172) — never silently.
@@ -132,9 +138,9 @@ function quantitySlotPresent(v: unknown): boolean {
 /** The action's material noun label (the symbolic label the extractor
  *  associates an amount with). Non-empty → the extractor's label-adjacency
  *  arm decides (an amount near THIS label = stated). EMPTY → the demote side
- *  adjudicates by CLAUSE + DECLARED KIND (`clauseStatesKind`). A stated
- *  amount is still kept; an UNstated one is still demoted (no clause names
- *  the action's verb with an amount of that kind). */
+ *  adjudicates by `clauseStatesKind` (DEFAULT-KEEP, cycle 9 unit 1: the
+ *  VALUE-MATCH arm or the same-kind clause arm). A stated amount is still
+ *  kept; an UNstated one is still demoted. */
 function actionMaterialLabel(action: Dict): string {
   const m = action.material;
   return typeof m === 'string' ? m.trim() : '';
@@ -205,13 +211,25 @@ export function demoteUnstatedQuantities(
         // (ONE-grammar law — no second quantity grammar here):
         //   • NAMED material — the extractor's label-adjacency arm (the
         //     ~90-char window near THIS label); byte-identical.
-        //   • NO material (cycle 7 unit 2 / D1) — `clauseStatesKind`: the
-        //     slot's DECLARED KIND must appear in the CLAUSE naming THIS
-        //     action's verb. An unrelated clause's amount (K1) or a wrong-
-        //     KIND amount (K2) no longer satisfies the slot.
+        //   • NO material — `clauseStatesKind`, DEFAULT-KEEP (cycle 9 unit 1):
+        //     the VALUE-MATCH arm (a same-KIND amount whose value EQUALS the
+        //     slot) or the clause arm (the CLAUSE naming THIS action's verb
+        //     carries an amount of the slot's DECLARED KIND). An unrelated
+        //     number (K1) or a wrong-KIND amount (K2) no longer satisfies
+        //     the slot.
+        // The slot's numeric value (a bare number slot, or the quantity
+        // object's `value`) feeds the VALUE-MATCH arm's comparison.
+        const qObj = typeof value === 'object' && value !== null && !Array.isArray(value)
+          ? (value as Dict)
+          : null;
+        const slotValue = isFiniteNumber(value)
+          ? value
+          : qObj !== null && typeof qObj.value === 'number' && Number.isFinite(qObj.value)
+            ? qObj.value
+            : undefined;
         const stated = label
           ? extractQuantity(words, label)
-          : clauseStatesKind(words, verb, slotDeclaredKind(contract.name));
+          : clauseStatesKind(words, verb, slotDeclaredKind(contract.name), slotValue);
         if (stated) continue; // the scientist stated an amount for this slot — keep it
         // Demote: strip the field and disclose.
         delete fields[fieldName];
