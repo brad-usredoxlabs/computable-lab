@@ -277,3 +277,33 @@ describe('PreviewActionBar Accept persistence', () => {
     await waitFor(() => expect(mocks.persistAcceptedEventGraph).toHaveBeenCalled())
   })
 })
+
+describe('PreviewActionBar commit verb visibility (L2-CLARIFY-TARGET-1 D2)', () => {
+  it('hides Accept and Discard when chat.hasPreview is true', () => {
+    mocks.aiPanelMock = { chat: { hasPreview: true } }
+    renderBar()
+
+    expect(screen.queryByRole('button', { name: /^Accept$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Discard$/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+  })
+
+  it('shows Accept and Discard when chat.hasPreview is false', () => {
+    mocks.aiPanelMock = { chat: { hasPreview: false } }
+    renderBar()
+
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Discard$/ })).toBeTruthy()
+    // Accept is shown as "Review terms to accept" (blocked until terms decided)
+    expect(screen.getByRole('button', { name: /review terms to accept/i })).toBeTruthy()
+  })
+
+  it('shows Accept and Discard when aiPanel is null', () => {
+    mocks.aiPanelMock = null
+    renderBar()
+
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Discard$/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /review terms to accept/i })).toBeTruthy()
+  })
+})
