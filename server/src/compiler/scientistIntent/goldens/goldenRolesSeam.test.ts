@@ -177,11 +177,16 @@ describe('golden.intent-to-graph.roles-seam', () => {
     expect(defaultRoleResolver('control_well', { orientation: 'landscape', labwareType: '96-well-plate' }))
       .toEqual(['A12']);
 
-    // Hint-spy arithmetic (fixture-1 clause 5 idiom): bound labels took the
-    // authoritative arm with no second searchLabwareByHint lookup.
+    // Ruling 11a181c0 Q1: declaration_precedence binds before the hint arm,
+    // so this fixture issues 3 labware + 3 material list calls (was n=2
+    // labware-only hint searches before the flip). Absolute pins, not a
+    // difference proxy: an extra searchLabwareByHint shows up as
+    // labwareListCalls > 3. The shared docstring (replayKernel.ts:236-238)
+    // describes the pre-flip identity where labwareListCalls - materialListCalls - n == 0.
     const n = countHintEligibleLabeledArgs(fixture.modelOutput);
     expect(n).toBe(2); // transfer.source, transfer.target (targetWells is NOT hintEligible)
-    expect(run.spies.labwareListCalls - run.spies.materialListCalls - n).toBe(0);
+    expect(run.spies.labwareListCalls).toBe(3);
+    expect(run.spies.materialListCalls).toBe(3);
 
     expect(run.spies.writeCalls).toBe(0);
   });
