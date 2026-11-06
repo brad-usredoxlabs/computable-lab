@@ -1,3 +1,5 @@
+import * as fs from 'fs'
+import * as path from 'path'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { computeLabwareStates } from '../../graph/lib/eventGraph'
@@ -145,5 +147,34 @@ describe('WellTooltip (event-editor focus)', () => {
     for (const cell of volCells) {
       expect(cell.textContent, 'composition row must not claim a volume').not.toBe('100.0 µL')
     }
+  })
+
+  // u5css RED pin: CSS declarations must NOT clip conc/vol cells and MUST wrap.
+  // Reads eventEditor.css directly, strips comments, extracts rule bodies,
+  // and asserts declaration-level properties (not raw text that a comment could satisfy).
+  it('u5css pin: conc and vol cells wrap (no ellipsis, white-space: normal, overflow-wrap: anywhere)', () => {
+    const cssPath = path.resolve(__dirname, '../styles/eventEditor.css')
+    const raw = fs.readFileSync(cssPath, 'utf8')
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, '')
+
+    function ruleBody(selector: string): string {
+      const re = new RegExp(selector + '\\s*\\{([^}]*)\\}', 's')
+      const m = re.exec(css)
+      expect(m, 'selector ' + selector + ' not found in CSS').toBeTruthy()
+      return m![1]
+    }
+
+    const tooltipBody = ruleBody('\\.event-editor \\.well-tooltip')
+    expect(tooltipBody).toContain('pointer-events: none')
+
+    const concBody = ruleBody('\\.event-editor \\.well-tooltip__material-conc')
+    expect(concBody).not.toContain('text-overflow: ellipsis')
+    expect(concBody).toContain('white-space: normal')
+    expect(concBody).toContain('overflow-wrap: anywhere')
+
+    const volBody = ruleBody('\\.event-editor \\.well-tooltip__material-vol')
+    expect(volBody).not.toContain('text-overflow: ellipsis')
+    expect(volBody).toContain('white-space: normal')
+    expect(volBody).toContain('overflow-wrap: anywhere')
   })
 })
