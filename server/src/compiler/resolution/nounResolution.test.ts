@@ -345,9 +345,10 @@ actions:
 
 describe('noun-resolution.policy-is-data', () => {
   // Pool: the hint lookup yields candidate A (single match); the spine yields
-  // candidate B (single tier-0 hit). Shipped strategyOrder runs hint_search
-  // first -> binds A. The fixture copy swaps symbolic_label ahead of
-  // hint_search -> binds B. Same engine code, same pool, zero TS diff.
+  // candidate B (single tier-0 hit). declaration_precedence contributes nothing
+  // for this fixture so hint_search is the first strategy that binds -> binds A.
+  // The fixture copy swaps symbolic_label ahead of hint_search -> binds B. Same
+  // engine code, same pool, zero TS diff.
   function pool() {
     return spineWith(
       hits({ curie: 'local:plate-B', label: 'Gemini plate', namespace: 'local', level: 'unknown' }),
