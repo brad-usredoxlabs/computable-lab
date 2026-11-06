@@ -230,17 +230,25 @@ export function createRoleAddressAdapter(ctx?: Partial<RoleAddressContext>): Can
 // the map lives in data. No new ontology search.
 // ---------------------------------------------------------------------------
 
+/** Resolve an ONTOLOGY_DOMAINS key case-insensitively. */
+function findOntologyDomainKey(tag: string): string | undefined {
+  return Object.keys(ONTOLOGY_DOMAINS).find(
+    (k) => k.toLowerCase() === tag.toLowerCase()
+  );
+}
+
 /** Namespace prefixes an ontology domain's primary ontology produces (e.g.
  *  chemical -> CHEBI via the ONTOLOGY_DOMAINS primary 'chebi'). Local tiers
  *  (namespace 'local') are NEVER filtered — the lab's own records always
  *  remain eligible (prefer what the lab already has). */
 export function declaredNamespacesForDomain(domain: string | undefined): Set<string> | undefined {
   if (!domain) return undefined;
-  const config = (ONTOLOGY_DOMAINS as Record<string, { primary: string }>)[domain];
-  if (!config) return undefined; // a domain tag with no ontology declaration imposes no filter
+  const key = findOntologyDomainKey(domain);
+  const config = key ? (ONTOLOGY_DOMAINS as Record<string, { primary: string }>)[key] : undefined;
+  if (!config || !key) return undefined; // a domain tag with no ontology declaration imposes no filter
   const primary = config.primary.toUpperCase();
   const namespaces = new Set<string>([primary, 'local']);
-  for (const ols of (ONTOLOGY_DOMAINS as Record<string, { olsOntologies?: string[] }>)[domain]?.olsOntologies ?? []) {
+  for (const ols of (ONTOLOGY_DOMAINS as Record<string, { olsOntologies?: string[] }>)[key]?.olsOntologies ?? []) {
     namespaces.add(ols.toUpperCase());
   }
   return namespaces;
