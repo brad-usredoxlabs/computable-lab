@@ -177,11 +177,16 @@ describe('golden.intent-to-graph.roles-seam', () => {
     expect(defaultRoleResolver('control_well', { orientation: 'landscape', labwareType: '96-well-plate' }))
       .toEqual(['A12']);
 
-    // Hint-spy arithmetic (fixture-1 clause 5 idiom): bound labels took the
-    // authoritative arm with no second searchLabwareByHint lookup.
+    // Ruling 11a181c0 Q1: declaration_precedence only contributes candidates
+    // when a declared twin was narrowed. This fixture has no declared twin
+    // pair, so declaration_precedence contributes nothing and hint_search
+    // runs on every hint-eligible label (n=2). The count is labware =
+    // material + n (7 = 5+2), the trunk semantic identity restored.
+    // Absolute pin — labwareListCalls reflects actual post-fix calls.
     const n = countHintEligibleLabeledArgs(fixture.modelOutput);
     expect(n).toBe(2); // transfer.source, transfer.target (targetWells is NOT hintEligible)
-    expect(run.spies.labwareListCalls - run.spies.materialListCalls - n).toBe(0);
+    expect(run.spies.labwareListCalls).toBe(7);
+    expect(run.spies.materialListCalls).toBe(5);
 
     expect(run.spies.writeCalls).toBe(0);
   });

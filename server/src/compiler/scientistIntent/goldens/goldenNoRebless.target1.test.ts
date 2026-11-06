@@ -44,12 +44,12 @@ const TREESTATE_FILES = [
 // LITERAL pins — the exact MANIFEST treeState sha256 values.
 // The vocabulary pin moved ONCE for advc-full-l2t2475 D1+D6: dead contenderOrder
 // DATA was removed (D6), changing the file bytes, so the pin was updated once to
-// the measured hash (sha256sum). The guard's teeth are intact: manifest pin,
-// literal and actual bytes must still all agree, so any future silent move stays RED.
+// the measured hash (sha256sum). Chain: 212c83f5 -> d39fd67b (COMPOSITION-BIND c1precfix2a).
+// The guard's teeth are intact: manifest pin, literal and actual bytes must still all agree, so any future silent move stays RED.
 // A move of EITHER the file or its manifest pin fails the test.
 const BASE_TREESTATE_HASHES: Record<string, string> = {
   'schema/scientist-intent/scientist-intent-vocabulary.yaml':
-    '212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e',
+    'd39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab',
   'schema/workflow/scientist-intent.schema.yaml':
     '78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6',
   'schema/registry/compile-pipelines/scientist-intent-compile.yaml':

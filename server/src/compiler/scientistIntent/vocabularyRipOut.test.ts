@@ -92,6 +92,7 @@ describe('strategy-order flip (data, not code)', () => {
     expect(flippedOrder).not.toEqual(shippedOrder);
     // The shipped order is unchanged by the fixture's existence.
     expect(shippedOrder).toEqual([
+      'declaration_precedence',
       'explicit_wells',
       'hint_search',
       'symbolic_label',
