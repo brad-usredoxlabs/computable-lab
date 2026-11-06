@@ -2619,6 +2619,26 @@ export function createResolveRolesPass(): Pass {
       let counter = 0;
       const allDiagnostics: PassDiagnostic[] = [];
 
+      /** Build the canonical material_ref + composition_snapshot shapes.
+       * ref.schema.yaml §52-55: type is record-specific; §73-77: kind=record
+       * requires id+type. composition-entry.schema.yaml §9: required
+       * [component_ref, role]; §15-22: role enum. We use 'other' (§22) as the
+       * honest gap arm — the binding carries no composition role. */
+      function buildMaterialEmission(
+        recordId: string,
+      ): Record<string, unknown> {
+        // 'record' and 'material' are schema enum members (ref.schema.yaml §14, §52-55)
+        const typedRef = { kind: 'record' as const, type: 'material' as const, id: recordId };
+        return {
+          material_ref: typedRef,
+          // composition-entry.schema.yaml §11: component_ref $ref ./ref.schema.yaml
+          // §22: 'other' is the honest gap arm (no declared role on the binding)
+          composition_snapshot: [
+            { component_ref: typedRef, role: 'other' as const },
+          ],
+        };
+      }
+
       for (const ev of events) {
         const details = ev.details as Record<string, unknown> | undefined;
         const role = details?.role as string | undefined;
@@ -2632,14 +2652,8 @@ export function createResolveRolesPass(): Pass {
             if (materialBinding?.recordId) {
               const enrichedDetails = {
                 ...ev.details,
-                material_ref: { kind: 'record' as const, id: materialBinding.recordId },
+                ...buildMaterialEmission(materialBinding.recordId),
               } as Record<string, unknown>;
-              if (!enrichedDetails.composition_snapshot) {
-                enrichedDetails.composition_snapshot = [{
-                  material_ref: { kind: 'record' as const, id: materialBinding.recordId },
-                  role: 'primary',
-                }];
-              }
               out.push({ ...ev, details: enrichedDetails });
               continue;
             }
@@ -2710,18 +2724,10 @@ export function createResolveRolesPass(): Pass {
           if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
             const materialBinding = nounBindings?.[details.material];
             if (materialBinding?.recordId) {
-              (expandedEvent.details as Record<string, unknown>).material_ref = {
-                kind: 'record' as const,
-                id: materialBinding.recordId,
-              };
-              // A ref without a composition_snapshot leaves the tooltip blank.
-              // Emit a single-component snapshot carrying the resolved record.
-              if (!(expandedEvent.details as Record<string, unknown>).composition_snapshot) {
-                (expandedEvent.details as Record<string, unknown>).composition_snapshot = [{
-                  material_ref: { kind: 'record' as const, id: materialBinding.recordId },
-                  role: 'primary',
-                }];
-              }
+              Object.assign(
+                expandedEvent.details as Record<string, unknown>,
+                buildMaterialEmission(materialBinding.recordId),
+              );
             }
           }
 
