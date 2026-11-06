@@ -55,4 +55,4 @@ The launcher matched a STALE exit marker from `L2-SCIENCE-CHAIN-1-u4fix3.md` —
 
 This report documents only the u4fix6 unit. No browser/UI claim is made. No item-level verdict is given — the item-level adversarial review on `u4fix5c + u4fix6` is the orchestrator's step.
 
-L2-PROMPT2-SCIENCE-CHAIN-1 UNIT u4fix6 DONE 5a18a95264f2755d76ffde2e82b5d4f8420b4dde
+L2-PROMPT2-SCIENCE-CHAIN-1-u4fix6closeout UNIT u4fix6 DONE 5a18a95264f2755d76ffde2e82b5d4f8420b4dde
