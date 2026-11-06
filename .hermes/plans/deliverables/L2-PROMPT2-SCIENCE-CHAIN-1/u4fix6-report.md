@@ -12,6 +12,9 @@
    Raw tail: `Tests  20 passed (20)` — baseline confirmed.
 2. `grep -rn resolveLabelOnlyMaterials server/src`
    Raw tail: 0 hits (exit code 1) — function remains deleted per ruling SCIENCE-shorthand-materialref-l2t2650-ruling.md.
+3. `npx vitest run src/compiler/pipeline/passes/ChatbotCompilePasses.compositionShape.test.ts`
+   Raw tail: `✓ (1 test) 110ms — Test Files  1 passed (1)   Tests  1 passed (1)   Duration  1.37s` — compositionShape suite passes.
+4. Advc probe (see ~/.hermes/cl/lanes/2/reviews/L2-PROMPT2-SCIENCE-CHAIN-1-advc-item-l2t2705.md): compiler emitted material_ref on 12/12 add_material events; enrichDraftResultEvents CHANGED compiler events: false (measured no-op / idempotent on the compiler path).
 
 ## WIP Auto-Commit Disclosure (b8a64ca5)
 Commit b8a64ca5 is a launcher WIP auto-commit containing the fallback demotion skip:
