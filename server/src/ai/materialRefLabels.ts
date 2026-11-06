@@ -794,8 +794,10 @@ export async function enrichAddMaterialRefs<T>(
  * breaks graph parity with the deterministic compiler. The model-tool
  * branch mints via `toMaterialRef` (separate path) and is unaffected.
  *
- * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650);
- * enrichAddMaterialRefs handles spec-ref expansion only — no second writer.
+ * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650).
+ * enrichAddMaterialRefs can write material_ref/composition_snapshot on events the
+ * compiler did not bind (latent second writer; writes at :481, :523), but is a
+ * measured no-op on compiler-emitted events (12/12 unchanged per advc probe).
  */
 export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
   result: T,
