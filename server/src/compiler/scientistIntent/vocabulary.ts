@@ -108,7 +108,7 @@ export interface ScientistIntentVerbEntry {
 
 export interface ScientistIntentVocabularyPolicies {
   strategyOrder: readonly string[];
-  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string; identityCollapse?: { key: readonly string[]; survivor: readonly string[] }; contenderOrder?: readonly string[] };
+  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string; identityCollapse?: { key: readonly string[]; survivor: readonly string[] } };
   hintAuthority: { mode: string; strategyRef: string };
   ruleIds: readonly string[];
 }

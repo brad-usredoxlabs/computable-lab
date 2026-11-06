@@ -1031,12 +1031,6 @@ policies:
       survivor:
         - declared_substance
         - stable_order
-    # L2-PROMPT2-COMPOSITION-BIND-1: contender-narrowing order is DATA (policy, not TS branches).
-    # The list defines the priority order for narrowing contenders — each pass is fail-safe.
-    # ABSENT => no narrowing order declared (pre-fix bytes, legacy behavior preserved).
-    contenderOrder:
-      - exact_name
-      - declared_substance
   hintAuthority:
     mode: lab_hint_first
     strategyRef: hint_search

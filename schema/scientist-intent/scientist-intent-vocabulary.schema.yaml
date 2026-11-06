@@ -451,14 +451,6 @@ properties:
             description: >-
               Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
               no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
-          contenderOrder:
-            type: array
-            minItems: 1
-            uniqueItems: true
-            items: { type: string, enum: [exact_name, declared_substance] }
-            description: >-
-              Contender-narrowing order as DATA (policy, not TS branches); each pass fail-safe;
-              ABSENT means no narrowing declared (legacy behavior preserved).
       hintAuthority:
         type: object
         additionalProperties: false
