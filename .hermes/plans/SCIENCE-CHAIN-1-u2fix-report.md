@@ -26,4 +26,4 @@
 - C-1..C-6 regression: all still PASS (14/14)
 - Scope: exactly 2 owned files edited, no prohibited files touched
 
-L2-PROMPT2-SCIENCE-CHAIN-1-u2fix UNIT unit DONE 85830f8c830c596e7419cff3dea3b52f899a697c
+L2-PROMPT2-SCIENCE-CHAIN-1-u2fix UNIT unit DONE b23c1cd78f7807b15b8f3a6a69195c1282b4e86e
