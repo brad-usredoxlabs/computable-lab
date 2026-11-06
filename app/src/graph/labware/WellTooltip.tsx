@@ -20,6 +20,10 @@ import {
   formatComputedCount,
   formatScientificStateSummary,
 } from '../../shared/lib/formHelpers'
+import {
+  formatLadderedConcentration,
+  loadConcentrationDisplayConvention,
+} from '../lib/mixtureShareFormat'
 
 interface WellTooltipProps {
   wellId: WellId
@@ -109,7 +113,7 @@ export function WellTooltip({
               // must not repeat the mixture's volume — the header/summary above
               // is the single volume assertion. The row states its share of the
               // mixture plus count/density. Non-carrier rows render as before.
-              const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown) || 'no concentration'
+              const conc = formatLadderedConcentration(m.concentration, loadConcentrationDisplayConvention(), m.concentrationUnknown) || 'no concentration'
               const density = formatComputedConcentration(m.counterDensity)
               // CELLRATE-1: the per-well total is DISPLAY truth over the declared
               // data — derived ONLY from a declared rate x a declared volume and
