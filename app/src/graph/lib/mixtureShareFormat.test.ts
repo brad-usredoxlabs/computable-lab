@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   loadConcentrationDisplayConvention,
   formatLadderedConcentration,
@@ -20,18 +20,25 @@ describe('loadConcentrationDisplayConvention', () => {
   })
 
   it('returns undefined with a console.warn when the section is absent', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const yamlWithoutSection = `
 displayRoundingFactor: 100
 basis: percent-of-final-volume
 `
-    expect(() => loadConcentrationDisplayConvention(yamlWithoutSection)).not.toThrow()
     const result = loadConcentrationDisplayConvention(yamlWithoutSection)
     expect(result).toBeUndefined()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0][0]).toMatch(/section 'concentrationDisplay' absent/)
+    warnSpy.mockRestore()
   })
 
   it('returns undefined for empty text', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const result = loadConcentrationDisplayConvention('')
     expect(result).toBeUndefined()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0][0]).toMatch(/is empty/)
+    warnSpy.mockRestore()
   })
 
   it('throws when significantDigits is non-integer', () => {
