@@ -358,4 +358,30 @@ describe('SurfaceChatBridge — the ONE registrar door contract (T-2)', () => {
     expect(decided.scope).toBeUndefined()
     expect('scope' in decided).toBe(false)
   })
+
+  it('L2-CLARIFY-CARD-1 D2(b) cold-mount: deck door with scopePending=true holds provisional past the deadline (does not settle to absent)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    // A scopeless deck slice — the host's scope has not resolved yet.
+    function ScopelessDeckPublisher() {
+      usePublishSurfaceSlice('deck', scopelessDeckSliceFixture())
+      return null
+    }
+    render(
+      <AiPanelProvider>
+        <SurfaceChatBridge host="run-workspace" base={{ context: baseRunContext() }} scopePending={true} />
+        <ScopelessDeckPublisher />
+      </AiPanelProvider>,
+    )
+    // Before deadline: provisional (the slice is published scope-less)
+    expect(surfaceChatCalls[0]!.scopeStatus).toBe('provisional')
+    // After deadline: STILL provisional — the host explicitly says
+    // scopePending=true, so the deadline does NOT settle to absent.
+    // The IO gate stays held until the host reports no longer pending.
+    act(() => {
+      vi.advanceTimersByTime(DOOR_REQUIRED_RECHECK_DEADLINE_MS)
+    })
+    const afterDeadline = surfaceChatCalls[surfaceChatCalls.length - 1]!
+    expect(afterDeadline.scopeStatus).toBe('provisional')
+  })
 })
