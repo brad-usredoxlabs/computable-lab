@@ -36,4 +36,4 @@ comment blocks. Fixed one stale comment in strategies.ts.
 - 9f0a05dd: re-point golden spy-count pins to post-leak-fix counts
 - 5bcd36e3: fix stale strategies.ts gather comment
 
-L2-PROMPT2-COMPOSITION-BIND-1-c1precfix5 UNIT c1precfix5 DONE b1a4d738
+L2-PROMPT2-COMPOSITION-BIND-1-c1precfix5 UNIT c1precfix5 DONE 2837bc6a7a86ff01fe67df124968970bd25fc83c
