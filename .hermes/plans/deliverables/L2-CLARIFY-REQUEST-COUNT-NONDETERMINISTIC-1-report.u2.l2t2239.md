@@ -90,4 +90,4 @@ nondeterminism originates from the LLM response variance given thread context.
 - `.hermes/probes/reqcount-nondet-probe.cjs` — added `--arm=continuation` mode
 - Raw data: `/tmp/reqcount-u2/reqcount.json` (not committed)
 
-L2-CLARIFY-REQUEST-COUNT-NONDETERMINISTIC-1-u2 UNIT unit DONE
+L2-CLARIFY-REQUEST-COUNT-NONDETERMINISTIC-1-u2 UNIT unit DONE 1c6630671a723badf68cb8f815ef453a2ca04914
