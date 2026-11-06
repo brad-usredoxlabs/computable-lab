@@ -1,5 +1,5 @@
 /**
- * L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 u4cardfix — client done-arm replay.
+ * L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 u5dec — client done-arm replay.
  *
  * The adversarial DEFECT 1/2 pin: the existing tests hand-build the assistant
  * message and only pin ChatLog rendering. Nobody replayed the leg3 done frame
@@ -16,11 +16,17 @@
  * The adjacency predicate is exercised by building a message array where the
  * leg3 assistant (from the done arm) is followed by a system message, then a
  * user turn. The trunk form slice(index+1).some(user) finds the user and
- * suppresses the card. The fix checks only the immediately following message.
+ * suppresses the card. The fixed form checks only the immediately following
+ * message (ChatLog.tsx:117, landed in this item's u4card commit 412f82c9).
+ *
+ * u5dec decision: PIN-ONLY — the product already uses the adjacency form, and
+ * the mutation run proves the broader trunk form turns (b1) RED. Both
+ * directions are pinned: (b1) non-adjacent later user -> card stays; (b2)
+ * immediately-following user -> compact answered row (so a never-answered
+ * predicate also fails here, not just in the sibling ChatLog.test.tsx pins).
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, renderHook, act, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
 import { useAiChat } from '../shared/hooks/useAiChat'
 import { streamAssist } from '../shared/api/aiClient'
 import type { AiContext } from '../types/aiContext'
@@ -76,51 +82,62 @@ const baseProps = {
   onCancel: vi.fn(), onReview: vi.fn(), onClarificationPick: vi.fn(), onClarificationSubmit: vi.fn(),
 }
 
+/** (a) Drive the leg3 done frame through the real useAiChat done arm. */
+async function leg3ThroughDoneArm(): Promise<ChatMessage[]> {
+  vi.mocked(streamAssist).mockImplementationOnce(frames({
+    type: 'done',
+    result: {
+      success: true,
+      events: [],
+      notes: [],
+      clarificationRequests: LEG3_REQUESTS,
+      clarification: { prompt: LEG3_PROMPT, entityType: 'material', options: [], menuProvider: '/m', query: '1 mm clofibrate in dmso' },
+    },
+  }))
+
+  const { result } = renderHook(() => useAiChat({ aiContext }))
+  await act(async () => {
+    result.current.sendPrompt('Add 1 mM clofibrate in DMSO to E2:H5')
+  })
+  await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 4000 })
+
+  const assistant = result.current.messages.find((m) => m.role === 'assistant' && m.clarificationRequests?.length === 3)!
+  expect(assistant.clarificationRequests).toHaveLength(3)
+  expect(assistant.clarificationRequests?.[0]?.id).toBe('unresolved-c-de6a0cf836')
+  return result.current.messages.slice(0, 2) // user prompt + leg3 assistant
+}
+
 describe('L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 u4cardfix: leg3 done frame through useAiChat client done arm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('done arm replays leg3: assistant message carries 3 clarificationRequests and ChatLog renders the card even with a later user turn', async () => {
-    // Done arm: leg3 done frame with 3 clarificationRequests
-    vi.mocked(streamAssist).mockImplementationOnce(frames({
-      type: 'done',
-      result: {
-        success: true,
-        events: [],
-        notes: [],
-        clarificationRequests: LEG3_REQUESTS,
-        clarification: { prompt: LEG3_PROMPT, entityType: 'material', options: [], menuProvider: '/m', query: '1 mm clofibrate in dmso' },
-      },
-    }))
-
-    const { result } = renderHook(() => useAiChat({ aiContext }))
-    await act(async () => {
-      result.current.sendPrompt('Add 1 mM clofibrate in DMSO to E2:H5')
-    })
-    await waitFor(() => expect(result.current.isStreaming).toBe(false), { timeout: 4000 })
-
-    // (a) The assistant message carries the typed requests through the done arm
-    const assistant = result.current.messages.find((m) => m.role === 'assistant' && m.clarificationRequests?.length === 3)!
-    expect(assistant.clarificationRequests).toHaveLength(3)
-    expect(assistant.clarificationRequests?.[0]?.id).toBe('unresolved-c-de6a0cf836')
-
-    // (b) Build a message array with a system buffer between the leg3 assistant
-    //     and a later user turn to exercise the adjacency predicate:
-    //     [user: leg3 prompt] [assistant: leg3 clarification] [system: buffer] [user: follow-up]
-    //     The trunk form slice(index+1).some(user) finds the user at index 3
-    //     and suppresses the card. The fix checks only index+1 (system) -> card renders.
+  it('(b1) keeps the card when a system buffer separates the clarification from a later user turn', async () => {
     const messages: ChatMessage[] = [
-      ...result.current.messages.slice(0, 2), // user prompt + leg3 assistant
+      ...(await leg3ThroughDoneArm()),
       { id: 'system-buffer', role: 'system' as const, content: 'Draft preparation in progress.', timestamp: Date.now() + 1 },
       { id: 'user-followup', role: 'user' as const, content: 'Something else entirely', timestamp: Date.now() + 2 },
     ]
     expect(messages.length).toBe(4)
 
     render(<ChatLog {...baseProps} messages={messages} />)
-    // Card must render — the user message at index 3 is NOT the immediate answer
-    // to the clarification at index 1 (the immediately following message is system).
+    // Card must render — the user at index 3 is NOT the immediate answer to the
+    // clarification at index 1 (the immediately following message is system).
+    // The trunk form slice(index+1).some(user) suppresses here (mutation RED).
     expect(screen.getByTestId('chat-clarification-card')).toBeTruthy()
     expect(screen.queryByTestId('chat-log-clarification-answered')).toBeNull()
+  })
+
+  it('(b2) collapses to the answered row when the user turn immediately follows the clarification', async () => {
+    const messages: ChatMessage[] = [
+      ...(await leg3ThroughDoneArm()),
+      { id: 'user-answer', role: 'user' as const, content: 'Something else entirely', timestamp: Date.now() + 1 },
+    ]
+
+    render(<ChatLog {...baseProps} messages={messages} />)
+    // Only the user turn's CONTENT is rendered here; the system-buffer case above
+    // shows the same content NOT collapsing to this row.
+    expect(screen.queryByTestId('chat-clarification-card')).toBeNull()
+    expect(screen.getByTestId('chat-log-clarification-answered')).toHaveTextContent('Something else entirely')
   })
 })
