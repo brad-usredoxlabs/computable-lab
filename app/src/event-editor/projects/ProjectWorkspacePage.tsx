@@ -177,10 +177,10 @@ function WorkspaceShellHost({
         const payload = (env as { payload?: Record<string, unknown> })?.payload
         const t = typeof payload?.title === 'string' && payload.title.trim() ? payload.title : null
         if (t) setStudyTitle(t)
-      }, true)
+      })
       .catch(() => {
         /* title is a nicety — fall back to the id */
-      }, true)
+      })
     return () => {
       cancelled = true
     }
@@ -372,7 +372,7 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
     // This is a bridge between the PDF viewer and the AI chat
     const event = new CustomEvent('pdf-text-selection', {
       detail: { text, pageNumber },
-    }, true)
+    })
     window.dispatchEvent(event)
   }
   if (!activeTab) {
