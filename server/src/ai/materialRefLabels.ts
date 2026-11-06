@@ -784,3 +784,25 @@ export async function enrichAddMaterialRefs<T>(
   );
   return dedupeExactAddMaterialEvents(chunks.flat());
 }
+
+/**
+ * Enrich a draft result's events through the same enrichment path used by the
+ * model-tool branch. A thin wrapper: absent/empty events ⇒ return the SAME
+ * object; otherwise runs enrichAddMaterialRefs over the events array.
+ *
+ * Used at the deterministic shorthand-compile return path so bound
+ * single-ref formulations carry material_spec_ref + composition_snapshot
+ * instead of a bare material label.
+ */
+export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
+  result: T,
+  opts: { labeler: MaterialLabeler } & EnrichAddMaterialRefsOptions,
+): Promise<T> {
+  if (!Array.isArray(result.events) || result.events.length === 0) return result;
+  const enriched = await enrichAddMaterialRefs(result.events, opts.labeler, {
+    store: opts.store,
+    ...(opts.mentions ? { mentions: opts.mentions } : {}),
+  });
+  result.events = enriched;
+  return result;
+}

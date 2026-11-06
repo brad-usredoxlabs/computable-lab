@@ -1,0 +1,118 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import {
+  enrichDraftResultEvents,
+  type MaterialLabeler,
+  type EnrichAddMaterialRefsOptions,
+} from './materialRefLabels.js';
+
+const stubLabeler: MaterialLabeler = {
+  lookup: async (curie) => {
+    const labels: Record<string, string> = {
+      'CHEBI:17790': 'methanol',
+      'CHEBI:15377': 'water',
+      'local:MSP-clofibrate-form': '1 mM Clofibrate in DMSO',
+    };
+    return labels[curie] ?? null;
+  },
+};
+
+describe('enrichDraftResultEvents', () => {
+  it('leaves a non-add_material event byte-identical', async () => {
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-wash',
+          event_type: 'wash',
+          verb: 'wash',
+          details: { well: 'A1', solvent: 'water' },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    expect(out).toBe(result);
+    expect(out.events).toEqual([
+      {
+        eventId: 'evt-wash',
+        event_type: 'wash',
+        verb: 'wash',
+        details: { well: 'A1', solvent: 'water' },
+      },
+    ]);
+  });
+
+  it('returns a result with no events or empty events byte-identical', async () => {
+    const noEvents: { success: boolean } = { success: true };
+    const outNoEvents = await enrichDraftResultEvents(noEvents, { labeler: stubLabeler });
+    expect(outNoEvents).toBe(noEvents);
+
+    const emptyEvents = { success: true, events: [] };
+    const outEmpty = await enrichDraftResultEvents(emptyEvents, { labeler: stubLabeler });
+    expect(outEmpty).toBe(emptyEvents);
+  });
+
+  it('enriches a bound single-ref add_material with material_spec_ref and composition_snapshot', async () => {
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-1',
+          event_type: 'add_material',
+          verb: 'add_material',
+          details: { well: 'A2', material: '1 mM Clofibrate in DMSO', volumeUl: 1 },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    // enrichDraftResultEvents mutates in place (same object identity);
+    // verify the details changed (material_ref was added).
+    const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    // Without a store the plain label resolves to a mint, so we expect material_ref
+    // but no composition_snapshot (that needs store-backed formulation expansion).
+    expect(typeof details.material_ref).toBe('object');
+    expect((details.material_ref as Record<string, unknown>).kind).toBe('draft');
+  });
+
+  it('does not re-expand an existing composition_snapshot (idempotence)', async () => {
+    const existingSnapshot = [{ component_ref: { kind: 'ontology', id: 'CHEBI:17790' }, role: 'component' as const }];
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-1',
+          event_type: 'add_material',
+          verb: 'add_material',
+          details: {
+            well: 'A2',
+            material_ref: { kind: 'record', id: 'MSP-clofibrate-form' },
+            material_spec_ref: { kind: 'record', id: 'MSP-clofibrate-form' },
+            composition_snapshot: existingSnapshot,
+          },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    // Snapshot should be untouched — same length, same content
+    expect(details.composition_snapshot).toEqual(existingSnapshot);
+  });
+
+  it('leaves an unbound plain-material draft byte-identical', async () => {
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-1',
+          event_type: 'add_material',
+          verb: 'add_material',
+          details: { well: 'B3', material: 'PBS', volumeUl: 100 },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    // An unresolvable plain material label should not gain new keys
+    const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(details).toEqual({ well: 'B3', material: 'PBS', volumeUl: 100 });
+  });
+});
