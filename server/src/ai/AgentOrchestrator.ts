@@ -41,7 +41,7 @@ import {
   parseAlsoPlace,
   parseRecordCreations,
 } from './submitSuggestionTool.js';
-import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import { createMaterialLabeler, enrichAddMaterialRefs, enrichDraftResultEvents } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
@@ -3218,7 +3218,7 @@ export function createAgentOrchestrator(
               // call (never process-cached); absent store ⇒ empty map ⇒ STAGE
               // B identity form for every card.
               const shCanonicalLabels = await canonicalLabelsForFacts(compiledSh.clarifications ?? [], deps.store);
-              const shResult = shorthandResultFromCompile(
+              let shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
@@ -3244,6 +3244,13 @@ export function createAgentOrchestrator(
                 shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
                 console.warn(`[agent ${tid}] ${shResult.error}`);
               }
+              // Enrich compiler-draft events through the same path as the
+              // model-tool branch — label->mint fallback + material_spec_ref
+              // expansion so deterministic drafts carry the same structure.
+              shResult = await enrichDraftResultEvents(shResult, {
+                labeler: createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
+                store: deps.store,
+              });
               shorthandSummary(shResult);
               return shResult;
             }

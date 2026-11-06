@@ -790,6 +790,10 @@ export async function enrichAddMaterialRefs<T>(
  * model-tool branch. A thin wrapper: absent/empty events ⇒ return the SAME
  * object; otherwise runs enrichAddMaterialRefs over the events array.
  *
+ * For label-only draft details (no materials[] array, no material_ref), falls
+ * back to minting a draft ref — the same path the model-tool branch takes
+ * when it emits `{ kind: 'draft', id: \`mint:${label}\`, label }`.
+ *
  * Used at the deterministic shorthand-compile return path so bound
  * single-ref formulations carry material_spec_ref + composition_snapshot
  * instead of a bare material label.
@@ -803,6 +807,23 @@ export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
     store: opts.store,
     ...(opts.mentions ? { mentions: opts.mentions } : {}),
   });
+  // Mint fallback: after enrichAddMaterialRefs, some add_material events may
+  // still carry only a plain `material` label in details (no materials[] array
+  // and no material_ref). That happens when the shorthand compiler emits
+  // `{ well, material: '1 mM Clofibrate in DMSO', volumeUl }` — collectParts
+  // finds nothing and returns empty. Apply the same mint-as-draft path the
+  // model-tool branch uses via `toMaterialRef({ label })`.
+  for (const ev of enriched) {
+    const e = asDict(ev);
+    if (!e) continue;
+    if ((e.event_type ?? e.verb) !== 'add_material') continue;
+    const d = asDict(e.details) ?? {};
+    if (d.material_ref !== undefined) continue;
+    const materialLabel = typeof d.material === 'string' ? d.material : '';
+    if (materialLabel) {
+      e.details = { ...d, material_ref: { kind: 'draft', id: `mint:${materialLabel}`, label: materialLabel } };
+    }
+  }
   result.events = enriched;
   return result;
 }

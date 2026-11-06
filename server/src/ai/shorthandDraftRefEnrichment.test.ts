@@ -98,7 +98,7 @@ describe('enrichDraftResultEvents', () => {
     expect(details.composition_snapshot).toEqual(existingSnapshot);
   });
 
-  it('leaves an unbound plain-material draft byte-identical', async () => {
+  it('mints a draft ref for a plain material label (unbound case)', async () => {
     const result = {
       success: true as const,
       events: [
@@ -111,8 +111,12 @@ describe('enrichDraftResultEvents', () => {
       ],
     };
     const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
-    // An unresolvable plain material label should not gain new keys
+    // A bare material label becomes a draft mint — same as the model-tool path
     const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
-    expect(details).toEqual({ well: 'B3', material: 'PBS', volumeUl: 100 });
+    expect(typeof details.material_ref).toBe('object');
+    const mr = details.material_ref as Record<string, unknown>;
+    expect(mr.kind).toBe('draft');
+    expect(mr.id).toBe('mint:PBS');
+    expect(mr.label).toBe('PBS');
   });
 });
