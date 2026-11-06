@@ -47,7 +47,7 @@ const TREESTATE_FILES = [
 // A move of EITHER the file or its manifest pin fails the test.
 const BASE_TREESTATE_HASHES: Record<string, string> = {
   'schema/scientist-intent/scientist-intent-vocabulary.yaml':
-    '9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946',
+    '9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676',
   'schema/workflow/scientist-intent.schema.yaml':
     '78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6',
   'schema/registry/compile-pipelines/scientist-intent-compile.yaml':

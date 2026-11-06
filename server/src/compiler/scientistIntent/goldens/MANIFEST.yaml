@@ -93,7 +93,13 @@ treeState:
   # one treeState sha256 pin re-hashed.
   # BEFORE: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
   # AFTER: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946}
+  # L2-PROMPT2-COMPOSITION-BIND-1 UNIT 2 REBLESS (advc-c3 D1, ruling l2t1840 §5):
+  # the vocabulary pin re-hashed ONCE — the delta is the contenderOrder DATA
+  # addition (additive policy block; no verb, arg, referentLevel, or prior policy
+  # value changed). No golden fixture/record moved — ONLY this one treeState sha256
+  # pin re-hashed. BEFORE: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
+  # AFTER: 9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and

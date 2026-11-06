@@ -166,6 +166,21 @@ describe('resolver-spec.validation', () => {
     ).toThrow(/not found/);
   });
 
+  // L2-PROMPT2-COMPOSITION-BIND-1 u2: contenderOrder as DATA — exposed verbatim
+  it('contenderOrder is exposed verbatim from DATA', () => {
+    const shipped = defaultScientistIntentVocabulary();
+    expect(shipped.policies().ambiguity.contenderOrder).toEqual(['exact_name', 'declared_substance']);
+  });
+
+  it('contenderOrder off-state: fixture without the block loads with key ABSENCE', () => {
+    const off = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-contender-order-off', VOCABULARY_DATA_FILE),
+    });
+    expect('contenderOrder' in off.policies().ambiguity).toBe(false);
+    expect(off.policies().ambiguity.mode).toBe('clarify');
+    expect(off.policies().ambiguity.strategyRef).toBe('symbolic_label');
+  });
+
   it('fixture vocabularies cache per resolved path (bait 2: fixture injection gets its own instance)', () => {
     const a = loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE) });
     const b = loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE) });
