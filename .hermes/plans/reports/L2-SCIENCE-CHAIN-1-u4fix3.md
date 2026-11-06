@@ -9,4 +9,4 @@
 - Post-edit `grep -c` = 0 (exit code 1, confirming zero matches)
 - `npx vitest run src/ai/shorthandDraftRefEnrichment.test.ts`: 7 tests passed, 0 failed
 
-L2-PROMPT2-SCIENCE-CHAIN-1-u4fix3 UNIT unit DONE c4aab566
+L2-PROMPT2-SCIENCE-CHAIN-1-u4fix3 UNIT unit DONE 9f8318bd9f8bccd2f51b37d8c004d96430006f06
