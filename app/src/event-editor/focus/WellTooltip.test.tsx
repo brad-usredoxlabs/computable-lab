@@ -149,6 +149,52 @@ describe('WellTooltip (event-editor focus)', () => {
     }
   })
 
+  // L2-VACUOUS-PINS-DEBT u3: diluted multi-entry composition snapshot — the
+  // clofibrate row must show the LADDERED value (3.268 uM, from convention rung
+  // uM/perBase:1000000) and NEVER the raw declared-unit literal (0.003268 mM).
+  // This pin flips RED when WellTooltip.tsx:83 is changed to formatComputedConcentration.
+  it('diluted multi-entry: clofibrate row shows laddered 3.268 uM, not raw 0.003268 mM', () => {
+    const { container } = (() => {
+      const labware = createLabware('plate_96', 'tt-plate')
+      const events: PlateEvent[] = [
+        {
+          eventId: 'evt-clofibrate',
+          event_type: 'add_material',
+          details: {
+            labwareId: labware.labwareId,
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'CHEBI:3750', namespace: 'CHEBI', label: 'clofibrate' },
+            volume: { value: 1, unit: 'uL' },
+            concentration: { value: 1, unit: 'mM' },
+          },
+        },
+        {
+          eventId: 'evt-water',
+          event_type: 'add_material',
+          details: {
+            labwareId: labware.labwareId,
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'CHEBI:787', namespace: 'CHEBI', label: 'water' },
+            volume: { value: 305, unit: 'uL' },
+          },
+        },
+      ]
+      const states = computeLabwareStates(events, new Map([[labware.labwareId, labware]]))
+      const state = states.get(labware.labwareId)?.get('A1')
+      if (!state) throw new Error('A1 state missing')
+      return render(<WellTooltip wellId="A1" state={state} clientX={10} clientY={10} />)
+    })()
+
+    const rows = Array.from(container.querySelectorAll('.well-tooltip__material'))
+    const clofibrateRow = rows.find((row) => row.textContent?.includes('clofibrate'))
+    expect(clofibrateRow).toBeTruthy()
+    const concCell = clofibrateRow?.querySelector('.well-tooltip__material-conc')?.textContent
+    // LADDERED value from convention: 0.003268 mM -> 3.268 uM
+    expect(concCell).toBe('3.268 uM')
+    // Raw declared-unit literal must NOT appear
+    expect(concCell).not.toContain('0.003268 mM')
+  })
+
   // u5css RED pin: CSS declarations must NOT clip conc/vol cells and MUST wrap.
   // Reads eventEditor.css directly, strips comments, extracts rule bodies,
   // and asserts declaration-level properties (not raw text that a comment could satisfy).
