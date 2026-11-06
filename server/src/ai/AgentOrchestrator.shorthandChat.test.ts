@@ -708,7 +708,7 @@ actions:
     expect('termManifest' in result).toBe(false);
   });
 
-  it('D1 pin: the compiler-draft return path enriches events with material_ref via enrichDraftResultEvents (AC6)', async () => {
+  it('D1 pin: the compiler-draft return path surfaces material_ref on events (compiler is the emitter; wire is idempotent pass-through)', async () => {
     const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
       events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
       terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
@@ -726,10 +726,10 @@ actions:
 
     expect(result.success).toBe(true);
     expect(result.events?.length).toBeGreaterThan(0);
-    // The enrichDraftResultEvents wire (AgentOrchestrator.ts:3250) must add
-    // material_ref to compiler-draft events. Without the wire, events carry
-    // `material: 'DMEM'` but no `material_ref`. This pin is NON-VACUOUS —
-    // commenting out the wire block :3247-3253 makes it RED.
+    // The compiler emits material_ref on all add_material events (12/12 per
+    // ruling SCIENCE-shorthand-materialref-l2t2650); the enrichDraftResultEvents
+    // wire is an idempotent pass-through on this path. This pin proves the
+    // compiler-draft return path surfaces material_ref.
     const firstDetails = (result.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
     expect(typeof firstDetails.material_ref).toBe('object');
   });
