@@ -360,7 +360,7 @@ describe('noun-resolution.policy-is-data', () => {
   it('strategyOrder swap flips WHICH candidate binds — shipped outcome unchanged', async () => {
     const shipped = shippedVocab();
     const flipped = fixtureVocab('vocab-policy-flip');
-    expect(shipped.policies().strategyOrder).toEqual(['explicit_wells', 'hint_search', 'symbolic_label', 'ontology_resolution', 'mint_local']);
+    expect(shipped.policies().strategyOrder).toEqual(['declaration_precedence', 'explicit_wells', 'hint_search', 'symbolic_label', 'ontology_resolution', 'mint_local']); // Ruling 11a181c0 Q1: declared formulation takes precedence
     expect(flipped.policies().strategyOrder).toEqual(['explicit_wells', 'symbolic_label', 'hint_search', 'ontology_resolution', 'mint_local', 'accept_top_ranked']);
 
     const contract = shipped.argContracts('read').find((a) => a.name === 'labware')!;
@@ -385,7 +385,7 @@ describe('noun-resolution.policy-is-data', () => {
   it('ambiguity strategyRef flip changes the AMBIGUOUS-pool arm (clarify -> accept top)', async () => {
     const shipped = shippedVocab();
     const flipped = fixtureVocab('vocab-policy-flip');
-    expect(shipped.policies().ambiguity.strategyRef).toBe('symbolic_label');
+    expect(shipped.policies().ambiguity.strategyRef).toBe('declaration_precedence'); // Ruling 11a181c0 Q1
     expect(flipped.policies().ambiguity.strategyRef).toBe('accept_top_ranked');
 
     // Ambiguous pool: TWO hint matches in the acceptance band, no spine hit.
