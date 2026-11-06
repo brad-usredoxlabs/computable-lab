@@ -708,6 +708,32 @@ actions:
     expect('termManifest' in result).toBe(false);
   });
 
+  it('D1 pin: the compiler-draft return path surfaces material_ref on events (compiler is the emitter; wire is idempotent pass-through)', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+    compileSpy.mockRestore();
+
+    expect(result.success).toBe(true);
+    expect(result.events?.length).toBeGreaterThan(0);
+    // The compiler emits material_ref on all add_material events (12/12 per
+    // ruling SCIENCE-shorthand-materialref-l2t2650); the enrichDraftResultEvents
+    // wire is an idempotent pass-through on this path. This pin proves the
+    // compiler-draft return path surfaces material_ref.
+    const firstDetails = (result.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(typeof firstDetails.material_ref).toBe('object');
+  });
+
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();

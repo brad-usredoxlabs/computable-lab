@@ -41,7 +41,7 @@ import {
   parseAlsoPlace,
   parseRecordCreations,
 } from './submitSuggestionTool.js';
-import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import { createMaterialLabeler, enrichAddMaterialRefs, enrichDraftResultEvents } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
@@ -3089,7 +3089,11 @@ export function createAgentOrchestrator(
               // + goldens stay byte-identical BY CONSTRUCTION (R1.7): this
               // is the AI path upstream of the compile; no MANIFEST treeState
               // pin is touched.
-              const demotion = demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
+              // Skip demotion on the fallback answer-turn: the model re-extracted
+              // quantities in response to a clarification re-ask — trust them.
+              const demotion = fallbackCarryIntentId
+                ? { doc: shorthandDoc, demoted: [], notes: [] }
+                : demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
               if (demotion.demoted.length > 0) {
                 shorthandDoc = demotion.doc;
                 shorthandYaml = stringifyShorthandYaml({
@@ -3218,7 +3222,7 @@ export function createAgentOrchestrator(
               // call (never process-cached); absent store ⇒ empty map ⇒ STAGE
               // B identity form for every card.
               const shCanonicalLabels = await canonicalLabelsForFacts(compiledSh.clarifications ?? [], deps.store);
-              const shResult = shorthandResultFromCompile(
+              let shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
@@ -3244,6 +3248,14 @@ export function createAgentOrchestrator(
                 shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
                 console.warn(`[agent ${tid}] ${shResult.error}`);
               }
+              // Enrich compiler-draft events: material_spec_ref expansion +
+              // composition_snapshot so deterministic drafts carry bound refs.
+              // No mint-fallback — the compiled graph must stay byte-identical
+              // to the deterministic compiler's output.
+              shResult = await enrichDraftResultEvents(shResult, {
+                labeler: createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
+                store: deps.store,
+              });
               shorthandSummary(shResult);
               return shResult;
             }

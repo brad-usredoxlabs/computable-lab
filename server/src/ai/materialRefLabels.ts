@@ -784,3 +784,29 @@ export async function enrichAddMaterialRefs<T>(
   );
   return dedupeExactAddMaterialEvents(chunks.flat());
 }
+
+/**
+ * Enrich compiler-draft events through enrichAddMaterialRefs.
+ * A thin wrapper: absent/empty events ⇒ return the SAME
+ * object; otherwise runs enrichAddMaterialRefs over the events array.
+ *
+ * Does NOT mint draft refs for label-only materials — that fabrication
+ * breaks graph parity with the deterministic compiler. The model-tool
+ * branch mints via `toMaterialRef` (separate path) and is unaffected.
+ *
+ * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650).
+ * enrichAddMaterialRefs can write material_ref/composition_snapshot on events the
+ * compiler did not bind (latent second writer; writes at :481, :523), but is a
+ * measured no-op on compiler-emitted events (12/12 unchanged per advc probe).
+ */
+export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
+  result: T,
+  opts: { labeler: MaterialLabeler } & EnrichAddMaterialRefsOptions,
+): Promise<T> {
+  if (!Array.isArray(result.events) || result.events.length === 0) return result;
+  result.events = await enrichAddMaterialRefs(result.events, opts.labeler, {
+    store: opts.store,
+    ...(opts.mentions ? { mentions: opts.mentions } : {}),
+  });
+  return result;
+}

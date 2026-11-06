@@ -2619,11 +2619,45 @@ export function createResolveRolesPass(): Pass {
       let counter = 0;
       const allDiagnostics: PassDiagnostic[] = [];
 
+      /** Build the canonical material_ref + composition_snapshot shapes.
+       * ref.schema.yaml §52-55: type is record-specific; §73-77: kind=record
+       * requires id+type. composition-entry.schema.yaml §9: required
+       * [component_ref, role]; §15-22: role enum. We use 'other' (§22) as the
+       * honest gap arm — the binding carries no composition role. */
+      function buildMaterialEmission(
+        recordId: string,
+      ): Record<string, unknown> {
+        // 'record' and 'material' are schema enum members (ref.schema.yaml §14, §52-55)
+        const typedRef = { kind: 'record' as const, type: 'material' as const, id: recordId };
+        return {
+          material_ref: typedRef,
+          // composition-entry.schema.yaml §11: component_ref $ref ./ref.schema.yaml
+          // §22: 'other' is the honest gap arm (no declared role on the binding)
+          composition_snapshot: [
+            { component_ref: typedRef, role: 'other' as const },
+          ],
+        };
+      }
+
       for (const ev of events) {
         const details = ev.details as Record<string, unknown> | undefined;
         const role = details?.role as string | undefined;
 
         if (!role) {
+          // No role — pass through unchanged, but still emit material_ref +
+          // composition_snapshot for add_material events when the material label
+          // is resolved by resolve_nouns (compiler is the ONE emitter per ruling).
+          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
+            const materialBinding = nounBindings?.[details.material];
+            if (materialBinding?.recordId) {
+              const enrichedDetails = {
+                ...ev.details,
+                ...buildMaterialEmission(materialBinding.recordId),
+              } as Record<string, unknown>;
+              out.push({ ...ev, details: enrichedDetails });
+              continue;
+            }
+          }
           // No role — pass through unchanged
           out.push(ev);
           continue;
@@ -2681,6 +2715,20 @@ export function createResolveRolesPass(): Pass {
           // Attach cellTypeTerm on expanded events if resolved
           if (cellTypeTerm) {
             (expandedEvent.details as Record<string, unknown>).cellTypeTerm = cellTypeTerm;
+          }
+
+          // RULING: The compiler is the ONE emitter of material_ref on add_material events.
+          // Look up the resolved material binding from resolve_nouns — zero verb branches,
+          // zero name tests, zero id literals. The label is the event's details.material;
+          // the binding carries the authoritative recordId from the spine/vocabulary path.
+          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
+            const materialBinding = nounBindings?.[details.material];
+            if (materialBinding?.recordId) {
+              Object.assign(
+                expandedEvent.details as Record<string, unknown>,
+                buildMaterialEmission(materialBinding.recordId),
+              );
+            }
           }
 
           out.push(expandedEvent);
