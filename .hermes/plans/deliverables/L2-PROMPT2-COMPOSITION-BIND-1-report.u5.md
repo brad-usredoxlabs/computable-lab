@@ -35,4 +35,4 @@ Widened the vocabulary `domain` declaration slot to accept either a string OR an
 ## Blockers
 None — unit 5 is complete. The 2 typecheck errors are expected and will be resolved by unit 6's filter-layer changes.
 
-L2-PROMPT2-COMPOSITION-BIND-1 UNIT 5 DONE TBD
+L2-PROMPT2-COMPOSITION-BIND-1 UNIT 5 DONE d2d1bc32009df8f7481092aac6f610329b05f7c9
