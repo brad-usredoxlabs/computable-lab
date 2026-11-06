@@ -279,9 +279,14 @@ function SurfaceChatRegistrar({ host, base, scopePending }: SurfaceChatBridgePro
   // A cold-mount transient window is bounded by the deadline; the scope value
   // arriving or the deadline firing both settle.
   const scopeUndecided = expectsScope && !deckScope
-  const settleWindowElapsed = useScopeSettleDeadline(scopeUndecided)
+  // L2-CLARIFY-CARD-1: when the host explicitly reports scopePending=true, hold
+  // provisional past the deadline (the host signal, not a timer, bounds the hold).
+  // === true (not ?? true): an ABSENT prop keeps the bounded-settle path so
+  // P3 (C-2) still settles to absent, and optional-deck doors don't hang forever.
+  const hostReportsPending = declaresDeck && scopePending === true
+  const settleWindowElapsed = useScopeSettleDeadline(scopeUndecided && !hostReportsPending)
   const scopeStatus: 'settled' | 'provisional' =
-    scopeUndecided && !settleWindowElapsed ? 'provisional' : 'settled'
+    scopeUndecided && (hostReportsPending || !settleWindowElapsed) ? 'provisional' : 'settled'
   // §2.5 step 3: the ghost handlers wire ONLY when the host declares ghost_mount
   // (the collector only returns handlers in that case — belt and braces).
   const handlers = entry.ghost_mount ? collected.handlers : undefined
