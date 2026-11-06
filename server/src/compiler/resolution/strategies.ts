@@ -134,6 +134,39 @@ const mintLocal: ResolutionStrategy = {
   resolveAmbiguity: () => 'clarify',
 };
 
+// declaration_precedence — resolves a multi-candidate in-band set to the
+// SINGLE candidate carrying formulationDeclared: true when it is the unique
+// top-score winner. formulationDeclared is a typed contract term
+// (server/src/resolve/types.ts:51: "Present only when true: the record's
+// payload structurally declares a testable formulation"). The narrowed band
+// (one candidate) binds through the existing inBand.length === 1 path; a
+// band that was not narrowed still clarifies via resolveAmbiguity === 'clarify'.
+// The precedence is DECLARED IN DATA (ruling 11a181c0 Q1): the strategy id
+// is named in strategyOrder and ambiguity.strategyRef — no TS comparator,
+// no name/level literal. Cost: spine is gathered once per resolvable arg
+// (localOnly resolution); the band is unchanged for non-narrowable cases.
+const declarationPrecedence: ResolutionStrategy = {
+  id: 'declaration_precedence',
+  applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
+  gather: async (req, ctx) => {
+    const outcome = withDomainFilter(req, await gatherFrom(req, ctx, ['spine']));
+    // Narrow the band: sort by score DESC, curie ASC (matches resolutionEngine sortCandidates)
+    const sorted = [...outcome.candidates].sort((a, b) => b.score - a.score || a.curie.localeCompare(b.curie));
+    if (sorted.length > 1) {
+      const topScore = sorted[0]!.score;
+      // Count candidates at top score that carry formulationDeclared === true
+      const declaredAtTop = sorted.filter((c) => c.score === topScore && c.formulationDeclared === true);
+      // Exactly one declared candidate at top score => narrow to it
+      if (declaredAtTop.length === 1) {
+        return { candidates: [declaredAtTop[0]!], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: narrowed to declared formulation'] };
+      }
+    }
+    // Band not narrowable — return unchanged (engine's existing paths handle it)
+    return outcome;
+  },
+  resolveAmbiguity: () => 'clarify',
+};
+
 // accept_top_ranked — an ambiguity-arm strategy that accepts the top-ranked
 // in-band candidate. Reachable ONLY when the vocabulary DATA names it
 // (strategyOrder + ambiguity.strategyRef); the shipped vocabulary does not.
@@ -152,5 +185,6 @@ export function buildStrategyRegistry(): Map<string, ResolutionStrategy> {
     [ontologyResolution.id, ontologyResolution],
     [mintLocal.id, mintLocal],
     [acceptTopRanked.id, acceptTopRanked],
+    [declarationPrecedence.id, declarationPrecedence],
   ]);
 }
