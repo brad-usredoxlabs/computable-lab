@@ -3947,9 +3947,8 @@
   width: 60px;
   padding-left: 6px;
   text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--cl-accent);
   font-variant-numeric: tabular-nums;
 }
@@ -3958,9 +3957,8 @@
   width: 75px;
   padding-left: 6px;
   text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--cl-text-dim);
   font-variant-numeric: tabular-nums;
 }
