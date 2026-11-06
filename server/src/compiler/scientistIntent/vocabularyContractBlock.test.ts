@@ -6,7 +6,7 @@
  * typed-out verb names.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultScientistIntentVocabulary } from './vocabulary.js';
+import { defaultScientistIntentVocabulary, formatArgDomain } from './vocabulary.js';
 
 describe('vocabulary contract block', () => {
   it('lists every verb with its declared args', () => {
@@ -45,7 +45,7 @@ describe('vocabulary contract block', () => {
     const block = vocab.contractBlock();
     for (const verb of vocab.verbs()) {
       const expectedArgs = vocab.argContracts(verb)
-        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
         .join(', ');
       const line = block.split('\n').find((l) => l.startsWith(`- ${verb}`))!;
       expect(line).toBe(expectedArgs ? `- ${verb} — ${expectedArgs}` : `- ${verb}`);

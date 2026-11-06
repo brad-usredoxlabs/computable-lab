@@ -108,7 +108,7 @@ export interface ScientistIntentVerbEntry {
 
 export interface ScientistIntentVocabularyPolicies {
   strategyOrder: readonly string[];
-  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string; identityCollapse?: { key: readonly string[]; survivor: readonly string[] }; contenderOrder?: readonly string[] };
+  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string; identityCollapse?: { key: readonly string[]; survivor: readonly string[] } };
   hintAuthority: { mode: string; strategyRef: string };
   ruleIds: readonly string[];
 }
@@ -196,6 +196,17 @@ export function declaredDomains(
   if (arg === undefined || arg === '') return [];
   if (typeof arg === 'string') return [arg.trim().toLowerCase()];
   return arg.map((d) => d.trim().toLowerCase());
+}
+
+/**
+ * Render a domain slot as a pipe-separated string (e.g. `labware|material`).
+ * Both prompt emitters and the mirror must use this formatter so the slot
+ * renders unambiguously — never raw interpolation of `a.domain`.
+ */
+export function formatArgDomain(
+  arg?: string | readonly string[] | undefined,
+): string {
+  return declaredDomains(arg).join('|');
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -413,7 +424,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     const lines: string[] = ['ACTIONS (the CLOSED vocabulary — never invent another):'];
     for (const verb of verbsFrozen) {
       const args = entries.get(verb)!.args
-        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
         .join(', ');
       lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
       for (const a of entries.get(verb)!.args) {

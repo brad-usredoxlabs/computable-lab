@@ -99,7 +99,15 @@ treeState:
   # value changed). No golden fixture/record moved — ONLY this one treeState sha256
   # pin re-hashed. BEFORE: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
   # AFTER: 9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676}
+  # L2-PROMPT2-COMPOSITION-BIND-1 FIX CYCLE REBLESS (advc-full-l2t2475 D1+D6):
+  # the vocabulary pin re-hashed ONCE — the delta is the D6 removal of the dead
+  # contenderOrder DATA block (3 comments + key + 2 items from vocabulary.yaml,
+  # matching schema property, loader type member, and pass-through test pin removed).
+  # No verb, arg, referentLevel, or policy value changed; the delta is the D6 removal
+  # only. One bless, no second bless owed.
+  # BEFORE: 1065219b6b2ec55927f9c7432000bd81e973f85e87dc4b0f4f51ed92766d6eba.
+  # AFTER: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
