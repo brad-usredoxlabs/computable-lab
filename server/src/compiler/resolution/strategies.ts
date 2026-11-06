@@ -146,8 +146,8 @@ const mintLocal: ResolutionStrategy = {
 // strategy in strategyOrder (resolutionEngine.ts:386).
 // The precedence is DECLARED IN DATA (ruling 11a181c0 Q1): the strategy id
 // is named in strategyOrder and ambiguity.strategyRef — no TS comparator,
-// no name/level literal. Cost: spine is gathered once per resolvable arg
-// (localOnly resolution).
+// no name/level literal. Spine is gathered once per resolvable arg, but
+// candidates are only contributed when a declared twin pair was narrowed.
 const declarationPrecedence: ResolutionStrategy = {
   id: 'declaration_precedence',
   applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
