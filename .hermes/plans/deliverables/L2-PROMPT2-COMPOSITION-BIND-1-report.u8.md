@@ -32,4 +32,4 @@
 ### Commit
 94e7609d — `L2-PROMPT2-COMPOSITION-BIND-1 u8: fix import path + replace vacuous confinement pin with real consumer tests` (1 file changed, +63/-27)
 
-L2-PROMPT2-COMPOSITION-BIND-1-u8 UNIT 8 BLOCKED marker_sha_pending
+L2-PROMPT2-COMPOSITION-BIND-1-u8 UNIT 8 DONE 94e7609da90bd2de99824ee20bb99f0d5e610ffc
