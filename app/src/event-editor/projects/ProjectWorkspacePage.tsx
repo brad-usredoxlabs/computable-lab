@@ -177,10 +177,10 @@ function WorkspaceShellHost({
         const payload = (env as { payload?: Record<string, unknown> })?.payload
         const t = typeof payload?.title === 'string' && payload.title.trim() ? payload.title : null
         if (t) setStudyTitle(t)
-      })
+      }, true)
       .catch(() => {
         /* title is a nicety — fall back to the id */
-      })
+      }, true)
     return () => {
       cancelled = true
     }
@@ -214,7 +214,7 @@ function WorkspaceShellHost({
       kind: 'deck',
       eventGraphId: autoOpenEventGraphId,
       title: autoOpenEventGraphId,
-    })
+    }, true)
   })
 
   // Phase R: a bare /project/:id lands on the project homepage (project-details
@@ -372,7 +372,7 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
     // This is a bridge between the PDF viewer and the AI chat
     const event = new CustomEvent('pdf-text-selection', {
       detail: { text, pageNumber },
-    })
+    }, true)
     window.dispatchEvent(event)
   }
   if (!activeTab) {
