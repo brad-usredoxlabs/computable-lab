@@ -203,6 +203,38 @@ describe('resolutionEngine.declarationPrecedence', () => {
   });
 
   // -----------------------------------------------------------------------
+  // SHIPPED-DATA PINS — declaration_precedence must be first in strategyOrder
+  // and strategyRef must point to it. These read the actual shipped YAML.
+  // -----------------------------------------------------------------------
+  describe('shipped-vocabulary-pins', () => {
+    it('strategyOrder[0] is declaration_precedence in shipped vocabulary', () => {
+      expect(loadScientistIntentVocabulary().policies().strategyOrder[0]).toBe('declaration_precedence');
+    });
+
+    it('ambiguity.strategyRef is declaration_precedence in shipped vocabulary', () => {
+      expect(loadScientistIntentVocabulary().policies().ambiguity.strategyRef).toBe('declaration_precedence');
+    });
+
+    // Positive scenario with shipped vocabulary directly — no declarationVocab() override.
+    // If the YAML is reverted, this test goes RED.
+    it('one declared candidate binds spec CURIE using shipped vocabulary directly', async () => {
+      const vocab = loadScientistIntentVocabulary();
+      const { spine, tracker } = spineWith(hits(), hits(conceptHit, specHit));
+      const deps = depsFor({ spine, tracker, vocab });
+
+      const outcome = await resolveNoun(
+        request({ verb: 'transfer', argument: 'source', label: 'clofibrate', declared: sourceContract }),
+        vocab,
+        deps,
+      );
+
+      expect(outcome.bindings).toHaveLength(1);
+      expect(outcome.bindings[0]!.curie).toBe('MSP-PR9-TEST-CLO-1MM');
+      expect(outcome.clarifications).toEqual([]);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Negative pin (c-continued): one in-band => binds through existing path
   // -----------------------------------------------------------------------
   it('one in-band candidate => binds through existing single-bind path', async () => {
