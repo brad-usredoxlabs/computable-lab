@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { declaredDomains } from '../vocabulary';
+import { declaredDomains } from './vocabulary';
+import type { ScientistIntentVocabulary } from './vocabulary.js';
 
 describe('declaredDomains', () => {
   it('returns empty array for undefined', () => {
@@ -16,35 +17,70 @@ describe('declaredDomains', () => {
   });
 });
 
-describe('declaredDomains — confinement RED pin', () => {
-  it('throws TypeError when contract.domain is an array and raw .toLowerCase() is called', () => {
-    // This test reproduces the exact bug: a widened domain slot (array) passed through
-    // the raw consumer crashes on .toLowerCase()
-    const contract = {
-      name: 'source',
-      kind: 'resolvable',
-      required: false,
-      domain: ['material'] as string | readonly string[],
+describe('declaredDomains — confinement via stripRedundantMixtureLabels (ALL-of)', () => {
+  it('single domain confined in stripDomains → material strips', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+
+    const stub: ScientistIntentVocabulary = {
+      argContracts: (verb) => verb === 'add_material'
+        ? [{ name: 'material', kind: 'resolvable', required: false, domain: ['material'], cardinality: 'one' as const },
+           { name: 'composition', kind: 'resolvable', required: false, cardinality: 'many' as const, itemNounField: 'material' }]
+        : [],
+      verbs: () => [], has: () => false, classOf: () => undefined,
+      patterns: () => new Set(), policies: () => ({ strategyOrder: [], ambiguity: { mode: '', confidenceAccept: { min: 0, max: 1 }, strategyRef: '' }, hintAuthority: { mode: '', strategyRef: '' }, ruleIds: [] }),
+      promptVerbBlock: () => '', toolActionEnum: () => [], contractBlock: () => '',
+      wellsetValueTokens: () => [], materialBearingEventTypes: () => [],
+      labStateContentBearingEventTypes: () => [],
+      labwareIdentityResolution: () => ({ order: [], tokenFields: [] }),
     };
-    // Directly exercise the bug: the accessor is safe, but the raw consumer crashes
-    expect(() => {
-      // Simulate the raw consumer path (pre-fix)
-      const domain = contract.domain;
-      (domain as any).toLowerCase();
-    }).toThrow(/toLowerCase is not a function/);
+
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'all-of-strip',
+      actions: [{
+        action: 'add_material',
+        material: 'DMEM/FBS',
+        params: { composition: [{ material: 'DMEM', role: 'buffer_component' }, { material: 'FBS', role: 'additive' }] },
+      }],
+      unresolved: [],
+    } as never;
+
+    const result = stripRedundantMixtureLabels(intent, stub);
+    // ALL-of: ['material'] ⊆ stripDomains → strip fires
+    expect(result.stripped.map((s) => s.argument)).toEqual(['material']);
   });
 
-  it('declaredDomains normalises the same contract safely (ALL-of confinement)', () => {
-    const contract = {
-      name: 'source',
-      kind: 'resolvable',
-      required: false,
-      domain: ['material'] as string | readonly string[],
+  it('multi-domain not-all-confined → material does NOT strip (ALL-of polarity)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+
+    const stub: ScientistIntentVocabulary = {
+      argContracts: (verb) => verb === 'add_material'
+        ? [{ name: 'material', kind: 'resolvable', required: false, domain: ['material', 'labware'], cardinality: 'one' as const },
+           { name: 'composition', kind: 'resolvable', required: false, cardinality: 'many' as const, itemNounField: 'material' }]
+        : [],
+      verbs: () => [], has: () => false, classOf: () => undefined,
+      patterns: () => new Set(), policies: () => ({ strategyOrder: [], ambiguity: { mode: '', confidenceAccept: { min: 0, max: 1 }, strategyRef: '' }, hintAuthority: { mode: '', strategyRef: '' }, ruleIds: [] }),
+      promptVerbBlock: () => '', toolActionEnum: () => [], contractBlock: () => '',
+      wellsetValueTokens: () => [], materialBearingEventTypes: () => [],
+      labStateContentBearingEventTypes: () => [],
+      labwareIdentityResolution: () => ({ order: [], tokenFields: [] }),
     };
-    const domains = declaredDomains(contract.domain);
-    // ALL-of: every declared domain must be in stripDomains
-    const stripDomains = new Set(['material']);
-    const shouldStrip = domains.length > 0 && domains.every((d) => stripDomains.has(d));
-    expect(shouldStrip).toBe(true);
+
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'all-of-no-strip',
+      actions: [{
+        action: 'add_material',
+        material: 'DMEM/FBS',
+        params: { composition: [{ material: 'DMEM', role: 'buffer_component' }, { material: 'FBS', role: 'additive' }] },
+      }],
+      unresolved: [],
+    } as never;
+
+    const result = stripRedundantMixtureLabels(intent, stub);
+    // ALL-of: ['material','labware'] NOT ⊆ stripDomains (labware missing) → no strip
+    expect(result.stripped).toEqual([]);
   });
 });
