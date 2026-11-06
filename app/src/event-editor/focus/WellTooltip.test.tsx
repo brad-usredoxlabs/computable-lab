@@ -92,6 +92,22 @@ describe('WellTooltip (event-editor focus)', () => {
     expect(concCell?.textContent).toBe('1 mM')
   })
 
+  // D2: truncated cells expose their full text via title attributes so the
+  // concentration and mixture-share are recoverable even when ellipsis clips.
+  it('conc and vol cells carry title matching their text content', () => {
+    const { container } = renderTooltip(mixtureEvent)
+
+    const concCells = Array.from(container.querySelectorAll('.well-tooltip__material-conc'))
+    const volCells  = Array.from(container.querySelectorAll('.well-tooltip__material-vol'))
+
+    for (const cell of concCells) {
+      expect(cell.getAttribute('title')).toBe(cell.textContent)
+    }
+    for (const cell of volCells) {
+      expect(cell.getAttribute('title')).toBe(cell.textContent)
+    }
+  })
+
   // CELLRATE-1 (RED-first): the post-fix compiled shape — a rate-only event
   // (counter_density declared, NO count). The cells row keeps the declared
   // rate AND shows the per-well total LABELED derived with the operands
