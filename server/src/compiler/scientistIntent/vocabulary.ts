@@ -198,6 +198,17 @@ export function declaredDomains(
   return arg.map((d) => d.trim().toLowerCase());
 }
 
+/**
+ * Render a domain slot as a pipe-separated string (e.g. `labware|material`).
+ * Both prompt emitters and the mirror must use this formatter so the slot
+ * renders unambiguously — never raw interpolation of `a.domain`.
+ */
+export function formatArgDomain(
+  arg?: string | readonly string[] | undefined,
+): string {
+  return declaredDomains(arg).join('|');
+}
+
 export interface LoadScientistIntentVocabularyOptions {
   /** Absolute or cwd-relative path to a vocabulary DATA file (fixture injection). */
   path?: string;
@@ -413,7 +424,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     const lines: string[] = ['ACTIONS (the CLOSED vocabulary — never invent another):'];
     for (const verb of verbsFrozen) {
       const args = entries.get(verb)!.args
-        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
         .join(', ');
       lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
       for (const a of entries.get(verb)!.args) {
