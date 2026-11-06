@@ -118,8 +118,8 @@ export function WellTooltip({ wellId, state, isTubeRack = false, clientX, client
                     {m.materialRef}
                     {m.role ? <span className="well-tooltip__material-role"> · {m.role}</span> : null}
                   </td>
-                  <td className="well-tooltip__material-conc">{concCell}</td>
-                  <td className="well-tooltip__material-vol">{volCell}</td>
+                  <td className="well-tooltip__material-conc" title={concCell}>{concCell}</td>
+                  <td className="well-tooltip__material-vol" title={volCell}>{volCell}</td>
                 </tr>
               )
             })}
