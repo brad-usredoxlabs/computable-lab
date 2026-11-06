@@ -162,3 +162,25 @@ recipeShapedReadingEvidence:
   # the document itself). The evaluator treats the declared sub-composition as
   # the datum; no reagent word is consulted.
   documentSideReading: precedingEntryDeclaresOwnComposition
+
+# ---- concentration display ladder (L2-PROMPT2-TOOLTIP-FINAL-CONC-1) ----
+# Readable-unit ladder for a computed (diluted) concentration cell.
+# perBase = how many of THIS rung make one base unit of the family (molar base = M,
+# mass_per_volume base = g/L). TS derives every factor; no literal lives there.
+# Rungs are ORDERED most-significant first.
+concentrationDisplay:
+  minDisplayMagnitude: 1
+  significantDigits: 4
+  unitLadders:
+    molar:
+      - {unit: M,   perBase: 1}
+      - {unit: mM,  perBase: 1000}
+      - {unit: uM,  perBase: 1000000}
+      - {unit: nM,  perBase: 1000000000}
+      - {unit: pM,  perBase: 1000000000000}
+      - {unit: fM,  perBase: 1000000000000000}
+    mass_per_volume:
+      - {unit: g/L,  perBase: 1}
+      - {unit: mg/mL, perBase: 1}
+      - {unit: ug/mL, perBase: 1000}
+      - {unit: ng/mL, perBase: 1000000}
