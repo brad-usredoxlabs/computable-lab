@@ -52,7 +52,7 @@ describe('enrichDraftResultEvents', () => {
     expect(outEmpty).toBe(emptyEvents);
   });
 
-  it('enriches a bound single-ref add_material with material_spec_ref and composition_snapshot', async () => {
+  it('mints a draft material_ref for a bound single-ref add_material without a store', async () => {
     const result = {
       success: true as const,
       events: [
