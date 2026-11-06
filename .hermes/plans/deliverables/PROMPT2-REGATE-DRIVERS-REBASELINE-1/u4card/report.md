@@ -49,4 +49,4 @@ Test 2: S1 fix — user turn separated by non-user message must NOT suppress the
 None. The S1 fix resolves the client-side card suppression. Live browser verification
 (u5) remains to confirm the fix renders in :5193.
 
-L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1-u4card UNIT 4 DONE d795737a503650c1cd8dc0573aedb5281466ec17
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1-u4card UNIT 4 DONE f1bd704b7ac0aad85521341631c8917942d2e865
