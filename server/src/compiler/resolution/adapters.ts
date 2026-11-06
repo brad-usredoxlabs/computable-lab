@@ -264,10 +264,15 @@ function claimsConflictingLandingZone(candidate: RankedCandidate, domain: string
 
 export function filterCandidatesByDeclaredDomain(
   candidates: RankedCandidate[],
-  domain: string | undefined,
+  domain: string | readonly string[] | undefined,
 ): { eligible: RankedCandidate[]; rejected: RankedCandidate[] } {
-  if (!domain) return { eligible: candidates, rejected: [] };
-  const namespaces = declaredNamespacesForDomain(domain);
+  const declared =
+    domain === undefined
+      ? undefined
+      : typeof domain === 'string'
+        ? [domain]
+        : domain;
+  if (!declared || declared.length === 0) return { eligible: candidates, rejected: [] };
   const eligible: RankedCandidate[] = [];
   const rejected: RankedCandidate[] = [];
   for (const candidate of candidates) {
@@ -275,16 +280,21 @@ export function filterCandidatesByDeclaredDomain(
       eligible.push(candidate); // the mint affordance is not a namespace claim
       continue;
     }
-    if (namespaces) {
-      // Ontology bridge declared for this tag: the namespace filter is the authority.
-      if (namespaces.has(candidate.namespace.toUpperCase())) eligible.push(candidate);
-      else rejected.push(candidate);
-    } else if (claimsConflictingLandingZone(candidate, domain)) {
-      // No ontology bridge: the term-spine landing-zone taxonomy is the authority.
-      rejected.push(candidate);
-    } else {
-      eligible.push(candidate);
+    let admitted = false;
+    for (const tag of declared) {
+      const tagNs = declaredNamespacesForDomain(tag);
+      if (tagNs) {
+        if (tagNs.has(candidate.namespace.toUpperCase())) {
+          admitted = true;
+          break;
+        }
+      } else if (!claimsConflictingLandingZone(candidate, tag)) {
+        admitted = true;
+        break;
+      }
     }
+    if (admitted) eligible.push(candidate);
+    else rejected.push(candidate);
   }
   return { eligible, rejected };
 }
