@@ -92,12 +92,21 @@ properties:
               required:
                 type: boolean
               domain:
-                type: string
-                minLength: 1
+                oneOf:
+                  - type: string
+                    minLength: 1
+                  - type: array
+                    minItems: 1
+                    uniqueItems: true
+                    items:
+                      type: string
+                      minLength: 1
                 description: >-
-                  DECLARATION SLOT — free-text domain tag naming where the noun
-                  must land (e.g. labware, material, instrument). Required for
-                  resolvable args by lint policy (not by structure).
+                  DECLARATION SLOT — free-text domain tag(s) naming where the noun
+                  must land (e.g. labware, material, instrument). A single value
+                  names one landing zone; an array declares that ANY of the listed
+                  zones is acceptable for this argument. Required for resolvable
+                  args by lint policy (not by structure).
               capability:
                 type: string
                 minLength: 1

@@ -49,8 +49,10 @@ export interface ScientistIntentArgContract {
   name: string;
   kind: ScientistIntentArgKind;
   required: boolean;
-  /** DECLARATION SLOT — where the noun must land (SPINE-3 adapters consume). */
-  domain?: string;
+  /** DECLARATION SLOT — where the noun must land (SPINE-3 adapters consume).
+   *  A single value names one landing zone; an array declares that ANY of the
+   *  listed zones is acceptable for this argument. */
+  domain?: string | readonly string[];
   capability?: string;
   hintEligible?: boolean;
   /** SPINE-8 DECLARATION SLOT — the MaterialLevel this argument's noun must
@@ -252,7 +254,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string; satisfiedBy?: string[] }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string | readonly string[]; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string; satisfiedBy?: string[] }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labStateContentBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
@@ -267,7 +269,13 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       name: a.name,
       kind: a.kind,
       required: a.required,
-      ...(typeof a.domain === 'string' ? { domain: a.domain } : {}),
+      // Domain: accept string or non-empty array (meta-schema is the validation
+      // authority; conditional spread for exactOptionalPropertyTypes).
+      ...(typeof a.domain === 'string'
+        ? { domain: a.domain }
+        : Array.isArray(a.domain) && a.domain.length > 0
+        ? { domain: a.domain }
+        : {}),
       ...(typeof a.capability === 'string' ? { capability: a.capability } : {}),
       ...(typeof a.hintEligible === 'boolean' ? { hintEligible: a.hintEligible } : {}),
       // Generic narrowing of the DECLARED level slot (the meta-schema enum is
