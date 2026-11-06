@@ -50,4 +50,4 @@ The ambiguity-strategy test (`nounResolution.test.ts:385` — two hint matches, 
 - No hardcoded labels in branch conditions
 - Prior unit `c1precfix3b` repinned the test to bless the regression; this unit undoes that
 
-L2-PROMPT2-COMPOSITION-BIND-1 UNIT c1precfix4b DONE d5e20127928107eef26a563b055dfcafa7059346
+L2-PROMPT2-COMPOSITION-BIND-1 UNIT c1precfix4b DONE 6b6bc7ba46eefe2b021f3c6389deda4589370f06
