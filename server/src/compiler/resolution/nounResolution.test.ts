@@ -590,7 +590,9 @@ actions:
       hits(),
     );
     const outcome = await resolveScientistIntentNouns(doc, vocab, depsFor({ spine, tracker, vocab }));
-    expect(outcome.traces.some((t) => t.startsWith('domain-expectation: declared labware vs doc expected cellType for transfer.source'))).toBe(true);
+    // D3 (advc-full-l2t2475): transfer.source is declared [labware, material] since the u5 widening;
+    // the trace now renders the set form. Was: "declared labware".
+    expect(outcome.traces.some((t) => t.startsWith('domain-expectation: declared [labware, material] vs doc expected cellType for transfer.source'))).toBe(true);
   });
 
   it('N3 quirk consumed + pinned: whitespace-only actionLocation.argument is dropped at parse; clarification still carries actionIndex+action', async () => {
