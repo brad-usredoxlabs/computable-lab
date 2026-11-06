@@ -11,6 +11,7 @@
 import { defaultRoleResolver } from '../roles/RoleResolver.js';
 import { ONTOLOGY_DOMAINS } from '../../ontology/domains.js';
 import { suggestExistingTerms, type TermLike } from '../../materials/termReconciliation.js';
+import { declaredDomains } from '../scientistIntent/vocabulary.js';
 import type { ProviderHit, RankedCandidate, ResolveOptions, ResolveProvider, ResolveTier } from '../../resolve/types.js';
 import type { CandidateAdapter, TierOutcome } from './types.js';
 
@@ -258,21 +259,20 @@ export function declaredNamespacesForDomain(domain: string | undefined): Set<str
  *  (absence of a claim is not a conflict — "prefer what the lab has"). NO
  *  domain NAME is branched on: the check compares two declared data fields
  *  (the vocabulary's domain tag vs the candidate's term kind). */
-function claimsConflictingLandingZone(candidate: RankedCandidate, domain: string): boolean {
-  return candidate.termKind !== undefined && candidate.termKind.toLowerCase() !== domain.toLowerCase();
+/**
+ * Check whether a candidate's termKind conflicts with the declared domain tag.
+ * The tag arrives normalised (lowercased) by declaredDomains — no additional
+ * casing transform is required. */
+function claimsConflictingLandingZone(candidate: RankedCandidate, tag: string): boolean {
+  return candidate.termKind !== undefined && candidate.termKind.toLowerCase() !== tag;
 }
 
 export function filterCandidatesByDeclaredDomain(
   candidates: RankedCandidate[],
   domain: string | readonly string[] | undefined,
 ): { eligible: RankedCandidate[]; rejected: RankedCandidate[] } {
-  const declared =
-    domain === undefined
-      ? undefined
-      : typeof domain === 'string'
-        ? [domain]
-        : domain;
-  if (!declared || declared.length === 0) return { eligible: candidates, rejected: [] };
+  const declared = declaredDomains(domain);
+  if (declared.length === 0) return { eligible: candidates, rejected: [] };
   const eligible: RankedCandidate[] = [];
   const rejected: RankedCandidate[] = [];
   for (const candidate of candidates) {
