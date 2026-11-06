@@ -62,4 +62,15 @@ describe('domainSetFilter', () => {
     expect(result.eligible.length).toBe(1);
     expect(result.rejected.length).toBe(0);
   });
+
+  it('cellType domain admits CL-namespace candidates via namespace filter (advc DEFECT 1)', () => {
+    // declaredDomains lowercases tags; ONTOLOGY_DOMAINS keys are camelCase.
+    // A CL-namespace candidate must be admitted under 'cellType' because CL
+    // is the primary namespace. It should NOT fall through to the conflict
+    // landing-zone check — the namespace filter owns admission.
+    const candidates = [makeCandidate({ namespace: 'CL', termKind: 'material' })];
+    const result = filterCandidatesByDeclaredDomain(candidates, 'cellType');
+    expect(result.eligible.length).toBe(1);
+    expect(result.rejected.length).toBe(0);
+  });
 });
