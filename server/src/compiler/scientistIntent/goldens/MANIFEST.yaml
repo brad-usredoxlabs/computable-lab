@@ -105,9 +105,9 @@ treeState:
   # matching schema property, loader type member, and pass-through test pin removed).
   # No verb, arg, referentLevel, or policy value changed; the delta is the D6 removal
   # only. One bless, no second bless owed.
-  # BEFORE: 1065219b6b2ec55927f9c7432000bd81e973f85e87dc4b0f4f51ed92766d6eba.
-  # AFTER: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e}
+  # BEFORE: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e.
+  # AFTER: d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab (c1precfix1b: ruling 11a181c0 Q1 — declaration_precedence first in strategyOrder, strategyRef updated).
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and

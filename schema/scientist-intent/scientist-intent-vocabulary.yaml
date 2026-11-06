@@ -1012,6 +1012,7 @@ labwareIdentityResolution:
 referentLevels: [concept, formulation, vendor-product, instance, aliquot]
 policies:
   strategyOrder:
+    - declaration_precedence  # Ruling 11a181c0 Q1: declared formulation takes precedence
     - explicit_wells
     - hint_search
     - symbolic_label
@@ -1022,7 +1023,7 @@ policies:
     confidenceAccept:
       min: 0.7
       max: 1
-    strategyRef: symbolic_label
+    strategyRef: declaration_precedence  # Ruling 11a181c0 Q1
     # Identity policy l2t2030: same (normalized_label, candidate_level) is ONE identity — the
     # store may not carry two local terms for one entity. survivor is an ORDERED list of policy
     # ids; each pass is fail-safe (never empties the set). ABSENT => no collapse, pre-fix bytes.
