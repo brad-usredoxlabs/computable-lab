@@ -46,4 +46,4 @@ File: `server/src/compiler/scientistIntent/mixtureLabelRedundancy.ts`
 1. `9aaf9f66` — D8 blank filter in declaredDomains (trim-then-drop)
 2. `b5ecabdd` — D7 fail-closed strip candidacy in mixtureLabelRedundancy
 
-L2-PROMPT2-COMPOSITION-BIND-1-u13fix UNIT unit DONE b5ecabdd
+L2-PROMPT2-COMPOSITION-BIND-1-u13fix UNIT unit DONE b5ecabdd71791cf4257cff14ed5845ef15e295b1
