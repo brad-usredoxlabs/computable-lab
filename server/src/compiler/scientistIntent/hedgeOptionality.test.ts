@@ -47,6 +47,7 @@ import {
 } from './intentCompile.js';
 import {
   defaultScientistIntentVocabulary,
+  formatArgDomain,
   loadScientistIntentVocabulary,
   VOCABULARY_DATA_FILE,
 } from './vocabulary.js';
@@ -163,7 +164,7 @@ describe('hedge-type-1 generated ARGUMENTS block (required-vs-optional from argC
       const line = lines.find((l) => l.startsWith(`- ${verb}`));
       expect(line, `block line for ${verb}`).toBeDefined();
       for (const a of vocab.argContracts(verb)) {
-        const rendered = `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`;
+        const rendered = `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`;
         expect(line!, `${verb}.${a.name}`).toContain(rendered);
       }
     }
