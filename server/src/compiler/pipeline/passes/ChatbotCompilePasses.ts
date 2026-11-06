@@ -2624,6 +2624,26 @@ export function createResolveRolesPass(): Pass {
         const role = details?.role as string | undefined;
 
         if (!role) {
+          // No role — pass through unchanged, but still emit material_ref +
+          // composition_snapshot for add_material events when the material label
+          // is resolved by resolve_nouns (compiler is the ONE emitter per ruling).
+          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
+            const materialBinding = nounBindings?.[details.material];
+            if (materialBinding?.recordId) {
+              const enrichedDetails = {
+                ...ev.details,
+                material_ref: { kind: 'record' as const, id: materialBinding.recordId },
+              } as Record<string, unknown>;
+              if (!enrichedDetails.composition_snapshot) {
+                enrichedDetails.composition_snapshot = [{
+                  material_ref: { kind: 'record' as const, id: materialBinding.recordId },
+                  role: 'primary',
+                }];
+              }
+              out.push({ ...ev, details: enrichedDetails });
+              continue;
+            }
+          }
           // No role — pass through unchanged
           out.push(ev);
           continue;
@@ -2681,6 +2701,28 @@ export function createResolveRolesPass(): Pass {
           // Attach cellTypeTerm on expanded events if resolved
           if (cellTypeTerm) {
             (expandedEvent.details as Record<string, unknown>).cellTypeTerm = cellTypeTerm;
+          }
+
+          // RULING: The compiler is the ONE emitter of material_ref on add_material events.
+          // Look up the resolved material binding from resolve_nouns — zero verb branches,
+          // zero name tests, zero id literals. The label is the event's details.material;
+          // the binding carries the authoritative recordId from the spine/vocabulary path.
+          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
+            const materialBinding = nounBindings?.[details.material];
+            if (materialBinding?.recordId) {
+              (expandedEvent.details as Record<string, unknown>).material_ref = {
+                kind: 'record' as const,
+                id: materialBinding.recordId,
+              };
+              // A ref without a composition_snapshot leaves the tooltip blank.
+              // Emit a single-component snapshot carrying the resolved record.
+              if (!(expandedEvent.details as Record<string, unknown>).composition_snapshot) {
+                (expandedEvent.details as Record<string, unknown>).composition_snapshot = [{
+                  material_ref: { kind: 'record' as const, id: materialBinding.recordId },
+                  role: 'primary',
+                }];
+              }
+            }
           }
 
           out.push(expandedEvent);
