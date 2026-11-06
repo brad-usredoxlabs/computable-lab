@@ -40,7 +40,23 @@ function buildFixture(targetWells: unknown) {
     realization: {
       recordId: 'LPR-addmat',
       inherits_from: { kind: 'record', type: 'protocol', id: recordId },
-      branch_resolution: [],
+      // Answers the lowering's required-answer gate demands; shape copied from
+      // realizationGolden.test.ts:116-147, not from its content.
+      branch_resolution: [
+        {
+          axisId: 'branch-axis-step-1',
+          matched: true,
+          branchIds: ['branch-1'],
+          choices: {
+            'branch-axis-step-1': 'manual',
+            sample_count: { value: 96, unit: 'wells', dimension: 'count' },
+          },
+        },
+      ],
+      labwares: [
+        { role: 'sample_plate', ref: { kind: 'record', type: 'labware', id: 'LAB-sample-plate' } },
+        { role: 'reagent_reservoir', ref: { kind: 'record', type: 'labware', id: 'LAB-reservoir' } },
+      ],
     },
   };
 }
