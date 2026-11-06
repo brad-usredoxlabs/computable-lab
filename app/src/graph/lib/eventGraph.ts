@@ -507,26 +507,37 @@ function materialDisplayPriority(material: MaterialEntry): number {
 function syncDerivedMaterials(state: WellComputedState): WellComputedState {
   // SCIENCE-CHAIN-1 unit 2: derive a denominator-stated mixture share for the
   // carrier solvent row when exactly ONE candidate exists. Read the convention
-  // roles from DATA (never hardcoded).
+  // roles from DATA (never hardcoded). Derivation is OFF when participation
+  // convention is absent — no fallback role.
   const participationConv = loadParticipationConvention()
-  const carrierRole = participationConv?.promptEmission.carrierSnapshotRole ?? 'solvent'
-  const candidates = state.components.filter((c) => isFormulationCarrierRow(c, carrierRole))
 
   let derivedFractionOfMixture: string | undefined
-  if (candidates.length === 1) {
-    const mixConv = loadMixtureShareConvention()
-    if (mixConv) {
-      derivedFractionOfMixture = formatMixtureShare(
-        candidates[0].carrierVolume_uL,
-        state.volume_uL,
-        mixConv.displayRoundingFactor,
-        formatVolume,
-      )
+  let carrierCandidateKey: string | undefined
+
+  if (participationConv) {
+    const carrierRole = participationConv.promptEmission.carrierSnapshotRole
+    const candidates = state.components.filter((c) => isFormulationCarrierRow(c, carrierRole))
+
+    if (candidates.length === 1) {
+      carrierCandidateKey = candidates[0].componentKey
+      const mixConv = loadMixtureShareConvention()
+      if (mixConv) {
+        derivedFractionOfMixture = formatMixtureShare(
+          candidates[0].carrierVolume_uL,
+          state.volume_uL,
+          mixConv.displayRoundingFactor,
+          formatVolume,
+        )
+      }
     }
   }
 
   state.materials = state.components
-    .map((component) => deriveMaterialEntry(component, state.volume_uL, derivedFractionOfMixture))
+    .map((component) => deriveMaterialEntry(
+      component,
+      state.volume_uL,
+      component.componentKey === carrierCandidateKey ? derivedFractionOfMixture : undefined,
+    ))
     .filter((material) => material.volume_uL > 0.001 || typeof material.count === 'number')
     .sort((a, b) =>
       materialDisplayPriority(a) - materialDisplayPriority(b)
