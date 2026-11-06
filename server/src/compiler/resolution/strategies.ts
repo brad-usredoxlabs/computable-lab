@@ -12,6 +12,7 @@
  */
 import type { RankedCandidate } from '../../resolve/types.js';
 import type { ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
+import { declaredDomains } from '../scientistIntent/vocabulary.js';
 import { filterCandidatesByDeclaredDomain } from './adapters.js';
 import type {
   EngineFailure,
@@ -47,32 +48,26 @@ async function gatherFrom(
  *  (SPINE-1's declaration, "SPINE-3 is that consumer") fills it when the
  *  vocabulary declares none, and a declared/expected disagreement is traced. */
 function withDomainFilter(req: ResolutionRequest, outcome: StrategyOutcome): StrategyOutcome {
-  const effectiveDomain: string | readonly string[] | undefined =
-    req.declared.domain ?? req.expectedDomain;
+  const declaredSlot = req.declared.domain;  // the only permitted read (ruling c94bd866 §1.2)
+  const declaredTags = declaredDomains(declaredSlot);
+  const expectedTags = declaredDomains(req.expectedDomain);
+  const effectiveDomain = declaredSlot ?? req.expectedDomain;
   const { eligible, rejected } = filterCandidatesByDeclaredDomain(outcome.candidates, effectiveDomain);
-  const declaredTags =
-    typeof req.declared.domain === 'string'
-      ? [req.declared.domain]
-      : Array.isArray(req.declared.domain)
-        ? req.declared.domain
-        : [];
-  const containsExpected =
-    req.expectedDomain && declaredTags.length > 0
-      ? declaredTags.some((t) => t.toLowerCase() === req.expectedDomain!.toLowerCase())
-      : false;
+  const containsExpected = expectedTags.length > 0 && declaredTags.length > 0
+    ? declaredTags.some((t) => expectedTags.includes(t))
+    : false;
   const disagreement =
-    req.declared.domain && req.expectedDomain && !containsExpected
-      ? [typeof req.declared.domain === 'string'
-        ? `domain-expectation: declared ${req.declared.domain} vs doc expected ${req.expectedDomain} for ${req.verb}.${req.argument}`
-        : `domain-expectation: declared [${declaredTags.join(', ')}] vs doc expected ${req.expectedDomain} for ${req.verb}.${req.argument}`]
+    declaredSlot && req.expectedDomain && !containsExpected
+      ? [`domain-expectation: declared ${declaredTags.length === 1 ? declaredTags[0] : '[' + declaredTags.join(', ') + ']'} vs doc expected ${req.expectedDomain} for ${req.verb}.${req.argument}`]
       : [];
+  const effectiveDomainStr = Array.isArray(effectiveDomain) ? '[' + effectiveDomain.join(', ') + ']' : effectiveDomain ?? 'none';
   return {
     candidates: eligible,
     failures: outcome.failures,
     traces: [
       ...outcome.traces,
       ...disagreement,
-      ...rejected.map((r) => `domain-mismatch: ${r.curie} rejected for declared domain ${Array.isArray(effectiveDomain) ? '[' + effectiveDomain.join(', ') + ']' : effectiveDomain ?? 'none'}`),
+      ...rejected.map((r) => `domain-mismatch: ${r.curie} rejected for declared domain ${effectiveDomainStr}`),
     ],
   };
 }
