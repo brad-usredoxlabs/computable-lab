@@ -88,16 +88,16 @@ describe('golden.intent-to-graph.transfer-read', () => {
       { id: 'destination plate', labwareHint: 'destination plate', role: 'target', resolutionStatus: 'candidate' },
     ]);
 
-    // Ruling 11a181c0 Q1: declaration_precedence binds before the hint arm,
-    // so this fixture issues 4 labware + 4 material list calls (was n=3
-    // labware-only hint searches before the flip). Absolute pins, not a
-    // difference proxy: an extra searchLabwareByHint shows up as
-    // labwareListCalls > 4. The shared docstring (replayKernel.ts:236-238)
-    // describes the pre-flip identity where labwareListCalls - materialListCalls - n == 0.
+    // Ruling 11a181c0 Q1: declaration_precedence only contributes candidates
+    // when a declared twin was narrowed. This fixture has no declared twin
+    // pair, so declaration_precedence contributes nothing and hint_search
+    // runs on every hint-eligible label (n=3). The count is labware =
+    // material + n (10 = 7+3), the trunk semantic identity restored.
+    // Absolute pin — labwareListCalls reflects actual post-fix calls.
     const n = countHintEligibleLabeledArgs(fixture.modelOutput);
     expect(n).toBe(3); // transfer.source, transfer.target, read.labware
-    expect(run.spies.labwareListCalls).toBe(4);
-    expect(run.spies.materialListCalls).toBe(4);
+    expect(run.spies.labwareListCalls).toBe(10);
+    expect(run.spies.materialListCalls).toBe(7);
 
     // Zero writes (§5(d) discipline applies to every replay test).
     expect(run.spies.writeCalls).toBe(0);

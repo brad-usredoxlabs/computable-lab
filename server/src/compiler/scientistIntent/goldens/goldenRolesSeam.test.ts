@@ -177,16 +177,16 @@ describe('golden.intent-to-graph.roles-seam', () => {
     expect(defaultRoleResolver('control_well', { orientation: 'landscape', labwareType: '96-well-plate' }))
       .toEqual(['A12']);
 
-    // Ruling 11a181c0 Q1: declaration_precedence binds before the hint arm,
-    // so this fixture issues 3 labware + 3 material list calls (was n=2
-    // labware-only hint searches before the flip). Absolute pins, not a
-    // difference proxy: an extra searchLabwareByHint shows up as
-    // labwareListCalls > 3. The shared docstring (replayKernel.ts:236-238)
-    // describes the pre-flip identity where labwareListCalls - materialListCalls - n == 0.
+    // Ruling 11a181c0 Q1: declaration_precedence only contributes candidates
+    // when a declared twin was narrowed. This fixture has no declared twin
+    // pair, so declaration_precedence contributes nothing and hint_search
+    // runs on every hint-eligible label (n=2). The count is labware =
+    // material + n (7 = 5+2), the trunk semantic identity restored.
+    // Absolute pin — labwareListCalls reflects actual post-fix calls.
     const n = countHintEligibleLabeledArgs(fixture.modelOutput);
     expect(n).toBe(2); // transfer.source, transfer.target (targetWells is NOT hintEligible)
-    expect(run.spies.labwareListCalls).toBe(3);
-    expect(run.spies.materialListCalls).toBe(3);
+    expect(run.spies.labwareListCalls).toBe(7);
+    expect(run.spies.materialListCalls).toBe(5);
 
     expect(run.spies.writeCalls).toBe(0);
   });
