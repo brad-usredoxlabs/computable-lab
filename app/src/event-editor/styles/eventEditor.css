@@ -3912,6 +3912,7 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
+  table-layout: fixed; /* D-1: forces columns to fit panel width */
 }
 
 .event-editor .well-tooltip__material > td {
@@ -3928,6 +3929,7 @@
   font-weight: 600;
   color: var(--cl-text);
   max-width: 130px;
+  padding-right: 6px; /* D-2: gutter before concentration cell */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3939,17 +3941,23 @@
 }
 
 .event-editor .well-tooltip__material-conc {
-  padding-left: 10px;
+  width: 60px;
+  padding-left: 6px;
   text-align: right;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--cl-accent);
   font-variant-numeric: tabular-nums;
 }
 
 .event-editor .well-tooltip__material-vol {
-  padding-left: 10px;
+  width: 75px;
+  padding-left: 6px;
   text-align: right;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--cl-text-dim);
   font-variant-numeric: tabular-nums;
 }
