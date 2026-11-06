@@ -660,6 +660,22 @@ export async function lowerRealization(
       if (typeof value === 'number') action[arg] = value;
     }
 
+    // DECLARED kind:wells lowering — the action builder reads the verb's
+    // declared arg contracts (vocabulary data, zero verb/field literals),
+    // selects contracts whose declared kind is a well-coordinate kind, and
+    // copies the step's own intent payload value VERBATIM into the action.
+    // The kind is the eligibility discriminant (data), never a verb name or
+    // field-name branch in TS. Value is copied as-is (string stays string,
+    // array stays array) — expansion/normalisation is a downstream pass.
+    const payloadMap = payload as Record<string, unknown>;
+    for (const contract of vocabulary.argContracts(verb)) {
+      if (contract.kind !== 'wells') continue;
+      const raw = payloadMap[contract.name];
+      if (raw !== undefined && raw !== null && raw !== '' && !(Array.isArray(raw) && raw.length === 0)) {
+        action[contract.name] = raw;
+      }
+    }
+
     actions.push(action);
   }
   if (failures.length > 0) return { failures };
