@@ -672,7 +672,8 @@ export async function lowerRealization(
       if (contract.kind !== 'wells') continue;
       const raw = payloadMap[contract.name];
       if (raw !== undefined && raw !== null && raw !== '' && !(Array.isArray(raw) && raw.length === 0)) {
-        action[contract.name] = raw;
+        // MUTATION u1bfix2: lowering neutralised to prove the pin is load-bearing.
+        void raw;
       }
     }
 
