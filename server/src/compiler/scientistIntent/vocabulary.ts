@@ -186,6 +186,7 @@ export interface ScientistIntentVocabulary {
  * Normalise a declaration domain slot into a lowercase array.
  *
  * `string` → single-element array; `readonly string[]` → element-wise trimmed + lowercased;
+ * blank/whitespace-only values yield the empty array (fail-closed parity).
  * `undefined` / empty → empty array.
  *
  * Return type is `readonly string[]` — never `undefined` (satisfies exactOptionalPropertyTypes).
@@ -193,9 +194,9 @@ export interface ScientistIntentVocabulary {
 export function declaredDomains(
   arg?: string | readonly string[] | undefined,
 ): readonly string[] {
-  if (arg === undefined || arg === '') return [];
-  if (typeof arg === 'string') return [arg.trim().toLowerCase()];
-  return arg.map((d) => d.trim().toLowerCase());
+  if (arg === undefined) return [];
+  if (typeof arg === 'string') { const t = arg.trim().toLowerCase(); return t.length > 0 ? [t] : []; }
+  return arg.map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
 }
 
 /**
