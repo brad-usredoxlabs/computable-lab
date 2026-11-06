@@ -3089,7 +3089,11 @@ export function createAgentOrchestrator(
               // + goldens stay byte-identical BY CONSTRUCTION (R1.7): this
               // is the AI path upstream of the compile; no MANIFEST treeState
               // pin is touched.
-              const demotion = demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
+              // Skip demotion on the fallback answer-turn: the model re-extracted
+              // quantities in response to a clarification re-ask — trust them.
+              const demotion = fallbackCarryIntentId
+                ? { doc: shorthandDoc, demoted: [], notes: [] }
+                : demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
               if (demotion.demoted.length > 0) {
                 shorthandDoc = demotion.doc;
                 shorthandYaml = stringifyShorthandYaml({
