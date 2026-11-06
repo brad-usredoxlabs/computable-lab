@@ -664,26 +664,40 @@ export async function normalizeEventGraphMaterialUsage(
         return null;
       })();
     if (!inferredSpec || inferredSpec.kind !== 'record') return { ...event, details: detailsWithProposedSpec };
-    const lot = extractInstanceLot(detailsWithProposedSpec);
+
+    // Expand composition_snapshot from the bound material-spec so downstream
+    // concentration/fraction math is statable (L2-PROMPT2-SCIENCE-CHAIN-1 u3).
+    const boundSpecEnvelope = await store.get(inferredSpec.id);
+    const boundSpecPayload = getEnvelopePayload(boundSpecEnvelope);
+    const boundFormulation = boundSpecPayload?.['formulation'] && typeof boundSpecPayload['formulation'] === 'object'
+      ? boundSpecPayload['formulation'] as Record<string, unknown>
+      : null;
+    const boundComposition = boundFormulation?.['composition'];
+    const expandedSnapshot = boundComposition ? canonicalCompositionSnapshot(boundComposition) : null;
+    const detailsWithExpanded = expandedSnapshot
+      ? { ...detailsWithProposedSpec, composition_snapshot: expandedSnapshot }
+      : detailsWithProposedSpec;
+
+    const lot = extractInstanceLot(detailsWithExpanded);
     if (!lot) {
       changed = true;
       return {
         ...event,
         details: {
-          ...detailsWithProposedSpec,
-          material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
-          material_source_requirement: detailsWithProposedSpec['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec, eventGraphId, eventId),
+          ...detailsWithExpanded,
+          material_spec_ref: detailsWithExpanded['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+          material_source_requirement: detailsWithExpanded['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec, eventGraphId, eventId),
         },
       };
     }
 
-    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, detailsWithProposedSpec);
+    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, detailsWithExpanded);
     changed = true;
     return {
       ...event,
       details: {
-        ...detailsWithProposedSpec,
-        material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+        ...detailsWithExpanded,
+        material_spec_ref: detailsWithExpanded['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
         aliquot_ref: aliquotRef,
       },
     };
