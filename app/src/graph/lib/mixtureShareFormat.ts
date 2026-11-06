@@ -182,7 +182,7 @@ export function formatLadderedConcentration(
   // Find which ladder family contains the declared unit
   let targetLadder: ConcentrationLadderRung[] | undefined
   let declaredRung: ConcentrationLadderRung | undefined
-  for (const [family, rungs] of Object.entries(convention.unitLadders)) {
+  for (const [_family, rungs] of Object.entries(convention.unitLadders)) {
     const rung = rungs.find((r) => r.unit === declaredUnit)
     if (rung) {
       targetLadder = rungs
