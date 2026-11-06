@@ -61,3 +61,5 @@ Baseline was: Test Files 2 failed (2) | Tests 2 failed | 11 passed (13)
 ## Changed Files
 1. server/src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts (lines 91-96)
 2. server/src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts (lines 180-184)
+
+L2-PROMPT2-COMPOSITION-BIND-1 UNIT c1precfix2b DONE 7bec50158baf23315e614b4ae6e998a7c850eabe
