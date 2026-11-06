@@ -182,6 +182,22 @@ export interface ScientistIntentVocabulary {
   labStateContentBearingEventTypes(): readonly string[];
 }
 
+/**
+ * Normalise a declaration domain slot into a lowercase array.
+ *
+ * `string` → single-element array; `readonly string[]` → element-wise trimmed + lowercased;
+ * `undefined` / empty → empty array.
+ *
+ * Return type is `readonly string[]` — never `undefined` (satisfies exactOptionalPropertyTypes).
+ */
+export function declaredDomains(
+  arg?: string | readonly string[] | undefined,
+): readonly string[] {
+  if (arg === undefined || arg === '') return [];
+  if (typeof arg === 'string') return [arg.trim().toLowerCase()];
+  return arg.map((d) => d.trim().toLowerCase());
+}
+
 export interface LoadScientistIntentVocabularyOptions {
   /** Absolute or cwd-relative path to a vocabulary DATA file (fixture injection). */
   path?: string;
