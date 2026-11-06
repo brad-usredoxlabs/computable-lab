@@ -222,13 +222,8 @@ async function runContinuation(idx) {
     // Reset capture for turn 2
     await page.evaluate(() => { window.__capture = { body: null, streamText: '' } })
     // Turn 2: re-send byte-identical prompt in the SAME thread
-    // Re-select wells (selection may have cleared)
-    await page.locator('.lawn__tile-anchor .tile, .tile').first().click({ force: true })
-    await page.waitForTimeout(1000)
-    await page.locator('main[aria-label="Labware focus"] [data-well-id="E2"]').first().click()
-    await page.waitForTimeout(400)
-    await page.locator('main[aria-label="Labware focus"] [data-well-id="H5"]').first().click({ modifiers: ['Shift'] })
-    await page.waitForTimeout(600)
+    // Thread carries the context — no need to re-select wells
+    // Capture current selection state for t2 record
     const t2SelectionWells = await page.evaluate(() =>
       Array.from(document.querySelectorAll('[data-selected="true"][data-well-id]'))
         .map(e => e.getAttribute('data-well-id')).filter(Boolean))
