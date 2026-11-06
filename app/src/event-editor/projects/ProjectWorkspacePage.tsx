@@ -214,7 +214,7 @@ function WorkspaceShellHost({
       kind: 'deck',
       eventGraphId: autoOpenEventGraphId,
       title: autoOpenEventGraphId,
-    })
+    }, true)
   })
 
   // Phase R: a bare /project/:id lands on the project homepage (project-details
