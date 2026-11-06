@@ -114,7 +114,7 @@ function clarificationRequest(clarification: AiClarification): AiClarificationRe
  * legacy block and the typed requests come off the same answered state).
  */
 function isClarificationAnswered(messages: ChatMessage[], index: number): boolean {
-  return messages.slice(index + 1).some((m) => m.role === 'user')
+  return messages[index + 1]?.role === 'user'
 }
 
 /** The question's prompt for the compact row (typed arm first — canonical). */
