@@ -23,4 +23,4 @@ Derive a denominator-stated share of mixture in `syncDerivedMaterials` from ledg
 - `git -c core.fileMode=false status --short` → clean tree
 
 ## Exit
-L2-PROMPT2-SCIENCE-CHAIN-1-u2 UNIT 2 DONE ab107c05d13e924e425efb142b48182aaefe835d
+L2-PROMPT2-SCIENCE-CHAIN-1-u2 UNIT 2 DONE 9c6ed59add86b80e91525c335c3a75a8d8b7de89
