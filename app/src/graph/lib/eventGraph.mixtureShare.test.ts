@@ -58,10 +58,10 @@ describe('formatMixtureShare — format pins', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────
-// DERIVATION PINS — C-1..C-6 (syncDerivedMaterials)
+// DERIVATION PINS — C-1..C-8 (syncDerivedMaterials)
 // ─────────────────────────────────────────────────────────────────────
 
-describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-6)', () => {
+describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-8)', () => {
   /** Build a multi-entry snapshot event with material_spec_ref (so ledger entries get materialSpecRef). */
   function makeSnapshotEvent(labwareId: string, snapshot: unknown[], opts?: { materialSpecRef?: string }) {
     return {
@@ -214,5 +214,43 @@ describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-6)', 
     expect(a1!.volume_uL).toBe(402)
     const carrier = a1!.materials.find((m) => m.role === 'solvent')
     expect(carrier?.fractionOfMixture).toMatch(/\d+\.\d+ \u00b5L \/ 402\.0 \u00b5L/)
+  })
+
+  // C-7: Multi-entry [solute (NO source), solvent] — derived share attaches ONLY
+  // to the carrier row, never to the non-carrier solute row.
+  // This is the exact adversarial probe shape: the solute must NOT see a DMSO-style
+  // mixture share in its WellTooltip.
+  it('C-7: derived fractionOfMixture attaches ONLY to the carrier row — solute gets undefined', () => {
+    const a1 = makeSnapshot('plate-c7', [
+      { componentRef: { kind: 'record', id: 'rec-solute', label: 'solute' }, role: 'solute' },
+      { componentRef: { kind: 'record', id: 'rec-carrier', label: 'carrier' }, role: 'solvent' },
+    ], { materialSpecRef: 'rec-spec' })
+    expect(a1).toBeTruthy()
+    const solute = a1!.materials.find((m) => m.role === 'solute')
+    const carrier = a1!.materials.find((m) => m.role === 'solvent')
+    // Solute must NOT have fractionOfMixture — it is NOT the carrier
+    expect(solute?.fractionOfMixture).toBeUndefined()
+    // Carrier row must have the derived share
+    expect(carrier?.fractionOfMixture).toMatch(/^\d+\.\d+ \u00b5L \/ \d+\.\d+ \u00b5L \(\d+\.\d{2} %\)$/)
+  })
+
+  // C-8: When participation convention is absent (loadParticipationConvention → undefined),
+  // derivation is OFF — no hardcoded role fallback re-enables it.
+  it('C-8: absent participation convention ⇒ no derived share (no hardcoded fallback)', async () => {
+    const mod = await import('../../shared/lib/participationConvention')
+    vi.spyOn(mod, 'loadParticipationConvention').mockReturnValue(undefined)
+    try {
+      const a1 = makeSnapshot('plate-c8', [
+        { componentRef: { kind: 'record', id: 'rec-solute', label: 'solute' }, role: 'solute' },
+        { componentRef: { kind: 'record', id: 'rec-carrier', label: 'carrier' }, role: 'solvent' },
+      ], { materialSpecRef: 'rec-spec' })
+      expect(a1).toBeTruthy()
+      // NO row should have a derived fractionOfMixture
+      a1!.materials.forEach((m) => {
+        expect(m.fractionOfMixture).toBeUndefined()
+      })
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 })
