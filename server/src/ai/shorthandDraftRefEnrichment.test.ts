@@ -52,7 +52,7 @@ describe('enrichDraftResultEvents', () => {
     expect(outEmpty).toBe(emptyEvents);
   });
 
-  it('mints a draft material_ref for a bound single-ref add_material without a store', async () => {
+  it('does NOT mint a draft ref for a plain material label (compile-path parity)', async () => {
     const result = {
       success: true as const,
       events: [
@@ -65,13 +65,11 @@ describe('enrichDraftResultEvents', () => {
       ],
     };
     const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
-    // enrichDraftResultEvents mutates in place (same object identity);
-    // verify the details changed (material_ref was added).
+    // enrichDraftResultEvents must NOT fabricate a mint ref — the compiled graph
+    // must stay byte-identical to the deterministic compiler's output.
+    // The details are left untouched (no material_ref key).
     const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
-    // Without a store the plain label resolves to a mint, so we expect material_ref
-    // but no composition_snapshot (that needs store-backed formulation expansion).
-    expect(typeof details.material_ref).toBe('object');
-    expect((details.material_ref as Record<string, unknown>).kind).toBe('draft');
+    expect(details.material_ref).toBeUndefined();
   });
 
   it('does not re-expand an existing composition_snapshot (idempotence)', async () => {
@@ -98,7 +96,7 @@ describe('enrichDraftResultEvents', () => {
     expect(details.composition_snapshot).toEqual(existingSnapshot);
   });
 
-  it('mints a draft ref for a plain material label (unbound case)', async () => {
+  it('does NOT mint a draft ref for a plain material label (compile-path parity)', async () => {
     const result = {
       success: true as const,
       events: [
@@ -111,13 +109,10 @@ describe('enrichDraftResultEvents', () => {
       ],
     };
     const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
-    // A bare material label becomes a draft mint — same as the model-tool path
+    // enrichDraftResultEvents must NOT fabricate a mint ref — the compiled graph
+    // must stay byte-identical to the deterministic compiler's output.
     const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
-    expect(typeof details.material_ref).toBe('object');
-    const mr = details.material_ref as Record<string, unknown>;
-    expect(mr.kind).toBe('draft');
-    expect(mr.id).toBe('mint:PBS');
-    expect(mr.label).toBe('PBS');
+    expect(details.material_ref).toBeUndefined();
   });
 
   // D2: a CURIE-shaped label must NOT be fabricated into a draft mint

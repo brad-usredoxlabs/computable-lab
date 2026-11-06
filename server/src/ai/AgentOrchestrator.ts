@@ -3244,9 +3244,10 @@ export function createAgentOrchestrator(
                 shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
                 console.warn(`[agent ${tid}] ${shResult.error}`);
               }
-              // Enrich compiler-draft events through the same path as the
-              // model-tool branch — label->mint fallback + material_spec_ref
-              // expansion so deterministic drafts carry the same structure.
+              // Enrich compiler-draft events: material_spec_ref expansion +
+              // composition_snapshot so deterministic drafts carry bound refs.
+              // No mint-fallback — the compiled graph must stay byte-identical
+              // to the deterministic compiler's output.
               shResult = await enrichDraftResultEvents(shResult, {
                 labeler: createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
                 store: deps.store,

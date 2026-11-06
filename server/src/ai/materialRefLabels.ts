@@ -786,13 +786,13 @@ export async function enrichAddMaterialRefs<T>(
 }
 
 /**
- * Enrich a draft result's events through the same enrichment path used by the
- * model-tool branch. A thin wrapper: absent/empty events ⇒ return the SAME
+ * Enrich compiler-draft events through enrichAddMaterialRefs.
+ * A thin wrapper: absent/empty events ⇒ return the SAME
  * object; otherwise runs enrichAddMaterialRefs over the events array.
  *
- * For label-only draft details (no materials[] array, no material_ref), falls
- * back to minting a draft ref — the same path the model-tool branch takes
- * when it emits `{ kind: 'draft', id: \`mint:${label}\`, label }`.
+ * Does NOT mint draft refs for label-only materials — that fabrication
+ * breaks graph parity with the deterministic compiler. The model-tool
+ * branch mints via `toMaterialRef` (separate path) and is unaffected.
  *
  * Used at the deterministic shorthand-compile return path so bound
  * single-ref formulations carry material_spec_ref + composition_snapshot
@@ -803,32 +803,45 @@ export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
   opts: { labeler: MaterialLabeler } & EnrichAddMaterialRefsOptions,
 ): Promise<T> {
   if (!Array.isArray(result.events) || result.events.length === 0) return result;
-  const enriched = await enrichAddMaterialRefs(result.events, opts.labeler, {
+  result.events = await enrichAddMaterialRefs(result.events, opts.labeler, {
     store: opts.store,
     ...(opts.mentions ? { mentions: opts.mentions } : {}),
   });
-  // Mint fallback: after enrichAddMaterialRefs, some add_material events may
-  // still carry only a plain `material` label in details (no materials[] array
-  // and no material_ref). That happens when the shorthand compiler emits
-  // `{ well, material: '1 mM Clofibrate in DMSO', volumeUl }` — collectParts
-  // finds nothing and returns empty. Apply the same mint-as-draft path the
-  // model-tool branch uses via `toMaterialRef({ label })`.
-  for (const ev of enriched) {
-    const e = asDict(ev);
-    if (!e) continue;
-    if ((e.event_type ?? e.verb) !== 'add_material') continue;
-    const d = asDict(e.details) ?? {};
-    if (d.material_ref !== undefined) continue;
-    const materialLabel = typeof d.material === 'string' ? d.material : '';
-    // D2: refuse to fabricate a draft ref for a CURIE-shaped label
-    if (materialLabel && isCurieShaped(materialLabel)) continue;
-    // D3: refuse to mint when a sibling record ref already exists
-    const hasSiblingRef = Object.keys(RECORD_REF_FIELDS).some((field) => d[field] !== undefined);
-    if (hasSiblingRef) continue;
-    if (materialLabel) {
-      e.details = { ...d, material_ref: { kind: 'draft', id: `mint:${materialLabel}`, label: materialLabel } };
-    }
-  }
-  result.events = enriched;
+  result.events = await resolveLabelOnlyMaterials(result.events, opts.store);
   return result;
+}
+
+/** Resolve plain-label add_material events against the store.
+ *  Unlike the removed mint-fallback, this only adds material_ref when
+ *  a matching record actually exists — preserving graph parity because
+ *  we never fabricate mint: placeholders. */
+async function resolveLabelOnlyMaterials<T extends Event>(
+  events: T[],
+  store: typeof EventGraphStore.prototype | undefined,
+): Promise<T[]> {
+  if (!store) return events;
+  const materials = await store.list({ kind: 'material' });
+  const out: T[] = [];
+  for (const e of events) {
+    const d = e.details as Record<string, unknown>;
+    if (
+      e.event_type === 'add_material' &&
+      typeof d.material === 'string' &&
+      d.material_ref === undefined
+    ) {
+      const match = materials.find((r: Record<string, unknown>) => {
+        const p = r.payload ?? r;
+        return (p.kind ?? r.kind) === 'material' && (p.name ?? r.name) === d.material;
+      });
+      if (match) {
+        const id = match.recordId ?? match.payload?.recordId;
+        if (id && typeof id === 'string') {
+          out.push({ ...e, details: { ...d, material_ref: { kind: 'record', id } } } as T);
+          continue;
+        }
+      }
+    }
+    out.push(e);
+  }
+  return out;
 }
