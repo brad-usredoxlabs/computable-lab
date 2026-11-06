@@ -119,4 +119,42 @@ describe('enrichDraftResultEvents', () => {
     expect(mr.id).toBe('mint:PBS');
     expect(mr.label).toBe('PBS');
   });
+
+  // D2: a CURIE-shaped label must NOT be fabricated into a draft mint
+  it('refuses to fabricate a draft ref for a CURIE-shaped label', async () => {
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-1',
+          event_type: 'add_material',
+          verb: 'add_material',
+          details: { well: 'A2', material: 'CHEBI:17790' },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    // CHEBI:17790 is CURIE-shaped — the fallback must not fabricate mint:CHEBI:17790
+    const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(details.material_ref).toBeUndefined();
+  });
+
+  // D3: an event that already carries a sibling record ref must not gain a conflicting draft ref
+  it('refuses to mint when a sibling record ref already exists', async () => {
+    const result = {
+      success: true as const,
+      events: [
+        {
+          eventId: 'evt-1',
+          event_type: 'add_material',
+          verb: 'add_material',
+          details: { well: 'A2', material: 'Clofibrate', material_spec_ref: { kind: 'record', id: 'MSP-X' } },
+        },
+      ],
+    };
+    const out = await enrichDraftResultEvents(result, { labeler: stubLabeler });
+    // material_spec_ref already present — must not append a conflicting material_ref
+    const details = (out.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(details.material_ref).toBeUndefined();
+  });
 });

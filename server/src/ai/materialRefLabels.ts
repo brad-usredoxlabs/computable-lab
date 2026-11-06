@@ -820,6 +820,11 @@ export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
     const d = asDict(e.details) ?? {};
     if (d.material_ref !== undefined) continue;
     const materialLabel = typeof d.material === 'string' ? d.material : '';
+    // D2: refuse to fabricate a draft ref for a CURIE-shaped label
+    if (materialLabel && isCurieShaped(materialLabel)) continue;
+    // D3: refuse to mint when a sibling record ref already exists
+    const hasSiblingRef = Object.keys(RECORD_REF_FIELDS).some((field) => d[field] !== undefined);
+    if (hasSiblingRef) continue;
     if (materialLabel) {
       e.details = { ...d, material_ref: { kind: 'draft', id: `mint:${materialLabel}`, label: materialLabel } };
     }

@@ -708,6 +708,32 @@ actions:
     expect('termManifest' in result).toBe(false);
   });
 
+  it('D1 pin: the compiler-draft return path enriches events with material_ref via enrichDraftResultEvents (AC6)', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+    compileSpy.mockRestore();
+
+    expect(result.success).toBe(true);
+    expect(result.events?.length).toBeGreaterThan(0);
+    // The enrichDraftResultEvents wire (AgentOrchestrator.ts:3250) must add
+    // material_ref to compiler-draft events. Without the wire, events carry
+    // `material: 'DMEM'` but no `material_ref`. This pin is NON-VACUOUS —
+    // commenting out the wire block :3247-3253 makes it RED.
+    const firstDetails = (result.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(typeof firstDetails.material_ref).toBe('object');
+  });
+
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
