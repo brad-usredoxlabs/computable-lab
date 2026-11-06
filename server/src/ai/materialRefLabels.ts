@@ -794,9 +794,8 @@ export async function enrichAddMaterialRefs<T>(
  * breaks graph parity with the deterministic compiler. The model-tool
  * branch mints via `toMaterialRef` (separate path) and is unaffected.
  *
- * Used at the deterministic shorthand-compile return path so bound
- * single-ref formulations carry material_spec_ref + composition_snapshot
- * instead of a bare material label.
+ * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650);
+ * enrichAddMaterialRefs handles spec-ref expansion only — no second writer.
  */
 export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
   result: T,
@@ -807,41 +806,5 @@ export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
     store: opts.store,
     ...(opts.mentions ? { mentions: opts.mentions } : {}),
   });
-  result.events = await resolveLabelOnlyMaterials(result.events, opts.store);
   return result;
-}
-
-/** Resolve plain-label add_material events against the store.
- *  Unlike the removed mint-fallback, this only adds material_ref when
- *  a matching record actually exists — preserving graph parity because
- *  we never fabricate mint: placeholders. */
-async function resolveLabelOnlyMaterials<T extends Event>(
-  events: T[],
-  store: typeof EventGraphStore.prototype | undefined,
-): Promise<T[]> {
-  if (!store) return events;
-  const materials = await store.list({ kind: 'material' });
-  const out: T[] = [];
-  for (const e of events) {
-    const d = e.details as Record<string, unknown>;
-    if (
-      e.event_type === 'add_material' &&
-      typeof d.material === 'string' &&
-      d.material_ref === undefined
-    ) {
-      const match = materials.find((r: Record<string, unknown>) => {
-        const p = r.payload ?? r;
-        return (p.kind ?? r.kind) === 'material' && (p.name ?? r.name) === d.material;
-      });
-      if (match) {
-        const id = match.recordId ?? match.payload?.recordId;
-        if (id && typeof id === 'string') {
-          out.push({ ...e, details: { ...d, material_ref: { kind: 'record', id } } } as T);
-          continue;
-        }
-      }
-    }
-    out.push(e);
-  }
-  return out;
 }
