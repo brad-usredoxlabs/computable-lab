@@ -357,7 +357,7 @@ describe('noun-resolution.policy-is-data', () => {
   const searchLabwareByHint = async (hint: string) =>
     hint === 'Gemini' ? [{ recordId: 'LBW-A', title: 'Gemini reader deck slot' }] : [];
 
-  it('strategyOrder swap flips WHICH candidate binds — shipped outcome shifts to declared candidate', async () => {
+  it('strategyOrder swap flips WHICH candidate binds — shipped outcome unchanged', async () => {
     const shipped = shippedVocab();
     const flipped = fixtureVocab('vocab-policy-flip');
     expect(shipped.policies().strategyOrder).toEqual(['declaration_precedence', 'explicit_wells', 'hint_search', 'symbolic_label', 'ontology_resolution', 'mint_local']); // Ruling 11a181c0 Q1: declared formulation takes precedence
@@ -378,7 +378,7 @@ describe('noun-resolution.policy-is-data', () => {
       depsFor({ spine: f.spine, tracker: f.tracker, searchLabwareByHint, vocab: flipped }),
     );
 
-    expect(shippedOutcome.bindings.map((b) => b.curie)).toEqual(['local:plate-B']); // declaration_precedence first (Ruling 11a181c0 Q1): declared/spine candidate outranks the hint match
+    expect(shippedOutcome.bindings.map((b) => b.curie)).toEqual(['LBW-A']); // hint_search first: declaration_precedence contributes nothing when it cannot narrow a declared twin
     expect(flippedOutcome.bindings.map((b) => b.curie)).toEqual(['local:plate-B']); // symbolic_label first
   });
 

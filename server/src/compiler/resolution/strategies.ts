@@ -139,12 +139,15 @@ const mintLocal: ResolutionStrategy = {
 // top-score winner. formulationDeclared is a typed contract term
 // (server/src/resolve/types.ts:51: "Present only when true: the record's
 // payload structurally declares a testable formulation"). The narrowed band
-// (one candidate) binds through the existing inBand.length === 1 path; a
-// band that was not narrowed still clarifies via resolveAmbiguity === 'clarify'.
+// (one candidate) binds through the existing inBand.length === 1 path.
+// When the strategy cannot narrow (single spine hit, or multiple candidates
+// without a unique declared winner), it contributes an empty candidate set —
+// preserving failures and traces — so the engine falls through to the next
+// strategy in strategyOrder (resolutionEngine.ts:386).
 // The precedence is DECLARED IN DATA (ruling 11a181c0 Q1): the strategy id
 // is named in strategyOrder and ambiguity.strategyRef — no TS comparator,
 // no name/level literal. Cost: spine is gathered once per resolvable arg
-// (localOnly resolution); the band is unchanged for non-narrowable cases.
+// (localOnly resolution).
 const declarationPrecedence: ResolutionStrategy = {
   id: 'declaration_precedence',
   applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
@@ -161,8 +164,9 @@ const declarationPrecedence: ResolutionStrategy = {
         return { candidates: [declaredAtTop[0]!], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: narrowed to declared formulation'] };
       }
     }
-    // Band not narrowable — return unchanged (engine's existing paths handle it)
-    return outcome;
+    // Not narrowed — contribute empty candidates so the engine falls through
+    // to the next strategy (resolutionEngine.ts:386). Keep failures/traces.
+    return { candidates: [], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: not narrowed — no contribution'] };
   },
   resolveAmbiguity: () => 'clarify',
 };
