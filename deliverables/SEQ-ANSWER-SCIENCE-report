@@ -40,3 +40,4 @@ Pinned test result at HEAD (e02a8196):
 Commit: this commit closes out the dirty tree from fix2 exit.
 
 SEQ-ANSWER-SCIENCE-u8r2-fix3 UNIT 1 DONE 031ea1238a6ae36b13275d7fc3cdbb19eb3bacef
+SEQ-ANSWER-SCIENCE-u8r2fix4 UNIT unit DONE aefee9e9b9105ecf0183cedd1c3a6f605af17d86
