@@ -573,11 +573,13 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
       const count = typeof details.count === 'number' && (entry.role === 'cells' || snapshot.length === 1) ? details.count : undefined
       // u7carrierref: extract per-row materialSpecRef from a record-kind component_ref.
       // Plain string refs are NOT passed through — getRecordId returns strings verbatim,
-      // which would mint a fake spec ref. Gate on kind === 'record' AND string id.
+      // which would mint a fake spec ref. Gate on kind === 'record', string id, AND
+      // type === 'material-spec' so material-typed refs (e.g. MAT-trypsin) are excluded.
       const rowSpecRef =
         componentRef && typeof componentRef === 'object'
           && (componentRef as { kind?: string }).kind === 'record'
           && typeof (componentRef as { id?: string }).id === 'string'
+          && (componentRef as { type?: string }).type === 'material-spec'
         ? (componentRef as { id: string }).id
         : undefined
       newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, componentLabel, {
