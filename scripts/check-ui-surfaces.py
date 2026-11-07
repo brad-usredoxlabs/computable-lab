@@ -26,6 +26,9 @@ SURFACES_YAML = os.path.join(REPO_ROOT, "config", "ui", "surfaces.yaml")
 ORPHANS_DIR = os.path.join(REPO_ROOT, "deliverables", "ui-surface-manifest-1")
 ORPHANS_FILE = os.path.join(ORPHANS_DIR, "orphans.txt")
 
+# Module-scope list for unresolved imports
+unresolved_imports = []
+
 # ---------------------------------------------------------------------------
 # YAML loader — prefer PyYAML, fall back to hand-parsing
 # ---------------------------------------------------------------------------
@@ -242,20 +245,24 @@ def find_orphans():
 
     def resolve_import(source_file, rel_path):
         dir_of_source = os.path.dirname(source_file)
-        resolved = os.path.normpath(os.path.join(dir_of_source, rel_path))
-        if os.path.isfile(resolved):
-            return resolved
-        if resolved.endswith(".tsx") and os.path.isfile(resolved):
-            return resolved
-        if os.path.isfile(resolved + ".tsx"):
-            return resolved + ".tsx"
-        if os.path.isfile(resolved + "/index.tsx"):
-            return resolved + "/index.tsx"
-        if os.path.isfile(resolved + ".ts"):
-            return resolved + ".ts"
-        if os.path.isfile(resolved + "/index.ts"):
-            return resolved + "/index.ts"
-        return resolved + ".tsx"
+        base = os.path.normpath(os.path.join(dir_of_source, rel_path))
+        # NodeNext emits ".js" in import specifiers even for .tsx source files.
+        # Strip the trailing ".js" so candidate probes hit the real file.
+        if base.endswith(".js"):
+            base = base[:-3]
+        if os.path.isfile(base):
+            return base
+        if os.path.isfile(base + ".tsx"):
+            return base + ".tsx"
+        if os.path.isfile(base + "/index.tsx"):
+            return base + "/index.tsx"
+        if os.path.isfile(base + ".ts"):
+            return base + ".ts"
+        if os.path.isfile(base + "/index.ts"):
+            return base + "/index.ts"
+        # Record the miss instead of silently inventing a path
+        unresolved_imports.append((source_file, rel_path))
+        return base + ".tsx"
 
     imported_files = set()
     for source_file, rel_imports in import_map.items():
@@ -388,6 +395,7 @@ def main():
             f.write(f"{rel} — {reason}\n")
 
     print(f"\nOrphan artifact: {ORPHANS_FILE} ({len(orphans)} orphans, {scanned} scanned)")
+    print(f"UNRESOLVED-IMPORTS={len(unresolved_imports)}", file=sys.stderr)
 
     # Exit code: 1 only on PHANTOM > 0 (unresolved lazy already exits in (b))
     if phantom_count > 0:
