@@ -4,6 +4,15 @@
  * D-2 (materialComposition callback expansion), and D-3 (kind filter).
  */
 import { describe, it, expect, vi } from 'vitest';
+// Mock eligibility loader so the canonical resolve_nouns pass doesn't throw
+// on missing lint schema (schema/lint/lint-v1.schema.yaml).
+vi.mock('../compiler/resolution/eligibility/policy.js', async () => {
+  const actual = await vi.importActual('../compiler/resolution/eligibility/policy.js');
+  return {
+    ...(actual as object),
+    loadMaterialEligibilityIfPresent: () => null,
+  };
+});
 import { runChatbotCompile, type RunChatbotCompileArgs } from './runChatbotCompile.js';
 import { createResolveRolesPass } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../extract/ExtractionRunnerService.js';
@@ -194,24 +203,21 @@ describe('composition prefetch', () => {
 
 /* ── RED pin: pipeline must register resolve_nouns and wire resolvedByLabel ── */
 describe('u8compbind RED pin', () => {
-  it('pipeline produces resolve_nouns output from material-spec prefetch', async () => {
-    // Root cause: resolve_nouns was not in the chatbot pipeline, so
-    // authoritativeNounSlot returned undefined → nounBindings was empty
-    // → buildMaterialEmission was never called → composition_snapshot
-    // was never emitted (self-referential fallback).
-    // The fix registers resolve_nouns and builds resolvedByLabel from
-    // both ontology bindings and material mentions matching spec recordIds.
-    const compEntries = [
-      { component_ref: { kind: 'record', type: 'material', id: 'SOLUTE-1' }, role: 'solute' },
-      { component_ref: { kind: 'record', type: 'material', id: 'SOLVENT-1' }, role: 'solvent' },
-    ];
+  it('pipeline registers resolve_nouns and produces resolvedByLabel', async () => {
+    // The production runChatbotCompile pipeline must register the canonical
+    // resolve_nouns pass so that resolve_roles can expand composition_snapshot.
+    // This test exercises the full production pipeline — no test-local registry
+    // slots or makePassState. If resolve_nouns registration regresses, the
+    // slot is absent → RED.
     const matSpec: RecordEnvelope = {
       recordId: 'MAT-RED', kind: 'material-spec',
       schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
-      payload: { formulation: { composition: compEntries } },
+      payload: { formulation: { composition: [
+        { component_ref: { kind: 'record', type: 'material', id: 'SOLUTE-1' }, role: 'solute' },
+      ] } },
     } as RecordEnvelope;
     const { mock, calls } = makeStore([matSpec]);
-    // 1. Prefetch is wired: store.list called with kind: material-spec
+    // 1. Run the production pipeline
     const result = await runChatbotCompile({
       prompt: 'Add [[aliquot:MAT-RED|RedMat]] to [[labware:lw-1|Plate]]',
       mentions: [
@@ -221,30 +227,16 @@ describe('u8compbind RED pin', () => {
       editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
       deps: makeDeps(mock),
     });
+    // 2. Prefetch is wired: store.list called with kind: material-spec
     expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
-    expect(result.outcome).toBeDefined();
-    // 2. Expansion code path: with resolve_nouns binding, composition expands
-    // The resolve_roles pass uses materialComposition callback + nounBindings
-    // to produce expanded composition_snapshot instead of self-referential fallback.
-    const pass = createResolveRolesPass({
-      materialComposition: (id: string) => {
-        if (id === 'MAT-RED') return compEntries;
-        return undefined;
-      },
-    });
-    const state = makePassState({
-      RedMat: { recordId: 'MAT-RED', verb: 'add', argument: 'material', label: 'RedMat' },
-    }, [{
-      eventId: 'evt-1', event_type: 'add_material',
-      details: { material: 'RedMat', volumeUl: 1, labwareInstanceId: 'plate-1', well: 'A2' },
-    }]);
-    const passResult = pass.run({ pass_id: 'resolve_roles', state });
-    const snap = (passResult.output as any).events[0].details.composition_snapshot;
-    expect(snap).toBeDefined();
-    expect(snap).toHaveLength(2);
-    expect(snap[0].role).not.toBe('other');
-    expect(snap[0]).toEqual(compEntries[0]);
-    expect(snap[1]).toEqual(compEntries[1]);
+    // 3. resolve_nouns is registered: passOutputs must contain the pass output.
+    // If registration is missing, the slot is absent → RED.
+    expect(result.passOutputs['resolve_nouns']).toBeDefined();
+    const rn = result.passOutputs['resolve_nouns'] as { resolvedByLabel: Record<string, { recordId: string }> };
+    expect(rn.resolvedByLabel['RedMat']).toBeDefined();
+    expect(rn.resolvedByLabel['RedMat'].recordId).toBe('MAT-RED');
+    // 4. Binding also indexed by recordId
+    expect(rn.resolvedByLabel['MAT-RED']).toBeDefined();
   });
 });
 
