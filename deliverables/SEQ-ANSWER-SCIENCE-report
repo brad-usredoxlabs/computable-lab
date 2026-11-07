@@ -20,3 +20,23 @@ Verification:
 Commit: 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
 
 SEQ-ANSWER-SCIENCE-u8r2-fix2 UNIT 1 DONE 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
+
+=== CLOSEOUT: SEQ-ANSWER-SCIENCE-u8r2-fix3 ===
+
+What 68646c94 delivers:
+  - RED pin rewritten to exercise the production runChatbotCompile pipeline
+  - Test asserts on result.passOutputs['resolve_nouns'] and resolvedByLabel
+  - vi.mock for eligibility policy loader (missing lint schema)
+  - 8/8 tests GREEN
+
+debug_pipeline.test.ts: REMOVED.
+  - It was a scratch probe (expect(true).toBe(true), console.log debugging)
+  - The production test already covers resolve_nouns/resolvedByLabel assertions
+  - No unique coverage justification to keep it
+
+Pinned test result at HEAD (e02a8196):
+  src/ai/runChatbotCompileCompositionPrefetch.test.ts: 8 passed (8) GREEN
+
+Commit: this commit closes out the dirty tree from fix2 exit.
+
+SEQ-ANSWER-SCIENCE-u8r2-fix3 UNIT 1 DONE 031ea1238a6ae36b13275d7fc3cdbb19eb3bacef
