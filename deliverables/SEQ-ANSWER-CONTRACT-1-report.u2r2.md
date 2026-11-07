@@ -21,7 +21,7 @@
 ### Verification
 - compileWorkspaceAction.test.ts: 33/33 green (was 32, +1 new test)
 - AgentOrchestrator.sequencesAgentAction.test.ts: 14/14 green (was 11 passed, 3 failed)
-- Typecheck: no new errors (S3StorageProvider pre-existing error unrelated)
+- Typecheck: server tsc --noEmit exits 0, 0 errors
 - AgentOrchestrator.workspaceAction.test.ts: 11/11 green (10 pre-existing + 1 OQ1 witness)
 - Spec §7 five-file set: 84/84 green
 
