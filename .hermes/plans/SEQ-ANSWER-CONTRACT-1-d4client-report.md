@@ -52,3 +52,11 @@ git diff --stat 120deaeb..HEAD → 3 files, 216 insertions, 2 deletions
 ```
 
 SEQ-ANSWER-CONTRACT-1 DONE 1fbcf95626b41d669fec5f920adaea95faf4e46f
+
+## FIX3
+fix3 replaces the placeholder-era 8-hex marker with a 40-hex spec-form marker.
+Per convention (a commit cannot embed its own SHA), the DONE line names the preceding
+substantive commit that contains the cleaned marker. The fabricated-era placeholder
+S never appears again outside quoted prose.
+
+SEQ-ANSWER-CONTRACT-1 fix3 UNIT unit DONE a1df14cbc51e173a734ca08e940493a655862e57
