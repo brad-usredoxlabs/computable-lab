@@ -112,4 +112,4 @@ seed-board.py: 252 lines (+69 lines added to original 183)
 c2p1-baseline.board.yaml: 95 lines (+15 lines added to original 80)
 Total new lines: 84 (within 120 budget)
 
-L2-PROMPT2-FIXTURE-BOARD-1 UNIT u4wsreset DONE 58978b9a408cb234c0dbc989450cdd3db8e799d8
+L2-PROMPT2-FIXTURE-BOARD-1 UNIT u4wsreset DONE bb436f4ec7bbe298556d589841082d635a0083f0
