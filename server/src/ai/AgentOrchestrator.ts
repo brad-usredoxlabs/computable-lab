@@ -4103,6 +4103,38 @@ export function createAgentOrchestrator(
               return chainProposalResult;
             }
 
+            // intent=answer (SEQ-ANSWER-CONTRACT-1): emit the model's answer text
+            // as a text_delta on the visible chat channel. NO compiler call, NO
+            // proposal, NO write, NO second inference call. One text_delta,
+            // byte-equal to the payload, is the entire turn.
+            if (agentIntent.intent === 'answer') {
+              const durationMs = Date.now() - t0;
+              // Parser contract: text is only present when non-empty.
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs });
+              onEvent?.({ type: 'text_delta', delta: agentIntent.text! });
+              const answerResult: AgentResult = { success: true };
+              const answerSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: durationMs,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, answerSummary);
+              console.log(`[agent ${tid}] done answer emitted text_delta elapsedMs=${durationMs}`);
+              return answerResult;
+            }
+
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding
             // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
             // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the
