@@ -734,6 +734,53 @@ actions:
     expect(typeof firstDetails.material_ref).toBe('object');
   });
 
+  it('L2-PROMPT2-SCIENCE-CHAIN-1: fold-path bind drives bindFoldPicksOntoCompile — material_ref carries record ref', async () => {
+    const { holdShorthandIntent, factRequestId } = await import('./shorthandChat.js');
+    const { deriveContextCacheKey } = await import('./systemPrompt.js');
+    const key = deriveContextCacheKey('run-workspace' as never, RUN_CHAT_REQUEST.context as never);
+
+    // AMBIGUOUS_YAML has an unresolved material (mystery goop) → draft mint.
+    // The binder must replace it with the answer's record ref.
+    const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
+    const clarification = {
+      label: 'mystery goop',
+      reason: 'the lab spine could not bind it',
+      actionLocation: { actionIndex: 0, action: 'add_material', argument: 'material' },
+    };
+    holdShorthandIntent(key, { yaml: AMBIGUOUS_YAML, doc: heldDoc, clarifications: [clarification] });
+
+    const model = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+
+    const requestId = factRequestId(clarification);
+    const result = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{
+        requestId,
+        label: 'mystery goop',
+        ref: { kind: 'record', id: 'MAT-test-reagent-1', label: 'mystery goop' },
+      }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.events?.length).toBeGreaterThanOrEqual(1);
+    const evt = result.events![0] as Record<string, unknown>;
+    const details = evt.details as Record<string, unknown>;
+    // With the real binder, material_ref is a record ref.
+    // Under M1 (bindFoldPicksOntoCompile stubbed), it stays as a draft mint.
+    const matRef = details.material_ref as Record<string, unknown>;
+    expect(matRef.kind).toBe('record');
+    expect(matRef.id).toBe('MAT-test-reagent-1');
+    expect(String(matRef.id)).not.toMatch(/^mint:/);
+  });
+
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
