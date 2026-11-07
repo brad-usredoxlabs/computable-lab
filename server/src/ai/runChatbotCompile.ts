@@ -426,7 +426,59 @@ export async function runChatbotCompile(
   // rewritten mentions array — for CURIE→MAT- substitutions to flow downstream.
   const effectivePrompt = bindResult.prompt ?? compilePrompt;
 
+  // Register resolve_nouns pass so authoritativeNounSlot returns bindings
+  // for material labels — enabling buildMaterialEmission to fire and
+  // emit composition_snapshot (u8compbind: the resolve_nouns pass was
+  // missing from the chatbot pipeline, so nounBindings was undefined).
+  // Build resolvedByLabel from both ontology bindings AND material mentions
+  // whose ids match known material spec recordIds.
+  const resolvedByLabel: Record<string, { recordId: string; verb: string; argument: string; label: string }> = {};
+  for (const b of ontologyBindings) {
+    resolvedByLabel[b.label] = { recordId: b.recordId, verb: 'add', argument: 'material', label: b.label };
+  }
+  // Also bind material mentions by label → recordId when the mention id
+  // matches a material-spec recordId from the prefetch lookup.
+  const specRecordIds = materialCompositionLookup ? Array.from(materialCompositionLookup.keys()) : [];
+  for (const m of effectiveMentions) {
+    if (m.type === 'material' && m.id && specRecordIds.includes(m.id)) {
+      const label = m.label ?? '';
+      if (!resolvedByLabel[label]) {
+        resolvedByLabel[label] = { recordId: m.id, verb: 'add', argument: 'material', label };
+      }
+      // Also index by the mention id — the deterministic precompile may use
+      // the id as details.material rather than the label.
+      if (m.id && !resolvedByLabel[m.id]) {
+        resolvedByLabel[m.id] = { recordId: m.id, verb: 'add', argument: 'material', label: m.id };
+      }
+    }
+  }
+  registry.register({
+    id: 'resolve_nouns',
+    family: 'disambiguate' as const,
+    run(): { ok: boolean; output: { resolvedByLabel: Record<string, { recordId: string; verb: string; argument: string; label: string }> } } {
+      return { ok: true, output: { resolvedByLabel } };
+    },
+  });
+
+  // Inject resolve_nouns into the pipeline spec so it runs before resolve_roles.
+  // The YAML spec does not include resolve_nouns; the registry provides the impl.
   const spec = loadPipeline(PIPELINE_YAML_PATH);
+  // Find the index of resolve_roles in the spec and insert resolve_nouns before it
+  const resolveRolesIdx = spec.passes.findIndex(p => p.id === 'resolve_roles');
+  if (resolveRolesIdx >= 0) {
+    spec.passes.splice(resolveRolesIdx, 0, {
+      id: 'resolve_nouns',
+      family: 'disambiguate' as const,
+      depends_on: [],
+      description: 'Material-label → recordId bindings for buildMaterialEmission.',
+    });
+    // Make resolve_roles depend on resolve_nouns so the topological sort
+    // guarantees resolve_nouns runs before resolve_roles
+    const resolveRolesPass = spec.passes.find(p => p.id === 'resolve_roles');
+    if (resolveRolesPass && Array.isArray(resolveRolesPass.depends_on)) {
+      resolveRolesPass.depends_on.push('resolve_nouns');
+    }
+  }
   const result = await runPipeline(spec, registry, {
     prompt: effectivePrompt,
     attachments: args.attachments ?? [],
