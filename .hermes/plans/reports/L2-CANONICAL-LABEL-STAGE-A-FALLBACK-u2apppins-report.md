@@ -24,9 +24,18 @@
 ## Regression
 - `ChatClarificationCard.mint.test.tsx`: 9 tests passed (unchanged baseline)
 
+## Fix run 1 (u2apppins)
+### D1 [major] — Remove unused `within` import
+- File: `app/src/agent/ChatClarificationCard.stageAstring.test.tsx:12`
+- Fix: removed `within` from `@testing-library/react` import (was unused, caused TS6133)
+- Evidence: `grep -n 'within' ...` shows 0 matches after fix
+- Typecheck: no TS6133 on this file; zero new TS errors vs baseline
+
+### Verification
+- Tests: 5/5 GREEN (`ChatClarificationCard.stageAstring`)
+- Typecheck: pre-existing errors only; TS6133 for `within` eliminated
+
 ## Verification
 - `git -c core.fileMode=false status --short`: clean
 - `git diff --stat HEAD^..HEAD`: 1 file changed, 196 insertions(+)
 - SHA: 8e1b1004f2e4ec7688f4dce150c84ef3de79f5d4
-
-L2-CANONICAL-LABEL-STAGE-A-FALLBACK-u2apppins UNIT 2 DONE 511402133857601e6c4e409f2c283d7421189f3c
