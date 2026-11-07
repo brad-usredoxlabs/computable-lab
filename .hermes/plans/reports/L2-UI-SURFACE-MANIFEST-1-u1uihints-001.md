@@ -8,7 +8,7 @@ Unit u1uihints: Author schema/ui/surface-manifest.ui.yaml and one pin test.
 2. server/src/ui/SurfaceManifestUiSpec.test.ts (new, 64 lines) - loads via UISpecLoader, resolves JSONPaths
 
 ## Verification Results
-- Test: GREEN - Tests 1 passed (1)  
+- Test: GREEN - Tests 1 passed (1)
 - Non-vacuity: removing list block -> RED (1 failed); restoring -> GREEN (1 passed)
 - Tree: clean at exit (only 2 new files + report committed)
 
@@ -20,4 +20,4 @@ With list restored: PASS (1 passed)
 text, chips, array - all in VALID_WIDGET_TYPES from UISpecLoader.ts:19-29
 
 ## Exit Marker
-L2-UI-SURFACE-MANIFEST-1-u1uihints UNIT unit DONE 482b4a138c89f4b9088dac4f528dc055e336291d
+L2-UI-SURFACE-MANIFEST-1-u1uihints UNIT unit DONE 7d4084ecb6c0b7490d74e38e4acef733d9341940
