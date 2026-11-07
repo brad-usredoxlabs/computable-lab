@@ -192,6 +192,38 @@ describe('composition prefetch', () => {
   });
 });
 
+/* ── RED pin: pipeline must emit expanded composition_snapshot ── */
+describe('u8compbind RED pin', () => {
+  it('single-ref bind emits expanded composition_snapshot (not self-referential fallback)', async () => {
+    const compEntries = [
+      { component_ref: { kind: 'record', type: 'material', id: 'SOLUTE-1' }, role: 'solute' },
+      { component_ref: { kind: 'record', type: 'material', id: 'SOLVENT-1' }, role: 'solvent' },
+    ];
+    const matSpec: RecordEnvelope = {
+      recordId: 'MAT-TEST', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: compEntries } },
+    } as RecordEnvelope;
+    const { mock } = makeStore([matSpec]);
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT-TEST|TestMat]] to [[labware:lw-1|Plate]]',
+      mentions: [
+        { type: 'material', entityKind: 'aliquot', id: 'MAT-TEST', label: 'TestMat' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' },
+      ],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    // Find the add_material event and check composition_snapshot
+    const addMatEvents = result.events.filter(e => e.event_type === 'add_material');
+    expect(addMatEvents.length).toBeGreaterThanOrEqual(1);
+    const snap = (addMatEvents[0].details as any)?.composition_snapshot;
+    expect(snap).toBeDefined();
+    expect(snap).toHaveLength(2);
+    expect(snap[0].role).not.toBe('other');
+  });
+});
+
 /* ── Pass-level behavioural legs (D-1, D-2) ── */
 describe('composition prefetch — behavioural (pass-level)', () => {
   it('D-1: non-array composition yields legacy single-entry (role: other)', () => {
