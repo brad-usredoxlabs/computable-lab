@@ -156,12 +156,13 @@ describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-8)', 
       ], { materialSpecRef: 'rec-spec' })
       expect(a1!.materials.find((m) => m.role === 'solvent')?.fractionOfMixture).toBeUndefined()
     }
-    // 2. Missing materialSpecRef: multi-entry but no material_spec_ref on the event
+    // 2. Missing materialSpecRef: plain-string component_refs (no record-kind id) and no
+    //    event-level material_spec_ref ⇒ no spec ref on the row
     {
       const a1 = makeSnapshot('plate-c5-no-materialSpecRef', [
-        { componentRef: { kind: 'record', id: 'rec-solute', label: 'solute' }, role: 'solute' },
-        { componentRef: { kind: 'record', id: 'rec-carrier', label: 'carrier' }, role: 'solvent' },
-      ]) // no materialSpecRef
+        { componentRef: 'solute', role: 'solute' },
+        { componentRef: 'carrier', role: 'solvent' },
+      ]) // no materialSpecRef, plain-string refs
       expect(a1!.materials.find((m) => m.role === 'solvent')?.fractionOfMixture).toBeUndefined()
     }
     // 3. Has fractionOfMixture (explicit source): explicit WINS — NOT a suppression, this should succeed
@@ -232,6 +233,23 @@ describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-8)', 
     expect(solute?.fractionOfMixture).toBeUndefined()
     // Carrier row must have the derived share
     expect(carrier?.fractionOfMixture).toMatch(/^\d+\.\d+ \u00b5L \/ \d+\.\d+ \u00b5L \(\d+\.\d{2} %\)$/)
+  })
+
+  // C-9: Per-row record-kind component_ref provides materialSpecRef WITHOUT event-level ref.
+  // This is the exact gate3 D2 shape: two-entry snapshot, each entry carries its own
+  // record-kind componentRef with id, NO event-level material_spec_ref.
+  // The solvent row must derive fractionOfMixture because each row carries its own spec ref.
+  it('C-9: per-row record-kind component_ref provides materialSpecRef without event-level ref', () => {
+    const a1 = makeSnapshot('plate-c9-per-row-ref', [
+      { componentRef: { kind: 'record', id: 'MAT-PR9-TEST-SOLUTE', label: 'solute', type: 'material-spec' }, role: 'solute', source: '99% of the mixture' },
+      { componentRef: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', label: 'DMSO', type: 'material-spec' }, role: 'solvent' },
+    ]) // NO event-level materialSpecRef — per-row refs carry their own ids
+    expect(a1).toBeTruthy()
+    const carrier = a1!.materials.find((m) => m.role === 'solvent')
+    // The solvent row should have a denominator-stated share because it has its own materialSpecRef
+    expect(carrier?.fractionOfMixture).toMatch(/^\d+\.\d+ \u00b5L \/ \d+\.\d+ \u00b5L \(\d+\.\d{2} %\)$/)
+    // The id must be the per-row id, NOT from the event
+    expect(carrier?.materialSpecRef).toBe('MAT-PR9-TEST-DMSO')
   })
 
   // C-8: When participation convention is absent (loadParticipationConvention → undefined),
