@@ -8,18 +8,32 @@ import { UISpecLoader } from './UISpecLoader.js';
 
 const MANIFEST_SCHEMA_ID = 'https://computable-lab.com/schema/ui/surface-manifest.schema.yaml';
 
-/** Tiny JSONPath resolver: handles $, .field, .field[0], and [*] */
+/** Tiny JSONPath resolver: handles $, .field, .field[0], .field[*], and nested paths */
 function resolvePath(doc: unknown, path: string): unknown {
-  if (path === '$') return doc;
-  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
-  let current: unknown = doc;
-  for (const part of parts) {
-    if (part === '*') {
-      if (!Array.isArray(current)) return undefined;
-      return current;
+  // Tokenize: split on dots but respect bracket notation
+  const segments: string[] = [];
+  let i = 0;
+  const p = path.startsWith('$') ? path.slice(1) : path;
+  for (let j = 0; j < p.length; j++) {
+    if (p[j] === '.') {
+      const seg = p.slice(i, j);
+      if (seg) segments.push(seg);
+      i = j + 1;
+    } else if (p[j] === '[') {
+      const bracketEnd = p.indexOf(']', j);
+      const raw = p.slice(j + 1, bracketEnd);
+      if (i < j) segments.push(p.slice(i, j));
+      segments.push(raw);
+      i = bracketEnd + 1;
     }
-    if (current === null || current === undefined || typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[part];
+  }
+  if (i < p.length) segments.push(p.slice(i));
+
+  let current: unknown = doc;
+  for (const seg of segments) {
+    if (seg === '*') return Array.isArray(current) ? current : undefined;
+    if (current == null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[seg];
   }
   return current;
 }
