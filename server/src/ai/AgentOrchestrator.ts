@@ -4109,11 +4109,9 @@ export function createAgentOrchestrator(
             // byte-equal to the payload, is the entire turn.
             if (agentIntent.intent === 'answer') {
               const durationMs = Date.now() - t0;
-              const text = agentIntent.text;
-              if (text && text.length > 0) {
-                onEvent?.({ type: 'text_delta', delta: text });
-              }
+              // Parser contract: text is only present when non-empty.
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs });
+              onEvent?.({ type: 'text_delta', delta: agentIntent.text! });
               const answerResult: AgentResult = { success: true };
               const answerSummary: AgentSummary = {
                 traceId: tid,

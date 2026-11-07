@@ -331,4 +331,36 @@ describe('agent_intent — the constrained emission menu', () => {
   it('reports unknown intent and rejects non-string platform/variant', () => {
     expect(parseAgentIntentArgs({ intent: 'explode_the_lab', variantId: 7 })).toEqual({ intent: 'unknown' });
   });
+  it('tool schema declares a text property with string type, minLength, maxLength, and description', () => {
+    const props = (AGENT_INTENT_TOOL_DEF.function.parameters as { properties: Record<string, any> }).properties;
+    expect(props.text).toBeDefined();
+    expect(props.text.type).toBe('string');
+    expect(props.text.minLength).toBe(1);
+    expect(typeof props.text.maxLength).toBe('number');
+    expect(props.text.maxLength).toBeGreaterThan(10);
+    expect(typeof props.text.description).toBe('string');
+  });
+
+  it('parses answer intent with text retained verbatim', () => {
+    const result = parseAgentIntentArgs({
+      intent: 'answer',
+      text: 'This sequences workspace tracks sequence records and their runs.',
+    });
+    expect(result.intent).toBe('answer');
+    expect(result.text).toBe('This sequences workspace tracks sequence records and their runs.');
+  });
+
+  it('rejects answer intent without text — falls to unknown', () => {
+    const result = parseAgentIntentArgs({ intent: 'answer' });
+    expect(result.intent).toBe('unknown');
+  });
+
+  it('rejects answer intent with whitespace-only text — falls to unknown', () => {
+    const result = parseAgentIntentArgs({ intent: 'answer', text: '   ' });
+    expect(result.intent).toBe('unknown');
+  });
+
+  it('unknown intents parse as unknown regardless of extra fields', () => {
+    expect(parseAgentIntentArgs({ intent: 'nonexistent' }).intent).toBe('unknown');
+  });
 });

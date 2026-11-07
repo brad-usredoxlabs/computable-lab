@@ -1,38 +1,74 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseAgentIntentArgs, AGENT_INTENT_TOOL_DEF } from './submitSuggestionTool.js';
-import type { AgentIntentArgs } from './submitSuggestionTool.js';
+import { createAgentOrchestrator } from './AgentOrchestrator.js';
+import { AGENT_INTENT_TOOL_NAME, AGENT_INTENT_TOOL_DEF, parseAgentIntentArgs } from './submitSuggestionTool.js';
+import type { AgentEvent, CompletionRequest, InferenceClient } from './types.js';
 
-describe('answer intent — parser and tool definition', () => {
-  it('parses answer intent with text retained', () => {
-    const result = parseAgentIntentArgs({
-      intent: 'answer',
-      text: 'This sequences workspace tracks sequence records and their runs.',
+function mutationTripwire() {
+  return {
+    get: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    exists: vi.fn(async () => false),
+    create: vi.fn(async () => { throw new Error('answer intent must NEVER reach store.create'); }),
+    update: vi.fn(async () => { throw new Error('answer intent must NEVER reach store.update'); }),
+    delete: vi.fn(async () => { throw new Error('answer intent must NEVER reach store.delete'); }),
+    validate: vi.fn(), lint: vi.fn(), getByPath: vi.fn(), getWithValidation: vi.fn(),
+  };
+}
+
+function intentClient(args: unknown): { client: InferenceClient } {
+  const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+    yield {
+      id: 'resp-answer',
+      choices: [{
+        index: 0,
+        delta: {
+          role: 'assistant',
+          tool_calls: [{
+            index: 0, id: 'call-ans', type: 'function',
+            function: { name: AGENT_INTENT_TOOL_NAME, arguments: JSON.stringify(args) },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    };
+  });
+  return { client: { complete: vi.fn(), completeStream } };
+}
+
+describe('answer intent — orchestrator-level behaviour (SEQ-ANSWER-CONTRACT-1)', () => {
+  it('emits exactly one text_delta with the answer payload, no writes, one inference, no agent_action', async () => {
+    const store = mutationTripwire();
+    const answerPayload = 'This sequences workspace tracks sequence records and their runs.';
+    const { client } = intentClient({ intent: 'answer', text: answerPayload });
+    const executeTool = vi.fn(async () => { throw new Error('answer intent must NEVER execute a tool'); });
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      client,
+      { getToolDefinitions: () => [], executeTool },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      { store: store as never },
+    );
+    const result = await orchestrator.run({
+      prompt: 'What does sequences workspace do?',
+      forceDraftTool: true,
+      onEvent: (event) => events.push(event),
+      context: { labwares: [], eventSummary: 'No events yet.', vocabPackId: 'liquid-handling/v1', availableVerbs: ['transfer'] },
     });
-    expect(result.intent).toBe('answer');
-    expect(result.text).toBe('This sequences workspace tracks sequence records and their runs.');
-  });
-
-  it('rejects answer intent without text — falls to unknown', () => {
-    const result = parseAgentIntentArgs({ intent: 'answer' });
-    expect(result.intent).toBe('unknown');
-  });
-
-  it('rejects answer intent with empty string text — falls to unknown', () => {
-    const result = parseAgentIntentArgs({ intent: 'answer', text: '' });
-    expect(result.intent).toBe('unknown');
-  });
-
-  it('rejects answer intent with whitespace-only text — falls to unknown', () => {
-    const result = parseAgentIntentArgs({ intent: 'answer', text: '   ' });
-    expect(result.intent).toBe('unknown');
-  });
-
-  it('unknown intents still parse as unknown', () => {
-    expect(parseAgentIntentArgs({ intent: 'explode_the_lab' }).intent).toBe('unknown');
-  });
-
-  it('tool definition enum includes answer', () => {
-    const props = AGENT_INTENT_TOOL_DEF.function.parameters as { properties: Record<string, { enum?: string[] }> };
-    expect(props.properties.intent?.enum).toContain('answer');
+    const textDeltas = events.filter((e) => e.type === 'text_delta');
+    expect(textDeltas).toHaveLength(1);
+    expect(textDeltas[0].delta).toBe(answerPayload);
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(client.completeStream).toHaveBeenCalledTimes(1);
+    const agentActions = events.filter((e) => e.type === 'agent_action' || e.type === 'agent_action_proposal');
+    expect(agentActions).toHaveLength(0);
+    const toolResultIdx = events.findIndex((e) => e.type === 'tool_result');
+    const textDeltaIdx = events.findIndex((e) => e.type === 'text_delta');
+    expect(toolResultIdx).toBeGreaterThan(-1);
+    expect(textDeltaIdx).toBeGreaterThan(-1);
+    expect(toolResultIdx).toBeLessThan(textDeltaIdx);
+    expect(result.success).toBe(true);
   });
 });
