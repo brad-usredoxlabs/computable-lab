@@ -50,7 +50,7 @@ describe('L2-PROMPT2-SCIENCE-CHAIN-1 fold-path bind', () => {
     // Before binding: events carry mints (the defect)
     expect((events[0] as any).details.composition_snapshot[0].component_ref.kind).toBe('draft');
 
-    const { compiled: boundCompiled, bound, unbound } = bindFoldPicksOntoCompile(
+    const { boundCompiled, bound, unbound } = bindFoldPicksOntoCompile(
       compiled as any,
       answers,
     );
@@ -98,7 +98,7 @@ describe('L2-PROMPT2-SCIENCE-CHAIN-1 fold-path bind', () => {
       { requestId: 'unresolved-c-X', label: 'X' }, // no ref
     ];
 
-    const { compiled: boundCompiled, bound, unbound } = bindFoldPicksOntoCompile(
+    const { boundCompiled, bound, unbound } = bindFoldPicksOntoCompile(
       compiled as any,
       answers,
     );
