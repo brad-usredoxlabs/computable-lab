@@ -340,7 +340,7 @@ function decodeQuoted(raw: string): string {
  * name, not inside a string value), so e.g. `mints` / `xmint` / a `mint`
  * inside a label value can never be mistaken for the DSL's `mint` block.
  */
-function objectLiteralField(body: string, key: string, kind: 'object' | 'string'): string | null {
+function objectLiteralField(body: string, key: string, kind: 'object' | 'string' | 'scalar'): string | null {
   const n = body.length
   if (n < 2 || body[0] !== '{') return null
   let depth = 0
@@ -381,41 +381,75 @@ function objectLiteralField(body: string, key: string, kind: 'object' | 'string'
       if (close === -1) return null
       return decodeQuoted(body.slice(j + 1, close - 1))
     }
+    if (kind === 'scalar') {
+      // Unquoted scalar value: read until ',' or '}' at depth 1 (respecting quotes).
+      // Terminated by comma or closing brace — handles {mint:{label:nile red stain,domain:chemical}}
+      let start = j
+      let k = j
+      while (k < n) {
+        const ch = body[k]
+        if (ch === '"' || ch === "'") {
+          const sc = skipQuoted(body, k)
+          if (sc === -1) return null
+          k = sc
+          continue
+        }
+        if (ch === '{') {
+          const mc = matchBrace(body, k)
+          if (mc === -1) return null
+          k = mc + 1
+          continue
+        }
+        if (ch === ',' || ch === '}') break
+        k++
+      }
+      const val = body.slice(start, k).trim()
+      if (val) return val
+      return null
+    }
     return null
   }
   return null
 }
 
 /**
- * Client mirror of server extractHumanLabel (shorthandChat.ts:92-121).
- * Browser regate #4 finding M2: a raw provenance blob (structured mint JSON)
- * must be unwrapped to the inner human label before seeding the mint title.
+ * Unwrap a mint blob from a raw label string.
+ * A mint blob is a serialized DSL: {mint:{label:…}} (unquoted) or
+ * {mint:{label:"…"}} (quoted). Returns the inner human label or null.
+ * Non-mint objects ({foo:1}) and bare strings return null.
  */
-function humanLabelFromProvenance(label: string): string | undefined {
+function unwrapMintBlob(label: string): string | null {
   const trimmed = label.trim()
-  const looksLikeStructured = trimmed.startsWith('{') && trimmed.endsWith('}')
-  if (!looksLikeStructured) return label
-  // Try JSON-parse path first — mirror server extractHumanLabel: scan nested
-  // object values for the inner "label" key, never unwrap top-level labels.
+  if (!trimmed.startsWith('{')) return null
+  // Try JSON.parse first — handles quoted-key JSON blobs like {"mint":{"label":"..."}}
   try {
-    const parsed = JSON.parse(label)
+    const parsed = JSON.parse(trimmed) as Record<string, unknown> | undefined
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      for (const [, value] of Object.entries(parsed)) {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const inner = (value as Record<string, unknown>)['label']
-          if (typeof inner === 'string' && inner.length > 0) return inner
-        }
+      const mint = parsed.mint
+      if (mint && typeof mint === 'object' && !Array.isArray(mint)) {
+        const m = mint as Record<string, unknown>
+        if (typeof m.label === 'string' && m.label.trim()) return m.label.trim()
+        if (typeof m.name === 'string' && m.name.trim()) return m.name.trim()
       }
-      // Valid JSON object but no usable inner label — don't render
-      return undefined
+      return null // valid JSON without a mint block: not a mint blob
     }
   } catch {
-    // Not valid JSON — fall through to regex
+    // not JSON — fall through to the unquoted DSL scan below
   }
-  // Regex fallback for mint:{label:clofibrate,...} style blobs
-  const match = new RegExp(`label:([\\w\\s-]+?)(?:,|})`).exec(label)
-  if (match) return match[1].trim()
-  return undefined
+  // Check for the mint block at the top level
+  const mintBlock = objectLiteralField(trimmed, 'mint', 'object')
+  if (mintBlock === null) return null
+  // Read the label value: try quoted first, then unquoted scalar
+  let val = objectLiteralField(mintBlock, 'label', 'string')
+  if (val !== null && val.trim()) return val.trim()
+  val = objectLiteralField(mintBlock, 'label', 'scalar')
+  if (val !== null && val.trim()) return val.trim()
+  // Also try 'name' as fallback
+  val = objectLiteralField(mintBlock, 'name', 'string')
+  if (val !== null && val.trim()) return val.trim()
+  val = objectLiteralField(mintBlock, 'name', 'scalar')
+  if (val !== null && val.trim()) return val.trim()
+  return null
 }
 
 export function mintLabelFor(request: AiClarificationRequest, query: string): string {
@@ -429,20 +463,31 @@ export function mintLabelFor(request: AiClarificationRequest, query: string): st
   // SELECTS the raw field — it never transforms case. Type-guarded (the wire
   // declares unresolvedFact? OPTIONAL — types.ts:621), never assumed.
   //
-  // Browser regate #4 finding M2: the raw label may be a structured provenance
-  // blob (e.g. '{mint:{label:clofibrate,ontology:cf/x}}') that must be unwrapped
-  // to the inner human label. Client mirrors server extractHumanLabel.
+  // M2 (browser regate #4 finding): the raw label can be a SERIALIZED mint
+  // blob {mint:{label:…}} — unquoted form from the live receipt. Unwrap it
+  // to the inner human label. A non-mint object ({foo:1}) passes through
+  // as '' so the fallback chain uses the query-derived noun. A bare label
+  // passes through byte-unchanged.
   //
   // The fallback is NOT a casing hole: the only OTHER mint-capable request
   // family is the gap request (forceMaterialClarifications.ts:521-523/:537-539,
   // request.query = gap.label — RAW provenance; that path never rides the D3
   // canonical fold), so on every mint-capable shape the chain ends at a
   // raw-case string, never at a fold.
-  let labelCandidate: string | undefined
-  if (request.unresolvedFact && typeof request.unresolvedFact.label === 'string' && request.unresolvedFact.label.trim()) {
-    labelCandidate = humanLabelFromProvenance(request.unresolvedFact.label.trim())
+  if (request.unresolvedFact && typeof request.unresolvedFact.label === 'string') {
+    const rawLabel = request.unresolvedFact.label.trim()
+    if (rawLabel) {
+      // M2: try to unwrap a mint blob first
+      const unwrapped = unwrapMintBlob(rawLabel)
+      if (unwrapped) return unwrapped
+      // Non-mint object literal ({foo:1}): do NOT use as durable name —
+      // fall through to the query-derived noun. A serialized object should
+      // never become a record's name. Skip the raw label and let the
+      // fallback chain handle it.
+      if (!rawLabel.startsWith('{')) return rawLabel
+    }
   }
-  return labelCandidate || mintNounFromQuery(request.query) || query.trim()
+  return mintNounFromQuery(request.query) || query.trim()
 }
 
 /** Append `more` to `base`, dedupe by key, keep `pinBottom` rows last. */
