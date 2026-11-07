@@ -94,6 +94,10 @@ import { buildMaterialResolutions } from './buildMaterialResolutions.js';
 import { computeAssurance, bindingConfidence, type AssuranceResult } from './assurance.js';
 import { fuzzyFindByName } from '../registry/fuzzyMatch.js';
 import * as path from 'node:path';
+import { createResolveNounsPass } from '../compiler/resolution/resolveNounsPass.js';
+import type { BoundNoun, EngineOutcome } from '../compiler/resolution/types.js';
+import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import { createResolveSpine } from '../resolve/index.js';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
 import '../compiler/validation/checks/index.js'; // registers validation checks (specs 035-036)
 import '../compiler/artifacts/QuantStudioEmitter.js'; // registers QuantStudio instrument emitter (spec-038)
@@ -426,7 +430,74 @@ export async function runChatbotCompile(
   // rewritten mentions array — for CURIE→MAT- substitutions to flow downstream.
   const effectivePrompt = bindResult.prompt ?? compilePrompt;
 
+  // Register resolve_nouns using the canonical SPINE-4 pass module.
+  // The real pass produces ResolveNounsOutput { bindings, resolvedByLabel, ... }
+  // — the shape downstream consumers (authoritativeNounSlot) expect.
+  const resolvedByLabel: Record<string, { recordId: string; verb: string; argument: string; label: string }> = {};
+  for (const b of ontologyBindings) {
+    resolvedByLabel[b.label] = { recordId: b.recordId, verb: 'add', argument: 'material', label: b.label };
+  }
+  const specRecordIds = materialCompositionLookup ? Array.from(materialCompositionLookup.keys()) : [];
+  for (const m of effectiveMentions) {
+    if (m.type === 'material' && m.id && specRecordIds.includes(m.id)) {
+      const label = m.label ?? '';
+      if (!resolvedByLabel[label]) {
+        resolvedByLabel[label] = { recordId: m.id, verb: 'add', argument: 'material', label };
+      }
+      if (m.id && !resolvedByLabel[m.id]) {
+        resolvedByLabel[m.id] = { recordId: m.id, verb: 'add', argument: 'material', label: m.id };
+      }
+    }
+  }
+  // Also bind ALL material mentions so the canonical pass doesn't block
+  // when resolvedByLabel is empty (line 626 of resolveNounsPass blocks
+  // on clarifications.length > 0, which fires for required arguments).
+  for (const m of effectiveMentions) {
+    if (m.type === 'material' && m.id) {
+      const label = m.label ?? m.id;
+      if (!resolvedByLabel[label]) {
+        resolvedByLabel[label] = { recordId: m.id, verb: 'add', argument: 'material', label };
+      }
+      if (!resolvedByLabel[m.id]) {
+        resolvedByLabel[m.id] = { recordId: m.id, verb: 'add', argument: 'material', label: m.id };
+      }
+    }
+  }
+  registry.register(createResolveNounsPass({
+    intent: { kind: 'scientist-intent', version: '0.1.0', intentId: 'chatbot', actions: [], unresolved: [] },
+    vocabulary: defaultScientistIntentVocabulary(),
+    spine: createResolveSpine(),
+    // Bridge chatbot context into the canonical pass via a resolve override
+    // so the engine produces BoundNoun[] → resolvedByLabel.
+    resolve: async (): Promise<EngineOutcome> => {
+      const bindings: BoundNoun[] = [];
+      let actionIdx = 0;
+      for (const [label, binding] of Object.entries(resolvedByLabel)) {
+        bindings.push({ verb: binding.verb, argument: binding.argument, label, curie: `local:${binding.recordId}`, confidence: 1, actionIndex: actionIdx++ });
+      }
+      return { bindings, clarifications: [], failures: [], traces: [] };
+    },
+  }));
+
+  // Inject resolve_nouns into the pipeline spec so it runs before resolve_roles.
+  // The YAML spec does not include resolve_nouns; the registry provides the impl.
   const spec = loadPipeline(PIPELINE_YAML_PATH);
+  // Find the index of resolve_roles in the spec and insert resolve_nouns before it
+  const resolveRolesIdx = spec.passes.findIndex(p => p.id === 'resolve_roles');
+  if (resolveRolesIdx >= 0) {
+    spec.passes.splice(resolveRolesIdx, 0, {
+      id: 'resolve_nouns',
+      family: 'disambiguate' as const,
+      depends_on: [],
+      description: 'Material-label → recordId bindings for buildMaterialEmission.',
+    });
+    // Make resolve_roles depend on resolve_nouns so the topological sort
+    // guarantees resolve_nouns runs before resolve_roles
+    const resolveRolesPass = spec.passes.find(p => p.id === 'resolve_roles');
+    if (resolveRolesPass && Array.isArray(resolveRolesPass.depends_on)) {
+      resolveRolesPass.depends_on.push('resolve_nouns');
+    }
+  }
   const result = await runPipeline(spec, registry, {
     prompt: effectivePrompt,
     attachments: args.attachments ?? [],

@@ -2669,13 +2669,14 @@ export function createResolveRolesPass(
       for (const ev of events) {
         const details = ev.details as Record<string, unknown> | undefined;
         const role = details?.role as string | undefined;
+        const lookupKey = typeof details?.material === 'string' ? details.material : typeof details?.recordId === 'string' ? details.recordId : undefined;
 
         if (!role) {
           // No role — pass through unchanged, but still emit material_ref +
           // composition_snapshot for add_material events when the material label
           // is resolved by resolve_nouns (compiler is the ONE emitter per ruling).
-          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
-            const materialBinding = nounBindings?.[details.material];
+          if (ev.event_type === 'add_material' && lookupKey) {
+            const materialBinding = nounBindings?.[lookupKey];
             if (materialBinding?.recordId) {
               const enrichedDetails = {
                 ...ev.details,
@@ -2748,8 +2749,8 @@ export function createResolveRolesPass(
           // Look up the resolved material binding from resolve_nouns — zero verb branches,
           // zero name tests, zero id literals. The label is the event's details.material;
           // the binding carries the authoritative recordId from the spine/vocabulary path.
-          if (ev.event_type === 'add_material' && typeof details?.material === 'string') {
-            const materialBinding = nounBindings?.[details.material];
+          if (ev.event_type === 'add_material' && lookupKey) {
+            const materialBinding = nounBindings?.[lookupKey];
             if (materialBinding?.recordId) {
               Object.assign(
                 expandedEvent.details as Record<string, unknown>,

@@ -1,0 +1,64 @@
+=== FIX RUN 2: SEQ-ANSWER-SCIENCE-u8r2-fix2 ===
+
+Changed files:
+  server/src/ai/runChatbotCompileCompositionPrefetch.test.ts (+28/-36)
+
+What was done:
+  - Added vi.mock for eligibility/policy.js (missing lint schema)
+  - Rewrote RED pin test to use production runChatbotCompile pipeline
+  - Test asserts on result.passOutputs['resolve_nouns'] and resolvedByLabel
+  - Removed test-local makePassState construction with pre-seeded resolve_nouns
+
+Verification:
+  runChatbotCompileCompositionPrefetch: 8/8 GREEN
+  demoteUnstatedQuantities: 27/27 GREEN (no regression)
+  typecheck: 3 pre-existing errors in runChatbotCompile.ts (from fix1 auto-commit)
+  RED pin revert check:
+    Commented out registry.register(createResolveNounsPass) -> 2 tests FAILED
+    Restored -> 8/8 GREEN
+
+Commit: 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
+
+SEQ-ANSWER-SCIENCE-u8r2-fix2 UNIT 1 DONE 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
+
+=== CLOSEOUT: SEQ-ANSWER-SCIENCE-u8r2-fix3 ===
+
+What 68646c94 delivers:
+  - RED pin rewritten to exercise the production runChatbotCompile pipeline
+  - Test asserts on result.passOutputs['resolve_nouns'] and resolvedByLabel
+  - vi.mock for eligibility policy loader (missing lint schema)
+  - 8/8 tests GREEN
+
+debug_pipeline.test.ts: REMOVED.
+  - It was a scratch probe (expect(true).toBe(true), console.log debugging)
+  - The production test already covers resolve_nouns/resolvedByLabel assertions
+  - No unique coverage justification to keep it
+
+Pinned test result at HEAD (e02a8196):
+  src/ai/runChatbotCompileCompositionPrefetch.test.ts: 8 passed (8) GREEN
+
+Commit: this commit closes out the dirty tree from fix2 exit.
+
+SEQ-ANSWER-SCIENCE-u8r2-fix3 UNIT 1 DONE 031ea1238a6ae36b13275d7fc3cdbb19eb3bacef
+SEQ-ANSWER-SCIENCE-u8r2fix4 UNIT unit DONE aefee9e9b9105ecf0183cedd1c3a6f605af17d86
+
+=== BLOCKED: L2-PROMPT2-SCIENCE-CHAIN-1-u8d3pin ===
+
+Production gap: the resolve_roles enrichment gate at ChatbotCompilePasses.ts:2677 and :2751
+requires typeof details?.material === 'string' to fire buildMaterialEmission(). Production
+add_material events from the deterministic pipeline carry details: { recordId: 'MAT-RED',
+kind: 'aliquot' } — no details.material string. The enrichment never fires, so
+composition_snapshot is absent on production result.events.
+
+Evidence:
+- Probe output: event_type=add_material details={recordId:"MAT-RED",kind:"aliquot"}
+- Gate at :2677: if (ev.event_type === 'add_material' && typeof details?.material === 'string')
+- Gate at :2751: same check
+- buildMaterialEmission(recordId) at :2682/:2756 is the only path that emits composition_snapshot
+- Both paths gated on details.material being a string — never true for production events
+
+Resolution required: architect must widen the enrichment gate in production to handle
+recordId-based event details, or the pipeline must emit a string material label alongside
+recordId. This is a production code fix, outside the test-only scope of this unit.
+
+L2-PROMPT2-SCIENCE-CHAIN-1-u8d3pin UNIT unit BLOCKED production enrichment gate requires details.material string but production events emit recordId/kind objects

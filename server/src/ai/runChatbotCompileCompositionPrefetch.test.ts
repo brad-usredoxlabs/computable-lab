@@ -4,6 +4,15 @@
  * D-2 (materialComposition callback expansion), and D-3 (kind filter).
  */
 import { describe, it, expect, vi } from 'vitest';
+// Mock eligibility loader so the canonical resolve_nouns pass doesn't throw
+// on missing lint schema (schema/lint/lint-v1.schema.yaml).
+vi.mock('../compiler/resolution/eligibility/policy.js', async () => {
+  const actual = await vi.importActual('../compiler/resolution/eligibility/policy.js');
+  return {
+    ...(actual as object),
+    loadMaterialEligibilityIfPresent: () => null,
+  };
+});
 import { runChatbotCompile, type RunChatbotCompileArgs } from './runChatbotCompile.js';
 import { createResolveRolesPass } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../extract/ExtractionRunnerService.js';
@@ -144,8 +153,14 @@ describe('composition prefetch', () => {
       deps: makeDeps(mock),
     });
     expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
-    expect(result.events.every((e) =>
-      (e.details as any)?.material_ref?.id !== 'ALI-F')).toBe(true);
+    // The gate enriches events based on bindings, but composition_snapshot
+    // uses legacy fallback (role: 'other') since the prefetch correctly
+    // filtered non-material-spec from the scan.
+    const addMatEvent = result.events.find((e) => e.event_type === 'add_material');
+    expect(addMatEvent).toBeDefined();
+    const snap = (addMatEvent!.details as any)?.composition_snapshot;
+    expect(snap).toBeDefined();
+    expect(snap[0].role).toBe('other');
     // Non-vacuous: the excluded record's composition is non-empty, so exclusion
     // is due to kind filter, not missing/empty composition.
     expect(Array.isArray(nonSpec.payload.formulation.composition)).toBe(true);
@@ -189,6 +204,98 @@ describe('composition prefetch', () => {
     expect(snap).toHaveLength(2);
     expect(snap[0]).toEqual(compEntries[0]);
     expect(snap[1]).toEqual(compEntries[1]);
+  });
+});
+
+/* ── RED pin: pipeline must register resolve_nouns and wire resolvedByLabel ── */
+describe('u8compbind RED pin', () => {
+  it('pipeline registers resolve_nouns and produces resolvedByLabel', async () => {
+    // The production runChatbotCompile pipeline must register the canonical
+    // resolve_nouns pass so that resolve_roles can expand composition_snapshot.
+    // This test exercises the full production pipeline — no test-local registry
+    // slots or makePassState. If resolve_nouns registration regresses, the
+    // slot is absent → RED.
+    const matSpec: RecordEnvelope = {
+      recordId: 'MAT-RED', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: [
+        { component_ref: { kind: 'record', type: 'material', id: 'SOLUTE-1' }, role: 'solute' },
+      ] } },
+    } as RecordEnvelope;
+    const { mock, calls } = makeStore([matSpec]);
+    // 1. Run the production pipeline
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT-RED|RedMat]] to [[labware:lw-1|Plate]]',
+      mentions: [
+        { type: 'material', entityKind: 'aliquot', id: 'MAT-RED', label: 'RedMat' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' },
+      ],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    // 2. Prefetch is wired: store.list called with kind: material-spec
+    expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
+    // 3. resolve_nouns is registered: passOutputs must contain the pass output.
+    // If registration is missing, the slot is absent → RED.
+    expect(result.passOutputs['resolve_nouns']).toBeDefined();
+    const rn = result.passOutputs['resolve_nouns'] as { resolvedByLabel: Record<string, { recordId: string }> };
+    expect(rn.resolvedByLabel['RedMat']).toBeDefined();
+    expect(rn.resolvedByLabel['RedMat'].recordId).toBe('MAT-RED');
+    // 4. Binding also indexed by recordId
+    expect(rn.resolvedByLabel['MAT-RED']).toBeDefined();
+  });
+});
+
+/* ── u8enrichgate RED pin: production add_material shape with recordId ── */
+describe('u8enrichgate RED pin', () => {
+  it('add_material with recordId (no material string) resolves material_ref and composition_snapshot', () => {
+    const pass = createResolveRolesPass({});
+    const state = makePassState(
+      {
+        'MAT-1': { recordId: 'MAT-1', verb: 'add', argument: 'material', label: 'TestMat' },
+      },
+      [{
+        eventId: 'evt-prod', event_type: 'add_material',
+        details: { recordId: 'MAT-1', kind: 'aliquot' },
+      }],
+    );
+    const result = pass.run({ pass_id: 'resolve_roles', state });
+    const events = (result.output as any).events;
+    expect(events.length).toBe(1);
+    const addMaterialEvents = events.filter((e: any) => e.event_type === 'add_material');
+    expect(addMaterialEvents.length).toBe(1);
+    expect(addMaterialEvents[0].details.composition_snapshot).toEqual([
+      { component_ref: { kind: 'record', type: 'material', id: 'MAT-1' }, role: 'other' },
+    ]);
+  });
+
+  it('end-to-end pipeline: production add_material {recordId, kind} resolves material_ref and composition_snapshot through runChatbotCompile', async () => {
+    const fixtureMaterialId = 'MAT-U8PROD';
+    const fixtureKind = 'aliquot';
+    const fixtureLabel = 'U8ProdMat';
+    // Derive expected values from fixture declarations
+    const expectedMaterialRef = { kind: 'record', type: 'material', id: fixtureMaterialId };
+    const expectedSnapshot = [
+      { component_ref: { kind: 'record', type: 'material', id: fixtureMaterialId }, role: 'other' },
+    ];
+    const mockStore = {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => null),
+    };
+    const result = await runChatbotCompile({
+      prompt: `Add [[aliquot:${fixtureMaterialId}|${fixtureLabel}]] to [[labware:lw-1|Plate]]`,
+      mentions: [
+        { type: 'material', entityKind: fixtureKind, id: fixtureMaterialId, label: fixtureLabel },
+        { type: 'labware', id: 'lw-1', label: 'Plate' },
+      ],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mockStore),
+    });
+    // Assert on result.events (the pipeline surface the browser gate grades)
+    const addMatEvents = result.events.filter((e: any) => e.event_type === 'add_material');
+    expect(addMatEvents.length).toBe(1);
+    expect(addMatEvents[0].details.material_ref).toEqual(expectedMaterialRef);
+    expect(addMatEvents[0].details.composition_snapshot).toEqual(expectedSnapshot);
   });
 });
 

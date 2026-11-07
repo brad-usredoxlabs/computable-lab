@@ -1,0 +1,50 @@
+L2-PROMPT2-SCIENCE-CHAIN-1 / UNIT u8prode2e — End-to-end production add_material assertion
+
+BASE: 976b0fe7 (WIP AT EXIT, un-reviewed enrichment-gate fix inherited; not accepted)
+BRANCH: cl/lane2-science-u8compbind-r2
+WORKTREE: /home/brad/cl-wt/wt-SCIENCE-u8compbind-r2
+
+WHAT WAS DONE
+  Added ONE new it() inside the existing describe('u8enrichgate RED pin') block in
+  server/src/ai/runChatbotCompileCompositionPrefetch.test.ts.
+
+  The new leg drives the REAL pipeline (await runChatbotCompile with deps: makeDeps(store))
+  with a fixture whose add_material event carries the PRODUCTION details shape
+  { recordId: 'MAT-U8PROD', kind: 'aliquot' } and NO material string, then asserts on
+  result.events that:
+    - details.material_ref deep-equals { kind: 'record', type: 'material', id: '<derived id>' }
+    - details.composition_snapshot deep-equals [{ component_ref: { kind: 'record', type: 'material', id: '<derived id>' }, role: 'other' }]
+
+  Expected values are DERIVED from the fixture declarations (fixtureMaterialId variable),
+  never a second literal copy.
+
+MEASUREMENT DISCIPLINE (three measured steps, same run)
+  (a) New leg on the FIXED base (976b0fe7 + this commit): PASS
+      Test Files 2 passed (2) / Tests 11 passed (11)
+
+  (b) /tmp scratch revert of the fix at ChatbotCompilePasses.ts:2672:
+      Reverted lookupKey to old gate: typeof details?.material === 'string' ? details.material : undefined
+      Re-run: 3 FAILED, 8 passed (11 total)
+        - u8enrichgate RED pin > add_material with recordId: expected undefined to deeply equal [...]
+        - u8enrichgate RED pin > end-to-end pipeline: expected undefined to deeply equal { kind: 'record', ... }
+        - D-3 kind filter: expected undefined not to be undefined
+      Both u8enrichgate legs fail because they share the same cause (lookupKey can't resolve recordId).
+
+  (c) Worktree restored byte-identical: git diff --stat server/src/compiler/ is empty.
+      Re-run: Test Files 2 passed (2) / Tests 11 passed (11)
+
+VERIFICATION
+  Tests: cd server && npx vitest run src/ai/runChatbotCompileCompositionPrefetch.test.ts src/compiler/pipeline/passes/ChatbotCompilePasses.compositionShape.test.ts
+    → Test Files 2 passed (2) / Tests 11 passed (11)
+  Typecheck: cd server && npx tsc --noEmit -p . → exit 0, zero errors
+  git diff --stat 976b0fe7..HEAD -- server
+    → runChatbotCompileCompositionPrefetch.test.ts | 29 ++++++++++++++++++++++
+      1 file changed, 29 insertions(+)
+  git status --short: ?? node_modules (untracked, expected)
+
+NO ONTOLOGY / SCHEMA CHANGE: This unit writes only a test file. No YAML edited, no reload required.
+NO PRODUCT CODE EDIT: Only the test file changed. The fix inherited from 976b0fe7 was not modified.
+
+The fix inherited from 976b0fe7 is un-reviewed. This leg proves behaviour of the tree measured.
+
+L2-PROMPT2-SCIENCE-CHAIN-1-u8prode2e UNIT unit DONE d07b5652bd4aa95da4e40af38976a9a82211c891
