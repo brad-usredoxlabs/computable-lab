@@ -146,6 +146,10 @@ describe('composition prefetch', () => {
     expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
     expect(result.events.every((e) =>
       (e.details as any)?.material_ref?.id !== 'ALI-F')).toBe(true);
+    // Non-vacuous: the excluded record's composition is non-empty, so exclusion
+    // is due to kind filter, not missing/empty composition.
+    expect(Array.isArray(nonSpec.payload.formulation.composition)).toBe(true);
+    expect((nonSpec.payload.formulation.composition as any[]).length).toBeGreaterThan(0);
   });
 });
 
