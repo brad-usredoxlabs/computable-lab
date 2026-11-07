@@ -92,4 +92,4 @@ No golden files were modified.
 - `material_ref` stays `{kind:'record',type:'material',id}`
 - Zero role literals ('solvent', 'solute') in TS — roles come from entry data
 
-L2-PROMPT2-SCIENCE-CHAIN-1-u5matrefr UNIT u5matref DONE 6b95941523f0783b2a55d3b7e053ee68dbc82f90
+L2-PROMPT2-SCIENCE-CHAIN-1-u5matrefr UNIT u5matref DONE cb21a465520103e57c0441f6043855c10a5a6f7e
