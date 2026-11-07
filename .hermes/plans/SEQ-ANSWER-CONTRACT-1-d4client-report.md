@@ -51,7 +51,6 @@ git status --short → clean
 git diff --stat 120deaeb..HEAD → 3 files, 216 insertions, 2 deletions
 ```
 
-SEQ-ANSWER-CONTRACT-1 DONE 1fbcf95626b41d669fec5f920adaea95faf4e46f
 
 ## FIX3
 fix3 replaces the placeholder-era 8-hex marker with a 40-hex spec-form marker.
@@ -61,4 +60,3 @@ S never appears again outside quoted prose.
 
 SEQ-ANSWER-CONTRACT-1 fix3 UNIT unit DONE a1df14cbc51e173a734ca08e940493a655862e57
 
-SEQ-ANSWER-CONTRACT-1-d4fix3 UNIT unit DONE 69f0d7b2f25cef2c59d7a6baba1ad7239fd629d0
