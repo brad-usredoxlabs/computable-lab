@@ -5,7 +5,7 @@ Added ONE `answerDelivered` predicate derived from per-turn `accumulated` text_d
 (trimmed, non-empty) and gated BOTH the honestWall guard and the bubble guard on it.
 
 ## Changed Files
-- app/src/shared/hooks/useAiChat.ts (+13 lines, -2 lines)
+- app/src/shared/hooks/useAiChat.ts (+11 lines, -2 lines)
 - app/src/shared/hooks/useAiChat.answerSurface.test.tsx (new, 151 lines)
 
 ## RED-first pin output (commit 78b239da, before fix)
