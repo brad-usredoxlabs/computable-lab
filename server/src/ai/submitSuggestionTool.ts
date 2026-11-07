@@ -905,7 +905,7 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
     }
     return { intent: 'unknown' };
   }
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft' || intent === 'compose_receiving' || intent === 'compose_execute_chain' || intent === 'answer') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft' || intent === 'compose_receiving' || intent === 'compose_execute_chain') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -948,11 +948,6 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
       // envelope above.
       ...(intent === 'compose_execute_chain' && args.chain !== null && typeof args.chain === 'object' && !Array.isArray(args.chain)
         ? { chain: args.chain as Record<string, unknown> }
-        : {}),
-      // SEQ-ANSWER-CONTRACT-1: the answer text is retained verbatim when
-      // present and non-empty; absent or empty -> text is not spread.
-      ...(intent === 'answer' && typeof args.text === 'string' && args.text.trim().length > 0
-        ? { text: args.text }
         : {}),
     };
   }
