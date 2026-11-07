@@ -2584,7 +2584,23 @@ function resolveCellTypeLink(
  * - For cell_region events with cell_type_id, resolves against the Cell Ontology registry
  *   and attaches cellTypeTerm on the expanded events (or emits a warning if unknown)
  */
-export function createResolveRolesPass(): Pass {
+/**
+ * Options for createResolveRolesPass.
+ */
+export interface ResolveRolesPassOptions {
+  /**
+   * Synchronous lookup: given a recordId, return the formulation's
+   * formulation.composition entries (each with component_ref + role).
+   * When absent or returning undefined/empty, the pass falls back to the
+   * legacy single-entry snapshot (role: 'other').
+   * Synchronous — no awaits, no async.
+   */
+  materialComposition?: (recordId: string) => readonly unknown[] | undefined;
+}
+
+export function createResolveRolesPass(
+  opts?: ResolveRolesPassOptions,
+): Pass {
   return {
     id: 'resolve_roles',
     family: 'expand' as const,
@@ -2629,13 +2645,24 @@ export function createResolveRolesPass(): Pass {
       ): Record<string, unknown> {
         // 'record' and 'material' are schema enum members (ref.schema.yaml §14, §52-55)
         const typedRef = { kind: 'record' as const, type: 'material' as const, id: recordId };
+
+        // If a composition lookup is available and returns entries, expand them
+        // into the snapshot (one level — the formulation's declared entries).
+        // Otherwise, fall back to the legacy single-entry with role: 'other'.
+        const compositionEntries = opts?.materialComposition?.(recordId);
+        const snapshot =
+          compositionEntries && compositionEntries.length > 0
+            ? (compositionEntries as unknown[]).map((entry: unknown) => ({
+                component_ref: (entry as { component_ref: unknown }).component_ref,
+                role: (entry as { role: string }).role,
+              }))
+            : [{ component_ref: typedRef, role: 'other' as const }];
+
         return {
           material_ref: typedRef,
           // composition-entry.schema.yaml §11: component_ref $ref ./ref.schema.yaml
           // §22: 'other' is the honest gap arm (no declared role on the binding)
-          composition_snapshot: [
-            { component_ref: typedRef, role: 'other' as const },
-          ],
+          composition_snapshot: snapshot,
         };
       }
 
