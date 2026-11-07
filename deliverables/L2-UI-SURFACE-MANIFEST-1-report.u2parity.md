@@ -70,7 +70,7 @@ NON-VACUITY PROOFS:
   (d) All 80 orphan paths in orphans.txt pass test -f.
 
 CHANGED FILES:
-  scripts/check-ui-surfaces.py (new, 392 lines)
+  scripts/check-ui-surfaces.py (new, 409 lines)
   deliverables/ui-surface-manifest-1/orphans.txt (new, 85 lines)
 
 PROHIBITED FILES: unchanged
