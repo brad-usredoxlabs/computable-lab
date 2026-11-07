@@ -1,17 +1,15 @@
 /**
- * Gate 4 D1 — u9 composition-prefetch wire: the scientist-intent path must
- * expand a material-spec's formulation.composition into solute+solvent
- * snapshot entries. Before the fix: resolves to ONE self-referential entry
- * with role:'other'. After the fix: TWO entries (solute + solvent).
+ * Gate 4 D1 — u9 composition-prefetch wire: the shorthand path must expand
+ * a material-spec's formulation.composition into solute+solvent snapshot
+ * entries. Before the fix: resolves to ONE self-referential entry with
+ * role:'other'. After the fix: TWO entries (solute + solvent).
  *
  * Mirror the mock-store pattern from shorthandChat.labwareIdBinding.test.ts.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
-import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
-import { createResolveSpineFromContext } from '../resolve/index.js';
+import { compileShorthandDeterministically } from './shorthandChat.js';
 import type { RecordStore } from '../store/types.js';
-import type { AnsweredNounAnswer } from '../compiler/resolution/resolveNounsPass.js';
 
 // --- Fixtures ---
 
@@ -71,16 +69,15 @@ function mockStore() {
   } as unknown as RecordStore;
 }
 
-describe('u9: composition-prefetch wire — compiler emits TWO snapshot entries for material-spec with composition', () => {
+describe('u9: composition-prefetch wire — shorthand emit expands formulation.composition', () => {
   it('material-spec with composition emits TWO snapshot entries (solute + solvent)', async () => {
     const store = mockStore();
     const doc = parseScientistIntent(DOC);
-    const spine = createResolveSpineFromContext({ store });
 
     // Force binding via answeredSlots because the spine level filter excludes
     // 'spec' from add_material.material. This simulates the production flow
     // where [[material-spec:MSP-...|...]] resolves to the spec record.
-    const answeredSlots: AnsweredNounAnswer[] = [
+    const answeredSlots = [
       {
         label: 'Clofibrate 1mM',
         recordId: 'MSP-PR9-TEST-CLO-1MM',
@@ -88,12 +85,12 @@ describe('u9: composition-prefetch wire — compiler emits TWO snapshot entries 
       },
     ];
 
-    const compiled = await compileScientistIntent(doc, {
-      spine,
-      answeredSlots,
+    const compiled = await compileShorthandDeterministically(doc, {
+      store,
+      ...(answeredSlots.length > 0 ? { answeredSlots } : {}),
     });
 
-    expect(compiled).toBeDefined();
+    expect(compiled).not.toBeNull();
     expect(compiled!.outcome).toBe('complete');
 
     const events = compiled!.terminalArtifacts.events;

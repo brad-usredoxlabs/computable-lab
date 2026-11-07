@@ -38,6 +38,7 @@ import {
   type ScientistIntentCompileDeps,
 } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
+import { buildMaterialCompositionLookup } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
 import type { RecordStore } from '../store/types.js';
 import type {
@@ -208,6 +209,13 @@ export interface ShorthandCompileDeps {
    * the key is ABSENT, never undefined — the caller spreads conditionally.
    */
   priorLabState?: LabStateSnapshot;
+  /**
+   * ANSWER-BIND-1: the caller-validated clarification answers (mention idiom
+   * parsed + recordId confirmed in the store by the handler). Threaded VERBATIM
+   * into compileScientistIntent — the pass, not this module, decides slot
+   * matching. Absent: every other caller is byte-unchanged.
+   */
+  answeredSlots?: readonly import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[];
 }
 
 /**
@@ -554,6 +562,11 @@ export async function compileShorthandDeterministically(
   if (!deps.store) return null;
   const spine = createResolveSpineFromContext({ store: deps.store });
   const reuseBindings = deps.reuseBindings ?? [];
+
+  // GATE-4-D1 (u9): prefetch material-spec formulation.composition entries
+  // so the resolve_roles pass expands them into solute+solvent snapshots.
+  const materialCompositionMap = await buildMaterialCompositionLookup(deps.store);
+
   return compileScientistIntent(doc, {
     spine: reuseBindings.length > 0
       ? composeSpineWithReuseBindings(spine, reuseBindings)
@@ -563,10 +576,18 @@ export async function compileShorthandDeterministically(
     ...(deps.answeredClarificationLabels
       ? { answeredClarificationLabels: deps.answeredClarificationLabels }
       : {}),
+    // ANSWER-BIND-1: the validated answers ride into the pass verbatim — the
+    // pass matches them against the PARSED intent's declared resolvable slots.
+    ...(deps.answeredSlots ? { answeredSlots: deps.answeredSlots } : {}),
     // WELLSET-RESOLVER-1: the committed contents layer rides the compile as
     // the resolve_wellsets pass's priorLabState (conditional spread — the key
     // is ABSENT, never undefined, per exactOptionalPropertyTypes).
     ...(deps.priorLabState ? { priorLabState: deps.priorLabState } : {}),
+    // GATE-4-D1: the composition prefetch lookup — conditional spread so the
+    // key is ABSENT (not undefined) when empty, respecting exactOptionalPropertyTypes.
+    ...(materialCompositionMap
+      ? { materialComposition: (id: string) => materialCompositionMap!.get(id) }
+      : {}),
   });
 }
 
