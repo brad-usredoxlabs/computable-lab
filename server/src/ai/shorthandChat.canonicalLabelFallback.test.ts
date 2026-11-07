@@ -212,3 +212,21 @@ describe('AC-6: Cost model — one list per call, zero when all ids hit', () => 
     expect(store.listFn).not.toHaveBeenCalled();
   });
 });
+
+describe('AC-8: Needle parity — bare toLowerCase matches the mint, no trim', () => {
+  it('padded fact label misses map key (no-label-match -> fallback keeps own key)', async () => {
+    // The map is keyed with .trim().toLowerCase() of stored names (:1209).
+    // The needle must be bare .toLowerCase() — mirroring MaterialGrounding.ts:213.
+    // Stored name "acetone" -> map key "acetone" (trimmed).
+    // Fact label " acetone " (padded) -> raw needle " acetone " (no trim).
+    // Raw needle " acetone " !== map key "acetone" -> MISS -> no title.
+    // If .trim() were reintroduced, needle becomes "acetone" -> MATCH -> RED.
+    const envelope = makeEnvelope('acetone', 'MAT-ACETONE-legacy');
+    const store = makeFakeStore(async () => null, async () => [envelope]);
+
+    const map = await canonicalLabelsForFacts([fact(' acetone ')], store);
+
+    // The padded label should NOT match — bare toLowerCase preserves the spaces.
+    expect(map.size).toBe(0);
+  });
+});
