@@ -395,12 +395,19 @@ function humanLabelFromProvenance(label: string): string | undefined {
   const trimmed = label.trim()
   const looksLikeStructured = trimmed.startsWith('{') && trimmed.endsWith('}')
   if (!looksLikeStructured) return label
-  // Try JSON-parse path first
+  // Try JSON-parse path first — mirror server extractHumanLabel: scan nested
+  // object values for the inner "label" key, never unwrap top-level labels.
   try {
     const parsed = JSON.parse(label)
-    if (typeof parsed === 'object' && parsed !== null && 'label' in parsed) {
-      const inner = (parsed as Record<string, unknown>).label
-      if (typeof inner === 'string') return inner
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [, value] of Object.entries(parsed)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const inner = (value as Record<string, unknown>)['label']
+          if (typeof inner === 'string' && inner.length > 0) return inner
+        }
+      }
+      // Valid JSON object but no usable inner label — don't render
+      return undefined
     }
   } catch {
     // Not valid JSON — fall through to regex
