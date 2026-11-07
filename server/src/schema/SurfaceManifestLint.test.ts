@@ -17,16 +17,22 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import { LintEngine } from '../lint/LintEngine.js';
+import { AjvValidator } from '../validation/AjvValidator.js';
 import type { LintSpec } from '../lint/types.js';
 
 const MANIFEST_SCHEMA_ID =
   'https://computable-lab.com/schema/ui/surface-manifest.schema.yaml';
+const LINT_META_SCHEMA_ID =
+  'https://computable-lab.com/schema/lint/lint-v1.schema.yaml';
 
 const LINT_PATH = fileURLToPath(
   new URL('../../../schema/ui/surface-manifest.lint.yaml', import.meta.url),
 );
 const MANIFEST_PATH = fileURLToPath(
   new URL('../../../config/ui/surfaces.yaml', import.meta.url),
+);
+const LINT_META_PATH = fileURLToPath(
+  new URL('../../../schema/lint/lint-v1.schema.yaml', import.meta.url),
 );
 
 function loadLintSpec(): LintSpec {
@@ -119,5 +125,41 @@ describe('L-SM-2 surface-pane-vocabulary-closure', () => {
     const rules = engine.getRules(MANIFEST_SCHEMA_ID);
     expect(rules).toHaveLength(1);
     expect(rules[0].id).toBe('surface-pane-vocabulary-closure');
+  });
+});
+
+// =============================================================================
+// Meta-conformance pin — L2-L2-VACUOUS-PINS-DEBT / u1lsm2meta
+// =============================================================================
+
+describe('surface-manifest lint spec meta-conformance', () => {
+  it('the shipped surface-manifest lint spec conforms to lint-v1.schema.yaml', () => {
+    const validator = new AjvValidator();
+    const meta = parseYaml(readFileSync(LINT_META_PATH, 'utf-8')) as Record<string, unknown>;
+    validator.addSchema(meta as never, LINT_META_SCHEMA_ID);
+
+    // Projection: lintVersion + rules (schemaId is file-level, not part of the
+    // meta schema which has additionalProperties: false)
+    const spec = parseYaml(readFileSync(LINT_PATH, 'utf-8')) as Record<string, unknown>;
+    const projection = { lintVersion: spec.lintVersion, rules: spec.rules };
+
+    // Positive: the real spec must validate
+    const r = validator.validate(projection, LINT_META_SCHEMA_ID);
+    expect(r.errors.map((e) => `${e.path}: ${e.message}`)).toEqual([]);
+    expect(r.valid).toBe(true);
+
+    // Negative: deep-clone projection, inject a meta-illegal path shape
+    const clone = JSON.parse(JSON.stringify(projection));
+    // The `in` predicate path must match the :224 pattern; "surfaces[*].panes[*]"
+    // is NOT admitted (the pattern forbids [*] in in.path)
+    const ruleAssert = clone.rules[0].assert as Record<string, unknown>;
+    const innerAssert = ruleAssert.assert as Record<string, unknown>;
+    const inPred = innerAssert.assert as Record<string, unknown>;
+    inPred.path = 'surfaces[*].panes[*]';
+
+    const rNeg = validator.validate(clone, LINT_META_SCHEMA_ID);
+    expect(rNeg.valid).toBe(false);
+    const firstRuleError = rNeg.errors.find((e) => e.path.startsWith('/rules/0/'));
+    expect(firstRuleError, 'Validator rejected meta-illegal path under /rules/0').toBeDefined();
   });
 });
