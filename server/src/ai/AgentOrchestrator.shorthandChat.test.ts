@@ -735,20 +735,6 @@ actions:
   });
 
   it('L2-PROMPT2-SCIENCE-CHAIN-1: fold-path bind drives bindFoldPicksOntoCompile — material_ref carries record ref', async () => {
-    const { holdShorthandIntent, factRequestId } = await import('./shorthandChat.js');
-    const { deriveContextCacheKey } = await import('./systemPrompt.js');
-    const key = deriveContextCacheKey('run-workspace' as never, RUN_CHAT_REQUEST.context as never);
-
-    // AMBIGUOUS_YAML has an unresolved material (mystery goop) → draft mint.
-    // The binder must replace it with the answer's record ref.
-    const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
-    const clarification = {
-      label: 'mystery goop',
-      reason: 'the lab spine could not bind it',
-      actionLocation: { actionIndex: 0, action: 'add_material', argument: 'material' },
-    };
-    holdShorthandIntent(key, { yaml: AMBIGUOUS_YAML, doc: heldDoc, clarifications: [clarification] });
-
     const model = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
     const orchestrator = createAgentOrchestrator(
       model.client,
@@ -757,25 +743,31 @@ actions:
       { maxTurns: 2 },
       orchestratorDeps(),
     );
+    // FIRST run must HOLD the ambiguous intent: the deterministic fold arm
+    // requires a held intent, else the second run takes the plain model path and
+    // the bind call site (AgentOrchestrator.ts:1646) is never reached.
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add 50 uL of mystery goop to A1' });
+    expect(first.clarificationRequests?.length).toBeGreaterThan(0);
+    expect(model.callCount()).toBe(1);
 
-    const requestId = factRequestId(clarification);
-    const result = await orchestrator.run({
+    const second = await orchestrator.run({
       ...RUN_CHAT_REQUEST,
       prompt: 'the test reagent',
       clarificationAnswers: [{
-        requestId,
-        label: 'mystery goop',
-        ref: { kind: 'record', id: 'MAT-test-reagent-1', label: 'mystery goop' },
+        requestId: first.clarificationRequests![0].id,
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-reagent-1', kind: 'record' },
       }],
     });
 
-    expect(result.success).toBe(true);
-    expect(result.events?.length).toBeGreaterThanOrEqual(1);
-    const evt = result.events![0] as Record<string, unknown>;
-    const details = evt.details as Record<string, unknown>;
-    // With the real binder, material_ref is a record ref.
-    // Under M1 (bindFoldPicksOntoCompile stubbed), it stays as a draft mint.
+    // ZERO new model calls => the deterministic fold arm ran => :1646 executed.
+    expect(model.callCount()).toBe(1);
+    expect(second.success).toBe(true);
+    expect(second.events?.length).toBe(1);
+    const details = (second.events![0] as unknown as Record<string, unknown>).details as Record<string, unknown>;
     const matRef = details.material_ref as Record<string, unknown>;
+    // Real binder: material_ref is the ANSWERED record ref, not the draft mint.
+    // Under M1 (bindFoldPicksOntoCompile stubbed) this stays a mint:/unbound.
     expect(matRef.kind).toBe('record');
     expect(matRef.id).toBe('MAT-test-reagent-1');
     expect(String(matRef.id)).not.toMatch(/^mint:/);
