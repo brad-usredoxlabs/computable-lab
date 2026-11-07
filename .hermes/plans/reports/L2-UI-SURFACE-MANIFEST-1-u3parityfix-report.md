@@ -58,9 +58,9 @@ Negative leg (script reverted): orphans = 43, PromoteToProtocolModal = 1 — con
 The lane contract limits script + artifact + report to ≤ 3 files and ≤ 300 lines.
 The branch carries four files: `scripts/check-ui-surfaces.py` (409 lines),
 `deliverables/ui-surface-manifest-1/orphans.txt` (47 lines),
-`.hermes/plans/reports/L2-UI-SURFACE-MANIFEST-1-u3parityfix-report.md` (63 lines),
+`.hermes/plans/reports/L2-UI-SURFACE-MANIFEST-1-u3parityfix-report.md` (76 lines),
 and `deliverables/L2-UI-SURFACE-MANIFEST-1-report.u2parity.md` (85 lines) —
-total 604 lines, exceeding the 300-line cap.
+total 617 lines, exceeding the 300-line cap.
 This is an accepted deviation: the cycle-3 rescue (PromoteToProtocolModal) eliminated
 a false orphan without adding product code, and the script change is a generic specifier
 rule applicable to any similarly structured repo. The budget overrun is documentation-only
@@ -70,4 +70,7 @@ are fully met.
 1. `scripts/check-ui-surfaces.py` — resolve_import fix + unresolved tracking
 2. `deliverables/ui-surface-manifest-1/orphans.txt` — regenerated (42 entries)
 
-L2-UI-SURFACE-MANIFEST-1 unit u3parityfix DONE 20b09da178e3e08bb7bc0eb869d2826f4766fcb0
+L2-UI-SURFACE-MANIFEST-1 unit u3parityfix DONE dacf93fe5a4a811b4d692542583b71c54ea8b1fc
+Marker names dacf93fe, the final content commit of this lineage; the commit that records this marker line is paperwork-only.
+
+L2-UI-SURFACE-MANIFEST-1-u3parityfix-pw2 UNIT unit DONE dacf93fe5a4a811b4d692542583b71c54ea8b1fc
