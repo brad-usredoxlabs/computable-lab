@@ -239,6 +239,52 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
     expect(mintLabelFor(structuredBlobRequest, 'clofibrate')).toBe('clofibrate')
   })
 
+  // D3: JSON-serialized blob (the real producer shape from nounCoverage.ts:128)
+  // must extract the inner label from the nested object, not the top-level key.
+  it('D3: a JSON-serialized provenance blob extracts the inner mint label', () => {
+    const jsonBlobRequest: AiClarificationRequest = {
+      id: 'unresolved-c-d3-json',
+      kind: 'material',
+      prompt: 'Choose what it is',
+      entityType: 'material',
+      menuProvider: '/m',
+      query: 'Nile Red stain',
+      options: [],
+      allowCreateLocal: true,
+      unresolvedFact: {
+        label: JSON.stringify({mint: {label: 'Nile Red stain', domain: 'chemical'}}),
+        reason: 'unbound',
+        actionLocation: {action: 'add_material', argument: 'material'},
+      },
+    }
+    // The server algorithm scans nested objects for the inner "label" key.
+    expect(mintLabelFor(jsonBlobRequest, 'Nile Red stain')).toBe('Nile Red stain')
+  })
+
+  // Negative: a top-level {"label":"x"} blob must NOT unwrap to "x" —
+  // the server returns undefined for that shape, so the client falls back
+  // to the query seed.
+  it('D3-neg: a top-level label key blob yields the query fallback, not the inner value', () => {
+    const topLevelRequest: AiClarificationRequest = {
+      id: 'unresolved-c-d3-neg',
+      kind: 'material',
+      prompt: 'Choose what it is',
+      entityType: 'material',
+      menuProvider: '/m',
+      query: 'some material',
+      options: [],
+      allowCreateLocal: true,
+      unresolvedFact: {
+        label: JSON.stringify({label: 'x'}),
+        reason: 'unbound',
+        actionLocation: {action: 'add_material', argument: 'material'},
+      },
+    }
+    // Top-level "label" is NOT on a nested object, so the server returns
+    // undefined and the client falls back to the query.
+    expect(mintLabelFor(topLevelRequest, 'some material')).toBe('some material')
+  })
+
   it('still falls back to the query seed when the server stamps NO unresolvedFact (non-shorthand / gap requests)', () => {
     // A gap request (forceMaterialClarifications.ts) sets request.query =
     // gap.label (RAW provenance) and NEVER stamps unresolvedFact. The chain
