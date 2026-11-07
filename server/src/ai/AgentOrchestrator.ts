@@ -1652,6 +1652,12 @@ export function createAgentOrchestrator(
                       .join(', '),
                 );
               }
+              if (foldBinding.unbound.length > 0) {
+                console.warn(
+                  `[agent ${tid}] fold-path ${foldBinding.unbound.length} clarification answer(s) could not be bound to an event: ` +
+                    foldBinding.unbound.map((a) => a.requestId).join(', '),
+                );
+              }
               const foldResult = shorthandResultFromCompile(
                 { ...foldBinding.boundCompiled, clarifications: survivingFacts },
                 folded.yaml,
