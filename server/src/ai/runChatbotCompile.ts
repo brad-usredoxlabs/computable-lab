@@ -376,13 +376,13 @@ export async function runChatbotCompile(
     | Map<string, readonly unknown[]>
     | undefined;
   if (args.deps.store) {
-    const materialSpecs = await args.deps.store.list({ schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml', limit: 10000 });
+    const materialSpecs = await args.deps.store.list({ kind: 'material-spec', schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml', limit: 10000 });
     const compMap = new Map<string, readonly unknown[]>();
     for (const env of materialSpecs) {
       const payload = env.payload as Record<string, unknown> | undefined;
       const formulation = payload?.formulation as Record<string, unknown> | undefined;
-      const composition = formulation?.composition as unknown[] | undefined;
-      if (composition && composition.length > 0) {
+      const composition = formulation?.composition;
+      if (Array.isArray(composition) && composition.length > 0) {
         compMap.set(env.recordId, composition);
       }
     }

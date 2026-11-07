@@ -2651,10 +2651,10 @@ export function createResolveRolesPass(
         // Otherwise, fall back to the legacy single-entry with role: 'other'.
         const compositionEntries = opts?.materialComposition?.(recordId);
         const snapshot =
-          compositionEntries && compositionEntries.length > 0
-            ? (compositionEntries as unknown[]).map((entry: unknown) => ({
-                component_ref: (entry as { component_ref: unknown }).component_ref,
-                role: (entry as { role: string }).role,
+          Array.isArray(compositionEntries) && compositionEntries.length > 0
+            ? compositionEntries.map((entry: { component_ref: unknown; role: string }) => ({
+                component_ref: entry.component_ref,
+                role: entry.role,
               }))
             : [{ component_ref: typedRef, role: 'other' as const }];
 
