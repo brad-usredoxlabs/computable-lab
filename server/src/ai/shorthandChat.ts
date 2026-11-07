@@ -47,6 +47,7 @@ import type {
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
+import { MATERIAL_SCHEMA_ID } from '../materials/MaterialGrounding.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { loadCanonicalLabelPolicy } from '../compiler/resolution/canonicalLabelPolicy.js';
 import {
@@ -1184,6 +1185,53 @@ export async function canonicalLabelsForFacts(
         : '';
     if (title) entry.title = title;
   }));
+  // THIRD PASS — STAGE A name-keyed fallback: when the id-keyed GET misses
+  // (legacy record id predates the D3 scheme), resolve by the mint handler's
+  // own case-insensitive exact-name lookup. Mirrors VocabHandlers.ts:124-131
+  // and MaterialGrounding.ts:211-223.
+  // Cost model: ONE store.list per call, ZERO when every id hit. Two call
+  // sites total (AgentOrchestrator :1607 / :3224) ⇒ at most two store.list
+  // per turn, never N+1.
+  const unresolvedKeys = new Set<string>();
+  for (const [key, entry] of byKey) {
+    if (!entry.title) unresolvedKeys.add(key);
+  }
+  if (unresolvedKeys.size > 0 && typeof (store as { list?: unknown }).list === 'function') {
+    try {
+      const materials = await (store as { list?: (filter?: { schemaId?: string; limit?: number }) => Promise<any[]> }).list?.({ schemaId: MATERIAL_SCHEMA_ID, limit: 10000 });
+      if (materials && Array.isArray(materials)) {
+        // Build name.toLowerCase() -> envelope ONCE — first-match (set-if-absent)
+        // to mirror .find() semantics in the mint (MaterialGrounding.ts).
+        const nameMap = new Map<string, { payload: unknown }>();
+        for (const env of materials) {
+          const p = env?.payload;
+          if (p && typeof p === 'object' && typeof (p as { name?: unknown }).name === 'string') {
+            const lowered = (p as { name: string }).name.trim().toLowerCase();
+            if (!nameMap.has(lowered)) nameMap.set(lowered, { payload: p });
+          }
+        }
+        // For each title-less key, match against the lowered stored name
+        // the mint uses (payloadName.toLowerCase()). On hit, set entry.title
+        // to the stored name verbatim — NEVER a folded form.
+        for (const key of unresolvedKeys) {
+          // Find the fact whose canonicalLabelKey matches this key
+          const factForKey = [...facts].find((f) =>
+            typeof f.label === 'string' && canonicalLabelKey(f.label) === key
+          );
+          if (factForKey) {
+            const loweredLabel = factForKey.label.toLowerCase();
+            const match = nameMap.get(loweredLabel);
+            if (match) {
+              const entry = byKey.get(key)!;
+              entry.title = (match.payload as { name: string }).name.trim();
+            }
+          }
+        }
+      }
+    } catch {
+      // list failed or threw — STAGE B behavior preserved
+    }
+  }
   for (const [key, entry] of byKey) {
     if (entry.title) map.set(key, entry.title);
   }

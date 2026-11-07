@@ -138,7 +138,7 @@ export async function canonicalLabelsForFacts(
     if (byKey.has(key)) continue;
     byKey.set(key, {
       recordId: localMaterialIdForLabel(fact.label),
-      needle: fact.label.trim().toLowerCase(),      // VERBATIM mint semantics
+      needle: fact.label.toLowerCase(),               // VERBATIM mint semantics — bare toLowerCase per MaterialGrounding.ts:213 (no trim)
       title: '',
     });
   }
@@ -506,7 +506,7 @@ prompt's assumptions, both measured and load-bearing:
    complete (`{ recordId, needle, title }`) and mutate `.title` only. Never assign `undefined` to an
    optional field.
 2. **Widening the needle.** Do NOT use `canonicalLabelKey(fact.label)` as the needle. It collapses inner
-   whitespace and NFKC-normalises; mint's needle is `label.trim().toLowerCase()` (VocabHandlers.ts:125).
+   whitespace and NFKC-normalises; mint's needle is bare `label.toLowerCase()` (MaterialGrounding.ts:213, no trim).
    A wider needle grounds the card where the mint would CREATE — the card would then display a title that
    is not the record the mint returns. Equality with the mint's decision is the whole invariant.
 3. **N+1.** `store.list` never goes inside the per-key loop. One call per batch; assert it.
