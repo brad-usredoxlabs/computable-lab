@@ -95,6 +95,7 @@ import { computeAssurance, bindingConfidence, type AssuranceResult } from './ass
 import { fuzzyFindByName } from '../registry/fuzzyMatch.js';
 import * as path from 'node:path';
 import { createResolveNounsPass } from '../compiler/resolution/resolveNounsPass.js';
+import type { BoundNoun, EngineOutcome } from '../compiler/resolution/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { createResolveSpine } from '../resolve/index.js';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
@@ -468,13 +469,13 @@ export async function runChatbotCompile(
     spine: createResolveSpine(),
     // Bridge chatbot context into the canonical pass via a resolve override
     // so the engine produces BoundNoun[] → resolvedByLabel.
-    resolve: async (): Promise<{ bindings: BoundNoun[]; clarifications: Array<unknown>; failures: Array<unknown> }> => {
+    resolve: async (): Promise<EngineOutcome> => {
       const bindings: BoundNoun[] = [];
       let actionIdx = 0;
       for (const [label, binding] of Object.entries(resolvedByLabel)) {
         bindings.push({ verb: binding.verb, argument: binding.argument, label, curie: `local:${binding.recordId}`, confidence: 1, actionIndex: actionIdx++ });
       }
-      return { bindings, clarifications: [], failures: [] };
+      return { bindings, clarifications: [], failures: [], traces: [] };
     },
   }));
 
