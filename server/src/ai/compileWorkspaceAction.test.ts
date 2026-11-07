@@ -321,6 +321,16 @@ describe('compileWorkspaceAction — surface check (registry membership only)', 
     expect(result.diagnostics[0]!.message).not.toContain('must have required property');
   });
 
+  it('same-surface open-surface WITH target -> ok:true (target-aware guard)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } },
+      { ...deps(), requestingSurface: 'sequences' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.target).toMatchObject({ kind: 'sequence-tab', tab: 'Analysis' });
+  });
+
   it('a registered surface id compiles open-surface with no target', async () => {
     const result = await compileWorkspaceAction(
       { action: 'open-surface', surface: 'analysis', contextNote: 'open the analysis surface' },

@@ -657,7 +657,9 @@ export async function compileWorkspaceAction(
 
   // SEQ-ANSWER-CONTRACT-1 u2r2: same-surface target-less open-surface is
   // MISSING_TARGET — the user is already there, so a target is required.
+  // Only fires when NO target is supplied; a target makes it a valid nav.
   if (verb === 'open-surface'
+      && proposalObj.target === undefined
       && deps.requestingSurface !== undefined
       && surface === deps.requestingSurface) {
     const entry = deps.surfaces.get(surface);
