@@ -48,7 +48,7 @@ const nileRedRequest: AiClarificationRequest = {
   options: [],
   allowCreateLocal: true,
   unresolvedFact: {
-    label: '{mint:{label:nile red stain,domain:chemical}}',
+    label: '{mint:{label:Nile Red stain,domain:chemical}}',
     reason: 'unbound',
     actionLocation: { action: 'add_material', argument: 'material' },
   },
@@ -65,7 +65,7 @@ const nileRedQuotedRequest: AiClarificationRequest = {
   options: [],
   allowCreateLocal: true,
   unresolvedFact: {
-    label: '{mint:{label:"nile red stain",domain:"chemical"}}',
+    label: '{mint:{label:"Nile Red stain",domain:"chemical"}}',
     reason: 'unbound',
     actionLocation: { action: 'add_material', argument: 'material' },
   },
@@ -88,6 +88,23 @@ const nonMintBlobRequest: AiClarificationRequest = {
   },
 }
 
+// JSON.stringify-form: quoted-key JSON blob
+const nileRedJsonRequest: AiClarificationRequest = {
+  id: 'unresolved-c-nile-red-json-1',
+  kind: 'material',
+  prompt: 'Choose the material',
+  entityType: 'material',
+  menuProvider: '/m',
+  query: 'nile red stain',
+  options: [],
+  allowCreateLocal: true,
+  unresolvedFact: {
+    label: JSON.stringify({mint:{label:'Nile Red stain',domain:'chemical'}}),
+    reason: 'unbound',
+    actionLocation: { action: 'add_material', argument: 'material' },
+  },
+}
+
 afterEach(() => {
   cleanup()
   resolveMaterial.mockReset()
@@ -104,12 +121,12 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 M2: mint blob unwrap', () =>
     // Post-fix: raw label {mint:{label:nile red stain,domain:chemical}} unwraps
     // to 'nile red stain'. Pre-fix: returns the literal serialization
     // '{mint:{label:nile red stain,domain:chemical}}'.
-    expect(mintLabelFor(nileRedRequest, seedNoun)).toBe('nile red stain')
+    expect(mintLabelFor(nileRedRequest, seedNoun)).toBe('Nile Red stain')
   })
 
   it('mintLabelFor also unwraps the quoted form', () => {
     const seedNoun = 'nile red stain'
-    expect(mintLabelFor(nileRedQuotedRequest, seedNoun)).toBe('nile red stain')
+    expect(mintLabelFor(nileRedQuotedRequest, seedNoun)).toBe('Nile Red stain')
   })
 
   it('the rendered mint input contains no { or mint: when the label is a mint blob', async () => {
@@ -119,12 +136,12 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 M2: mint blob unwrap', () =>
     // The fix must unwrap the blob — no { or mint: in the value
     expect(label.value).not.toContain('{')
     expect(label.value).not.toContain('mint:')
-    expect(label.value).toBe('nile red stain')
+    expect(label.value).toBe('Nile Red stain')
   })
 
   it('clicking Create POSTS the unwrapped label to mintLocalTerm', async () => {
     resolveMaterial.mockResolvedValue([])
-    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-nile-001', label: 'nile red stain', iri: 'urn:cl:local:MAT-nile-001' })
+    mintLocalTerm.mockResolvedValue({ success: true, recordId: 'MAT-nile-001', label: 'Nile Red stain', iri: 'urn:cl:local:MAT-nile-001' })
     render(<ClarificationPicker request={nileRedRequest} onPick={vi.fn()} />)
 
     fireEvent.click(screen.getByTestId('clarification-mint-create'))
@@ -132,7 +149,12 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 M2: mint blob unwrap', () =>
 
     // The exact string posted is the unwrapped human label, not the serialization
     expect(mintLocalTerm.mock.calls[0]?.[0]).toBe('material')
-    expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('nile red stain')
+    expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('Nile Red stain')
+  })
+
+  it('mintLabelFor unwraps JSON.stringify-form (quoted-key JSON) blobs', () => {
+    const seedNoun = 'nile red stain'
+    expect(mintLabelFor(nileRedJsonRequest, seedNoun)).toBe('Nile Red stain')
   })
 
   // NEGATIVE/non-vacuity leg: a non-mint blob must NOT mint a serialized name.
