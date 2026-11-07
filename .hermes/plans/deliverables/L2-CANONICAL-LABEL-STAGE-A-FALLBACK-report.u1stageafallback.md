@@ -38,4 +38,4 @@ Clean tree. Exactly 2 files changed. API diff stat: empty.
 1. u1stageafallback: RED test for canonical-label name-keyed fallback (AC-1/2/4/5/6)
 2. u1stageafallback: STAGE A name-keyed fallback in canonicalLabelsForFacts
 
-L2-CANONICAL-LABEL-STAGE-A-FALLBACK-u1stageafallback UNIT 1 DONE 2f3e5a910ae3a8b5768c361b8cb17f88b6aced9c
+L2-CANONICAL-LABEL-STAGE-A-FALLBACK-u1stageafallback UNIT 1 DONE c298552c1808b90fcbecfcf28bb8ac4f83636d11
