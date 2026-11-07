@@ -718,4 +718,58 @@ describe('everyItem / noneIn meta-schema contract (lint-v1)', () => {
     expect(res.errors.map((e) => `${e.path} ${e.message}`)).toEqual([]);
     expect(res.valid).toBe(true);
   });
+
+  // u1metawiden — meta-schema conformance: "." in in.path and "[*]" in message.paths
+  it('accepts nested everyItem + in with bare "." path and "[*]" message paths', () => {
+    const res = lintMetaValidator().validate(
+      {
+        lintVersion: 1,
+        rules: [
+          {
+            id: 'pane-type-check',
+            title: 'Pane type check',
+            severity: 'warning',
+            scope: 'record',
+            message: {
+              template: 'Pane type must be in allowed set',
+              paths: ['surfaces[*].panes[*]'],
+            },
+            assert: {
+              op: 'everyItem',
+              collectionPath: 'surfaces',
+              assert: {
+                op: 'everyItem',
+                collectionPath: 'panes',
+                assert: { op: 'in', path: '.', values: ['ai-chat'] },
+              },
+            },
+          },
+        ],
+      },
+      LINT_META_SCHEMA_ID,
+    );
+    expect(res.errors.map((e) => `${e.path} ${e.message}`)).toEqual([]);
+    expect(res.valid).toBe(true);
+  });
+
+  it('rejects in path of ".." (proves [.] is not blanket ".*")', () => {
+    const res = lintMetaValidator().validate(
+      {
+        lintVersion: 1,
+        rules: [
+          {
+            id: 'bad-parent-path',
+            title: 'Bad parent path',
+            severity: 'warning',
+            scope: 'record',
+            message: { template: 'bad' },
+            assert: { op: 'in', path: '..', values: ['x'] },
+          },
+        ],
+      },
+      LINT_META_SCHEMA_ID,
+    );
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.path.includes('/rules/0/assert'))).toBe(true);
+  });
 });
