@@ -60,3 +60,5 @@ substantive commit that contains the cleaned marker. The fabricated-era placehol
 S never appears again outside quoted prose.
 
 SEQ-ANSWER-CONTRACT-1 fix3 UNIT unit DONE a1df14cbc51e173a734ca08e940493a655862e57
+
+SEQ-ANSWER-CONTRACT-1-d4fix3 UNIT unit DONE 69f0d7b2f25cef2c59d7a6baba1ad7239fd629d0
