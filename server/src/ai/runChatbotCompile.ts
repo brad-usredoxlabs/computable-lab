@@ -368,7 +368,34 @@ export async function runChatbotCompile(
     stampPatternRegistry: getStampPatternRegistry(),
   }));
   registry.register(createFallbackSideEvidenceEventsPass());
-  registry.register(createResolveRolesPass());
+
+  // Prefetch material-spec formulations so the resolve_roles pass can expand
+  // formulation.composition entries into composition_snapshot (one level deep,
+  // never dereferencing component records).
+  let materialCompositionLookup:
+    | Map<string, readonly unknown[]>
+    | undefined;
+  if (args.deps.store) {
+    const materialSpecs = await args.deps.store.list({ schemaId: 'lab/material-spec', limit: 10000 });
+    const compMap = new Map<string, readonly unknown[]>();
+    for (const env of materialSpecs) {
+      const payload = env.payload as Record<string, unknown> | undefined;
+      const formulation = payload?.formulation as Record<string, unknown> | undefined;
+      const composition = formulation?.composition as unknown[] | undefined;
+      if (composition && composition.length > 0) {
+        compMap.set(env.recordId, composition);
+      }
+    }
+    if (compMap.size > 0) {
+      materialCompositionLookup = compMap;
+    }
+  }
+
+  registry.register(createResolveRolesPass({
+    ...(materialCompositionLookup
+      ? { materialComposition: (id: string) => materialCompositionLookup!.get(id) }
+      : {}),
+  }));
   registry.register(createLabStatePass());
   registry.register(createComputeVolumesPass());
   registry.register(createComputeResourcesPass());
