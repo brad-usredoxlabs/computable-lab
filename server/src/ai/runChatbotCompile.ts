@@ -376,7 +376,7 @@ export async function runChatbotCompile(
     | Map<string, readonly unknown[]>
     | undefined;
   if (args.deps.store) {
-    const materialSpecs = await args.deps.store.list({ schemaId: 'lab/material-spec', limit: 10000 });
+    const materialSpecs = await args.deps.store.list({ schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml', limit: 10000 });
     const compMap = new Map<string, readonly unknown[]>();
     for (const env of materialSpecs) {
       const payload = env.payload as Record<string, unknown> | undefined;
