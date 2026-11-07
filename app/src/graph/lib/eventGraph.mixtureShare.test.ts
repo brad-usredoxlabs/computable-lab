@@ -252,6 +252,30 @@ describe('syncDerivedMaterials — derivation pins (SCIENCE-CHAIN-1 C-1..C-8)', 
     expect(carrier?.materialSpecRef).toBe('MAT-PR9-TEST-DMSO')
   })
 
+  // C-10: Per-row record-kind component_ref with type: 'material' must NOT set materialSpecRef.
+  // Only type: 'material-spec' is accepted. This is the defect u7fix1 targets.
+  it('C-10: type:material component_ref does NOT set materialSpecRef; type:material-spec does', () => {
+    // Leg 1: type: 'material' → materialSpecRef must be UNSET
+    {
+      const a1 = makeSnapshot('plate-c10-material', [
+        { componentRef: { kind: 'record', id: 'MAT-trypsin', label: 'Trypsin', type: 'material' }, role: 'solute' },
+        { componentRef: { kind: 'record', id: 'MSP-buffer', label: 'Buffer', type: 'material-spec' }, role: 'solvent' },
+      ])
+      expect(a1).toBeTruthy()
+      const matRow = a1!.materials.find((m) => m.materialRef === 'Trypsin')
+      expect(matRow?.materialSpecRef).toBeUndefined()
+    }
+    // Leg 2: type: 'material-spec' → materialSpecRef IS set
+    {
+      const a1 = makeSnapshot('plate-c10-spec', [
+        { componentRef: { kind: 'record', id: 'MSP-x', label: 'X', type: 'material-spec' }, role: 'solvent' },
+      ], { materialSpecRef: 'rec-spec' })
+      expect(a1).toBeTruthy()
+      const specRow = a1!.materials[0]
+      expect(specRow?.materialSpecRef).toBe('MSP-x')
+    }
+  })
+
   // C-8: When participation convention is absent (loadParticipationConvention → undefined),
   // derivation is OFF — no hardcoded role fallback re-enables it.
   it('C-8: absent participation convention ⇒ no derived share (no hardcoded fallback)', async () => {
