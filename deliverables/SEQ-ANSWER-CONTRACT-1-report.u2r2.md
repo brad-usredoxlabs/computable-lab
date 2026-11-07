@@ -51,3 +51,36 @@ The `requestingSurface` KEY IS ABSENT for a surface-less request, asserted with 
 SEQ-ANSWER-CONTRACT-1-u2r2-fix2 UNIT unit DONE a2a329f3355362a8cbda9a0fc6cfcad797caffbe
 
 SEQ-ANSWER-CONTRACT-1-u2r2fix3 UNIT unit DONE ffba16ae61d31dd7372a0d5c3a5eb6cdec1ba9c4
+
+## fix5 — advc cycle 5 D1 (MAJOR, paperwork)
+
+### Defect
+`deliverables/SEQ-ANSWER-CONTRACT-1-report.u2r2.md:53` named the fabricated SHA
+`ffba16aef1bd0e23e8045faf310c42e79a45a192` — the first 8 hex of the real fix4 commit `ffba16ae`
+glued onto the trailing 32 hex of the old `f07ba5cc`. It resolves to no git object.
+
+### Fix
+Replaced only that 40-hex token with the real fix4 commit SHA
+`ffba16ae61d31dd7372a0d5c3a5eb6cdec1ba9c4` (= `git rev-parse b4262d9c^`). No other file, no code,
+no wording change.
+
+### Measured verification (this run)
+```
+$ git -c core.fileMode=false cat-file -t ffba16aef1bd0e23e8045faf310c42e79a45a192
+fatal: git cat-file: could not get object info          # exit=128 (fabricated, as reported)
+$ git -c core.fileMode=false cat-file -t ffba16ae61d31dd7372a0d5c3a5eb6cdec1ba9c4
+commit                                                   # exit=0  (real fix4 commit)
+$ git -c core.fileMode=false rev-parse b4262d9c^
+ffba16ae61d31dd7372a0d5c3a5eb6cdec1ba9c4
+$ git -c core.fileMode=false diff --stat      # before committing fix5
+ deliverables/SEQ-ANSWER-CONTRACT-1-report.u2r2.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+Report SHA-256: `2030bfb74de1740efe2fdaa78aeb7ab267abfb9ab3165d90dd7edee678baaf3e` ->
+`85ed803d98d05f5e5bf45bc750f45d67e4bd87350ddd44467e65ab2f19f6e527`.
+
+### Commits
+- fix5: e3b3758518bbb6f79efb68d315bae71492686d3c — replaced the fabricated SHA with the real fix4 SHA
+- marker: this commit — appends this fix5 section and the DONE marker naming fix5
+
+SEQ-ANSWER-CONTRACT-1-u2r2fix5 UNIT unit DONE e3b3758518bbb6f79efb68d315bae71492686d3c
