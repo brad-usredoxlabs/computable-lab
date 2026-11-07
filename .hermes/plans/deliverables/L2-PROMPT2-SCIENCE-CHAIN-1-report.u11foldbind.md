@@ -67,3 +67,5 @@ site is still reached — the `unbound` log line is emitted from that path. Scra
 `git -c core.fileMode=false status --short` → only `?? node_modules`. No production file touched.
 
 SCIENCE-U11WITNESS2 DONE 4e1438ce551599c30c830e861a2e9e6f46073967
+
+L2-PROMPT2-SCIENCE-CHAIN-1 UNIT unit DONE 4e1438ce551599c30c830e861a2e9e6f46073967
