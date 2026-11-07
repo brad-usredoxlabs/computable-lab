@@ -1818,6 +1818,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // SEQ-ANSWER-CONTRACT-1 D4: derive whether the turn streamed
+            // answer text (visible to the user) from accumulated text_delta
+            // frames. A whitespace-only delta is NOT an answer — trim before
+            // testing emptiness. Lives on accumulated (per-turn, resets each
+            // send at :1415) so it cannot suppress forever.
+            const answerDelivered = accumulated
+              .filter((ev) => ev.type === 'text_delta')
+              .map((ev) => (ev as { delta: string }).delta)
+              .join('').trim().length > 0
             // L2-SUITE-A-uifix1 D1 (+ F4 fix1): a deckLayout done is a
             // DELIVERABLE turn — mount it through the host's native editor
             // action (the SAME actions the manual deck bar uses: setPlatform
@@ -1857,7 +1866,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 Boolean(result.clarificationNeeded?.trim()) ||
                 (result.clarificationRequests?.length ?? 0) > 0
               const surfacedError = Boolean(result.error?.trim())
-              if (!askedQuestion && !surfacedError) {
+              if (!askedQuestion && !surfacedError && !answerDelivered) {
                 // Name what the turn actually carried when it is unmountable
                 // here — the wall must report plain-language truth, not claim
                 // "nothing" was proposed when it proposed unmountable things.
@@ -1924,7 +1933,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // classifier grades the turn 'proposal' via the nav frame, so the
               // pane's "nothing was proposed" bubble CONTRADICTS the delivered
               // action. Same delivered-change arm as deckLayoutDelivered.
-              if (!askedQuestion && !deckLayoutDelivered && !navActionDelivered) {
+              if (!askedQuestion && !deckLayoutDelivered && !navActionDelivered && !answerDelivered) {
                 setMessages((prev) => [
                   ...prev,
                   {
