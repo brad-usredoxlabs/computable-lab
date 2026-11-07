@@ -115,7 +115,18 @@ async function runOne(idx) {
       const e = document.querySelector('[data-testid="thread-picker-select"]')
       return e ? e.value || null : null
     })
-    await page.locator('.lawn__tile-anchor .tile, .tile').first().click({ force: true })
+    // u2proberun3: waitFor tile visible before click — cold-remount or in-flight
+    // HMR/suspense on the 3rd fresh page.goto can leave .tile unmounted.
+    // L2-CLARIFY-REQUEST-COUNT-NONDETERMINISTIC-1 u2proberun3.
+    const tile = page.locator('.lawn__tile-anchor .tile, .tile').first()
+    try { await tile.waitFor({ state: 'visible', timeout: 60000 }); await tile.click({ force: true }) }
+    catch (clickErr) {
+      const ad = path.join(DIR, 'artifacts', 'run' + idx)
+      fs.mkdirSync(ad, { recursive: true })
+      await page.screenshot({ path: path.join(ad, 'click-failure.png') })
+      fs.writeFileSync(path.join(ad, 'dom-head.txt'), (await page.content()).slice(0, 8000))
+      throw new Error('Tile click/wait failed (artifacts in ' + ad + '): ' + clickErr.message)
+    }
     await page.waitForTimeout(1500)
     await page.locator('main[aria-label="Labware focus"] [data-well-id="E2"]').first().click()
     await page.waitForTimeout(400)
@@ -191,7 +202,16 @@ async function runContinuation(idx) {
       const e = document.querySelector('[data-testid="thread-picker-select"]')
       return e ? e.value || null : null
     })
-    await page.locator('.lawn__tile-anchor .tile, .tile').first().click({ force: true })
+    // u2proberun3: waitFor tile visible before click (continuation arm)
+    const tile2 = page.locator('.lawn__tile-anchor .tile, .tile').first()
+    try { await tile2.waitFor({ state: 'visible', timeout: 60000 }); await tile2.click({ force: true }) }
+    catch (clickErr) {
+      const ad = path.join(DIR, 'artifacts', 'cont-run' + idx)
+      fs.mkdirSync(ad, { recursive: true })
+      await page.screenshot({ path: path.join(ad, 'click-failure.png') })
+      fs.writeFileSync(path.join(ad, 'dom-head.txt'), (await page.content()).slice(0, 8000))
+      throw new Error('Tile click/wait failed (artifacts in ' + ad + '): ' + clickErr.message)
+    }
     await page.waitForTimeout(1500)
     await page.locator('main[aria-label="Labware focus"] [data-well-id="E2"]').first().click()
     await page.waitForTimeout(400)
