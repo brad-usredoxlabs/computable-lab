@@ -268,6 +268,35 @@ describe('u8enrichgate RED pin', () => {
       { component_ref: { kind: 'record', type: 'material', id: 'MAT-1' }, role: 'other' },
     ]);
   });
+
+  it('end-to-end pipeline: production add_material {recordId, kind} resolves material_ref and composition_snapshot through runChatbotCompile', async () => {
+    const fixtureMaterialId = 'MAT-U8PROD';
+    const fixtureKind = 'aliquot';
+    const fixtureLabel = 'U8ProdMat';
+    // Derive expected values from fixture declarations
+    const expectedMaterialRef = { kind: 'record', type: 'material', id: fixtureMaterialId };
+    const expectedSnapshot = [
+      { component_ref: { kind: 'record', type: 'material', id: fixtureMaterialId }, role: 'other' },
+    ];
+    const mockStore = {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => null),
+    };
+    const result = await runChatbotCompile({
+      prompt: `Add [[aliquot:${fixtureMaterialId}|${fixtureLabel}]] to [[labware:lw-1|Plate]]`,
+      mentions: [
+        { type: 'material', entityKind: fixtureKind, id: fixtureMaterialId, label: fixtureLabel },
+        { type: 'labware', id: 'lw-1', label: 'Plate' },
+      ],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mockStore),
+    });
+    // Assert on result.events (the pipeline surface the browser gate grades)
+    const addMatEvents = result.events.filter((e: any) => e.event_type === 'add_material');
+    expect(addMatEvents.length).toBe(1);
+    expect(addMatEvents[0].details.material_ref).toEqual(expectedMaterialRef);
+    expect(addMatEvents[0].details.composition_snapshot).toEqual(expectedSnapshot);
+  });
 });
 
 /* ── Pass-level behavioural legs (D-1, D-2) ── */
