@@ -2,12 +2,14 @@
 """Seed / verify / reset driver for the Corpus2 prompt-1 baseline board.
 
 Modes:
-  --check    POST /api/validate-full with the YAML payload; print summary
-  --seed     seed_journey (idempotent — second run reuses existing record)
-  --verify   GET the record, assert stored == YAML + timestamps
-  --digest   dump the full record JSON to stdout
-  --reset    teardown_journey (delete) + re-seed
-  --api-base URL (default http://127.0.0.1:3093)
+  --check              POST /api/validate-full with the YAML payload; print summary
+  --seed               seed_journey (idempotent — second run reuses existing record)
+  --verify             GET the record, assert stored == YAML + timestamps
+  --digest             dump the full record JSON to stdout
+  --reset              teardown_journey (delete) + re-seed
+  --workspace-reset    PUT the declared workspace state from the board YAML
+  --verify-workspace   GET workspace, assert all tabs are declared
+  --api-base           URL (default http://127.0.0.1:3093)
 """
 import argparse
 import importlib.util
@@ -77,6 +79,8 @@ def do_seed(api_base):
         print(f"seed failed: {note}", file=sys.stderr)
         sys.exit(1)
     print(note)
+    # Normalise workspace to the board's declared tab set
+    do_workspace_reset(api_base)
     return note
 
 def do_verify(api_base):
@@ -134,6 +138,59 @@ def do_digest(api_base):
         sys.exit(1)
     print(json.dumps(body))
 
+
+def do_workspace_reset(api_base):
+    """PUT the declared workspace state from the board YAML and verify."""
+    board = load_board_yaml()
+    ws = board["workspace"]
+    study_id = ws["studyId"]
+    declared_ids = [t["id"] for t in ws["tabs"]]
+
+    # PUT workspace state directly (body IS the state object, never wrapped)
+    st, body = api_call(api_base, "PUT",
+                        f"/api/studies/{study_id}/workspace", ws)
+    if st not in (200, 201):
+        print(f"workspace: PUT failed HTTP {st} {body}", file=sys.stderr)
+        sys.exit(1)
+
+    # Re-GET to assert (server silently drops mismatched kinds)
+    st, body = api_call(api_base, "GET",
+                        f"/api/studies/{study_id}/workspace")
+    if st != 200:
+        print(f"workspace: GET failed HTTP {st}", file=sys.stderr)
+        sys.exit(1)
+    state = body["state"]
+    actual_ids = [t["id"] for t in state["tabs"]]
+    if sorted(actual_ids) != sorted(declared_ids):
+        print(f"workspace: PUT response mismatch — got {actual_ids}, expected {declared_ids}",
+              file=sys.stderr)
+        sys.exit(1)
+    print(f"workspace: {len(actual_ids)} tabs, activeTabId={state['activeTabId']}")
+
+
+def do_verify_workspace(api_base):
+    """GET workspace and assert every tab is declared."""
+    board = load_board_yaml()
+    ws = board["workspace"]
+    study_id = ws["studyId"]
+    declared_ids = set(t["id"] for t in ws["tabs"])
+
+    st, body = api_call(api_base, "GET",
+                        f"/api/studies/{study_id}/workspace")
+    if st != 200:
+        print(f"workspace: GET failed HTTP {st}", file=sys.stderr)
+        sys.exit(1)
+    state = body["state"]
+    ok = True
+    for tab in state["tabs"]:
+        tid = tab["id"]
+        if tid not in declared_ids:
+            print(f"workspace: UNDECLARED tab id={tid}", file=sys.stderr)
+            ok = False
+    if not ok:
+        sys.exit(1)
+    print(f"workspace: {len(state['tabs'])} tabs, activeTabId={state['activeTabId']} — all declared")
+
 def do_reset(api_base):
     """Delete then re-seed the fixture."""
     board = load_board_yaml()
@@ -151,6 +208,8 @@ def do_reset(api_base):
         print(f"reset re-seed failed: {note}", file=sys.stderr)
         sys.exit(1)
     print(note)
+    # Normalise workspace to the board's declared tab set
+    do_workspace_reset(api_base)
 
 def main():
     parser = argparse.ArgumentParser(description="Seed/verify/reset Corpus2 board fixture")
@@ -159,11 +218,17 @@ def main():
     parser.add_argument("--verify", action="store_true", help="Verify stored == YAML + timestamps")
     parser.add_argument("--digest", action="store_true", help="Dump record JSON to stdout")
     parser.add_argument("--reset", action="store_true", help="Delete and re-seed")
+    parser.add_argument("--workspace-reset", action="store_true",
+                        help="PUT the declared workspace state")
+    parser.add_argument("--verify-workspace", action="store_true",
+                        help="GET workspace and assert all tabs declared")
     parser.add_argument("--api-base", default="http://127.0.0.1:3093",
                         help="API base URL")
     args = parser.parse_args()
 
-    if not any([args.check, args.seed, args.verify, args.digest, args.reset]):
+    modes = [args.check, args.seed, args.verify, args.digest, args.reset,
+             args.workspace_reset, args.verify_workspace]
+    if not any(modes):
         parser.print_help()
         sys.exit(1)
 
@@ -178,6 +243,10 @@ def main():
         do_digest(api_base)
     if args.reset:
         do_reset(api_base)
+    if args.workspace_reset:
+        do_workspace_reset(api_base)
+    if args.verify_workspace:
+        do_verify_workspace(api_base)
 
 if __name__ == "__main__":
     main()
