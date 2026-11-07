@@ -119,4 +119,117 @@ describe('bindMaterialAnswersToEvents — the pick is bound, not transmitted', (
     expect(bound).toHaveLength(0);
     expect(out).toEqual(events);
   });
+
+  it('D1-fix: tolerates a null entry in composition_snapshot', () => {
+    // Pre-fix: entry.component_ref throws TypeError when entry is null.
+    const event = {
+      event_type: 'add_material',
+      details: {
+        labwareId: 'req:CL:96_well_plate:mu9azzva:if7jwo',
+        wells: ['A2'],
+        material_ref: { kind: 'draft', id: 'mint:mixture', label: 'mixture' },
+        composition_snapshot: [
+          null as unknown as never,
+          { component_ref: { kind: 'draft', id: 'mint:clofibrate', label: '1 mM Clofibrate in DMSO' }, role: 'solute' },
+        ],
+      },
+    };
+    const { bound, events, unbound } = bindMaterialAnswersToEvents([event], [
+      { requestId: 'material-1', label: '1 mM Clofibrate in DMSO',
+        ref: { kind: 'record', id: 'MSP-API-mu50x5z7', type: 'material-spec', label: '1 mM Clofibrate in DMSO' } },
+    ]);
+    // Should not throw; binds the labeled entry, skips null
+    expect(bound).toHaveLength(1);
+    expect(unbound).toHaveLength(0);
+    const snapshot = (events[0]!.details as Record<string, unknown>).composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot[1]!.component_ref).toMatchObject({ kind: 'record', id: 'MSP-API-mu50x5z7' });
+  });
+
+  it('D2-fix: duplicate labels in snapshot => falls back to top-level path', () => {
+    // Pre-fix: findIndex silently first-wins; post-fix: >1 match is ambiguous,
+    // so the answer falls through to the single-ref top-level path (not claimed as composition_snapshot).
+    const event = {
+      event_type: 'add_material',
+      details: {
+        labwareId: 'req:CL:96_well_plate:mu9azzva:if7jwo',
+        wells: ['A2'],
+        material_ref: { kind: 'draft', id: 'mint:mixture', label: 'mixture' },
+        composition_snapshot: [
+          { component_ref: { kind: 'draft', id: 'mint:clofibrate', label: 'DMSO' }, role: 'solute' },
+          { component_ref: { kind: 'draft', id: 'mint:dmsolater', label: 'DMSO' }, role: 'solvent' },
+        ],
+      },
+    };
+    const { bound, events, unbound } = bindMaterialAnswersToEvents([event], [
+      { requestId: 'material-1', label: 'DMSO',
+        ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', type: 'material', label: 'DMSO' } },
+    ]);
+    // Ambiguous: bound via top-level path (single-ref), not composition_snapshot
+    expect(bound).toHaveLength(1);
+    expect(bound[0]!.field).toBe('material_ref');
+    expect(unbound).toHaveLength(0);
+    const details = events[0]!.details as Record<string, unknown>;
+    expect(details.material_ref).toMatchObject({ kind: 'record', id: 'MAT-PR9-TEST-DMSO' });
+    // composition_snapshot untouched
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot[0]!.component_ref).toMatchObject({ kind: 'draft', id: 'mint:clofibrate' });
+    expect(snapshot[1]!.component_ref).toMatchObject({ kind: 'draft', id: 'mint:dmsolater' });
+  });
+
+  it('binds two-slot composition picks into snapshot entries by label match', () => {
+    // Two-slot clarification card shape: one add_material event with a mixture
+    // composition_snapshot of >=2 draft entries. The answers carry record refs
+    // that should replace the matching snapshot component_refs by label.
+    const compositionEvent = {
+      event_type: 'add_material',
+      details: {
+        labwareId: 'req:CL:96_well_plate:mu9azzva:if7jwo',
+        wells: ['A2'],
+        material_ref: { kind: 'draft', id: 'mint:1 mM Clofibrate in DMSO + DMSO', label: '1 mM Clofibrate in DMSO + DMSO' },
+        composition_snapshot: [
+          { component_ref: { kind: 'draft', id: 'mint:1 mM Clofibrate in DMSO', label: '1 mM Clofibrate in DMSO' }, role: 'solute' },
+          { component_ref: { kind: 'draft', id: 'mint:DMSO', label: 'DMSO' }, role: 'solvent' },
+        ],
+      },
+    };
+    const DMSO_PICK: AgentClarificationAnswer = {
+      requestId: 'material-1',
+      label: 'DMSO',
+      ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', type: 'material', label: 'DMSO' },
+    };
+    const { events: boundEvents, bound: bindings, unbound: unboundAnswers } = bindMaterialAnswersToEvents([compositionEvent], [PICK, DMSO_PICK]);
+    expect(bindings).toHaveLength(2);
+    expect(unboundAnswers).toHaveLength(0);
+
+    const details = boundEvents[0]!.details as Record<string, unknown>;
+
+    // Top-level material_ref stays as the mixture's own draft (not overwritten)
+    expect(details.material_ref).toMatchObject({
+      kind: 'draft',
+      id: 'mint:1 mM Clofibrate in DMSO + DMSO',
+      label: '1 mM Clofibrate in DMSO + DMSO',
+    });
+
+    // Both snapshot entries carry record refs
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(2);
+
+    // Solute entry: matched "1 mM Clofibrate in DMSO" -> material-spec record
+    expect(snapshot[0]!.role).toBe('solute');
+    expect(snapshot[0]!.component_ref).toMatchObject({
+      kind: 'record',
+      type: 'material-spec',
+      id: 'MSP-API-mu50x5z7',
+      label: '1 mM Clofibrate in DMSO',
+    });
+
+    // Solvent entry: matched "DMSO" -> material record
+    expect(snapshot[1]!.role).toBe('solvent');
+    expect(snapshot[1]!.component_ref).toMatchObject({
+      kind: 'record',
+      type: 'material',
+      id: 'MAT-PR9-TEST-DMSO',
+      label: 'DMSO',
+    });
+  });
 });
