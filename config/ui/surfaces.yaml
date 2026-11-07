@@ -1,0 +1,50 @@
+manifestVersion: "1.0.0"
+
+paneVocabulary:
+  - ai-chat
+  - event-editor
+  - deck
+  - project-tabs
+
+surfaces:
+  - id: run-workspace
+    route: "/runs/:runId"
+    panes:
+      - ai-chat
+      - event-editor
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for run-workspace surface still owed — J1 journey needs live probe evidence"
+    description: "Run workspace — executes a run against a revision, shows output artifacts and chat."
+
+  - id: event-editor
+    route: "/runs/:runId/event-editor"
+    panes:
+      - ai-chat
+      - event-editor
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for event-editor surface still owed — J1 journey needs live probe evidence"
+    description: "Event editor — standalone deck host for event graphs with chat and deck viewer."
+
+  - id: analysis
+    route: "/analysis"
+    panes:
+      - ai-chat
+      - project-tabs
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for analysis surface still owed — journey leg not yet implemented"
+    description: "Analysis surface — method authoring, run execution, and artifact viewing with AI assistance."
