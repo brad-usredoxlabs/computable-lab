@@ -1117,6 +1117,41 @@ export async function compileFoldedShorthand(
   return compileShorthandDeterministically(docForCompile, deps);
 }
 
+/**
+ * L2-PROMPT2-SCIENCE-CHAIN-1: bind the fold-path's clarification answers onto
+ * the compile's events BEFORE shorthandResultFromCompile builds the result.
+ *
+ * The model path calls bindMaterialAnswersToEvents at :4388; the fold path
+ * had no such call — card picks were available (the client sends ref) but
+ * never written into composition_snapshot. This helper extracts the events,
+ * runs the production binder, and returns the events-wrapped compile result
+ * so the caller can feed it directly into shorthandResultFromCompile.
+ *
+ * On the fold path the held-fact requestIds are unresolved-c-* (not
+ * material-<n>), so the binder falls through to singleton or label-match
+ * resolution. That is correct — there is one add_material event per fold,
+ * and the snapshot entries carry labels that match the answer's label.
+ */
+export function bindFoldPicksOntoCompile(
+  compiled: import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult,
+  answers: readonly import('./types.js').AgentClarificationAnswer[] | undefined,
+): {
+  boundCompiled: import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult;
+  bound: import('./materialBinding.js').MaterialBinding[];
+  unbound: import('./types.js').AgentClarificationAnswer[];
+} {
+  const events = compiled.terminalArtifacts.events as unknown as Record<string, unknown>[];
+  const binding = bindMaterialAnswersToEvents(events, answers);
+  const boundCompiled = {
+    ...compiled,
+    terminalArtifacts: {
+      ...compiled.terminalArtifacts,
+      events: binding.events as unknown as typeof compiled.terminalArtifacts.events,
+    },
+  };
+  return { boundCompiled, bound: binding.bound, unbound: binding.unbound };
+}
+
 export function createAgentOrchestrator(
   inferenceClient: InferenceClient,
   toolBridge: ToolBridge,
@@ -1605,8 +1640,20 @@ export function createAgentOrchestrator(
               // process-cached); absent store ⇒ empty map ⇒ STAGE B identity
               // form for every surviving card.
               const foldCanonicalLabels = await canonicalLabelsForFacts(survivingFacts, deps.store);
+              // L2-PROMPT2-SCIENCE-CHAIN-1: bind the clarification answers onto
+              // the compile's events so card picks land in composition_snapshot
+              // as record refs — the model path does this at :4388.
+              const foldBinding = bindFoldPicksOntoCompile(compiledFold, clarificationAnswers);
+              if (foldBinding.bound.length > 0) {
+                console.log(
+                  `[agent ${tid}] fold-path bound ${foldBinding.bound.length} material pick(s): ` +
+                    foldBinding.bound
+                      .map((b) => `event[${b.eventIndex}].${b.field}=${String((b.ref as Record<string, unknown>).id)} (${b.source})`)
+                      .join(', '),
+                );
+              }
               const foldResult = shorthandResultFromCompile(
-                { ...compiledFold, clarifications: survivingFacts },
+                { ...foldBinding.boundCompiled, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
