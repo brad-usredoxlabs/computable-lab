@@ -1,218 +1,192 @@
 // @vitest-environment node
 /**
- * Tests for the material-spec composition prefetch: bounded store walk,
- * Array.isArray guards at both consumption sites, and expansion of declared
- * composition entries into composition_snapshot.
+ * Composition prefetch — behavioural tests for D-1 (Array.isArray guard),
+ * D-2 (materialComposition callback expansion), and D-3 (kind filter).
  */
-
 import { describe, it, expect, vi } from 'vitest';
 import { runChatbotCompile, type RunChatbotCompileArgs } from './runChatbotCompile.js';
+import { createResolveRolesPass } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../extract/ExtractionRunnerService.js';
 import type { LlmClient } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { RecordFilter, RecordEnvelope } from '../store/types.js';
+import type { PipelineState } from '../compiler/pipeline/types.js';
+import { emptyLabState } from '../compiler/state/LabState.js';
 
-function completionResponse(content: string) {
+/* ── Helpers ── */
+
+function makeDeps(store: any) {
   return {
-    id: 'test-response-id',
-    choices: [
-      {
-        index: 0,
-        message: { role: 'assistant', content },
-        finish_reason: 'stop',
-      },
-    ],
-    usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+    extractionService: { run: vi.fn(async (req: RunExtractionServiceArgs) => ({
+      target_kind: req.target_kind, source: req.source, candidates: [], diagnostics: [],
+    })) } as unknown as ExtractionRunnerService,
+    llmClient: { complete: vi.fn(async () => {
+      throw new Error('LLM should not be called');
+    }) } as unknown as LlmClient,
+    searchLabwareByHint: vi.fn(async () => []),
+    store,
   };
 }
 
-describe('composition prefetch', () => {
-  it('prefetch filter carries kind: material-spec and ignores malformed composition', async () => {
-    // Track all store.list calls
-    const listCalls: RecordFilter[] = [];
-    const mockStore = {
+function makeStore(specs: RecordEnvelope[], nonSpecs: RecordEnvelope[] = []) {
+  const calls: RecordFilter[] = [];
+  return {
+    mock: {
       list: vi.fn(async (filter: RecordFilter | undefined) => {
-        if (filter) listCalls.push(filter);
-        // Good envelope: composition is an array of entry objects
-        const good: RecordEnvelope = {
-          recordId: 'MAT-GOOD',
-          kind: 'material-spec',
-          schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
-          payload: {
-            formulation: {
-              composition: [
-                {
-                  component_ref: { kind: 'record', type: 'material', id: 'MAT-X' },
-                  role: 'solute',
-                },
-              ],
-            },
-          },
-        };
-        // Malformed envelope: composition is a plain object (not an array)
-        const bad: RecordEnvelope = {
-          recordId: 'MAT-BAD',
-          kind: 'material-spec',
-          schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
-          payload: {
-            formulation: {
-              composition: { component_ref: { kind: 'record', type: 'material', id: 'MAT-Y' }, role: 'solute' },
-            },
-          },
-        };
-        return [good, bad];
+        if (filter) calls.push(filter);
+        // BEHAVIOURAL: reads filter?.kind and branches
+        return filter?.kind === 'material-spec' ? [...specs] : [...specs, ...nonSpecs];
       }),
       get: vi.fn(async () => null),
-    } as any;
+    },
+    calls,
+  };
+}
 
-    const mockExtractionService: ExtractionRunnerService = {
-      run: vi.fn(async (req: RunExtractionServiceArgs) => ({
-        target_kind: req.target_kind,
-        source: req.source,
-        candidates: [],
-        diagnostics: [],
-      })),
-    } as unknown as ExtractionRunnerService;
+function makePassState(
+  nounBindings: Record<string, { recordId: string; verb: string; argument: string; label: string }>,
+  events?: any[],
+): PipelineState {
+  return {
+    input: { labState: emptyLabState() },
+    context: {}, meta: {},
+    outputs: new Map([
+      ['mint_materials', { events: events ?? [{
+        eventId: 'evt-1', event_type: 'add_material',
+        details: { material: 'TestMat', volumeUl: 1, labwareInstanceId: 'plate-1', well: 'A2' },
+      }] }],
+      ['expand_patterns', { events: [] }],
+      ['expand_biology_verbs', { events: [] }],
+      ['expand_protocol', { events: [] }],
+      ['resolve_references', { resolvedRefs: [] }],
+      ['resolve_nouns', { resolvedByLabel: nounBindings }],
+    ]),
+    diagnostics: [],
+  };
+}
 
-    const mockLlmClient: LlmClient = {
-      complete: vi.fn(async () => {
-        throw new Error('mention-resolved prompt should not call the LLM planner');
-      }),
-    } as unknown as LlmClient;
-    const searchLabwareByHint = vi.fn(async (_hint: string) => []);
-
-    const args: RunChatbotCompileArgs = {
-      prompt: 'Add 100uL of [[aliquot:MAT-GOOD|Good Material]] to well A1 in [[labware:lw-plate-1|Plate]]',
-      mentions: [
-        { type: 'material', entityKind: 'aliquot', id: 'MAT-GOOD', label: 'Good Material' },
-        { type: 'labware', id: 'lw-plate-1', label: 'Plate' },
-      ],
-      editorLabwares: [{ labwareId: 'lw-plate-1', labwareType: 'plate_96', name: 'Plate' }],
-      deps: {
-        extractionService: mockExtractionService,
-        llmClient: mockLlmClient,
-        searchLabwareByHint,
-        store: mockStore,
-      },
-    };
-
-    // Compile should resolve without throwing even with malformed composition
-    const result = await runChatbotCompile(args);
-
-    // (c) The prefetch list call carries kind: 'material-spec'
-    // The first list call is the prefetch; bindOntologyMentions may call list too
-    const prefetchCall = listCalls.find((f) => f.kind === 'material-spec');
-    expect(prefetchCall).toBeDefined();
-    expect(prefetchCall!.kind).toBe('material-spec');
-
-    // (a) The compile completed successfully — verify outcome
+/* ── Pipeline-level tests (original intents + D-3) ── */
+describe('composition prefetch', () => {
+  it('prefetch filter carries kind: material-spec and ignores malformed composition', async () => {
+    const calls: RecordFilter[] = [];
+    const good = { recordId: 'MAT-GOOD', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: [{
+        component_ref: { kind: 'record', type: 'material', id: 'MAT-X' }, role: 'solute',
+      }] } } } as RecordEnvelope;
+    const bad = { recordId: 'MAT-BAD', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: {
+        component_ref: { kind: 'record', type: 'material', id: 'MAT-Y' }, role: 'solute',
+      } } } } as RecordEnvelope;
+    const mock = { list: vi.fn(async (filter: RecordFilter | undefined) => {
+      if (filter) calls.push(filter); return [good, bad];
+    }), get: vi.fn(async () => null) } as any;
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT-GOOD|Good]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'MAT-GOOD', label: 'Good' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
     expect(result.outcome).toBeDefined();
-
-    // (b) The malformed MAT-BAD envelope was ignored (did not crash)
-    // Verify the compile ran without error and no event references MAT-BAD
-    const hasBadRef = result.events.some((e) =>
-      (e.details as any)?.recordId === 'MAT-BAD',
-    );
-    expect(hasBadRef).toBe(false);
+    expect(result.events.some((e) => (e.details as any)?.recordId === 'MAT-BAD')).toBe(false);
   });
 
   it('does not prefetch when store is absent', async () => {
-    let listCallCount = 0;
-    const mockStore = {
-      list: vi.fn(async () => { listCallCount++; return []; }),
-      get: vi.fn(async () => null),
-    } as any;
-
-    const mockExtractionService: ExtractionRunnerService = {
-      run: vi.fn(async (req: RunExtractionServiceArgs) => ({
-        target_kind: req.target_kind,
-        source: req.source,
-        candidates: [],
-        diagnostics: [],
-      })),
-    } as unknown as ExtractionRunnerService;
-
-    const mockLlmClient: LlmClient = {
-      complete: vi.fn(async () => {
-        throw new Error('mention-resolved prompt should not call the LLM');
-      }),
-    } as unknown as LlmClient;
-    const searchLabwareByHint = vi.fn(async (_hint: string) => []);
-
-    const args: RunChatbotCompileArgs = {
-      prompt: 'Add 100uL of [[aliquot:MAT-GOOD|Good Material]] to well A1 in [[labware:lw-plate-1|Plate]]',
-      mentions: [
-        { type: 'material', entityKind: 'aliquot', id: 'MAT-GOOD', label: 'Good Material' },
-        { type: 'labware', id: 'lw-plate-1', label: 'Plate' },
-      ],
-      editorLabwares: [{ labwareId: 'lw-plate-1', labwareType: 'plate_96', name: 'Plate' }],
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT|Mat]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'MAT', label: 'Mat' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
       deps: {
-        extractionService: mockExtractionService,
-        llmClient: mockLlmClient,
-        searchLabwareByHint,
-        // No store — prefetch must NOT happen
+        extractionService: { run: vi.fn(async () => ({ target_kind: '', source: '',
+          candidates: [], diagnostics: [] })) } as unknown as ExtractionRunnerService,
+        llmClient: { complete: vi.fn(async () => {
+          throw new Error('no LLM');
+        }) } as unknown as LlmClient,
+        searchLabwareByHint: vi.fn(async () => []),
       },
-    };
-
-    const result = await runChatbotCompile(args);
-
-    // No store means no prefetch and no bindOntologyMentions store calls
-    expect(listCallCount).toBe(0);
-    // Event still compiles successfully
-    expect(result.events.length).toBeGreaterThanOrEqual(1);
-    const addMaterialEvent = result.events.find((e) => e.event_type === 'add_material');
-    expect(addMaterialEvent).toBeDefined();
+    });
+    expect(result.events.find((e) => e.event_type === 'add_material')).toBeDefined();
   });
 
   it('prefetch filter carries kind: material-spec for the lookup call', async () => {
-    // Verify the exact filter object passed to the prefetch list call
-    let observedFilter: RecordFilter | undefined;
-    const mockStore = {
-      list: vi.fn(async (filter: RecordFilter | undefined) => {
-        // Only record calls for the material-spec prefetch
-        if (filter?.kind === 'material-spec') {
-          observedFilter = filter;
-        }
-        return [];
-      }),
-      get: vi.fn(async () => null),
-    } as any;
+    let filter: RecordFilter | undefined;
+    const mock = { list: vi.fn(async (f: RecordFilter | undefined) => {
+      if (f?.kind === 'material-spec') filter = f; return [];
+    }), get: vi.fn(async () => null) } as any;
+    await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT|Mat]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'MAT', label: 'Mat' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    expect(filter?.kind).toBe('material-spec');
+    expect(filter?.schemaId).toContain('material-spec');
+    expect(filter?.limit).toBeDefined();
+  });
 
-    const mockExtractionService: ExtractionRunnerService = {
-      run: vi.fn(async (req: RunExtractionServiceArgs) => ({
-        target_kind: req.target_kind,
-        source: req.source,
-        candidates: [],
-        diagnostics: [],
-      })),
-    } as unknown as ExtractionRunnerService;
+  /* D-3: kind filter behaviourally excludes non-material-spec records */
+  it('D-3: kind filter excludes non-material-spec from prefetch scan', async () => {
+    const nonSpec = { recordId: 'ALI-F', kind: 'aliquot',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
+      payload: { formulation: { composition: [{
+        component_ref: { kind: 'record', type: 'material', id: 'FALSE-COMP' }, role: 'solute',
+      }] } } } as RecordEnvelope;
+    const { mock, calls } = makeStore([], [nonSpec]);
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:ALI-F|Ali]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'ALI-F', label: 'Ali' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
+    expect(result.events.every((e) =>
+      (e.details as any)?.material_ref?.id !== 'ALI-F')).toBe(true);
+  });
+});
 
-    const mockLlmClient: LlmClient = {
-      complete: vi.fn(async () => {
-        throw new Error('should not call LLM');
-      }),
-    } as unknown as LlmClient;
+/* ── Pass-level behavioural legs (D-1, D-2) ── */
+describe('composition prefetch — behavioural (pass-level)', () => {
+  it('D-1: non-array composition yields legacy single-entry (role: other)', () => {
+    // The callback returns a non-array value. The Array.isArray guard at
+    // ChatbotCompilePasses:2654 prevents .map() on the non-array.
+    const pass = createResolveRolesPass({
+      materialComposition: () => ({ component_ref: { id: 'OBJ-COMP' }, role: 'solute' }) as any,
+    });
+    const state = makePassState({
+      TestMat: { recordId: 'MAT-1', verb: 'add', argument: 'material', label: 'TestMat' },
+    });
+    const result = pass.run({ pass_id: 'resolve_roles', state });
+    const snap = (result.output as any).events[0].details.composition_snapshot;
+    // Must be legacy single-entry (not mapped garbage from object properties)
+    expect(snap).toEqual([
+      { component_ref: { kind: 'record', type: 'material', id: 'MAT-1' }, role: 'other' },
+    ]);
+  });
 
-    const args: RunChatbotCompileArgs = {
-      prompt: 'Add 100uL of [[aliquot:MAT-TEST|Test]] to well A1 in [[labware:lw-plate-1|Plate]]',
-      mentions: [
-        { type: 'material', entityKind: 'aliquot', id: 'MAT-TEST', label: 'Test' },
-        { type: 'labware', id: 'lw-plate-1', label: 'Plate' },
-      ],
-      editorLabwares: [{ labwareId: 'lw-plate-1', labwareType: 'plate_96', name: 'Plate' }],
-      deps: {
-        extractionService: mockExtractionService,
-        llmClient: mockLlmClient,
-        searchLabwareByHint: async () => [],
-        store: mockStore,
-      },
-    };
-
-    await runChatbotCompile(args);
-
-    // The prefetch filter must include kind: 'material-spec'
-    expect(observedFilter).toBeDefined();
-    expect(observedFilter!.kind).toBe('material-spec');
-    expect(observedFilter!.schemaId).toContain('material-spec');
-    expect(observedFilter!.limit).toBeDefined();
+  it('D-2: array composition is expanded into composition_snapshot', () => {
+    const entries = [
+      { component_ref: { kind: 'record', type: 'material', id: 'SOL-1' }, role: 'solute' },
+      { component_ref: { kind: 'record', type: 'material', id: 'SOLV-1' }, role: 'solvent' },
+    ];
+    const pass = createResolveRolesPass({
+      materialComposition: () => entries,
+    });
+    const state = makePassState({
+      TestMat: { recordId: 'MAT-2', verb: 'add', argument: 'material', label: 'TestMat' },
+    });
+    const result = pass.run({ pass_id: 'resolve_roles', state });
+    const snap = (result.output as any).events[0].details.composition_snapshot;
+    expect(snap).toHaveLength(2);
+    expect(snap[0]).toEqual({
+      component_ref: { kind: 'record', type: 'material', id: 'SOL-1' }, role: 'solute',
+    });
+    expect(snap[1]).toEqual({
+      component_ref: { kind: 'record', type: 'material', id: 'SOLV-1' }, role: 'solvent',
+    });
   });
 });
