@@ -20,4 +20,4 @@ With list restored: PASS (1 passed)
 text, chips, array - all in VALID_WIDGET_TYPES from UISpecLoader.ts:19-29
 
 ## Exit Marker
-L2-UI-SURFACE-MANIFEST-1-u1uihints UNIT unit DONE a3fd39802546a03ec857f434fd6342668919e2e2
+L2-UI-SURFACE-MANIFEST-1-u1uihints UNIT unit DONE 482b4a138c89f4b9088dac4f528dc055e336291d
