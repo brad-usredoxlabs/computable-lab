@@ -128,6 +128,14 @@ export interface ScientistIntentCompileDeps {
    *  after any answer, so without suppression the bar loops forever).
    *  Absent: every other caller is byte-identically unchanged. */
   answeredClarificationLabels?: readonly string[];
+  /**
+   * GATE-4-D1 (u9 composition-prefetch wire): synchronous lookup that returns
+   * formulation.composition entries for a given material-spec recordId.
+   * Threaded into createResolveRolesPass so add_material events expand into
+   * solute+solvent snapshot entries instead of the legacy single self-referential
+   * role:'other' entry. Absent: every other caller is byte-unchanged.
+   */
+  materialComposition?: (recordId: string) => readonly unknown[] | undefined;
 }
 
 export interface ScientistIntentCompileResult {
@@ -216,7 +224,9 @@ function buildRegistry(
     compoundClassRegistry: getCompoundClassRegistry(),
     ontologyTermRegistry: getOntologyTermRegistry(),
   }));
-  registry.register(createResolveRolesPass());
+  registry.register(createResolveRolesPass({
+    ...(deps.materialComposition ? { materialComposition: deps.materialComposition } : {}),
+  }));
   // WELLSET-RESOLVER-1: the server-side contents-derived wellset resolver.
   // Declared in scientist-intent-compile.yaml (family expand, after
   // resolve_roles) — resolves a declared kind:wellset token to a concrete well
