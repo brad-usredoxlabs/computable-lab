@@ -69,4 +69,4 @@ The removed `|| intent === 'answer'` arm and conditional spread are dead code. R
 ### D7 claim correction
 The report from fix run 1 claimed D7 (guard removal) was resolved. This run corrects that claim: the guard's absence is pinned indirectly via the parser fail-closed contract, not directly. A direct guard pin is impossible because `parseAgentIntentArgs` ensures empty text never produces an `answer` intent. The reviewer's mutation (restoring the guard) stays GREEN because no input reaches the branch with empty text.
 
-SEQ-ANSWER-CONTRACT-1-u1fix2 UNIT 1 DONE 75965a2d6e36b4affbb58ef76056dbbdc3ba34e9
+SEQ-ANSWER-CONTRACT-1-u1fix2 UNIT 1 DONE aa0b6d844e4cc940c8882b3beb8bc32599414f10
