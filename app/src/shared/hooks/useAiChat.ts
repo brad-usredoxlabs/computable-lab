@@ -1866,7 +1866,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 Boolean(result.clarificationNeeded?.trim()) ||
                 (result.clarificationRequests?.length ?? 0) > 0
               const surfacedError = Boolean(result.error?.trim())
-              if (!askedQuestion && !surfacedError && !answerDelivered) {
+              if (!askedQuestion && !surfacedError && !answerDelivered && !navActionDelivered) {
                 // Name what the turn actually carried when it is unmountable
                 // here — the wall must report plain-language truth, not claim
                 // "nothing" was proposed when it proposed unmountable things.
@@ -2624,7 +2624,7 @@ function buildAssistantContent(events: AiStreamEvent[]): string {
           // (e.g. doc-discussion turn). Surface it as the message body.
           modelText = ev.result.clarificationNeeded ?? ''
         }
-        if (!ev.result.error && (ev.result.events ?? []).length === 0 && modelText.length === 0) {
+        if (!ev.result.error && (ev.result.events ?? []).length === 0 && modelText.length === 0 && (ev.result.notes ?? []).length === 0) {
           parts.push('No events generated.')
         }
         break
