@@ -1200,13 +1200,14 @@ export async function canonicalLabelsForFacts(
     try {
       const materials = await (store as { list?: (filter?: { schemaId?: string; limit?: number }) => Promise<any[]> }).list?.({ schemaId: MATERIAL_SCHEMA_ID, limit: 10000 });
       if (materials && Array.isArray(materials)) {
-        // Build name.toLowerCase() -> envelope ONCE
+        // Build name.toLowerCase() -> envelope ONCE — first-match (set-if-absent)
+        // to mirror .find() semantics in the mint (MaterialGrounding.ts).
         const nameMap = new Map<string, { payload: unknown }>();
         for (const env of materials) {
           const p = env?.payload;
           if (p && typeof p === 'object' && typeof (p as { name?: unknown }).name === 'string') {
             const lowered = (p as { name: string }).name.trim().toLowerCase();
-            nameMap.set(lowered, { payload: p });
+            if (!nameMap.has(lowered)) nameMap.set(lowered, { payload: p });
           }
         }
         // For each title-less key, match against the lowered stored name
@@ -1218,7 +1219,7 @@ export async function canonicalLabelsForFacts(
             typeof f.label === 'string' && canonicalLabelKey(f.label) === key
           );
           if (factForKey) {
-            const loweredLabel = factForKey.label.trim().toLowerCase();
+            const loweredLabel = factForKey.label.toLowerCase();
             const match = nameMap.get(loweredLabel);
             if (match) {
               const entry = byKey.get(key)!;

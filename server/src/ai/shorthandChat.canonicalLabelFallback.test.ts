@@ -162,6 +162,22 @@ describe('AC-5: Case deduplication — two facts differing only in case', () => 
   });
 });
 
+describe('AC-7: First-match — duplicate lowered names pick FIRST record', () => {
+  it('two materials whose names lower to the same key ⇒ fallback resolves to FIRST listed', async () => {
+    // Seed two records whose names differ only in case — they lower to the same key
+    const firstEnv = makeEnvelope('Acetone', 'MAT-ACETONE-FIRST');
+    const secondEnv = makeEnvelope('AcETOnE', 'MAT-ACETONE-SECOND');
+    // Order matters: first listed first
+    const store = makeFakeStore(async () => null, async () => [firstEnv, secondEnv]);
+
+    const map = await canonicalLabelsForFacts([fact('Acetone')], store);
+    const key = canonicalLabelKey('Acetone');
+
+    // Must resolve to the FIRST listed record's verbatim name
+    expect(map.get(key)).toBe('Acetone');
+  });
+});
+
 describe('AC-6: Cost model — one list per call, zero when all ids hit', () => {
   it('N distinct id-missed identities ⇒ list called exactly once', async () => {
     const envs = [
