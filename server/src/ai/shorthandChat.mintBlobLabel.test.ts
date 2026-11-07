@@ -154,4 +154,28 @@ describe('M3: looped escalation mintRefused uses extracted label', () => {
     // The label in the error should be the extracted label "clofibrate"
     expect(result.error).toContain('clofibrate');
   });
+
+  it('non-mintable blob label reports mintRefused:true — refusal clause present', () => {
+    // "FBS with HepG2" is non-mintable per config/drafting/shorthand-drafting.yaml:52
+    // pattern 2: \\b[\\p{L}]{2,}\\s+(?:with|containing|including)\\s+[\\p{L}]{2,}
+    // (connective "with" flanked by multi-letter words)
+    const blob = '{mint:{label:FBS with HepG2,domain:chemical}}';
+    const fact = blobFact(blob, 'unknown-noun');
+
+    const compiled = makeCompileResult([fact]);
+    const requestId = factRequestId(fact);
+
+    const result = shorthandResultFromCompile(compiled, 'shorthand: test', '', undefined, {
+      priorLoopAskCounts: { [requestId]: 2 },
+    });
+
+    // With priorLoopAskCounts of 2, this enters looped escalation
+    expect(result.success).toBe(true);
+    expect(result.error).toBeDefined();
+    // The extracted label "FBS with HepG2" is non-mintable — the error MUST contain
+    // the refusal clause (this is the positive pin for M3)
+    expect(result.error).toContain('mint affordance is closed');
+    // The label in the error should be the extracted label "FBS with HepG2"
+    expect(result.error).toContain('FBS with HepG2');
+  });
 });
