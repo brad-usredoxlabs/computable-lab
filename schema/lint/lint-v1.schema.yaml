@@ -121,8 +121,8 @@ definitions:
             description: "Paths referenced in the template"
             items:
               type: "string"
-              pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
-              description: "Valid JSONPath-like reference"
+              pattern: '^(\$\.|[.]|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+              description: "Valid JSONPath-like reference; '[*]' projection and bare '.' are allowed"
 
       # Dependencies
       dependsOn:
@@ -221,8 +221,8 @@ definitions:
           const: "in"
         path:
           type: "string"
-          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
-          description: "Path to check membership"
+          pattern: '^(\$\.|[.]|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to check membership; bare '.' selects the item itself (matches PathResolver)"
         values:
           type: "array"
           description: "Array of allowed values"
