@@ -153,8 +153,14 @@ describe('composition prefetch', () => {
       deps: makeDeps(mock),
     });
     expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
-    expect(result.events.every((e) =>
-      (e.details as any)?.material_ref?.id !== 'ALI-F')).toBe(true);
+    // The gate enriches events based on bindings, but composition_snapshot
+    // uses legacy fallback (role: 'other') since the prefetch correctly
+    // filtered non-material-spec from the scan.
+    const addMatEvent = result.events.find((e) => e.event_type === 'add_material');
+    expect(addMatEvent).toBeDefined();
+    const snap = (addMatEvent!.details as any)?.composition_snapshot;
+    expect(snap).toBeDefined();
+    expect(snap[0].role).toBe('other');
     // Non-vacuous: the excluded record's composition is non-empty, so exclusion
     // is due to kind filter, not missing/empty composition.
     expect(Array.isArray(nonSpec.payload.formulation.composition)).toBe(true);
@@ -237,6 +243,30 @@ describe('u8compbind RED pin', () => {
     expect(rn.resolvedByLabel['RedMat'].recordId).toBe('MAT-RED');
     // 4. Binding also indexed by recordId
     expect(rn.resolvedByLabel['MAT-RED']).toBeDefined();
+  });
+});
+
+/* ── u8enrichgate RED pin: production add_material shape with recordId ── */
+describe('u8enrichgate RED pin', () => {
+  it('add_material with recordId (no material string) resolves material_ref and composition_snapshot', () => {
+    const pass = createResolveRolesPass({});
+    const state = makePassState(
+      {
+        'MAT-1': { recordId: 'MAT-1', verb: 'add', argument: 'material', label: 'TestMat' },
+      },
+      [{
+        eventId: 'evt-prod', event_type: 'add_material',
+        details: { recordId: 'MAT-1', kind: 'aliquot' },
+      }],
+    );
+    const result = pass.run({ pass_id: 'resolve_roles', state });
+    const events = (result.output as any).events;
+    expect(events.length).toBe(1);
+    const addMaterialEvents = events.filter((e: any) => e.event_type === 'add_material');
+    expect(addMaterialEvents.length).toBe(1);
+    expect(addMaterialEvents[0].details.composition_snapshot).toEqual([
+      { component_ref: { kind: 'record', type: 'material', id: 'MAT-1' }, role: 'other' },
+    ]);
   });
 });
 
