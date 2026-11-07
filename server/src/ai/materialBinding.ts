@@ -120,10 +120,37 @@ function isMaterialBearing(e: Dict): boolean {
  * every OTHER material ref field, so exactly one authoritative claim remains
  * (the gate trusts both spellings, but two claims in one event is how the E1
  * confusion started).
+ *
+ * When the event carries a `composition_snapshot` of >=2 entries, the ref is
+ * matched to the ONE entry whose `component_ref.label` equals the ref's label
+ * (case-insensitive). That entry's `component_ref` is replaced while the
+ * entry's `role` and any other fields are preserved. The top-level material
+ * ref fields are NOT touched — the mixture's own ref stays.
  */
 function writeMaterialRef<T extends Dict>(event: T, ref: Dict): { event: T; field: string } {
-  const field = canonicalMaterialField(ref);
   const details = detailsOf(event);
+  const snapshot = details.composition_snapshot;
+  const refLabel = asString(ref.label);
+
+  // Composition snapshot path: >=2 entries and a label to match against
+  if (Array.isArray(snapshot) && snapshot.length >= 2 && refLabel.length > 0) {
+    const matchedIndex = snapshot.findIndex((entry: Dict) => {
+      const compRef = asDict(entry.component_ref);
+      if (!compRef) return false;
+      return asString(compRef.label).toLowerCase() === refLabel.toLowerCase();
+    });
+    if (matchedIndex >= 0) {
+      const nextDetails: Dict = { ...details };
+      const nextSnapshot: Dict[] = [...(nextDetails.composition_snapshot as Dict[])];
+      const original = nextSnapshot[matchedIndex] as Dict;
+      nextSnapshot[matchedIndex] = { ...original, component_ref: ref };
+      nextDetails.composition_snapshot = nextSnapshot;
+      return { event: { ...event, details: nextDetails } as T, field: 'composition_snapshot' };
+    }
+  }
+
+  // Single-ref path: top-level field write with stale-field deletion
+  const field = canonicalMaterialField(ref);
   const nextDetails: Dict = { ...details };
   for (const key of MATERIAL_REF_FIELDS) {
     if (key !== field) delete nextDetails[key];
