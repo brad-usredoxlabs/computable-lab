@@ -35,3 +35,18 @@ snapshot has <2 entries or no label matches.
 
 L2-PROMPT2-SCIENCE-CHAIN-1-u10cardref UNIT unit DONE 2dbf9477d60b093d7ce5fa39a8366e3918a75323
 L2-PROMPT2-SCIENCE-CHAIN-1-u10cardfix UNIT u10cardfix DONE 80ddd378738870867b7bbb6ddf5a60a5f0d8b90b
+
+## Fix Section — cycle 2 defect fix (u10cardfix)
+
+### Defects fixed (adversarial review c1, both MINOR)
+D1 — element guard: added `asDict` guard on each snapshot entry before accessing `component_ref`.
+     `composition_snapshot: [null, {...}]` no longer throws TypeError.
+D2 — duplicate labels: replaced `findIndex` with a full scan counting matches. If more than one
+     entry matches, the answer falls through to the top-level single-ref path (composition_snapshot
+     untouched). Added doc-comment stating the ambiguity rule.
+
+### Verification
+- 62 tests passed (3 files), 0 failed (was 60 passed before; 2 new D1/D2 tests now green)
+- tsc --noEmit: 0 errors
+
+L2-PROMPT2-SCIENCE-CHAIN-1-u10cardfix UNIT unit DONE d4685a7844af0340eac9a7e73ed9e0e6613f84e9
