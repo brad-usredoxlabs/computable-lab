@@ -234,7 +234,10 @@ describe('u8compbind RED pin', () => {
     });
     const state = makePassState({
       RedMat: { recordId: 'MAT-RED', verb: 'add', argument: 'material', label: 'RedMat' },
-    });
+    }, [{
+      eventId: 'evt-1', event_type: 'add_material',
+      details: { material: 'RedMat', volumeUl: 1, labwareInstanceId: 'plate-1', well: 'A2' },
+    }]);
     const passResult = pass.run({ pass_id: 'resolve_roles', state });
     const snap = (passResult.output as any).events[0].details.composition_snapshot;
     expect(snap).toBeDefined();
