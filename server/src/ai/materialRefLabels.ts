@@ -795,9 +795,10 @@ export async function enrichAddMaterialRefs<T>(
  * branch mints via `toMaterialRef` (separate path) and is unaffected.
  *
  * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650).
- * enrichAddMaterialRefs can write material_ref/composition_snapshot on events the
- * compiler did not bind (latent second writer; writes at :481, :523), but is a
- * measured no-op on compiler-emitted events (12/12 unchanged per advc probe).
+ * enrichAddMaterialRefs can write material_ref on events the compiler did not bind
+ * (latent second writer; writes material_ref at :481) and deletes composition_snapshot
+ * at :523 while stripping draft-only fields, but is a measured no-op on
+ * compiler-emitted events (12/12 unchanged per advc probe).
  */
 export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
   result: T,
