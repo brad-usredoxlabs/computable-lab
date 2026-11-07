@@ -38,6 +38,7 @@ import {
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 import { normalizeProtocolIntent, type ProtocolIntent } from '../../../compiler/protocolIntent/ProtocolIntent.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
+import type { RecordStore } from '../../../store/types.js';
 import { renderPromptTemplate } from '../../../registry/PromptTemplateRegistry.js';
 import {
   getExecutionScaleProfileRegistry,
@@ -2596,6 +2597,34 @@ export interface ResolveRolesPassOptions {
    * Synchronous — no awaits, no async.
    */
   materialComposition?: (recordId: string) => readonly unknown[] | undefined;
+}
+
+/**
+ * Prefetch material-spec formulation.composition entries from the store so
+ * the resolve_roles pass can expand them into composition_snapshot.
+ *
+ * Used by BOTH the chatbot pipeline (runChatbotCompile.ts) and the
+ * scientist-intent shorthand seam (shorthandChat.ts) — ONE source of truth
+ * prevents duplicate local vocabulary.
+ *
+ * @param store — record store (may be undefined when the caller has none).
+ * @returns Map of recordId -> composition array (undefined when no specs carry composition).
+ */
+export async function buildMaterialCompositionLookup(
+  store: RecordStore | undefined,
+): Promise<Map<string, readonly unknown[]> | undefined> {
+  if (!store) return undefined;
+  const materialSpecs = await store.list({ kind: 'material-spec', schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml', limit: 10000 });
+  const compMap = new Map<string, readonly unknown[]>();
+  for (const env of materialSpecs) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    const formulation = payload?.formulation as Record<string, unknown> | undefined;
+    const composition = formulation?.composition;
+    if (Array.isArray(composition) && composition.length > 0) {
+      compMap.set(env.recordId, composition);
+    }
+  }
+  return compMap.size > 0 ? compMap : undefined;
 }
 
 export function createResolveRolesPass(
