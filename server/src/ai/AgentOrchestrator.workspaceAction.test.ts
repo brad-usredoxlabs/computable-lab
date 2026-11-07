@@ -28,6 +28,7 @@ import { readFile } from 'node:fs/promises';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
 import { AGENT_ACTION_SCHEMA_ID } from './compileWorkspaceAction.js';
+import * as compileModule from './compileWorkspaceAction.js';
 import { loadDefaultSurfacesRegistry } from '../surfaces/surfaces.js';
 import { loadSchemasFromContent } from '../schema/SchemaLoader.js';
 import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
@@ -343,5 +344,26 @@ describe('AgentOrchestrator — workspace_action intent (EMIT IS GATED BY COMPIL
     expect(result.success).toBe(true);
     expect(result.protocolEdit!.ops).toEqual([{ op: 'step_delete', stepId: 'step-003' }]);
     expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(0);
+  });
+
+  // OQ1 contract: compileWorkspaceAction deps must NOT carry requestingSurface
+  // when the request has no surface.  The key must be ABSENT, not undefined.
+  it('OQ1: surface-less request passes compileWorkspaceAction deps WITHOUT requestingSurface key', async () => {
+    const compileSpy = vi.spyOn(compileModule, 'compileWorkspaceAction').mockResolvedValue({
+      ok: true,
+      action: { action: 'focus', target: { kind: 'record', id: 'MAT-000001', type: 'material', label: 'HepG2 Cell' } },
+    });
+    const store = mutationTripwire({ 'MAT-000001': { kind: 'material', payload: { recordId: 'MAT-000001', kind: 'material', name: 'HepG2 Cell' } } });
+    const spine = fakeSpine([
+      { curie: 'local:MAT-000001', label: 'HepG2 Cell', namespace: 'local', tier: 1, level: 'concept', score: 1.15, source: 'local-record' },
+    ]);
+    const { events } = await runIntentTurn(
+      { intent: 'workspace_action', action: { action: 'focus', target: { kind: 'record', label: 'HepG2 cells' } } },
+      { store, spine },
+    );
+    expect(compileSpy).toHaveBeenCalled();
+    const depsArg = compileSpy.mock.calls[0][1];
+    expect('requestingSurface' in depsArg).toBe(false);
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(1);
   });
 });

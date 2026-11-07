@@ -3564,6 +3564,7 @@ export function createAgentOrchestrator(
                     resolveSpine: deps.resolveSpine,
                     surfaces: deps.surfaces,
                     store: deps.store,
+                    ...(surface !== undefined ? { requestingSurface: surface } : {}),
                     // HARNESS-SEQ-2 (OQ2 ruling): the visibility door for
                     // navigation targets — the SAME door the ordinary read
                     // routes use (AuthorizationService.canAccess(actor,'read',
