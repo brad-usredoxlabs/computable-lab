@@ -386,6 +386,38 @@ function objectLiteralField(body: string, key: string, kind: 'object' | 'string'
   return null
 }
 
+/**
+ * Client mirror of server extractHumanLabel (shorthandChat.ts:92-121).
+ * Browser regate #4 finding M2: a raw provenance blob (structured mint JSON)
+ * must be unwrapped to the inner human label before seeding the mint title.
+ */
+function humanLabelFromProvenance(label: string): string | undefined {
+  const trimmed = label.trim()
+  const looksLikeStructured = trimmed.startsWith('{') && trimmed.endsWith('}')
+  if (!looksLikeStructured) return label
+  // Try JSON-parse path first — mirror server extractHumanLabel: scan nested
+  // object values for the inner "label" key, never unwrap top-level labels.
+  try {
+    const parsed = JSON.parse(label)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [, value] of Object.entries(parsed)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const inner = (value as Record<string, unknown>)['label']
+          if (typeof inner === 'string' && inner.length > 0) return inner
+        }
+      }
+      // Valid JSON object but no usable inner label — don't render
+      return undefined
+    }
+  } catch {
+    // Not valid JSON — fall through to regex
+  }
+  // Regex fallback for mint:{label:clofibrate,...} style blobs
+  const match = new RegExp(`label:([\\w\\s-]+?)(?:,|})`).exec(label)
+  if (match) return match[1].trim()
+  return undefined
+}
+
 export function mintLabelFor(request: AiClarificationRequest, query: string): string {
   // L2-CLARIFY-CARD-1 (defect 5, ruling l2t1951 Q1): the MINT SEED reads the
   // RAW provenance label FIRST (request.unresolvedFact.label — the server's
@@ -397,18 +429,20 @@ export function mintLabelFor(request: AiClarificationRequest, query: string): st
   // SELECTS the raw field — it never transforms case. Type-guarded (the wire
   // declares unresolvedFact? OPTIONAL — types.ts:621), never assumed.
   //
+  // Browser regate #4 finding M2: the raw label may be a structured provenance
+  // blob (e.g. '{mint:{label:clofibrate,ontology:cf/x}}') that must be unwrapped
+  // to the inner human label. Client mirrors server extractHumanLabel.
+  //
   // The fallback is NOT a casing hole: the only OTHER mint-capable request
   // family is the gap request (forceMaterialClarifications.ts:521-523/:537-539,
   // request.query = gap.label — RAW provenance; that path never rides the D3
   // canonical fold), so on every mint-capable shape the chain ends at a
   // raw-case string, never at a fold.
-  const rawLabel =
-    request.unresolvedFact &&
-    typeof request.unresolvedFact.label === 'string' &&
-    request.unresolvedFact.label.trim()
-      ? request.unresolvedFact.label.trim()
-      : ''
-  return rawLabel || mintNounFromQuery(request.query) || query.trim()
+  let labelCandidate: string | undefined
+  if (request.unresolvedFact && typeof request.unresolvedFact.label === 'string' && request.unresolvedFact.label.trim()) {
+    labelCandidate = humanLabelFromProvenance(request.unresolvedFact.label.trim())
+  }
+  return labelCandidate || mintNounFromQuery(request.query) || query.trim()
 }
 
 /** Append `more` to `base`, dedupe by key, keep `pinBottom` rows last. */
