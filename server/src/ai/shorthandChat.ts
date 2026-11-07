@@ -112,8 +112,10 @@ function extractHumanLabel(label: string): string | undefined {
     // Not valid JSON — try regex fallback for unquoted values
   }
   // Regex fallback for unquoted values (e.g. {mint:{label:clofibrate,...}})
-  const match = new RegExp(`${MINT_INNER_KEY}:(\\w+)`).exec(label);
-  if (match) return match[1];
+  // Capture up to the structural delimiters (comma or closing brace) allowing
+  // spaces and hyphens within the label value.
+  const match = new RegExp(`${MINT_INNER_KEY}:([\\w\\s-]+?)(?:,|})`).exec(label);
+  if (match && match[1]) return match[1].trim();
   // Structured token without usable inner label — don't render the serialization
   return undefined;
 }
@@ -1009,8 +1011,15 @@ export function clarificationsFromUnresolvedFacts(
     // CARD-1 D2: use the human label (extracted inner label or the fact's reason)
     // so the blob serialization never reaches display. The raw label on
     // `unresolvedFact` stays verbatim (provenance contract).
-    const identityKey = canonicalLabelKey(displayLabelSource);
+    // D3 ruling: identity derives from the LABEL — never from the reason.
+    // For a blob, use the extracted inner label; for a plain string, use
+    // the original label. A reason must never enter an identity key.
+    const identityKey = canonicalLabelKey(humanLabel ?? fact.label);
     const groundedTitle = canonicalLabels?.get(identityKey);
+    // The display label uses displayLabelSource (humanLabel ?? fact.reason)
+    // so the blob serialization never reaches display. Keep this separate from
+    // identityKey — the identity key is for grounded-title lookup, the display
+    // source controls what the scientist sees.
     let displayLabel: string;
     if (groundedTitle !== undefined) {
       // STAGE A (a record is grounded): the declared `mintedDisplay` token
@@ -1027,7 +1036,7 @@ export function clarificationsFromUnresolvedFacts(
       // STAGE B (no grounded record): the declared `preMintDisplay` token
       // (`identity-case`) says the label's IDENTITY FORM is the display form.
       if (canonicalPolicy.preMintDisplay === 'identity-case') {
-        displayLabel = identityKey;
+        displayLabel = canonicalLabelKey(displayLabelSource);
       } else {
         throw new Error(
           `canonical-label policy: STAGE B display token "${canonicalPolicy.preMintDisplay}" ` +
@@ -1921,7 +1930,7 @@ export function shorthandResultFromCompile(
         return {
           label: extractHumanLabel(fact?.label ?? r.query ?? '') ?? r.query ?? fact?.label ?? '',
           ...(typeof fact?.reason === 'string' && fact.reason.trim() !== '' ? { reason: fact.reason } : {}),
-          ...(fact && nounShape ? { mintRefused: !isMintableLabel(fact.label, nounShape) } : {}),
+          ...(fact && nounShape ? { mintRefused: !isMintableLabel(extractHumanLabel(fact.label) ?? fact.label, nounShape) } : {}),
         };
       });
       return {

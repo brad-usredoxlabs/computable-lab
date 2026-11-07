@@ -10,8 +10,14 @@
  * The raw `unresolvedFact.label` must keep the verbatim model output (provenance).
  */
 import { describe, expect, it } from 'vitest';
-import { clarificationsFromUnresolvedFacts } from './shorthandChat.js';
+import {
+  clarificationsFromUnresolvedFacts,
+  factRequestId,
+  shorthandResultFromCompile,
+} from './shorthandChat.js';
 import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
+import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 
 const BLOB_LABEL = '{mint:{label:clofibrate,domain:chemical}}';
 
@@ -20,6 +26,16 @@ function blobFact(label: string, reason = 'unknown-noun'): ScientistIntentUnreso
     label,
     reason,
     actionLocation: { actionIndex: 0, action: 'add_material', argument: 'material' },
+  };
+}
+
+function makeCompileResult(clarifications: ScientistIntentUnresolvedFact[]): ScientistIntentCompileResult {
+  return {
+    terminalArtifacts: { events: [], directives: [], gaps: [] },
+    normalized: { candidateEvents: [], unresolvedRefs: [] },
+    outcome: 'needs-clarification',
+    diagnostics: [],
+    clarifications,
   };
 }
 
@@ -67,5 +83,75 @@ describe('CARD-1 D2: mint blob label — display must extract inner label', () =
     // No inner label → query should not render the blob serialization
     expect(request.query).not.toBe(malformedBlob);
     expect(request.prompt).not.toContain(malformedBlob);
+  });
+});
+
+// ====================================================================
+// M1 — Regex fallback must capture multi-word labels
+// ====================================================================
+describe('M1: multi-word labels survive regex fallback extraction', () => {
+  it('extractHumanLabel captures "Nile Red" from unquoted blob', () => {
+    const multiWordBlob = '{mint:{label:Nile Red,domain:chemical}}';
+    const requests = clarificationsFromUnresolvedFacts([blobFact(multiWordBlob)]);
+    expect(requests).toHaveLength(1);
+    const [request] = requests;
+
+    // The query must be "Nile Red", not truncated to "Nile"
+    expect(request.query).toBe('nile red');
+    expect(request.prompt).toContain('nile red');
+    expect(request.prompt).not.toContain(multiWordBlob);
+  });
+});
+
+// ====================================================================
+// M2 — identityKey must derive from label, never from reason
+// ====================================================================
+describe('M2: identity key derives from label, never from reason', () => {
+  it('same label blob + different reasons -> identity key based on label, not reason', () => {
+    // Use a malformed blob (no inner label) so humanLabel is undefined.
+    // Without the fix, identityKey = canonicalLabelKey(reason) — different for each.
+    // With the fix, identityKey = canonicalLabelKey(fact.label) — same for both.
+    const malformedBlob = '{mint:{domain:chemical}}';
+    const canonicalBlobKey = canonicalLabelKey(malformedBlob);
+
+    // Pass a canonicalLabels map keyed by the blob label's canonical key
+    const canonicalLabels = new Map([
+      [canonicalBlobKey, 'GroundedTitle'],
+    ]);
+
+    const factA = blobFact(malformedBlob, 'reason-alpha');
+    const factB = blobFact(malformedBlob, 'reason-beta');
+    const requests = clarificationsFromUnresolvedFacts([factA, factB], canonicalLabels);
+
+    // Both facts have the same blob label -> same identity key -> both hit the
+    // grounded title lookup. Without the fix, factA's key would be based on
+    // "reason-alpha" and factB's on "reason-beta" — neither would match the map.
+    expect(requests[0].query).toBe('GroundedTitle');
+    expect(requests[1].query).toBe('GroundedTitle');
+  });
+});
+
+// ====================================================================
+// M3 — mintRefused in looped escalation must use extracted label
+// ====================================================================
+describe('M3: looped escalation mintRefused uses extracted label', () => {
+  it('mintable blob label reports mintRefused:false in looped escalation', () => {
+    const blob = '{mint:{label:clofibrate,domain:chemical}}';
+    const fact = blobFact(blob, 'unknown-noun');
+
+    const compiled = makeCompileResult([fact]);
+    const requestId = factRequestId(fact);
+
+    const result = shorthandResultFromCompile(compiled, 'shorthand: test', '', undefined, {
+      priorLoopAskCounts: { [requestId]: 2 },
+    });
+
+    // With priorLoopAskCounts of 2, this enters looped escalation
+    expect(result.success).toBe(true);
+    expect(result.error).toBeDefined();
+    // The error should NOT include the mintRefused clause because "clofibrate" is mintable
+    expect(result.error).not.toContain('mint affordance is closed');
+    // The label in the error should be the extracted label "clofibrate"
+    expect(result.error).toContain('clofibrate');
   });
 });
