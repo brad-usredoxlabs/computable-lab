@@ -1,0 +1,22 @@
+=== FIX RUN 2: SEQ-ANSWER-SCIENCE-u8r2-fix2 ===
+
+Changed files:
+  server/src/ai/runChatbotCompileCompositionPrefetch.test.ts (+28/-36)
+
+What was done:
+  - Added vi.mock for eligibility/policy.js (missing lint schema)
+  - Rewrote RED pin test to use production runChatbotCompile pipeline
+  - Test asserts on result.passOutputs['resolve_nouns'] and resolvedByLabel
+  - Removed test-local makePassState construction with pre-seeded resolve_nouns
+
+Verification:
+  runChatbotCompileCompositionPrefetch: 8/8 GREEN
+  demoteUnstatedQuantities: 27/27 GREEN (no regression)
+  typecheck: 3 pre-existing errors in runChatbotCompile.ts (from fix1 auto-commit)
+  RED pin revert check:
+    Commented out registry.register(createResolveNounsPass) -> 2 tests FAILED
+    Restored -> 8/8 GREEN
+
+Commit: 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
+
+SEQ-ANSWER-SCIENCE-u8r2-fix2 UNIT 1 DONE 68646c94952b0bd4c1c84637e3b5ce7b8e0c82de
