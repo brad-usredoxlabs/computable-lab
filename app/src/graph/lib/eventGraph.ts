@@ -342,6 +342,8 @@ function createLedgerEntry(
     /** SH-QA-4 requirement 4: snapshot arms pass ONLY the entry's own
      * concentration — never fall through to the event-level (mixture's). */
     noEventConcentrationFallback?: boolean
+    /** Per-row materialSpecRef from a record-kind component_ref (u7carrierref). */
+    materialSpecRef?: string
   },
 ): WellComponentLedgerEntry {
   const normalizedConcentration = normalizeConcentration(
@@ -355,12 +357,15 @@ function createLedgerEntry(
   const canonicalAmountValue = canComputeAmount
     ? descriptor!.toCanonicalPerBaseVolume(normalizedConcentration!.value) * toBaseVolume(volume_uL, descriptor!.baseVolume)
     : undefined
+  // Per-row materialSpecRef wins over event-level (u7carrierref).
+  // The event-level ref is the fallback for single-entry/legacy rows.
+  const specRef = options?.materialSpecRef ?? getRecordId(details.material_spec_ref)
 
   return {
     componentKey: createComponentKey(details, materialLabel, options?.componentId),
     materialRef: materialLabel,
     ...(options?.role ? { role: options.role } : {}),
-    ...(getRecordId(details.material_spec_ref) ? { materialSpecRef: getRecordId(details.material_spec_ref) } : {}),
+    ...(specRef ? { materialSpecRef: specRef } : {}),
     ...(getRecordId(details.aliquot_ref) ? { aliquotRef: getRecordId(details.aliquot_ref) } : {}),
     ...(getRecordId(details.material_instance_ref) ? { materialInstanceRef: getRecordId(details.material_instance_ref) } : {}),
     ...(getRecordId(details.vendor_product_ref) ? { vendorProductRef: getRecordId(details.vendor_product_ref) } : {}),
@@ -566,6 +571,15 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
       const componentRef = entry.componentRef || (entry as unknown as { component_ref?: typeof entry.componentRef }).component_ref
       const componentLabel = componentRef?.label || componentRef?.id || materialLabel || `component_${index + 1}`
       const count = typeof details.count === 'number' && (entry.role === 'cells' || snapshot.length === 1) ? details.count : undefined
+      // u7carrierref: extract per-row materialSpecRef from a record-kind component_ref.
+      // Plain string refs are NOT passed through — getRecordId returns strings verbatim,
+      // which would mint a fake spec ref. Gate on kind === 'record' AND string id.
+      const rowSpecRef =
+        componentRef && typeof componentRef === 'object'
+          && (componentRef as { kind?: string }).kind === 'record'
+          && typeof (componentRef as { id?: string }).id === 'string'
+        ? (componentRef as { id: string }).id
+        : undefined
       newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, componentLabel, {
         componentId: componentRef?.id || `${index + 1}`,
         concentration: entry.concentration,
@@ -589,6 +603,7 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
         // snapshot is a single-material add (requirement 3): it keeps today's
         // event-level concentration display byte-unchanged.
         ...(isCarrierComposition ? { noEventConcentrationFallback: true } : {}),
+        ...(rowSpecRef ? { materialSpecRef: rowSpecRef } : {}),
       }))
     })
   } else if (materialLabel) {
