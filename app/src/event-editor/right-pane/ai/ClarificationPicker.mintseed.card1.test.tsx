@@ -239,16 +239,20 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
     expect(mintLabelFor(structuredBlobRequest, 'clofibrate')).toBe('clofibrate')
   })
 
-  // D3: JSON-serialized blob (the real producer shape from nounCoverage.ts:128)
-  // must extract the inner label from the nested object, not the top-level key.
+  // D3: JSON-serialized blob — query is the lowercase fold ('nile red stain'),
+  // so only the nested-label extraction can yield human case ('Nile Red stain').
+  // If the JSON branch yields nothing, the fold leaks through and the assert fails.
   it('D3: a JSON-serialized provenance blob extracts the inner mint label', () => {
+    // The query must be lowercase (the real producer shape) so the JSON branch
+    // is the only path that produces human-case; if it yields nothing, the fold
+    // leaks through and the assertion below fails.
     const jsonBlobRequest: AiClarificationRequest = {
       id: 'unresolved-c-d3-json',
       kind: 'material',
       prompt: 'Choose what it is',
       entityType: 'material',
       menuProvider: '/m',
-      query: 'Nile Red stain',
+      query: 'nile red stain',
       options: [],
       allowCreateLocal: true,
       unresolvedFact: {
