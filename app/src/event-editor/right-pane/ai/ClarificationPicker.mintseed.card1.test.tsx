@@ -216,6 +216,29 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
     expect(mintLocalTerm.mock.calls[0]?.[1]).toBe('1 mM Clofibrate in DMSO')
   })
 
+  // Browser regate #4 finding M2: raw provenance blobs (structured mint JSON)
+  // must be unwrapped to the inner human label before seeding the mint title.
+  it('M2: a structured provenance blob is unwrapped to the inner mint label', () => {
+    const structuredBlobRequest: AiClarificationRequest = {
+      id: 'unresolved-c-m2-blob',
+      kind: 'material',
+      prompt: 'Choose what it is',
+      entityType: 'material',
+      menuProvider: '/m',
+      query: 'clofibrate',
+      options: [],
+      allowCreateLocal: true,
+      unresolvedFact: {
+        label: '{mint:{label:clofibrate,ontology:cf/x}}',
+        reason: 'unbound',
+        actionLocation: { action: 'add_material', argument: 'material' },
+      },
+    }
+    // The raw blob is NOT the human label — the client mirror extracts 'clofibrate'.
+    // Without the fix, mintLabelFor returns the raw blob string itself.
+    expect(mintLabelFor(structuredBlobRequest, 'clofibrate')).toBe('clofibrate')
+  })
+
   it('still falls back to the query seed when the server stamps NO unresolvedFact (non-shorthand / gap requests)', () => {
     // A gap request (forceMaterialClarifications.ts) sets request.query =
     // gap.label (RAW provenance) and NEVER stamps unresolvedFact. The chain
