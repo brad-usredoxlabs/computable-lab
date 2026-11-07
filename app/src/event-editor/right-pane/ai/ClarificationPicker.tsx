@@ -421,6 +421,21 @@ function objectLiteralField(body: string, key: string, kind: 'object' | 'string'
 function unwrapMintBlob(label: string): string | null {
   const trimmed = label.trim()
   if (!trimmed.startsWith('{')) return null
+  // Try JSON.parse first — handles quoted-key JSON blobs like {"mint":{"label":"..."}}
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown> | undefined
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const mint = parsed.mint
+      if (mint && typeof mint === 'object' && !Array.isArray(mint)) {
+        const m = mint as Record<string, unknown>
+        if (typeof m.label === 'string' && m.label.trim()) return m.label.trim()
+        if (typeof m.name === 'string' && m.name.trim()) return m.name.trim()
+      }
+      return null // valid JSON without a mint block: not a mint blob
+    }
+  } catch {
+    // not JSON — fall through to the unquoted DSL scan below
+  }
   // Check for the mint block at the top level
   const mintBlock = objectLiteralField(trimmed, 'mint', 'object')
   if (mintBlock === null) return null
