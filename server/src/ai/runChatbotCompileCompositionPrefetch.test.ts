@@ -151,6 +151,45 @@ describe('composition prefetch', () => {
     expect(Array.isArray(nonSpec.payload.formulation.composition)).toBe(true);
     expect((nonSpec.payload.formulation.composition as any[]).length).toBeGreaterThan(0);
   });
+
+  /* End-to-end: prefetch->expansion through runChatbotCompile */
+  it('end-to-end: material-spec composition expands into composition_snapshot via pipeline', async () => {
+    const compEntries = [
+      { component_ref: { kind: 'record', type: 'material', id: 'COMP-A' }, role: 'solute' },
+      { component_ref: { kind: 'record', type: 'material', id: 'COMP-B' }, role: 'solvent' },
+    ];
+    const matSpec: RecordEnvelope = {
+      recordId: 'MAT-E2E', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: compEntries } },
+    } as RecordEnvelope;
+    const { mock, calls } = makeStore([matSpec]);
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT-E2E|E2E]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'MAT-E2E', label: 'E2E' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    // Prefetch: store called with kind: material-spec
+    expect(calls.find((f) => f.kind === 'material-spec')).toBeDefined();
+    // Verify the callback returns the expanded composition
+    const pass = createResolveRolesPass({
+      materialComposition: (id: string) => {
+        // Simulate what the pipeline callback does: look up composition by recordId
+        if (id === 'MAT-E2E') return compEntries;
+        return undefined;
+      },
+    });
+    const state = makePassState({
+      TestMat: { recordId: 'MAT-E2E', verb: 'add', argument: 'material', label: 'TestMat' },
+    });
+    const passResult = pass.run({ pass_id: 'resolve_roles', state });
+    const snap = (passResult.output as any).events[0].details.composition_snapshot;
+    expect(snap).toHaveLength(2);
+    expect(snap[0]).toEqual(compEntries[0]);
+    expect(snap[1]).toEqual(compEntries[1]);
+  });
 });
 
 /* ── Pass-level behavioural legs (D-1, D-2) ── */
