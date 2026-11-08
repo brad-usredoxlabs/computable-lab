@@ -97,4 +97,4 @@ This unit touches .cjs harness code and markdown only. No TypeScript types, no s
 ## BLOCKERS FOR FUTURE RUN
 The `.lawn__tile-anchor .tile` selector must be updated to match the current chrome. This is out of scope for u6status and requires an orchestrator decision on whether the driver re-baseline should incorporate the new UI selectors or wait for the product to stabilize.
 
-L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u6status DONE <sha>
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u6status DONE 6daf7721693d52dc56ca5ddcf6712d774cfcfb76
