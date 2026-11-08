@@ -615,6 +615,8 @@ actions:
       'compose_receiving',
       // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain.
       'compose_execute_chain',
+      // SEQ-ANSWER (DELIBERATE golden diff): answer on the SAME forced tool.
+      'answer',
     ]);
     expect(params.properties.shorthand?.type).toBe('string');
     const parsed = parseAgentIntentArgs({ intent: 'event_shorthand', shorthand: ADD_DMEM_YAML });
