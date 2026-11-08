@@ -742,6 +742,11 @@ export async function normalizeEventGraphMaterialUsage(
 
   void options;
   let changed = false;
+
+  // Batch-scoped memo: key by material_ref.id + canonical composition JSON.
+  // This ensures events with identical identity share ONE upsert promise.
+  const identityMemo = new Map<string, Promise<RefShape | null>>();
+
   const nextEvents = await Promise.all(events.map(async (event, index) => {
     if (event.event_type !== 'add_material') return event;
     const eventId = typeof event.eventId === 'string' && event.eventId.trim().length > 0 ? event.eventId.trim() : `event_${index + 1}`;
@@ -752,9 +757,25 @@ export async function normalizeEventGraphMaterialUsage(
     // A bare concept in a well is never right. Materialize it: a composition or a
     // concept+concentration → a formulation (material-spec); cells+count → an
     // instance. The well then references a formulation/instance, not a concept.
-    const proposedSpecRef =
-      (await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails))
-      ?? (await upsertProposedMaterialSpecFromSingleActive(store, eventGraphId, eventId, groundedDetails));
+    const materialRef = normalizeRef(groundedDetails['material_ref'], 'material');
+    const composition = canonicalCompositionSnapshot(groundedDetails['composition_snapshot']);
+    const identityKey = materialRef && composition.length >= 2
+      ? `${materialRef.id}|${JSON.stringify(composition)}`
+      : null;
+
+    let proposedSpecRef: RefShape | null;
+    if (identityKey) {
+      if (!identityMemo.has(identityKey)) {
+        identityMemo.set(identityKey, upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails));
+      }
+      proposedSpecRef = await identityMemo.get(identityKey)!;
+    } else {
+      proposedSpecRef =
+        await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails);
+    }
+    if (!proposedSpecRef) {
+      proposedSpecRef = await upsertProposedMaterialSpecFromSingleActive(store, eventGraphId, eventId, groundedDetails);
+    }
     const proposedInstanceRef = proposedSpecRef
       ? null
       : await upsertProposedCellsInstance(store, eventGraphId, eventId, groundedDetails);
