@@ -12,4 +12,4 @@ In upsertProposedMaterialSpecFromComposition (MIXTURE/composition arm), look up 
 - Typecheck: npx tsc --noEmit => pre-existing S3 error only, no new errors in AddMaterialSupport.ts
 - Git: clean tree at exit
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE 41f3a367fea17272eb923ba84ea121e09369b5af
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE 3f71d1f48c67ccdba1dfe6d4b262ffa14698f652
