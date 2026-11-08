@@ -208,3 +208,5 @@ PROMPT2-REGATE-LEGAB: PASS (instrument fix landed)
 - `grep -n "waitForTimeout(2500)" chrome.cjs` → 0 matches (fixed)
 - `grep -c "pop.count()" chrome.cjs` → 2 (poll check + final count)
 - `git diff HEAD --stat -- app server schema` → empty (no product-code change)
+
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u8legabdiag DONE 2131cc66f2b96fa93205f691623d919d4a7a6eff
