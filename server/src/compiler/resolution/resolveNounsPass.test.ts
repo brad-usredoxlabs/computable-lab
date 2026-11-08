@@ -41,8 +41,14 @@ const fixtureVocab = (dir: string) =>
   loadScientistIntentVocabulary({ path: join(process.cwd(), FIXTURES, dir, 'scientist-intent-vocabulary.yaml') });
 
 /** A spine whose tier-0 hits are keyed by the queried label (EngineSpineLike
- *  is structural — the same seam nounResolution.test.ts uses). */
-function spineReturning(bindings: Record<string, Array<[string, string]>>) {
+ *  is structural — the same seam nounResolution.test.ts uses). Curies listed
+ *  in `declaringFormulation` carry formulationDeclared:true (a record that
+ *  structurally declares a testable formulation — D5-1). */
+function spineReturning(
+  bindings: Record<string, Array<[string, string]>>,
+  declaringFormulation: string[] = [],
+) {
+  const declaring = new Set(declaringFormulation);
   return createResolveSpine({
     termProvider: async (term) =>
       (bindings[term] ?? []).map(([curie, label]) => ({
@@ -50,6 +56,7 @@ function spineReturning(bindings: Record<string, Array<[string, string]>>) {
         label,
         namespace: 'local' as const,
         level: 'unknown' as const,
+        ...(declaring.has(curie) ? { formulationDeclared: true } : {}),
       })),
   });
 }
@@ -628,13 +635,31 @@ describe('shqa1.gate — resolution-aware firing gate (channel owner)', () => {
     const result = await createResolveNounsPass({
       intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10, targetWells: ['A1'] }]),
       vocabulary: shippedVocab(),
-      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }, ['local:MAT-gated']),
       resolutionGatedClarifications: [gatedBlob],
     }).run(emptyRunArgs);
     expect(result.ok).toBe(true);
     const output = result.output as ResolveNounsOutput;
     expect(output.clarifications).toEqual([]);
     expect(output.blocked).toBe(false);
+  });
+
+  // D5-1: a bind to a record that declares NO testable formulation must NOT
+  // make the gated blob fact moot — the slot is occupied but nothing testable
+  // was bound. The fact survives, the bar blocks, and the binding stands.
+  it('D5-1: a bound slot whose record declares no formulation KEEPS the gated fact', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10, targetWells: ['A1'] }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-bare-concept', 'Gamma/Delta Mixture']] }),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+    // No silent un-bind: the slot is still occupied by the engine binding.
+    expect(output.bindings.some((b: BoundNoun) => b.curie === 'local:MAT-bare-concept')).toBe(true);
   });
 
   it('an unbound slot keeps the gated fact: it counts toward blocked and rides the bar diagnostic', async () => {
