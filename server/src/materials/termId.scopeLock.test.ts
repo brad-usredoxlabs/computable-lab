@@ -63,7 +63,8 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /** The closed, ruling-allowed set of repo-relative files that may mention the
  *  token (definition home + its derivation + the three named shorthandChat
- *  sites + the policy loader that documents it + the tests that pin it). */
+ *  sites + the policy loader that documents it + the tests that pin it +
+ *  server-side tests added after l2t1430 that import the key). */
 const ALLOWED = new Set([
   'server/src/materials/termId.ts',
   'server/src/materials/termId.test.ts',
@@ -80,6 +81,9 @@ const ALLOWED = new Set([
   // variant labels mint the SAME id) — the allow-list covers exactly such
   // server-side tests; app/ stays excluded and the set stays closed.
   'server/src/api/handlers/VocabHandlers.mint.test.ts',
+  // Server-side TESTS added after l2t1430 that import the key — allowed category (server-side tests).
+  'server/src/ai/shorthandChat.canonicalLabelFallback.test.ts',
+  'server/src/ai/shorthandChat.mintBlobLabel.test.ts',
 ]);
 
 function filesMentioningToken(): string[] {

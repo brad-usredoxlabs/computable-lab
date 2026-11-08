@@ -66,13 +66,13 @@ vi.mock('../../lib/groundMaterialRef', () => ({
 // `clarificationsFromUnresolvedFacts` (server/src/ai/shorthandChat.ts:873)
 // emits for this fact — not a hand-built guess. The pre-fix FIX-3 fixture
 // hand-built `query: '1 mM clofibrate in dmso'`, which is NOT what the server
-// emits: the `query` is the canonical FOLD (`canonicalLabelKey(label)` =
+// emits: the `query` is the canonical FOLD (the server's canonical-label fold =
 // NFKC->trim->collapse->toLowerCase), and `'1 mM Clofibrate in DMSO'` folds to
 // `'1 mm clofibrate in dmso'` (note the `1 mm`, not `1 mM`). The byte-accurate
 // fold is the reviewer's D1 point: a hand-built guess that "looks" folded but
 // doesn't match the real fold would hide a server-side fold change.
 // `actionLocation` is carried verbatim (it is the fact's content key — the id
-// is a sha1 over [actionIndex, action, argument, reason, canonicalLabelKey]).
+// is a sha1 over [actionIndex, action, argument, reason, the server's canonical-label fold]).
 // `id` is the REAL content hash (unresolved-c-<sha1-10hex>); it is stable for
 // this exact fact and is re-verified against the live builder by
 // ClarificationPicker.realshape.card1.test.ts (the D1 real-shape pin).
@@ -83,7 +83,7 @@ const clofibrateRequest: AiClarificationRequest = {
   entityType: 'material',
   menuProvider: '/m',
   // The canonical FOLD (the display form) — the real builder emits the
-  // canonicalLabelKey of the raw label, which for '1 mM Clofibrate in DMSO'
+  // the server's canonical-label fold of the raw label, which for '1 mM Clofibrate in DMSO'
   // is '1 mm clofibrate in dmso'. A bare noun, so mintNounFromQuery returns it
   // verbatim (the pre-fix seed).
   query: '1 mm clofibrate in dmso',
@@ -112,7 +112,7 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
   it('mintLabelFor seeds from the RAW unresolvedFact.label (human case), not the canonical lowercase query', () => {
     // seedNoun is what the component passes (mintNounFromQuery(request.query))
     // — for a bare-noun query it is the query itself. The REAL builder folds
-    // the raw label to '1 mm clofibrate in dmso' (canonicalLabelKey), so THAT
+    // the raw label to '1 mm clofibrate in dmso' (the server's canonical-label fold), so THAT
     // is the seed the component computes from the real payload.
     const seedNoun = '1 mm clofibrate in dmso'
     // Post-fix: the raw provenance label wins (human case). Pre-fix this
@@ -185,7 +185,7 @@ describe('ClarificationPicker — L2-CLARIFY-CARD-1 defect 5: the COMPOSED mint-
   it('D13: a raw label with leading/trailing whitespace posts the TRIMMED title (the .trim() is intentional and pinned)', async () => {
     // A copy of the real-shape fixture whose raw label is PADDING whitespace
     // around the same human-case label. query is the same canonical fold
-    // (canonicalLabelKey trims + folds, so the fold is whitespace-free too).
+    // (the server's canonical-label fold trims + folds, so the fold is whitespace-free too).
     const wsRequest: AiClarificationRequest = {
       ...clofibrateRequest,
       id: 'unresolved-c-ws-padded-1',

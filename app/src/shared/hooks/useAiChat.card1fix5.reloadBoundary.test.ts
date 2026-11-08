@@ -25,7 +25,7 @@
  *     consumes exactly this — `answeredIds` from the on-wire
  *     `clarificationAnswers`, then the drop) together with the re-derived
  *     fact: post-D3 the fact's id is canonical-stable
- *     (`factRequestId` = content key over `canonicalLabelKey(fact.label)`),
+ *     (`factRequestId` = content key over the server's canonical-label fold of the fact label),
  *     so the re-extract re-mints the SAME id the ask offered — and the drop
  *     removes it. The unanswered fact survives (the negative case). NO
  *     re-opened card for the answered requestId.
