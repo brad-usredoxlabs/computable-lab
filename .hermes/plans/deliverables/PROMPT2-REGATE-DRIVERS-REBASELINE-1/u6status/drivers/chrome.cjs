@@ -138,12 +138,16 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
     }
   }
 
-  // 4. Numbered options
+  // 4. Numbered options — grouped arm: slot-scoped testid prefix; fallback: ol button
   {
-    const opts = slot.locator('ol button')
+    let opts = slot.locator('[data-testid^="chat-clarification-option-"]')
+    if (!(await opts.count())) { opts = slot.locator('ol button') }
     if (await opts.count()) {
-      const o = await pickNumberedOption(page, answerValue)
-      if (o) return { present: true, via: 'option' }
+      const n = await opts.count()
+      for (let i = 0; i < n; i++) {
+        const txt = ((await opts.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
+        if (new RegExp(searchValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option' } }
+      }
     }
   }
 
@@ -193,9 +197,21 @@ async function answerSlot(page, kind, searchValue) {
     throw new Error(`answerSlot identity: no picker/popover/top3/option match for "${searchValue}"`)
   }
   if (kind === 'quantity') {
-    // Delegate to surface-driven enumeration for slot 1 (the second slot)
+    // Derive slot index from the rendered card: find the slot whose
+    // chat-clarification-slot-identity span matches "quantity". Fall back
+    // to the first slot if no identity label matches.
+    const slotEls = page.locator('[data-testid="chat-clarification-slot"]')
+    const slotCount = await slotEls.count()
+    let idx = 0
+    for (let i = 0; i < slotCount; i++) {
+      const identity = slotEls.nth(i).locator('[data-testid="chat-clarification-slot-identity"]')
+      if (await identity.count()) {
+        const txt = (await identity.innerText()).toLowerCase()
+        if (txt.includes(kind)) { idx = i; break }
+      }
+    }
     // Legacy callers expect a {present, approved} or {present:false} shape.
-    const r = await answerSlotBySurface(page, 1, searchValue)
+    const r = await answerSlotBySurface(page, idx, searchValue)
     if (r.present) {
       return { present: true, approved: String(searchValue), via: r.via }
     }
