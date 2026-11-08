@@ -318,6 +318,37 @@ describe('composition prefetch — behavioural (pass-level)', () => {
     ]);
   });
 
+  it('u14 D4-1/D4-2: composition_snapshot entries carry declared concentration and material-spec ref type', async () => {
+    // Browser c4 D4-1: the emission mapped {component_ref, role} only, dropping
+    // the declared concentration so the board rendered an em-dash. D4-2: the
+    // bound ref of a material-spec must carry type 'material-spec'.
+    const concentration = { value: 1, unit: 'mM', basis: 'molar' };
+    const matSpec: RecordEnvelope = {
+      recordId: 'MAT-CONC', kind: 'material-spec',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+      payload: { formulation: { composition: [
+        { component_ref: { kind: 'record', type: 'material', id: 'SOLUTE-C' }, role: 'solute', concentration },
+        { component_ref: { kind: 'record', type: 'material', id: 'SOLVENT-C' }, role: 'solvent' },
+      ] } },
+    } as RecordEnvelope;
+    const { mock } = makeStore([matSpec]);
+    const result = await runChatbotCompile({
+      prompt: 'Add [[aliquot:MAT-CONC|ConcMat]] to [[labware:lw-1|Plate]]',
+      mentions: [{ type: 'material', entityKind: 'aliquot', id: 'MAT-CONC', label: 'ConcMat' },
+        { type: 'labware', id: 'lw-1', label: 'Plate' }],
+      editorLabwares: [{ labwareId: 'lw-1', labwareType: 'plate_96', name: 'Plate' }],
+      deps: makeDeps(mock),
+    });
+    const addMatEvent = result.events.find((e) => e.event_type === 'add_material');
+    expect(addMatEvent).toBeDefined();
+    const details = addMatEvent!.details as any;
+    expect(details.composition_snapshot).toHaveLength(2);
+    expect(details.composition_snapshot[0].concentration).toEqual(concentration);
+    // Absent optional fields stay absent (exactOptionalPropertyTypes), never undefined.
+    expect(details.composition_snapshot[1]).not.toHaveProperty('concentration');
+    expect(details.material_ref.type).toBe('material-spec');
+  });
+
   it('D-2: array composition is expanded into composition_snapshot', () => {
     const entries = [
       { component_ref: { kind: 'record', type: 'material', id: 'SOL-1' }, role: 'solute' },
