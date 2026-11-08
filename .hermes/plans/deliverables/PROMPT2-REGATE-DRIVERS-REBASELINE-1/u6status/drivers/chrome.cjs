@@ -54,6 +54,41 @@ async function pickTop3(page, searchValue) {
   return null
 }
 
+// u3fix2 FIX-2/FIX-3: the card renders each slot's identity (request.slot) in
+// [data-testid="chat-clarification-slot-identity"], so the answer value is a
+// function of the RENDERED identity — never of the slot's array position.
+const DEFAULT_ANSWERS = { concept: 'Clofibrate', quantity: '1' }
+
+/** Classify a slot's rendered identity text as 'concept' | 'quantity' | ''. */
+function identityKind(identityText) {
+  const t = String(identityText || '').toLowerCase()
+  if (/(quant|volume|amount|concentration|dose|mass|count)/.test(t)) return 'quantity'
+  if (/(ident|concept|material|compound|reagent|solvent|analyte)/.test(t)) return 'concept'
+  return ''
+}
+
+/** Read one slot's rendered identity text ('' when the card renders none). */
+async function slotIdentity(slot) {
+  const el = slot.locator('[data-testid="chat-clarification-slot-identity"]')
+  if (!(await el.count())) return ''
+  return ((await el.innerText().catch(() => '')) || '').trim()
+}
+
+/**
+ * Value to drive into one slot. A scalar `answers` keeps the legacy "same
+ * value for every slot" contract; an object maps identity kind -> value.
+ */
+async function slotAnswerValue(slot, identity, answers) {
+  if (typeof answers === 'string') return answers
+  const a = answers || DEFAULT_ANSWERS
+  const kind = identityKind(identity)
+  if (kind) return a[kind] ?? DEFAULT_ANSWERS[kind]
+  if (a.default) return a.default
+  // No identity text: read the control the slot actually rendered.
+  const chip = await slot.locator('[data-testid="clarify-assumed-chip"]').count()
+  return chip ? (a.quantity ?? DEFAULT_ANSWERS.quantity) : (a.concept ?? DEFAULT_ANSWERS.concept)
+}
+
 async function pickNumberedOption(page, searchValue) {
   const rows = page.locator('.chat-log-clarification-options li button')
   const n = await rows.count()
@@ -97,7 +132,7 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       const approve = chip.locator('[data-testid="clarify-assumed-approve"]')
       if (!(await approve.isEnabled())) throw new Error('answerSlotBySurface: assumed-chip approve disabled')
       await approve.click()
-      return { present: true, via: 'assumed-chip' }
+      return { present: true, via: 'assumed-chip', picked: String(answerValue) }
     }
   }
 
@@ -111,7 +146,7 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       if (await approve.count() && (await approve.isEnabled())) {
         await approve.click()
       }
-      return { present: true, via: 'wells-slot' }
+      return { present: true, via: 'wells-slot', picked: String(answerValue) }
     }
   }
 
@@ -127,14 +162,14 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       const popN = await pop.count()
       for (let i = 0; i < popN; i++) {
         const txt = ((await pop.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
-        if (new RegExp(answerValue, 'i').test(txt)) { await pop.nth(i).click(); return { present: true, via: 'picker-popover' } }
+        if (new RegExp(answerValue, 'i').test(txt)) { await pop.nth(i).click(); return { present: true, via: 'picker-popover', picked: txt.trim() } }
       }
       // Popover gave nothing: fall through to top-3 rows
     }
     const top3 = slot.locator('[data-testid="clarification-top3-row"]')
     if (await top3.count()) {
       const t = await pickTop3(page, answerValue)
-      if (t) return { present: true, via: 'picker-top3' }
+      if (t) return { present: true, via: 'picker-top3', picked: t.picked }
     }
   }
 
@@ -146,7 +181,7 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       const n = await opts.count()
       for (let i = 0; i < n; i++) {
         const txt = ((await opts.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
-        if (new RegExp(answerValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option' } }
+        if (new RegExp(answerValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option', picked: txt.trim() } }
       }
     }
   }
@@ -160,7 +195,7 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       if (await submit.count() && (await submit.isEnabled())) {
         await submit.click()
       }
-      return { present: true, via: 'typed' }
+      return { present: true, via: 'typed', picked: String(answerValue) }
     }
   }
 
@@ -225,8 +260,14 @@ async function answerSlot(page, kind, searchValue) {
  * answers each one. A slot with no drivable control returns
  * {unanswered: true, slotId, dom} instead of throwing.
  *
+ * u3fix2: each result also carries `slotIndex`, the slot's rendered `identity`
+ * text and the `answerValue` actually driven into it, so callers project
+ * receipts by IDENTITY rather than by array position.
+ *
  * @param {import('playwright').Page} page
- * @param {string} answerValue  value to type into each slot
+ * @param {string|{concept?: string, quantity?: string, default?: string}} answerValue
+ *        a scalar keeps the legacy "same value for every slot" contract; an
+ *        object maps rendered identity kind -> value (default: Clofibrate / 1)
  * @returns {Promise<Array>}  array of per-slot results
  */
 async function answerAllSlots(page, answerValue) {
@@ -234,9 +275,12 @@ async function answerAllSlots(page, answerValue) {
   const n = await slotEls.count()
   const results = []
   for (let i = 0; i < n; i++) {
-    const r = await answerSlotBySurface(page, i, answerValue)
+    const slot = slotEls.nth(i)
+    const identity = await slotIdentity(slot)
+    const value = await slotAnswerValue(slot, identity, answerValue)
+    const r = await answerSlotBySurface(page, i, value)
     if (r.present) await page.waitForTimeout(500)
-    results.push(r)
+    results.push({ ...r, slotIndex: i, identity, answerValue: value })
   }
   return results
 }
@@ -265,4 +309,4 @@ async function apply(page) {
 
 async function discard(page) { await page.locator('[data-testid="chat-preview-discard"]').click() }
 
-module.exports = { card, slots, anySurface, arm, answerSlot, answerSlotBySurface, answerAllSlots, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
+module.exports = { card, slots, anySurface, arm, answerSlot, answerSlotBySurface, answerAllSlots, identityKind, slotIdentity, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
