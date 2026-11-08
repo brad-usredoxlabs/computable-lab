@@ -99,4 +99,4 @@ e6244068 u4bfix1: update probe to pass all 5 shapes with classification fix
 42a83fe7 u4bfix1: probe.slots.cjs — RED pin for slot-kind classification
 ```
 
-L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4bfix1 DONE 53e2346716240cbf9d63661e8bae7c8827859b49
+L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4bfix1 DONE bfe7c9e9e3ffdc24f9e52702826d4a84c33925f3
