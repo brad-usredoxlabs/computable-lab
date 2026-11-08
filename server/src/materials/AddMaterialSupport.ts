@@ -205,6 +205,38 @@ function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId:
   };
 }
 
+function entriesMatch(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aRef = normalizeRef(a['component_ref']);
+  const bRef = normalizeRef(b['component_ref']);
+  if (!aRef || !bRef || aRef.id !== bRef.id) return false;
+  const aRole = typeof a['role'] === 'string' ? a['role'] : null;
+  const bRole = typeof b['role'] === 'string' ? b['role'] : null;
+  if (aRole !== bRole) return false;
+  const aConc = a['concentration'];
+  const bConc = b['concentration'];
+  if (aConc && bConc && typeof aConc === 'object' && typeof bConc === 'object') {
+    const aObj = aConc as Record<string, unknown>;
+    const bObj = bConc as Record<string, unknown>;
+    if (aObj.value !== bObj.value || aObj.unit !== bObj.unit) return false;
+  }
+  return true;
+}
+
+function compositionsEqual(a: Record<string, unknown>[], b: Record<string, unknown>[]): boolean {
+  if (a.length !== b.length) return false;
+  const bUsed = new Array(b.length).fill(false);
+  for (const entryA of a) {
+    let found = -1;
+    for (let j = 0; j < b.length; j++) {
+      if (bUsed[j]) continue;
+      if (entriesMatch(entryA, b[j]!)) { found = j; break; }
+    }
+    if (found === -1) return false;
+    bUsed[found] = true;
+  }
+  return true;
+}
+
 async function upsertProposedMaterialSpecFromComposition(
   store: RecordStore,
   eventGraphId: string,
@@ -219,6 +251,32 @@ async function upsertProposedMaterialSpecFromComposition(
   if (!materialRef) return null;
   const composition = canonicalCompositionSnapshot(details['composition_snapshot']);
   if (composition.length < 2) return null;
+
+  /* ---- FIND: look for an existing material-spec with the same identity ---- */
+  const specs = await store.list({ kind: 'material-spec', limit: 10000 });
+  const candidates = specs.filter((env): env is RecordEnvelope => {
+    const payload = getEnvelopePayload(env);
+    if (!payload) return false;
+    const storedRef = normalizeRef(payload['material_ref'], 'material');
+    if (!storedRef || storedRef.id !== materialRef.id) return false;
+    const storedFormulation = payload['formulation'];
+    if (!storedFormulation || typeof storedFormulation !== 'object') return false;
+    const storedComp = (storedFormulation as Record<string, unknown>)['composition'];
+    const storedCanonical = canonicalCompositionSnapshot(storedComp);
+    return compositionsEqual(composition, storedCanonical);
+  });
+  if (candidates.length > 0) {
+    if (candidates.length > 1) {
+      candidates.sort((a, b) => a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0);
+    }
+    const matched = candidates[0]!;
+    const matchedPayload = getEnvelopePayload(matched);
+    return toRecordRef(
+      matched.recordId,
+      'material-spec',
+      matchedPayload ? String(matchedPayload.name) : matched.recordId,
+    );
+  }
 
   const specId = implicitMaterialSpecId(eventGraphId, eventId);
   const existing = await store.get(specId);
