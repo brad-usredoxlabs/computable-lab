@@ -181,7 +181,7 @@ def _component_body(app_content, name):
 
 def _shape_detail(class_name, element):
     if class_name == "redirect":
-        m = re.search(r'to=(?:"([^"]*)"|\{(.+?)\}\s+replace)', element)
+        m = re.search(r'to=(?:"([^"]*)"|\{(.+?)\}\s+replace)', element, re.S)
         if not m:
             target = "?"
         elif m.group(1) is not None:
@@ -204,7 +204,11 @@ def classify_non_page_routes(unmatched_routes, route_elements, app_content):
     """
     redirects, slot_hosts, catchalls, remaining = [], [], [], []
     for route_path in unmatched_routes:
-        element = route_elements.get(route_path, "").strip()
+        # A multi-line element body (or a tag name followed by a newline) is
+        # still the same shape; collapse layout whitespace before matching the
+        # shape table so a reformatted <Navigate>/<Slot> cannot fall through to
+        # the page bucket and silently undercount REDIRECT / SLOT-HOST.
+        element = re.sub(r"\s+", " ", route_elements.get(route_path, "")).strip()
         shape = None
         if route_path == CATCHALL_PATH:
             shape = ("catch-all", _shape_detail("catch-all", element))
@@ -432,6 +436,12 @@ def main():
     route_elements = extract_route_elements(APP_TSX)
     with open(APP_TSX, "r") as f:
         app_content = f.read()
+    # Non-tautological guard: the bucket-sum assert below still holds when
+    # extraction silently drops a route (it just moves it between buckets), so
+    # require element coverage of every route the route extractor found.
+    assert len(route_elements) == route_count, (
+        f"extract_route_elements captured {len(route_elements)} of "
+        f"{route_count} routes")
     redirects, slot_hosts, catchalls, page_routes = classify_non_page_routes(
         unmatched, route_elements, app_content)
     # Every MISSING route lands in exactly one bucket; nothing may vanish.
