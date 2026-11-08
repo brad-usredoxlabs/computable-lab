@@ -86,4 +86,4 @@ AFTER (with memo):
 1. 1e22a81f — roauth u8mspdedupe: RED pin for per-identity spec minting
 2. 83937958 — roauth u8mspdedupe: one material-spec per identity in a batch
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8mspdedupe DONE 83937958b06da105b41074b609912d4ed7f6f7d1
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8mspdedupe DONE 0089304747a848551c734d9bb0ff1a0c4786edc8
