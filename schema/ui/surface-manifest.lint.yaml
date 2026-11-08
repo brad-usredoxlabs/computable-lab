@@ -32,6 +32,7 @@ rules:
             - event-editor
             - deck
             - project-tabs
+            - collection-list
     message:
       template: >-
         Surface {{surfaces[*].id}} mounts pane {{surfaces[*].panes[*]}} which is not in the declared pane vocabulary.
