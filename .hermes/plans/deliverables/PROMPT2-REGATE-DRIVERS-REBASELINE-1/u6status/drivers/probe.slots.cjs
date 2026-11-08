@@ -46,20 +46,39 @@ function mkEl(key, si, text) {
 // Every element carries its own text so a fixture can make slot0's row match a
 // value that belongs to slot1 — the discriminator for page-wide fallbacks.
 const PICKS = []
-function stubList(els) {
-  return { count: async () => els.length, nth: (i) => els[i] || mkEl('x', -1), first: () => els[0] || mkEl('x', -1) }
+function stubList(els, resolve) {
+  const one = (i) => els[i] || mkEl('x', -1)
+  return {
+    locator: (sel) => (resolve ? resolve(sel) : stubList([])),
+    count: async () => els.length, nth: (i) => one(i), first: () => one(0),
+    // Trunk chrome drives controls straight off a slot-level locator; forward
+    // element ops to the first match.
+    click: async () => one(0).click(), fill: async () => one(0).fill(),
+    isEnabled: async () => one(0).isEnabled(), innerText: async () => one(0).innerText(),
+    getAttribute: async () => '',
+  }
 }
 
 function buildPage(slotTables, answerMap) {
   _answerMap = answerMap
   PICKS.length = 0
   const slotEls = slotTables.map((st, si) => ({
-    locator: (sel) => {
-      const key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
-      const c = (st.markers && st.markers[key]) || 0
-      const texts = (st.texts && st.texts[key]) || []
-      return stubList(Array.from({ length: c }, (_, j) => mkEl(key, si, texts[j])))
-    },
+    getAttribute: async () => null, innerHTML: async () => '<stub-slot/>',
+    locator: (() => {
+      // Trunk chrome queries the picker arm by exact testid and the option arms
+      // by prefix / generic 'ol button'; resolve those selectors onto the same
+      // per-slot marker tables (no new fixture semantics). Nested queries (e.g.
+      // the assumed chip's value/approve controls) resolve within the slot too.
+      const resolve = (sel) => {
+        let key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
+        if (!key && sel === 'ol button') key = 'options'
+        if (!key && /^\[data-testid\^="chat-clarification-option-"\]$/.test(sel)) key = 'cardOption'
+        const c = (st.markers && st.markers[key]) || 0
+        const texts = (st.texts && st.texts[key]) || []
+        return stubList(Array.from({ length: c }, (_, j) => mkEl(key, si, texts[j])), resolve)
+      }
+      return resolve
+    })(),
   }))
   function pageAgg(key) {
     return stubList(slotTables.map((st, si) => {
@@ -138,12 +157,27 @@ const SHAPES = [
   },
 ]
 
+// Trunk answerAllSlots returns slotIndex/identity/answerValue (identity-located
+// receipts) instead of an index/kind pair; classify the driven surface back to
+// the shape's kind vocabulary so every assertion keeps its meaning.
+function kindOf(r, shape) {
+  if (r.kind) return r.kind
+  const table = shape.slots[r.slotIndex]
+  const m = (table && table.markers) || {}
+  if (m.chip) return 'quantity'
+  if (m.target) return 'wells'
+  if (m.param || m.paramInput) return 'parameter'
+  if (m.search || m.top3) return 'identity'
+  if (m.options || m.logOptions) return 'option'
+  return r.identity ? chrome.identityKind(r.identity) : ''
+}
+
 async function run() {
   let fail = 0
   for (const shape of SHAPES) {
     try {
       const results = await chrome.answerAllSlots(buildPage(shape.slots, shape.answerMap), shape.answerMap)
-      const got = results.map((r) => 'slot' + r.index + ':' + r.kind)
+      const got = results.map((r) => 'slot' + r.slotIndex + ':' + kindOf(r, shape))
       const exp = shape.slots.map((s, i) => 'slot' + i + ':' + s.kind)
       const okKinds = got.length === exp.length && got.every((k, i) => k === exp[i])
       const want = shape.expectPicked
