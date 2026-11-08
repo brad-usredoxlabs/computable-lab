@@ -10,7 +10,7 @@ import {
   type RefShape as GroundingRefShape,
 } from './MaterialGrounding.js';
 import { searchOls4 } from '../resolve/providers/ols4.js';
-import { findOrAuthorFormulation } from './formulationGrounding.js';
+import { findOrAuthorFormulation, SolventUnresolvableError } from './formulationGrounding.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
@@ -300,9 +300,9 @@ async function upsertProposedMaterialSpecFromSingleActive(
         solventLabel,
       );
       return toRecordRef(identityRef.id, 'material-spec', identityRef.label);
-    } catch {
-      // Solvent unresolvable or store write failed — fall through to
-      // the per-journey path exactly as before.
+    } catch (err) {
+      if (!(err instanceof SolventUnresolvableError)) throw err;
+      // Solvent unresolvable — fall through to the per-journey path exactly as before.
     }
   }
 

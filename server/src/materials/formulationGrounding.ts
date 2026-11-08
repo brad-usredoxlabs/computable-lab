@@ -106,27 +106,42 @@ async function conceptMatches(
 
 /**
  * Scan existing material-specs for one that declares the same
- * solute concept + concentration identity. Returns the matching spec env,
- * or null if none found.
+ * solute concept + solvent + concentration identity. Returns the matching
+ * spec env, or null if none found.
  */
 async function findExistingFormulation(
   store: RecordStore,
   soluteCurie: string,
   concentration: ConcentrationObj,
+  solventRef: RefShape | null,
 ): Promise<RecordEnvelope | null> {
   const specs = await store.list({ kind: 'material-spec', limit: 10000 });
   for (const env of specs) {
     const payload = asPayload(env);
     if (!payload || !declaresFormulation(payload)) continue;
+
+    // formulation_kind must be compatible — skip non-single-active specs
+    if (payload.formulation_kind && typeof payload.formulation_kind === 'string'
+        && payload.formulation_kind !== 'single_active') {
+      continue;
+    }
+
     const form = payload.formulation as Record<string, unknown>;
 
     // Check concentration matches
     if (!concEqual(form.concentration, concentration)) continue;
 
     // Check solute concept matches
-    if (await conceptMatches(store, payload, soluteCurie)) {
-      return env;
+    if (!await conceptMatches(store, payload, soluteCurie)) continue;
+
+    // Check solvent matches — different solvent means a different formulation
+    if (solventRef) {
+      const existingSolvent = asObject(form.solvent_ref);
+      if (!existingSolvent || typeof existingSolvent.id !== 'string') continue;
+      if (existingSolvent.id !== solventRef.id) continue;
     }
+
+    return env;
   }
   return null;
 }
@@ -158,6 +173,21 @@ async function findSolventMaterial(
     }
   }
   return null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Errors                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Thrown when solvent resolution fails — no local material found and no
+ * ontology hit. Callers may catch this to fall through to per-journey paths.
+ */
+export class SolventUnresolvableError extends Error {
+  constructor(solventLabel: string) {
+    super(`Cannot resolve solvent "${solventLabel}" from local materials or ontology.`);
+    this.name = 'SolventUnresolvableError';
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,9 +233,25 @@ export async function findOrAuthorFormulation(
     }
   }
 
-  /* ---- FIND: check existing specs ---- */
+  /* ---- Resolve solvent BEFORE find, so we can compare in FIND ---- */
+  let solventRef: RefShape | null = await findSolventMaterial(store, solventLabel);
+  if (!solventRef) {
+    const hits = await searchOntology(solventLabel, 1, new AbortController().signal);
+    const firstHit = hits[0];
+    if (firstHit) {
+      solventRef = await ensureLocalMaterialForOntology(store, {
+        kind: 'ontology',
+        id: firstHit.curie,
+        label: firstHit.label,
+      }, { createdBy: 'formulation-grounding' });
+    } else {
+      throw new SolventUnresolvableError(solventLabel);
+    }
+  }
+
+  /* ---- FIND: check existing specs (with solvent awareness) ---- */
   if (soluteCurie) {
-    const existing = await findExistingFormulation(store, soluteCurie, concentration);
+    const existing = await findExistingFormulation(store, soluteCurie, concentration, solventRef);
     if (existing) {
       const specPayload = asPayload(existing);
       return {
@@ -218,45 +264,22 @@ export async function findOrAuthorFormulation(
   }
 
   /* ---- AUTHOR: concept ---- */
+  // D2 fix: when soluteCurie is null, use the record ref directly instead of
+  // fabricating an ontology term from a record id.
   const conceptRef: RefShape = soluteCurie
     ? await ensureLocalMaterialForOntology(store, {
         kind: 'ontology',
         id: soluteCurie,
         label: soluteLabel,
       }, { createdBy: 'formulation-grounding' })
-    : await ensureLocalMaterialForOntology(store, {
-        kind: 'ontology',
-        id: materialRef.id,
-        label: soluteLabel,
-      }, { createdBy: 'formulation-grounding' });
-
-  /* ---- AUTHOR: solvent — find existing first ---- */
-  let solventRef: RefShape | null = await findSolventMaterial(store, solventLabel);
-  if (!solventRef) {
-    // Truly absent — create from ontology
-    const hits = await searchOntology(solventLabel, 1, new AbortController().signal);
-    const firstHit = hits[0];
-    if (firstHit) {
-      solventRef = await ensureLocalMaterialForOntology(store, {
-        kind: 'ontology',
-        id: firstHit.curie,
-        label: firstHit.label,
-      }, { createdBy: 'formulation-grounding' });
-    } else {
-      // No ontology hit either — fall back to minting a draft material
-      solventRef = {
-        kind: 'record',
-        id: solventLabel.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, ''),
-        type: 'material',
-        label: solventLabel,
-      };
-    }
-  }
+    : toRecordMaterialRef(materialRef.id, soluteLabel);
 
   /* ---- AUTHOR: material-spec formulation ---- */
   const concLabel = `${concentration.value} ${concentration.unit} `;
   const specName = `${concLabel}${soluteLabel}`.trim();
-  const specId = `MSP-${soluteLabel.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase()}-${concentration.value}-${concentration.unit.replace(/\//g, 'p')}`;
+  const soluteSlug = soluteLabel.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
+  const solventSlug = (solventRef.id).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
+  const specId = `MSP-${soluteSlug}-${concentration.value}-${concentration.unit.replace(/\//g, 'p')}-IN-${solventSlug}`;
 
   const specPayload: Record<string, unknown> = {
     kind: 'material-spec',

@@ -201,7 +201,7 @@ describe('findOrAuthorFormulation', () => {
     expect(store.created.length).toBe(createdAfterFirst);
   });
 
-  it('finder that skips existing record fails idempotency pin', async () => {
+  it('reuses a pre-seeded matching spec on second call', async () => {
     // This mutation pin verifies: a finder that does not detect an already-
     // stored spec would author a duplicate. We test by putting a matching spec
     // in the store and confirming the finder reuses it instead of creating a new one.
@@ -235,5 +235,55 @@ describe('findOrAuthorFormulation', () => {
     expect(result.id).toBe('MSP-EXISTING');
     // Must NOT create anything new
     expect(store.created.length).toBe(createdBefore);
+  });
+
+  it('authors a different spec when solvent differs (DMSO vs ethanol), not reusing ethanol spec', async () => {
+    // Seed: an ethanol solvent material
+    const ethanolEnv: RecordEnvelope = {
+      recordId: 'mat-ethanol',
+      schemaId: MATERIAL_SCHEMA_ID,
+      payload: {
+        kind: 'material',
+        id: 'mat-ethanol',
+        name: 'Ethanol',
+        synonyms: ['ethanol', 'ethyl alcohol'],
+        domain: 'chemical',
+      },
+    };
+    // Seed: a concept for clofibrate
+    const conceptEnv: RecordEnvelope = {
+      recordId: 'MAT-CHEBI-3750',
+      schemaId: MATERIAL_SCHEMA_ID,
+      payload: {
+        kind: 'material',
+        id: 'MAT-CHEBI-3750',
+        name: 'clofibrate',
+        class: [{ kind: 'ontology', id: 'CHEBI:3750' }],
+      },
+    };
+    // Seed: an ethanol spec for 1mM clofibrate
+    const ethanolSpec = makeMaterialSpecEnv(
+      'MSP-ETHANOL',
+      { kind: 'record', id: 'MAT-CHEBI-3750', type: 'material' },
+      { value: 1, unit: 'mM' },
+      { kind: 'record', id: 'mat-ethanol', type: 'material' },
+    );
+    const store = new MemoryRecordStore([DMSO_ENV, ethanolEnv, conceptEnv, ethanolSpec]);
+    const createdBefore = store.created.length;
+
+    // Request 1mM clofibrate in DMSO — should NOT return the ethanol spec
+    const result = await findOrAuthorFormulation(
+      { store, searchOntology: stubSearchOntology },
+      { kind: 'ontology', id: 'CHEBI:3750', label: 'clofibrate' },
+      { value: 1, unit: 'mM' },
+      'DMSO',
+    );
+
+    // Must NOT reuse the ethanol spec
+    expect(result.id).not.toBe('MSP-ETHANOL');
+    // Must have authored a new spec
+    expect(store.created.length).toBeGreaterThan(createdBefore);
+    // New spec id should include DMSO solvent
+    expect(result.id).toContain('MAT-SEED-DM');
   });
 });
