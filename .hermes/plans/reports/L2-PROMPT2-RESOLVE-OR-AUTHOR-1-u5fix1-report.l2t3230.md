@@ -109,4 +109,4 @@ $ cd server && npx vitest run src/materials/addMaterialCompositionIdentity.test.
 1. 2e9a3b8d — u5fix1: RED — cross-ref-level composition FIND (gate g2 D1 shape)
 2. 48e243e8 — u5fix1: bind canonical spec across ref levels; prefer non-draft candidate (D1/D2)
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u5fix1 DONE cd15d5e9f4128e44db8fa1ee4677a97201c03ce1
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u5fix1 DONE f2b2458696fde28b98c8d64abdeb08e3f2662e82
