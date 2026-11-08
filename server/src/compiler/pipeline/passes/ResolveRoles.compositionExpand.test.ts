@@ -87,8 +87,8 @@ describe('composition expansion in createResolveRolesPass', () => {
     expect(events).toHaveLength(1);
     const details = events[0].details;
 
-    // material_ref still points to the formulation
-    expect(details.material_ref).toEqual({ kind: 'record', type: 'material', id: 'FORM-1' });
+    // material_ref still points to the formulation (material-spec when composition entries exist, D4-2)
+    expect(details.material_ref).toEqual({ kind: 'record', type: 'material-spec', id: 'FORM-1' });
 
     // composition_snapshot has TWO entries
     const snapshot = details.composition_snapshot as Array<{ component_ref: { id: string }; role: string }>;
