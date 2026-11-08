@@ -57,6 +57,18 @@ describe('proposalRowFact — material_ref fallback for authored events', () => 
     expect(fact).not.toBeNull()
     expect(fact!.text).toBe('A1 ← 50 uL DMEM')
     expect(fact!.text).not.toContain('Other material')
+
+    // Mutation witness: empty material falls back to material_ref.label.
+    const eventB = {
+      eventId: 'e2b', kind: 'add_material',
+      details: {
+        well: 'A2', volumeUl: 50, material: '',
+        material_ref: { kind: 'record', type: 'material-spec', id: 'MSP-other', label: 'Other material' },
+      },
+    }
+    const factB = proposalRowFact(eventB)
+    expect(factB).not.toBeNull()
+    expect(factB!.text).toContain('Other material')
   })
 
   it('material_ref without label yields no material part', () => {
@@ -78,6 +90,31 @@ describe('proposalRowFact — material_ref fallback for authored events', () => 
     expect(fact).not.toBeNull()
     expect(fact!.text).toBe('B1 ← 25 uL')
     expect(fact!.carried.has('material')).toBe(false)
+
+    // Mutation witness: whitespace label is trimmed out (trim() guard).
+    const eventB2 = {
+      eventId: 'e3b', kind: 'add_material',
+      details: {
+        wells: ['B2'], volumeUl: 25,
+        material_ref: { kind: 'record', type: 'material-spec', id: 'MSP-whitespace', label: '   ' },
+      },
+    }
+    const factB = proposalRowFact(eventB2)
+    expect(factB).not.toBeNull()
+    expect(factB!.text).toBe('B2 ← 25 uL')
+    expect(factB!.carried.has('material')).toBe(false)
+
+    // Mutation witness: valid label renders via else-arm.
+    const eventC = {
+      eventId: 'e3c', kind: 'add_material',
+      details: {
+        wells: ['C2'], volumeUl: 50,
+        material_ref: { kind: 'record', type: 'material-spec', id: 'MSP-dmem', label: 'DMEM' },
+      },
+    }
+    const factC = proposalRowFact(eventC)
+    expect(factC).not.toBeNull()
+    expect(factC!.text).toContain('DMEM')
   })
 
   it('material_ref that is not an object yields no material part', () => {
@@ -94,6 +131,18 @@ describe('proposalRowFact — material_ref fallback for authored events', () => 
     expect(fact).not.toBeNull()
     expect(fact!.text).toBe('C1 ← 10 uL')
     expect(fact!.carried.has('material')).toBe(false)
+
+    // Mutation witness: proper object material_ref renders via else-arm.
+    const eventB4 = {
+      eventId: 'e4b', kind: 'add_material',
+      details: {
+        wells: ['D1'], volumeUl: 10,
+        material_ref: { kind: 'record', type: 'material-spec', id: 'MSP-x', label: 'Trypsin-EDTA' },
+      },
+    }
+    const factB = proposalRowFact(eventB4)
+    expect(factB).not.toBeNull()
+    expect(factB!.text).toContain('Trypsin-EDTA')
   })
 
   it('record id appends when material_ref.label matches the map', () => {
