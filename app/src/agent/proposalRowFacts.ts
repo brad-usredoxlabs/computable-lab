@@ -114,13 +114,26 @@ export function proposalRowFact(
     }
   }
 
-  // material: details.material when a string.
+  // material: details.material when a string, else falls back to
+  // details.material_ref.label when details.material is absent (authored
+  // events carry material_ref instead of material).
   const material = details.material
   let materialLabel: string | null = null
   if (typeof material === 'string' && material.trim().length > 0) {
     materialLabel = material.trim()
     parts.push(materialLabel)
     carried.add('material')
+  } else {
+    // Authored events: material_ref is an object with a `label` string.
+    const materialRef = details.material_ref
+    if (typeof materialRef === 'object' && materialRef !== null) {
+      const refLabel = (materialRef as { label?: unknown }).label
+      if (typeof refLabel === 'string' && refLabel.trim().length > 0) {
+        materialLabel = refLabel.trim()
+        parts.push(materialLabel)
+        carried.add('material')
+      }
+    }
   }
 
   // No recognised field ⇒ null (the caller keeps the eventLabel +
