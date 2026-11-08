@@ -91,6 +91,37 @@ async function answerSlot(page, kind, searchValue) {
   throw new Error(`answerSlot unknown kind: ${kind}`)
 }
 
+async function answerAllSlots(page, answerMap) {
+  // Enumerate slots in DOM order, detect kind per slot, pick value from answerMap,
+  // delegate to existing answerSlot(page, kind, value).
+  const slotEls = page.locator('[data-testid="chat-clarification-slot"]')
+  const count = await slotEls.count()
+  if (count === 0) throw new Error('answerAllSlots: no slots found')
+  const results = []
+  for (let i = 0; i < count; i++) {
+    const slot = slotEls.nth(i)
+    // Detect kind from markers INSIDE this slot
+    const hasIdentity = await slot.locator('[data-testid="chat-clarification-slot-identity"]').count()
+    const hasQuantity = await slot.locator('[data-testid="clarify-assumed-chip"]').count()
+    const hasOptions = await slot.locator('.chat-clarification-card__options li button').count()
+    let kind
+    if (hasIdentity > 0) kind = 'identity'
+    else if (hasQuantity > 0) kind = 'quantity'
+    else if (hasOptions > 0) kind = 'option'
+    else throw new Error('answerAllSlots: slot ' + i + ' — unrecognized kind (no identity/quantity/options markers)')
+    // Pick value from answerMap: object {identity, quantity}, array [by index], or legacy string
+    let value
+    if (typeof answerMap === 'string') value = answerMap
+    else if (Array.isArray(answerMap)) value = answerMap[i]
+    else if (typeof answerMap === 'object' && answerMap !== null) value = answerMap[kind]
+    else throw new Error('answerAllSlots: unsupported answerMap type')
+    if (value === undefined || value === null) throw new Error('answerAllSlots: no value for slot ' + i + ' (kind ' + kind + ')')
+    const result = await answerSlot(page, kind, value)
+    results.push({ index: i, kind, value, ...result })
+  }
+  return results
+}
+
 async function submitAnswers(page) {
   const btn = page.locator('[data-testid="chat-clarification-submit"]')
   if (!(await btn.count())) {
@@ -115,4 +146,4 @@ async function apply(page) {
 
 async function discard(page) { await page.locator('[data-testid="chat-preview-discard"]').click() }
 
-module.exports = { card, slots, anySurface, arm, answerSlot, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
+module.exports = { card, slots, anySurface, arm, answerSlot, answerAllSlots, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
