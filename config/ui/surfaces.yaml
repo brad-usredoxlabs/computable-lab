@@ -5,6 +5,7 @@ paneVocabulary:
   - event-editor
   - deck
   - project-tabs
+  - collection-list
 
 surfaces:
   - id: run-workspace
@@ -93,3 +94,102 @@ surfaces:
       leg: null
       reason: "Browser gate for registry-host surface still owed — no live probe evidence for this host yet"
     description: "Registry host — record registry with chat on the scratch thread scope."
+
+  - id: claims-collection
+    route: "/claims"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for claims-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Claim collection — lists claim records grouped into active and retracted operational status views."
+
+  - id: graph-search
+    route: "/find"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for graph-search surface still owed — no live probe evidence for this surface yet"
+    description: "Graph search — natural-language master search over the knowledge graph with plate and table results."
+
+  - id: lab-collection
+    route: "/lab"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for lab-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Lab collection — category-navigated inventory of protocols, materials, labware, equipment, people and documents."
+
+  - id: literature-list
+    route: "/literature"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for literature-list surface still owed — no live probe evidence for this surface yet"
+    description: "Literature page — literature intake funnel rendered inside the app shell with its chat panel slot."
+
+  - id: projects-collection
+    route: "/projects"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for projects-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Project collection — single-column searchable, sortable chip list of all study records."
+
+  - id: runs-collection
+    route: "/runs"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for runs-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Run collection — two-column grid of runs across studies with status tabs, filtering and sorting."
+
+  - id: sequences-list
+    route: "/sequences"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for sequences-list surface still owed — no live probe evidence for this surface yet"
+    description: "Sequences page — editor, assay, analysis, setup and import tabs over sequence records."
+
+  - id: settings
+    route: "/settings"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for settings surface still owed — no live probe evidence for this surface yet"
+    description: "Settings — off-nav settings form rendered inside the app shell."
+
+  - id: splash
+    route: "/splash"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for splash surface still owed — no live probe evidence for this surface yet"
+    description: "Splash — new-tab landing surface hosting the splash search page in the left pane."
