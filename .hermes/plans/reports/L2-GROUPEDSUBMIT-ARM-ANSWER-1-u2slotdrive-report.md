@@ -36,12 +36,4 @@ Surface-driven driver + narrowed catch guard. Fixes two defects identified by ad
 - Mutation control (revert catch to bare catch → pin goes RED): not performed — stack-down
   prevents full verification.
 
-## Next Actions
-1. Start lane stack (`:3093` API, `:5193` app) and re-run:
-   `mkdir -p /tmp/r-u2slotdrive/shots && RECEIPT_DIR=/tmp/r-u2slotdrive \
-    node .hermes/plans/deliverables/PROMPT2-REGATE-DRIVERS-REBASELINE-1/u6status/drivers/leg4.cjs | tail -n 25`
-   Expect: `{"action":"submit","target":"submitted"}` in trail, or
-   `out.answer.unanswered` naming the slot + DOM.
-2. Mutation control: in /tmp scratch, revert the narrowed catch to bare catch and verify
-   the pin goes RED.
-3. Browser reviewer gate on the full branch chain.
+L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u2slotdrive BLOCKED project STU-scratch not found at URL
