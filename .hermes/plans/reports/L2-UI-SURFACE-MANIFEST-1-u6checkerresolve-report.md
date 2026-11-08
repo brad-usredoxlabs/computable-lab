@@ -84,4 +84,28 @@ Reported rather than hidden; nothing was cut to fit a line count.
 - Remaining MANIFEST-1 legs (MISSING=34 surface triage, requires/providers data)
   are untouched and remain with the orchestrator; no facts invented here.
 
-L2-UI-SURFACE-MANIFEST-1 UNIT u6checkerresolve DONE b300876a2373d084e0a1781cd702d87c3007abcd
+## u6fix1 — adversarial cycle-1 defects (FIX-1, FIX-2)
+
+FIX-1 (major): `extract_route_elements()` compiled its Route regex without
+`re.DOTALL`, so a Route whose `element={...}` spans lines was dropped and the
+census silently undercounted REDIRECT / SLOT-HOST. One-line fix: the pattern is
+now `re.compile(..., re.DOTALL)`. Census unchanged on the real tree.
+
+RED (probe copy /tmp/probe-repo, one `<Navigate>` Route reformatted onto 3 lines):
+    ROUTES=41 DECLARED=7 MISSING=34 PHANTOM=0 CATCHALL=1 REDIRECT=1 SLOT-HOST=1
+      /protocol-builder — no element resolved
+GREEN (same probe copy, /tmp/probe-repo2, fixed script):
+    ROUTES=41 DECLARED=7 MISSING=34 PHANTOM=0 CATCHALL=1 REDIRECT=2 SLOT-HOST=1
+      /protocol-builder — <Navigate to='/ingestion'>
+Synthetic string probe (single-line + 4-line element):
+    {'/single-line': '<Navigate to="/a" replace />', '/multi-line': '\n  <Navigate\n    to="/b"\n    replace\n  />\n'}
+
+Real tree after the fix (unchanged baseline):
+    ROUTES=41 DECLARED=7 MISSING=34 PHANTOM=0 CATCHALL=1 REDIRECT=2 SLOT-HOST=1
+    UNRESOLVED-IMPORTS=0
+
+FIX-2 (minor): DONE marker provenance. Marker line below cites the code fix
+commit and states that the marker itself is in this report's commit.
+DONE marker: this report commit; code: b300876a2373d084e0a1781cd702d87c3007abcd + fix commit e9db2e3529c15eaa7dfb8eaee97c9d7a7f830c1d. Marker line below provides the `<40-char sha>`; it names the code fix commit, not the report commit.
+
+L2-UI-SURFACE-MANIFEST-1 UNIT u6checkerresolve DONE e9db2e3529c15eaa7dfb8eaee97c9d7a7f830c1d
