@@ -7,6 +7,9 @@
 //   C — wells (slot='targetWells'): label + well-target
 //   D — options: numbered-option buttons only
 //   E — typed-parameter: parameter-answer input
+//   F — grouped identity: two slots, each with its own top-3 row, both wanting
+//       the same value. Pins slot scoping of pickTop3/pickNumberedOption: a
+//       page-wide fallback answers slot1 with slot0's row (M3 mutation, D-6).
 //
 // At d9ca461e (base), shape A MUST throw "unrecognized kind".
 
@@ -28,29 +31,39 @@ const MARKERS = {
 }
 
 let _answerMap = {}
-function mkEl(key, si) {
+function mkEl(key, si, text) {
   return {
-    count: async () => 1, click: async () => {}, fill: async () => {},
+    count: async () => 1, click: async () => { PICKS.push({ key, si, text: text || Object.values(_answerMap)[0] || 'match' }) }, fill: async () => {},
     isEnabled: async () => true,
-    innerText: async () => (_answerMap ? Object.values(_answerMap)[0] || 'match' : 'match'),
-    nth: () => mkEl(key, si), first: () => mkEl(key, si), locator: () => stubList([]),
+    innerText: async () => text || Object.values(_answerMap)[0] || 'match',
+    nth: () => mkEl(key, si, text), first: () => mkEl(key, si, text), locator: () => stubList([]),
   }
 }
+// Every element carries its own text so a fixture can make slot0's row match a
+// value that belongs to slot1 — the discriminator for page-wide fallbacks.
+const PICKS = []
 function stubList(els) {
   return { count: async () => els.length, nth: (i) => els[i] || mkEl('x', -1), first: () => els[0] || mkEl('x', -1) }
 }
 
 function buildPage(slotTables, answerMap) {
   _answerMap = answerMap
+  PICKS.length = 0
   const slotEls = slotTables.map((st, si) => ({
     locator: (sel) => {
       const key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
       const c = (st.markers && st.markers[key]) || 0
-      return stubList(Array.from({ length: c }, () => mkEl(key, si)))
+      const texts = (st.texts && st.texts[key]) || []
+      return stubList(Array.from({ length: c }, (_, j) => mkEl(key, si, texts[j])))
     },
   }))
   function pageAgg(key) {
-    return stubList(slotTables.map((st, si) => (st.markers && st.markers[key]) ? mkEl(key, si) : null).filter(Boolean))
+    return stubList(slotTables.map((st, si) => {
+      const c = (st.markers && st.markers[key]) || 0
+      if (!c) return null
+      const texts = (st.texts && st.texts[key]) || []
+      return mkEl(key, si, texts[0])
+    }).filter(Boolean))
   }
   return {
     locator: (sel) => {
@@ -94,6 +107,18 @@ const SHAPES = [
     slots: [{ markers: { param: 1, paramInput: 1, paramSubmit: 1 }, kind: 'parameter' }],
     answerMap: { parameter: '10 uL' },
   },
+  // M3 pin (D-6): two grouped identity slots, each with its OWN top-3 row, and
+  // both want the value "Clofibrate". Slot-scoped code picks slot_i's row for
+  // slot_i; a page-wide fallback picks slot0's row for BOTH. Must stay RED if
+  // pickTop3's scope is un-threaded.
+  { name: 'F-IDENT-SCOPE',
+    slots: [
+      { markers: { top3: 1 }, texts: { top3: ['Clofibrate (slot0)'] }, kind: 'identity' },
+      { markers: { top3: 1 }, texts: { top3: ['Clofibrate (slot1)'] }, kind: 'identity' },
+    ],
+    answerMap: { identity: 'Clofibrate' },
+    expectPicked: ['Clofibrate (slot0)', 'Clofibrate (slot1)'],
+  },
 ]
 
 async function run() {
@@ -103,9 +128,13 @@ async function run() {
       const results = await chrome.answerAllSlots(buildPage(shape.slots, shape.answerMap), shape.answerMap)
       const got = results.map((r) => 'slot' + r.index + ':' + r.kind)
       const exp = shape.slots.map((s, i) => 'slot' + i + ':' + s.kind)
-      if (got.length === exp.length && got.every((k, i) => k === exp[i])) {
-        console.log('PASS ' + shape.name + ': ' + got.join(', '))
-      } else { fail++; console.log('FAIL ' + shape.name + ': expected [' + exp.join(', ') + '] got [' + got.join(', ') + ']') }
+      const okKinds = got.length === exp.length && got.every((k, i) => k === exp[i])
+      const want = shape.expectPicked
+      const okPicks = !want || (results.length === want.length && results.every((r, i) => r.picked === want[i]))
+      if (okKinds && okPicks) {
+        console.log('PASS ' + shape.name + ': ' + got.join(', ') + (want ? ' picked=' + results.map((r) => r.picked).join('|') : ''))
+      } else if (!okKinds) { fail++; console.log('FAIL ' + shape.name + ': expected [' + exp.join(', ') + '] got [' + got.join(', ') + ']') }
+      else { fail++; console.log('FAIL ' + shape.name + ': picked [' + results.map((r) => r.picked || '-').join('|') + '] expected [' + want.join('|') + ']') }
     } catch (err) { fail++; console.log('FAIL ' + shape.name + ': ' + err.message) }
   }
   if (fail) { console.log('\n' + fail + ' shape(s) failed'); process.exit(1) }
