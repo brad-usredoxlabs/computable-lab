@@ -8,10 +8,14 @@ import sys
 LEG_ORDER = ("legAB", "leg3", "leg4")
 SEED_BOARD = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "seed-board.py")
+BOARD_GATE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "board-gate.py")
+BOARD_YAML = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "c2p1-baseline.board.yaml")
 
 
 def plan(seed_board, drivers_dir, api_base, receipt_dir, tmpdir):
-    """Return exactly 7 steps in fixed order."""
+    """Return exactly 9 steps in fixed order."""
     steps = [
         {"name": "seed-board",
          "argv": [sys.executable, seed_board, "--seed",
@@ -19,6 +23,12 @@ def plan(seed_board, drivers_dir, api_base, receipt_dir, tmpdir):
         {"name": "verify-board",
          "argv": [sys.executable, seed_board, "--verify",
                   "--api-base", api_base]},
+        {"name": "reset-board",
+         "argv": [sys.executable, seed_board, "--reset",
+                  "--api-base", api_base]},
+        {"name": "board-gate",
+         "argv": [sys.executable, BOARD_GATE, "--board", BOARD_YAML,
+                  "--receipt-dir", receipt_dir]},
         {"name": "workspace-reset",
          "argv": [sys.executable, seed_board, "--workspace-reset",
                   "--api-base", api_base]},
