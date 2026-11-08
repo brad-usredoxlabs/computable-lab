@@ -146,7 +146,7 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
       const n = await opts.count()
       for (let i = 0; i < n; i++) {
         const txt = ((await opts.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
-        if (new RegExp(searchValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option' } }
+        if (new RegExp(answerValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option' } }
       }
     }
   }
