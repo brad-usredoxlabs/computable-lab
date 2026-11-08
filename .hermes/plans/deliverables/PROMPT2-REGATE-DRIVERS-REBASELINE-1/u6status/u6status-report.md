@@ -171,3 +171,40 @@ INSTRUMENT fault (purged record NOT_FOUND); 2 of 3 legs now pass.
 - artifacts/ (captured AI request bodies)
 
 L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u7urlfix DONE 791fafc4
+
+## u8legabdiag — LegAB identity FAIL diagnosis + bounded-popover poll fix
+
+### RUN A (warm re-run) — PASS
+legAB passed on warm run: identity picked "CHEBI clofibrate CHEBI:3750" via popover,
+no identityError. Same code that failed cold minutes earlier now succeeds, confirming
+the cold-popover timing hypothesis (the 2500ms fixed wait was insufficient on cold
+cache; the popover renders late).
+
+### INSTRUMENT FIX — bounded poll
+Replaced the fixed `await page.waitForTimeout(2500)` with a bounded poll loop:
+up to 10 iterations x 1000ms, each pass checks `pop.count() > 0` and breaks as soon
+as options appear. The existing match-scan for-loop (lines 66-69) is untouched.
+File changed: drivers/chrome.cjs:63 (1 deletion, 2 insertions).
+
+Commit: 16919a30 "u8legabdiag: bounded popover poll replaces fixed 2500ms wait
+(cold-popover instrument fix)"
+
+### RUN B (confirmation after fix) — PASS
+After workspace reset + confirmation run with the poll fix:
+- identity picked "Local clofibrate Local record binds material record MAT-CHEBI-3750"
+  via popover
+- No identityError
+- submitted=true
+- Full run completed (previewWells=16, apply succeeded, persistence verified)
+
+### Verdict
+PROMPT2-REGATE-LEGAB: PASS (instrument fix landed)
+
+### Receipts
+/home/brad/.hermes/cl/receipts/PROMPT2-REGATE-20261108/20261108T042507/legAB.json
+(RUN B JSON — final confirmation run with poll fix)
+
+### Verification
+- `grep -n "waitForTimeout(2500)" chrome.cjs` → 0 matches (fixed)
+- `grep -c "pop.count()" chrome.cjs` → 2 (poll check + final count)
+- `git diff HEAD --stat -- app server schema` → empty (no product-code change)
