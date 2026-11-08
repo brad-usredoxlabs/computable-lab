@@ -285,6 +285,49 @@ describe('WorkspaceHandlers', () => {
       );
       expect(state.status).toBe(400);
     });
+
+    it('PUT + GET strips derived deck tabs from persisted state', async () => {
+      const stateWithDerived: WorkspaceState = {
+        version: 3,
+        studyId: 'STU-der001',
+        tabs: [
+          {
+            id: 'tab-deck-EVG-derived',
+            kind: 'deck',
+            eventGraphId: 'EVG-derived',
+            title: 'Derived deck',
+            derived: true,
+          },
+          {
+            id: 'details:STU-der001',
+            kind: 'project-details',
+            title: 'Project',
+          },
+        ],
+        activeTabId: 'tab-deck-EVG-derived',
+        rightPaneMode: 'find',
+        rightPaneCollapsed: false,
+        paneWidths: { left: 0.6, right: 0.4 },
+      };
+      const { reply: putReply } = makeReply();
+      const putResult = await handlers.putWorkspace(
+        makeRequest({ studyId: 'STU-der001' }, stateWithDerived),
+        putReply,
+      );
+      // PUT response must not contain the derived tab
+      expect(putResult?.state.tabs).toHaveLength(1);
+      expect(putResult?.state.tabs[0].kind).toBe('project-details');
+      expect(putResult?.state.activeTabId).toBe('details:STU-der001');
+
+      // GET returns the same stripped state
+      const { reply: getReply } = makeReply();
+      const getResult = await handlers.getWorkspace(
+        makeRequest({ studyId: 'STU-der001' }),
+        getReply,
+      );
+      expect(getResult?.state.tabs).toHaveLength(1);
+      expect(getResult?.state.tabs[0].kind).toBe('project-details');
+    });
   });
 
   describe('parseWorkspaceState contract — anchored here for regression', () => {
