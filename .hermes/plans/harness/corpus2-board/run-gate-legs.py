@@ -11,8 +11,14 @@ SEED_BOARD = os.path.join(
 
 
 def plan(seed_board, drivers_dir, api_base, receipt_dir, tmpdir):
-    """Return exactly 5 steps in fixed order."""
+    """Return exactly 7 steps in fixed order."""
     steps = [
+        {"name": "seed-board",
+         "argv": [sys.executable, seed_board, "--seed",
+                  "--api-base", api_base]},
+        {"name": "verify-board",
+         "argv": [sys.executable, seed_board, "--verify",
+                  "--api-base", api_base]},
         {"name": "workspace-reset",
          "argv": [sys.executable, seed_board, "--workspace-reset",
                   "--api-base", api_base]},
