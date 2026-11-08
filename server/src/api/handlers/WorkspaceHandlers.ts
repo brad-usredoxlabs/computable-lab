@@ -25,6 +25,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   defaultWorkspaceState,
   parseWorkspaceState,
+  stripDerivedTabs,
   type WorkspaceState,
 } from '../../workspace/types.js';
 
@@ -127,6 +128,10 @@ export function createWorkspaceHandlers(
         });
         return undefined;
       }
+
+      // Strip derived tabs before persisting — ruling
+      // .hermes/plans/decisions/FIXTURE-BOARD-firstpaint-flake-l2t3300-ruling.md
+      const persistState = stripDerivedTabs(state);
 
       const filePath = workspaceFilePath(studyId);
       try {
