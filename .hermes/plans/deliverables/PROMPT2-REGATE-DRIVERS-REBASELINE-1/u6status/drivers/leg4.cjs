@@ -52,12 +52,31 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
     if (cardSeen) {
       out.answer.slotCount = await page.locator('[data-testid="chat-clarification-slot"]').count()
       step('slots', 'count', { slotCount: out.answer.slotCount })
-      try { const r = await chrome.answerSlot(page, 'identity', 'Clofibrate'); out.answer.identity = r; step('answer-identity', 'picked concept', { picked: r.picked })
-        await page.waitForTimeout(1800); await shot(page, 'identity') }
-      catch (e) { out.answer.identityError = String(e).slice(0, 300); step('answer-identity', 'FAILED', { error: out.answer.identityError }) }
-      try { const r = await chrome.answerSlot(page, 'quantity', '1'); out.answer.quantity = r; step('answer-quantity', 'committed volume', { approved: r.approved })
-        await page.waitForTimeout(1000); await shot(page, 'quantity') }
-      catch (e) { out.answer.quantityError = String(e).slice(0, 300); step('answer-quantity', 'FAILED', { error: out.answer.quantityError }) }
+
+      // Use answerAllSlots to drive every slot and record per-slot results.
+      // u3fix2 FIX-2: per-slot values derived from each slot's rendered
+      // identity (concept -> Clofibrate, quantity/volume -> 1), never a scalar
+      // '1' typed into every slot.
+      try {
+        const results = await chrome.answerAllSlots(page, { concept: 'Clofibrate', quantity: '1' })
+        out.answer.slots = results
+        out.answer.unanswered = results.filter((r) => r.unanswered)
+        // Preserve identity/quantity keys for prior receipts. u3fix2 FIX-3/4a:
+        // locate each slot BY its rendered identity text (never by array
+        // index) and report the PICKED LABEL, with `via` as the surface.
+        const kindOf = (r) => chrome.identityKind(r.identity)
+        const identitySlot = results.find((r) => r.present && kindOf(r) === 'concept') || results.find((r) => r.present)
+        if (identitySlot) out.answer.identity = { present: true, picked: identitySlot.picked, via: identitySlot.via, identity: identitySlot.identity }
+        const quantitySlot = results.find((r) => r.present && kindOf(r) === 'quantity')
+        out.answer.quantity = quantitySlot
+          ? { present: true, picked: quantitySlot.picked, via: quantitySlot.via, identity: quantitySlot.identity }
+          : { present: false, unanswered: true, note: 'no quantity/volume-identified slot rendered on this card' }
+        step('answer-all', 'answerAllSlots committed', { slots: results.length, answered: results.filter((r) => r.present).length, values: results.map((r) => ({ identity: r.identity, answerValue: r.answerValue, picked: r.picked, via: r.via })) })
+        await page.waitForTimeout(1800); await shot(page, 'all-slots-answered')
+      } catch (e) {
+        out.answer.answerAllError = String(e).slice(0, 300)
+        step('answer-all', 'FAILED', { error: out.answer.answerAllError })
+      }
       out.submitDisabled = await page.evaluate(() => { const b = document.querySelector('[data-testid="chat-clarification-submit"]'); return b ? b.disabled : null })
       try { await chrome.submitAnswers(page); out.answer.submitted = true; step('submit', 'submitted', { wasDisabled: out.submitDisabled })
         await page.waitForTimeout(2000); await shot(page, 'submitted') }

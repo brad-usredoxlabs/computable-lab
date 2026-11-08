@@ -688,10 +688,21 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         try {
           // Mint affordance produces its mention async; everything else is inline.
           const mention = item.resolveMention ? await item.resolveMention() : item.mention
-          if (!mention) return
-          const answer = await groundedAnswerFromMention(request, mention)
-          if (answer) {
-            onPick(answer, request)
+          if (!mention) {
+            busyRef.current = false
+            setBusy(false)
+            return
+          }
+          // Narrow guard: try covers ONLY the grounding await. A 200 response
+          // whose body carries no materialRef leaves .kind read off null, so
+          // groundedAnswerFromMention returns the answerFromMention bytes. A
+          // genuine transport rejection is caught; onPick + closePicker run
+          // OUTSIDE any catch so a throw from either propagates.
+          let answer: AiClarificationAnswer | null = null
+          try { answer = await groundedAnswerFromMention(request, mention) } catch { answer = null }
+          const resolved = answer ?? answerFromMention(request, mention)
+          if (resolved) {
+            onPick(resolved, request)
             // Dismiss-on-select: a pick answers the question, so the picker
             // closes (no open picker lingering beside the answered card).
             closePicker()
