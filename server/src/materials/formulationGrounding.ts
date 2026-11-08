@@ -13,7 +13,6 @@ import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import type { ProviderHit } from '../resolve/types.js';
 import {
   ensureLocalMaterialForOntology,
-  MATERIAL_SCHEMA_ID,
   type RefShape,
   toRecordMaterialRef,
 } from './MaterialGrounding.js';
@@ -236,11 +235,12 @@ export async function findOrAuthorFormulation(
   if (!solventRef) {
     // Truly absent — create from ontology
     const hits = await searchOntology(solventLabel, 1, new AbortController().signal);
-    if (hits.length > 0) {
+    const firstHit = hits[0];
+    if (firstHit) {
       solventRef = await ensureLocalMaterialForOntology(store, {
         kind: 'ontology',
-        id: hits[0].curie,
-        label: hits[0].label,
+        id: firstHit.curie,
+        label: firstHit.label,
       }, { createdBy: 'formulation-grounding' });
     } else {
       // No ontology hit either — fall back to minting a draft material
