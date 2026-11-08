@@ -734,6 +734,45 @@ actions:
     expect(typeof firstDetails.material_ref).toBe('object');
   });
 
+  it('L2-PROMPT2-SCIENCE-CHAIN-1: fold-path bind drives bindFoldPicksOntoCompile — material_ref carries record ref', async () => {
+    const model = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    // FIRST run must HOLD the ambiguous intent: the deterministic fold arm
+    // requires a held intent, else the second run takes the plain model path and
+    // the bind call site (AgentOrchestrator.ts:1646) is never reached.
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add 50 uL of mystery goop to A1' });
+    expect(first.clarificationRequests?.length).toBeGreaterThan(0);
+    expect(model.callCount()).toBe(1);
+
+    const second = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{
+        requestId: first.clarificationRequests![0].id,
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-reagent-1', kind: 'record' },
+      }],
+    });
+
+    // ZERO new model calls => the deterministic fold arm ran => :1646 executed.
+    expect(model.callCount()).toBe(1);
+    expect(second.success).toBe(true);
+    expect(second.events?.length).toBe(1);
+    const details = (second.events![0] as unknown as Record<string, unknown>).details as Record<string, unknown>;
+    const matRef = details.material_ref as Record<string, unknown>;
+    // Real binder: material_ref is the ANSWERED record ref, not the draft mint.
+    // Under M1 (bindFoldPicksOntoCompile stubbed) this stays a mint:/unbound.
+    expect(matRef.kind).toBe('record');
+    expect(matRef.id).toBe('MAT-test-reagent-1');
+    expect(String(matRef.id)).not.toMatch(/^mint:/);
+  });
+
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
