@@ -270,3 +270,19 @@ by this unit.
 PROMPT2-REGATE: PARTIAL 2/3 (leg3 PASS, legAB PASS, leg4 FAIL: submitAnswers disabled)
 
 L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u9advcfix DONE 467c9d5bdf3d4f568965be179772328743b4e28f
+
+## u10paperwork — cycle-2 closure (D1r, D2r, D3)
+
+### D1r — DISPOSITION attribution correction
+The bounded-popover poll fix's grouped-arm witness is leg4's SUCCESSFUL identity pick in T043724 (arm=grouped, slotCount=2), not legAB. legAB's T043724 PASS rendered arm=single (slotCount=0). Both arms are explicitly exercised in the same receipt dir.
+
+### D2r — RUN A annotation
+The u8 "RUN A (warm re-run) — PASS" claim has no separate RUN A receipt directory; the evidence is inline narrative only. T042507 and T043724 are RUN B and confirmation runs, respectively.
+
+### D3 — Consolidated n/4 verdict line
+PROMPT2-REGATE: PARTIAL 2/4 (leg2 NOT-RE-RUN, leg3 PASS, leg4 FAIL: submitAnswers disabled on grouped arm slotCount=2, legAB PASS)
+
+leg2 was never re-run in this cycle; it exists only in the 20261105T141152 corpus and is retired from the re-gate. leg3 PASS and legAB PASS are confirmed in T043724; leg4 FAIL is a named PRODUCT defect (grouped arm, slotCount=2, submitAnswers disabled). This consolidated n/4 line supersedes the earlier PARTIAL 0/4 (line :77, pre-URL-fix) and PARTIAL 2/3 (lines :159 and :270, pre-consolidation) verdicts.
+
+### Observation — u7 arm narrative supersession
+The u7 narrative claiming leg3/leg4 rendered "grouped arm, 2 slots" is superseded by T035245 JSONs showing arm=single for both legs; the u9 section's arm dispositions (leg4=grouped, legAB=single) reflect the actual per-leg behavior in T043724.
