@@ -5,6 +5,7 @@ check-ui-surfaces.py — Route-parity checker for L2-UI-SURFACE-MANIFEST-1.
 Extracts routes from app/src/App.tsx, matches them against declared patterns
 in config/ui/surfaces.yaml, and produces:
   1. A census line: ROUTES=<n> DECLARED=<m> MISSING=<k> PHANTOM=<p> CATCHALL=<c>
+     REDIRECT=<r> SLOT-HOST=<s>
   2. Per-item detail for MISSING and PHANTOM
   3. An orphan-component artifact (deliverables/ui-surface-manifest-1/orphans.txt)
 
@@ -151,6 +152,85 @@ def build_route_element_map(app_tsx_path):
 
 
 # ---------------------------------------------------------------------------
+# Non-page route element shapes: redirect / slot-host / catch-all
+# ---------------------------------------------------------------------------
+
+# Ordered shape table: the JSX marker decides the class, so any future
+# <Navigate> or <Slot> route is classified without naming its path.
+ELEMENT_SHAPE_RULES = (
+    ("redirect", "<Navigate "),
+    ("slot-host", "<Slot "),
+)
+CATCHALL_PATH = "*"
+
+
+def extract_route_elements(app_tsx_path):
+    """Map every <Route path="..."> to the JSX source of its element."""
+    with open(app_tsx_path, "r") as f:
+        content = f.read()
+    pattern = re.compile(r'<Route\s+path="([^"]+)"\s+element=\{(.+?)\}\s*/>')
+    return dict(pattern.findall(content))
+
+
+def _component_body(app_content, name):
+    """Return the source of a locally defined `function <name>(...) { ... }`."""
+    m = re.search(r'function\s+%s\s*\([^)]*\)\s*\{(.*?)\n\}' % re.escape(name),
+                  app_content, re.S)
+    return m.group(1) if m else ""
+
+
+def _shape_detail(class_name, element):
+    if class_name == "redirect":
+        m = re.search(r'to=(?:"([^"]*)"|\{(.+?)\}\s+replace)', element)
+        if not m:
+            target = "?"
+        elif m.group(1) is not None:
+            target = m.group(1)
+        else:
+            target = m.group(2) or "?"
+        return f"<Navigate to={target!r}>"
+    if class_name == "slot-host":
+        m = re.search(r'name="([^"]+)"', element)
+        return f'<Slot name="{m.group(1)}">' if m else "<Slot>"
+    return "path '*' (router catch-all)"
+
+
+def classify_non_page_routes(unmatched_routes, route_elements, app_content):
+    """
+    Classify unmatched routes whose element is not a lazy page module by the
+    element shape found in App.tsx. First matching rule wins, so each route
+    lands in exactly one class. Returns
+    (redirects, slot_hosts, catchalls, remaining_page_routes).
+    """
+    redirects, slot_hosts, catchalls, remaining = [], [], [], []
+    for route_path in unmatched_routes:
+        element = route_elements.get(route_path, "").strip()
+        shape = None
+        if route_path == CATCHALL_PATH:
+            shape = ("catch-all", _shape_detail("catch-all", element))
+        else:
+            for class_name, marker in ELEMENT_SHAPE_RULES:
+                if marker in element:
+                    shape = (class_name, _shape_detail(class_name, element))
+                    break
+            if shape is None:
+                local = re.match(r'^<(\w+)\s*/>$', element)
+                body = _component_body(app_content, local.group(1)) if local else ""
+                if "<Navigate" in body:
+                    shape = ("redirect", f"{local.group(1)} renders "
+                             f"{_shape_detail('redirect', body)}")
+        if shape is None:
+            remaining.append(route_path)
+        elif shape[0] == "redirect":
+            redirects.append((route_path, shape[1]))
+        elif shape[0] == "slot-host":
+            slot_hosts.append((route_path, shape[1]))
+        else:
+            catchalls.append((route_path, shape[1]))
+    return redirects, slot_hosts, catchalls, remaining
+
+
+# ---------------------------------------------------------------------------
 # Pattern matching: manifest route pattern vs App.tsx route path
 # ---------------------------------------------------------------------------
 
@@ -244,6 +324,9 @@ def find_orphans():
         import_map[fpath] = imports
 
     def resolve_import(source_file, rel_path):
+        # Vite raw/url imports carry a `?raw` / `?url` query; the module on
+        # disk is the path before the query. A missing file still records a miss.
+        rel_path = rel_path.split("?", 1)[0]
         dir_of_source = os.path.dirname(source_file)
         base = os.path.normpath(os.path.join(dir_of_source, rel_path))
         # NodeNext emits ".js" in import specifiers even for .tsx source files.
@@ -345,9 +428,20 @@ def main():
     missing_count = len(unmatched)
     phantom_count = len(phantoms)
 
-    # (e) Print census
+    # (d2) Classify non-page element shapes (redirect / slot-host / catch-all)
+    route_elements = extract_route_elements(APP_TSX)
+    with open(APP_TSX, "r") as f:
+        app_content = f.read()
+    redirects, slot_hosts, catchalls, page_routes = classify_non_page_routes(
+        unmatched, route_elements, app_content)
+    # Every MISSING route lands in exactly one bucket; nothing may vanish.
+    assert (len(redirects) + len(slot_hosts) + len(catchalls) + len(page_routes)
+            == missing_count), "route classification dropped a MISSING route"
+
+    # (e) Print census (token order up to CATCHALL is grepped by readers)
     census = (f"ROUTES={route_count} DECLARED={declared_count} "
-              f"MISSING={missing_count} PHANTOM={phantom_count} CATCHALL={catchall}")
+              f"MISSING={missing_count} PHANTOM={phantom_count} CATCHALL={catchall}"
+              f" REDIRECT={len(redirects)} SLOT-HOST={len(slot_hosts)}")
     print(census)
 
     # Print per-item detail for MISSING
@@ -362,12 +456,21 @@ def main():
         for sid, pat in phantoms:
             print(f"  - {sid}: {pat}")
 
-    # Classify missing routes by chat-surface mount
+    # Classify non-page routes by element shape (each lands in one class)
+    print(f"\n--- Non-page route shapes ---")
+    print(f"Rule: element shape in App.tsx decides redirect / slot-host / catch-all.")
+    for label, entries in (("catch-all", catchalls), ("redirect", redirects),
+                           ("slot-host", slot_hosts)):
+        print(f"  {label}: {len(entries)}")
+        for route_path, why in entries:
+            print(f"    {route_path} — {why}")
+
+    # Classify remaining (page) routes by chat-surface mount
     print(f"\n--- Missing route classification ---")
     print(f"Rule: resolve each route element to its page module, check for "
           f"'SurfaceChatBridge' in that module's source.")
     chat_routes, non_chat_routes = classify_missing_routes(
-        unmatched, route_to_elem, lazy_specs
+        page_routes, route_to_elem, lazy_specs
     )
     print(f"  Routes mounting a chat surface (SurfaceChatBridge): {len(chat_routes)}")
     for r, e, f_ in chat_routes:
