@@ -257,17 +257,37 @@ async function upsertProposedMaterialSpecFromComposition(
   const candidates = specs.filter((env): env is RecordEnvelope => {
     const payload = getEnvelopePayload(env);
     if (!payload) return false;
-    const storedRef = normalizeRef(payload['material_ref'], 'material');
-    if (!storedRef || storedRef.id !== materialRef.id) return false;
     const storedFormulation = payload['formulation'];
     if (!storedFormulation || typeof storedFormulation !== 'object') return false;
     const storedComp = (storedFormulation as Record<string, unknown>)['composition'];
     const storedCanonical = canonicalCompositionSnapshot(storedComp);
-    return compositionsEqual(composition, storedCanonical);
+    if (!compositionsEqual(composition, storedCanonical)) return false;
+    // Cross-ref-level identity check: the candidate matches when its payload
+    // material_ref points to the same material OR when the event ref IS the spec
+    // (event names the spec directly; payload has material-level ref).
+    const storedRef = normalizeRef(payload['material_ref'], 'material');
+    if (storedRef) {
+      // payload material_ref matches the event ref (both material-level)
+      if (storedRef.id === materialRef.id) return true;
+    }
+    // Event ref names this spec directly — the candidate recordId IS the
+    // spec the event points at (spec-level ref, payload has material-level ref)
+    if (env.recordId === materialRef.id) return true;
+    return false;
   });
   if (candidates.length > 0) {
     if (candidates.length > 1) {
-      candidates.sort((a, b) => a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0);
+      // Prefer a canonical (non-ai-draft) spec over prior draft residue (D2)
+      candidates.sort((a, b) => {
+        const aPayload = getEnvelopePayload(a);
+        const bPayload = getEnvelopePayload(b);
+        const aTags = Array.isArray(aPayload?.['tags']) ? (aPayload['tags'] as string[]) : [];
+        const bTags = Array.isArray(bPayload?.['tags']) ? (bPayload['tags'] as string[]) : [];
+        const aIsDraft = aTags.includes('ai-draft');
+        const bIsDraft = bTags.includes('ai-draft');
+        if (aIsDraft !== bIsDraft) return aIsDraft ? 1 : -1;
+        return a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0;
+      });
     }
     const matched = candidates[0]!;
     const matchedPayload = getEnvelopePayload(matched);
