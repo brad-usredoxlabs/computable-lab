@@ -77,7 +77,10 @@ export function ProjectWorkspacePage() {
   }
 
   return (
-    <WorkspaceProvider studyId={studyId}>
+    <WorkspaceProvider
+      studyId={studyId}
+      {...(eventGraphId ? { routeActivation: { tab: { id: `tab-deck-${eventGraphId}`, kind: 'deck', eventGraphId, title: eventGraphId, derived: true }, activate: true } } : {})}
+    >
       {/* L2-CHAT-UI-1 LEG C4 (CHATHOST-CONSOLIDATE-1): the ONE registrar
           (host="project-deck-tab"), page-level — renders nothing. */}
       <ProjectWorkspaceDoor studyId={studyId} />
@@ -214,6 +217,7 @@ function WorkspaceShellHost({
       kind: 'deck',
       eventGraphId: autoOpenEventGraphId,
       title: autoOpenEventGraphId,
+      derived: true,
     }, true)
   })
 
