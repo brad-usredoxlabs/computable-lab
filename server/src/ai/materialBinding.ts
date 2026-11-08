@@ -150,6 +150,10 @@ function writeMaterialRef<T extends Dict>(event: T, ref: Dict): { event: T; fiel
       const original = nextSnapshot[matches[0]!] as Dict;
       nextSnapshot[matches[0]!] = { ...original, component_ref: ref };
       nextDetails.composition_snapshot = nextSnapshot;
+      // A formulation-spec pick also claims the event level, so the mixture
+      // carries `details.material_spec_ref` (denominator share). Bare material
+      // picks stay entry-only: their layer has no formulation identity.
+      if (canonicalMaterialField(ref) === 'material_spec_ref') nextDetails.material_spec_ref = ref;
       return { event: { ...event, details: nextDetails } as T, field: 'composition_snapshot' };
     }
     // matches.length === 0 or >1: fall through to top-level path

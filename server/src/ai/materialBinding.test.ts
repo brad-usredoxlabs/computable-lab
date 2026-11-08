@@ -232,4 +232,41 @@ describe('bindMaterialAnswersToEvents — the pick is bound, not transmitted', (
       label: 'DMSO',
     });
   });
+
+  it('composition-branch material-spec pick also stamps event-level material_spec_ref (layer guard)', () => {
+    // D1: the composition branch replaced the snapshot entry but left the event
+    // level untouched, so the mixture never carried details.material_spec_ref
+    // and the solvent row had no denominator share to render.
+    const compositionEvent = {
+      event_type: 'add_material',
+      details: {
+        labwareId: 'req:CL:96_well_plate:mu9azzva:if7jwo',
+        wells: ['A2'],
+        material_ref: { kind: 'draft', id: 'mint:1 mM Clofibrate in DMSO + DMSO', label: '1 mM Clofibrate in DMSO + DMSO' },
+        composition_snapshot: [
+          { component_ref: { kind: 'draft', id: 'mint:1 mM Clofibrate in DMSO', label: '1 mM Clofibrate in DMSO' }, role: 'solute' },
+          { component_ref: { kind: 'draft', id: 'mint:DMSO', label: 'DMSO' }, role: 'solvent' },
+        ],
+      },
+    };
+    const { events: boundEvents, bound: bindings } = bindMaterialAnswersToEvents([compositionEvent], [PICK]);
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0]!.field).toBe('composition_snapshot');
+    const details = boundEvents[0]!.details as Record<string, unknown>;
+    // (i) entry substitution preserved
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot[0]!.component_ref).toMatchObject({ kind: 'record', id: 'MSP-API-mu50x5z7', type: 'material-spec' });
+    expect(snapshot[1]!.component_ref).toMatchObject({ kind: 'draft', id: 'mint:DMSO' });
+    // (ii) the fix: the event itself carries the formulation claim
+    expect(details.material_spec_ref).toMatchObject({ kind: 'record', id: 'MSP-API-mu50x5z7', type: 'material-spec' });
+    // the mixture's own top-level claim is untouched
+    expect(details.material_ref).toMatchObject({ kind: 'draft', id: 'mint:1 mM Clofibrate in DMSO + DMSO' });
+
+    // (iii) layer guard: a bare material pick in this branch stamps nothing
+    const bare = bindMaterialAnswersToEvents([compositionEvent], [
+      { requestId: 'material-1', label: 'DMSO', ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', type: 'material', label: 'DMSO' } },
+    ]);
+    expect(bare.bound[0]!.field).toBe('composition_snapshot');
+    expect((bare.events[0]!.details as Record<string, unknown>).material_spec_ref).toBeUndefined();
+  });
 });
