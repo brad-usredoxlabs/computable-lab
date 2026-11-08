@@ -90,4 +90,4 @@ marker sha line updated once (precedent: prior u8mspdedupe unit).
 - server/src/materials/addMaterialCompositionBatchDedupe.test.ts
 - .hermes/plans/deliverables/L2-PROMPT2-RESOLVE-OR-AUTHOR-1-u8fix1-report.md
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix1 DONE PENDING_SHA
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix1 DONE e08438778d2bf47a164f3059071565145315aa21
