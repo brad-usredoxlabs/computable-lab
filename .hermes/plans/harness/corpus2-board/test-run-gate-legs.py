@@ -27,7 +27,7 @@ def assert_true(cond, msg):
         print(f"FAIL: {msg}")
 
 
-# ── T1: plan returns exactly 5 steps in order ──
+# ── T1: plan returns exactly 7 steps in order ──
 def test_plan_order():
     seed = os.path.join(_HERE, "seed-board.py")
     with tempfile.TemporaryDirectory() as drv:
@@ -36,20 +36,21 @@ def test_plan_order():
             with tempfile.TemporaryDirectory() as tmp:
                 steps = mod.plan(seed, os.path.join(drv, "drivers"),
                                  "http://127.0.0.1:3093", rec, tmp)
-                assert_true(len(steps) == 5,
-                            f"expected 5 steps, got {len(steps)}")
+                assert_true(len(steps) == 7,
+                            f"expected 7 steps, got {len(steps)}")
                 names = [s["name"] for s in steps]
-                expected = ["workspace-reset", "verify-workspace",
+                expected = ["seed-board", "verify-board",
+                            "workspace-reset", "verify-workspace",
                             "legAB", "leg3", "leg4"]
                 assert_true(names == expected,
                             f"plan order {names} != {expected}")
-                # seed steps use sys.executable
-                for i in range(2):
+                # seed/verify/workspace steps use sys.executable
+                for i in range(min(4, len(steps))):
                     assert_true(steps[i]["argv"][0] == sys.executable,
                                 f"step {i} argv[0] should be sys.executable")
                 # no shell=True anywhere (plan doesn't use shell)
                 # leg steps use node
-                for i in range(2, 5):
+                for i in range(min(4, len(steps)), len(steps)):
                     assert_true(steps[i]["argv"][0] == "node",
                                 f"step {i} argv[0] should be 'node'")
 
@@ -91,7 +92,7 @@ def test_fail_closed_undeclared():
                     invocations.append(kw)
                     class R:
                         returncode = 0
-                        if call_count[0] == 2:
+                        if call_count[0] == 4:
                             # verify-workspace: stdout missing "all declared"
                             stdout = "workspace: UNDECLARED tab id=legacy-tab"
                         else:
@@ -101,8 +102,8 @@ def test_fail_closed_undeclared():
                 rc = mod.run(steps, runner=fake_runner)
                 assert_true(rc == 1,
                             f"expected rc=1 on undeclared, got {rc}")
-                assert_true(len(invocations) == 2,
-                            f"expected 2 invocations, got {len(invocations)}")
+                assert_true(len(invocations) == 4,
+                            f"expected 4 invocations, got {len(invocations)}")
                 # T3b: mutation-proof — when rc=0 but stderr contains UNDECLARED
                 invocations2 = []
                 call_count2 = [0]
@@ -111,7 +112,7 @@ def test_fail_closed_undeclared():
                     invocations2.append(kw)
                     class R:
                         returncode = 0
-                        if call_count2[0] == 2:
+                        if call_count2[0] == 4:
                             stdout = "workspace: 2 tabs"
                             stderr = "workspace: UNDECLARED tab id=x"
                         else:
@@ -121,12 +122,40 @@ def test_fail_closed_undeclared():
                 rc2 = mod.run(steps, runner=fake_runner2)
                 assert_true(rc2 == 1,
                             f"expected rc=1 on UNDECLARED in stderr, got {rc2}")
-                assert_true(len(invocations2) == 2,
-                            f"expected 2 invocations (stderr UNDECLARED), "
+                assert_true(len(invocations2) == 4,
+                            f"expected 4 invocations (stderr UNDECLARED), "
                             f"got {len(invocations2)}")
 
 
-# ── T4: all green — 5 steps run in order with RECEIPT_DIR ──
+# ── T4: fail-closed on seed-board failure — BEFORE any leg ──
+def test_fail_closed_seed():
+    """Prove that a seed failure stops execution before any leg runs."""
+    seed = os.path.join(_HERE, "seed-board.py")
+    with tempfile.TemporaryDirectory() as drv:
+        with tempfile.TemporaryDirectory() as rec:
+            with tempfile.TemporaryDirectory() as tmp:
+                steps = mod.plan(seed, os.path.join(drv, "drivers"),
+                                 "http://127.0.0.1:3093", rec, tmp)
+                argvs = []
+                def fake_runner(argv, **kw):
+                    argvs.append(argv)
+                    class R:
+                        returncode = 1
+                        stdout = ""
+                        stderr = "seed failed"
+                    return R
+                rc = mod.run(steps, runner=fake_runner)
+                assert_true(rc == 1, f"expected rc=1 on seed fail, got {rc}")
+                assert_true(len(argvs) == 1,
+                            f"expected 1 invocation (seed-board only), "
+                            f"got {len(argvs)}")
+                # Verify no leg command was executed
+                leg_executed = any("leg" in str(a) for a in argvs)
+                assert_true(not leg_executed,
+                            "a leg command ran despite seed failure")
+
+
+# ── T5: all green — 7 steps run in order with RECEIPT_DIR ──
 def test_all_green():
     seed = os.path.join(_HERE, "seed-board.py")
     with tempfile.TemporaryDirectory() as drv:
@@ -141,7 +170,7 @@ def test_all_green():
                     invocations.append(kw)
                     class R:
                         returncode = 0
-                        if call_num[0] == 2:
+                        if call_num[0] == 4:
                             stdout = "workspace: 2 tabs, activeTabId=abc — all declared"
                         else:
                             stdout = "ok"
@@ -149,11 +178,11 @@ def test_all_green():
                     return R
                 rc = mod.run(steps, runner=fake_runner)
                 assert_true(rc == 0, f"expected rc=0 all green, got {rc}")
-                assert_true(len(invocations) == 5,
-                            f"expected 5 invocations, got {len(invocations)}")
-                # leg steps (3,4,5) must have RECEIPT_DIR
-                last_leg_inv = invocations[4]
-                for i in range(2, 5):
+                assert_true(len(invocations) == 7,
+                            f"expected 7 invocations, got {len(invocations)}")
+                # leg steps (5,6,7) must have RECEIPT_DIR
+                last_leg_inv = invocations[6]
+                for i in range(4, 7):
                     env = invocations[i].get("env", {})
                     assert_true(
                         "RECEIPT_DIR" in env,
@@ -161,12 +190,12 @@ def test_all_green():
                 assert_true(last_leg_inv["env"]["RECEIPT_DIR"] == rec,
                             f"step {last_leg_inv.get('env', {}).keys()} RECEIPT_DIR mismatch")
                 # leg order: legAB, leg3, leg4
-                leg_names = [s["name"] for s in steps[2:5]]
+                leg_names = [s["name"] for s in steps[4:7]]
                 assert_true(leg_names == ["legAB", "leg3", "leg4"],
                             f"leg order {leg_names} != expected")
 
 
-# ── T5: usage error — missing --drivers → exit 2 ──
+# ── T6: usage error — missing --drivers → exit 2 ──
 def test_usage_missing_drivers():
     import subprocess
     # Run the module as a script with --dry-run but no --drivers
@@ -182,6 +211,7 @@ if __name__ == "__main__":
     test_plan_order()
     test_fail_closed_reset()
     test_fail_closed_undeclared()
+    test_fail_closed_seed()
     test_all_green()
     test_usage_missing_drivers()
     print(f"{PASS} passed")
