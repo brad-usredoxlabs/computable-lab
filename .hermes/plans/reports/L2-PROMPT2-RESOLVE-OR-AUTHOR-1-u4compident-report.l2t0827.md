@@ -1,21 +1,15 @@
 # L2-PROMPT2-RESOLVE-OR-AUTHOR-1 — u4compident Report
 
 ## Task
-In `upsertProposedMaterialSpecFromComposition` (MIXTURE/composition arm), look up an existing material-spec whose material_ref id and formulation composition set equal the incoming composition snapshot BEFORE calling `implicitMaterialSpecId`, and bind it (zero writes) when found.
+In upsertProposedMaterialSpecFromComposition (MIXTURE/composition arm), look up an existing material-spec whose material_ref id and formulation composition set equal the incoming composition snapshot BEFORE calling implicitMaterialSpecId, and bind it (zero writes) when found.
 
 ## Changes
-- `server/src/materials/AddMaterialSupport.ts`: Added entriesMatch() and compositionsEqual() helpers. Inserted FIND block after the `< 2` composition guard that lists existing material-specs, normalizes stored compositions with canonicalCompositionSnapshot, and compares via order-insensitive multiset equality. Binds matched record (lexicographically lowest if duplicates) or falls through to mint path.
-- `server/src/materials/addMaterialCompositionIdentity.test.ts`: New test — drives normalizeEventGraphMaterialUsage twice with the same composition snapshot against different eventIds. Asserts zero new records on second call and identical returned spec id.
-
-## Decisions
-- Used canonicalCompositionSnapshot on both incoming and stored sides (per brief: one-sided normalisation bait).
-- Concentration equality compares value and unit as stored; missing concentration on both sides still matches on component_ref.id + role only.
-- Duplicate resolution: lexicographically lowest recordId, no schema/lint added.
-- Reused store.list pattern from formulationGrounding.ts.
+- server/src/materials/AddMaterialSupport.ts: Added entriesMatch() and compositionsEqual() helpers. Inserted FIND block after the composition length guard that lists existing material-specs, normalizes stored compositions via canonicalCompositionSnapshot, and compares via order-insensitive multiset equality. Binds matched record (lexicographically lowest if duplicates) or falls through to mint path.
+- server/src/materials/addMaterialCompositionIdentity.test.ts: New test file. Drives normalizeEventGraphMaterialUsage twice with the same composition snapshot against different eventIds. Asserts zero new records on second call and identical returned spec id.
 
 ## Verification
-- Test: 2 files, 11 tests passed (1 new + 10 existing), exit 0
-- Typecheck: baseline S3 error only (pre-existing), no new errors from AddMaterialSupport
-- Git: clean tree
+- Tests: cd server && npx vitest run src/materials/addMaterialCompositionIdentity.test.ts src/materials/AddMaterialSupport.test.ts => 2 files, 11 tests passed, exit 0
+- Typecheck: npx tsc --noEmit => pre-existing S3 error only, no new errors in AddMaterialSupport.ts
+- Git: clean tree at exit
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE cb78209fef9a0b69e0e28a22bc6ed4cfe9755cc5
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE d4f474ec7389d73b45692c84123a5f3db997fc8b
