@@ -172,3 +172,5 @@ URL fix resolved the INSTRUMENT fault; 2 of 3 legs now pass.
 - leg4.json (PASS — both slots committed, previewWells>0)
 - shots/ (screenshots per leg)
 - artifacts/ (captured AI request bodies)
+
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u7urlfix DONE 7539b587
