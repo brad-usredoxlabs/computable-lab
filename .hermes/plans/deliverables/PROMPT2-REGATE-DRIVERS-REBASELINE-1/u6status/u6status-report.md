@@ -173,4 +173,4 @@ URL fix resolved the INSTRUMENT fault; 2 of 3 legs now pass.
 - shots/ (screenshots per leg)
 - artifacts/ (captured AI request bodies)
 
-L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u7urlfix DONE 565fcceb
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u7urlfix DONE f0bc7abc
