@@ -286,6 +286,18 @@ async function upsertProposedMaterialSpecFromComposition(
   const name = componentLabels.length > 0
     ? componentLabels.join(' + ')
     : `Draft formulation for ${refLabel(materialRef) ?? materialRef.id}`;
+  // Derive top-level concentration + solvent_ref from composition roles.
+  // Role vocabulary: schema/core/datatypes/composition-entry.schema.yaml:13-22
+  const soluteEntries = composition.filter((e) => e['role'] === 'solute' && e['concentration']);
+  const solventEntries = composition.filter((e) => e['role'] === 'solvent');
+  // Match formulationGrounding shape: { value, unit } — no extra basis field.
+  const concObj = soluteEntries.length === 1
+    ? ((soluteEntries[0] as Record<string, unknown>)['concentration'] as Record<string, unknown> | undefined)
+    : undefined;
+  const authoredConcentration = concObj
+    ? { value: (concObj as Record<string, unknown>).value, unit: (concObj as Record<string, unknown>).unit }
+    : null;
+  const authoredSolventRef = solventEntries.length === 1 ? solventEntries[0]!['component_ref'] : null;
   const payload: Record<string, unknown> = {
     kind: 'material-spec',
     id: specId,
@@ -296,6 +308,8 @@ async function upsertProposedMaterialSpecFromComposition(
     formulation: {
       composition,
       notes: 'Draft formulation inferred from an add-material event composition snapshot.',
+      ...(authoredConcentration ? { concentration: authoredConcentration } : {}),
+      ...(authoredSolventRef ? { solvent_ref: authoredSolventRef } : {}),
     },
     tags: ['ai-draft', 'composition_snapshot'],
   };
