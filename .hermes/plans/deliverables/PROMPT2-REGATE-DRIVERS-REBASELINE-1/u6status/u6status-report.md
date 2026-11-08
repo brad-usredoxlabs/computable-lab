@@ -286,3 +286,5 @@ leg2 was never re-run in this cycle; it exists only in the 20261105T141152 corpu
 
 ### Observation — u7 arm narrative supersession
 The u7 narrative claiming leg3/leg4 rendered "grouped arm, 2 slots" is superseded by T035245 JSONs showing arm=single for both legs; the u9 section's arm dispositions (leg4=grouped, legAB=single) reflect the actual per-leg behavior in T043724.
+
+L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u10paperwork DONE e6ba4b5a
