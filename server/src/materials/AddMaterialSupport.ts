@@ -9,6 +9,8 @@ import {
   ensureLocalMaterialForDraft,
   type RefShape as GroundingRefShape,
 } from './MaterialGrounding.js';
+import { searchOls4 } from '../resolve/providers/ols4.js';
+import { findOrAuthorFormulation } from './formulationGrounding.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
@@ -280,6 +282,29 @@ async function upsertProposedMaterialSpecFromSingleActive(
   if (canonicalCompositionSnapshot(details['composition_snapshot']).length > 0) return null;
   const concentration = extractConcentration(details);
   if (!concentration) return null;
+
+  // Consult the identity-keyed FIND-THEN-AUTHOR seam. When we have a
+  // concentration and a resolvable solvent, prefer the identity-keyed
+  // spec over per-journey id. Guard: preserve today's per-journey path
+  // exactly when solvent is unresolvable.
+  const solventLabel = typeof details['solvent'] === 'string' && details['solvent'].trim()
+    ? details['solvent'].trim()
+    : null;
+  if (solventLabel) {
+    try {
+      const concObj = concentration as { value: number; unit: string };
+      const identityRef = await findOrAuthorFormulation(
+        { store, searchOntology: searchOls4 },
+        materialRef,
+        concObj,
+        solventLabel,
+      );
+      return toRecordRef(identityRef.id, 'material-spec', identityRef.label);
+    } catch {
+      // Solvent unresolvable or store write failed — fall through to
+      // the per-journey path exactly as before.
+    }
+  }
 
   const specId = implicitMaterialSpecId(eventGraphId, eventId);
   const conc = concentration as { value?: unknown; unit?: unknown };
