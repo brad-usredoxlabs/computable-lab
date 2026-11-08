@@ -32,7 +32,15 @@ describe('Surface manifest schema', () => {
   it('validates the committed manifest and pins surface + pane sets', () => {
     const result = validator.validate(manifest, SURFACE_MANIFEST_ID);
     expect(result.valid).toBe(true);
-    expect(manifest.surfaces.map((s: any) => s.id)).toEqual(['run-workspace', 'event-editor', 'analysis']);
+    expect(manifest.surfaces.map((s: any) => s.id)).toEqual([
+      'run-workspace',
+      'event-editor',
+      'analysis',
+      'project-deck-tab',
+      'record-host',
+      'artifact-host',
+      'registry-host',
+    ]);
     expect(manifest.paneVocabulary).toEqual(['ai-chat', 'event-editor', 'deck', 'project-tabs']);
   });
 
