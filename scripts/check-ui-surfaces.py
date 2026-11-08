@@ -168,7 +168,7 @@ def extract_route_elements(app_tsx_path):
     """Map every <Route path="..."> to the JSX source of its element."""
     with open(app_tsx_path, "r") as f:
         content = f.read()
-    pattern = re.compile(r'<Route\s+path="([^"]+)"\s+element=\{(.+?)\}\s*/>')
+    pattern = re.compile(r'<Route\s+path="([^"]+)"\s+element=\{(.+?)\}\s*/>', re.DOTALL)
     return dict(pattern.findall(content))
 
 
