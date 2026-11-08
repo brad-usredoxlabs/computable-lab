@@ -54,3 +54,37 @@ Note: a commit cannot contain its own id, so the marker names f9618d43, the fina
 code/probe; the report commit immediately follows it and `git log -1 --format=%H` names that one.
 
 L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4bfix2 DONE f9618d43ab8cc89fd9db428d6a5dee1667336ec1
+
+## u4bfix3 addendum — G-OPTION-SCOPE (advc c2 D-2)
+
+Code commit e0e4125051ae47f78394d7a8d1050d9572e24977 (probe only; chrome.cjs FROZEN/untouched).
+- New MARKERS.logOptions = `.chat-log-clarification-options li button` (pickNumberedOption's selector,
+  distinct from MARKERS.options).
+- Shape G-OPTION-SCOPE: two identity slots, same value "Clofibrate"; each slot's numbered-option list
+  holds its own "(slotN)" text. expectPicked = [Clofibrate (slot0), Clofibrate (slot1)].
+- F's header overclaim corrected: F pins pickTop3 scoping; G pins pickNumberedOption scoping.
+
+Deviation from brief's snippet, measured: the prescribed G (logOptions only, no top3) fails
+`answerAllSlots: slot 0 — unrecognized kind`, because classification (chrome.cjs:144) needs a picker
+or top3 surface. G therefore includes a non-matching top3 row per slot (`(no top-3 match)`) to classify
+as identity; pickTop3 returns null and the scoped pickNumberedOption fallback answers.
+
+GREEN (7 PASS, EXIT=0):
+```
+PASS F-IDENT-SCOPE: ... picked=Clofibrate (slot0)|Clofibrate (slot1)
+PASS G-OPTION-SCOPE: slot0:identity, slot1:identity picked=Clofibrate (slot0)|Clofibrate (slot1)
+All shapes passed
+```
+TEETH 1 (scratch copy; pickNumberedOption base -> page only): G RED, F green:
+```
+FAIL G-OPTION-SCOPE: picked [Clofibrate (slot0)|Clofibrate (slot0)] expected [Clofibrate (slot0)|Clofibrate (slot1)]
+1 shape(s) failed  EXIT=1
+```
+TEETH 2 (scratch copy; pickTop3 base -> page only): F RED, G green:
+```
+FAIL F-IDENT-SCOPE: picked [Clofibrate (slot0)|Clofibrate (slot0)] expected [Clofibrate (slot0)|Clofibrate (slot1)]
+1 shape(s) failed  EXIT=1
+```
+TEETH 3 (restored clean): all 7 PASS, EXIT=0. Tree clean after commits.
+
+L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4bfix3 DONE e0e4125051ae47f78394d7a8d1050d9572e24977
