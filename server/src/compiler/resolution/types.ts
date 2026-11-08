@@ -108,6 +108,9 @@ export interface BoundNoun {
   source?: string;
   addresses?: string[];
   actionIndex?: number;
+  /** D5-1: the bound record structurally declares a testable formulation
+   *  (concentration + solvent_ref). Absent when it does not. */
+  formulationDeclared?: boolean;
 }
 
 /** Clarifications ARE SPINE-1's frozen ScientistIntentUnresolvedFact (§5.6).

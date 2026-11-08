@@ -543,22 +543,27 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       );
 
       // SH-QA-1 resolution-aware firing gate: a gated producer fact is MOOT
-      // exactly when the engine bound its slot (resolve-vs-mint is known
-      // HERE, post-resolve — normalize could not know it at raise time).
+      // exactly when the engine bound its slot TO A RECORD DECLARING A
+      // TESTABLE FORMULATION (resolve-vs-mint is known HERE, post-resolve —
+      // normalize could not know it at raise time).
+      // D5-1: binding alone is not enough — a bind to a bare concept/record
+      // with no formulation leaves the blob fact UNRESOLVED, so the fact
+      // survives (the pre-D5-1 "bound key => drop" arm silently un-fired it).
       // The join is the §5.1 machinery verbatim: a binding occupies its slot
-      // key; a gated fact is dropped iff its identityKey is a bound SLOT key.
+      // key; a gated fact is dropped iff its identityKey is a bound SLOT key
+      // whose binding carries formulationDeclared === true.
       // A gated fact WITHOUT slot identity (no actionLocation) is KEPT —
       // never silently dropped. Zero verb/arg/domain/reason NAME literals:
       // this switches on engine output + identity keys only.
-      const boundSlotKeys = new Set<string>();
+      const boundSlotKeys = new Map<string, BoundNoun>();
       for (const binding of bindings) {
-        if (binding.actionIndex !== undefined) boundSlotKeys.add(identityKey(binding));
+        if (binding.actionIndex !== undefined) boundSlotKeys.set(identityKey(binding), binding);
       }
       const gatedSurvivors = (deps.resolutionGatedClarifications ?? [])
         .filter((fact) => {
           const loc = fact.actionLocation;
           if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
-          return !boundSlotKeys.has(identityKey(fact));
+          return boundSlotKeys.get(identityKey(fact))?.formulationDeclared !== true;
         })
         .map((fact) => ({ ...fact }));
 
