@@ -290,12 +290,12 @@ async function upsertProposedMaterialSpecFromComposition(
   // Role vocabulary: schema/core/datatypes/composition-entry.schema.yaml:13-22
   const soluteEntries = composition.filter((e) => e['role'] === 'solute' && e['concentration']);
   const solventEntries = composition.filter((e) => e['role'] === 'solvent');
-  // Match formulationGrounding shape: { value, unit } — no extra basis field.
-  const concObj = soluteEntries.length === 1
+  // Match formulationGrounding shape (formulationGrounding.ts:300): { value, unit } — no extra basis field.
+  const concRaw = soluteEntries.length === 1
     ? ((soluteEntries[0] as Record<string, unknown>)['concentration'] as Record<string, unknown> | undefined)
     : undefined;
-  const authoredConcentration = concObj
-    ? { value: (concObj as Record<string, unknown>).value, unit: (concObj as Record<string, unknown>).unit }
+  const authoredConcentration = concRaw
+    ? { value: (concRaw as Record<string, unknown>).value, unit: (concRaw as Record<string, unknown>).unit }
     : null;
   const authoredSolventRef = solventEntries.length === 1 ? solventEntries[0]!['component_ref'] : null;
   const payload: Record<string, unknown> = {
