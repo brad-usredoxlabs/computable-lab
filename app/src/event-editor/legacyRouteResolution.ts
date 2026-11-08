@@ -28,6 +28,9 @@ export interface ResolvedLegacyRoute {
         kind: 'deck'
         id: string
         eventGraphId: string
+        /** Route-derived tabs are marked true so the server PUT strip
+         *  distinguishes them from user-persisted tabs. */
+        derived: true
         title: string
       }
 }
@@ -58,6 +61,7 @@ export async function resolveLegacyEventGraphRoute(
       kind: 'deck',
       id: `tab-deck-${eventGraphId}`,
       eventGraphId,
+      derived: true,
       title: eventGraphId,
     },
   }
@@ -106,6 +110,7 @@ export function resolveLegacyNoParamsRoute(): ResolvedLegacyRoute {
       kind: 'deck',
       id: `tab-deck-${Date.now().toString(36)}`,
       eventGraphId: '',
+      derived: true,
       title: 'New deck',
     },
   }
@@ -146,6 +151,7 @@ function makeRoute(
       kind: 'deck',
       id: `tab-deck-${eventGraphId}`,
       eventGraphId,
+      derived: true,
       title: title || eventGraphId,
     },
   }

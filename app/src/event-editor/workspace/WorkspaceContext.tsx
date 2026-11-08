@@ -83,6 +83,13 @@ export interface WorkspaceProviderProps {
     studyId: string,
     state: WorkspaceState,
   ) => Promise<{ state: WorkspaceState }>
+  /**
+   * Route-named activation: applies the route's intended tab BEFORE the
+   * first `ready` frame. This outranks the persisted `activeTabId` so
+   * the cold-load first paint always honors the route, not stale sidecar
+   * state. Optional — when absent, behaviour is unchanged.
+   */
+  routeActivation?: { tab: WorkspaceTab; activate: true }
   children: ReactNode
 }
 
@@ -91,6 +98,7 @@ export function WorkspaceProvider({
   saveDebounceMs = 500,
   loadFn,
   saveFn,
+  routeActivation,
   children,
 }: WorkspaceProviderProps) {
   const [state, dispatch] = useReducer(
@@ -104,8 +112,10 @@ export function WorkspaceProvider({
   // re-subscribing every render.
   const loadFnRef = useRef(loadFn)
   const saveFnRef = useRef(saveFn)
+  const routeActivationRef = useRef(routeActivation)
   loadFnRef.current = loadFn
   saveFnRef.current = saveFn
+  routeActivationRef.current = routeActivation
 
   // Track whether the current state was just loaded from the server. We
   // suppress the save effect immediately after a load so we don't echo
@@ -124,8 +134,16 @@ export function WorkspaceProvider({
       // here. parseWorkspaceState on the server already validated, so we
       // trust the runtime shape.
       const next = result.state as WorkspaceState
+      // Apply route-named activation before the first ready frame so it
+      // outranks the persisted activeTabId. The reducer's open-tab is
+      // idempotent on id (replaces existing entry), and activate=true
+      // sets activeTabId to the route tab's id.
+      const activation = routeActivationRef.current
+      const activated = activation
+        ? workspaceReducer(next, { type: 'open-tab', tab: activation.tab, activate: true })
+        : next
       justLoadedRef.current = true
-      dispatch({ type: 'replace', state: next })
+      dispatch({ type: 'replace', state: activated })
       setReady(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
