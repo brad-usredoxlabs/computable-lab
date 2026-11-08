@@ -48,3 +48,48 @@ surfaces:
       leg: null
       reason: "Browser gate for analysis surface still owed — journey leg not yet implemented"
     description: "Analysis surface — method authoring, run execution, and artifact viewing with AI assistance."
+
+  - id: project-deck-tab
+    route: "/project/:studyId"
+    panes:
+      - ai-chat
+      - deck
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for project-deck-tab surface still owed — no live probe evidence for this host yet"
+    description: "Project deck tab — study workspace door rendering the deck chat slice; also served at /project/:studyId/event-graph/:eventGraphId."
+
+  - id: record-host
+    route: "/record/:recordId"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for record-host surface still owed — no live probe evidence for this host yet"
+    description: "Record host — record-by-id editor with thread-scoped chat; also served at /record/new/:nodeType/:parentId?."
+
+  - id: artifact-host
+    route: "/artifact/:kind/:artifactId"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for artifact-host surface still owed — no live probe evidence for this host yet"
+    description: "Artifact host — artifact viewer with thread-scoped chat."
+
+  - id: registry-host
+    route: "/registry"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for registry-host surface still owed — no live probe evidence for this host yet"
+    description: "Registry host — record registry with chat on the scratch thread scope."
