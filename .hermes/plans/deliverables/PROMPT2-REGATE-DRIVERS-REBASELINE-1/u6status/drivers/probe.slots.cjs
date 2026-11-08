@@ -8,8 +8,11 @@
 //   D — options: numbered-option buttons only
 //   E — typed-parameter: parameter-answer input
 //   F — grouped identity: two slots, each with its own top-3 row, both wanting
-//       the same value. Pins slot scoping of pickTop3/pickNumberedOption: a
-//       page-wide fallback answers slot1 with slot0's row (M3 mutation, D-6).
+//       the same value. Pins slot scoping of pickTop3: a page-wide fallback
+//       answers slot1 with slot0's row (M3 mutation, D-6).
+//   G — grouped identity: top-3 rows exist but never match, each slot's own
+//       numbered-option list does. Pins slot scoping of pickNumberedOption:
+//       a page-wide fallback answers slot1 with slot0's option (D-2).
 //
 // At d9ca461e (base), shape A MUST throw "unrecognized kind".
 
@@ -25,6 +28,7 @@ const MARKERS = {
   target:   '[data-testid="clarify-well-target"]',
   targetApprove: '[data-testid="clarify-well-target-approve"]',
   options:  '.chat-clarification-card__options li button',
+  logOptions: '.chat-log-clarification-options li button',
   param:    '[data-testid="parameter-answer"]',
   paramInput:    '[data-testid="parameter-answer-input"]',
   paramSubmit:   '[data-testid="parameter-answer-submit"]',
@@ -115,6 +119,19 @@ const SHAPES = [
     slots: [
       { markers: { top3: 1 }, texts: { top3: ['Clofibrate (slot0)'] }, kind: 'identity' },
       { markers: { top3: 1 }, texts: { top3: ['Clofibrate (slot1)'] }, kind: 'identity' },
+    ],
+    answerMap: { identity: 'Clofibrate' },
+    expectPicked: ['Clofibrate (slot0)', 'Clofibrate (slot1)'],
+  },
+  // D-2 pin: top-3 rows are present (so the slot classifies as identity) but
+  // never match, leaving pickNumberedOption as the fallback that actually
+  // answers. Slot-scoped code picks slot_i's own option; a page-wide fallback
+  // picks slot0's option for BOTH. Must stay RED if pickNumberedOption's scope
+  // is un-threaded.
+  { name: 'G-OPTION-SCOPE',
+    slots: [
+      { markers: { top3: 1, logOptions: 1 }, texts: { top3: ['(no top-3 match)'], logOptions: ['Clofibrate (slot0)'] }, kind: 'identity' },
+      { markers: { top3: 1, logOptions: 1 }, texts: { top3: ['(no top-3 match)'], logOptions: ['Clofibrate (slot1)'] }, kind: 'identity' },
     ],
     answerMap: { identity: 'Clofibrate' },
     expectPicked: ['Clofibrate (slot0)', 'Clofibrate (slot1)'],
