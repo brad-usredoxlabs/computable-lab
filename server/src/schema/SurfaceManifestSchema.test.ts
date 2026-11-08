@@ -40,8 +40,26 @@ describe('Surface manifest schema', () => {
       'record-host',
       'artifact-host',
       'registry-host',
+      'claims-collection',
+      'graph-search',
+      'lab-collection',
+      'literature-list',
+      'projects-collection',
+      'runs-collection',
+      'sequences-list',
+      'settings',
+      'splash',
+      'deck-host',
+      'project-event-graph',
+      'record-create',
     ]);
-    expect(manifest.paneVocabulary).toEqual(['ai-chat', 'event-editor', 'deck', 'project-tabs']);
+    expect(manifest.paneVocabulary).toEqual([
+      'ai-chat',
+      'event-editor',
+      'deck',
+      'project-tabs',
+      'collection-list',
+    ]);
   });
 
   it('rejects a duplicated surface entry (uniqueItems)', () => {
