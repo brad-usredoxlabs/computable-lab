@@ -445,19 +445,27 @@ def main():
     redirects, slot_hosts, catchalls, page_routes = classify_non_page_routes(
         unmatched, route_elements, app_content)
     # Every MISSING route lands in exactly one bucket; nothing may vanish.
-    assert (len(redirects) + len(slot_hosts) + len(catchalls) + len(page_routes)
+    nonpage_count = len(redirects) + len(slot_hosts) + len(catchalls)
+    assert (nonpage_count + len(page_routes)
             == missing_count), "route classification dropped a MISSING route"
+    # Page bucket + non-page buckets must still reconstruct the MISSING total.
+    assert len(page_routes) + nonpage_count == missing_count, (
+        "MISSING total does not reconcile to page + non-page buckets")
 
-    # (e) Print census (token order up to CATCHALL is grepped by readers)
+    # (e) Print census (token order up to SLOT-HOST is grepped by readers;
+    # NONPAGE-UNDECLARED is additive and appended last). MISSING counts page
+    # routes only: no surface can be declared for a catch-all, redirect or
+    # slot host, so counting those as missing would be a double count.
     census = (f"ROUTES={route_count} DECLARED={declared_count} "
-              f"MISSING={missing_count} PHANTOM={phantom_count} CATCHALL={catchall}"
-              f" REDIRECT={len(redirects)} SLOT-HOST={len(slot_hosts)}")
+              f"MISSING={len(page_routes)} PHANTOM={phantom_count} CATCHALL={catchall}"
+              f" REDIRECT={len(redirects)} SLOT-HOST={len(slot_hosts)}"
+              f" NONPAGE-UNDECLARED={nonpage_count}")
     print(census)
 
-    # Print per-item detail for MISSING
-    if unmatched:
-        print(f"\nMISSING routes ({missing_count}):")
-        for r in sorted(unmatched):
+    # Print per-item detail for MISSING page routes only
+    if page_routes:
+        print(f"\nMISSING routes ({len(page_routes)}):")
+        for r in sorted(page_routes):
             print(f"  - {r}")
 
     # Print per-item detail for PHANTOM
