@@ -90,4 +90,48 @@ marker sha line updated once (precedent: prior u8mspdedupe unit).
 - server/src/materials/addMaterialCompositionBatchDedupe.test.ts
 - .hermes/plans/deliverables/L2-PROMPT2-RESOLVE-OR-AUTHOR-1-u8fix1-report.md
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix1 DONE e08438778d2bf47a164f3059071565145315aa21
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix1 SUPERSEDED by u8fix2 (its marker named e0843877, whose tree carried PENDING_SHA)
+
+## u8fix2
+
+advc c2 unit u8fix2: DEFECT 1 (marker paperwork) + DEFECT 2 (coverage gap for
+the `compositionsEqual` clause in the batch identity memo). No product-code
+edits: the memo clause was accepted in c1 D1 and is unchanged.
+
+### DEFECT 2 — shipped witness
+New test in `server/src/materials/addMaterialCompositionBatchDedupe.test.ts`:
+"same material, equal-length compositions with DIFFERENT concentration mint
+distinct specs". Two events, same `material_ref` (XCO:0000988), two-entry
+compositions with the same components/roles; only the glucose concentration
+differs (1 mM vs 2 mM). Expects 2 material-specs with distinct ids.
+
+### Verification (measured)
+1. Baseline before change: 4 files / 19 tests PASS.
+2. After adding the test: 4 files / 20 tests PASS (batchDedupe 3 -> 4).
+3. Mutant, scratch rsync copy at /tmp/u8fix2-mutant (node_modules symlinked,
+   deleted after): memo clause line 772
+   `compositionsEqual(entry.composition, composition)` ->
+   `entry.composition.length === composition.length`. Raw:
+   ```
+   ❯ src/materials/addMaterialCompositionBatchDedupe.test.ts  (4 tests | 1 failed)
+     ❯ ... > same material, equal-length compositions with DIFFERENT concentration mint distinct specs
+       → expected 1 to be 2 // Object.is equality
+     298|     expect(createdSpecs.length).toBe(2);
+   Test Files  1 failed (1)
+        Tests  1 failed | 3 passed (4)
+   ```
+   Real code is GREEN, mutant is RED: the new test witnesses the clause.
+4. Marker: HEAD's last report line is `DONE <sha>` naming the commit that
+   introduced this section; that commit's own report tail is a full-hex
+   `DONE 6eb6f5a0...` (chain: HEAD -> report commit -> 6eb6f5a0 full hex).
+
+### Commits
+1. 1f6ed0c3 — u8fix2: witness compositionsEqual in batch identity memo
+2. <report commit> — u8fix2: report + DONE marker
+3. <marker finalisation> — u8fix2: marker names report commit
+
+### Files changed
+- server/src/materials/addMaterialCompositionBatchDedupe.test.ts
+- .hermes/plans/deliverables/L2-PROMPT2-RESOLVE-OR-AUTHOR-1-u8fix1-report.md
+
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix2 DONE 6eb6f5a09076c1346db1c26591650ad587b272fa
