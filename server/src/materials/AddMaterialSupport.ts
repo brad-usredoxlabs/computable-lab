@@ -743,9 +743,14 @@ export async function normalizeEventGraphMaterialUsage(
   void options;
   let changed = false;
 
-  // Batch-scoped memo: key by material_ref.id + canonical composition JSON.
-  // This ensures events with identical identity share ONE upsert promise.
-  const identityMemo = new Map<string, Promise<RefShape | null>>();
+  // Batch-scoped memo: one upsert promise per material identity. Identity is
+  // judged with the SAME predicate the server FIND uses (compositionsEqual,
+  // order-insensitive), so memoized events and persisted records agree.
+  const identityMemo: Array<{
+    materialRefId: string;
+    composition: Record<string, unknown>[];
+    promise: Promise<RefShape | null>;
+  }> = [];
 
   const nextEvents = await Promise.all(events.map(async (event, index) => {
     if (event.event_type !== 'add_material') return event;
@@ -759,16 +764,24 @@ export async function normalizeEventGraphMaterialUsage(
     // instance. The well then references a formulation/instance, not a concept.
     const materialRef = normalizeRef(groundedDetails['material_ref'], 'material');
     const composition = canonicalCompositionSnapshot(groundedDetails['composition_snapshot']);
-    const identityKey = materialRef && composition.length >= 2
-      ? `${materialRef.id}|${JSON.stringify(composition)}`
-      : null;
+    const useIdentityMemo = Boolean(materialRef && composition.length >= 2);
 
     let proposedSpecRef: RefShape | null;
-    if (identityKey) {
-      if (!identityMemo.has(identityKey)) {
-        identityMemo.set(identityKey, upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails));
+    if (useIdentityMemo && materialRef) {
+      const memoized = identityMemo.find(
+        (entry) => entry.materialRefId === materialRef.id && compositionsEqual(entry.composition, composition),
+      );
+      if (memoized) {
+        proposedSpecRef = await memoized.promise;
+      } else {
+        const entry = {
+          materialRefId: materialRef.id,
+          composition,
+          promise: upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails),
+        };
+        identityMemo.push(entry);
+        proposedSpecRef = await entry.promise;
       }
-      proposedSpecRef = await identityMemo.get(identityKey)!;
     } else {
       proposedSpecRef =
         await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails);
