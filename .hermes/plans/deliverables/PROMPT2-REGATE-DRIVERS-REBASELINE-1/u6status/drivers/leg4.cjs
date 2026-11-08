@@ -54,10 +54,16 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
       step('slots', 'count', { slotCount: out.answer.slotCount })
       try {
         const results = await chrome.answerAllSlots(page, { identity: 'Clofibrate', quantity: '1' })
+        // D4 fix: index-keyed array survives same-kind pairs; kind-keyed kept for compat
+        out.answer.slots = results
         results.forEach((r) => { out.answer[r.kind] = r; step('answer-' + r.kind, r.kind + ' answered', { index: r.index }) })
         await page.waitForTimeout(1800); await shot(page, 'all-slots')
       }
-      catch (e) { out.answerError = String(e).slice(0, 300); step('answer-all', 'FAILED', { error: out.answerError }) }
+      catch (e) {
+        out.answerError = String(e).slice(0, 300)
+        out.answer.slots = [{ index: -1, kind: 'unknown', error: out.answerError }]
+        step('answer-all', 'FAILED', { error: out.answerError })
+      }
       out.submitDisabled = await page.evaluate(() => { const b = document.querySelector('[data-testid="chat-clarification-submit"]'); return b ? b.disabled : null })
       try { await chrome.submitAnswers(page); out.answer.submitted = true; step('submit', 'submitted', { wasDisabled: out.submitDisabled })
         await page.waitForTimeout(2000); await shot(page, 'submitted') }
