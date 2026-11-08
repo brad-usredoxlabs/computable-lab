@@ -13,12 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { createWorkspaceHandlers } from './WorkspaceHandlers.js';
@@ -119,6 +119,61 @@ describe('WorkspaceHandlers', () => {
         expect(state.status).toBe(200);
         expect(result?.state).toEqual(defaultWorkspaceState('STU-000002'));
       }
+    });
+
+    it('GET strips a derived deck tab that is already on disk in the sidecar', async () => {
+      // Seed the file directly, bypassing PUT — PUT would strip it for us
+      const studyId = 'STU-der002';
+      const filePath = join(
+        workspaceRoot,
+        recordsDir,
+        'studies',
+        studyId,
+        'workspace.yaml',
+      );
+      await mkdir(
+        join(workspaceRoot, recordsDir, 'studies', studyId),
+        { recursive: true },
+      );
+      await writeFile(
+        filePath,
+        stringifyYaml({
+          version: 3,
+          studyId,
+          tabs: [
+            {
+              id: 'tab-deck-EVG-legacy',
+              kind: 'deck',
+              eventGraphId: 'EVG-legacy',
+              title: 'Legacy deck',
+              derived: true,
+            },
+            {
+              id: 'details:STU-der002',
+              kind: 'project-details',
+              title: 'Project',
+            },
+          ],
+          activeTabId: 'tab-deck-EVG-legacy',
+          rightPaneMode: 'find',
+          rightPaneCollapsed: false,
+          paneWidths: { left: 0.6, right: 0.4 },
+        }),
+        'utf-8',
+      );
+
+      const { reply: getReply, state: getState } = makeReply();
+      const getResult = await handlers.getWorkspace(
+        makeRequest({ studyId }),
+        getReply,
+      );
+      expect(getState.status).toBe(200);
+      expect(getResult?.state.tabs).toHaveLength(1);
+      expect(getResult?.state.tabs[0].kind).toBe('project-details');
+      expect(getResult?.state.activeTabId).toBe('details:STU-der002');
+      expect(
+        JSON.stringify(getResult?.state).includes('tab-deck-EVG-legacy'),
+      ).toBe(false);
     });
   });
 
