@@ -140,10 +140,10 @@ export function createWorkspaceHandlers(
           dirname(filePath),
           `.workspace.yaml.${randomUUID()}.tmp`,
         );
-        const yaml = stringifyYaml(state, { indent: 2 });
+        const yaml = stringifyYaml(persistState, { indent: 2 });
         await writeFile(tmpPath, yaml, 'utf-8');
         await rename(tmpPath, filePath);
-        return { state };
+        return { state: persistState };
       } catch (err) {
         reply.status(500).send({
           error: 'WORKSPACE_WRITE_FAILED',
