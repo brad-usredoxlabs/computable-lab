@@ -2672,20 +2672,29 @@ export function createResolveRolesPass(
       function buildMaterialEmission(
         recordId: string,
       ): Record<string, unknown> {
-        // 'record' and 'material' are schema enum members (ref.schema.yaml §14, §52-55)
-        const typedRef = { kind: 'record' as const, type: 'material' as const, id: recordId };
-
         // If a composition lookup is available and returns entries, expand them
         // into the snapshot (one level — the formulation's declared entries).
         // Otherwise, fall back to the legacy single-entry with role: 'other'.
+        // The lookup is keyed by material-SPEC recordId, so the composition arm
+        // means the bound ref describes a material-spec (sibling:
+        // materialRefLabels.ts types those refs 'material-spec'); the legacy
+        // single-entry fallback keeps 'material' — record kind is unknowable here.
         const compositionEntries = opts?.materialComposition?.(recordId);
-        const snapshot =
-          Array.isArray(compositionEntries) && compositionEntries.length > 0
-            ? compositionEntries.map((entry: { component_ref: unknown; role: string }) => ({
-                component_ref: entry.component_ref,
-                role: entry.role,
-              }))
-            : [{ component_ref: typedRef, role: 'other' as const }];
+        const hasComposition = Array.isArray(compositionEntries) && compositionEntries.length > 0;
+        const typedRef = {
+          kind: 'record' as const,
+          type: (hasComposition ? 'material-spec' : 'material') as 'material' | 'material-spec',
+          id: recordId,
+        };
+        const snapshot = hasComposition
+          ? (compositionEntries as Array<{ component_ref: unknown; role: string; concentration?: unknown; participation?: unknown; source?: unknown }>).map((entry) => ({
+              component_ref: entry.component_ref,
+              role: entry.role,
+              ...(entry.participation !== undefined ? { participation: entry.participation } : {}),
+              ...(entry.concentration !== undefined ? { concentration: entry.concentration } : {}),
+              ...(entry.source !== undefined ? { source: entry.source } : {}),
+            }))
+          : [{ component_ref: typedRef, role: 'other' as const }];
 
         return {
           material_ref: typedRef,
