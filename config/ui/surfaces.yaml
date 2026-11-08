@@ -193,3 +193,44 @@ surfaces:
       leg: null
       reason: "Browser gate for splash surface still owed — no live probe evidence for this surface yet"
     description: "Splash — new-tab landing surface hosting the splash search page in the left pane."
+
+  - id: deck-host
+    route: "/deck/:eventGraphId/:runId?"
+    panes:
+      - ai-chat
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for deck-host surface still owed — no live probe evidence for this host yet"
+    description: "Deck host — standalone top-level tab rendering an event-graph deck with the deck chat slice in the right pane."
+
+  - id: project-event-graph
+    route: "/project/:studyId/event-graph/:eventGraphId"
+    panes:
+      - ai-chat
+      - deck
+    requires:
+      providers: [deck, workspace]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for project-event-graph surface still owed — no live probe evidence for this host yet"
+    description: "Project event graph — project workspace opening a deck tab for the named graph with chat in the right pane."
+
+  - id: record-create
+    route: "/record/new/:nodeType/:parentId?"
+    panes:
+      - ai-chat
+    requires:
+      providers: [workspace]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for record-create surface still owed — no live probe evidence for this host yet"
+    description: "Record create — record creation panel in its own tab inside the workspace shell with thread-scoped chat."
