@@ -210,3 +210,61 @@ PROMPT2-REGATE-LEGAB: PASS (instrument fix landed)
 - `git diff HEAD --stat -- app server schema` → empty (no product-code change)
 
 L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u8legabdiag DONE 2131cc66f2b96fa93205f691623d919d4a7a6eff
+
+## u9advcfix — Evidence defects D1-D4 closure + ONE honest re-run
+
+### SCOPE
+Close advc-c1 evidence defects D1-D4:
+- D1: RUN A left no separate receipt dir
+- D2: u8legabdiag saved only one receipt dir for two runs
+- D3: report lacks item-required verdict line form
+- D4: report's md5 table is stale
+
+### CORRECTED MD5 TABLE (D4 fix)
+Driver            | Current MD5
+------------------|-----------------------
+chrome.cjs        | d482e2eecd57d646350aee815c220d0a
+leg3.cjs          | 9ad0f0470898599f74d01794f4c2b99b
+leg4.cjs          | 7fd883d4f42b091691b16e8ae509d438
+legAB.cjs         | 34b79233e7eeba6fb0fd8e4962f93b96
+
+These match BEDROCK (b) verbatim — verified with `md5sum` post-run.
+
+### HONEST RE-RUN (D1/D2 fix — separate receipt dir)
+Receipt dir: /home/brad/.hermes/cl/receipts/PROMPT2-REGATE-20261108/20261108T043724/
+Three separate JSON files + shots/ subdirectory. Workspace-reset between legs.
+
+#### leg3 — PASS
+- status: PASS, failedCriteria: []
+- before=34, cardSeen=true, submitted=true
+- settled=true, previewWells=16, previewBarText="16 events View changes"
+- hoverE2.tooltip: "E2 103.0 uL MAT-CHEBI-3750 ..."
+- discarded=true, after=34 (unchanged)
+- identity: "Local clofibrate Local record binds material record MAT-CHEBI-3750"
+
+#### leg4 — FAIL (submit disabled)
+- submitted=false, submitError: "Error: submitAnswers disabled: 2 slot(s)"
+- before=34, cardSeen=true, arm=grouped, slotCount=2
+- identity picked: "Local clofibrate Local record binds material record MAT-CHEBI-3750"
+- quantity: "no quantity slot in this arm (volume stated in the prompt)"
+- settled=false, previewWells=[], previewBarText=null
+- hoverE2 tooltip present: "E2 102.0 uL MAT-CHEBI-3750 ..."
+
+#### legAB — PASS
+- identity: "Local clofibrate Local record binds material record MAT-CHEBI-3750"
+- submitted=true, applied=true
+- events grew from 34 to 50 (16 new events)
+- previewWells=16, previewBarText="16 events View changes"
+- record sha: 2d0aa4cd7dd91fbc11cddec6a9ae3c24e4ce0a31
+- persistence verified after reload (events=50, previewWells=0, fills persisted)
+
+### DISPOSITION
+The old cold-fail receipt (20261108T035245/) showed legAB failing on identityError.
+The new pass receipt (20261108T043724/) confirms the bounded-popover poll fix resolved
+that cold-start timing issue. leg3 and legAB pass; leg4 fails because the grouped arm
+presents 2 slots (identity + quantity) but the quantity slot reports no answer needed
+(volume stated in prompt), leaving submit disabled — a product behavior not addressed
+by this unit.
+
+### VERDICT
+PROMPT2-REGATE: PARTIAL 2/3 (leg3 PASS, legAB PASS, leg4 FAIL: submitAnswers disabled)
