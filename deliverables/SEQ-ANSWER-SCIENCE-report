@@ -62,3 +62,5 @@ recordId-based event details, or the pipeline must emit a string material label 
 recordId. This is a production code fix, outside the test-only scope of this unit.
 
 L2-PROMPT2-SCIENCE-CHAIN-1-u8d3pin UNIT unit BLOCKED production enrichment gate requires details.material string but production events emit recordId/kind objects
+
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u1fix DONE 6b0aaff8d521cd0153a30aa3601ce7f3f9b361ab
