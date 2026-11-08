@@ -76,13 +76,6 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
       } catch (e) {
         out.answer.answerAllError = String(e).slice(0, 300)
         step('answer-all', 'FAILED', { error: out.answer.answerAllError })
-        // Fallback: try per-slot calls for prior receipt compatibility
-        try { const r = await chrome.answerSlot(page, 'identity', 'Clofibrate'); out.answer.identity = r; step('answer-identity', 'picked concept (fallback)', { picked: r.picked })
-          await page.waitForTimeout(1800); await shot(page, 'identity') }
-        catch (e2) { out.answer.identityError = String(e2).slice(0, 300); step('answer-identity', 'FAILED', { error: out.answer.identityError }) }
-        try { const r = await chrome.answerSlot(page, 'quantity', '1'); out.answer.quantity = r; step('answer-quantity', 'committed volume (fallback)', { approved: r.approved })
-          await page.waitForTimeout(1000); await shot(page, 'quantity') }
-        catch (e2) { out.answer.quantityError = String(e2).slice(0, 300); step('answer-quantity', 'FAILED', { error: out.answer.quantityError }) }
       }
       out.submitDisabled = await page.evaluate(() => { const b = document.querySelector('[data-testid="chat-clarification-submit"]'); return b ? b.disabled : null })
       try { await chrome.submitAnswers(page); out.answer.submitted = true; step('submit', 'submitted', { wasDisabled: out.submitDisabled })
