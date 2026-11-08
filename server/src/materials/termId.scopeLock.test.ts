@@ -25,7 +25,9 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
 
 const CODE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage']);
+// 'wt' = in-repo legacy coder-worktree debris dirs (pre cl-wt policy, 2026-11-05): untracked
+// nested clones whose duplicate sources are NOT repo sources; the pin must scan repo files only.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'wt']);
 
 const TOKEN = 'canonicalLabelKey';
 
