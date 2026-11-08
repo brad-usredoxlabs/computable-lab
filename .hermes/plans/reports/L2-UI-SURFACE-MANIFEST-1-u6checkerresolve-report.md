@@ -83,3 +83,5 @@ Reported rather than hidden; nothing was cut to fit a line count.
 - Orphan artifact regenerated unchanged (42 orphans, 719 scanned); not hand-edited.
 - Remaining MANIFEST-1 legs (MISSING=34 surface triage, requires/providers data)
   are untouched and remain with the orchestrator; no facts invented here.
+
+L2-UI-SURFACE-MANIFEST-1 UNIT u6checkerresolve DONE b300876a2373d084e0a1781cd702d87c3007abcd
