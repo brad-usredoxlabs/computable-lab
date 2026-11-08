@@ -130,15 +130,70 @@ describe('normalizeEventGraphMaterialUsage — batch identity deduplication', ()
     );
 
     const firstId = specIds[0];
-    expect(firstId).toBeDefined();
+
+    // Every event must bind the SAME id (all-equal pin) and the id must be a
+    // single identity key, not a per-event-shaped draft id.
     specIds.forEach((id) => {
       expect(id).toBe(firstId);
     });
-
-    // The id is NOT per-event shaped (i.e. not MSP-DRAFT-EVG_BATCH_DEDUPE_EVT_* with distinct event suffixes)
-    // The actual id observed is the first event's implicit id: MSP-DRAFT-EVG_BATCH_DEDUPE_EVT_WELL_A1
-    expect(firstId).toBeDefined();
+    expect(new Set(specIds).size).toBe(1);
+    expect(typeof firstId).toBe('string');
+    expect(firstId).toContain('EVT_WELL_A1');
+    expect(firstId).not.toMatch(/EVT_WELL_(B2|C3|D4)/);
     expect(specIds.length).toBe(4);
+  });
+
+  it('permuted composition entry order across events still mints ONE material-spec', async () => {
+    const store = new MemoryRecordStore();
+
+    const glucose = {
+      component_ref: { kind: 'ontology', id: 'CHEBI:28908', namespace: 'CHEBI', label: 'glucose' },
+      role: 'solute',
+      concentration: { value: 5, unit: 'mM' },
+    };
+    const ethanol = {
+      component_ref: { kind: 'ontology', id: 'CHEBI:15377', namespace: 'CHEBI', label: 'ethanol' },
+      role: 'solvent',
+    };
+
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-PERM-ORDER',
+      events: [
+        {
+          eventId: 'evt-perm-e1',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: 'Media mix' },
+            composition_snapshot: [glucose, ethanol],
+          },
+        },
+        {
+          eventId: 'evt-perm-e2',
+          event_type: 'add_material',
+          details: {
+            wells: ['B2'],
+            material_ref: { kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: 'Media mix' },
+            // Same identity, entry order permuted: server FIND uses
+            // compositionsEqual (order-insensitive), so the batch memo must too.
+            composition_snapshot: [ethanol, glucose],
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+
+    const createdSpecs = store.created.filter((e) => e.meta?.kind === 'material-spec');
+    expect(createdSpecs.length).toBe(1);
+
+    const specIds = ((normalized as any).events as any[]).map(
+      (ev) => (ev.details as any).material_spec_ref?.id,
+    );
+    expect(specIds.length).toBe(2);
+    expect(new Set(specIds).size).toBe(1);
+    expect(specIds[0]).toBe(specIds[1]);
   });
 
   it('distinct identities in one graph still mint distinct specs', async () => {
