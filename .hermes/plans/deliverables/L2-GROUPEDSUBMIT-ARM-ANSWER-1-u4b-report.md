@@ -17,10 +17,11 @@
 - .hermes/plans/deliverables/PROMPT2-REGATE-DRIVERS-REBASELINE-1/u6status/drivers/chrome.cjs
 - .hermes/plans/deliverables/PROMPT2-REGATE-DRIVERS-REBASELINE-1/u6status/drivers/leg4.cjs
 
-## Commit
-08be060f8375f7fae467bb49d718f51a36f1f06c
+## Commits
+08be060f u4b: answerAllSlots — grouped driver answers via one chrome.answerAllSlots
+cf47b3af u4b: report for answerAllSlots implementation
 
 ## Tree
 Clean at exit.
 
-L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4b DONE 08be060f8375f7fae467bb49d718f51a36f1f06c
+L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u4b DONE cf47b3af68774c05de582acdb00c47e897a0113f
