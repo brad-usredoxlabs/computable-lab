@@ -696,6 +696,15 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
             // closes (no open picker lingering beside the answered card).
             closePicker()
           }
+        } catch {
+          // groundedAnswerFromMention can reject (e.g. groundMaterialRef
+          // /api call fails). Fall back to answerFromMention so the slot
+          // still records and the grouped submit gate can pass.
+          const fallback = answerFromMention(request, item.mention)
+          if (fallback) {
+            onPick(fallback, request)
+            closePicker()
+          }
         } finally {
           busyRef.current = false
           setBusy(false)
