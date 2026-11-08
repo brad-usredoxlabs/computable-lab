@@ -185,6 +185,7 @@ function bindingFor(req: ResolutionRequest, candidate: RankedCandidate): BoundNo
     confidence: confidenceOf(candidate),
     source: candidate.source,
     ...(req.actionIndex !== undefined ? { actionIndex: req.actionIndex } : {}),
+    ...(candidate.formulationDeclared ? { formulationDeclared: candidate.formulationDeclared } : {}),
   };
 }
 
