@@ -15,6 +15,15 @@
 // one-request prompt. This file now resolves EITHER arm. SELECTORS ONLY — the
 // legs' assertions (surface appears, answer committed, preview bar, ghost,
 // apply/discard, event-count delta) are unchanged.
+//
+// SURFACE-DRIVEN (u2slotdrive): answerSlot for non-identity kinds enumerates
+// each slot's actual control by testid in the card's precedence order:
+//   1. clarify-assumed-chip (quantity declared slot)
+//   2. clarify-well-target-slot (wells declared slot)
+//   3. clarification-top3-row (picker top-3 buttons)
+//   4. chat-clarification-option-* (numbered options)
+//   5. parameter-answer-input (typed fallback)
+// Returns { present, via } naming the surface driven.
 
 const CARD = '[data-testid="chat-clarification-card"]'
 const SINGLE = '.chat-log-clarification'
@@ -55,6 +64,113 @@ async function pickNumberedOption(page, searchValue) {
   return null
 }
 
+/**
+ * SURFACE-DRIVEN slot answerer. Instead of knowing slot "kinds" (identity,
+ * quantity), we enumerate the controls the card actually rendered for this
+ * slot, in the card's own precedence order. Returns the surface it drove.
+ *
+ * Precedence (matches ChatClarificationCard.tsx ternary):
+ *   1. clarify-assumed-chip (declared quantity slot)
+ *   2. clarify-well-target-slot (declared wells slot)
+ *   3. clarification-identity-search + popover/top3 (picker)
+ *   4. chat-clarification-option-* (numbered options)
+ *   5. parameter-answer-input (typed fallback)
+ *
+ * @param {import('playwright').Page} page
+ * @param {number} slotIndex  0-based index into [data-testid="chat-clarification-slot"]
+ * @param {string} answerValue  the value to type/pick
+ * @returns {Promise<{present: true, via: string} | {present: false, unanswered: true, slotId: string, dom: string}>}
+ */
+async function answerSlotBySurface(page, slotIndex, answerValue) {
+  const slotEls = page.locator('[data-testid="chat-clarification-slot"]')
+  const n = await slotEls.count()
+  if (slotIndex < 0 || slotIndex >= n) throw new Error(`answerSlotBySurface: slotIndex ${slotIndex} out of range [0,${n})`)
+  const slot = slotEls.nth(slotIndex)
+
+  // 1. Declared quantity chip (clarify-assumed-chip)
+  {
+    const chip = slot.locator('[data-testid="clarify-assumed-chip"]')
+    if (await chip.count()) {
+      const input = chip.locator('[data-testid="clarify-assumed-value"]')
+      await input.fill(String(answerValue))
+      await page.waitForTimeout(300)
+      const approve = chip.locator('[data-testid="clarify-assumed-approve"]')
+      if (!(await approve.isEnabled())) throw new Error('answerSlotBySurface: assumed-chip approve disabled')
+      await approve.click()
+      return { present: true, via: 'assumed-chip' }
+    }
+  }
+
+  // 2. Declared wells slot (clarify-well-target-slot)
+  {
+    const wellSlot = slot.locator('[data-testid="clarify-well-target-slot"]')
+    if (await wellSlot.count()) {
+      const input = wellSlot.locator('[data-testid="clarify-well-target"]')
+      await input.fill(String(answerValue))
+      const approve = wellSlot.locator('[data-testid="clarify-well-target-approve"]')
+      if (await approve.count() && (await approve.isEnabled())) {
+        await approve.click()
+      }
+      return { present: true, via: 'wells-slot' }
+    }
+  }
+
+  // 3. Picker: search + popover, or top-3 buttons
+  {
+    const search = slot.locator('[data-testid="clarification-identity-search"]')
+    if (await search.count()) {
+      await search.click()
+      await search.fill(answerValue)
+      // Wait for popover options
+      const pop = page.locator('[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
+      for (let wait = 0; wait < 10; wait++) { if (await pop.count() > 0) break; await page.waitForTimeout(1000) }
+      const popN = await pop.count()
+      for (let i = 0; i < popN; i++) {
+        const txt = ((await pop.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
+        if (new RegExp(answerValue, 'i').test(txt)) { await pop.nth(i).click(); return { present: true, via: 'picker-popover' } }
+      }
+      // Popover gave nothing: fall through to top-3 rows
+    }
+    const top3 = slot.locator('[data-testid="clarification-top3-row"]')
+    if (await top3.count()) {
+      const t = await pickTop3(page, answerValue)
+      if (t) return { present: true, via: 'picker-top3' }
+    }
+  }
+
+  // 4. Numbered options
+  {
+    const opts = slot.locator('ol button')
+    if (await opts.count()) {
+      const o = await pickNumberedOption(page, answerValue)
+      if (o) return { present: true, via: 'option' }
+    }
+  }
+
+  // 5. Typed parameter input
+  {
+    const typed = slot.locator('[data-testid="parameter-answer-input"]')
+    if (await typed.count()) {
+      await typed.fill(String(answerValue))
+      const submit = slot.locator('[data-testid="parameter-answer-submit"]')
+      if (await submit.count() && (await submit.isEnabled())) {
+        await submit.click()
+      }
+      return { present: true, via: 'typed' }
+    }
+  }
+
+  // No drivable control — return the slot's DOM for diagnosis
+  const slotId = await slot.getAttribute('data-request-id') || `slot[${slotIndex}]`
+  const dom = (await slot.innerHTML()).slice(0, 2000)
+  return { present: false, unanswered: true, slotId, dom }
+}
+
+/**
+ * Legacy answerSlot — kept for backward compat with legs that still call it
+ * with 'identity' or 'quantity' kinds. Identity path unchanged; quantity
+ * delegates to surface-driven enumeration (slot 0 for legacy calls).
+ */
 async function answerSlot(page, kind, searchValue) {
   if (kind === 'identity') {
     // grouped arm: per-slot picker, search + popover
@@ -77,18 +193,36 @@ async function answerSlot(page, kind, searchValue) {
     throw new Error(`answerSlot identity: no picker/popover/top3/option match for "${searchValue}"`)
   }
   if (kind === 'quantity') {
-    const input = page.locator('[data-testid="clarify-assumed-value"]')
-    if (!(await input.count())) {
-      // single arm for a prompt that STATES the volume: no quantity request is
-      // raised, so there is no chip to approve. Recorded, not silently passed.
-      return { present: false, note: 'no quantity slot in this arm (volume stated in the prompt)' }
+    // Delegate to surface-driven enumeration for slot 1 (the second slot)
+    // Legacy callers expect a {present, approved} or {present:false} shape.
+    const r = await answerSlotBySurface(page, 1, searchValue)
+    if (r.present) {
+      return { present: true, approved: String(searchValue), via: r.via }
     }
-    await input.first().click(); await input.first().fill(String(searchValue)); await page.waitForTimeout(300)
-    const approve = page.locator('[data-testid="clarify-assumed-approve"]').first()
-    if (!(await approve.isEnabled())) throw new Error('answerSlot quantity: approve disabled')
-    await approve.click(); return { present: true, approved: String(searchValue) }
+    return r
   }
   throw new Error(`answerSlot unknown kind: ${kind}`)
+}
+
+/**
+ * answerAllSlots — walks every [data-testid="chat-clarification-slot"] and
+ * answers each one. A slot with no drivable control returns
+ * {unanswered: true, slotId, dom} instead of throwing.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} answerValue  value to type into each slot
+ * @returns {Promise<Array>}  array of per-slot results
+ */
+async function answerAllSlots(page, answerValue) {
+  const slotEls = page.locator('[data-testid="chat-clarification-slot"]')
+  const n = await slotEls.count()
+  const results = []
+  for (let i = 0; i < n; i++) {
+    const r = await answerSlotBySurface(page, i, answerValue)
+    if (r.present) await page.waitForTimeout(500)
+    results.push(r)
+  }
+  return results
 }
 
 async function submitAnswers(page) {
@@ -115,4 +249,4 @@ async function apply(page) {
 
 async function discard(page) { await page.locator('[data-testid="chat-preview-discard"]').click() }
 
-module.exports = { card, slots, anySurface, arm, answerSlot, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
+module.exports = { card, slots, anySurface, arm, answerSlot, answerSlotBySurface, answerAllSlots, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }

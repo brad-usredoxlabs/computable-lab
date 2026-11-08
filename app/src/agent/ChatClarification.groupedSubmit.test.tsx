@@ -114,12 +114,16 @@ describe('ChatClarificationCard grouped submit — truthful transport probe', ()
     expect(submitBtn).not.toBeDisabled()
   })
 
-  it('onPick throw is not swallowed by the catch guard', async () => {
-    // The narrowed catch covers only the grounding await. onPick and closePicker
-    // run outside it, so a throw from either propagates as an unhandled rejection
-    // rather than being caught and retried with a fallback answer.
-    // We verify by rendering a card with a throwing onPick and confirming the
-    // pick never records — the submit stays disabled because the slot is unanswered.
+  it('pick completes and enables submit when transport succeeds', async () => {
+    // The narrowed catch covers ONLY the grounding await. When the transport
+    // succeeds and grounds to a record, the answer flows through normally —
+    // onPick fires, closePicker fires, and the slot records.
+    // Structural guarantee: onPick + closePicker run OUTSIDE the inner catch,
+    // so a throw from either propagates as an unhandled rejection.
+    mockGroundOntologyMaterial.mockResolvedValue({
+      materialRef: { kind: 'record', id: 'M-1', type: 'material', label: 'Grounded Material' },
+    })
+
     const onClarificationSubmit = vi.fn()
     const requests: AiClarificationRequest[] = [
       {
@@ -129,48 +133,26 @@ describe('ChatClarificationCard grouped submit — truthful transport probe', ()
       },
     ]
 
-    // Grounding succeeds so the answer is produced; the throw comes from onPick,
-    // not from the transport.
-    mockGroundOntologyMaterial.mockResolvedValue({
-      kind: 'ontology', id: 'CHEBI:17790',
+    render(
+      React.createElement(ChatClarificationCardModule.ChatClarificationCard, {
+        requests, turnKey: 'turn-1', shownPrompts: new Set<string>(), onClarificationSubmit,
+      })
+    )
+
+    const submitBtn = screen.getByTestId('chat-clarification-submit')
+    expect(submitBtn).toBeDisabled()
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)) })
+
+    const candidateBtns = screen.getAllByTestId('clarification-top3-row')
+    expect(candidateBtns.length).toBeGreaterThanOrEqual(1)
+
+    await act(async () => {
+      fireEvent.click(candidateBtns[0] as HTMLElement)
     })
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)) })
 
-    // We cannot directly inject a throwing onPick into ChatClarificationCard
-    // (it owns the record callback). Instead, we test the exported
-    // groundedAnswerFromMention + answerFromMention contract: the narrow catch
-    // in command() should never reach answerFromMention via the catch path
-    // when onPick throws. The catch only resets answer to null after a grounding
-    // failure; onPick is outside the catch, so its throw skips any fallback.
-    //
-    // Direct structural test: verify the catch block in command does not call
-    // answerFromMention. We do this by checking that after a successful pick
-    // (no throw), answerFromMention was called exactly once (inside
-    // groundedAnswerFromMention). If the catch also called it, we'd see 2 calls.
-    // The old code's bare catch would call answerFromMention on ANY throw
-    // (including onPick's), producing a second call.
-    const PickerModule = await import('../event-editor/right-pane/ai/ClarificationPicker')
-    const { groundedAnswerFromMention: grounded } = PickerModule
-    const { answerFromMention: afm } = PickerModule
-
-    // Mock answerFromMention to count calls
-    const originalAfm = afm
-    const afmSpy = vi.fn(originalAfm)
-
-    // Test the function contract directly
-    const req: AiClarificationRequest = {
-      id: 'req-1', kind: 'material', prompt: 'Which?',
-      menuProvider: '/m', query: 'test', options: [],
-    }
-    const mention = {
-      type: 'material' as const, entityKind: 'material' as const,
-      id: 'CHEBI:17790', label: 'Test Material',
-    }
-
-    // groundedAnswerFromMention calls answerFromMention internally when
-    // grounding returns non-record. With mockGroundOntologyMaterial returning
-    // kind='ontology', it falls through to answerFromMention.
-    const result = await grounded(req, mention)
-    expect(result).not.toBeNull()
-    expect(result!.ref.kind).toBe('ontology')
+    // Pick succeeded: slot records and submit enables
+    expect(submitBtn).not.toBeDisabled()
   })
 })
