@@ -55,12 +55,15 @@ async function pickNumberedOption(page, searchValue) {
   return null
 }
 
-async function answerSlot(page, kind, searchValue) {
+async function answerSlot(page, kind, searchValue, root) {
+  // root is optional: when absent, page-wide fallback is used (single-surface callers).
+  const r = root || page
   if (kind === 'identity') {
-    // grouped arm: per-slot picker, search + popover
-    const search = page.locator('[data-testid="clarification-identity-search"]')
+    // grouped arm: per-slot picker, search + popover (scoped to root)
+    const search = r.locator('[data-testid="clarification-identity-search"]')
     if (await search.count()) {
       await search.first().click(); await search.first().fill(searchValue)
+      // popover is page-wide (portal), so always search from page
       const pop = page.locator('[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
       for (let wait = 0; wait < 10; wait++) { if (await pop.count() > 0) break; await page.waitForTimeout(1000) }
       const n = await pop.count()
@@ -77,46 +80,80 @@ async function answerSlot(page, kind, searchValue) {
     throw new Error(`answerSlot identity: no picker/popover/top3/option match for "${searchValue}"`)
   }
   if (kind === 'quantity') {
-    const input = page.locator('[data-testid="clarify-assumed-value"]')
+    const input = r.locator('[data-testid="clarify-assumed-value"]')
     if (!(await input.count())) {
       // single arm for a prompt that STATES the volume: no quantity request is
       // raised, so there is no chip to approve. Recorded, not silently passed.
       return { present: false, note: 'no quantity slot in this arm (volume stated in the prompt)' }
     }
     await input.first().click(); await input.first().fill(String(searchValue)); await page.waitForTimeout(300)
-    const approve = page.locator('[data-testid="clarify-assumed-approve"]').first()
+    const approve = r.locator('[data-testid="clarify-assumed-approve"]').first()
     if (!(await approve.isEnabled())) throw new Error('answerSlot quantity: approve disabled')
     await approve.click(); return { present: true, approved: String(searchValue) }
+  }
+  if (kind === 'wells') {
+    const input = r.locator('[data-testid="clarify-well-target"]')
+    if (!(await input.count())) throw new Error('answerSlot wells: no clarify-well-target found')
+    await input.first().click(); await input.first().fill(String(searchValue)); await page.waitForTimeout(300)
+    const approve = r.locator('[data-testid="clarify-well-target-approve"]').first()
+    if (!(await approve.isEnabled())) throw new Error('answerSlot wells: approve disabled')
+    await approve.click(); return { present: true, approved: String(searchValue) }
+  }
+  if (kind === 'option') {
+    const btns = r.locator('.chat-clarification-card__options li button')
+    const n = await btns.count()
+    for (let i = 0; i < n; i++) {
+      const txt = ((await btns.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
+      if (new RegExp(searchValue, 'i').test(txt)) { await btns.nth(i).click(); return { picked: txt.trim(), via: 'option' } }
+    }
+    throw new Error(`answerSlot option: no button matched "${searchValue}"`)
+  }
+  if (kind === 'parameter') {
+    const input = r.locator('[data-testid="parameter-answer-input"]')
+    if (!(await input.count())) throw new Error('answerSlot parameter: no parameter-answer-input found')
+    await input.first().click(); await input.first().fill(String(searchValue))
+    const submit = r.locator('[data-testid="parameter-answer-submit"]').first()
+    if (!(await submit.isEnabled())) throw new Error('answerSlot parameter: submit disabled')
+    await submit.click(); return { entered: String(searchValue) }
   }
   throw new Error(`answerSlot unknown kind: ${kind}`)
 }
 
 async function answerAllSlots(page, answerMap) {
-  // Enumerate slots in DOM order, detect kind per slot, pick value from answerMap,
-  // delegate to existing answerSlot(page, kind, value).
+  // Enumerate slots in DOM order, detect kind per slot from the answer SURFACE
+  // rendered inside each slot (card precedence: picker -> quantity -> wells ->
+  // options -> parameter), pass the slot root so each arm is slot-scoped.
   const slotEls = page.locator('[data-testid="chat-clarification-slot"]')
   const count = await slotEls.count()
   if (count === 0) throw new Error('answerAllSlots: no slots found')
   const results = []
   for (let i = 0; i < count; i++) {
     const slot = slotEls.nth(i)
-    // Detect kind from markers INSIDE this slot
-    const hasIdentity = await slot.locator('[data-testid="chat-clarification-slot-identity"]').count()
-    const hasQuantity = await slot.locator('[data-testid="clarify-assumed-chip"]').count()
+    // Classify by the answer surface rendered INSIDE this slot (not the label)
+    const hasPicker = await slot.locator('[data-testid="clarification-identity-search"]').count()
+    const hasTop3 = await slot.locator('[data-testid="clarification-top3-row"]').count()
+    const hasChip = await slot.locator('[data-testid="clarify-assumed-chip"]').count()
+    const hasWells = await slot.locator('[data-testid="clarify-well-target"]').count()
     const hasOptions = await slot.locator('.chat-clarification-card__options li button').count()
+    const hasParam = await slot.locator('[data-testid="parameter-answer"]').count()
     let kind
-    if (hasIdentity > 0) kind = 'identity'
-    else if (hasQuantity > 0) kind = 'quantity'
+    if (hasPicker > 0 || hasTop3 > 0) kind = 'identity'
+    else if (hasChip > 0) kind = 'quantity'
+    else if (hasWells > 0) kind = 'wells'
     else if (hasOptions > 0) kind = 'option'
-    else throw new Error('answerAllSlots: slot ' + i + ' — unrecognized kind (no identity/quantity/options markers)')
-    // Pick value from answerMap: object {identity, quantity}, array [by index], or legacy string
+    else if (hasParam > 0) kind = 'parameter'
+    else throw new Error('answerAllSlots: slot ' + i + ' — unrecognized kind (no picker/chip/wells/options/parameter surface)')
+    // Pick value from answerMap: index-keyed first (unambiguous), then kind-keyed, then string
     let value
     if (typeof answerMap === 'string') value = answerMap
     else if (Array.isArray(answerMap)) value = answerMap[i]
-    else if (typeof answerMap === 'object' && answerMap !== null) value = answerMap[kind]
+    else if (typeof answerMap === 'object' && answerMap !== null) {
+      value = answerMap[kind] !== undefined ? answerMap[kind] : answerMap[i]
+    }
     else throw new Error('answerAllSlots: unsupported answerMap type')
     if (value === undefined || value === null) throw new Error('answerAllSlots: no value for slot ' + i + ' (kind ' + kind + ')')
-    const result = await answerSlot(page, kind, value)
+    // Delegate to answerSlot with the slot root so it probes from this slot
+    const result = await answerSlot(page, kind, value, slot)
     results.push({ index: i, kind, value, ...result })
   }
   return results

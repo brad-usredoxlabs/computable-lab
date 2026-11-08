@@ -13,10 +13,15 @@
 
 const chrome = require('./chrome.cjs')
 
-// ── marker selector map ────────────────────────────────────────
-const MARKER_SELECTOR = {
+// ── stub page factory ──────────────────────────────────────────
+// Each shape provides slotTables: array of { markers: { markerName: count } }
+// Markers are keyed by their selector names (simplified keys).
+// We also pass the answerMap so stubs know what search value to match.
+
+const MARKERS = {
   identity: '[data-testid="chat-clarification-slot-identity"]',
   search:   '[data-testid="clarification-identity-search"]',
+  top3:     '[data-testid="clarification-top3-row"]',
   chip:     '[data-testid="clarify-assumed-chip"]',
   value:    '[data-testid="clarify-assumed-value"]',
   approve:  '[data-testid="clarify-assumed-approve"]',
@@ -26,149 +31,163 @@ const MARKER_SELECTOR = {
   param:    '[data-testid="parameter-answer"]',
   paramInput:    '[data-testid="parameter-answer-input"]',
   paramSubmit:   '[data-testid="parameter-answer-submit"]',
-  top3:     '[data-testid="clarification-top3-row"]',
   popover:  '[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button',
-  numOptions: '.chat-log-clarification-options li button',
+  numOpts:  '.chat-log-clarification-options li button',
+  submit:   '[data-testid="chat-clarification-submit"]',
 }
 
-// ── stub factory ───────────────────────────────────────────────
-function stubPage(slotTables) {
-  // Build slot array — each slot knows its markers
-  const slotList = slotTables.map((st, idx) => ({
-    _index: idx,
-    _markers: st.markers,
-    locator: (sel) => {
-      const name = Object.entries(MARKER_SELECTOR).find(([, s]) => s === sel)?.[0]
-      const count = (st.markers && st.markers[name]) || 0
-      return {
-        count: async () => count,
-        nth: () => stubElement(count, name, idx),
-        first: () => stubElement(count, name, idx),
-      }
-    },
-  }))
+function stubPage(slotTables, answerMap) {
+  const slotList = []
+  for (let si = 0; si < slotTables.length; si++) {
+    const st = slotTables[si]
+    const slotObj = {
+      locator: (sel) => {
+        const key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
+        const c = (st.markers && st.markers[key]) || 0
+        return stubList(Array.from({ length: c }, () => stubEl(c, key, si, answerMap)))
+      },
+    }
+    slotList.push(slotObj)
+  }
 
   return {
     locator: (sel) => {
-      // card-level selectors
-      if (sel === '[data-testid="chat-clarification-card"]')
-        return stubList([stubCardElement()])
-      if (sel === '[data-testid="chat-clarification-slot"]')
-        return stubList(slotList)
-      // page-wide selectors used by answerSlot
-      if (sel === '[data-testid="clarification-identity-search"]') {
-        // Return all search inputs across slots
-        const hits = slotList.map((s, i) =>
-          s._markers.search ? stubElement(1, 'search', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      if (sel === '[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
-        return stubList([stubPopElement()])
-      if (sel === '[data-testid="clarify-assumed-value"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.value ? stubElement(1, 'value', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      if (sel === '[data-testid="clarify-assumed-approve"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.approve ? stubElement(1, 'approve', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      if (sel === '[data-testid="clarify-well-target"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.target ? stubElement(1, 'target', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      if (sel === '[data-testid="clarify-well-target-approve"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.targetApprove ? stubElement(1, 'targetApprove', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
+      // card
+      if (sel === '[data-testid="chat-clarification-card"]') return stubList([{}])
+      // slots
+      if (sel === '[data-testid="chat-clarification-slot"]') return stubList(slotList)
+      // page-wide selectors — aggregate across slots
+      if (sel === '[data-testid="clarification-identity-search"]')
+        return stubList(aggSlots(slotList, 'search'))
       if (sel === '[data-testid="clarification-top3-row"]')
-        return stubList([stubTop3Element()])
+        return stubList(aggSlots(slotList, 'top3'))
+      if (sel === '[data-testid="clarify-assumed-value"]')
+        return stubList(aggSlots(slotList, 'value'))
+      if (sel === '[data-testid="clarify-assumed-approve"]')
+        return stubList(aggSlots(slotList, 'approve'))
+      if (sel === '[data-testid="clarify-well-target"]')
+        return stubList(aggSlots(slotList, 'target'))
+      if (sel === '[data-testid="clarify-well-target-approve"]')
+        return stubList(aggSlots(slotList, 'targetApprove'))
+      if (sel === '[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
+        return stubList([stubPopEl(answerMap)])
       if (sel === '.chat-log-clarification-options li button')
         return stubList([])
       if (sel === '[data-testid="chat-clarification-submit"]')
-        return stubList([stubSubmitElement()])
-      if (sel === '[data-testid="parameter-answer"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.param ? stubElement(1, 'param', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      if (sel === '[data-testid="parameter-answer-input"]') {
-        const hits = slotList.map((s, i) =>
-          s._markers.paramInput ? stubElement(1, 'paramInput', i) : null
-        ).filter(Boolean)
-        return stubList(hits.length > 0 ? hits : [stubElement(0)])
-      }
-      // Default: empty
-      return stubList([stubElement(0)])
+        return stubList([stubSubmitEl()])
+      if (sel === '[data-testid="parameter-answer"]')
+        return stubList(aggSlots(slotList, 'param'))
+      if (sel === '[data-testid="parameter-answer-input"]')
+        return stubList(aggSlots(slotList, 'paramInput'))
+      if (sel === '[data-testid="parameter-answer-submit"]')
+        return stubList(aggSlots(slotList, 'paramSubmit'))
+      // default: empty
+      return stubList([])
     },
-    waitForTimeout: async (ms) => {},
+    waitForTimeout: async () => {},
+  }
+}
+
+function aggSlots(slotList, key) {
+  const hits = []
+  slotList.forEach((s, i) => {
+    const m = s.locator(MARKERS[key])
+    // We need to count — but m is our stubList, just check markers
+    if ((slotList[i].locator(MARKERS[key]) || {}).count) {} // side effect already handled
+  })
+  // Build from markers directly
+  return slotList.map((s, i) => {
+    const m = s._markers || (slotTables_ && slotTables_[i] && slotTables_[i].markers) || {}
+    return m[key] ? stubEl(1, key, i, answerMap_) : null
+  }).filter(Boolean)
+}
+
+// Simpler approach: build stubs directly from marker data
+let slotTables_ = [], answerMap_
+function buildPage(slotTables, answerMap) {
+  slotTables_ = slotTables
+  answerMap_ = answerMap
+
+  const slotElements = slotTables.map((st, si) => ({
+    locator: (sel) => {
+      const key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
+      const c = (st.markers && st.markers[key]) || 0
+      return stubList(Array.from({ length: c }, () => mkEl(key, si)))
+    },
+  }))
+
+  // page-level aggregates
+  function pageAgg(key) {
+    const els = []
+    slotTables.forEach((st, si) => {
+      if (st.markers && st.markers[key]) els.push(mkEl(key, si))
+    })
+    return stubList(els)
+  }
+
+  return {
+    locator: (sel) => {
+      if (sel === '[data-testid="chat-clarification-card"]') return stubList([{}])
+      if (sel === '[data-testid="chat-clarification-slot"]') return stubList(slotElements)
+      // Popover is a page-wide portal — always available when picker exists
+      if (sel === '[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
+        return stubList([stubPopEl()])
+      const key = Object.keys(MARKERS).find((k) => MARKERS[k] === sel)
+      if (key) return pageAgg(key)
+      return stubList([])
+    },
+    waitForTimeout: async () => {},
   }
 }
 
 function stubList(els) {
   return {
     count: async () => els.length,
-    nth: (i) => els[i] || stubElement(0),
-    first: () => els[0] || stubElement(0),
+    nth: (i) => els[i] || mkEl('_empty', -1),
+    first: () => els[0] || mkEl('_empty', -1),
   }
 }
 
-function stubElement(count, name, slotIdx) {
+function mkEl(key, si) {
   return {
-    count: async () => count,
-    click: async () => ({ clicked: name, slot: slotIdx }),
-    fill: async (v) => ({ filled: name, value: v, slot: slotIdx }),
+    count: async () => 1,
+    click: async () => {},
+    fill: async (v) => {},
     isEnabled: async () => true,
-    innerText: async () => name || '',
-    nth: (i) => stubElement(count, name, slotIdx),
-    first: () => stubElement(count, name, slotIdx),
-    locator: () => stubList([stubElement(0)]),
+    innerText: async () => {
+      // Return the search value so matching works
+      if (answerMap_ && typeof answerMap_ === 'object') {
+        const keys = Object.keys(answerMap_)
+        if (keys.length > 0) return answerMap_[keys[0]] || 'match'
+      }
+      return 'match'
+    },
+    nth: () => mkEl(key, si),
+    first: () => mkEl(key, si),
+    locator: () => stubList([]),
   }
 }
 
-function stubCardElement() {
-  return { locator: () => stubList([]) }
-}
-
-function stubPopElement() {
+function stubPopEl(map) {
   return {
     count: async () => 1,
-    click: async () => ({ picked: 'match', via: 'popover' }),
+    click: async () => {},
     innerText: async () => 'Clofibrate',
-    nth: (i) => stubPopElement(),
-    first: () => stubPopElement(),
+    nth: () => stubPopEl(map),
+    first: () => stubPopEl(map),
   }
 }
 
-function stubTop3Element() {
-  return {
-    count: async () => 1,
-    click: async () => ({ picked: 'match', via: 'top3-row', rows: 1 }),
-    innerText: async () => 'Clofibrate',
-    nth: (i) => stubTop3Element(),
-    first: () => stubTop3Element(),
-  }
-}
-
-function stubSubmitElement() {
+function stubSubmitEl() {
   return {
     count: async () => 1,
     isEnabled: async () => true,
     click: async () => {},
-    first: () => stubSubmitElement(),
+    first: () => stubSubmitEl(),
   }
 }
 
-// ── shapes ──────────────────────────────────────────────────────
+// ── shapes (measured tables from review §4.1) ──────────────────
 const SHAPES = [
   {
     name: 'A-LIVE',
@@ -209,11 +228,11 @@ const SHAPES = [
   },
 ]
 
-// ── run ──────────────────────────────────────────────────────────
+// ── run ─────────────────────────────────────────────────────────
 async function run() {
   let failures = 0
   for (const shape of SHAPES) {
-    const page = stubPage(shape.slots)
+    const page = buildPage(shape.slots, shape.answerMap)
     try {
       const results = await chrome.answerAllSlots(page, shape.answerMap)
       const kinds = results.map((r) => `slot${r.index}:${r.kind}`)
