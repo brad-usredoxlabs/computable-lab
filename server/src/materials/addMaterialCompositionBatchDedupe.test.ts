@@ -248,4 +248,59 @@ describe('normalizeEventGraphMaterialUsage — batch identity deduplication', ()
     );
     expect(specIds[0]).not.toBe(specIds[1]);
   });
+
+  it('same material, equal-length compositions with DIFFERENT concentration mint distinct specs', async () => {
+    const store = new MemoryRecordStore();
+
+    // Same components, same roles, same entry COUNT — only the solute's
+    // concentration differs (1 mM vs 2 mM). These are chemically distinct
+    // formulations and must not be merged into ONE material-spec.
+    const glucoseAt = (value: number) => ({
+      component_ref: { kind: 'ontology', id: 'CHEBI:28908', namespace: 'CHEBI', label: 'glucose' },
+      role: 'solute',
+      concentration: { value, unit: 'mM' },
+    });
+    const ethanol = {
+      component_ref: { kind: 'ontology', id: 'CHEBI:15377', namespace: 'CHEBI', label: 'ethanol' },
+      role: 'solvent',
+    };
+
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-CONC-DIFF',
+      events: [
+        {
+          eventId: 'evt-conc-1mm',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: 'Media mix' },
+            composition_snapshot: [glucoseAt(1), ethanol],
+          },
+        },
+        {
+          eventId: 'evt-conc-2mm',
+          event_type: 'add_material',
+          details: {
+            wells: ['B2'],
+            material_ref: { kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: 'Media mix' },
+            composition_snapshot: [glucoseAt(2), ethanol],
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+
+    // Witnesses the compositionsEqual clause in the batch identity memo: an
+    // id-only or length-only comparison would merge these into ONE spec.
+    const createdSpecs = store.created.filter((e) => e.meta?.kind === 'material-spec');
+    expect(createdSpecs.length).toBe(2);
+
+    const specIds = ((normalized as any).events as any[]).map(
+      (ev) => (ev.details as any).material_spec_ref?.id,
+    );
+    expect(specIds.length).toBe(2);
+    expect(specIds[0]).not.toBe(specIds[1]);
+  });
 });
