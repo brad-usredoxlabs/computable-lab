@@ -88,7 +88,7 @@ export function createWorkspaceHandlers(
         }
         // The on-disk file may have been written for a different studyId
         // (file moved by hand). Always trust the URL.
-        return { state: { ...state, studyId } };
+        return { state: stripDerivedTabs({ ...state, studyId }) };
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
           return { state: defaultWorkspaceState(studyId) };
