@@ -8,7 +8,7 @@ const chrome = require(path.join(__dirname, 'chrome.cjs'))
 const DIR = process.env.RECEIPT_DIR
 const ART = path.join(DIR, 'artifacts')
 const SHOTS = path.join(DIR, 'shots')
-const URL = 'http://localhost:5193/project/STU-scratch/event-graph/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b'
+const URL = 'http://localhost:5193/project/STU-scratch/event-graph/EVG-corpus2-prompt1-dmem-baseline'
 const PROMPT = 'Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.'
 const OUT = path.join(DIR, 'legAB.json')
 
@@ -187,7 +187,7 @@ const fillsOf = (page) => page.evaluate(() => {
 
     // record read-back
     out.record = await page.evaluate(async () => {
-      const r = await fetch('/api/records/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b')
+      const r = await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')
       const j = await r.json(); const p = j.record.payload
       return { status: r.status, sha: j.record.meta && j.record.meta.contentSha,
         events: p.events.map((e) => ({ id: e.eventId, type: e.event_type, details: e.details, labwareId: e.labwareId, provenance: e.provenance })) }
@@ -206,7 +206,7 @@ const fillsOf = (page) => page.evaluate(() => {
     step('reload', 'cold reload persistence', { previewWells: out.afterReload.deck.previewWells.length, E2Fill: out.afterReload.fills['E2'], H5Fill: out.afterReload.fills['H5'] })
     await shot(page, 'legAB-after-reload')
     out.recordAfterReload = await page.evaluate(async () => {
-      const r = await fetch('/api/records/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b')
+      const r = await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')
       const j = await r.json(); const p = j.record.payload
       return { status: r.status, sha: j.record.meta && j.record.meta.contentSha,
         events: p.events.map((e) => ({ id: e.eventId, type: e.event_type, details: e.details, labwareId: e.labwareId, provenance: e.provenance })) }

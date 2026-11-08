@@ -6,7 +6,7 @@ const fs = require('node:fs'), path = require('node:path')
 const chrome = require(path.join(__dirname, 'chrome.cjs'))
 
 const DIR = process.env.RECEIPT_DIR, SHOTS = path.join(DIR, 'shots')
-const URL = 'http://localhost:5193/project/STU-scratch/event-graph/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b'
+const URL = 'http://localhost:5193/project/STU-scratch/event-graph/EVG-corpus2-prompt1-dmem-baseline'
 const PROMPT = 'Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.'
 const OUT = path.join(DIR, 'leg3.json')
 
@@ -49,7 +49,7 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
       if (nt) { await picker.selectOption({ label: nt }); await page.waitForTimeout(1200) } }
     await page.locator('.lawn__tile-anchor .tile, .tile').first().click({ force: true }); await page.waitForTimeout(1500)
     try { await page.waitForSelector('main[aria-label="Labware focus"]', { timeout: 20000 }) } catch {}
-    out.before = await page.evaluate(async () => (await (await fetch('/api/records/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b')).json()).record.payload.events.length)
+    out.before = await page.evaluate(async () => (await (await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')).json()).record.payload.events.length)
     step('before-events', String(out.before))
     await shot(page, 'labware-focus')
 
@@ -117,7 +117,7 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
         await page.waitForTimeout(1500) }
       catch (e) { out.discardError = String(e).slice(0, 300); step('discard', 'FAILED', { error: out.discardError }) }
     }
-    out.after = await page.evaluate(async () => (await (await fetch('/api/records/EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b')).json()).record.payload.events.length)
+    out.after = await page.evaluate(async () => (await (await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')).json()).record.payload.events.length)
     step('after', 'events', { before: out.before, after: out.after, unchanged: out.after === out.before }); await shot(page, 'after-discard')
     const v = leg3Verdict(out); out.status = v.status; out.failedCriteria = v.failedCriteria; step('verdict', out.status, { failedCriteria: v.failedCriteria })
   } catch (e) { out.error = String(e).slice(0, 1000); out.status = 'FAIL'; step('error', out.error); try { await shot(page, 'error') } catch {} }
