@@ -60,8 +60,9 @@ async function answerSlot(page, kind, searchValue) {
     // grouped arm: per-slot picker, search + popover
     const search = page.locator('[data-testid="clarification-identity-search"]')
     if (await search.count()) {
-      await search.first().click(); await search.first().fill(searchValue); await page.waitForTimeout(2500)
+      await search.first().click(); await search.first().fill(searchValue)
       const pop = page.locator('[data-testid="clarification-popover"] [role="option"], [data-testid="clarification-popover"] li, [data-testid="clarification-popover"] button')
+      for (let wait = 0; wait < 10; wait++) { if (await pop.count() > 0) break; await page.waitForTimeout(1000) }
       const n = await pop.count()
       for (let i = 0; i < n; i++) {
         const txt = ((await pop.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
