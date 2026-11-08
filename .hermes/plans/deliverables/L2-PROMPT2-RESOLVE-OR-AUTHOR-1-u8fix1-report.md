@@ -127,11 +127,11 @@ differs (1 mM vs 2 mM). Expects 2 material-specs with distinct ids.
 
 ### Commits
 1. 1f6ed0c3 — u8fix2: witness compositionsEqual in batch identity memo
-2. <report commit> — u8fix2: report + DONE marker
-3. <marker finalisation> — u8fix2: marker names report commit
+2. e3e18ce6 — u8fix2: report + DONE marker (marker named 6eb6f5a0)
+3. <this commit> — u8fix2: marker names the report commit e3e18ce6
 
 ### Files changed
 - server/src/materials/addMaterialCompositionBatchDedupe.test.ts
 - .hermes/plans/deliverables/L2-PROMPT2-RESOLVE-OR-AUTHOR-1-u8fix1-report.md
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix2 DONE 6eb6f5a09076c1346db1c26591650ad587b272fa
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u8fix2 DONE e3e18ce611c38982474af584913696e3ff99a22f
