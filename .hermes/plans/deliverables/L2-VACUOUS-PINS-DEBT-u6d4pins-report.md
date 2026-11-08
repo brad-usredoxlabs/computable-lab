@@ -120,4 +120,4 @@ Zero product-code delta — only test file edited.
 ### Changed files
 - `app/src/agent/proposalRowFacts.materialRef.test.ts` — 4 hoists (lines ~62, ~94, ~106, ~133)
 
-L2-VACUOUS-PINS-DEBT UNIT u6d4fix1 DONE b538d196b20ec6898d07266adafa4e0b713e92f8
+L2-VACUOUS-PINS-DEBT UNIT u6d4fix1 DONE edd7d695f01253e9710ee0699571c6a847ad15c1
