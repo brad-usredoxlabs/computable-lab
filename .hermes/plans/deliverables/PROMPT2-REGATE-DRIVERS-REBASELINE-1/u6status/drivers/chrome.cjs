@@ -32,8 +32,9 @@ async function arm(page) {
 
 function top3Rows(page) { return page.locator('[data-testid="clarification-top3-row"]') }
 
-async function pickTop3(page, searchValue) {
-  const rows = top3Rows(page)
+async function pickTop3(page, searchValue, scope) {
+  const base = scope || page
+  const rows = top3Rows(base)
   const n = await rows.count()
   for (let i = 0; i < n; i++) {
     const txt = ((await rows.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
@@ -45,8 +46,9 @@ async function pickTop3(page, searchValue) {
   return null
 }
 
-async function pickNumberedOption(page, searchValue) {
-  const rows = page.locator('.chat-log-clarification-options li button')
+async function pickNumberedOption(page, searchValue, scope) {
+  const base = scope || page
+  const rows = base.locator('.chat-log-clarification-options li button')
   const n = await rows.count()
   for (let i = 0; i < n; i++) {
     const txt = ((await rows.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
@@ -73,9 +75,11 @@ async function answerSlot(page, kind, searchValue, root) {
       }
       // popover gave nothing: fall through to the bounded top-3 rows
     }
-    const t = await pickTop3(page, searchValue)
+    // identity fallbacks follow the SAME scope as the search box: only rows
+    // inside this slot may answer this slot (page-wide pick would cross slots).
+    const t = await pickTop3(page, searchValue, r)
     if (t) return t
-    const o = await pickNumberedOption(page, searchValue)
+    const o = await pickNumberedOption(page, searchValue, r)
     if (o) return o
     throw new Error(`answerSlot identity: no picker/popover/top3/option match for "${searchValue}"`)
   }
