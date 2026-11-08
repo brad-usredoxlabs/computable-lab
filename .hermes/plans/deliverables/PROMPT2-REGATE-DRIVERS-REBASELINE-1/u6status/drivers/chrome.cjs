@@ -41,8 +41,10 @@ async function arm(page) {
 
 function top3Rows(page) { return page.locator('[data-testid="clarification-top3-row"]') }
 
-async function pickTop3(page, searchValue) {
-  const rows = top3Rows(page)
+async function pickTop3(page, searchValue, scope) {
+  // u5merge: optional slot root. Callers that own an explicit slot pass it so a
+  // row rendered by slot1 can never satisfy slot0's pick (G/F probe pins).
+  const rows = top3Rows(scope || page)
   const n = await rows.count()
   for (let i = 0; i < n; i++) {
     const txt = ((await rows.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
@@ -89,8 +91,8 @@ async function slotAnswerValue(slot, identity, answers) {
   return chip ? (a.quantity ?? DEFAULT_ANSWERS.quantity) : (a.concept ?? DEFAULT_ANSWERS.concept)
 }
 
-async function pickNumberedOption(page, searchValue) {
-  const rows = page.locator('.chat-log-clarification-options li button')
+async function pickNumberedOption(page, searchValue, scope) {
+  const rows = (scope || page).locator('.chat-log-clarification-options li button')
   const n = await rows.count()
   for (let i = 0; i < n; i++) {
     const txt = ((await rows.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
@@ -168,21 +170,26 @@ async function answerSlotBySurface(page, slotIndex, answerValue) {
     }
     const top3 = slot.locator('[data-testid="clarification-top3-row"]')
     if (await top3.count()) {
-      const t = await pickTop3(page, answerValue)
+      const t = await pickTop3(page, answerValue, slot)
       if (t) return { present: true, via: 'picker-top3', picked: t.picked }
     }
   }
 
-  // 4. Numbered options — grouped arm: slot-scoped testid prefix; fallback: ol button
+  // 4. Numbered options — grouped arm: slot-scoped testid prefix; fallback: ol button;
+  //    then the log-options list, which renders outside the slot subtree but is
+  //    still slot-scoped when a slot root is available (F/G probe pins).
   {
     let opts = slot.locator('[data-testid^="chat-clarification-option-"]')
     if (!(await opts.count())) { opts = slot.locator('ol button') }
-    if (await opts.count()) {
-      const n = await opts.count()
+    const n = await opts.count()
+    if (n) {
       for (let i = 0; i < n; i++) {
         const txt = ((await opts.nth(i).innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
         if (new RegExp(answerValue, 'i').test(txt)) { await opts.nth(i).click(); return { present: true, via: 'option', picked: txt.trim() } }
       }
+    } else {
+      const o = await pickNumberedOption(page, answerValue, slot)
+      if (o) return { present: true, via: 'option', picked: o.picked }
     }
   }
 
