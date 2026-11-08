@@ -202,6 +202,10 @@ u3fix2: report + verify transcripts
   no schema/lint/ui triplet touched).
 - No product file was edited. The mutation in §2.4 was reverted and is not in the diff.
 
+Commit trail (final): b69e6b19613e1f7a186ba1679384767131100f7c = report + verify
+transcripts (all code above); the marker line below landed in the follow-up
+`u3fix2: exit marker` commit so the tree exits clean.
+
 Verification commands (re-run from the worktree):
 ```
 cd .hermes/plans/deliverables/PROMPT2-REGATE-DRIVERS-REBASELINE-1/u6status/drivers && node --check chrome.cjs && node --check leg4.cjs
@@ -210,3 +214,5 @@ cd app && npx vitest run src/agent/ChatClarification.groupedSubmit.test.tsx; ech
 cd app && npx tsc --noEmit | grep -c 'error TS'
 cd app && npx vitest run src/event-editor/right-pane/ai/ClarificationPicker.test.tsx
 ```
+
+L2-GROUPEDSUBMIT-ARM-ANSWER-1 UNIT u3fix2 DONE b69e6b19613e1f7a186ba1679384767131100f7c
