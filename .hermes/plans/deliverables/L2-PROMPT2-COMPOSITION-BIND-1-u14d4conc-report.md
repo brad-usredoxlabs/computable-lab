@@ -48,3 +48,16 @@ exit=2, 1 diagnostic line total — pre-existing unrelated
 Commits: 28579fcf (RED test), ab51ca0d (fix).
 
 L2-PROMPT2-COMPOSITION-BIND-1 UNIT 14 DONE ab51ca0d95a26f9fb6dbf708efdcd99f725e5dce
+
+## Cycle 2 — advc c1 fix (stale sibling pin)
+- advc c1 MAJOR: the u14 'material-spec' flip (correct per D4-2) broke a committed sibling pin.
+- Change: ResolveRoles.compositionExpand.test.ts:91 pin type 'material' -> 'material-spec'
+  (comment cites D4-2). Production untouched; ChatbotCompilePasses.ts:2686 remains the authority.
+- RED before edit: 1 failed | 3 passed (4) — expected 'material', received 'material-spec'. Confirmed first.
+- GREEN after: 4 passed (4), exit 0.
+- Receipt: runChatbotCompileCompositionPrefetch + ResolveRoles.compositionExpand = 15 passed (2 files), exit 0.
+- TSC: exit 2, 1 diagnostic (@aws-sdk/client-s3) — stash-verified identical at HEAD; no new errors.
+- Files: 1 (test pin). Commit: 48ea3c82f6a7a1d0acb0d226949cf849b86b3a4f.
+- Logs: /home/brad/.hermes/cl/lanes/2/receipts/u14b/{GREEN-pin,RECEIPT,TSC}.log
+
+L2-PROMPT2-COMPOSITION-BIND-1 UNIT 14b DONE 48ea3c82f6a7a1d0acb0d226949cf849b86b3a4f
