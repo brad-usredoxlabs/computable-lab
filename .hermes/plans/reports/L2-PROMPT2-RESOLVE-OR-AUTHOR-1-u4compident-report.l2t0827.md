@@ -18,4 +18,4 @@ In `upsertProposedMaterialSpecFromComposition` (MIXTURE/composition arm), look u
 - Typecheck: baseline S3 error only (pre-existing), no new errors from AddMaterialSupport
 - Git: clean tree
 
-L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE 24f3ca7ddeb4c959c1c8bf1156b659fe48d051d5
+L2-PROMPT2-RESOLVE-OR-AUTHOR-1 UNIT u4compident DONE 05c3dbdda8672ff1095942e5a74df19f23478173
