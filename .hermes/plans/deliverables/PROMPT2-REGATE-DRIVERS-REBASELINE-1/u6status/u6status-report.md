@@ -98,3 +98,77 @@ This unit touches .cjs harness code and markdown only. No TypeScript types, no s
 The `.lawn__tile-anchor .tile` selector must be updated to match the current chrome. This is out of scope for u6status and requires an orchestrator decision on whether the driver re-baseline should incorporate the new UI selectors or wait for the product to stabilize.
 
 L2-PROMPT2-REGATE-DRIVERS-REBASELINE-1 UNIT u6status DONE 13c9395f1970cc09d0cc800ab2781acd86e4f492
+
+## u7urlfix — Harness fixture-URL fix + ONE honest full re-run
+
+### INSTRUMENT FAULT IDENTIFIED
+The u6status PARTIAL 0/4 result was caused by an INSTRUMENT fault, NOT selector drift:
+- The 3 REGATE drivers hard-coded EVG-cellrox-flow-cytometry-assay-kits-method-bda3685b
+- STORE-CHURN-PURGE-1 deleted this record -> deck viewer showed NOT_FOUND error placeholder
+- No tiles rendered -> .lawn__tile-anchor .tile selector had nothing to click
+- Root cause: purged record URL, not stale selectors
+
+### FIX
+Replaced purged record URL in all 3 drivers:
+  leg3.cjs:9 — URL constant (was EVG-cellrox-..., now EVG-corpus2-prompt1-dmem-baseline)
+  leg3.cjs:52,120 — fetch('/api/records/EVG-...') record IDs (before/after event counts)
+  leg4.cjs:9 — URL constant (same fix)
+  leg4.cjs:33,93 — fetch('/api/records/EVG-...') record IDs (before/after event counts)
+  legAB.cjs:11 — URL constant (same fix)
+  legAB.cjs:190,209 — fetch('/api/records/EVG-...') record IDs (record read-backs)
+
+Commit: f5bf2197 "u7urlfix: repoint drivers to seeded fixture EVG-corpus2-prompt1-dmem-baseline"
+
+### SEED VERIFICATION
+seed-board.py --seed: record created EVG-corpus2-prompt1-dmem-baseline
+seed-board.py --workspace-reset: deck tab active
+seed-board.py --verify: events=2, labwares=1, volume.value=100, wells=32, payload == fixture + {createdAt,updatedAt}: OK
+
+### RE-RUN RESULTS (ONE pass per leg, workspace reset between legs)
+
+#### legAB — FAIL (clarification card: identity answer failed)
+- Deck loaded: focusMains=["Labware focus"] (tile click succeeded)
+- Clarification card rendered (grouped arm, 2 slots)
+- Identity answer FAILED: no picker/popover/top3/option match for "clofibrate"
+- Quantity approved; submit FAILED (disabled: 2 slots)
+- No preview bar settled; no ghost preview; no apply
+- This is PRODUCT behavior: the concept picker did not return a match for "clofibrate"
+
+#### leg3 — PASS
+- Deck loaded: before=2 events
+- Clarification card rendered (grouped arm)
+- Identity picked: CHEBI clofibrate CHEBI:3750
+- Quantity approved; submit succeeded (wasDisabled=null)
+- Preview settled: previewBarText="16 events View changes"
+- previewWells=16, ghostFills=16, deckPreview=96
+- hoverE2 tooltip present with volume
+- Discard clicked; after=2 (unchanged=true)
+- leg3Verdict: status=PASS, failedCriteria=[]
+- All 6 criteria pass: card-not-seen, answer-not-submitted, preview-not-settled,
+  no-preview-wells, tooltip-missing, discard-unchanged
+
+#### leg4 — PASS
+- Deck loaded: before=2 events
+- Clarification card rendered (grouped arm)
+- Identity picked: CHEBI clofibrate CHEBI:3750
+- Quantity committed; submit succeeded (wasDisabled=null)
+- Preview settled: previewBarText="16 events View changes"
+- previewWells=16, no defect (both slots committed AND previewWells>0)
+- hoverE2 tooltip present
+- Discard clicked; after=2 (unchanged=true)
+- Status: PASS (answer.submitted=true AND previewWells.length>0)
+
+### VERDICT
+PROMPT2-REGATE: PARTIAL 2/3
+
+leg3 and leg4 PASS after the URL fix. legAB FAIL on PRODUCT behavior (identity answer
+failed in concept picker — no match for "clofibrate").
+URL fix resolved the INSTRUMENT fault; 2 of 3 legs now pass.
+
+### RECEIPT ARTIFACTS
+/home/brad/.hermes/cl/receipts/PROMPT2-REGATE-20261108/20261108T035245/
+- legAB.json (FAIL — identity answer failed in concept picker)
+- leg3.json (PASS — all 6 criteria met)
+- leg4.json (PASS — both slots committed, previewWells>0)
+- shots/ (screenshots per leg)
+- artifacts/ (captured AI request bodies)
