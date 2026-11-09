@@ -77,6 +77,7 @@ const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage'
 const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(m => ({ default: m.SequencesPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
+const LabMaterialNewPage = lazy(async () => import('./collections/LabMaterialNewPage').then((m) => ({ default: m.LabMaterialNewPage })))
 // QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
 // now imported by RegistryHostPage (the shell host), not routed directly.
 
@@ -158,6 +159,8 @@ export function App() {
               <Route path="/claims/:claimId" element={<DeferredRoute><ClaimWorkspace /></DeferredRoute>} />
               <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
+              {/* Unit 1: material creation entry point */}
+              <Route path="/lab/materials/new" element={<DeferredRoute><LabMaterialNewPage /></DeferredRoute>} />
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
