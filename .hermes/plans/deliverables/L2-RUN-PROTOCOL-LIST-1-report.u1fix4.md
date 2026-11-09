@@ -36,7 +36,7 @@ Previous marker named `f12ce43d` (8-hex, parent commit) — replaced with full 4
 
 ## Mutation probes (all passed)
 - M-a: `.slice().sort()[0]` -> 1 failed | 12 passed (RED, lead-order test catches it)
-- M-b: `.slice(-1)[0]` -> 2 failed | 11 passed (RED, lead-order + empty-array tests catch it)
+- M-b: `.slice(-1)[0]` -> 1 failed | 12 passed (RED: lead-order test catches it; the empty-array pin does NOT — its fixture list is single-element, so first==last. Noted honestly per advc c5 D1.)
 - M-c: revert presence predicate to truthiness -> 1 failed | 12 passed (RED, empty-array test catches it)
 
 ## Changed files
@@ -44,9 +44,12 @@ Previous marker named `f12ce43d` (8-hex, parent commit) — replaced with full 4
 - server/src/protocol/ProtocolContextService.test.ts (+37/-8 lines: rewrote lead-order test, added empty-array pin, fixed comment)
 - .hermes/plans/deliverables/L2-RUN-PROTOCOL-LIST-1-report.u1fix4.md (new, replaces report-u1fix3.md)
 
+## FIX RUN pw (l2t1557)
+Corrected M-b mutation report line per advc c5 D1: "2 failed | 11 passed" -> "1 failed | 12 passed"; empty-array pin does NOT catch it (fixture is single-element, first==last). Advc report: /home/brad/.hermes/cl/lanes/2/reviews/L2-RUN-PROTOCOL-LIST-1-u1fix4-advc-c5-l2t1557.md
+
 ## Verification
 1. ProtocolContextService.test.ts: Tests 13 passed (13) — 12 existing + 1 new empty-array pin
 2. runProtocolList.test.ts: Tests 9 passed (9) — unchanged
 3. tsc --noEmit: exit 0, no diagnostics
 
-L2-RUN-PROTOCOL-LIST-1 UNIT u1fix4 DONE fc50f4710355fc79c7fd57266d87e2a278d1dbe7
+L2-RUN-PROTOCOL-LIST-1-u1fix4pw UNIT unit DONE 77a7e9368e6f6e4b112d9151adf8be8acc054abc
