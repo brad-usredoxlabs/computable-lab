@@ -122,7 +122,7 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
     }
     out.after = await page.evaluate(async () => (await (await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')).json()).record.payload.events.length)
     step('after', 'events', { before: out.before, after: out.after, unchanged: out.after === out.before }); await shot(page, 'after-discard')
-    const v = leg3Verdict(out); out.status = v.status; out.failedCriteria = v.failedCriteria; step('verdict', out.status, { failedCriteria: v.failedCriteria })
+    const v = leg3Verdict(out); out.status = v.status; out.failedCriteria = v.failedCriteria; out.clarificationPath = v.clarificationPath; step('verdict', out.status, { failedCriteria: v.failedCriteria, clarificationPath: v.clarificationPath })
   } catch (e) { out.error = String(e).slice(0, 1000); out.status = 'FAIL'; step('error', out.error); try { await shot(page, 'error') } catch {} }
   out.trail = trail; await browser.close()
   fs.writeFileSync(OUT, JSON.stringify(out, null, 1)); console.log('WROTE', OUT)
