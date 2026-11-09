@@ -181,6 +181,42 @@ async function waitForPageReady() {
   })
 }
 
+// Shared fixtures — hoisted to avoid duplication across content-locked pins.
+function getApprovedDoc() {
+  return {
+    recordId: 'DOC-DEMO-SOP',
+    schemaId: 'controlled-document',
+    payload: {
+      kind: 'controlled-document',
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      title: 'Demo SOP',
+      lifecycleId: 'document-controlled-signing',
+      state: 'approved',
+    },
+  } as const
+}
+
+function getDraftCopyMockResult() {
+  return {
+    success: true,
+    record: {
+      recordId: 'DOC-NEWDRAFT',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        id: 'DOC-NEWDRAFT',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'draft',
+        derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+      },
+    },
+  } as const
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -707,18 +743,7 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     // Under the defect the re-prime is never issued because contentPending
     // derives from the now-empty terminal pending set.
     __resetContentLockedStatesCache()
-    const approvedDoc = {
-      recordId: 'DOC-DEMO-SOP',
-      schemaId: 'controlled-document',
-      payload: {
-        kind: 'controlled-document',
-        recordId: 'DOC-DEMO-SOP',
-        schemaId: 'controlled-document',
-        title: 'Demo SOP',
-        lifecycleId: 'document-controlled-signing',
-        state: 'approved',
-      },
-    }
+    const approvedDoc = getApprovedDoc()
     mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
       if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
       if (kind === 'training-record') return { records: [], total: 0 }
@@ -742,23 +767,7 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
         resolveContentLocked = () => resolve(['approved', 'effective'])
       })
     })
-    mocked.mockCreateDraftCopy.mockResolvedValue({
-      success: true,
-      record: {
-        recordId: 'DOC-NEWDRAFT',
-        schemaId: 'controlled-document',
-        payload: {
-          kind: 'controlled-document',
-          recordId: 'DOC-NEWDRAFT',
-          schemaId: 'controlled-document',
-          id: 'DOC-NEWDRAFT',
-          title: 'Demo SOP',
-          lifecycleId: 'document-controlled-signing',
-          state: 'draft',
-          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
-        },
-      },
-    })
+    mocked.mockCreateDraftCopy.mockResolvedValue(getDraftCopyMockResult())
 
     renderPage()
     // Click Documents — triggers listRecordsByKind + content prime #1 (which rejects).
@@ -771,8 +780,8 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
       await vi.dynamicImportSettled()
     })
 
-    // The first prime was issued and rejected.
-    expect(contentLockedCallCount).toBeGreaterThanOrEqual(1)
+    // The first prime was issued and rejected — exactly 1 in phase 1.
+    expect(contentLockedCallCount).toBe(1)
 
     // Change records identity mid-flight WITHOUT resolving the deferred prime —
     // switch to Training then back to Documents. This produces a new records
