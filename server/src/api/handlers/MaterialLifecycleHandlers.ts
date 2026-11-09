@@ -217,7 +217,7 @@ export async function createRecord(store: RecordStore, recordId: string, schemaI
   return result.success ? (result.envelope ?? { recordId, schemaId, payload }) : null;
 }
 
-function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | null {
+export function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | null {
   const payload = asPayload(envelope);
   if (!payload) return null;
   // Canonical term nodes (the identity spine): payload.kind is the TermKind
@@ -244,12 +244,21 @@ function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | 
   if (!kind) return null;
 
   if (kind === 'material-spec') {
+    // Specs that differ only by concentration (1 mM vs 2 mM) must be
+    // distinguishable in the add-material picker: the client prints
+    // `category · subtitle`, so surface formulation concentration here.
+    // Author specs may also carry a top-level concentration; formulation wins.
+    const formulation = isObject(payload.formulation) ? payload.formulation : null;
+    const concentration =
+      quantityValue(formulation?.concentration) ?? quantityValue(payload.concentration);
     return {
       recordId: envelope.recordId,
       kind,
       title,
       category: 'saved-stock',
-      subtitle: 'Saved stock or formulation',
+      subtitle: concentration
+        ? `Saved stock or formulation · ${concentration.value} ${concentration.unit}`
+        : 'Saved stock or formulation',
     };
   }
   if (kind === 'vendor-product') {
