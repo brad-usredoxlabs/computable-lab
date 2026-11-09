@@ -55,3 +55,45 @@ came from; a hidden provenance graph cannot be inspected.
 - No weakening of the prompt-2 acceptance criteria.
 - No product code is written under this decision by the architect; the task blocks in lane 2's
   queue carry it out.
+
+
+## ADDENDUM (2026-11-09) — universal vs local protocol, and build != execute
+
+Brad, verbatim:
+
+  "the 'protocol' i wrote at the end 'cell seeding' - is a universal protocol. it needs to be brought
+   down to a local protocol (bound to soecufic labware and specific lab-local vendor products -
+   trypsin-EDTA and DMEM are available from multiple vendors). once its built into a local event graph,
+   it can be executed which produces the sub-event graph (it should prompt the user for the cells/ul).
+   perhaps we should pre-seed the DB with dome local labwares and materials that are linked to specific
+   vendor products and ontology terms?"
+
+### D8.3 Universal -> local is by ROLE, and the binding surface is already declared
+
+A universal protocol names roles, never vendors, catalogue numbers, lots or labware instances. Turning
+it local means filling these declarations, which already exist:
+
+  schema/workflow/protocol.schema.yaml            role declarations on the protocol
+  schema/workflow/planned-run.schema.yaml:103-140 bindings: LabwareBinding, MaterialBinding
+                                                 (roleId + materialRef + lotNumber), ParameterBinding,
+                                                 ContextBinding, InstrumentBinding, ...
+  schema/lab/vendor-product.schema.yaml           the vendor-product tier
+  schema/lab/material-lot.schema.yaml:33-39       supplier { catalog_number, vendor_lot }
+  schema/lab/material-receiving.schema.yaml       vendorProductRef + lot (a bare lot never mints an id)
+
+Nothing fills these bindings today. The missing piece is a PRODUCER, not a model.
+
+### D8.4 Build != execute
+
+Building the local plan graph is not executing it. Execution is what produces the sub-event graph, and
+execution is what ASKS for the measured parameters (cells/uL) - it must never assume one. Recorded
+values carry their producing step and mechanism. An unanswered required parameter blocks execution with
+a named error; it does not default.
+
+### Seeding: yes, with a line drawn
+
+Seed labware, lab-local vendor products and lots with catalogue numbers, and ontology-term anchors.
+Do NOT seed derived objects - the 90:10 quench formulation, the 50:50 reservoir mixture, the counted
+density - because those are results of execution and seeding them would hardcode the answer the gate
+is meant to test. Where the lab has no catalogue entry, seed the concept (+ ontology term) and leave
+the vendor product absent so the binding step asks.
