@@ -145,7 +145,7 @@ properties:
       - type: object
         additionalProperties: false
         properties:
-          kind: { type: string }
+          kind: { const: "record" }
           id: { type: string }
           label: { type: string }
           revisionRef: { type: object }
