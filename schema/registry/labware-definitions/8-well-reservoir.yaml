@@ -7,6 +7,8 @@ display_name: Generic 8-Well Reservoir
 source: generic
 specificity: generic
 platform_aliases:
+  - platform: opentrons_ot2
+    alias: reservoir_8
   - platform: generic
     alias: generic/reservoir_8@v1
 topology:

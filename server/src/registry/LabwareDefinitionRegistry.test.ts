@@ -46,6 +46,9 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry).toBeDefined();
     expect(entry!.topology.rows).toBe(1);
     expect(entry!.topology.columns).toBe(8);
+    const aliased = registry.getByAlias('reservoir_8');
+    expect(aliased).toBeDefined();
+    expect(aliased!.id).toBe('8-well-reservoir');
   });
 
   it('includes generic beaker definitions for protocol labware search', () => {
