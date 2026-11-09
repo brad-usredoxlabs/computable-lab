@@ -134,7 +134,24 @@ properties:
         type: string
       type:
         type: string
-    description: "Local protocol selected as the reusable method for this run."
+    description: "Local protocol selected as the reusable method for this run. (legacy single-protocol form; read-compat only)"
+
+  localProtocolRefs:
+    type: array
+    description: "Ordered list of protocols followed in this run. The first entry is the run's lead protocol."
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        additionalProperties: false
+        properties:
+          kind: { const: "record" }
+          id: { type: string }
+          label: { type: string }
+          revisionRef: { type: object }
+          namespace: { type: string }
+          uri: { type: string }
+          type: { type: string }
 
   methodPlatform:
     type: string
