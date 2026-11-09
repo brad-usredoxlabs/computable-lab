@@ -1,0 +1,49 @@
+# UI specification for Material Selection Policy records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material-selection-policy.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "shield"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+  - title: "Selection"
+    fields:
+    - path: "$.selection"
+      widget: "select"
+      label: "Selection"
+      required: true
+    - path: "$.reason"
+      widget: "textarea"
+      label: "Reason"
+    - path: "$.since"
+      widget: "date"
+      label: "Effective From"
+      required: true
+  - title: "References"
+    fields:
+    - path: "$.material_ref"
+      widget: "record-ref"
+      label: "Material Concept"
+      required: true
+    - path: "$.vendor_product_ref"
+      widget: "record-ref"
+      label: "Vendor Product"
+      required: true
