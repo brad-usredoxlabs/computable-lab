@@ -109,8 +109,8 @@ function fetchSelectionPolicies(): Promise<SelectionPolicy[]> {
           if (
             !mr || !vpr || typeof sel !== 'string' ||
             !['only', 'default', 'alternative'].includes(sel) ||
-            !['ontology', 'record'].includes(mr.kind) ||
-            !['ontology', 'record'].includes(vpr.kind)
+            !(mr.kind === 'ontology' || mr.kind === 'record') ||
+            !(vpr.kind === 'ontology' || vpr.kind === 'record')
           ) {
             continue
           }
