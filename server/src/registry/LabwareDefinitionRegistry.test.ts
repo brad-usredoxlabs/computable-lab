@@ -76,4 +76,22 @@ describe('LabwareDefinitionRegistry', () => {
     const entry = registry.get('nonexistent-labware');
     expect(entry).toBeUndefined();
   });
+
+  it('flask_t25 is defined with correct topology, capacity, and legacy type', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('flask_t25');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.addressing).toBe('single');
+    expect(entry!.capacity.max_well_volume_uL).toBe(25000);
+    expect(entry!.legacy_labware_types).toContain('flask_t25');
+  });
+
+  it('flask_t75 is defined with correct topology, capacity, and legacy type', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('flask_t75');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.addressing).toBe('single');
+    expect(entry!.capacity.max_well_volume_uL).toBe(75000);
+    expect(entry!.legacy_labware_types).toContain('flask_t75');
+  });
 });
