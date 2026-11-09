@@ -47,6 +47,14 @@ type MaterialSearchItem = {
   domain?: string;
   /** ontology CURIE of the term (NCBITaxon:10090, CLO:0020273) — picks the rule. */
   curie?: string;
+  /**
+   * A record's own `material_ref` discriminator (vendor products and other
+   * records link to their material concept through the schema-required ref).
+   * ABSENT when the record carries no ref — never `undefined` (eOPT).
+   */
+  materialRefKind?: 'record' | 'ontology';
+  /** The ref's `id`: a CURIE for `ontology`, a recordId for `record`. */
+  materialRefId?: string;
 };
 
 type MaterialLineageResponse = {
@@ -265,12 +273,22 @@ export function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearch
     const vendor = stringValue(payload.vendor);
     const catalog = stringValue(payload.catalog_number);
     const concentration = extractPrimaryDeclaredConcentration(payload.declared_composition);
+    // D1: the concept link is the record's OWN schema-required `material_ref`.
+    // Guard the shape (the schema requires it, but envelopes can be legacy);
+    // OMIT the fields when absent — never emit `undefined` (eOPT).
+    const materialRef = isObject(payload.material_ref) ? payload.material_ref : null;
+    const refKindRaw = stringValue(materialRef?.kind);
+    const materialRefKind: 'record' | 'ontology' | undefined =
+      refKindRaw === 'record' || refKindRaw === 'ontology' ? refKindRaw : undefined;
+    const materialRefId = stringValue(materialRef?.id);
     return {
       recordId: envelope.recordId,
       kind,
       title,
       category: 'vendor-reagent',
       subtitle: [vendor, catalog, concentration ? `${concentration.value} ${concentration.unit}` : undefined].filter(Boolean).join(' · ') || 'Commercial reagent',
+      ...(materialRefKind ? { materialRefKind } : {}),
+      ...(materialRefId ? { materialRefId } : {}),
     };
   }
   if (kind === 'material-instance') {

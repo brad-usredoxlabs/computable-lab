@@ -798,7 +798,12 @@ function materialSuggestions(
   // `only` collapses to one row, `default` marks preselected, `alternative`
   // has no picker effect. Fail-open: if the vendor product isn't in the rows
   // or two `only` policies target the same concept, leave unchanged.
-  const withPolicies = applySelectionPolicies(ranked, selectionPolicies)
+  // D4: the COLLAPSE is a PICKER behaviour only — the doc-editor /m path
+  // (`pickerRows=false`) must never call it; its list stays byte-identical to
+  // the no-policy list (bait 6).
+  const withPolicies = pickerRows
+    ? applySelectionPolicies(ranked, selectionPolicies)
+    : ranked
 
   const labelKeys = seenLabels ?? new Set<string>()
   const rows: SlashSuggestion[] = []

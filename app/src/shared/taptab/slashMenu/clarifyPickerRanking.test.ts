@@ -31,7 +31,7 @@
  * the live bug — this suite fails at trunk tip and passes the moment the
  * comparator + data land.
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   materialCandidates,
   consequenceFor,
@@ -43,9 +43,14 @@ import {
   type SelectionPolicy,
 } from './clarifyPickerRanking'
 import {
+  __resetMaterialSelectionPolicies,
   __setCandidateRankingPolicy,
+  __setMaterialSelectionPolicies,
   getCandidateRankingPolicy,
 } from './policy'
+import { resolveMaterial } from './resolvers'
+import type { MaterialSearchItem } from '../../api/client'
+import type { SlashSuggestion } from './types'
 
 /**
  * The declared candidate-ranking policy — byte-mirrors the
@@ -355,15 +360,20 @@ describe('L2-CLARIFY-PICKER-1 — policy cache seam (resolver path is determinis
 })
 
 describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', () => {
+  const CONCEPT_CURIE = 'NCIT:C185409'
+
   /**
-   * Build test rows for one concept (NCIT:C185409): two vendor-product rows
-   * and the material row, all with the same CURIE.
+   * PRODUCER-SHAPED rows: the vendor-product catalog row carries NO `curie`
+   * (classifyMaterialRecord never emits one for a vendor product). Its concept
+   * link is its own schema-required `material_ref`, threaded as
+   * `materialRefKind` + `materialRefId`. The term/concept row carries the
+   * concept CURIE. Attribution must join on the ref's OWN discriminator.
    */
   function buildConceptRows(): RankedCandidateRow[] {
     return [
-      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', curie: 'NCIT:C185409', canBeDefault: true },
-      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', curie: 'NCIT:C185409', canBeDefault: true },
-      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', curie: 'NCIT:C185409', canBeDefault: true },
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: CONCEPT_CURIE, canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: CONCEPT_CURIE, canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', curie: CONCEPT_CURIE, canBeDefault: true },
     ]
   }
 
@@ -372,7 +382,7 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
     const rows = buildConceptRows()
     const policies: SelectionPolicy[] = [{
       recordId: 'POL-1',
-      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
       vendor_product_ref: { kind: 'record', id: 'VP-A' },
       selection: 'only',
     }]
@@ -388,7 +398,7 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
     // Target VP-B (index 1, NOT index 0 — avoids the vacuous pin bait)
     const policies: SelectionPolicy[] = [{
       recordId: 'POL-1',
-      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
       vendor_product_ref: { kind: 'record', id: 'VP-B' },
       selection: 'default',
     }]
@@ -413,7 +423,7 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
     const rows = buildConceptRows()
     const policies: SelectionPolicy[] = [{
       recordId: 'POL-1',
-      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
       vendor_product_ref: { kind: 'record', id: 'VP-DOES-NOT-EXIST' },
       selection: 'only',
     }]
@@ -432,13 +442,13 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
     const policies: SelectionPolicy[] = [
       {
         recordId: 'POL-1',
-        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
         vendor_product_ref: { kind: 'record', id: 'VP-A' },
         selection: 'only',
       },
       {
         recordId: 'POL-2',
-        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
         vendor_product_ref: { kind: 'record', id: 'VP-B' },
         selection: 'only',
       },
@@ -466,12 +476,18 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
       .toEqual(rows.map((r) => ({ key: r.key, label: r.label, recordId: r.recordId, family: r.family })))
   })
 
-  /** `only` with material_ref kind 'record' (not 'ontology') */
-  it('only — material_ref kind=record matches by row recordId', () => {
-    const rows = buildConceptRows()
+  /** `only` with material_ref kind 'record' matches by the ref-carried recordId */
+  it('only — material_ref kind=record matches the rows carrying that record ref', () => {
+    // A record-kind concept: the vendor rows' material_ref carries the CONCEPT
+    // record id (not the vendor recordId) — the producer-shaped link.
+    const rows: RankedCandidateRow[] = [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'record', materialRefId: 'MAT-1', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'record', materialRefId: 'MAT-1', canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', canBeDefault: true },
+    ]
     const policies: SelectionPolicy[] = [{
       recordId: 'POL-1',
-      material_ref: { kind: 'record', id: 'VP-A' },
+      material_ref: { kind: 'record', id: 'MAT-1' },
       vendor_product_ref: { kind: 'record', id: 'VP-A' },
       selection: 'only',
     }]
@@ -481,18 +497,128 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', (
     expect(result[0].preselected).toBe(true)
   })
 
+  /**
+   * Unscoped-collapse guard (D4 bait): an `only` collapse is scoped to the
+   * policy's OWN concept. Rows attributed to a DIFFERENT concept must survive
+   * — the whole-array `result.length = 0` wipe is the data-loss shape.
+   */
+  it('only — rows attributed to a DIFFERENT concept survive the collapse', () => {
+    const rows: RankedCandidateRow[] = [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C1', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C1', canBeDefault: true },
+      { key: 'material:MAT-B', label: 'Other Concept', mentionKind: 'material', recordId: 'MAT-B', family: 'concept-only', curie: 'NCIT:C2', canBeDefault: true },
+      { key: 'vendor-product:VP-C', label: 'Other Vendor', mentionKind: 'vendor-product', recordId: 'VP-C', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C2', canBeDefault: true },
+    ]
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C1' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'MAT-B', 'VP-C'])
+    expect(result[0].preselected).toBe(true)
+    // The other concept's rows are untouched (no preselected key attached).
+    expect('preselected' in result[1]).toBe(false)
+    expect('preselected' in result[2]).toBe(false)
+  })
+
   /** `alternative` policy has no picker effect */
   it('alternative — no effect on the picker', () => {
     const rows = buildConceptRows()
     const policies: SelectionPolicy[] = [{
       recordId: 'POL-1',
-      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
       vendor_product_ref: { kind: 'record', id: 'VP-A' },
       selection: 'alternative',
     }]
     const result = applySelectionPolicies(rows, policies)
     expect(result).toHaveLength(3)
     expect(result).toBe(rows)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — resolver scoping (D4: picker-only collapse)', () => {
+  // Producer-shaped search page: vendor rows carry their own record's
+  // material_ref (no CURIE); the concept row carries the CURIE; the FBS row
+  // belongs to a DIFFERENT concept and must never be wiped by an `only`.
+  const PAGE_ITEMS: MaterialSearchItem[] = [
+    { recordId: 'VP-A', kind: 'vendor-product', title: 'Vendor Product A', category: 'vendor-reagent', subtitle: 'Sigma · A123', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'VP-B', kind: 'vendor-product', title: 'Vendor Product B', category: 'vendor-reagent', subtitle: 'Sigma · B456', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'MAT-1', kind: 'material', title: 'Material 1', category: 'concept-only', curie: 'NCIT:C185409' },
+    { recordId: 'MAT-FBS', kind: 'material', title: 'FBS', category: 'concept-only', curie: 'NCIT:C999999' },
+  ]
+
+  const ONLY_POLICY: SelectionPolicy[] = [{
+    recordId: 'POL-1',
+    material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+    vendor_product_ref: { kind: 'record', id: 'VP-A' },
+    selection: 'only',
+  }]
+
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockImplementation(async (url: string) => {
+      const href = String(url)
+      if (href.includes('/materials/formulations/summary')) {
+        return { ok: true, json: async () => ({ items: [] }) }
+      }
+      return { ok: true, json: async () => ({ items: PAGE_ITEMS }) }
+    })
+    __setCandidateRankingPolicy(DECLARED)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    __resetMaterialSelectionPolicies()
+  })
+
+  /** JSON is the byte shape: functions (mint's resolveMention) drop out. */
+  const bytes = (rows: SlashSuggestion[]): string => JSON.stringify(rows)
+
+  /** `preselected` is a declared picker contract field (D7, open) — read structurally. */
+  const isPreselected = (row: SlashSuggestion): boolean =>
+    (row as { preselected?: boolean }).preselected === true
+
+  /** The mention id when the union arm carries one. */
+  const mentionId = (row: SlashSuggestion): string | undefined =>
+    'id' in row.mention ? row.mention.id : undefined
+
+  function editorCtx(): Parameters<typeof resolveMaterial>[1] {
+    return { selection: null, signal: new AbortController().signal }
+  }
+
+  function pickerCtx(): Parameters<typeof resolveMaterial>[1] {
+    return { selection: null, signal: new AbortController().signal, pickerRows: true }
+  }
+
+  it('pickerRows=false (doc-editor /m): an only policy leaves the list byte-identical to the no-policy list', async () => {
+    __setMaterialSelectionPolicies([])
+    const noPolicy = await resolveMaterial('dmem', editorCtx())
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const withPolicy = await resolveMaterial('dmem', editorCtx())
+    expect(bytes(withPolicy)).toBe(bytes(noPolicy))
+    // The unrelated row is present in the same input and survives.
+    expect(withPolicy.some((row) => mentionId(row) === 'MAT-FBS')).toBe(true)
+    // No row carries preselected chrome on the editor path.
+    expect(withPolicy.some((row) => isPreselected(row))).toBe(false)
+  })
+
+  it('pickerRows=true: the same only policy collapses the picker rows of that concept', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const picked = await resolveMaterial('dmem', pickerCtx())
+    const workspace = picked.filter((row) => !row.pinBottom)
+    // The concept's own rows collapse to the policy vendor product...
+    expect(workspace.some((row) => mentionId(row) === 'VP-B')).toBe(false)
+    expect(workspace.some((row) => mentionId(row) === 'MAT-1')).toBe(false)
+    const chosen = workspace.find((row) => mentionId(row) === 'VP-A')
+    expect(chosen).toBeTruthy()
+    expect(isPreselected(chosen!)).toBe(true)
+    // ...while the different-concept row is untouched.
+    expect(workspace.some((row) => mentionId(row) === 'MAT-FBS')).toBe(true)
   })
 })
 

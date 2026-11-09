@@ -62,6 +62,14 @@ export interface MaterialCandidateItem {
   subtitle?: string
   /** ontology CURIE of the item — threaded through for policy attribution. */
   curie?: string
+  /**
+   * The record's OWN `material_ref` discriminator (`record` | `ontology`) —
+   * the producer-shaped concept link a vendor product carries. ABSENT when the
+   * record has no ref (never `undefined`, eOPT).
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id`: a CURIE for `ontology`, a recordId for `record`. */
+  materialRefId?: string
 }
 
 /** The material mention kind a candidate row binds. */
@@ -119,6 +127,14 @@ export interface RankedCandidateRow {
   family: string
   /** The source item's ontology CURIE (threaded through for policy attribution). */
   curie?: string
+  /**
+   * The source record's OWN `material_ref` discriminator. This is the
+   * producer-shaped concept link: a vendor product carries no CURIE, it
+   * carries a ref whose `kind` decides whether `id` is a CURIE or a recordId.
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id` (CURIE for `ontology`, recordId for `record`). */
+  materialRefId?: string
   /**
    * Whether the row may hold the focused default (the DATA flag). ABSENT when
    * no ranking is declared (byte-stability: the row carries no new fields at
@@ -245,6 +261,8 @@ export function materialCandidates(
         family,
       }
       if (item.curie) row.curie = item.curie
+      if (item.materialRefKind) row.materialRefKind = item.materialRefKind
+      if (item.materialRefId) row.materialRefId = item.materialRefId
       return row
     })
   }
@@ -285,6 +303,8 @@ export function materialCandidates(
       family,
     }
     if (item.curie) row.curie = item.curie
+    if (item.materialRefKind) row.materialRefKind = item.materialRefKind
+    if (item.materialRefId) row.materialRefId = item.materialRefId
     // P2 fields are always DERIVED here (the row's own bind). The resolver
     // decides whether they ATTACH to the rendered suggestion (pickerRows —
     // advc-c1 DEFECT 8); the eOPT conditional spread lives there.
@@ -468,6 +488,13 @@ export function applySelectionPolicies(
       rowConceptKeys.push(`ontology:${row.curie}`)
     }
     rowConceptKeys.push(`record:${row.recordId}`)
+    // D1: the record's OWN `material_ref` is the producer-shaped concept link
+    // (a vendor product carries no CURIE, only this ref). The ref's own
+    // discriminator decides the namespace — an `ontology` id is a CURIE and is
+    // never rewritten into a recordId, nor vice versa (CLAUDE.md rule 8).
+    if (row.materialRefKind && row.materialRefId) {
+      rowConceptKeys.push(`${row.materialRefKind}:${row.materialRefId}`)
+    }
 
     for (const key of rowConceptKeys) {
       const existing = conceptRows.get(key)
@@ -493,10 +520,17 @@ export function applySelectionPolicies(
       if (!match) continue // Vendor product not in rows — fail open
 
       if (policy.selection === 'only') {
-        // Collapse to exactly this one row
+        // Collapse ONLY this concept's rows. Rows attributed to OTHER concepts
+        // keep their ranked order in the shared list: `result.length = 0`
+        // across the whole array is the D4 data-loss shape (it wiped the
+        // unrelated FBS row on the editor /m menu).
+        const conceptSet = new Set(rowsForConcept)
+        const firstIndex = result.findIndex((r) => conceptSet.has(r))
+        const kept = result.filter((r) => !conceptSet.has(r))
+        const insertAt = firstIndex < 0 ? kept.length : Math.min(firstIndex, kept.length)
+        kept.splice(insertAt, 0, { ...match, preselected: true })
         result.length = 0
-        const collapsed = { ...match, preselected: true }
-        result.push(collapsed)
+        for (const keptRow of kept) result.push(keptRow)
         modified = true
         break // Only one 'only' policy per concept (guaranteed above)
       } else if (policy.selection === 'default') {
