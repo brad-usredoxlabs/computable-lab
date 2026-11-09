@@ -103,6 +103,50 @@ describe('MaterialSelectionPolicy', () => {
     );
   });
 
+  it('allows two default selections for the same concept', () => {
+    const policies = [
+      {
+        kind: 'material-selection-policy',
+        recordId: 'MSPOL-DEF-1',
+        title: 'First default claim',
+        material_ref: {
+          kind: 'ontology',
+          id: 'CHEBI:SHARED',
+          namespace: 'CHEBI',
+          label: 'Shared material',
+        },
+        vendor_product_ref: {
+          kind: 'record',
+          id: 'VPR-DEF-1',
+          type: 'vendor-product',
+        },
+        selection: 'default',
+        since: '2026-11-01',
+      },
+      {
+        kind: 'material-selection-policy',
+        recordId: 'MSPOL-DEF-2',
+        title: 'Second default claim',
+        material_ref: {
+          kind: 'ontology',
+          id: 'CHEBI:SHARED',
+          namespace: 'CHEBI',
+          label: 'Shared material',
+        },
+        vendor_product_ref: {
+          kind: 'record',
+          id: 'VPR-DEF-2',
+          type: 'vendor-product',
+        },
+        selection: 'default',
+        since: '2026-11-02',
+      },
+    ];
+    const index = normalizeMaterialSelectionPolicies(policies);
+    expect(index.size).toBe(1);
+    expect(index.get('ontology:CHEBI:SHARED').length).toBe(2);
+  });
+
   it('rejects a record with selection only and no vendor_product_ref', () => {
     const result = validate({
       kind: 'material-selection-policy',
