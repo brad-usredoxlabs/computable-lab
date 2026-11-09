@@ -40,6 +40,14 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry!.topology.columns).toBe(12);
   });
 
+  it('8-well-reservoir has rows=1, columns=8', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('8-well-reservoir');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.rows).toBe(1);
+    expect(entry!.topology.columns).toBe(8);
+  });
+
   it('includes generic beaker definitions for protocol labware search', () => {
     const registry = getLabwareDefinitionRegistry();
     const entry = registry.get('beaker_250ml');
