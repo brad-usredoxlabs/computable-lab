@@ -19,6 +19,10 @@ function resolvePath(schema: Record<string, unknown>, dottedPath: string): boole
   let current: Record<string, unknown> = schema;
   for (const part of parts) {
     if (current == null || typeof current !== 'object') return false;
+    // Descend into `properties` map if present (JSON Schema convention)
+    if (typeof current.properties === 'object' && current.properties !== null) {
+      current = current.properties as Record<string, unknown>;
+    }
     const next = current[part];
     if (next === undefined) return false;
     current = next as Record<string, unknown>;
