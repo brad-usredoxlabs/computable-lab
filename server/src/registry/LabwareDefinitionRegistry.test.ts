@@ -40,6 +40,19 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry!.topology.columns).toBe(12);
   });
 
+  it('8-well-reservoir has rows=1, columns=8', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('8-well-reservoir');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.rows).toBe(1);
+    expect(entry!.topology.columns).toBe(8);
+    const aliased = registry.getByAlias('reservoir_8');
+    expect(aliased).toBeDefined();
+    expect(aliased!.id).toBe('8-well-reservoir');
+    const geom = entry!.physical_geometry as { overall_dimensions_mm: { length: number; width: number } };
+    expect(geom.overall_dimensions_mm).toEqual({ length: 127, width: 85 });
+  });
+
   it('includes generic beaker definitions for protocol labware search', () => {
     const registry = getLabwareDefinitionRegistry();
     const entry = registry.get('beaker_250ml');
