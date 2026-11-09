@@ -107,4 +107,21 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry!.capacity.max_well_volume_uL).toBe(75000);
     expect(entry!.legacy_labware_types).toContain('flask_t75');
   });
+
+  it('reservoir_25ml_single resolves with single addressing, 25000 uL capacity, aspiration hint, and no physical_geometry', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('reservoir_25ml_single');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.addressing).toBe('single');
+    expect(entry!.capacity.max_well_volume_uL).toBe(25000);
+    expect(entry!.aspiration_hints.single_well_multichannel_source).toBe(true);
+    expect(entry!.physical_geometry).toBeUndefined();
+  });
+
+  it('reservoir_25ml_single resolves by alias', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.getByAlias('reservoir_25ml_single');
+    expect(entry).toBeDefined();
+    expect(entry!.id).toBe('reservoir_25ml_single');
+  });
 });
