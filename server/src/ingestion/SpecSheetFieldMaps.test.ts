@@ -7,7 +7,7 @@
  * against the declared target schemas.
  */
 
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { getSpecSheetFieldMap, listSpecSheetFieldMaps, reload } from './SpecSheetFieldMaps.js';
 
 /* ------------------------------------------------------------------ */
@@ -42,8 +42,8 @@ async function loadSchema(filePath: string): Promise<Record<string, unknown>> {
 /* ------------------------------------------------------------------ */
 
 describe('SpecSheetFieldMaps — vendor-product', () => {
-  it('returns mappings that include vendor, catalog_number, and name', () => {
-    const map = getSpecSheetFieldMap('vendor-product');
+  it('returns mappings that include vendor, catalog_number, and name', async () => {
+    const map = await getSpecSheetFieldMap('vendor-product');
     expect(map.recordKind).toBe('vendor-product');
     const targets = map.fieldMappings.map(m => m.targetField);
     expect(targets).toContain('vendor');
@@ -53,8 +53,8 @@ describe('SpecSheetFieldMaps — vendor-product', () => {
 });
 
 describe('SpecSheetFieldMaps — labware', () => {
-  it('returns mappings for geometry and capacity paths', () => {
-    const map = getSpecSheetFieldMap('labware');
+  it('returns mappings for geometry and capacity paths', async () => {
+    const map = await getSpecSheetFieldMap('labware');
     expect(map.recordKind).toBe('labware');
     const targets = map.fieldMappings.map(m => m.targetField);
     expect(targets).toContain('capacity.max_well_volume_uL');
@@ -65,16 +65,16 @@ describe('SpecSheetFieldMaps — labware', () => {
 });
 
 describe('SpecSheetFieldMaps — unknown kind throws', () => {
-  it('throws naming the unknown type', () => {
-    expect(() => getSpecSheetFieldMap('equipment')).toThrow(
+  it('throws naming the unknown type', async () => {
+    await expect(getSpecSheetFieldMap('equipment')).rejects.toThrow(
       '[spec-sheet] no field map for record type "equipment"',
     );
   });
 });
 
 describe('SpecSheetFieldMaps — listSpecSheetFieldMaps', () => {
-  it('returns keys for all shipped maps', () => {
-    const keys = listSpecSheetFieldMaps();
+  it('returns keys for all shipped maps', async () => {
+    const keys = await listSpecSheetFieldMaps();
     expect(keys).toContain('vendor-product');
     expect(keys).toContain('labware');
   });
@@ -93,8 +93,8 @@ describe('SpecSheetFieldMaps — targetField conformance', () => {
     labwareSchema = await loadSchema(join(base, 'workflow/labware-definition.schema.yaml'));
   });
 
-  it('every vendor-product targetField resolves in vendor-product.schema.yaml', () => {
-    const map = getSpecSheetFieldMap('vendor-product');
+  it('every vendor-product targetField resolves in vendor-product.schema.yaml', async () => {
+    const map = await getSpecSheetFieldMap('vendor-product');
     for (const mapping of map.fieldMappings) {
       expect(
         resolvePath(vendorSchema.properties as Record<string, unknown>, mapping.targetField),
@@ -103,8 +103,8 @@ describe('SpecSheetFieldMaps — targetField conformance', () => {
     }
   });
 
-  it('every labware targetField resolves in labware-definition.schema.yaml', () => {
-    const map = getSpecSheetFieldMap('labware');
+  it('every labware targetField resolves in labware-definition.schema.yaml', async () => {
+    const map = await getSpecSheetFieldMap('labware');
     for (const mapping of map.fieldMappings) {
       expect(
         resolvePath(labwareSchema.properties as Record<string, unknown>, mapping.targetField),
@@ -113,10 +113,10 @@ describe('SpecSheetFieldMaps — targetField conformance', () => {
     }
   });
 
-  it('reload() re-reads the cache', () => {
-    const before = getSpecSheetFieldMap('vendor-product');
-    reload();
-    const after = getSpecSheetFieldMap('vendor-product');
+  it('reload() re-reads the cache', async () => {
+    const before = await getSpecSheetFieldMap('vendor-product');
+    await reload();
+    const after = await getSpecSheetFieldMap('vendor-product');
     expect(after.fieldMappings.length).toBe(before.fieldMappings.length);
   });
 });
