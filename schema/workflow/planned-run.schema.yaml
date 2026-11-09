@@ -83,6 +83,21 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Optional: reference to the local-protocol (LPR-*) this run is compiled from. Required-when-sourceType=local-protocol enforced by the compiler, not this schema."
 
+  localProtocolRefs:
+    type: array
+    description: "Ordered list of local-protocol records followed in this run. The first entry is the run's lead protocol."
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        additionalProperties: false
+        properties:
+          kind: { const: record }
+          id: { type: string }
+          label: { type: string }
+          revisionRef: { type: object }
+          type: { type: string }
+
   methodEventGraphId:
     type: string
     description: "Generated method event-graph recordId for this planned run, when materialized."

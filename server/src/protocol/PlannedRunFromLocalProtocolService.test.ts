@@ -180,7 +180,7 @@ describe('PlannedRunFromLocalProtocolService', () => {
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error('Expected not ok');
       expect(result.status).toBe(404);
-      expect(result.reason).toBe('local-protocol not found');
+      expect(result.reason).toBe('local-protocol not found: LPR-nonexistent');
     });
 
     it('returns 400 when resolved record is not a local-protocol', async () => {

@@ -97,28 +97,32 @@ export function createPlannedRunHandlers(ctx: AppContext) {
      *
      * Create a planned-run draft from a local-protocol record.
      *
-     * Body: { localProtocolRef: string, title?: string }
+     * Body: { localProtocolRef?: string, protocolRefs?: string[], title?: string, studyId?: string, experimentId?: string, runId?: string }
      *
      * Returns { plannedRunId, state } on success (201).
-     * Returns 400 when localProtocolRef is missing or the resolved record
+     * Returns 400 when localProtocolRef/protocolRefs is missing or the resolved record
      * is not a local-protocol.
      * Returns 404 when the local-protocol record is not found.
      */
     async createFromLocalProtocol(
       request: FastifyRequest<{
-        Body: { localProtocolRef: string; title?: string; studyId?: string; experimentId?: string; runId?: string };
+        Body: { localProtocolRef?: string; protocolRefs?: string[]; title?: string; studyId?: string; experimentId?: string; runId?: string };
       }>,
       reply: FastifyReply,
     ): Promise<CreatePlannedRunResponse | ApiError> {
-      const { localProtocolRef, title, studyId, experimentId, runId } = request.body ?? {};
+      const { localProtocolRef, protocolRefs, title, studyId, experimentId, runId } = request.body ?? {};
       const links = {
         ...(studyId ? { studyId } : {}),
         ...(experimentId ? { experimentId } : {}),
         ...(runId ? { runId } : {}),
       };
       const actor = await ctx.localIdentityService?.resolveRequestUser(request);
+      // Accept protocolRefs (ordered list) or fall back to localProtocolRef (singular)
+      const refsArg: string | string[] | undefined = protocolRefs && protocolRefs.length > 0
+        ? protocolRefs
+        : localProtocolRef;
       const result = await service.createFromLocalProtocol(
-        localProtocolRef,
+        refsArg ?? '',
         {
           ...(actor?.userId ? { actor: actor.userId } : {}),
           ...(title ? { title } : {}),
