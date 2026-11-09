@@ -48,3 +48,5 @@ it would return the old (smaller) count. Cleanup restores the original YAML in a
 **Ajv/createSchemaRegistry:** validated against schema/core/extraction-spec.schema.yaml with ajv 8.18 — both `kind: extraction-spec` documents `valid: true`, 5 negative controls red. (Environmental note: ajv resolved from the umbrella store because the tree's ajv pnpm symlink is broken.)
 
 L2-SPEC-SHEET-INGEST-1 UNIT u1fix2pw DONE ceab5158188bf9a76acebf0a4dcb6a7337590ed6
+
+L2-SPECSHEET-u1fix2pw UNIT unit DONE 401b8eae24f8c67fd4b1207b6ca2709e2e7cc283
