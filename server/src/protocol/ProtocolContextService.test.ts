@@ -241,6 +241,26 @@ describe('ProtocolContextService', () => {
     });
   });
 
+  it('prefers planned-run protocol refs over run-level refs (precedence pin)', async () => {
+    // Under old code (run-first), this would resolve LPR-run -> PRT-run, not LPR-planned -> PRT-planned.
+    const store = new MemoryRecordStore([
+      env('PRT-planned', { kind: 'protocol', recordId: 'PRT-planned', title: 'Planned Protocol', links: { studyId: 'STU-1' }, steps: [] }),
+      env('PRT-run', { kind: 'protocol', recordId: 'PRT-run', title: 'Run Protocol', links: { studyId: 'STU-1' }, steps: [] }),
+      env('LPR-planned', { kind: 'local-protocol', recordId: 'LPR-planned', title: 'Planned LPR', inherits_from: { kind: 'record', id: 'PRT-planned', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
+      env('LPR-run', { kind: 'local-protocol', recordId: 'LPR-run', title: 'Run LPR', inherits_from: { kind: 'record', id: 'PRT-run', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
+      env('PLR-run', { kind: 'planned-run', recordId: 'PLR-run', title: 'Planned', sourceType: 'local-protocol', localProtocolRef: { kind: 'record', id: 'LPR-planned', type: 'local-protocol' }, state: 'draft', links: { studyId: 'STU-1', runId: 'RUN-1' }, methodEventGraphId: 'EVG-run' }),
+      env('RUN-1', { kind: 'run', recordId: 'RUN-1', title: 'Run', studyId: 'STU-1', status: 'planned', plannedRunRef: { kind: 'record', id: 'PLR-run', type: 'planned-run' }, localProtocolRefs: [{ kind: 'record', id: 'LPR-run', type: 'local-protocol' }], methodEventGraphId: 'EVG-run' }),
+      env('EVG-run', { kind: 'event-graph', id: 'EVG-run', events: [], labwares: [], links: { studyId: 'STU-1', runId: 'RUN-1' } }),
+    ]);
+
+    const record = await new ProtocolContextService(store).promoteRunMethod({ runId: 'RUN-1' });
+    // Planned-run's singular localProtocolRef (LPR-planned -> PRT-planned) must win over run-level localProtocolRefs (LPR-run -> PRT-run).
+    expect(record.payload).toMatchObject({
+      kind: 'local-protocol',
+      inherits_from: { kind: 'record', id: 'PRT-planned', type: 'protocol' },
+    });
+  });
+
   it('filters by q across title/recordId/steps without a regression when q is empty', async () => {
     const store = new MemoryRecordStore([
       env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', state: 'approved', steps: [{ ordinal: 1, label: 'Prepare cells' }] }),
