@@ -87,6 +87,14 @@ export interface SlashSuggestion {
    */
   consequence?: string
   /**
+   * L2-MATERIAL-SELECTION-POLICY-1 u2fix3: the resolver's declared selection
+   * policy already narrowed this list to the single legal row (an `only` policy
+   * collapsed the ranked list to exactly one candidate). When present, the
+   * picker must NOT re-expand the list with streamed ontology/vendor tiers or
+   * the mint floor.
+   */
+  policyCollapsed?: boolean
+  /**
    * L2-CLARIFY-PICKER-1 P1: the presentation label of the CONTAINS section this
    * row collapsed under (the data-declared `contains_section_label` template,
    * e.g. `contains "DMEM" (9)`). Present ONLY on the first row of a contains

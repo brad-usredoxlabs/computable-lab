@@ -622,6 +622,117 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — resolver scoping (D4: picker-only c
   })
 })
 
+/**
+ * u2fix3: post-collapse suppression — when an `only` policy collapses to
+ * exactly one row, the resolver must NOT append the mint floor or stream
+ * ontology/vendor tiers. The collapse flag (`policyCollapsed`) is the
+ * signal; the picker must never re-expand a closed list.
+ */
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix3 post-collapse suppression', () => {
+  // All rows belong to the SAME concept so the `only` policy collapses to
+  // exactly one row (no other concept rows survive the collapse).
+  const SINGLE_CONCEPT_ITEMS: MaterialSearchItem[] = [
+    { recordId: 'VP-A', kind: 'vendor-product', title: 'Vendor Product A', category: 'vendor-reagent', subtitle: 'Sigma · A123', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'VP-B', kind: 'vendor-product', title: 'Vendor Product B', category: 'vendor-reagent', subtitle: 'Sigma · B456', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'MAT-1', kind: 'material', title: 'Material 1', category: 'concept-only', curie: 'NCIT:C185409' },
+  ]
+
+  const ONLY_POLICY: SelectionPolicy[] = [{
+    recordId: 'POL-1',
+    material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+    vendor_product_ref: { kind: 'record', id: 'VP-A' },
+    selection: 'only',
+  }]
+
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockImplementation(async (url: string) => {
+      const href = String(url)
+      if (href.includes('/materials/formulations/summary')) {
+        return { ok: true, json: async () => ({ items: [] }) }
+      }
+      return { ok: true, json: async () => ({ items: SINGLE_CONCEPT_ITEMS }) }
+    })
+    __setCandidateRankingPolicy(DECLARED)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    __resetMaterialSelectionPolicies()
+  })
+
+  /**
+   * RED test: with an `only` policy that collapses to exactly one row, the
+   * resolver should return exactly one row, carry `policyCollapsed: true`,
+   * and never call `onUpdate` (no streaming, no mint floor).
+   */
+  it('only — exactly one row with policyCollapsed, no mint row, onUpdate never called', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const onUpdateSpy = vi.fn()
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      pickerRows: true,
+      onUpdate: onUpdateSpy,
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // (a) Exactly ONE row — no mint floor, no extra rows
+    expect(rows).toHaveLength(1)
+
+    // (b) That row carries the collapse signal
+    expect(rows[0].policyCollapsed).toBe(true)
+    expect(rows[0].key).toBe('vendor-product:VP-A')
+
+    // (c) onUpdate was NEVER called (no streaming)
+    expect(onUpdateSpy).not.toHaveBeenCalled()
+  })
+
+  /** The doc-editor /m path (pickerRows absent) still gets the mint row and streams — byte-identical to no-policy. */
+  it('doc-editor /m path (no pickerRows): only policy does NOT suppress mint row or streaming', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const onUpdateSpy = vi.fn()
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      onUpdate: onUpdateSpy,
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // The doc-editor path is byte-identical to no-policy: mint row present
+    const mintRow = rows.find((r) => r.pinBottom === true)
+    expect(mintRow).toBeTruthy()
+  })
+
+  /** A `default` policy (not `only`) does NOT collapse — all rows + mint + streaming survive. */
+  it('default policy — no collapse, all rows + mint row present', async () => {
+    const DEFAULT_POLICY: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'default',
+    }]
+    __setMaterialSelectionPolicies(DEFAULT_POLICY)
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      pickerRows: true,
+      onUpdate: vi.fn(),
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // All 3 workspace rows + mint floor
+    expect(rows).toHaveLength(4)
+    const mintRow = rows.find((r) => r.pinBottom === true)
+    expect(mintRow).toBeTruthy()
+    // No collapse flag on any row
+    expect(rows.some((r) => r.policyCollapsed === true)).toBe(false)
+  })
+})
+
 describe('L2-MATERIAL-SELECTION-POLICY-1 — firstDefaultFocusIndex with preselected', () => {
   it('prefers preselected row over canBeDefault row', () => {
     const rows = [

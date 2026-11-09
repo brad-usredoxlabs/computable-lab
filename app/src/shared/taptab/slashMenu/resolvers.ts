@@ -132,11 +132,16 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
 
+  // u2fix3: detect if the resolver already collapsed the list via an `only`
+  // policy — one predicate gates both mint suppression and streaming skip.
+  const policyCollapsed = initial.some((r) => r.policyCollapsed === true)
+
   // The funnel's floor (creation-entry-points spec §6): minting a new
   // local-namespace term is always offered, always last, never the
   // keyboard default. Selecting it creates a draft material record
   // server-side, then inserts the pill — tier-1 finds it next search.
-  if (q) {
+  // u2fix3: suppressed when the policy already narrowed to exactly one row.
+  if (q && !policyCollapsed) {
     initial.push({
       key: `mint:${q}`,
       label: mintLocalTermLabel(q),
@@ -170,7 +175,8 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // and the remote OLS4 tier lands as the third. Each call only emits
   // additions that aren't already on screen — the menu rebuilds in
   // strictly additive order. Aborts when the user keeps typing.
-  if (q && ctx.onUpdate) {
+  // u2fix3: skip streaming when the policy already narrowed to one row.
+  if (q && ctx.onUpdate && !policyCollapsed) {
     // MENU-CANDIDATES-1 Fix B: an aggregate label (the card prefills the full
     // fact label) fires one extra search per component token so the store's
     // per-component records surface. Delimiter-free queries get an empty token
@@ -804,6 +810,10 @@ function materialSuggestions(
   const withPolicies = pickerRows
     ? applySelectionPolicies(ranked, selectionPolicies)
     : ranked
+  // u2fix3: one predicate — true when the declared selection policy
+  // collapsed the ranked list to exactly one row (an `only` policy hit).
+  // Used to gate the collapse flag, mint suppression, and streaming skip.
+  const collapsedToSingle = pickerRows && ranked.length > 1 && withPolicies.length === 1
 
   const labelKeys = seenLabels ?? new Set<string>()
   const rows: SlashSuggestion[] = []
@@ -876,6 +886,7 @@ function materialSuggestions(
       ...(pickerRows && row.consequence ? { consequence: row.consequence } : {}),
       ...(pickerRows && row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
       ...(pickerRows && row.preselected === true ? { preselected: true } : {}),
+      ...(collapsedToSingle ? { policyCollapsed: true } : {}),
     }
     rows.push(suggestion)
   }
