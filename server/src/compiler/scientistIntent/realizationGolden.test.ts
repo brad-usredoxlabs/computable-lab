@@ -285,6 +285,90 @@ describe('W2-7 T1 golden — family + robot answers -> local-protocol -> intent 
 });
 
 // ---------------------------------------------------------------------------
+// Negative pin — targetWells is load-bearing for add_material
+// ---------------------------------------------------------------------------
+
+describe('W2-7 negative pin — targetWells is load-bearing (vacuous-pin proof)', () => {
+
+  it('missing targetWells on add-lysis produces needs-clarification', async () => {
+    // Build a family fixture identical to familyFixture() but without targetWells
+    // on the add-lysis step, proving the positive pin is not vacuous.
+    const axes = [
+      ...deriveBranchAxes(CANDIDATE_STEPS),
+      ...deriveStepVariantAxes(CANDIDATE_STEPS, CANDIDATE_SECTIONS).map((axis) => ({
+        axisId: axis.axisId,
+        label: axis.question,
+        conditions: axis.conditions,
+      })),
+    ];
+    const family = {
+      kind: 'protocol',
+      recordId: 'PRT-zymo-w27-family',
+      protocolLayer: 'universal',
+      title: 'ZymoBIOMICS 96 MagBead DNA (universal family)',
+      branch_axes: axes,
+      steps: [
+        { stepId: 'add-lysis', label: 'Add lysis solution', ordinal: 1, kind: 'other', intent: {
+          semanticVerb: { canonical: 'add_material' },
+          materialNeeds: [{ need: 'lysis_solution' }],
+          // targetWells intentionally omitted — this is the negative pin
+          constraints: [{
+            class: 'volume',
+            bindingKind: 'hard_bound',
+            overridePolicy: 'never-override',
+            bound: { value: 200, unit: 'uL', dimension: 'volume' },
+            subject: { ref: 'cf:material', role: 'lysis_solution', dimensionKey: 'lysis_solution:volume', bindingPolicyKey: 'never-override:hard_bound' },
+          }],
+          provenance: [prov(1)],
+        } },
+        { stepId: 'step-1', label: 'Lyse the samples', ordinal: 2, kind: 'other', intent: {
+          semanticVerb: { canonical: 'transfer' },
+          constraints: [{
+            class: 'capacity',
+            bindingKind: 'hard_bound',
+            overridePolicy: 'never-override',
+            bound: { value: 200, unit: 'uL', dimension: 'volume' },
+            subject: { ref: 'cf:well', role: 'sample_plate', dimensionKey: 'sample_plate:volume', bindingPolicyKey: 'never-override:hard_bound' },
+          }],
+          provenance: [prov(2)],
+        } },
+        { stepId: 'step-2a', label: 'Bead beat the lysate', ordinal: 3, kind: 'other', intent: {
+          semanticVerb: { canonical: 'mix' },
+          materialNeeds: [{ need: 'beads', capabilityRequirement: { kind: 'ontology', id: 'CL:bead_beater', namespace: 'CL', label: 'bead beater' } }],
+          provenance: [prov(3)],
+        } },
+        { stepId: 'step-2b', label: 'Vortex the lysate', ordinal: 4, kind: 'other', intent: {
+          semanticVerb: { canonical: 'mix' },
+          provenance: [prov(4)],
+        } },
+        { stepId: 'wash-beads', label: 'Wash the beads', ordinal: 5, kind: 'other', intent: {
+          semanticVerb: { canonical: 'wash' },
+          materialNeeds: [{ need: 'wash_solution' }],
+          provenance: [prov(5)],
+        } },
+      ],
+    };
+    const recorder = goldenStore();
+    const spine = createResolveSpineFromContext({ store: recorder.store as never });
+    const result = await realizeAndCompile({
+      family: family as unknown as ProtocolPayloadLike,
+      realization: realizationFixture() as unknown as LocalProtocolPayloadLike,
+      compileDeps: { spine },
+    });
+    expect('compile' in result).toBe(true);
+    if (!('compile' in result)) return;
+    expect(result.compile.outcome).not.toBe('complete');
+    expect(result.compile.outcome).toBe('needs-clarification');
+    // The clarification must cite targetWells as missing-required-argument at actionIndex 0
+    const targetWellsClar = result.compile.clarifications.find(
+      (c: any) => c.label === 'targetWells' && c.reason === 'missing-required-argument'
+        && c.actionLocation.actionIndex === 0 && c.actionLocation.argument === 'targetWells'
+    );
+    expect(targetWellsClar).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T2 determinism — BYTE compare, three runs (two in-process + YAML reload)
 // ---------------------------------------------------------------------------
 
