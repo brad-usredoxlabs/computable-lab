@@ -36,8 +36,11 @@ import {
   materialCandidates,
   consequenceFor,
   firstDefaultFocusIndex,
+  applySelectionPolicies,
   type CandidateRankingPolicy,
   type MaterialCandidateItem,
+  type RankedCandidateRow,
+  type SelectionPolicy,
 } from './clarifyPickerRanking'
 import {
   __setCandidateRankingPolicy,
@@ -348,5 +351,172 @@ describe('L2-CLARIFY-PICKER-1 — policy cache seam (resolver path is determinis
     expect(first!.families.composition).toEqual({ rank: 4, canBeDefault: false })
     // Cache, not re-fetch: the second read returns the same object.
     expect(second).toBe(first)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', () => {
+  /**
+   * Build test rows for one concept (NCIT:C185409): two vendor-product rows
+   * and the material row, all with the same CURIE.
+   */
+  function buildConceptRows(): RankedCandidateRow[] {
+    return [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', curie: 'NCIT:C185409', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', curie: 'NCIT:C185409', canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', curie: 'NCIT:C185409', canBeDefault: true },
+    ]
+  }
+
+  /** Pin (a): `only` collapses to exactly one row with preselected: true */
+  it('only — collapses to exactly one row (the policy vendor product) with preselected: true', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(1)
+    expect(result[0].recordId).toBe('VP-A')
+    expect(result[0].preselected).toBe(true)
+  })
+
+  /** Pin (b): `default` keeps all rows, marks exactly one preselected, focus index matches */
+  it('default — all rows survive, exactly one is preselected, focus index matches', () => {
+    const rows = buildConceptRows()
+    // Target VP-B (index 1, NOT index 0 — avoids the vacuous pin bait)
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-B' },
+      selection: 'default',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    // ALL rows survive in their ranked order
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // Exactly one row carries preselected: true
+    const preselectedRows = result.filter((r) => r.preselected === true)
+    expect(preselectedRows).toHaveLength(1)
+    expect(preselectedRows[0].recordId).toBe('VP-B')
+    // The other rows must NOT carry the key at all (exactOptionalPropertyTypes)
+    expect('preselected' in result[0]).toBe(false)
+    expect('preselected' in result[2]).toBe(false)
+    // firstDefaultFocusIndex returns the preselected row's index
+    const focus = firstDefaultFocusIndex(result)
+    expect(focus).toBe(1)
+  })
+
+  /** Pin (c1): fail-open — policy vendor product not in rows */
+  it('fail-open — policy vendor product NOT in rows leaves list unchanged', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-DOES-NOT-EXIST' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // No row should carry preselected
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+  })
+
+  /** Pin (c2): fail-open — two `only` policies for the same concept */
+  it('fail-open — two only policies for the same concept leaves list unchanged', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [
+      {
+        recordId: 'POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // No row should carry preselected
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+  })
+
+  /** Pin (d): no-policy byte-stability — empty policies return identical rows */
+  it('no-policy — empty policies returns rows deep-equal to input with no preselected key', () => {
+    const rows = buildConceptRows()
+    const result = applySelectionPolicies(rows, [])
+    // The rows are byte-identical to input — no preselected key on any row
+    expect(result).toHaveLength(3)
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+    // Deep equality
+    expect(result.map((r) => ({ key: r.key, label: r.label, recordId: r.recordId, family: r.family })))
+      .toEqual(rows.map((r) => ({ key: r.key, label: r.label, recordId: r.recordId, family: r.family })))
+  })
+
+  /** `only` with material_ref kind 'record' (not 'ontology') */
+  it('only — material_ref kind=record matches by row recordId', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'record', id: 'VP-A' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(1)
+    expect(result[0].recordId).toBe('VP-A')
+    expect(result[0].preselected).toBe(true)
+  })
+
+  /** `alternative` policy has no picker effect */
+  it('alternative — no effect on the picker', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'alternative',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result).toBe(rows)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — firstDefaultFocusIndex with preselected', () => {
+  it('prefers preselected row over canBeDefault row', () => {
+    const rows = [
+      { canBeDefault: true },
+      { canBeDefault: true, preselected: true },
+      { canBeDefault: true },
+    ]
+    expect(firstDefaultFocusIndex(rows)).toBe(1)
+  })
+
+  it('falls back to canBeDefault when no preselected row exists', () => {
+    const rows = [
+      { canBeDefault: false },
+      { canBeDefault: true },
+      { canBeDefault: true },
+    ]
+    expect(firstDefaultFocusIndex(rows)).toBe(1)
+  })
+
+  it('returns 0 when no row is defaultable and none is preselected', () => {
+    const rows = [{ canBeDefault: false }, { canBeDefault: false }]
+    expect(firstDefaultFocusIndex(rows)).toBe(0)
   })
 })
