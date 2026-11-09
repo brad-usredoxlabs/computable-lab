@@ -34,9 +34,11 @@ import {
   aggregateComponentTokens,
   isCompositionLabel,
   materialCandidates,
+  applySelectionPolicies,
   type CandidateRankingPolicy,
+  type SelectionPolicy,
 } from './clarifyPickerRanking'
-import { getCandidateRankingPolicy } from './policy'
+import { getCandidateRankingPolicy, getMaterialSelectionPolicies } from './policy'
 // L2-TERM-1 (UC-D4): the badge/vocabulary tier words live in ONE declarative
 // table (tokens.ts) — every surface reads them from there, never re-spells
 // them as scattered string branches.
@@ -113,7 +115,11 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // once (module cache; null when the registry declares none — no fallback
   // table). The PURE comparator applies it; a null policy keeps the
   // resolver-emitted order (byte-stable).
-  const policy = await getCandidateRankingPolicy()
+  // L2-MATERIAL-SELECTION-POLICY-1: fetch selection policies alongside ranking.
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
   const workspace = materialSuggestions(
     materialRes.items,
     formulations,
@@ -121,6 +127,7 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
     policy,
     q,
     ctx.pickerRows === true,
+    selPolicies,
   )
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
@@ -168,7 +175,7 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
     // fact label) fires one extra search per component token so the store's
     // per-component records surface. Delimiter-free queries get an empty token
     // list and behave byte-identically to before.
-    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx, policy)
+    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx, policy, selPolicies)
     void (async () => {
       try {
         const localRes = await apiClient.resolve({
@@ -221,8 +228,11 @@ async function resolveFormulationLayer(
   abortIfNeeded(ctx)
   // L2-CLARIFY-PICKER-1 (P1): the data-declared ranking applies to the scoped
   // /m layer too (the ClarificationPicker cards set materialLayer).
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
 /**
@@ -244,11 +254,14 @@ async function resolveInstanceLayer(
     category: layer === 'aliquot' ? 'prepared-material' : 'saved-stock',
     subtitle: layer === 'aliquot' ? 'a specific aliquot in the lab' : 'a specific preparation in the lab',
   }))
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
-/** "Which catalog item?" — vendor products ONLY (a catalog identity is its own layer). */
+/** "Which catalog item? — vendor products ONLY (a catalog identity is its own layer). */
 async function resolveVendorLayer(
   query: string,
   ctx: SlashResolverContext,
@@ -263,8 +276,11 @@ async function resolveVendorLayer(
     category: 'vendor-reagent',
     subtitle: [hit.vendor, hit.catalogNumber].filter(Boolean).join(' '),
   }))
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
 function appendOntologyHits(
@@ -305,6 +321,7 @@ function appendComponentHits(
   seenLabels: Set<string>,
   ctx: SlashResolverContext,
   policy: CandidateRankingPolicy | null,
+  selPolicies: SelectionPolicy[] = [],
 ): void {
   const onUpdate = ctx.onUpdate
   if (!onUpdate) return
@@ -324,7 +341,7 @@ function appendComponentHits(
       // screen from repeating. Each token's page is ranked against its OWN
       // component noun (the data-declared policy; null keeps emitted order).
       const tokenNoun = tokens[i] ?? ''
-      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true)) {
+      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true, selPolicies)) {
         if (seenKeys.has(s.key)) continue
         seenKeys.add(s.key)
         merged.push(s)
@@ -744,6 +761,7 @@ function materialSuggestions(
   policy: CandidateRankingPolicy | null = null,
   noun = '',
   pickerRows = false,
+  selectionPolicies: SelectionPolicy[] = [],
 ): SlashSuggestion[] {
   const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
     recordId: summary.outputSpec.id,
@@ -776,10 +794,15 @@ function materialSuggestions(
     itemById.set(item.recordId, item)
   }
   const ranked = materialCandidates(allItems, noun, policy)
+  // L2-MATERIAL-SELECTION-POLICY-1: apply declared selection policies.
+  // `only` collapses to one row, `default` marks preselected, `alternative`
+  // has no picker effect. Fail-open: if the vendor product isn't in the rows
+  // or two `only` policies target the same concept, leave unchanged.
+  const withPolicies = applySelectionPolicies(ranked, selectionPolicies)
 
   const labelKeys = seenLabels ?? new Set<string>()
   const rows: SlashSuggestion[] = []
-  for (const row of ranked) {
+  for (const row of withPolicies) {
     const item = itemById.get(row.recordId)
     // MENU-CANDIDATES-1 Fix A: display-label dedup, kept DOWNSTREAM of the
     // comparator so the survivor is the first in the comparator's order (the
@@ -847,6 +870,7 @@ function materialSuggestions(
       ...(pickerRows && row.canBeDefault !== undefined ? { canBeDefault: row.canBeDefault } : {}),
       ...(pickerRows && row.consequence ? { consequence: row.consequence } : {}),
       ...(pickerRows && row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
+      ...(pickerRows && row.preselected === true ? { preselected: true } : {}),
     }
     rows.push(suggestion)
   }
