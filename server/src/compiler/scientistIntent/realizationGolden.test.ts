@@ -74,6 +74,14 @@ function familyFixture(): Record<string, unknown> {
       { stepId: 'add-lysis', label: 'Add lysis solution', ordinal: 1, kind: 'other', intent: {
         semanticVerb: { canonical: 'add_material' },
         materialNeeds: [{ need: 'lysis_solution' }],
+        targetWells: ['A1'],
+        constraints: [{
+          class: 'volume',
+          bindingKind: 'hard_bound',
+          overridePolicy: 'never-override',
+          bound: { value: 200, unit: 'uL', dimension: 'volume' },
+          subject: { ref: 'cf:material', role: 'lysis_solution', dimensionKey: 'lysis_solution:volume', bindingPolicyKey: 'never-override:hard_bound' },
+        }],
         provenance: [prov(1)],
       } },
       { stepId: 'step-1', label: 'Lyse the samples', ordinal: 2, kind: 'other', intent: {
