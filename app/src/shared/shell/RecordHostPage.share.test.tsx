@@ -70,6 +70,34 @@ vi.mock('../../shared/api/client', () => ({
       diagnostics: [],
     }),
     updateRecord: vi.fn().mockResolvedValue(undefined),
+    // GC-16 FIX RUN 2 (D5): the panel resolves kind→schemaId via the served
+    // registry for EVERY kind (spine included) — the create-mode test mounts
+    // the REAL RecordCreatePanel at /record/new/study, so the mock must serve
+    // getSchemas (the registry) + getSchema (the schema doc) exactly like the
+    // server. (Was absent at 1f7a92fe because the spine bypassed the registry.)
+    getSchemas: vi.fn().mockResolvedValue([
+      {
+        id: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
+        path: 'studies/study.schema.yaml',
+        title: 'study',
+      },
+    ]),
+    getSchema: vi.fn().mockResolvedValue({
+      id: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
+      path: 'studies/study.schema.yaml',
+      title: 'study',
+      schema: {
+        $id: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
+        type: 'object',
+        properties: {
+          kind: { const: 'study' },
+          recordId: { type: 'string' },
+          shortSlug: { type: 'string' },
+          title: { type: 'string' },
+        },
+        required: ['kind', 'recordId', 'shortSlug', 'title'],
+      },
+    }),
     // RecordCreatePanel draft-projection fetch (create-mode test)
     getEditorDraftProjection: vi.fn().mockResolvedValue({
       schemaId: 'test-schema',

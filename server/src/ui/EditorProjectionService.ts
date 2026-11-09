@@ -255,7 +255,19 @@ function assignSlotsToBlocksFromSections(
 /**
  * Widget types that TapTab does not yet fully support in fallback mode.
  * When encountered, the projection preserves nested metadata and emits
- * a diagnostic so the consumer knows the shape is not fully rendered.
+ * a diagnostic so the consumer knows the shape is not yet fully rendered.
+ *
+ * WIDGET-R1: `array` is CONDITIONAL — a slot that declares a VALID typed
+ * item-hint (`items` with a `path` and a `widget`; the loader,
+ * UISpecLoader.validateFieldHint, already walks `array.items` and validates
+ * the nested hint: required path, required widget, widget-type membership
+ * against the loader's own VALID_WIDGET_TYPES) is AUTHORABLE through the
+ * taptab widget (the ArrayWidget seeds items from the hint and renders
+ * sub-fields through the existing ObjectWidget), so the diagnostic is
+ * SUPPRESSED for it. A hint-less `array` is a spec defect marker — the
+ * diagnostic stays loud (never silenced, the raw-fallback items echo at the
+ * diagnostic message is preserved). `object`, `custom`, `markdown` are
+ * unchanged.
  */
 const UNSUPPORTED_WIDGETS = new Set<string>([
   'array',
@@ -263,6 +275,28 @@ const UNSUPPORTED_WIDGETS = new Set<string>([
   'custom',
   'markdown',
 ]);
+
+/**
+ * WIDGET-R1: is the array slot's item-hint a VALID typed hint — i.e. does it
+ * carry the declarative shape the ArrayWidget item authoring consumes?
+ *
+ * Validity mirrors UISpecLoader.validateFieldHint (the server's own
+ * structural authority): `items` present, a `path` (required by the loader
+ * — a hint without one is a load-time error and never reaches the
+ * projection), and a `widget` (required + member of the loader's
+ * VALID_WIDGET_TYPES by the same gate). We deliberately do NOT re-list the
+ * widget types here (no second validator): the loader is the authority, and
+ * the projection only ever runs on loader-validated specs (UIHandlers fetch
+ * the spec via uiSpecLoader.get / load before project). The hint's sub-field
+ * set (`fields`) is consumed verbatim by the client — an object widget with
+ * zero fields still degrades LOUD client-side (the hint is inert, the raw
+ * fallback renders), so its absence does not make the hint invalid here.
+ */
+function hasTypedArrayItemHint(field: FormSection['fields'][number]): boolean {
+  const items = field.items;
+  if (items === null || items === undefined) return false;
+  return typeof items.path === 'string' && items.path.length > 0 && typeof items.widget === 'string';
+}
 
 /**
  * Emit diagnostics for the projection.
@@ -336,6 +370,17 @@ function emitUnsupportedWidgetDiagnostics(
       if (field.hidden || !field.path) continue;
 
       const widget = field.widget ?? 'text';
+
+      // WIDGET-R1: `array` is CONDITIONAL — a slot that declares a VALID
+      // typed item-hint is authorable through the widget (the ArrayWidget
+      // seeds items from the hint and renders sub-fields through the
+      // existing ObjectWidget), so the UNSUPPORTED_WIDGET diagnostic is
+      // suppressed for it. A hint-less `array` (or an array whose hint lacks
+      // the loader-required path/widget) is a spec defect marker — the
+      // diagnostic stays loud, with the raw items echo preserved.
+      if (widget === 'array' && hasTypedArrayItemHint(field)) {
+        continue;
+      }
 
       if (UNSUPPORTED_WIDGETS.has(widget)) {
         const diagnostic: EditorDiagnostic = {

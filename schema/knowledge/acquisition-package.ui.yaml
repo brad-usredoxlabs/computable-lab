@@ -1,0 +1,325 @@
+# UI specification for Acquisition Package records (GC-4 — .D directory
+# registration).
+#
+# EDITOR-1 + GC-2 browser-gate lesson (promoted spec D12, ORCH-GATE fix): the
+# frontend documentMapper (app/src/editor/taptab/documentMapper.ts:171) renders
+# ONLY kind:section blocks and SKIPS every other block kind (a `kind: repeater`
+# block renders nothing). So the files list is NOT a repeater — it is a SECTION
+# block claiming an ARRAY slot (path: $.files, widget: array) with an explicit
+# `properties` sub-field list (documentMapper.ts:228: an array slot with
+# `properties` projects to arraySchema; the $.lines precedent is
+# schema/workflow/budget.ui.yaml:88). Every editor slot is claimed exactly once
+# by an explicit section block; no object value is bound to a textarea; every
+# label is a FULL WORD (no truncated headers). The ref slots are shape-pinned
+# to type: data-reference; target existence is resolution-time (the
+# registration service), not the UI's job.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/acquisition-package.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.storageDeviceId"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Package identity and lifecycle. state advances only via lifecycle transitions (registry-ops: draft -> active -> archived)."
+      slots: ["id-slot", "title-slot", "state-slot"]
+    - id: "device-and-directory"
+      kind: "section"
+      label: "Storage Device and Directory"
+      help: "The configured storage device (the config id, never a mount path) and the .D directory key RELATIVE to the device root. Both are set at registration and read-only afterward."
+      slots: ["storage-device-id-slot", "directory-key-slot"]
+    - id: "files"
+      kind: "section"
+      label: "Files"
+      help: >
+        One row per pinned file in the .D: its role, the per-file data-reference
+        (the integrity anchor), and its path relative to the package root.
+        signal_channel = an .CH signal file (a registrable package needs at
+        least one); uninterpreted = pinned with no semantics claimed (GC-1(e):
+        preserve bytes, don't parse) — nothing is ever silently skipped.
+      slots: ["files-slot"]
+    - id: "manifest-and-links"
+      kind: "section"
+      label: "Signal Collection and Links"
+      help: >
+        The manifest-level signal-collection data-reference (its contentHash is
+        the sha256 of the canonical per-file manifest string, not a hash of the
+        directory) and the optional run/sample links.
+      slots: ["signal-collection-ref-slot", "source-run-ref-slot", "sample-ref-slot"]
+    - id: "acquisition-status"
+      kind: "section"
+      label: "Acquisition Status"
+      help: >
+        How the acquisition ended, classified at registration from the RUN.LOG
+        member (strict UTF-16) using the declared rule file
+        (config/gc-acquisition-status/log-patterns.yaml). completed / aborted /
+        stopped-by-user / unknown. unknown is the DECLARED floor (a package with
+        no parseable log) — never a completed default. The evidence block
+        records the interpretation source, the decode facts, and every matched
+        RUN.LOG line VERBATIM (the data a human reads INSTEAD of a byte-serving
+        route — OQ-1). Absent on packages registered before FAME-1.
+      slots:
+        [
+          "acquisition-status-slot",
+          "evidence-ruleset-id-slot",
+          "evidence-ruleset-version-slot",
+          "evidence-ruleset-source-file-slot",
+          # FAME-1 FIX3 (cycle-3 DEFECT 1): the ruleset container CARRIER.
+          # Listed AFTER the three ruleset leaf slots (see the serializer
+          # note under the slot) so the save direction re-writes the
+          # container if the leaf rows' delete-on-empty contract pruned it.
+          "evidence-ruleset-container-carrier-slot",
+          "evidence-source-member-slot",
+          "evidence-decode-encoding-slot",
+          "evidence-decode-bom-present-slot",
+          "evidence-source-member-container-carrier-slot",
+          "evidence-matched-lines-slot",
+          "evidence-no-evidence-reason-slot",
+        ]
+  slots:
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+      help: "Stable local identifier (e.g., ACQP-2026-RES35077-4). Read-only."
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+      required: true
+      help: "Human-readable name for this acquisition package."
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    - id: "storage-device-id-slot"
+      path: "$.storageDeviceId"
+      label: "Storage Device Id"
+      widget: "readonly"
+      help: "The config storage device id (config.storageDevices[].id, e.g. gc-fid-nas) — the id, never a mount path. Set at registration."
+    - id: "directory-key-slot"
+      path: "$.directoryKey"
+      label: "Directory Key"
+      widget: "readonly"
+      help: "Safe RELATIVE key of the .D DIRECTORY relative to the device root (e.g. machine1/RES35077-4.D). A directory key — no single-file data-reference points at it directly. Set at registration."
+    - id: "files-slot"
+      path: "$.files"
+      label: "Files"
+      widget: "array"
+      required: true
+      help: "One row per pinned file. Each row: the file's role, the per-file data-reference (the integrity anchor), and the file's path relative to the package root."
+      properties:
+        - name: "relativePath"
+          widget: "text"
+          label: "Relative Path"
+          required: true
+          help: "Path of the file relative to the package root (the device key minus the directoryKey prefix)."
+        - name: "role"
+          widget: "select"
+          label: "File Role"
+          required: true
+          help: "signal_channel | sample_metadata | run_log | method_asset | uninterpreted."
+        - name: "dataReferenceRef"
+          widget: "ref"
+          label: "Data Reference Ref"
+          required: true
+          help: "The per-file data-reference record (the integrity anchor). Shape-pinned to type: data-reference."
+    - id: "signal-collection-ref-slot"
+      path: "$.signalCollectionRef"
+      label: "Signal Collection Ref"
+      widget: "ref"
+      refKind: "data-reference"
+      required: true
+      help: "The manifest-level signal-collection data-reference (dataKind signal-collection). Its contentHash is the sha256 of the canonical per-file manifest string, not a hash of the directory. Set at registration."
+    - id: "source-run-ref-slot"
+      path: "$.sourceRunRef"
+      label: "Source Run Ref"
+      widget: "ref"
+      refKind: "instrument-sequence-entry"
+      help: "Optional record ref to the instrument-sequence-entry (run) this package was acquired for."
+    - id: "sample-ref-slot"
+      path: "$.sampleRef"
+      label: "Sample Ref"
+      widget: "ref"
+      help: "Optional record ref to the sample (plain record ref — no CHEBI minting; compound/sample identity lives on gc-method / instrument-sequence-entry)."
+    - id: "acquisition-status-slot"
+      path: "$.acquisitionStatus"
+      label: "Acquisition Status"
+      # D9: rendered as a stable, NON-EDITABLE display (widget: readonly). The
+      # editor-config projection path hardcodes readOnly: false and does NOT
+      # forward a `readonly:` key, so a `readonly: true` claim on a select is
+      # INERT (the slot projects as an editable select — the D9 defect). The
+      # non-editable presentation is therefore declared via the WIDGET TYPE
+      # itself (the repo's id-slot / state-slot idiom), not an inert key.
+      # Dropped the select's `options` (a readonly display renders the raw
+      # stored value; the friendly-label map only served the editable select
+      # the platform can no longer honestly claim).
+      widget: "readonly"
+      help: >
+        How the acquisition ended (classification, not lifecycle — distinct
+        from State). completed / aborted / stopped-by-user / unknown. unknown
+        is the declared floor for a package with no parseable log (never a
+        completed default). Set at registration from the RUN.LOG evidence;
+        rendered non-editable (the classification is DATA, not hand-written).
+        Absent on packages registered before FAME-1.
+    # FAME-1 FIX2 (D1, cycle-2 ruling, option (a) — DATA-ONLY): the evidence
+    # presentation is declared in the shapes the CLIENT mapper
+    # (app/src/editor/taptab/documentMapper.ts) ACTUALLY consumes:
+    #   - sibling `readonly` slots at the deep dotted paths — the mapper
+    #     resolves a slot's value via getValueAtPath (documentMapper.ts:276 ->
+    #     formHelpers.ts:15-25, which walks `$.a.b.c`), and a `readonly` row
+    #     renders its stored value through ReadonlyWidget (a stable,
+    #     NON-EDITABLE display — the widget type is the non-editable claim,
+    #     the repo's id-slot / state-slot idiom; a `readonly: true` key is
+    #     inert, D9);
+    #   - a top-level `array` slot for $.acquisitionStatusEvidence.matched
+    #     with an `items` hint — the array/items path IS consumed
+    #     (documentMapper.ts:335-347 -> attrs.itemHint; the ArrayWidget seeds
+    #     items from the hint and renders each item through the
+    #     ObjectWidget).
+    # The pre-fix shape (ONE `widget: object` slot whose nested hints ride
+    # `fields:`) was INERT at the client: the editor-config projection never
+    # emits the `properties:` key documentMapper.ts:309 keys object
+    # decomposition on, so the evidence object rendered undecomposed
+    # (cycle-2 DEFECT 1). A top-level slot's `fields:` hints are therefore
+    # DROPPED — they carried no client surface. No new key spelling, no
+    # client-code change.
+    - id: "evidence-ruleset-id-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.id"
+      label: "Rule Set Id"
+      widget: "readonly"
+      help: >
+        The interpretation source's rule-set id, as declared in the rule file
+        (config/gc-acquisition-status/log-patterns.yaml). ABSENT in the
+        degenerate rule-file-missing arm (the ruleset is absence-shaped — D5):
+        the display shows the em-dash, never a fabricated identity.
+    - id: "evidence-ruleset-version-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.version"
+      label: "Rule Set Version"
+      widget: "readonly"
+      help: "The interpretation source's rule-set version (declared data; absent in the degenerate arm)."
+    - id: "evidence-ruleset-source-file-slot"
+      path: "$.acquisitionStatusEvidence.ruleset.sourceFile"
+      label: "Rule Set Source File"
+      widget: "readonly"
+      help: "The rule file the id/version came from (the stable config path label)."
+    - id: "evidence-source-member-slot"
+      path: "$.acquisitionStatusEvidence.sourceMember.relativePath"
+      label: "Source Member Relative Path"
+      widget: "readonly"
+      help: "Which package member was read (the run_log member's package-relative path, e.g. RUN.LOG)."
+    - id: "evidence-decode-encoding-slot"
+      path: "$.acquisitionStatusEvidence.decode.encoding"
+      label: "Decode Encoding"
+      widget: "readonly"
+      help: >
+        The strict-UTF-16 decode encoding used ('utf-16le' — FF FE BOM
+        consumed by the utf-16 family, BOM-less falls back to explicit
+        utf-16-le; 'none' when no member was read; 'unreadable' when the
+        member bytes could not be read). Recorded even on decode failure.
+    - id: "evidence-decode-bom-present-slot"
+      path: "$.acquisitionStatusEvidence.decode.bomPresent"
+      label: "Decode BOM Present"
+      widget: "readonly"
+      help: "Whether the FF FE BOM was present (the decode fact, recorded even on failure)."
+    - id: "evidence-matched-lines-slot"
+      path: "$.acquisitionStatusEvidence.matched"
+      label: "Matched Lines"
+      widget: "array"
+      help: >
+        Every RUN.LOG line a declared rule matched — preserved VERBATIM, never
+        dropped (the data a human reads INSTEAD of a byte-serving route —
+        OQ-1). Each item: the verbatim line, the declared rule id, and the
+        0-based line index.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Matched Line"
+        fields:
+          - path: "line"
+            widget: "text"
+            label: "Line"
+            help: "The matched line, verbatim (the exact decoded line)."
+          - path: "ruleId"
+            widget: "text"
+            label: "Rule Id"
+          - path: "lineIndex"
+            widget: "number"
+            label: "Line Index"
+    - id: "evidence-no-evidence-reason-slot"
+      path: "$.acquisitionStatusEvidence.noEvidenceReason"
+      label: "No Evidence Reason"
+      widget: "readonly"
+      help: >
+        Present ONLY when nothing matched: the named reason (log absent /
+        not decodable / zero rule hits / rule file unreadable). The em-dash
+        shows when a classification WAS evidenced.
+    # FAME-1 FIX3 (cycle-3 DEFECT 1 — DATA-ONLY close, fix-2 option (a)
+    # precedent): the record surface is TWO-WAY — the editor SERIALIZES these
+    # same rows on save, and the serializer's delete-on-empty contract
+    # (app/src/editor/taptap/recordSerializer.ts:122-123) prunes an emptied
+    # container. On the two degenerate arms the per-leaf rows above are the
+    # problem: the degenerate rule-file-missing arm (ruleset: {}) has no
+    # ruleset leaf values, and the run-log-member-absent arm
+    # (sourceMember.relativePath: '') has a '' leaf — both trigger the
+    # delete of the schema-REQUIRED container (acquisition-package.schema.
+    # yaml:216 required [ruleset, sourceMember, decode]; :243 required
+    # [relativePath]) -> the store rejects the save (422) and the client
+    # payload silently drops the evidence.
+    #
+    # These CARRIER slots are the data-only fix. `hidden` is a declared
+    # widget (ui-v1.schema.yaml:179 enum; UISpecLoader VALID_WIDGET_TYPES)
+    # that the client renders as NOTHING (FieldRow.tsx:125 returns null) —
+    # so the D1 presentation (the readonly leaf rows) is untouched — and the
+    # serializer does NOT prune a non-null, non-composite value
+    # (isEmptyFieldValue, refValue.ts:93-98): the carrier's value is the
+    # whole container object (getValueAtPath on the container path), which
+    # the serializer writes back via setValueAtPath AFTER the leaf slots
+    # have run (block slot order above), re-creating the pruned container.
+    # The evidence container therefore pins to its stored value on save —
+    # the classification is DATA, not hand-written (the slot help text is
+    # the claim). No app/editor, serializer, or projection code changed.
+    - id: "evidence-ruleset-container-carrier-slot"
+      path: "$.acquisitionStatusEvidence.ruleset"
+      label: "Evidence Rule Set Container"
+      widget: "hidden"
+      help: >
+        Save-direction carrier for the schema-required `ruleset` container:
+        carries the container itself (the interpretation source — id /
+        version / sourceFile, or the absence-shaped empty object of the
+        degenerate rule-file-missing arm, D5) so the serializer's
+        delete-on-empty contract (the absent leaf rows above) cannot prune
+        the required member. Renders nothing.
+    - id: "evidence-source-member-container-carrier-slot"
+      path: "$.acquisitionStatusEvidence.sourceMember"
+      label: "Evidence Source Member Container"
+      widget: "hidden"
+      help: >
+        Save-direction carrier for the schema-required `sourceMember`
+        container: carries { relativePath } — including the EMPTY relative
+        path of the run-log-member-absent arm, the honest floor value — so
+        the serializer's delete-on-empty contract (the '' leaf row above)
+        cannot prune the required member. Renders nothing.
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "180px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.storageDeviceId"
+    label: "Storage Device Id"
+    width: "140px"
+  - path: "$.state"
+    label: "State"
+    width: "100px"
+  - path: "$.acquisitionStatus"
+    label: "Acquisition Status"
+    width: "150px"

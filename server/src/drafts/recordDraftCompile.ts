@@ -50,10 +50,12 @@ import { parse } from 'yaml';
 import type { AppContext } from '../server.js';
 import type { JSONSchema } from '../schema/json-schema.js';
 import type { SchemaEntry } from '../schema/types.js';
-import type { RecordStore } from '../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import type { UISpec } from '../ui/types.js';
 import type { ValidationResult } from '../types/common.js';
 import { canonicalReadStore, LAB_SESSION_SCHEMA_ID } from './workstateCompile.js';
+import { getOntologyTermRegistry, type OntologyTerm } from '../registry/OntologyTermRegistry.js';
+import { object } from '../revisions/RecordRevisionService.js';
 
 export type RecordDraftDiagnosticCode =
   | 'MALFORMED_ENVELOPE'
@@ -62,7 +64,16 @@ export type RecordDraftDiagnosticCode =
   | 'UI_SPEC_MISSING'
   | 'LANDING_TAB_KIND_UNDECLARED'
   | 'STAGED_CREATE_REJECTED'
-  | 'COMPILE_INTERNAL';
+  | 'COMPILE_INTERNAL'
+  // OQ-4 OPT-A (edit-record arm) — the named refusals (the generic DRAFT_INVALID
+  // pipeline gate turns each into a needs-missing-fact diagnostic with
+  // canAccept:false — ZERO writes, never a guessed CURIE).
+  | 'EDIT_TARGET_REQUIRED'
+  | 'EDIT_TARGET_MISSING'
+  | 'EDIT_GUARD_UNDECLARED'
+  | 'EDIT_TERM_UNRESOLVED'
+  | 'EDIT_DUPLICATE_ENTRY'
+  | 'EDIT_MERGE_REJECTED';
 
 export interface RecordDraftDiagnostic {
   code: RecordDraftDiagnosticCode;
@@ -95,6 +106,15 @@ export interface RecordDraftDeps {
   validate: (doc: unknown, id: string) => ValidationResult;
   validateWithSchema: (doc: unknown, schema: object) => ValidationResult;
   uiSpecFor: (schemaId: string) => UISpec | undefined;
+  /**
+   * OQ-4 OPT-A (edit-record arm): the ontology-term registry (the
+   * schema/registry/ontology-terms/ aggregate). The edit arm resolves the
+   * model's compound noun through it — an EXACT known term (by id or label)
+   * yields its governed CURIE; an unknown/ambiguous noun yields NO CURIE
+   * (the never-guess round trip: a named needs-missing-fact diagnostic, never
+   * a guessed CURIE). Absent on the create arm.
+   */
+  ontologyTerms?: () => OntologyTerm[];
 }
 
 export function recordDraftDepsFromContext(ctx: AppContext): RecordDraftDeps {
@@ -105,6 +125,12 @@ export function recordDraftDepsFromContext(ctx: AppContext): RecordDraftDeps {
     validate: (doc, id) => ctx.validator.validate(doc, id),
     validateWithSchema: (doc, schema) => ctx.validator.validateWithSchema(doc, schema as never),
     uiSpecFor: (schemaId) => ctx.uiSpecLoader.get(schemaId),
+    // OQ-4 OPT-A (edit-record arm): the edit arm reads the target through the
+    // staging store (deps.stage) and resolves the compound noun through the
+    // ontology-term registry (the never-guess round trip). The single governed
+    // edit rides the onAccept hook (adapters.ts). The create arm never touches
+    // the ontologyTerms member.
+    ontologyTerms: () => getOntologyTermRegistry().list(),
   };
 }
 
@@ -144,12 +170,35 @@ export const RECORD_DRAFT_ENVELOPE_SCHEMA: object = {
   title: 'record-drafting proposal envelope',
   type: 'object',
   additionalProperties: false,
-  required: ['operation', 'kind', 'fields'],
+  required: ['operation'],
+  // OQ-4 OPT-A (architect ruling 20261101T032x): the record-drafting envelope
+  // is TWO-ARMED. The CREATE arm (compose-record) is the pre-change shape
+  // (kind + fields; the server derives the id). The EDIT arm (edit-record)
+  // names the target record (body.target, FormDraftService) + the compound
+  // noun (term) + the entry fields (fields) — it carries NO kind (the target's
+  // kind is the target's) and NO id. `anyOf` on operation carries the per-arm
+  // required set; additionalProperties:false stays, so a smuggled arm (an
+  // edit carrying kind, a create carrying term) is Ajv-rejected.
+  anyOf: [
+    {
+      properties: { operation: { type: 'string', const: 'compose-record' } },
+      required: ['operation', 'kind', 'fields'],
+    },
+    {
+      properties: { operation: { type: 'string', const: 'edit-record' } },
+      required: ['operation', 'term', 'fields'],
+    },
+  ],
   properties: {
-    operation: { type: 'string', const: 'compose-record' },
+    operation: { type: 'string', enum: ['compose-record', 'edit-record'] },
     requestId: { type: 'string' },
     kind: { type: 'string', minLength: 1 },
     fields: { type: 'object' },
+    // edit-record only: the compound noun the model named (the entry's
+    // compound label). NEVER a self-invented CURIE — the server resolves it
+    // through the ontology-term registry; an unknown/ambiguous noun yields a
+    // named diagnostic, never a guessed CURIE.
+    term: { type: 'string', minLength: 1 },
   },
 };
 
@@ -202,6 +251,110 @@ async function nextStagedId(store: RecordStore, prefix: string): Promise<string>
   return `${prefix}-${String(max + 1).padStart(6, '0')}`;
 }
 
+// ============================================================================
+// OQ-4 OPT-A (edit-record arm) — the DATA path guard + merge + term resolution.
+// ZERO path/kind literals live in the interpreter: the editable path, the merge
+// mode, and the entry defaults are read per call from
+// config/drafting/record-edit-guards.yaml (the OQ-4 ruling's step 2). The
+// interpreter below dispatches on the GUARD DATA, never on a schema/kind name.
+// ============================================================================
+
+const guardPath = new URL('../../../config/drafting/record-edit-guards.yaml', import.meta.url);
+
+interface RecordEditGuard {
+  path: string;
+  merge: 'append';
+  defaults?: Record<string, unknown>;
+}
+
+/** Loaded per call (the adapters.yaml / workstate-tab-kinds.yaml precedent).
+ *  Returns the guard declared for a target schema id, or null when the schema
+ *  declares no edit guard — the compile then fails with a NAMED diagnostic
+ *  (an undeclared editable path is never defaulted, never guessed). */
+function loadRecordEditGuard(schemaId: string): RecordEditGuard | null {
+  const raw = parse(readFileSync(guardPath, 'utf8')) as unknown;
+  const guards = (raw as { guards?: Record<string, RecordEditGuard> } | null)?.guards;
+  const guard = guards?.[schemaId];
+  if (!guard || typeof guard.path !== 'string' || guard.path.length === 0) return null;
+  if (guard.merge !== 'append') return null; // the only merge mode the interpreter carries
+  return guard;
+}
+
+/** Set a value at a dot-separated path (the edit arm's declared editable path).
+ *  Intermediate objects are created; arrays are never created — the guard
+ *  path must land on an array the target already declares (a missing array is
+ *  a named refusal, not a fabricated structure). Returns a NEW payload. */
+function mergeAppendEntry(payload: Record<string, unknown>, dotPath: string, entry: Record<string, unknown>): Record<string, unknown> {
+  const segments = dotPath.split('.').filter((s) => s.length > 0);
+  if (segments.length === 0) return payload;
+  const result = structuredClone(payload);
+  let current: unknown = result;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const holder = asRecord(current);
+    if (!holder) return result; // a non-object intermediate: the path is not writable
+    const part = segments[i]!;
+    if (holder[part] === undefined || holder[part] === null) holder[part] = {};
+    current = holder[part];
+  }
+  const last = segments[segments.length - 1]!;
+  const container = asRecord(current);
+  if (!container) return result;
+  const existing = container[last];
+  if (!Array.isArray(existing)) return result; // the guard path must be an array
+  container[last] = [...existing, entry];
+  return result;
+}
+
+/** Canonical JSON text: recursively key-sorted so two objects with the SAME
+ *  content but a DIFFERENT key order (hand-authored YAML, a migrated record,
+ *  a later field-order change) serialize identically. Primitive handling
+ *  mirrors JSON.stringify exactly (undefined -> null in arrays; an object key
+ *  whose value is undefined is dropped), so the canonical form of any
+ *  JSON.stringify-stable value is stable and key-order-insensitive. */
+function canonicalJson(value: unknown): string {
+  if (value === undefined) return 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record)
+    .filter((k) => record[k] !== undefined)
+    .sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(record[k])}`).join(',')}}`;
+}
+
+/** A deep structural equality over the entry the guard would append (the
+ *  duplicate-content refusal). Canonicalized (recursively key-sorted) so a
+ *  content-identical entry re-proposed — even with a DIFFERENT key order —
+ *  is recognized as a duplicate, not a new write. */
+function entryAlreadyPresent(list: unknown[], entry: Record<string, unknown>): boolean {
+  const want = canonicalJson(entry);
+  return list.some((item) => canonicalJson(item) === want);
+}
+
+/** Resolve the model's compound noun through the ontology-term registry —
+ *  the never-guess round trip. An EXACT known term (by its CURIE id or its
+ *  declared label) yields its governed ontology ref; an unknown or ambiguous
+ *  noun yields NO ref (the caller raises a named diagnostic, never a guessed
+ *  CURIE). Generic: the registry is the data, the interpreter carries no
+ *  term/kind literal. Returns null on unknown/ambiguous. */
+function resolveOntologyRef(noun: string, terms: OntologyTerm[]): Record<string, unknown> | null {
+  const q = noun.trim();
+  if (q.length === 0) return null;
+  const byId = terms.filter((t) => t.id === q);
+  const byLabel = terms.filter((t) => t.label === q);
+  const hits = byId.length > 0 ? byId : byLabel;
+  if (hits.length !== 1) return null; // zero = unknown; >1 = ambiguous — never guess
+  const term = hits[0]!;
+  const namespace = term.id.includes(':') ? term.id.split(':')[0]! : '';
+  return {
+    kind: 'ontology',
+    namespace,
+    id: term.id,
+    label: term.label,
+    ...(term.definition !== undefined ? { definition: term.definition } : {}),
+  };
+}
+
 /** Resolve a ui-v1 field path ($.title, $.scope.verbRefs) against the payload. */
 function payloadValueAt(payload: Record<string, unknown>, path: string): unknown {
   const segments = path.replace(/^\$\.?/, '').split('.').filter((s) => s.length > 0);
@@ -218,11 +371,220 @@ export type RecordDraftCompileOutcome =
   | { ok: true; result: RecordDraftResult }
   | { ok: false; diagnostics: RecordDraftDiagnostic[] };
 
+/**
+ * OQ-4 OPT-A (edit-record arm) — the shared merge builder. Both the compile
+ * (stage) arm and the onAccept hook derive the merged payload through this ONE
+ * helper, so the accept-time re-derivation is byte-identical to the compile
+ * (reviewHash stability). The interpreter carries ZERO path/kind literals: the
+ * editable path + merge mode + entry defaults come from
+ * config/drafting/record-edit-guards.yaml (DATA); the compound noun resolves
+ * through the ontology-term registry (never a guessed CURIE); the merged
+ * payload runs the REAL store-level schema validate. The `store` passed in is
+ * the staging proxy at compile (so the target read lands in `stage.reads` →
+ * the accept-time freshness re-check) and the real store at accept (the hook
+ * applies its single governed `update` through it).
+ */
+export type RecordEditMergeOutcome =
+  | {
+      ok: true;
+      target: RecordEnvelope;
+      mergedPayload: Record<string, unknown>;
+      mergedEnvelope: RecordEnvelope;
+      entry: Record<string, unknown>;
+      card: Record<string, unknown>;
+      entryCountBefore: number;
+      entryCountAfter: number;
+    }
+  | { ok: false; diagnostics: RecordDraftDiagnostic[] };
+
+export async function buildRecordEditMerge(params: {
+  intent: Record<string, unknown>;
+  targetId: string | undefined;
+  store: RecordStore;
+  ontologyTerms: () => OntologyTerm[];
+}): Promise<RecordEditMergeOutcome> {
+  const { intent, targetId, store } = params;
+  const fail = (code: RecordDraftDiagnosticCode, path: string, message: string): RecordEditMergeOutcome =>
+    ({ ok: false, diagnostics: [{ code, path, message }] });
+
+  // (a) target REQUIRED (the edit names the record it edits).
+  if (!targetId) {
+    return fail('EDIT_TARGET_REQUIRED', '/target',
+      'The edit-record proposal names no target record. Pass body.target.recordId — an edit always edits a named existing record.');
+  }
+
+  // (b) read the target. At compile this is the STAGING store — the read lands
+  //     in stage.reads (contentHash), which the accept loop re-verifies
+  //     (FormDraftService:179-182) before it re-runs the compile and the
+  //     onAccept hook applies the single governed edit. A missing target is a
+  //     NAMED refusal, never a fabricated structure.
+  const target = await store.get(targetId);
+  if (!target) {
+    return fail('EDIT_TARGET_MISSING', '/target',
+      `The target record "${targetId}" does not exist (or is unreadable). Nothing was proposed; name a record the lab has.`);
+  }
+  const targetPayload = object(target.payload);
+
+  // (c) the DATA guard for the target's schema. An undeclared editable path is
+  //     a NAMED refusal — the interpreter never defaults or guesses a path.
+  const guard = loadRecordEditGuard(target.schemaId);
+  if (!guard) {
+    return fail('EDIT_GUARD_UNDECLARED', '/target',
+      `No record-edit guard is declared for the target's schema (${target.schemaId}). The editable path, merge mode, and entry defaults are DATA (config/drafting/record-edit-guards.yaml); an undeclared path is never edited.`);
+  }
+
+  // (d) resolve the compound noun through the ontology-term registry — the
+  //     never-guess round trip. Exact known term -> governed CURIE; unknown /
+  //     ambiguous -> NO CURIE, a named diagnostic.
+  const term = trimmedString(intent.term)!;
+  const resolvedRef = resolveOntologyRef(term, params.ontologyTerms());
+  if (!resolvedRef) {
+    return fail('EDIT_TERM_UNRESOLVED', '/term',
+      `The compound noun "${term}" did not resolve to exactly one known ontology term. Nothing was proposed and no CURIE was guessed — name a term the lab's ontology vocabulary declares, or author it as a local term first.`);
+  }
+
+  // (e) build the entry: the approved fields VERBATIM + the resolved
+  //     compound_ref + the guard's declared defaults (the ONLY defaults — the
+  //     interpreter never injects a state it was not given; assignment_state
+  //     rides the guard DATA or the approved payload, never the code).
+  const fields = asRecord(intent.fields) ?? {};
+  const entry: Record<string, unknown> = {
+    ...(guard.defaults ?? {}),
+    ...structuredClone(fields),
+    compound_ref: resolvedRef,
+  };
+
+  // (f) append ONE entry at the declared path (the target must already
+  //     declare the array — a missing array is a named refusal, not a
+  //     fabricated structure).
+  const existing = payloadValueAt(targetPayload, guard.path);
+  if (!Array.isArray(existing)) {
+    return fail('EDIT_MERGE_REJECTED', `/${guard.path}`,
+      `The target's declared editable path "${guard.path}" is not an array. The guard merge is append-to-array; a missing/non-array path is never fabricated.`);
+  }
+  if (entryAlreadyPresent(existing, entry)) {
+    return fail('EDIT_DUPLICATE_ENTRY', `/${guard.path}`,
+      'The target already carries an identical entry at the declared path. Nothing was proposed — a duplicate re-draft is refused by name, never appended twice.');
+  }
+  const entryCountBefore = existing.length;
+  const mergedPayload = mergeAppendEntry(targetPayload, guard.path, entry);
+  const mergedList = payloadValueAt(mergedPayload, guard.path) as unknown[];
+  const entryCountAfter = Array.isArray(mergedList) ? mergedList.length : entryCountBefore + 1;
+  const appendedEntry = Array.isArray(mergedList) ? mergedList[entryCountAfter - 1] : undefined;
+
+  // (g) run the REAL store-level schema validate on the MERGED payload (the
+  //     card only ever names a payload the store would accept). A rejected
+  //     merge is a named refusal carrying the Ajv errors, ZERO writes.
+  const mergedEnvelope: RecordEnvelope = { recordId: target.recordId, schemaId: target.schemaId, payload: mergedPayload };
+  const validation = await store.validate(mergedEnvelope);
+  if (!validation.valid) {
+    const detail = (validation.errors ?? [])
+      .map((e) => `${e.path || '/'}: ${e.message ?? 'invalid'}`).join('; ');
+    return fail('EDIT_MERGE_REJECTED', '/payload',
+      `The merged payload was rejected by the target schema: ${detail}. Nothing was written.`);
+  }
+
+  // (g2) run the REAL store-level LINT on the MERGED payload (the OQ-4 W6 step-3
+  //      contract: "run REAL validate+lint on the MERGED payload via
+  //      context.store"). The store's own update runs validate AND lint
+  //      (RecordStoreImpl update) — a merged payload the store would lint-reject
+  //      at accept (e.g. gc-method: analysis.timed_events present with no
+  //      analysis.executable_binding) must be refused at COMPILE, by name,
+  //      carrying the lint message; otherwise accept throws after the card is
+  //      shown with no actionable path. ZERO writes.
+  const lint = await store.lint(mergedEnvelope);
+  if (!lint.valid) {
+    const detail = lint.violations
+      .map((v) => `${v.ruleId}${v.path ? ` @ ${v.path}` : ''}: ${v.message ?? 'lint violation'}`)
+      .join('; ');
+    return fail('EDIT_MERGE_REJECTED', '/payload',
+      `The merged payload was rejected by the target schema's lint rules: ${detail}. Nothing was written.`);
+  }
+
+  // (h) the card document (the OQ-4 receipt shape: the resolved term, the rt,
+  //     the state, the entry-count before/after).
+  const rtMin = appendedEntry && typeof appendedEntry === 'object'
+    ? (appendedEntry as Record<string, unknown>).expected_rt_min
+    : undefined;
+  const stateValue = entry.assignment_state;
+  const targetTitle = typeof targetPayload.title === 'string' ? targetPayload.title
+    : typeof targetPayload.name === 'string' ? targetPayload.name
+    : target.recordId;
+  const card = {
+    operation: 'edit-record',
+    targetRecordId: target.recordId,
+    targetTitle,
+    resolvedTerm: { id: resolvedRef.id, label: resolvedRef.label },
+    ...(typeof rtMin === 'number' ? { expectedRtMin: rtMin } : {}),
+    ...(typeof stateValue === 'string' ? { assignmentState: stateValue } : {}),
+    entryCountBefore,
+    entryCountAfter,
+  };
+
+  return {
+    ok: true,
+    target,
+    mergedPayload,
+    mergedEnvelope,
+    entry,
+    card,
+    entryCountBefore,
+    entryCountAfter,
+  };
+}
+
+/**
+ * OQ-4 OPT-A (edit-record arm) — compile a proposal that EDITS an existing
+ * record instead of composing a new one. Reads the target through the STAGING
+ * store (so the read lands in stage.reads → the accept-time freshness
+ * re-check), derives the merged payload via buildRecordEditMerge, and returns
+ * a card document. ZERO staged writes — the single governed edit rides the
+ * onAccept hook (adapters.ts), because the accept loop is create-only.
+ */
+async function compileEditRecordIntent(
+  intent: Record<string, unknown>,
+  deps: RecordDraftDeps,
+  targetId: string | undefined,
+): Promise<RecordDraftCompileOutcome> {
+  const merged = await buildRecordEditMerge({
+    intent,
+    targetId,
+    store: deps.stage,
+    ontologyTerms: () => (deps.ontologyTerms ? deps.ontologyTerms() : []),
+  });
+  if (!merged.ok) return merged;
+
+  const card = merged.card as { targetTitle?: string; resolvedTerm?: { id?: string; label?: string }; expectedRtMin?: number; assignmentState?: string };
+  const rtMin = typeof card?.expectedRtMin === 'number' ? card.expectedRtMin : undefined;
+  const stateValue = card?.assignmentState;
+  return {
+    ok: true,
+    result: {
+      recordId: merged.target.recordId,
+      summary: `Proposed an edit to "${card?.targetTitle}" (${merged.target.recordId}) — appends one assignment for "${card?.resolvedTerm?.label}" (${card?.resolvedTerm?.id}). Review the fields; nothing is written until you accept.`,
+      recordFields: [
+        { label: 'Target record', value: merged.target.recordId },
+        { label: 'Compound term', value: `${String(card?.resolvedTerm?.label ?? '')} (${card?.resolvedTerm?.id})` },
+        ...(typeof rtMin === 'number' ? [{ label: 'Expected RT (min)', value: String(rtMin) }] : []),
+        ...(typeof stateValue === 'string' ? [{ label: 'Assignment state', value: stateValue }] : []),
+        { label: 'Entries before/after', value: `${merged.entryCountBefore} / ${merged.entryCountAfter}` },
+      ],
+      sessionDocument: { version: 1 as const, tabs: [], activeTabId: null },
+      // The edit arm's server-built card rides in `result` (the record-
+      // drafting doctrine — the client renders it verbatim). The merged
+      // payload is NOT staged (ZERO writes); the onAccept hook re-derives it
+      // through buildRecordEditMerge and applies the single governed edit.
+      card: merged.card,
+    } as RecordDraftResult & { card?: unknown },
+  };
+}
+
 export async function compileRecordDraftIntent(
   intent: Record<string, unknown>,
   deps: RecordDraftDeps,
   actor: string,
   now: () => string,
+  targetId?: string,
 ): Promise<RecordDraftCompileOutcome> {
   // 1. Envelope — Ajv against the tool-declared shape. Load/validation failure
   //    is a path-named diagnostic, never silence.
@@ -236,6 +598,14 @@ export async function compileRecordDraftIntent(
         message: e.message ?? 'Invalid record-drafting proposal envelope.',
       })),
     };
+  }
+
+  // 1b. OQ-4 OPT-A: the edit-record arm dispatches BEFORE any kind/id logic
+  //     (an edit has no kind — the target's kind is the target's). The create
+  //     arm is byte-identical below (a compose-record operation never reaches
+  //     this branch).
+  if (intent.operation === 'edit-record') {
+    return compileEditRecordIntent(intent, deps, targetId);
   }
 
   const kind = trimmedString(intent.kind)!;

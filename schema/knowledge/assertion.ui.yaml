@@ -1,4 +1,24 @@
-# UI specification for Assertion records
+# UI specification for Assertion records.
+#
+# GC-16 (architect GAP-1 ruling): this file previously bound `$.claimId` and
+# `$.content` — properties assertion.schema.yaml does NOT declare (its
+# unevaluatedProperties:false schema declares claim_ref / statement / scope /
+# context_refs / roles / outcome / confidence). A draft built from that spec
+# could never pass the server Ajv. The form below binds ONLY the declared
+# fields, following the repo's ui-v1 binding idiom (the GC-13 evidence.ui.yaml
+# precedent: ref widget for record refs, reflist for ref lists, select for
+# enums, number for integers, object for objects).
+#
+# The identity field is `$.id`: the assertion schema declares `id` (not
+# `recordId`). recordId is the envelope's canonical identity (RecordEnvelope:
+# "CRITICAL: recordId is the canonical identity, NOT payload fields"); the
+# spine study/experiment/run schemas are the only ones that declare a
+# `recordId` payload field.
+#
+# One term per entity (architect ruling): the field vocabulary is the schema's
+# own (claim_ref / statement / scope / context_refs / roles / outcome /
+# confidence); "Knowledge" is only the /registry grouping label, never a
+# record term.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/assertion.schema.yaml"
 
@@ -11,33 +31,182 @@ form:
   sections:
   - title: "Identity"
     fields:
-    - path: "$.recordId"
+    - path: "$.id"
       widget: "text"
-      label: "Record ID"
-      readonly: true
+      label: "ID"
     - path: "$.kind"
       widget: "text"
       label: "Kind"
       readonly: true
       hidden: true
-  - title: "Assertion Content"
+  - title: "Claim in context"
     fields:
     - path: "$.title"
       widget: "text"
       label: "Title"
-    - path: "$.claimId"
-      widget: "ref"
-      label: "Claim"
-    - path: "$.content"
-      widget: "markdown"
-      label: "Content"
+    - path: "$.claim_ref"
+      widget: "record-ref"
+      refKind: "claim"
+      label: "Claim (the global atomic triple being asserted)"
+      help: >
+        Record reference to the claim. The record-ref picker commits the
+        structured ref { kind: record, type: claim, id } the schema declares;
+        the serializer omits it when unset.
+    - path: "$.statement"
+      widget: "text"
+      label: "Statement (the contextual claim)"
+    - path: "$.scope"
+      widget: "select"
+      label: "Scope (canonical assertion shape)"
+      options:
+      - { value: "single_context", label: "Single context" }
+      - { value: "comparison", label: "Comparison" }
+      - { value: "series", label: "Series" }
+      - { value: "global", label: "Global" }
+    # GC-16 FIX1 D2/D3 (data leg; the authoring leg is requires-rescope — see
+    # the D2/D3 authoring-proof test). evidence/assertion declare these as
+    # `type: array` with OBJECT items (datatypes/ref or {role_ref,context_ref}),
+    # so the binding is the repo's `array` + typed item-hint idiom (the
+    # $.sources precedent: an `object` item hint over the item's sub-fields).
+    # The taptap `array` widget accepts this declarative shape (loader-honored
+    # `items:`) but CANNOT commit a populated datatypes/ref OBJECT — its
+    # "+ Add item" commits `{}` and renders no authorable item sub-slots
+    # (ReflistWidget's Add is a stub; a single record-ref commits ONE object,
+    # not an array). That authoring gap is a widget-component platform gap
+    # (out of this lane's boundary) — the declarative spec below is the
+    # schema-faithful binding it should carry.
+    - path: "$.context_refs"
+      widget: "array"
+      label: "Context refs (the contexts this ranges over)"
+      help: >
+        Refs to the contexts in scope. A scoped assertion (single_context /
+        comparison / series) needs at least one; lint rule
+        asn-scoped-assertion-needs-context refuses a scoped assertion with no
+        context_refs (the A7-named refusal, visible on first attempt). Global
+        scope ranges over no context by definition — leave empty. Each entry
+        is a datatypes/ref object { kind: record, type, id, label? }.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Context ref"
+        # GC-16 FIX RUN 3 (D11, data leg): the datatypes/ref OBJECT the
+        # schema declares (schema/core/datatypes/ref.schema.yaml) REQUIRES
+        # `kind` (enum record|ontology) and kind:record then-requires id+type.
+        # The hint declares the discriminator as a single-option select
+        # (value "record" — the schema's own enum vocabulary, never a
+        # client-side kind table).
+        # GC-16 FIX RUN 4 (D18, data leg): that select is NOT readonly — the
+        # D11 surface-gap ruling (ui-v1's field definition has no
+        # const/seed/default keyword) stands: a seeded kind:record value the
+        # author need not touch is NOT expressible on the ui-v1 surface.
+        # But a readonly single-option select with no seed makes kind:record
+        # UNAUTHORABLE (no author action can produce it — the review's
+        # D18), so readonly is DROPPED: the discriminator is no longer
+        # marked readonly and becomes authorable only once R1 renders item
+        # sub-slots. At HEAD the array widget commits [{}] with no item
+        # sub-slots rendered (the repo's own green D2/D3 leg proves no
+        # author action yet produces kind:record), so dropping readonly
+        # removes a contradictory declaration only — it does not make the
+        # value authorable until R1. Seeding it
+        # WITHOUT the author touching the field is the R1 widget task's
+        # item-hint consumption (architect ruling item 4: the data-leg
+        # seeding stays in GC-16 scope as a DATA edit; the ui-v1 keyword
+        # that would make it data-only does not exist), NOT a widget
+        # hardcode.
+        fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
+        - path: "type"
+          widget: "text"
+          label: "Record type (context)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
+    - path: "$.roles"
+      widget: "array"
+      label: "Roles (context-role bindings)"
+      help: >
+        Role bindings for each context: each entry is an object
+        { role_ref, context_ref } binding a context-role record (role_ref) to
+        a context in context_refs (context_ref). Both are datatypes/ref
+        objects.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Role binding"
+        # GC-16 FIX RUN 3 (D11, data leg): role_ref and context_ref are
+        # each a datatypes/ref OBJECT (assertion.schema.yaml) — never a
+        # string. Rebound from `widget: text` to a ref-shaped object hint
+        # over the schema's ref fields: kind (discriminator, schema-
+        # required; single-option select, value "record" — NOT readonly,
+        # the D18 data-leg fix: a readonly single-option select with no
+        # seed is unauthorable — the surface-gap comment above the
+        # context_refs hint applies here identically)
+        # + type + id (kind:record then-requires both).
+        fields:
+        - path: "role_ref"
+          widget: "object"
+          label: "Role ref (context-role record)"
+          fields:
+          - path: "kind"
+            widget: "select"
+            label: "Kind (ref discriminator — schema-required)"
+            options:
+            - { value: "record", label: "Record (computable-lab record ref)" }
+          - path: "type"
+            widget: "text"
+            label: "Record type (context-role)"
+          - path: "id"
+            widget: "text"
+            label: "Record ID"
+        - path: "context_ref"
+          widget: "object"
+          label: "Context ref (ID in context_refs)"
+          fields:
+          - path: "kind"
+            widget: "select"
+            label: "Kind (ref discriminator — schema-required)"
+            options:
+            - { value: "record", label: "Record (computable-lab record ref)" }
+          - path: "type"
+            widget: "text"
+            label: "Record type (context)"
+          - path: "id"
+            widget: "text"
+            label: "Record ID"
+    - path: "$.evidence_refs"
+      widget: "reflist"
+      label: "Evidence refs (established when evidence bundles are created)"
+      readonly: true
+      help: >
+        Read-only display of the evidence bundles that reference this
+        assertion. Evidence records are authored via the evidence kind; they
+        carry the forward link (evidence.supports -> this assertion).
+  - title: "Outcome and confidence"
+    fields:
+    - path: "$.outcome"
+      widget: "object"
+      label: "Outcome (structured summary)"
+      help: >
+        Optional structured outcome summary (measure / target / detection /
+        direction / effect_size / layer / significance).
+    - path: "$.confidence"
+      widget: "number"
+      label: "Confidence (1-5)"
+      help: "How strongly the evidence supports this assertion (1-5)."
 
 list:
   columns:
-  - path: "$.recordId"
+  - path: "$.id"
     label: "ID"
-    width: "120px"
+    width: "140px"
   - path: "$.title"
     label: "Title"
-  - path: "$.claimId"
+  - path: "$.claim_ref"
     label: "Claim"

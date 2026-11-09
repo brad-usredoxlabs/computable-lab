@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { focusAdjacentTapTabField } from '../tabNavPlugin';
-import type { WidgetType } from '../types';
+import type { WidgetType, ObjectFieldConfig } from '../types';
 import { EnumCombobox } from '../EnumCombobox';
 import { RefCombobox } from '../RefCombobox';
 import { RecordRefPicker } from '../RecordRefPicker';
@@ -15,7 +15,7 @@ import { ReadonlyWidget } from '../widgets/ReadonlyWidget';
 import { DatetimeWidget } from '../widgets/DatetimeWidget';
 import { MultiselectWidget } from '../widgets/MultiselectWidget';
 import { ReflistWidget, type ReflistEntry } from '../widgets/ReflistWidget';
-import { ArrayWidget } from '../widgets/ArrayWidget';
+import { ArrayWidget, type ArrayItemHint } from '../widgets/ArrayWidget';
 import { ObjectWidget } from '../widgets/ObjectWidget';
 import { ChipComboboxWidget } from '../widgets/ChipComboboxWidget';
 import {
@@ -68,6 +68,29 @@ function hasWidgetValue(value: unknown): boolean {
   return value !== null && value !== undefined && !(typeof value === 'string' && value === '');
 }
 
+/**
+ * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): map ONE
+ * ObjectWidget property entry — and its nested `fields` recursively — the
+ * same way documentMapper's objectConfig map now does: a non-empty `fields`
+ * member is forwarded recursively (the ObjectWidget renders that property
+ * through another ObjectWidget); a flat entry maps byte-identically (no
+ * `fields` key appears). Generic forwarding ONLY — no field-name /
+ * widget-name / kind-name branch anywhere.
+ */
+function mapObjectFieldEntry(p: ObjectFieldConfig): ObjectFieldConfig {
+  return {
+    name: p.name,
+    widget: p.widget,
+    label: p.label,
+    help: p.help,
+    required: p.required ?? false,
+    options: p.options,
+    ...(Array.isArray(p.fields) && p.fields.length > 0
+      ? { fields: p.fields.map(mapObjectFieldEntry) }
+      : {}),
+  };
+}
+
 export interface WidgetRendererProps {
   widget: WidgetType;
   value: unknown;
@@ -100,8 +123,28 @@ export interface WidgetRendererProps {
       oboId?: string;
     } & { __structured__?: StructuredValue }
   ) => void;
-  /** Object widget properties (for 'object' widget type) */
-  objectProperties?: Array<{ name: string; widget: WidgetType; label: string; help?: string; required?: boolean; options?: Array<{ value: string; label: string }> }>;
+  /** Object widget properties (for 'object' widget type).
+   *  WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A):
+   *  ObjectFieldConfig entries are SELF-RECURSIVE (`fields?`) — a
+   *  property whose config carries a non-empty `fields` is a nested
+   *  object; the object-branch map below forwards those `fields`
+   *  through recursively (same conditional-spread pattern as
+   *  documentMapper's objectConfig map). Flat entries are
+   *  byte-identical. */
+  objectProperties?: ObjectFieldConfig[];
+  /**
+   * WIDGET-R1: the item-hint for `array` widget type (the projection's
+   * `items` member). Forwarded into ArrayWidget so it can seed items from
+   * the hint's field set and render each item through the existing
+   * ObjectWidget. Absent for hint-less arrays.
+   *
+   * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): typed as
+   * the widget layer's OWN `ArrayItemHint` (types.ts `ArrayItemHintField[]`
+   * — self-recursive) instead of a flat re-declaration that LIED about
+   * what :301 passes through opaquely (the mapper now forwards the nested
+   * `fields`; one name per entity).
+   */
+  arrayItemHint?: ArrayItemHint;
   /** Multiselect options (for 'multiselect' widget type) */
   multiselectOptions?: Array<{ value: string; label: string }>;
   /** Canonical record ID for record-scoped custom widgets. */
@@ -123,6 +166,7 @@ export function WidgetRenderer({
   onCancel,
   onRefSelect,
   objectProperties,
+  arrayItemHint,
   multiselectOptions,
   recordId,
   onRecordPatch,
@@ -272,7 +316,15 @@ export function WidgetRenderer({
   }
 
   if (widget === 'array') {
-    return <ArrayWidget value={value} widget={widget} readOnly={readOnly} onCommit={onCommit} />;
+    return (
+      <ArrayWidget
+        value={value}
+        widget={widget}
+        readOnly={readOnly}
+        onCommit={onCommit}
+        itemHint={arrayItemHint}
+      />
+    );
   }
 
   if (widget === 'object') {
@@ -280,14 +332,11 @@ export function WidgetRenderer({
       <ObjectWidget
         value={value}
         widget={widget}
-        properties={(objectProperties ?? []).map((p) => ({
-          name: p.name,
-          widget: p.widget,
-          label: p.label,
-          help: p.help,
-          required: p.required ?? false,
-          options: p.options,
-        }))}
+        // WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A):
+        // recursive forwarding — nested `fields` (a property that is
+        // itself a nested object) pass through to the ObjectWidget;
+        // flat entries are byte-identical (no `fields` key appears).
+        properties={(objectProperties ?? []).map(mapObjectFieldEntry)}
         readOnly={readOnly}
         onCommit={onCommit}
       />

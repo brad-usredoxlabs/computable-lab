@@ -26,17 +26,40 @@ import { useWorkstateProposalFlow } from '../shared/ai/useWorkstateProposalFlow'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import type { AiContext } from '../types/aiContext'
 
-export function AnalysisChatPanel() {
+/** FAME-3 W5: the ACTIVE RUN identity threaded into the chat's outgoing
+ * aiContext.surfaceContext (the run page's context discipline, one memo). */
+export interface AnalysisChatPanelActiveRun {
+  recordId: string
+  revisionRefId?: string
+  /** FAME-3 D1 (OQ-4 OPT-A step 7): the gc-method record the active run's
+   * peaks are assigned to — the edit-record arm's NAMED target. The
+   * record-drafting envelope is additionalProperties:false and carries no
+   * target, so this rides the compile REQUEST BODY (body.target.recordId),
+   * not the intent. It is the METHOD record id (gc-method), never the run id
+   * (ANR) or the analysis-revision ref (ANREV) — those would compile to
+   * EDIT_GUARD_UNDECLARED. Absent when the run's method carries no
+   * source_run_ref link to a gc-method: the chat edit arm then compiles to a
+   * NAMED EDIT_TARGET_REQUIRED refusal, never a guessed target. */
+  methodRecordId?: string
+}
+
+export function AnalysisChatPanel({ activeRun }: { activeRun?: AnalysisChatPanelActiveRun } = {}) {
   // The `analysis` surface carries no params (surfaces.yaml:57-62 — an
   // AI-context surface, not deep-linkable), so the context payload is the
-  // surface identity + a stable summary; per-run detail rides the prompt.
+  // surface identity + a stable summary + the ACTIVE RUN identity (W5:
+  // the chat leg cannot resolve a peak into a compound without the run id;
+  // the outgoing spread already exists — useAiChat.ts:572). Per-run detail
+  // rides the prompt.
   const aiContext = useMemo<AiContext>(
     () => ({
       surface: 'analysis',
       summary: 'Analysis work surface — methods (revisions), runs, and rendered outputs.',
-      surfaceContext: {},
+      surfaceContext: {
+        ...(activeRun ? { activeRunId: activeRun.recordId } : {}),
+        ...(activeRun?.revisionRefId ? { activeRevisionRefId: activeRun.revisionRefId } : {}),
+      },
     }),
-    [],
+    [activeRun],
   )
 
   const flow = useWorkstateProposalFlow()
@@ -51,6 +74,19 @@ export function AnalysisChatPanel() {
     // the server emits was silently dropped on this mount.
     onAnalysisProposal: (intent) => {
       void flow.proposeWorkstate('analysis', intent)
+    },
+    // FAME-3 D1 (OQ-4 OPT-A step 7): the record-drafting INTENT rides the SAME
+    // flow on the analysis mount — one adapter constant ('record-drafting'),
+    // the same compile→card→accept/reject machinery. The edit-record arm's
+    // NAMED target (the gc-method record id) is a compile REQUEST-BODY channel
+    // (body.target.recordId), NOT an intent field — the envelope is
+    // additionalProperties:false and carries no target. It is forwarded only
+    // when the active run's method supplies it (activeRun.methodRecordId); an
+    // edit that omits it compiles to the NAMED EDIT_TARGET_REQUIRED refusal,
+    // never a guessed target. The run id (ANR) and the analysis-revision ref
+    // (ANREV) are NOT valid targets — they would compile to EDIT_GUARD_UNDECLARED.
+    onRecordDraftProposal: (intent) => {
+      void flow.proposeWorkstate('record-drafting', intent, activeRun?.methodRecordId ? { recordId: activeRun.methodRecordId } : undefined)
     },
     onAgentAction: flow.handleAgentAction,
   })

@@ -21,6 +21,8 @@ vi.mock('../../shared/api/client', () => ({
     getRecordEditorProjection: vi.fn(),
     updateRecord: vi.fn(),
     createPlannedRun: vi.fn(),
+    getLifecycleContentLockedStates: vi.fn(),
+    getLifecycleTerminalStates: vi.fn(),
   },
 }))
 
@@ -136,6 +138,8 @@ describe('RecordEditPanel save — D3b write-back payload', () => {
     })
     ;(apiClient.getRecordEditorProjection as ReturnType<typeof vi.fn>).mockResolvedValue(projection)
     ;(apiClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({})
+    ;(apiClient.getLifecycleContentLockedStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
+    ;(apiClient.getLifecycleTerminalStates as ReturnType<typeof vi.fn>).mockResolvedValue([])
   })
 
   afterEach(() => cleanup())

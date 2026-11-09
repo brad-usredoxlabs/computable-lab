@@ -18,6 +18,7 @@ import { ProtocolIdentity } from './ProtocolIdentity'
 import { ProtocolStepEditModal } from './ProtocolStepEditModal'
 import { apiClient } from '../../../shared/api/client'
 import { deleteProtocolStep, stepSummaries } from './protocolStepEditing'
+import { primeContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 import './AttachProtocolPanel.css'
 import './ProtocolNavPanel.css'
 
@@ -121,6 +122,9 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
       const expectedSha = record.meta?.contentSha ?? record.meta?.commitSha
       if (!expectedSha) throw new Error('The protocol has no save token. Reload it before editing.')
       const payload = record.payload as Record<string, unknown>
+      // Prime the lock-status cache before the sync gate fires inside deleteProtocolStep.
+      const lockLid = typeof payload.lifecycleId === 'string' ? payload.lifecycleId : undefined
+      if (lockLid) await primeContentLockedStates(lockLid)
       const updated = deleteProtocolStep(payload, step.stepId)
       const result = await apiClient.updateRecord(protocolId, updated, { expectedSha })
       if (!result.record) throw new Error('The step could not be deleted.')

@@ -369,3 +369,69 @@ describe('useWorkstateProposalFlow — the record-drafting adapter (QMS7-7)', ()
     expect(apiClient.acceptWorkstateDraft).not.toHaveBeenCalled()
   })
 })
+
+// FAME-3 D1 (OQ-4 OPT-A step 7) — the edit-record arm's NAMED target is a
+// compile REQUEST-BODY channel (body.target.recordId), NOT an intent envelope
+// field (the envelope is additionalProperties:false). The flow's optional
+// third argument is the ONLY channel that reaches FormDraftService's
+// body.target; the W5 mount wires it from the active run's gc-method id.
+// These tests capture the actual compileWorkstateDraft REQUEST BODY.
+const EDIT_INTENT = {
+  operation: 'edit-record',
+  term: 'Methyl octanoate (FAME, 8:0-OMe)',
+  fields: { label: 'C8:0 FAME peak', expected_rt_min: 19.0624 },
+}
+
+describe('useWorkstateProposalFlow — edit-record target (FAME-3 D1)', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValue(COMPILED_OK)
+    vi.mocked(apiClient.acceptWorkstateDraft).mockResolvedValue(COMPILED_OK.result)
+  })
+
+  it('an edit proposal WITH a target forwards body.target.recordId on the compile REQUEST BODY (captured, asserted present)', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', EDIT_INTENT, { recordId: 'GCM-FAME3-WORKING-L1T1030' })
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    expect(apiClient.compileWorkstateDraft).toHaveBeenCalledTimes(1)
+    const reqBody = vi.mocked(apiClient.compileWorkstateDraft).mock.calls[0]?.[0] as {
+      adapter: string
+      intent: Record<string, unknown>
+      target?: { recordId: string }
+    }
+    // The REQUEST BODY carries target.recordId — the only legal channel (the
+    // intent envelope is additionalProperties:false and carries no target).
+    expect(reqBody.adapter).toBe('record-drafting')
+    expect(reqBody.intent).toEqual(EDIT_INTENT)
+    expect(reqBody.target?.recordId).toBe('GCM-FAME3-WORKING-L1T1030')
+    // The target never rides INSIDE the intent envelope (the reviewer's W5
+    // defect: an impossible wire shape that cannot reach FormDraftService).
+    expect((reqBody.intent as Record<string, unknown>).target).toBeUndefined()
+  })
+
+  it('an edit proposal WITHOUT a target sends NO target key (never an undefined slot) — the compile then names EDIT_TARGET_REQUIRED', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', EDIT_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    const reqBody = vi.mocked(apiClient.compileWorkstateDraft).mock.calls[0]?.[0] as Record<string, unknown>
+    // Conditional spread: absent target ⇒ the key is ABSENT (exactOptionalPropertyTypes
+    // discipline — never { target: undefined }).
+    expect('target' in reqBody).toBe(false)
+    expect(reqBody.target).toBeUndefined()
+  })
+
+  it('a malformed target (empty / non-string recordId) is treated as ABSENT — no target key, never a fabricated identity', async () => {
+    const result = setup()
+    act(() => {
+      // Deliberately malformed target (empty recordId) to prove the guard:
+      // the flow normalizes it to ABSENT, never a fabricated identity.
+      void result.current.proposeWorkstate('record-drafting', EDIT_INTENT, { recordId: '' })
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    const reqBody = vi.mocked(apiClient.compileWorkstateDraft).mock.calls[0]?.[0] as Record<string, unknown>
+    expect('target' in reqBody).toBe(false)
+  })
+})

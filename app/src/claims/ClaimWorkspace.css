@@ -117,3 +117,83 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* GC-13 gate-fix (D3/D4, gate G6) — the Evidence Ledger + Connections rows.
+ * Leg E added the row markup (an <a> record id + a stance/kind <span>) but
+ * never styled them: the labels rendered run-on ("EVD-…supports",
+ * "ANR-…analysis-run", margin-left:0, transparent bg) and the record ids had
+ * no link affordance (body-text colour, text-decoration:none) — clickable
+ * text that read as static. This block is the missing ClaimWorkspace.css.
+ *
+ *  - the row is a flex line: the record-id anchor + the label chip are laid
+ *    out as distinct pieces, never run-on;
+ *  - the stance/kind label reads as a distinct chip (soft fill + hairline
+ *    border + its own ink, theme-token driven — legible in both themes);
+ *  - the record anchors carry the app's visible-link affordance: the
+ *    GC-12 .gc-results a pattern (var(--color-primary) + underline, hover
+ *    thickens). */
+
+/* The ledger row (evidence id + stance) and the connections row (run /
+ * claim id + kind). Flex line, baseline aligned, wrapped so a long id never
+ * overlaps the chip. */
+.claim-workspace__evidence-row,
+.claim-workspace__connections-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.claim-workspace__evidence-row,
+.claim-workspace__connections-row {
+  padding: 4px 0;
+}
+
+/* The record-id anchors (evidence / run / claim). Visible link: primary
+ * colour + underline, hover thickens (the GC-12 .gc-results a pattern —
+ * gate G6 shot 09-b2 measured these as colour rgb(31,35,40) +
+ * text-decoration-line:none, indistinguishable from plain text). */
+.claim-workspace__evidence-row a,
+.claim-workspace__connections-row a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.claim-workspace__evidence-row a:hover,
+.claim-workspace__connections-row a:hover {
+  text-decoration-thickness: 2px;
+  color: var(--color-primary-hover, #1d4ed8);
+}
+
+/* The stance (supports/refutes/assesses) + kind (analysis-run/claim)
+ * labels — a distinct chip, not run-on body text. Theme tokens keep it
+ * legible in dark + light. */
+.claim-workspace__evidence-stance,
+.claim-workspace__connections-kind {
+  display: inline-block;
+  margin-left: 0; /* the row's flex gap does the separation */
+  padding: 2px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-dim);
+  white-space: nowrap;
+}
+
+.claim-workspace__evidence-stance {
+  background: var(--cl-success-soft);
+  border-color: var(--cl-success-border);
+  color: var(--cl-success);
+}
+
+.claim-workspace__connections-kind {
+  background: var(--cl-type-run-soft);
+  border-color: var(--cl-border);
+  color: var(--cl-type-run);
+}

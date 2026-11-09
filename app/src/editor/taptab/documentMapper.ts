@@ -3,6 +3,7 @@
  */
 
 import type { UISpec, FieldHint, FormSection, FieldOption } from '../../types/uiSpec';
+import type { ArrayItemHintField, ObjectFieldConfig } from './types';
 import { getValueAtPath, stripJsonPath, isFieldHidden } from '../../shared/lib/formHelpers';
 import { buildSuggestionPlanFromFieldHint } from '../../shared/forms/suggestionPlan';
 
@@ -123,6 +124,70 @@ function stripJsonPathValue(value: unknown): unknown {
 // ============================================================================
 
 /**
+ * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): map ONE
+ * item-hint field entry — and its nested `fields` recursively — to the
+ * `attrs.itemHint.fields` entry shape. Same conditional-spread pattern as
+ * the existing options map (and as ArrayWidget.mapHintFieldsToObjectFields):
+ * a field WITH a non-empty `fields` member forwards it recursively; a field
+ * WITHOUT `fields` maps byte-identically to the pre-change shape (no
+ * `fields: undefined` / `fields: []` key appears). Generic forwarding ONLY —
+ * no field-name / widget-name / kind-name branch anywhere: the branch is on
+ * the presence of a non-empty `fields` member in the hint data.
+ */
+function mapHintFieldEntry(f: ArrayItemHintField): ArrayItemHintField {
+  return {
+    path: f.path,
+    widget: f.widget,
+    ...(f.label !== undefined && { label: f.label }),
+    ...(f.help !== undefined && { help: f.help }),
+    required: f.required ?? false,
+    ...(f.options !== undefined && {
+      options: f.options.map((o) => ({ value: o.value, label: o.label })),
+    }),
+    // W2 part 2: forward the declared refKind + suggestion props so a
+    // ref/record-ref item sub-field reaches the ObjectWidget with enough
+    // data to render the EXISTING picker machinery (RefCombobox /
+    // RecordRefPicker) — the same generic shape-only forwarding as the
+    // options/fields maps. Absent for flat fields (byte-identical).
+    ...(f.refKind !== undefined && { refKind: f.refKind }),
+    ...(f.props !== undefined && { props: f.props }),
+    ...(Array.isArray(f.fields) && f.fields.length > 0
+      ? { fields: f.fields.map(mapHintFieldEntry) }
+      : {}),
+  };
+}
+
+/**
+ * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): map ONE
+ * `attrs.objectConfig` property entry — and its nested `fields` recursively
+ * — to the ObjectFieldConfig shape. Same conditional-spread pattern: a
+ * property WITH a non-empty `fields` member forwards it recursively (the
+ * ObjectWidget renders that property through another ObjectWidget); a flat
+ * property maps byte-identically to the pre-change shape (no `fields` key
+ * appears). Generic forwarding ONLY — no field-name / widget-name /
+ * kind-name branch.
+ */
+function mapObjectConfigProperty(p: {
+  name: string;
+  widget: string;
+  label: string;
+  help?: string;
+  required?: boolean;
+  fields?: ObjectFieldConfig[];
+}): ObjectFieldConfig {
+  return {
+    name: p.name,
+    widget: p.widget as any,
+    label: p.label,
+    help: p.help,
+    required: p.required ?? false,
+    ...(Array.isArray(p.fields) && p.fields.length > 0
+      ? { fields: p.fields.map((n) => mapObjectConfigProperty(n)) }
+      : {}),
+  };
+}
+
+/**
  * Build a TipTap document from EditorProjection blocks and slots.
  * This is the additive projection path used by BudgetDocumentSurface.
  *
@@ -161,7 +226,42 @@ export function buildProjectionDocument(
     options?: Array<{ value: string | number | boolean; label: string }>;
     refKind?: string;
     props?: Record<string, unknown>;
-    properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>;
+    properties?: Array<{
+      name: string;
+      widget: string;
+      label: string;
+      help?: string;
+      required?: boolean;
+      /**
+       * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): nested
+       * field definitions — present ONLY when this property is a nested
+       * object. Self-recursive (ObjectFieldConfig.fields?); forwarded
+       * through the objectConfig map below so the ObjectWidget can render
+       * that property through another ObjectWidget. Absent/flat on every
+       * existing caller (byte-identical).
+       */
+      fields?: ObjectFieldConfig[];
+    }>;
+    /**
+     * WIDGET-R1: the item-hint for `widget: array` slots (the projection's
+     * `items` member, server `FieldHint`). Carries the item's field set so
+     * the client can seed items from the hint and render each item through
+     * the existing ObjectWidget. Absent for hint-less arrays.
+     *
+     * WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A): the
+     * `fields` entries are SELF-RECURSIVE (`ArrayItemHintField.fields?`,
+     * types.ts — the same shape the widget layer already consumes) — a
+     * field whose hint declares its own `fields` is a nested object. The
+     * mapper forwards those nested `fields` through the itemHint map below
+     * (recursive, same conditional-spread pattern as the options map).
+     * One name per entity: NO second shape is declared here.
+     */
+    items?: {
+      path?: string;
+      widget?: string;
+      label?: string;
+      fields?: ArrayItemHintField[];
+    };
   }>,
   data: Record<string, unknown>,
 ): { type: 'doc'; content: JSONContent[] } {
@@ -215,13 +315,12 @@ export function buildProjectionDocument(
 
       if (slot.widget === 'object' && slot.properties) {
         attrs.objectConfig = {
-          properties: slot.properties.map((p) => ({
-            name: p.name,
-            widget: p.widget as any,
-            label: p.label,
-            help: p.help,
-            required: p.required ?? false,
-          })),
+          // WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A):
+          // recursive forwarding — a property that declares its own
+          // `fields` is a nested object and its `fields` are forwarded
+          // through (same conditional-spread pattern as the itemHint map
+          // below); a flat property maps byte-identically to today.
+          properties: slot.properties.map((p) => mapObjectConfigProperty(p)),
         };
       }
 
@@ -231,6 +330,29 @@ export function buildProjectionDocument(
           properties: Object.fromEntries(
             slot.properties.map((p) => [p.name, { type: 'string', title: p.label }])
           ),
+        };
+      }
+
+      // WIDGET-R1: surface the item-hint (the projection's `items` member)
+      // for `widget: array` slots so the ArrayWidget can seed items from the
+      // hint's field set and render each item through the existing
+      // ObjectWidget. The client previously DROPPED this member (the server
+      // payload already carried it — EditorProjectionService forwards
+      // `slot.items` in both the editor-mode and form-fallback projections).
+      if (slot.widget === 'array' && slot.items) {
+        attrs.itemHint = {
+          ...(slot.items.path !== undefined && { path: slot.items.path }),
+          ...(slot.items.widget !== undefined && { widget: slot.items.widget }),
+          ...(slot.items.label !== undefined && { label: slot.items.label }),
+          ...(slot.items.fields !== undefined && {
+            // WIDGET-R1 fix-run 3 (data-path, ruling ARCHD3L1T1440 OPT-A):
+            // recursive forwarding — a hint field that declares its own
+            // `fields` is a nested object and its `fields` are forwarded
+            // through (mapHintFieldEntry, same conditional-spread pattern
+            // as the options map); a field without `fields` maps
+            // byte-identically to today (no `fields` key appears).
+            fields: slot.items.fields.map(mapHintFieldEntry),
+          }),
         };
       }
 

@@ -1,0 +1,6 @@
+node v26.7.0
+CURRENT  nested rule: {"selector":".view-spec__table td","decls":"overflow-wrap: anywhere;","atContext":["@media (max-width: 900px)"]}
+CURRENT  violations:  ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+PREVIOUS (e2d18589) rules:    [{"selector":".analysis-right","atContext":[]},{"selector":".view-spec__table th, .view-spec__table td","atContext":[]},{"selector":".view-spec__cell-item","atContext":[]},{"selector":".view-spec__table td","atContext":["@media (max-width: 900px)"]}]
+PREVIOUS (e2d18589) violations: ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]
+NOTE: the ORIGINAL line-anchored parser (base 1a443259) returned [] for this fixture — the first run's RED evidence; report §2/§4.4, supplementary capture /tmp/red-run-l1pin.txt.

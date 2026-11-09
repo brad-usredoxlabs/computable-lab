@@ -28,9 +28,69 @@ properties:
 
   renderer:
     type: string
-    enum: [ table, signal, metric, static-figure ]
+    # GC-10 [E]: the shipped renderer set, extended with the interactive
+    # chromatogram + the multi-trace compare (task: "view-spec enum extended").
+    # The static `signal` polyline is preserved unchanged (OQ-3); these are
+    # NEW ids. bindings/options below remain the free objects that absorb the
+    # renderer-specific data — no `properties` addition is needed.
+    # GC-11 [D1]: + `calibration-curve` (the calibration review composite —
+    # task :8412 "Calibration-curve view (view-spec renderer)"). Its data-only
+    # spec rides `bindings`: modelArtifact (sibling artifact NAME) + optional
+    # rowLabelField / outlierTopN + the opaque `page` context (run id,
+    # revisions, frozen source run) the client-synthesis door binds.
+    # FAME-6 [E]: + `artifact-table` — the GENERIC artifact-report renderer
+    # (task: "one new generic renderer id (GC-10 enum precedent), no bespoke
+    # FAME UI"; architect OQ-1 ratifies the exact id string, .hermes/plans/
+    # 2026-11-01_fame-6-oq1-oq2-oq3-decision.md). enum + TS union + page
+    # whitelist + dispatch arm + compat source-pin land in ONE commit (the
+    # GC-10/GC-11 shape, e6b34229/51a78ae5). It is a DISTINCT id from `table`:
+    # `table` keeps its raw-rows behaviour and remains the unshipped-id
+    # coercion target; `artifact-table` adds the OQ-3 binding slots below.
+    # The same data-only stance applies — no `properties` addition is needed;
+    # bindings/options remain the free objects that absorb the renderer's data.
+    enum: [ table, signal, metric, static-figure, chromatogram, trace-compare, calibration-curve, artifact-table ]
 
   # Field/axis bindings onto the artifact payload (e.g. { x: 'time', y: 'intensity' }).
+  # GC-10 canonical shapes (all optional, data-only; unknown keys pass through —
+  # additionalProperties is the schema's own stance):
+  #   chromatogram:
+  #     markersFrom: "<sibling artifact NAME>"      # -> RT/peak markers
+  #     markerRtField / markerLabelField            # property NAMES in the marker rows
+  #     markerSaturatedField / markerFlagsField     # saturation + reason-code columns
+  #     baselineFrom / baselineField                # optional overlay baseline key
+  #   trace-compare:
+  #     artifactRef = the PRIMARY trace artifact (the schema-required field)
+  #     traces: [ { artifactRef: { kind:'record', id:'AOUT-…',
+  #                                    type:'analysis-output-artifact', label?: '…' },
+  #                 conversion?: { factor: number, toUnit: string, declaredBy: string } } ]
+  #     axisUnits: { x: '<unit string as seen>', y: '<unit string as seen>' }  # audit echo
+  #   calibration-curve (GC-11 [D1]):
+  #     modelArtifact: "<sibling artifact NAME>"   # the calibration_model payload
+  #     rowLabelField / outlierTopN                # presentation data (optional)
+  #     page: { activeRunId, revisions[], sourceRun }  # opaque page context the
+  #                                                     client-synthesis door binds
+  #   artifact-table (FAME-6):
+  #     columns: [ "<payload field NAME>", ... ]   # OPTIONAL ordered column-subset selector;
+  #         absent -> the payload's declared {columns} (TableView-parity, :79-87)
+  #     captionFrom: "<payload field NAME>"        # OPTIONAL: that field's string value renders
+  #         as a visible caption line ABOVE the table (denominator caption, basis note)
+  #     warningsFrom: "<payload field NAME>"       # OPTIONAL: array field; each entry renders as
+  #         a visible warning line BELOW the table
+  #     warningTextField: "<field NAME>"           # OPTIONAL: when warnings entries are records,
+  #         the property whose string value renders; entries may be plain strings without this key
+  #   columnFields (L1-CELLRENDER-1, shared by `table` AND `artifact-table`):
+  #     columnFields: { "<column NAME>": "<path>" }  # OPTIONAL: reduces an OBJECT-valued column to
+  #         one value per resolved path. Path grammar: dot-separated object segments; `[*]` maps
+  #         over that array (one resolved value per line); `[<n>]` indexes it, e.g.
+  #         `{ params: "assignments[*].compound_ref.label" }`. A path missing/unresolvable mid-way,
+  #         or whose resolved value is non-scalar, falls back to honest compact JSON of the cell
+  #         (full text on a title attribute) — never `[object Object]`, never blank.
+  #         Resolution is a hand-written segment walker (no eval/dynamic execution).
+  #   (The composition-check block is just ANOTHER artifact-table view over a
+  #   re-echoed {columns,rows} payload — one row per labeled reading; the
+  #   outcome words arrive as payload strings, never re-declared in TS.)
+  #   Colour is NOT spec data: it is derived (stable rank within the trace list
+  #   sorted by artifact record id); the `options` colours are presentation-only.
   bindings:
     type: object
     additionalProperties: true

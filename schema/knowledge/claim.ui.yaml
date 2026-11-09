@@ -1,4 +1,19 @@
-# UI specification for Claim records
+# UI specification for Claim records.
+#
+# GC-16 audit (architect GAP-1 ruling): the schema declares subject /
+# predicate / object as ref-typed (datatypes/ref.schema.yaml) — a claim is the
+# global atomic triple (ontology-backed subject/predicate/object, cf. the
+# real CLM records: kind: ontology, id: <CURIE>, namespace, label). The
+# previous form bound $.predicate to a text widget: a text value is not a
+# ref object, so a claim drafted from that form could not pass the schema
+# (predicate is a required ref). All three triplet arms now bind the `ref`
+# widget with valueShape: ontology-ref, which commits the structured ontology
+# ref { kind: ontology, id: <CURIE>, namespace, label } the schema declares
+# (the same contract FieldRow applies to every ontology-ref field).
+#
+# The identity field is `$.id` (the claim schema declares `id`, not
+# `recordId` — recordId is the envelope's canonical identity, not a payload
+# field on a FAIRCommon record).
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/claim.schema.yaml"
 
@@ -14,7 +29,6 @@ form:
     - path: "$.id"
       widget: "text"
       label: "ID"
-      readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
@@ -28,18 +42,45 @@ form:
       required: true
     - path: "$.subject"
       widget: "ref"
+      refKind: "ontology"
       label: "Subject"
+      required: true
+      props:
+        sources: ["local", "ols"]
+        valueShape: "ontology-ref"
+        ontologyBinding: "allow-ontology"
+      help: >
+        Ontology term (CURIE) or local vocabulary term. Commits the structured
+        ref { kind: ontology, id: <CURIE>, namespace, label }.
     - path: "$.predicate"
-      widget: "text"
+      widget: "ref"
+      refKind: "ontology"
       label: "Predicate"
+      required: true
+      props:
+        sources: ["local", "ols"]
+        valueShape: "ontology-ref"
+        ontologyBinding: "allow-ontology"
+      help: >
+        Ontology relation (CURIE, e.g. RO:0002410). Lint rule approved-predicate
+        (warning) checks the predicate against the approved registry at submit.
     - path: "$.object"
       widget: "ref"
+      refKind: "ontology"
       label: "Object"
+      required: true
+      props:
+        sources: ["local", "ols"]
+        valueShape: "ontology-ref"
+        ontologyBinding: "allow-ontology"
+      help: >
+        Ontology term (CURIE) or local vocabulary term. Commits the structured
+        ref { kind: ontology, id: <CURIE>, namespace, label }.
 
 list:
   columns:
   - path: "$.id"
     label: "ID"
-    width: "120px"
+    width: "140px"
   - path: "$.statement"
     label: "Statement"

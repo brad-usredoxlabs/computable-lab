@@ -25,6 +25,7 @@ import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSele
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
+import { GcRunSheetSection } from './gc/GcRunSheetSection'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -40,6 +41,13 @@ export function RunWorkspacePage() {
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
   const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
   const [runTitle, setRunTitle] = useState<string | null>(null)
+  // GC-12 (D1): the run record's `kind`, resolved by the existing mount
+  // getRecord below. The GC run-sheet section mounts ONLY when the record is
+  // a `run` (the /runs/:runId surface is a RUN-record id — GC-D1). A non-run
+  // record (or an unresolved record) never mounts the section — the DNA case
+  // stays byte-identical (bait #2). No SECOND getRecord is fired here; this
+  // reuses the page's single mount fetch.
+  const [runKind, setRunKind] = useState<string | null>(null)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -62,6 +70,8 @@ export function RunWorkspacePage() {
         if (!cancelled) setResolvedEventGraphId(egId)
         const t = typeof payload.title === 'string' && payload.title.trim() ? payload.title : null
         if (!cancelled) setRunTitle(t)
+        const k = typeof payload.kind === 'string' ? payload.kind : null
+        if (!cancelled) setRunKind(k)
       })
       .catch(() => {
         if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
@@ -162,6 +172,12 @@ export function RunWorkspacePage() {
                 </div>
               }
             >
+              {/* GC-12 (D1/D2): the additive GC run-sheet section — mounts
+                  ONLY when the record resolved as kind 'run' (the /runs/:runId
+                  surface is a RUN-record id). The section renders NOTHING
+                  when no instrument-sequence links the run (the DNA case is
+                  byte-identical — bait #2) and owns its own single probe. */}
+              {runKind === 'run' ? <GcRunSheetSection runId={runId} /> : null}
               <RunWorkspaceContent runId={runId} mode={mode} />
             </RunWorkspaceShell>
           </FocusModalsProvider>

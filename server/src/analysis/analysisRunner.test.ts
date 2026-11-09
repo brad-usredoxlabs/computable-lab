@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import { setupTestWorkspace } from '../test/setupApp.js';
-import { AnalysisService } from './analysisService.js';
+import { AnalysisService, AnalysisServiceError } from './analysisService.js';
 import { AnalysisRunner } from './analysisRunner.js';
 import { acquireDataReference } from '../storage/acquisition.js';
 
@@ -230,5 +230,79 @@ describe('AnalysisRunner (integration)', () => {
     expect(res.manifest.artifacts[0].value).toEqual([
       { x: 0, y: 1 }, { x: 1, y: 3 }, { x: 2, y: 5 },
     ]);
+  }, 30000);
+
+  // GC-12 fix-cycle-3 (DIRFIX-2, architect ruling A-named-error): a
+  // directory-kind data-reference pin (dataKind signal-collection — the
+  // ACQP manifest DREF shape) must fail execute with the NAMED
+  // INPUT_IS_DIRECTORY token (400-class) BEFORE any read is attempted —
+  // never a relabeled INTERNAL_ERROR: EISDIR. The guard keys off the
+  // record's DECLARED dataKind (not a filename), and the message names the
+  // input, the DREF id, says the runner provisions file-kind references
+  // only, and points at the package's member DREFs via acquisition-package
+  // .files. No directory expansion (deferred by ruling).
+  it('a directory-kind (signal-collection) input pin is a NAMED INPUT_IS_DIRECTORY refusal (not INTERNAL_ERROR EISDIR)', async () => {
+    // A real directory on the storage device + a member file (the shape the
+    // GC-4 registration mints: per-member file DREFs + a manifest DREF over
+    // the directory). The manifest DREF is minted directly via the store —
+    // the SAME record shape acquireDataReference writes (path, dataKind,
+    // contentHash) — so the guard sees a real signal-collection record.
+    const dirKey = 'res35077-dir.D';
+    await mkdir(join(mountDir, dirKey), { recursive: true });
+    await writeFile(join(mountDir, dirKey, 'FID1A.CH'), 'time,intensity\n0.1,5\n1.0,0\n');
+    const drefId = 'DREF-TESTDIR-1';
+    const created = await ctx.store.create({
+      envelope: {
+        recordId: drefId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml',
+        payload: {
+          kind: 'data-reference',
+          id: drefId,
+          title: 'signal-collection manifest (test directory pin)',
+          storageDeviceId: 'usb0',
+          path: dirKey,
+          contentHash: '0'.repeat(64),
+          sizeBytes: 0,
+          dataKind: 'signal-collection',
+          acquiredAt: new Date().toISOString(),
+        },
+      },
+      message: `Test-mint signal-collection DREF ${drefId}`,
+    });
+    expect(created.success).toBe(true);
+
+    const { recordId: revId } = await service.createRevision({
+      title: 'dir-pin guard',
+      entryScript: 'def run(ctx):\n    ctx.publish("noop", [], kind="table")',
+      sdkVersion: '0.1.0',
+    });
+    const { recordId: runId } = await service.createRun({
+      title: 'run-dir-pin',
+      revisionRef: { kind: 'record', id: revId, type: 'analysis-revision' },
+      inputs: { package: { kind: 'record', id: drefId, type: 'data-reference' } },
+    });
+
+    let thrown: unknown;
+    try {
+      await runner.executeRun(runId);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(AnalysisServiceError);
+    const guard = thrown as AnalysisServiceError;
+    expect(guard.code).toBe('INPUT_IS_DIRECTORY');
+    expect(guard.statusCode).toBe(400);
+    // The message NAMES the input, the DREF id, states file-kind-only, and
+    // points at the package's member DREFs via acquisition-package.files.
+    expect(guard.message).toContain('package');
+    expect(guard.message).toContain(drefId);
+    expect(guard.message).toContain('file-kind');
+    expect(guard.message).toContain('acquisition-package.files');
+    // And it is NOT the old relabeled EISDIR internal error.
+    expect(guard.message).not.toContain('EISDIR');
+    // The run is visibly failed (the execute path sets status before
+    // re-throwing) — a NAMED failure, never a silent hang.
+    const runEnv = await service.getRun(runId);
+    expect((runEnv!.payload as { status: string }).status).toBe('failed');
   }, 30000);
 });

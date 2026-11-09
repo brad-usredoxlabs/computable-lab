@@ -51,4 +51,7 @@ scripts/.ontology-cache/*
 
 # Playwright MCP runtime artifacts
 .playwright-mcp/
+
+# SDK test byproduct (analysisRunner tests run real python entry scripts)
+server/model.pkl
 app/dist-viewer/

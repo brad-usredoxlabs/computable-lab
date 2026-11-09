@@ -1,0 +1,103 @@
+# GC-2 F: FAME/FFA compound identity — local terms for the medium-chain
+# species the GC-FID FAME method integrates.
+#
+# source: manual (the loader's source vocabulary has no 'fame-local' — the
+# file's NAME is the local identity; terms carry the confirmed ChEBI CURIEs
+# in meta.chibi_id, never as the term id: one entity, one local term).
+#
+# ChEBI ids orchestrator-verified live at OLS4 (+ PubChem) 2026-10-26T01:00:
+#   hexanoic acid     CHEBI:30776   (CAS 142-62-1; the spec's 110-94-1 anchor
+#                                   was WRONG — that is glutaric acid)
+#   octanoic acid     CHEBI:28837
+#   decanoic acid     CHEBI:30813
+#   methyl hexanoate  CHEBI:77322   (CAS 106-70-7)
+#   methyl octanoate  CHEBI:87432   (CAS 111-11-5)
+#   methyl decanoate  CHEBI:143577  (CAS 110-42-9)
+#
+# Two species per chain length (FFA vs methyl ester): one local term each,
+# never two ids for one entity.
+source: manual
+terms:
+  - kind: ontology-term
+    id: FAME-LOCAL:hexanoic-acid-n6
+    source: manual
+    label: "Hexanoic acid (free fatty acid, 6:0)"
+    definition: "Free fatty acid species of the hexanoic (6:0) chain; distinct from its methyl ester."
+    meta:
+      chebi_id: CHEBI:30776
+      cas: 142-62-1
+      chain: 6:0
+      species: ffa
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-hexanoate-n6
+    source: manual
+    label: "Methyl hexanoate (FAME, 6:0-OMe)"
+    definition: "Methyl ester (FAME) of hexanoic acid; the 6:0 GC-FID standard."
+    meta:
+      chebi_id: CHEBI:77322
+      cas: 106-70-7
+      chain: 6:0
+      species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:octanoic-acid-n8
+    source: manual
+    label: "Octanoic acid (free fatty acid, 8:0)"
+    definition: "Free fatty acid species of the octanoic (8:0) chain; distinct from its methyl ester."
+    meta:
+      chebi_id: CHEBI:28837
+      chain: 8:0
+      species: ffa
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-octanoate-n8
+    source: manual
+    label: "Methyl octanoate (FAME, 8:0-OMe)"
+    definition: "Methyl ester (FAME) of octanoic acid; the 8:0 GC-FID standard."
+    meta:
+      chebi_id: CHEBI:87432
+      cas: 111-11-5
+      chain: 8:0
+      species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:decanoic-acid-n10
+    source: manual
+    label: "Decanoic acid (free fatty acid, 10:0)"
+    definition: "Free fatty acid species of the decanoic (10:0) chain; distinct from its methyl ester."
+    meta:
+      chebi_id: CHEBI:30813
+      chain: 10:0
+      species: ffa
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-decanoate-n10
+    source: manual
+    label: "Methyl decanoate (FAME, 10:0-OMe)"
+    definition: "Methyl ester (FAME) of decanoic acid; the 10:0 GC-FID standard."
+    meta:
+      chebi_id: CHEBI:143577
+      cas: 110-42-9
+      chain: 10:0
+      species: methyl-ester
+# ChEBI ids architect-verified live at OLS4 2026-11-01 (CAS via PubChem PUG):
+#   palmitic acid       CHEBI:15756   (CAS 57-10-3; PubChem CID 985; OLS4 synonyms
+#                                     incl. "Palmitic acid"/"Palmitate")
+#   methyl palmitate    CHEBI:69187   (label "Methyl palmitate"; CAS 112-39-0;
+#                                     PubChem CID 8181; synonym "Methyl hexadecanoate")
+  - kind: ontology-term
+    id: FAME-LOCAL:palmitic-acid-n16
+    source: manual
+    label: "Palmitic acid (free fatty acid, 16:0)"
+    definition: "Free fatty acid species of the palmitic (16:0) chain; distinct from its methyl ester."
+    meta:
+      chebi_id: CHEBI:15756
+      cas: 57-10-3
+      chain: 16:0
+      species: ffa
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-palmitate-n16
+    source: manual
+    label: "Methyl palmitate (FAME, 16:0-OMe)"
+    definition: "Methyl ester (FAME) of palmitic acid; the 16:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:69187
+      cas: 112-39-0
+      chain: 16:0
+      species: methyl-ester

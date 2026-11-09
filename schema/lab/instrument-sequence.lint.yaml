@@ -1,0 +1,51 @@
+# Lint rules for Instrument Sequence records (GC-3 run-sheet header).
+#
+# HONEST BOUNDARY (GC-3 spec §Lint R5, orch resolution 2 option (a)):
+# the v1 lint DSL CANNOT open the record store (LintEngine.ts record-scope
+# skip + evaluateRule reads only ctx.data) — ref TARGET EXISTENCE is
+# resolution-time (the GC-4 resolver), NOT lint's job. What lint CAN do,
+# and does here, is intra-record shape discipline:
+#   R1 empty entryRefs is suspicious (warning, not fatal — build-up state);
+#   R2 a sequence bound to nothing has no home in the study graph (warning).
+# Do NOT add a store-resolution rule (reviewer bait #1): any YAML rule
+# claiming "dangling ref rejected" is a tautology or a lie in this DSL.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/instrument-sequence.schema.yaml"
+rules:
+  # R1 — an empty run-sheet is suspicious, not fatal.
+  - id: "iseq-entry-refs-declared-unique"
+    title: "A run sheet should declare at least one entry reference"
+    description: >-
+      instrument-sequence carries its rows via entryRefs (separate
+      instrument-sequence-entry records — inline entries are not a concept
+      of this kind). An empty array is legal at build-up (the schema allows
+      it), so this is a warning; duplicate ids are structurally rejected by
+      the schema's uniqueItems, not by this rule.
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.entryRefs"
+    message:
+      template: "Run sheet '{{$.id}}' declares no entryRefs — an empty run sheet is suspicious (add entries or note why the sheet is empty)"
+      paths: ["$.id"]
+  # R2 — mirrors the spirit of run.lint.yaml's parent-link rule: a sequence
+  # bound to nothing has no home in the study graph.
+  - id: "iseq-run-link-present"
+    title: "A run sheet must link to a study or a run record"
+    description: >-
+      At least one of runRef / studyRef must be present. A sequence bound
+      to neither is unaddressable from the study graph. Warning severity:
+      a header may legitimately be assembled before its binding is known.
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "any"
+      predicates:
+        - op: "exists"
+          path: "$.runRef"
+        - op: "exists"
+          path: "$.studyRef"
+    message:
+      template: "Run sheet '{{$.id}}' links to neither a run (runRef) nor a study (studyRef) — it has no home in the study graph"
+      paths: ["$.id"]

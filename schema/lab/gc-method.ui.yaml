@@ -1,0 +1,388 @@
+# UI specification for GC Method records — generated editor surface.
+# EDITOR-1 binding: section blocks claim slots EXPLICITLY (list order = field
+# order). FIX-1 (browser gate 2026-10-26T03:50:58, D1+D2):
+#   - D1: object-bound slots no longer use `textarea` (the frontend prints
+#     String(object) -> "[object Object]"). Every structured sub-field the
+#     DATA SCHEMA (gc-method.schema.yaml) declares is now a LEAF-SCALAR slot;
+#     the five array-of-object paths are `array` widgets with a `properties`
+#     sub-field list (documentMapper.ts:228 builds arraySchema from
+#     slot.properties; ArrayWidget renders each item as key: value lines).
+#   - D2: the app render path (documentMapper.ts:171) skips every block whose
+#     kind !== 'section', so the two `repeater` blocks never reached the DOM.
+#     They are deleted; their array slots are claimed inside SECTION blocks.
+# Every slot in editor.slots[] is claimed exactly once — the loader errors on
+# unknown / double-claimed / unclaimed slots in an explicitly-bound spec.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/gc-method.schema.yaml"
+
+display:
+  titleField: "$.name"
+  subtitleField: "$.method_version"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Method identity. state advances only via lifecycle transitions."
+      slots: ["id-slot", "name-slot", "method-name-slot", "method-version-slot", "state-slot"]
+    - id: "acquisition"
+      kind: "section"
+      label: "Acquisition"
+      help: "Injector, diversion/saver hardware, and column. Capture only: absent sections are unknown, never defaults."
+      slots: ["inlet-mode-slot", "inlet-temp-slot", "inlet-pressure-slot", "inlet-split-slot", "inlet-carrier-slot", "diverter-position-slot", "diverter-description-slot", "saver-position-slot", "saver-description-slot", "column-length-slot", "column-id-slot", "column-film-slot", "column-phase-slot", "column-flow-slot"]
+    - id: "oven-program"
+      kind: "section"
+      label: "Oven program (steps)"
+      help: "Temperature program steps. Units live in field names; a null ramp rate is an isothermal segment (a capture, not a default)."
+      slots: ["oven-steps-slot"]
+    - id: "analysis-global"
+      kind: "section"
+      label: "Global integration"
+      help: "pybaselines global integration settings (captured)."
+      slots: ["global-baseline-slot", "global-skim-slot", "global-valley-slot", "global-peakwidth-slot"]
+    - id: "calibration"
+      kind: "section"
+      label: "Calibration"
+      help: "Internal-standard calibration block (captured)."
+      slots: ["istd-ref-slot", "istd-amount-value-slot", "istd-amount-unit-slot", "dilution-factor-slot", "multiplier-slot", "calibration-levels-slot"]
+    - id: "executable-binding"
+      kind: "section"
+      label: "Executable binding"
+      help: "Declared data: engine reference + declaration time. Without it, timed events are capture-only (lint-blocked from executable use)."
+      slots: ["engine-ref-slot", "declared-at-slot"]
+    - id: "timed-events"
+      kind: "section"
+      label: "Timed events"
+      help: "ChemStation timed-event windows: integration on/off + per-window peak acceptance. Capture only."
+      slots: ["timed-events-slot"]
+    - id: "compound-assignments"
+      kind: "section"
+      label: "Compound assignments"
+      help: "FAME/FFA identities this method integrates (ontology/record refs)."
+      slots: ["compound-assignments-slot"]
+    - id: "provenance"
+      kind: "section"
+      label: "Provenance"
+      help: "Vendor-derived values live ONLY here (source files + imported key values); they never map into executable fields."
+      slots: ["entered-by-slot", "source-files-slot"]
+  slots:
+    # --- identity ---
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+    - id: "name-slot"
+      path: "$.name"
+      label: "Name"
+      widget: "text"
+      required: true
+    - id: "method-name-slot"
+      path: "$.method_name"
+      label: "Method name (as captured)"
+      widget: "text"
+      help: "Verbatim ChemStation method name from ACQ.TXT extraction."
+    - id: "method-version-slot"
+      path: "$.method_version"
+      label: "Method version"
+      widget: "number"
+      required: true
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    # --- acquisition: injector / diverter / saver / column (leaf scalars) ---
+    - id: "inlet-mode-slot"
+      path: "$.acquisition.inlet.mode"
+      label: "Inlet mode"
+      widget: "select"
+      options:
+        - { value: "split", label: "Split" }
+        - { value: "splitless", label: "Splitless" }
+        - { value: "on_column", label: "On column" }
+    - id: "inlet-temp-slot"
+      path: "$.acquisition.inlet.temp_c"
+      label: "Inlet temperature (°C)"
+      widget: "number"
+    - id: "inlet-pressure-slot"
+      path: "$.acquisition.inlet.pressure_psi"
+      label: "Inlet pressure (psi)"
+      widget: "number"
+    - id: "inlet-split-slot"
+      path: "$.acquisition.inlet.split_ratio"
+      label: "Inlet split ratio"
+      widget: "number"
+    - id: "inlet-carrier-slot"
+      path: "$.acquisition.inlet.carrier_gas"
+      label: "Inlet carrier gas"
+      widget: "select"
+      options:
+        - { value: "helium", label: "Helium" }
+        - { value: "nitrogen", label: "Nitrogen" }
+        - { value: "hydrogen", label: "Hydrogen" }
+        - { value: "other", label: "Other" }
+    - id: "diverter-position-slot"
+      path: "$.acquisition.diverter.position"
+      label: "Diverter position"
+      widget: "text"
+      help: "Semantics undocumented on the captured method; free-text capture."
+    - id: "diverter-description-slot"
+      path: "$.acquisition.diverter.description"
+      label: "Diverter description"
+      widget: "text"
+    - id: "saver-position-slot"
+      path: "$.acquisition.saver.position"
+      label: "Saver position"
+      widget: "text"
+      help: "Semantics undocumented on the captured method; free-text capture."
+    - id: "saver-description-slot"
+      path: "$.acquisition.saver.description"
+      label: "Saver description"
+      widget: "text"
+    - id: "column-length-slot"
+      path: "$.acquisition.column.length_m"
+      label: "Column length (m)"
+      widget: "number"
+    - id: "column-id-slot"
+      path: "$.acquisition.column.id_mm"
+      label: "Column inner diameter (mm)"
+      widget: "number"
+    - id: "column-film-slot"
+      path: "$.acquisition.column.film_thickness_um"
+      label: "Column film thickness (µm)"
+      widget: "number"
+    - id: "column-phase-slot"
+      path: "$.acquisition.column.stationary_phase"
+      label: "Column stationary phase"
+      widget: "text"
+    - id: "column-flow-slot"
+      path: "$.acquisition.column.flow_mode"
+      label: "Column flow mode"
+      widget: "select"
+      options:
+        - { value: "constant_flow", label: "Constant flow" }
+        - { value: "constant_pressure", label: "Constant pressure" }
+        - { value: "other", label: "Other" }
+    # --- oven program (array of steps) ---
+    - id: "oven-steps-slot"
+      path: "$.acquisition.oven"
+      label: "Oven program (steps)"
+      widget: "array"
+      help: "Captured step list. A null ramp rate marks an isothermal segment."
+      properties:
+        - { name: "step", widget: "number", label: "Step number", required: true }
+        - { name: "hold_time_min", widget: "number", label: "Hold time (minutes)", required: true }
+        - { name: "ramp_rate_c_per_min", widget: "number", label: "Ramp rate (°C per minute)", required: false, help: "Null = isothermal segment (a capture, not a default)." }
+        - { name: "target_temp_c", widget: "number", label: "Target temperature (°C)", required: true }
+    # --- global integration (leaf scalars) ---
+    - id: "global-baseline-slot"
+      path: "$.analysis.global.baseline_correction"
+      label: "Baseline correction"
+      widget: "select"
+      options:
+        - { value: "none", label: "None" }
+        - { value: "tangent_skim", label: "Tangent skim" }
+        - { value: "vertical_drop", label: "Vertical drop" }
+        - { value: "other", label: "Other" }
+    - id: "global-skim-slot"
+      path: "$.analysis.global.skim_ratio"
+      label: "Skim ratio"
+      widget: "number"
+    - id: "global-valley-slot"
+      path: "$.analysis.global.valley_to_peak_ratio"
+      label: "Valley to peak ratio"
+      widget: "number"
+    - id: "global-peakwidth-slot"
+      path: "$.analysis.global.peak_width_s"
+      label: "Peak width (seconds)"
+      widget: "number"
+    # --- calibration (leaf scalars + levels array) ---
+    - id: "istd-ref-slot"
+      path: "$.analysis.calibration.istd_ref"
+      label: "Internal standard reference"
+      widget: "ref"
+      refKind: "material"
+    - id: "istd-amount-value-slot"
+      path: "$.analysis.calibration.istd_amount.value"
+      label: "Internal standard amount (value)"
+      widget: "number"
+    - id: "istd-amount-unit-slot"
+      path: "$.analysis.calibration.istd_amount.unit"
+      label: "Internal standard amount (unit)"
+      widget: "text"
+    - id: "dilution-factor-slot"
+      path: "$.analysis.calibration.dilution_factor"
+      label: "Dilution factor"
+      widget: "number"
+    - id: "multiplier-slot"
+      path: "$.analysis.calibration.multiplier"
+      label: "Multiplier"
+      widget: "number"
+    - id: "calibration-levels-slot"
+      path: "$.analysis.calibration.calibration_levels"
+      label: "Calibration levels"
+      widget: "array"
+      help: "Material references for each calibration level."
+      properties:
+        - { name: "kind", widget: "text", label: "Kind", required: true }
+        - { name: "type", widget: "text", label: "Type", required: true }
+        - { name: "id", widget: "text", label: "ID", required: true }
+        - { name: "label", widget: "text", label: "Label", required: false }
+    # --- executable binding (leaf scalars) ---
+    - id: "engine-ref-slot"
+      path: "$.analysis.executable_binding.engine_ref"
+      label: "Engine reference"
+      widget: "ref"
+      refKind: "equipment"
+    - id: "declared-at-slot"
+      path: "$.analysis.executable_binding.declared_at"
+      label: "Declared at"
+      widget: "datetime"
+    # --- timed events (array of windows) ---
+    - id: "timed-events-slot"
+      path: "$.analysis.timed_events"
+      label: "Timed events"
+      widget: "array"
+      help: "Integration on/off windows + per-window peak acceptance. Capture only."
+      properties:
+        - { name: "at_min", widget: "number", label: "Time (minutes)", required: true }
+        - { name: "integration", widget: "select", label: "Integration", required: true, options: [ { value: "on", label: "On" }, { value: "off", label: "Off" } ] }
+        - { name: "slope_sensitivity", widget: "number", label: "Slope sensitivity", required: false }
+        - { name: "peak_width_s", widget: "number", label: "Peak width (seconds)", required: false }
+        - { name: "area_reject_au", widget: "number", label: "Area reject (AU)", required: false }
+        - { name: "height_reject_au", widget: "number", label: "Height reject (AU)", required: false }
+    # --- compound assignments (array of identities) ---
+    # W2 C1 (architect OPT-B ruling): the item sub-fields ride the
+    # ALREADY-FORWARDED, ALREADY-CONSUMED `items:` house dialect (the
+    # evidence.ui.yaml $.sources / $.supports precedent; UISpecLoader
+    # validates field.items for widget:array; EditorProjectionService
+    # forwards slot.items → the mapper's itemHint → ArrayWidget →
+    # ObjectWidget). This REPLACES the earlier decorative `properties:`
+    # block — the projection never forwarded that shape, so it was inert
+    # data (one spelling per slot; the dialect question itself is the
+    # platform item UI-DIALECT-1, NOT a forward built in this feature).
+    - id: "compound-assignments-slot"
+      path: "$.analysis.compound_assignments"
+      label: "Compound assignments"
+      widget: "array"
+      help: "FAME/FFA identities this method integrates (ontology/record refs)."
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Assignment entry"
+        fields:
+          - path: "label"
+            widget: "text"
+            label: "Label"
+            required: true
+          # The canonical compound identity: an ontology ref picked via the
+          # EXISTING ref picker machinery (never free text). The picker is
+          # enabled BY DATA (the claim.ui.yaml ontology-ref pattern): the
+          # 'ols' source turns on the /resolve spine in RefCombobox and
+          # valueShape ontology-ref commits the canonical ref OBJECT
+          # {kind:ontology, id:<CURIE>, namespace, label}. NO namespace
+          # literal lives here — the namespace rides the runtime resolve
+          # result, and a missing term is scientist-minted through the
+          # existing mint mechanism (the never-guess round trip).
+          - path: "compound_ref"
+            widget: "ref"
+            label: "Compound reference"
+            required: true
+            props:
+              sources: ["local", "ols"]
+              valueShape: "ontology-ref"
+              ontologyBinding: "allow-ontology"
+          - path: "expected_rt_min"
+            widget: "number"
+            label: "Expected retention time (minutes)"
+            required: false
+          - path: "rt_window_min"
+            widget: "number"
+            label: "Retention time window (minutes)"
+            required: false
+          - path: "response_factor"
+            widget: "number"
+            label: "Response factor"
+            required: false
+          # The entry's domain qualification — a select whose options are
+          # the schema enum verbatim (the vocabulary lives ONLY in the
+          # schema triplet; "unassigned" is the absence of an entry,
+          # never a value).
+          - path: "assignment_state"
+            widget: "select"
+            label: "Assignment state"
+            required: false
+            options: [ { value: "verified", label: "Verified" }, { value: "provisional", label: "Provisional" } ]
+          # The entry's provenance — who entered it, when, and which run +
+          # peak it was read from. A NESTED object (FIX-1 D1: never a
+          # scalar widget over an object) whose sub-fields are authorable
+          # through the existing recursion (data-driven, no widget change
+          # for the nesting itself).
+          - path: "provenance"
+            widget: "object"
+            label: "Provenance"
+            required: false
+            help: "Who entered it, when, and which run + peak it was read from."
+            fields:
+              - path: "entered_by"
+                widget: "record-ref"
+                label: "Entered by"
+                required: false
+                refKind: "person"
+              - path: "recorded_at"
+                widget: "text"
+                label: "Recorded at (ISO date-time)"
+                required: false
+                help: "ISO-8601 date-time of the entry."
+              - path: "source_run_ref"
+                widget: "record-ref"
+                label: "Source run"
+                required: false
+                refKind: "analysis-run"
+              - path: "source_peak_label"
+                widget: "text"
+                label: "Source peak label"
+                required: false
+          # The reporting face as a declaration (basis is data — NO
+          # enum; a missing basis term is scientist-minted via the existing
+          # mint mechanism). Absent = unknown, never a default. Same
+          # ontology-ref picker contract as compound_ref.
+          - path: "reporting_basis_ref"
+            widget: "ref"
+            label: "Reporting basis"
+            required: false
+            props:
+              sources: ["local", "ols"]
+              valueShape: "ontology-ref"
+              ontologyBinding: "allow-ontology"
+    # --- provenance ---
+    - id: "entered-by-slot"
+      path: "$.provenance_capture.entered_by"
+      label: "Entered by"
+      widget: "ref"
+      refKind: "person"
+    - id: "source-files-slot"
+      path: "$.provenance_capture.source_files"
+      label: "Source files"
+      widget: "array"
+      help: "Imported vendor key-values ONLY; never mapped into executable fields."
+      properties:
+        - { name: "file", widget: "text", label: "File name", required: true }
+        - { name: "role", widget: "select", label: "Role", required: true, options: [ { value: "acq_txt", label: "ACQ TXT" }, { value: "iq1_mth", label: "IQ1 MTH" }, { value: "da_m", label: "DA M" }, { value: "other", label: "Other" } ] }
+        - { name: "key_values", widget: "array", label: "Key values", required: false, help: "Imported { key, raw value } pairs, captured verbatim." }
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.method_version"
+    label: "Version"
+    width: "90px"
+  - path: "$.state"
+    label: "State"
+    width: "100px"

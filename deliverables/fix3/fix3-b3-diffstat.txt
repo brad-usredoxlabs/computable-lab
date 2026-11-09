@@ -1,0 +1,9 @@
+ app/src/analysis/ViewRenderer.cellrender.test.tsx |  63 ++++
+ app/src/analysis/cssRuleScan.test.ts              |  77 ++++-
+ app/src/analysis/cssRuleScan.ts                   |  96 ++++--
+ deliverables/fix3/fix3-red-probe.txt              | 303 ++++++++++++++++++
+ deliverables/fix3/fix3-red-vitest.txt             | 357 ++++++++++++++++++++++
+ deliverables/fix3/fix3-tsc-baseline.txt           |  18 ++
+ deliverables/probe-fix3-l1t0700.mts               | 128 ++++++++
+ 7 files changed, 1006 insertions(+), 36 deletions(-)
+c6930c66eabf3918ececb2df3a0f682b7e94c4da

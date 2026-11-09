@@ -1,0 +1,221 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml"
+title: "Analysis Engine"
+description: >
+  A DECLARED analysis-engine registry record (GC-5, GC-D3 ruling C): the
+  library/engine an analysis-revision pins by engineRef and the AnalysisRunner
+  resolves, probes, dispatches, and records as machine-readable engine
+  provenance. This record is DATA: the dispatch table (implementation.adapter),
+  the declared version constraints probed against the ACTUAL interpreter and
+  packages, and the capability declaration (the closed vocabulary from the GC-1
+  capability matrix — .hermes/plans/2026-10-26_GC-1-gc-feasibility-spike-report.md
+  §capability matrix; OQ1: no ontology terms minted, a closed enum is the
+  honest data form) all live HERE. The runner holds no engine-name, package-name
+  or version literal — it reads this record.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- title
+- implementation
+- version_constraints
+- capabilities
+- availability
+- runtime_requirements
+
+properties:
+  kind:
+    const: "analysis-engine"
+
+  id:
+    type: string
+    pattern: "^ENG-[A-Za-z0-9_-]+$"
+    description: "Stable engine record id (house prefix style, e.g. ENG-SCIPI001)."
+
+  title:
+    type: string
+    description: >
+      Human-facing name. A DECLARED STUB engine (the pluggability probe,
+      implementation.adapter: stub-echo) carries 'STUB' in this field so no
+      test or UI can mistake it for science. HONEST BOUNDARY (l1t2245 defect 4,
+      recorded not enforced): this cross-field convention — stub-echo adapter
+      ⇒ 'STUB' in title — is NOT enforced by the schema (title is a plain
+      string; the v1 shape-only lint DSL cannot express it either, and no
+      vacuous rule is invented for it — see the INTENT header of
+      analysis-engine.lint.yaml). The stub is instead identified in every
+      manifest it produces (the STUB_ADAPTER warning log code) and the
+      contract test asserts the fixture record's title carries STUB.
+
+  description:
+    type: string
+
+  engine_family:
+    type: string
+    description: "Engine family label (e.g. 'scipy-integration-core')."
+
+  engine_version:
+    type: string
+    description: >
+      The version THIS record describes. Free string, NOT semver-constrained:
+      GC-1's honest-unknown rule (a missing version is unknown, never a
+      default).
+
+  # ---------------------------------------------------------------------------
+  # Implementation — the dispatch DATA (GC-5 §d). adapter is a CLOSED enum of
+  # the shipped adapter ids (server/src/analysis/engineAdapters.ts): the schema
+  # refuses an unshipped adapter declaratively; the runner dispatches off this
+  # value and holds no engine-name literal.
+  # ---------------------------------------------------------------------------
+  implementation:
+    type: object
+    additionalProperties: false
+    required: [adapter, entry]
+    properties:
+      adapter:
+        type: string
+        enum: [python-entry-script, stub-echo]
+        description: >
+          Shipped adapter id. python-entry-script wraps the existing
+          `python -m computable_lab_analysis run` behavior; stub-echo is the
+          DECLARED second adapter (a pluggability probe that performs no
+          scientific computation).
+      entry:
+        type: string
+        minLength: 1
+        description: >
+          For python-entry-script: documents the SDK module invocation (fixed
+          by the runner contract); for stub-echo: 'stub'.
+      module:
+        type: string
+        description: >
+          Optional importable module name (e.g. computable_lab_analysis; a
+          future backend selector). Data, never a host file path.
+
+  # ---------------------------------------------------------------------------
+  # Version constraints — DECLARED, machine-checkable at probe time (GC-5 §c).
+  # The probe is one cheap interpreter call through the SAME resolved
+  # interpreter; actual-vs-declared mismatches are NAMED declared failures
+  # (ENGINE_VERSION_MISMATCH / ENGINE_VERSION_CHECK_UNSUPPORTED), never a
+  # silent run. Unknown constraint syntax = declared failure, never a guess.
+  # ---------------------------------------------------------------------------
+  version_constraints:
+    type: object
+    additionalProperties: false
+    required: [python, packages]
+    properties:
+      python:
+        type: string
+        minLength: 1
+        description: >
+          Free constraint string for the interpreter (e.g. '>=3.14,<3.15').
+          V1 checks are the named-failure cases, not a general semver engine.
+      packages:
+        type: array
+        description: "Declared host packages the engine needs (names from the record — bait #3: no package literal in runner TS)."
+        items:
+          type: object
+          additionalProperties: false
+          required: [name, constraint]
+          properties:
+            name:
+              type: string
+              minLength: 1
+            constraint:
+              type: string
+              minLength: 1
+              description: "Package constraint string (e.g. '==2.5.4')."
+
+  # ---------------------------------------------------------------------------
+  # Capabilities — the closed capability vocabulary (OQ1: declared in the
+  # schema as data; source-of-truth note = the GC-1 report capability matrix).
+  # support mirrors GC-1's S/A/U/NV legend verbatim in meaning:
+  # supported (S) / approximate (A) / unsupported (U) / unverified (NV).
+  # ---------------------------------------------------------------------------
+  capabilities:
+    type: object
+    additionalProperties: false
+    required: [declared]
+    properties:
+      declared:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [capability, support]
+          properties:
+            capability:
+              type: string
+              enum:
+              - baseline_control
+              - width_slope_sensitivity
+              - area_height_reject
+              - timed_integration_windows
+              - peak_detection
+              - deconvolution
+              # GC-8 D1 (orchestrator ruling 2026-10-27_GC-8-D1-capability-enum-ruling.md):
+              # the spec-mandated capability terms for the calibration/quantification
+              # revision pair (spec §A7). Enum widening ratified by the ruling; the
+              # values are NOT invented — the spec text names them.
+              - curve_fitting
+              - weighted_regression
+            support:
+              type: string
+              enum: [supported, approximate, unsupported, unverified]
+
+  # ---------------------------------------------------------------------------
+  # Availability — a DECLARATION by an operator that this engine is
+  # installable/runnable HERE. Distinct from lifecycle `state` (draft/
+  # active/archived = operational). available: false is a NAMED execute-time
+  # failure (ENGINE_UNAVAILABLE), never a fallback.
+  # ---------------------------------------------------------------------------
+  availability:
+    type: object
+    additionalProperties: false
+    required: [available]
+    properties:
+      available:
+        type: boolean
+      note:
+        type: string
+        description: "Declared, human-facing availability note."
+
+  # ---------------------------------------------------------------------------
+  # Runtime requirements. provisioned-venv = the engine is only runnable via
+  # the GC-1 interpreter resolution order (config-declared analysis.python →
+  # env CLA_ANALYSIS_PYTHON → the declared last-resort); when packages are
+  # declared, the last-resort must NOT satisfy it (ENGINE_UNAVAILABLE, never a
+  # silent /usr/bin run). Absent ints = unknown, never a default.
+  # ---------------------------------------------------------------------------
+  runtime_requirements:
+    type: object
+    additionalProperties: false
+    required: [interpreter]
+    properties:
+      interpreter:
+        type: string
+        enum: [provisioned-venv, system]
+      min_timeout_seconds:
+        type: integer
+        minimum: 1
+      max_input_bytes:
+        type: integer
+        minimum: 1
+
+  # Registry-kind lifecycle (GC-5 E: analysis-engine joins the minimal
+  # registry-ops lifecycle — draft default state, same treatment as
+  # gc-method/acquisition-package). The vocabulary is the registry-ops
+  # lifecycle's own.
+  lifecycleId:
+    type: string
+    enum: [registry-ops]
+    description: "Lifecycle governing this record's state transitions (declared per kind in schema/registry/registry-kinds.registry.yaml)."
+
+  state:
+    type: string
+    enum: [draft, active, archived]
+    description: "Lifecycle state (operational). DISTINCT from domain status/result fields."

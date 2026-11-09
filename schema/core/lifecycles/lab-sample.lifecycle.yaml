@@ -39,6 +39,7 @@ states:
   description: "Sample unsuitable (condition on receipt unacceptable, mismatched barcode, etc.)."
 - id: archived
   label: "Archived"
+  contentLocked: true
   terminal: true
   description: "Remaining material retired; record kept for history."
 

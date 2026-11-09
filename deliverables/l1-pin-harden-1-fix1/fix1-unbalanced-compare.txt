@@ -1,0 +1,2 @@
+PRE-FIX : .analysis-right | [] ; .view-spec__cell-item | [] ; .view-spec__table th, .view-spec__table td | ["@media (max-width: 900px)"]
+POST-FIX: .analysis-right | [] ; .view-spec__cell-item | [] ; .view-spec__table th, .view-spec__table td | ["@media (max-width: 900px)"]

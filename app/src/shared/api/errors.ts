@@ -84,6 +84,18 @@ export class ApiError extends Error {
  * and the 401 "unknown user" case) get a friendly, actionable hint instead of
  * the raw server text like "FORBIDDEN: User USR-… cannot add child records
  * under STU-…", which reads as a crash. Everything else is surfaced verbatim.
+ *
+ * WIDGET-R1 fix-run 1 (D1, A7b browser-gate defect): a lint refusal (the
+ * server's 422 `{ lint: { valid: false, violations: [{ ruleId, message, … }] },
+ * error: "Lint failed" }` body) was rendered as the bare string "Lint failed"
+ * — the offending RULE never reached the author. The ApiError already parses
+ * the top-level `lint` member; this display path appends each violation as
+ * `[ruleId] message` (joined like the validation summary built in
+ * `ApiError.fromResponse`; the `[ruleId]` shape matches the
+ * GcEvidenceHandoff.tsx precedent) so the rendered refusal names the rule
+ * verbatim — e.g. "Lint failed: [asn-scoped-assertion-needs-context] …".
+ * `ruleId` stays optional: a violation without one renders its bare message.
+ * The 403/401 special messages return first and are UNCHANGED.
  */
 export function describeApiError(err: unknown): string {
   if (ApiError.isApiError(err)) {
@@ -93,7 +105,14 @@ export function describeApiError(err: unknown): string {
     if (err.status === 401) {
       return 'Your user could not be identified. Pick a user from the switcher (top-right) and try again.'
     }
-    return err.message
+    let message = err.message
+    if (err.lint && !err.lint.valid && err.lint.violations.length > 0) {
+      const lintSummary = err.lint.violations
+        .map(v => `${v.ruleId !== undefined ? `[${v.ruleId}] ` : ''}${v.message}`)
+        .join('; ')
+      message = `${message}: ${lintSummary}`
+    }
+    return message
   }
   if (NetworkError.isNetworkError(err)) return err.message
   return err instanceof Error ? err.message : 'Something went wrong'

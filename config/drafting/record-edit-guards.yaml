@@ -1,0 +1,29 @@
+# Record-edit guards (OQ-4 OPT-A, architect ruling 20261101T032x).
+#
+# The record-drafting adapter's edit-record operation (config/drafting/
+# adapters.yaml) EDITS an existing record instead of composing a new one.
+# This file is the SOLE declaration of what the edit arm may touch, and the
+# interpreter (server/src/drafts/recordDraftCompile.ts) carries ZERO
+# path/kind literals — the editable path, the merge mode, and the entry
+# defaults are all read from HERE per target schema.
+#
+# Shape: one entry per target-schema $id (the schema corpus's schemaId —
+# the record's envelope.schemaId, never a kind literal). Each entry declares:
+#   path      — the dot-separated payload path the edit APPENDS to (an array).
+#   merge     — the merge mode. Currently exactly: append (ONE entry added to
+#               the declared array; nothing else in the payload is written).
+#   defaults  — entry fields the compile fills when the approved payload
+#               omits them. The interpreter NEVER injects a state it was not
+#               given in the human-approved envelope — these are the ONLY
+#               defaults, and they ride the guard DATA, not the code.
+#
+# Sole declared entry (FAME-3, W6): the gc-method schema's
+# analysis.compound_assignments array — append ONE assignment entry,
+# defaulting assignment_state to provisional (the draft is never verified;
+# verification is the bench, BRAD-DATA).
+guards:
+  "https://computable-lab.com/schema/computable-lab/gc-method.schema.yaml":
+    path: "analysis.compound_assignments"
+    merge: "append"
+    defaults:
+      assignment_state: "provisional"

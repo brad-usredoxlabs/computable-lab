@@ -385,12 +385,38 @@ function makeUnsupportedWidgetUISpec(): UISpec {
               path: '$.items',
               widget: 'array',
               label: 'Items',
+              // WIDGET-R1: a VALID typed item-hint (path + widget) — the
+              // ArrayWidget is authorable, so the projection SUPPRESSES the
+              // UNSUPPORTED_WIDGET diagnostic for this array.
               items: {
                 path: '$.items[].name',
                 widget: 'text',
                 label: 'Item Name',
                 required: true,
               },
+            },
+            {
+              // WIDGET-R1: a HINT-LESS array — a spec defect marker. The
+              // diagnostic stays LOUD (the raw-fallback items echo is not
+              // present because there is no items to echo).
+              path: '$.plainItems',
+              widget: 'array',
+              label: 'Plain Items (no hint)',
+            },
+            {
+              // WIDGET-R1: an array whose item-hint is INVALID (items present
+              // but missing the loader-required path/widget) — still a spec
+              // defect marker. The diagnostic is emitted LOUD with the items
+              // echo preserved (traceability for the raw fallback). The shape
+              // is deliberately malformed (no path, no widget) — the loader's
+              // validateFieldHint would reject it at load time, so in the
+              // projection-only path it exercises the "items present but
+              // not a valid hint" branch.
+              path: '$.malformed',
+              widget: 'array',
+              label: 'Malformed hint',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              items: { label: 'malformed (no path, no widget)' } as any,
             },
             {
               path: '$.config',
@@ -865,7 +891,7 @@ describe('experiment fallback projection', () => {
 // ============================================================================
 
 describe('unsupported nested widget diagnostics', () => {
-  it('emits diagnostics for array, object, custom, and markdown widgets', () => {
+  it('emits UNSUPPORTED_WIDGET diagnostics for the hint-less/invalid-hint arrays, object, custom, and markdown — and SUPPRESSES the valid-hint array (WIDGET-R1 conditional)', () => {
     const uiSpec = makeUnsupportedWidgetUISpec();
     const result = projectRecord(
       uiSpec,
@@ -877,10 +903,18 @@ describe('unsupported nested widget diagnostics', () => {
     const unsupportedDiagnostics = result.diagnostics.filter(
       (d) => d.code === 'UNSUPPORTED_WIDGET'
     );
-    expect(unsupportedDiagnostics).toHaveLength(4);
+    // WIDGET-R1: the valid-hint `$.items` array is SUPPRESSED (authorable);
+    // the hint-less `$.plainItems`, the invalid-hint `$.malformed`, the
+    // `$.config` object, the `$.customField` custom, and the `$.markdown`
+    // markdown still emit.
+    expect(unsupportedDiagnostics).toHaveLength(5);
 
     const paths = unsupportedDiagnostics.map((d) => d.path);
-    expect(paths).toContain('$.items'); // array
+    // The valid typed item-hint array is authorable — NOT diagnostic.
+    expect(paths).not.toContain('$.items');
+    // The spec-defect arrays (hint-less + invalid-hint) stay LOUD.
+    expect(paths).toContain('$.plainItems'); // array, no hint
+    expect(paths).toContain('$.malformed'); // array, invalid hint
     expect(paths).toContain('$.config'); // object
     expect(paths).toContain('$.customField'); // custom
     expect(paths).toContain('$.markdown'); // markdown
@@ -961,7 +995,7 @@ describe('unsupported nested widget diagnostics', () => {
     expect(titleDiagnostics).toHaveLength(0);
   });
 
-  it('includes nested metadata in diagnostic messages for traceability', () => {
+  it('includes nested metadata in diagnostic messages for traceability (the invalid-hint array keeps its items echo; the valid-hint array is suppressed)', () => {
     const uiSpec = makeUnsupportedWidgetUISpec();
     const result = projectRecord(
       uiSpec,
@@ -970,11 +1004,20 @@ describe('unsupported nested widget diagnostics', () => {
       'TEST-006'
     );
 
+    // WIDGET-R1: the valid-hint `$.items` array is SUPPRESSED (no diagnostic,
+    // no items echo). The invalid-hint `$.malformed` array is still LOUD and
+    // keeps its items echo for the raw-fallback traceability.
     const itemsDiagnostic = result.diagnostics.find(
-      (d) => d.code === 'UNSUPPORTED_WIDGET' && d.path === '$.items'
+      (d) => d.code === 'UNSUPPORTED_WIDGET' && d.path === '$.malformed'
     );
     expect(itemsDiagnostic).toBeDefined();
     expect(itemsDiagnostic!.message).toContain('items:');
+
+    // The valid-hint array must NOT emit a diagnostic (authorable).
+    const validHintDiagnostic = result.diagnostics.find(
+      (d) => d.code === 'UNSUPPORTED_WIDGET' && d.path === '$.items'
+    );
+    expect(validHintDiagnostic).toBeUndefined();
 
     const configDiagnostic = result.diagnostics.find(
       (d) => d.code === 'UNSUPPORTED_WIDGET' && d.path === '$.config'

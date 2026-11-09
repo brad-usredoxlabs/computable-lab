@@ -14,6 +14,8 @@ import type { SchemaNode } from '../browser/SchemaTree';
 import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
+import { isContentLocked } from '../shared/records/lifecycleLock';
+import { getContentLockedStatesSync, isContentLockedSetResolved, primeContentLockedStates } from '../shared/records/contentLockedStatesCache';
 import './RecordRegistryPage.css';
 
 // Exported for the test suites: the tab/kinds DATA is the single source for
@@ -33,6 +35,22 @@ export const REGISTRY_TABS = [
   { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
   { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
   { id: 'documents', label: 'Documents', kinds: ['controlled-document'] },
+  // GC-2R (GC-2 acceptance: "a gc-method record is visible in the /registry
+  // UI"): the tab strip, the listing filter, and the Create affordance all
+  // derive from this kinds DATA — the row IS the feature, no kind-specific
+  // code (the gc-method schema resolves like any other via GET /schemas).
+  { id: 'methods', label: 'Methods', kinds: ['gc-method'] },
+  // GC-16 (W2, architect GAP-1): the knowledge triplet (assertion / claim /
+  // evidence) gets a registry tab. The tab label "Knowledge" is a GROUPING
+  // label mirroring the schema/knowledge/ directory — NOT a record kind and
+  // NOT a new entity term (one term per entity: the kinds are the schema kind
+  // names themselves). The tab strip, the listing filter (listRecordsByKind
+  // per kind), and the QMS7-5 multi-kind Create picker all derive from this
+  // kinds DATA — the row IS the feature, no kind-specific code (the
+  // gc-method precedent). A multi-kind tab opens the existing QMS7-5 kinds
+  // picker; the kind -> schema $id resolution is the served registry (GET
+  // /schemas + deriveSchemaNode), never a client-side map.
+  { id: 'knowledge', label: 'Knowledge', kinds: ['assertion', 'claim', 'evidence'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
@@ -164,42 +182,92 @@ export default function RecordRegistryPage() {
   // empty and browsing FAILS OPEN (rows remain visible).
   const [terminalStatesByLifecycle, setTerminalStatesByLifecycle] = useState<Record<string, string[]>>({});
   const terminalFetchedRef = useRef<Set<string>>(new Set());
+  // DEFECT 6 fix: content-locked states committed to page state so the
+  // predicate recomputes when they arrive — mirrors terminalStatesByLifecycle.
+  const [contentLockedStatesByLifecycle, setContentLockedStatesByLifecycle] = useState<Record<string, string[]>>({});
+  const contentFetchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    let cancelled = false;
+    // Terminal half: fetch terminal states for lifecycles not yet fetched.
     const pending = new Set<string>();
     for (const record of records) {
       const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId;
       if (lifecycleId && !terminalFetchedRef.current.has(lifecycleId)) pending.add(lifecycleId);
     }
-    if (pending.size === 0) return;
-    let cancelled = false;
+    if (pending.size === 0) {
+      // Terminal half done — still need to check content half independently.
+    } else {
+      // Prime terminal states.
+      void Promise.all(
+        [...pending].map(async (lifecycleId) => {
+          try {
+            const states = await apiClient.getLifecycleTerminalStates(lifecycleId);
+            return [lifecycleId, states] as const;
+          } catch (err) {
+            // Fail open for this render: no facts -> nothing is hidden (no
+            // invented policy). The failure is NOT committed and the lifecycle
+            // is NOT marked fetched (FIX1 defect 2): the accessor already
+            // normalises a definitive 404 to a SUCCESSFUL [], so anything
+            // reaching this catch is a transient/server failure and must stay
+            // retryable on the next `records` change.
+            console.warn(`Lifecycle terminal facts unavailable for ${lifecycleId}; terminal filtering skipped.`, err);
+            return null;
+          }
+        }),
+      ).then((results) => {
+        // FIX1 defect 1: a superseded run (cleanup fired because `records`
+        // changed identity mid-flight) discards its entries AND leaves the
+        // lifecycles un-fetched, so the next effect run retries instead of
+        // permanently skipping them. Marking fetched happens ONLY where the
+        // result is actually committed.
+        if (cancelled) return;
+        const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+        if (entries.length === 0) return;
+        for (const [lifecycleId] of entries) terminalFetchedRef.current.add(lifecycleId);
+        setTerminalStatesByLifecycle((prev) => {
+          const next = { ...prev };
+          for (const [lifecycleId, states] of entries) next[lifecycleId] = states;
+          return next;
+        });
+      });
+    }
+
+    // Content-locked half: independent retry guard mirroring terminal pattern.
+    // Compute contentPending from records that are NOT yet in contentFetchedRef,
+    // so a superseded run leaves them un-marked and the next effect run retries.
+    const contentPending = new Set<string>();
+    for (const record of records) {
+      const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId;
+      if (lifecycleId && !contentFetchedRef.current.has(lifecycleId)) contentPending.add(lifecycleId);
+    }
+    // Prime content-locked states: gate commit on isContentLockedSetResolved so
+    // a failed prime (which resolves [] via catch) does not shadow the cache.
+    // Only genuinely resolved sets are committed — a transport failure leaves the
+    // lifecycle out of the map so the ?? sync fallback still works.
+    let contentCancelled = false;
     void Promise.all(
-      [...pending].map(async (lifecycleId) => {
+      [...contentPending].map(async (lifecycleId) => {
         try {
-          const states = await apiClient.getLifecycleTerminalStates(lifecycleId);
+          const states = await primeContentLockedStates(lifecycleId);
           return [lifecycleId, states] as const;
-        } catch (err) {
-          // Fail open for this render: no facts -> nothing is hidden (no
-          // invented policy). The failure is NOT committed and the lifecycle
-          // is NOT marked fetched (FIX1 defect 2): the accessor already
-          // normalises a definitive 404 to a SUCCESSFUL [], so anything
-          // reaching this catch is a transient/server failure and must stay
-          // retryable on the next `records` change.
-          console.warn(`Lifecycle terminal facts unavailable for ${lifecycleId}; terminal filtering skipped.`, err);
+        } catch {
           return null;
         }
       }),
     ).then((results) => {
-      // FIX1 defect 1: a superseded run (cleanup fired because `records`
-      // changed identity mid-flight) discards its entries AND leaves the
-      // lifecycles un-fetched, so the next effect run retries instead of
-      // permanently skipping them. Marking fetched happens ONLY where the
-      // result is actually committed.
-      if (cancelled) return;
-      const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+      if (contentCancelled) return;
+      const entries = results.filter((r): r is readonly [string, string[]] => {
+        if (r === null) return false;
+        // Gate: only commit when the cache marks this lifecycle as resolved.
+        // A failed prime resolves [] but does NOT mark resolved — skip it.
+        return isContentLockedSetResolved(r[0]);
+      });
       if (entries.length === 0) return;
-      for (const [lifecycleId] of entries) terminalFetchedRef.current.add(lifecycleId);
-      setTerminalStatesByLifecycle((prev) => {
+      // Mark fetched ONLY where results are actually committed, so a superseded
+      // run leaves lifecycles un-marked for the next effect run to retry.
+      for (const [lifecycleId] of entries) contentFetchedRef.current.add(lifecycleId);
+      setContentLockedStatesByLifecycle((prev) => {
         const next = { ...prev };
         for (const [lifecycleId, states] of entries) next[lifecycleId] = states;
         return next;
@@ -207,6 +275,7 @@ export default function RecordRegistryPage() {
     });
     return () => {
       cancelled = true;
+      contentCancelled = true;
     };
   }, [records]);
 
@@ -430,8 +499,14 @@ export default function RecordRegistryPage() {
       return;
     }
     if (!seed) {
+      // GC-16 FIX RUN 2 (adversarial defect 7; provisional default R-1,
+      // pending the id-mint ruling): the refusal must NAME THE WORKING DOOR.
+      // The registry door does not mint ids (OQ-3: an unparseable pattern is
+      // an actionable error, not a fabricated prefix), so the actionable
+      // next step is the working knowledge door /record/new/<kind> (the
+      // global + Create menu's working door — spec acceptance 2). One string.
       setCreateError(
-        `No id pattern declared for this schema (${kind}) — a schema-compliant id cannot be derived.`,
+        `No id pattern declared for this schema (${kind}) — the registry door does not mint ids; author this record via the working door at /record/new/${kind}.`,
       );
       return;
     }
@@ -533,17 +608,18 @@ export default function RecordRegistryPage() {
   // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
   // In-place Save is replaced by a draft-copy; the server issues fresh
   // authorship (no inherited reviewer/approver/signature assignments).
+  const selectedLifecycleId = (selectedRecord?.payload as { lifecycleId?: string } | undefined)?.lifecycleId ?? '';
   const contentLocked =
     editorMode === 'edit' &&
-    ((selectedRecord?.payload as { state?: string } | undefined)?.state === 'approved' ||
-      (selectedRecord?.payload as { state?: string } | undefined)?.state === 'effective');
+    isContentLocked(
+      selectedRecord?.payload as { state?: string } | undefined,
+      contentLockedStatesByLifecycle[selectedLifecycleId] ?? getContentLockedStatesSync(selectedLifecycleId),
+    );
 
   // QMS7-6 (OQ-2 ruling A): an archived/terminal record opens READ-ONLY via
   // the SAME single data-driven predicate the list filter uses — the row is
   // lifecycle-bearing AND its lifecycle's DECLARED terminal set contains its
-  // payload.state. One mechanism, zero new state strings (bait 1). This
-  // intentionally does NOT extend to approved/effective: those stay with the
-  // existing reviewed contentLocked branch above (ruling: do not touch it).
+  // payload.state. One mechanism, zero new state strings (bait 1).
   // Server-side the same content edit already fails 409 CONTROLLED_RECORD_LOCKED
   // (RecordHandlers.ts, QMS7-4) — the UI simply does not offer a doomed Save.
   const terminalLocked =

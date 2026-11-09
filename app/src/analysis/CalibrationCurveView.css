@@ -1,0 +1,163 @@
+/* GC-11 — the calibration-curve composite (D1/D6 chrome).
+ * D6 pin: headers and cells WRAP (overflow-wrap: anywhere, white-space:
+ * normal) — long column names wrap, never truncate. The header test asserts
+ * full textContent; the verif-6 grep asserts zero truncation rules in this
+ * file. */
+
+.calibration-curve {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.calibration-curve__head {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+}
+
+.calibration-curve__stat {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.calibration-curve__plot {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  display: block;
+}
+
+.calibration-curve__point {
+  cursor: pointer;
+}
+
+.calibration-curve__point[data-selected] {
+  stroke: #c0392b;
+  stroke-width: 3;
+}
+
+.calibration-curve__point[data-outlier] {
+  stroke-dasharray: 2 2;
+}
+
+.calibration-curve__residuals {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  min-height: 24px;
+}
+
+.calibration-curve__residual-bar {
+  width: 24px;
+  /* RGF2 (D5 half-closure): the label line box is 0.6rem font-size x
+     line-height 1 = 9.6px; RGF1's 2px floor let the ~10px label spill a
+     2px strip on a zero residual (height:0 wrote by the component). The
+     floor ties to the label line box so the in-bar label fits; non-zero
+     bars still encode their magnitude above it (Math.min(64, |r|*1.5)). */
+  min-height: 12px;
+  background: #8e44ad;
+  font-size: 0.6rem;
+  line-height: 1;
+  overflow: visible;
+  cursor: pointer;
+  text-align: center;
+  color: #fff;
+}
+
+.calibration-curve__residual-bar[data-selected] {
+  outline: 2px solid #c0392b;
+  outline-offset: 1px;
+}
+
+.calibration-curve__basis {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.calibration-curve__table {
+  /* RGF D1: the table was pinned to the pane (width:100%) — 13 columns
+     squeezed into 444px wrapped every header to 1–3 letters per line.
+     min-width:100% keeps the fill-when-narrow look while letting the
+     table grow PAST the pane (the per-column floors) — the
+     calibration-table-scroll seam (overflow-x: auto) then scrolls it
+     instead of crushing it. Still no truncation (D6): content wraps;
+     the verif-6 pin forbids any truncation rule in this file. */
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.calibration-curve__table th,
+.calibration-curve__table td {
+  border: 1px solid var(--border, #ccc);
+  padding: 2px 6px;
+  /* D6: wrap, never truncate */
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.calibration-curve__table tr[data-selected] {
+  background: rgba(192, 57, 43, 0.12);
+}
+
+.calibration-curve__table tr[data-outlier] {
+  font-weight: 600;
+}
+
+.calibration-curve__runline {
+  font-size: 0.85rem;
+}
+
+.calibration-curve__recalc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.calibration-curve__recalc-diff {
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+}
+
+.calibration-curve__recalc-preview {
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  background: var(--code-bg, #f4f4f4);
+  padding: 0.4rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* RGF D7 (fix cycle 2): the recalc submit's OWN button-scoped class. The
+   first fix cycle shipped className="analysis" on the button — a FALSE
+   mechanism: the frozen AnalysisPage.css `.analysis button:disabled` rules
+   are DESCENDANT selectors and the composite renders in `.analysis-right`,
+   not `.analysis`, so the button never inherited that discipline; the class
+   instead matched the bare `.analysis` CONTAINER rule (display:flex;
+   flex-direction:column; gap:1rem; padding:1rem 1.25rem 2rem;
+   max-width:720px) ON the button — an unintended box in a real browser. The
+   disabled treatment lives HERE, on the button's own class, mirroring the
+   frozen page discipline (the inline state style in the component writes
+   the same values at render time — the jsdom-observable half). */
+.calibration-curve__recalc-submit {
+  font: inherit;
+  cursor: pointer;
+}
+
+.calibration-curve__recalc-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calibration-curve__unresolved,
+.calibration-curve__dref {
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  border: 1px dashed var(--border, #999);
+  border-radius: 4px;
+}

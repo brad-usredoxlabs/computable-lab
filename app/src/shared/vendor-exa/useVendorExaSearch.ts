@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient, type VendorExaCategory, type VendorExaHit } from '../api/client'
+import { exaVendorEnabled, noteExaUnavailable } from '../lib/integrationFlags'
 
 /**
  * useVendorExaSearch — debounced Exa web search for vendor products, shared by
@@ -10,6 +11,21 @@ import { apiClient, type VendorExaCategory, type VendorExaHit } from '../api/cli
  * stale-response guard) so callers render results the same way. Results arrive
  * as `VendorExaHit`s carrying the provenance the server needs to mint a local
  * record via `createFromVendorExa`.
+ *
+ * ## GC-17 capability gate + sticky-negative
+ *
+ * Every fire is gated on the DECLARED capability read (`exaVendorEnabled` —
+ * the same once-per-page cached flag the slash-menu resolvers use): declared
+ * off, or already honestly refused this page load, → ZERO requests AND an
+ * honest `configured: false` read (quietly — no error string; a declared-off
+ * capability is not "configured", so the hook must not report the initial
+ * true). A
+ * `configured:false` response (no key / key rejected — the server answers the
+ * capability question as an honest 200) surfaces quietly (no error string) and
+ * marks the negative STICKY for the page load (`noteExaUnavailable`) so the
+ * other run-page surfaces don't re-probe. A 502-class rejection (valid key,
+ * genuine outage) keeps the throw→error path — typed, and NOT sticky (a blip
+ * must not silently kill the tier for the session).
  *
  * ## Controlled vs owned query
  *
@@ -76,6 +92,18 @@ export function useVendorExaSearch(options?: UseVendorExaSearchOptions): UseVend
     setError(null)
     const handle = window.setTimeout(async () => {
       try {
+        // GC-17 capability gate: await the once-per-page cached declared flag
+        // (same idiom as the slash-menu resolvers). Declared off, or already
+        // honestly refused this page load (sticky-negative) → ZERO requests.
+        const enabled = await exaVendorEnabled()
+        if (!enabled) {
+          // FIX1 D3: a declared-off / sticky-negative capability is NOT
+          // configured — report the capability honestly (quietly: no error
+          // string; this is a capability READ, not a failed search) instead of
+          // leaving `configured` at its initial true.
+          if (latestQueryRef.current === query) setConfigured(false)
+          return
+        }
         const response = await apiClient.searchVendorExa({
           q: trimmed,
           ...(category ? { category } : {}),
@@ -84,8 +112,19 @@ export function useVendorExaSearch(options?: UseVendorExaSearchOptions): UseVend
         if (latestQueryRef.current !== query) return
         setConfigured(response.configured)
         setExaResults(response.items ?? [])
+        if (!response.configured) {
+          // Honest refusal (no key / key rejected — the server answers the
+          // capability question as a 200, never an HTTP failure): quiet — no
+          // error string — and sticky for the page load so the other
+          // run-page surfaces don't re-probe. A 502-class outage (the catch
+          // path) is NOT sticky.
+          noteExaUnavailable()
+        }
       } catch (err) {
         if (latestQueryRef.current !== query) return
+        // A genuine upstream outage behind a valid key (502-class) keeps
+        // today's typed throw→error visibility; it is NOT sticky — a blip
+        // must not silently kill the tier for the session.
         setConfigured(false)
         setError(err instanceof Error ? err.message : 'Vendor Exa search failed')
       } finally {

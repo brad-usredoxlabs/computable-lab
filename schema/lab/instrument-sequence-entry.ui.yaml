@@ -1,0 +1,189 @@
+# UI specification for Instrument Sequence Entry records (GC-3 injection row).
+#
+# EDITOR-1 binding (the promoted spec §UI triplet): every block is a kind:
+# section claiming its slots EXPLICITLY (list order = field order); every slot
+# in editor.slots[] is claimed exactly once. The frontend documentMapper
+# renders ONLY kind:section blocks, and the GC-2 browser-gate rendering rule is
+# binding: the generic editor surface reliably renders ONLY leaf-scalar slots
+# (verified platform limit — widget: object decomposition never renders on the
+# generic surface), so the fixed-shape objects (position, amount, istdAmount)
+# are bound by LEAF-SCALAR DECOMPOSITION: one slot per scalar path ($.position.
+# vial, $.position.tray, $.amount.value, $.amount.unit, $.istdAmount.value,
+# $.istdAmount.unit). Ref fields bind widget: ref (single) / widget: reflist
+# (array of refs). No object/array field is ever bound to a textarea, and no
+# block relies on kind:repeater rendering. The one open string map
+# (uninterpreted) has no fixed leaf set, so it is a single widget: readonly
+# slot (renders the object as readable key: value lines) — never a textarea,
+# and never an invented editable field set. All labels are FULL WORDS; the
+# named labels from the spec are verbatim (Vial, Tray, Data File Name, Sample
+# Name, Method Reference, Manual Injection, Internal Standard Amount Value,
+# Internal Standard Amount Unit, Multiplier, Dilution, Uninterpreted Vendor
+# Fields).
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/instrument-sequence-entry.schema.yaml"
+
+display:
+  titleField: "$.sampleName"
+  subtitleField: "$.id"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity-and-position"
+      kind: "section"
+      label: "Identity and Position"
+      help: "The injection row's identity and where the injection happened on the instrument. state advances only via lifecycle transitions."
+      slots: ["identifier-slot", "vial-slot", "tray-slot", "state-slot"]
+    - id: "machine-links"
+      kind: "section"
+      label: "Machine Links"
+      help: "Record references the row points at (run, sample, gc-method, the GC-4 acquisition package, and the produced analysis-runs). Entries REFERENCE their targets — they never copy fields from them. Target existence is resolution-time."
+      slots: ["run-reference-slot", "sample-reference-slot", "method-reference-slot", "acquisition-package-reference-slot", "analysis-run-references-slot"]
+    - id: "observed-values"
+      kind: "section"
+      label: "Observed Run-Table Values"
+      help: "The run-table data captured as declarative data from the GC-1 spike report's first-hand reads. Vendor-ambiguous values stay honest: unknown unit -> the Uninterpreted sibling field; unverified columns -> the Uninterpreted Vendor Fields map."
+      slots: ["sample-name-slot", "data-file-name-slot", "acquisition-started-at-slot", "date-time-raw-slot", "amount-value-slot", "amount-unit-slot", "amount-uninterpreted-slot", "multiplier-slot", "dilution-slot", "internal-standard-number-slot", "istd-amount-value-slot", "istd-amount-unit-slot", "internal-standard-amount-uninterpreted-slot", "manual-injection-slot", "vendor-method-label-slot"]
+    - id: "uninterpreted-vendor-fields"
+      kind: "section"
+      label: "Uninterpreted Vendor Fields"
+      help: "Vendor-ambiguous run-table columns CL has not verified semantics for, preserved verbatim (string key -> string value). GC-1 unknown-is-unknown: never invent meanings."
+      slots: ["uninterpreted-slot"]
+  slots:
+    # --- identity and position ---
+    - id: "identifier-slot"
+      path: "$.id"
+      label: "Identifier"
+      widget: "readonly"
+      help: "Stable local identifier (e.g., ISEN-2026-0041-007). Read-only."
+    - id: "vial-slot"
+      path: "$.position.vial"
+      label: "Vial"
+      widget: "text"
+      help: "Vial id as captured on the run table."
+    - id: "tray-slot"
+      path: "$.position.tray"
+      label: "Tray"
+      widget: "text"
+      help: "Tray/slot label as free text (tray geometry deliberately not modeled)."
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    # --- machine links (every ref field is widget: ref / reflist) ---
+    - id: "run-reference-slot"
+      path: "$.runRef"
+      label: "Run Reference"
+      widget: "ref"
+      refKind: "run"
+      required: true
+      help: "The study RUN record this injection belongs to. A row with no run is not a row (required). Shape-pinned to type: run; target existence is resolution-time."
+    - id: "sample-reference-slot"
+      path: "$.sampleRef"
+      label: "Sample Reference"
+      widget: "ref"
+      refKind: "sample"
+      required: true
+      help: "The sample record injected. Shape-pinned to type: sample (id-prefix ^SMP- per lint R3); target existence is resolution-time."
+    - id: "method-reference-slot"
+      path: "$.gcMethodRef"
+      label: "Method Reference"
+      widget: "ref"
+      refKind: "gc-method"
+      required: true
+      help: "The gc-method record this row used (optionally pinned by revisionRef to an immutable REV- snapshot). Entries REFERENCE the method; they never copy its fields. Shape-pinned to type: gc-method (id-prefix ^GCM- per lint R3)."
+    - id: "acquisition-package-reference-slot"
+      path: "$.acquisitionPackageRef"
+      label: "Acquisition Package Reference"
+      widget: "ref"
+      refKind: "acquisition-package"
+      help: "The GC-4 acquisition package captured for this row (declared extension point; the target kind lands in GC-4). Shape-pinned to type: acquisition-package."
+    - id: "analysis-run-references-slot"
+      path: "$.analysisRunRefs"
+      label: "Analysis Run References"
+      widget: "reflist"
+      refKind: "analysis-run"
+      help: "Analysis-runs produced from this row (informational provenance from the run-sheet side). uniqueItems is enforced by the schema."
+    # --- observed run-table values (scalars bind scalar widgets) ---
+    - id: "sample-name-slot"
+      path: "$.sampleName"
+      label: "Sample Name"
+      widget: "text"
+      help: "The free-text run-table label (SAMPLE.XML <Name>, e.g. 'RES35077-4'). The machine link is the Sample Reference — this is the observed label only."
+    - id: "data-file-name-slot"
+      path: "$.dataFileName"
+      label: "Data File Name"
+      widget: "text"
+      help: "The vendor data-file name preserved verbatim (ACQ.TXT 'Data File: Z:\\GC-FID\\MACHINE1\\RES35077-4.D'). The NAS-side pointer is GC-4's job."
+    - id: "acquisition-started-at-slot"
+      path: "$.acquisitionStartedAt"
+      label: "Acquisition Started At"
+      widget: "datetime"
+      help: "Normalized acquisition start (ISO 8601 with offset)."
+    - id: "date-time-raw-slot"
+      path: "$.dateTimeRaw"
+      label: "Date Time Raw"
+      widget: "text"
+      help: "The vendor timestamp string preserved VERBATIM (RUN.LOG 'Method started 10:08:18 10/23/26'). A zone is never invented; the raw string sits next to the normalized one."
+    - id: "amount-value-slot"
+      path: "$.amount.value"
+      label: "Amount Value"
+      widget: "number"
+      help: "Injected amount value when the unit is known (SAMPLE.XML Amount)."
+    - id: "amount-unit-slot"
+      path: "$.amount.unit"
+      label: "Amount Unit"
+      widget: "text"
+      help: "Unit carried with the amount; bad unit/dimension combos are rejected by the quantity datatype."
+    - id: "amount-uninterpreted-slot"
+      path: "$.amountUninterpreted"
+      label: "Amount Uninterpreted"
+      widget: "number"
+      help: "The observed amount when the UNIT IS UNKNOWN (a bare number). Two fields, never a faked unit: declare exactly one of Amount / Amount Uninterpreted per record in practice."
+    - id: "multiplier-slot"
+      path: "$.multiplier"
+      label: "Multiplier"
+      widget: "number"
+      help: "The run-table multiplier (SAMPLE.XML <Multiplier>). Must be > 0 when present (a zero factor is a data-entry error — lint R4)."
+    - id: "dilution-slot"
+      path: "$.dilution"
+      label: "Dilution"
+      widget: "number"
+      help: "The run-table dilution factor (SAMPLE.XML <Dilution>). Must be > 0 when present (a zero factor is a data-entry error — lint R4)."
+    - id: "internal-standard-number-slot"
+      path: "$.istdNum"
+      label: "Internal Standard Number"
+      widget: "number"
+      help: "Which internal standard (SAMPLE.XML <ISTD Num='1'>). An integer >= 1."
+    - id: "istd-amount-value-slot"
+      path: "$.istdAmount.value"
+      label: "Internal Standard Amount Value"
+      widget: "number"
+      help: "Internal-standard amount value when the unit is known."
+    - id: "istd-amount-unit-slot"
+      path: "$.istdAmount.unit"
+      label: "Internal Standard Amount Unit"
+      widget: "text"
+      help: "Unit carried with the internal-standard amount."
+    - id: "internal-standard-amount-uninterpreted-slot"
+      path: "$.istdAmountUninterpreted"
+      label: "Internal Standard Amount Uninterpreted"
+      widget: "number"
+      help: "The internal-standard amount when the unit is unknown (SAMPLE.XML <ISTD>0</ISTD>)."
+    - id: "manual-injection-slot"
+      path: "$.manualInjection"
+      label: "Manual Injection"
+      widget: "checkbox"
+      help: "Manual-injection flag (run-table column; default false)."
+    - id: "vendor-method-label-slot"
+      path: "$.vendorMethodLabel"
+      label: "Vendor Method Label"
+      widget: "text"
+      help: "The observed vendor method NAME (ACQ.TXT 'Acq. Method: AOAC_FAME_NO_INJECTION.M'). Imported evidence — the machine link is the Method Reference."
+    # --- vendor-ambiguous open string map ---
+    - id: "uninterpreted-slot"
+      path: "$.uninterpreted"
+      label: "Uninterpreted Vendor Fields"
+      widget: "readonly"
+      help: "Vendor-ambiguous columns preserved verbatim (string key -> string value). Display-only here: an open map has no fixed editable field set (GC-1 unknown-is-unknown); never invent keys in the UI."

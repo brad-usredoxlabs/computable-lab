@@ -69,8 +69,14 @@ export interface WorkstateProposalCardState {
 export interface WorkstateProposalFlow {
   /** The single pending card (null = no proposal in flight). */
   card: WorkstateProposalCardState | null
-  /** Relay a tier-2 INTENT to POST /api/drafts/compile (THE trust boundary). */
-  proposeWorkstate: (adapter: WorkstateAdapter, intent: Record<string, unknown>) => Promise<void>
+  /** Relay a tier-2 INTENT to POST /api/drafts/compile (THE trust boundary).
+   * `target` (FAME-3 W6 OQ-4 OPT-A step 7): the edit-record arm's named target
+   * record, forwarded as `body.target.recordId` on the compile request. The
+   * record-drafting ENVELOPE is additionalProperties:false and carries no
+   * target — the target is a REQUEST-BODY channel (FormDraftService), not an
+   * intent field, so an edit that omits it compiles to the NAMED
+   * EDIT_TARGET_REQUIRED refusal. Absent ⇒ create arm (event-editor mount). */
+  proposeWorkstate: (adapter: WorkstateAdapter, intent: Record<string, unknown>, target?: { recordId: string }) => Promise<void>
   /** Accept = the actor-bound compiled draft through the single writer. */
   acceptWorkstate: () => Promise<void>
   /** Reject = abandon: zero store calls, zero fetches, identity cleared. */
@@ -100,16 +106,23 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
   }, [])
 
   const proposeWorkstate = useCallback(
-    async (adapter: WorkstateAdapter, intent: Record<string, unknown>) => {
+    async (adapter: WorkstateAdapter, intent: Record<string, unknown>, target?: { recordId: string }) => {
       const seq = compileSeqRef.current + 1
       compileSeqRef.current = seq
       setCard({ phase: 'compiling' })
       const pending = pendingDraftRef.current
       try {
+        // FAME-3 W6 (OQ-4 OPT-A step 7): the edit-record arm's named target
+        // record rides the compile REQUEST BODY (body.target.recordId), never
+        // the intent envelope (the envelope is additionalProperties:false).
+        // Conditional spread — absent target ⇒ absent key (the create arm and
+        // every non-edit adapter send no target), never an undefined slot.
+        const targetRecordId = target && typeof target.recordId === 'string' && target.recordId.length > 0 ? target.recordId : undefined
         const res = await apiClient.compileWorkstateDraft({
           adapter,
           intent,
           ...(pending ? { draftId: pending.draftId, revision: pending.revision } : {}),
+          ...(targetRecordId ? { target: { recordId: targetRecordId } } : {}),
         })
         if (seq !== compileSeqRef.current) return // superseded — discard
         pendingDraftRef.current = { draftId: res.draftId, revision: res.revision, reviewHash: res.reviewHash }

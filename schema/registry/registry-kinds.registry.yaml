@@ -20,8 +20,30 @@ kinds:
   - kind: competency-authorization
     # INSTR-COLLAPSE-2 C3: the `instrument` coverage entry is RETIRED with the
     # kind (Brad 2026-10-21T19:15 ruling; schema/lab/instrument.{schema,lint,ui}
-    # deleted, record.schema.yaml oneOf branch removed). Coverage is now 6 kinds.
+    # deleted, record.schema.yaml oneOf branch removed). Coverage is now 9 kinds after GC-2/GC-3 additions.
   - kind: calibration-record
+  # GC-2: gc-method records join the minimal registry-ops lifecycle (draft
+  # default state, same treatment as calibration-record — no stripDomainStatus).
+  # The kind's own schema declares the matching lifecycleId/state enums so the
+  # registryOpsLifecycle pin stays green.
+  - kind: gc-method
+  # GC-3: the instrument run-sheet kinds (header + injection row) join the
+  # minimal registry-ops lifecycle (draft default state, same treatment as
+  # calibration-record — no stripDomainStatus). Both kinds' schemas declare the
+  # matching lifecycleId/state enums so the registryOpsLifecycle pin stays green.
+  - kind: instrument-sequence
+  - kind: instrument-sequence-entry
+  # GC-4: the .D acquisition-package kind joins the minimal registry-ops
+  # lifecycle (draft default state, same treatment as calibration-record — no
+  # stripDomainStatus). The kind's schema declares the matching
+  # lifecycleId/state enums so the registryOpsLifecycle pin stays green.
+  - kind: acquisition-package
+  # GC-5: the declared analysis-engine kind joins the minimal registry-ops
+  # lifecycle (draft default state, same treatment as calibration-record — no
+  # stripDomainStatus). The kind's schema (schema/knowledge/
+  # analysis-engine.schema.yaml) declares the matching lifecycleId/state enums
+  # so the registryOpsLifecycle pin stays green.
+  - kind: analysis-engine
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
 # covered record in a terminal lifecycle state is refused at create, and on

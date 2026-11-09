@@ -15,16 +15,42 @@
 import { RecordRevisionService, withRecordLock, contentHash } from '../revisions/RecordRevisionService.js';
 import { executeSequenceMethod, sequenceConfig } from '../sequences/sequenceRuntime.js';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AnalysisService, AnalysisServiceError } from './analysisService.js';
+import { AnalysisService, AnalysisServiceError, resolveEngineRef } from './analysisService.js';
+import {
+  checkVersionConstraint,
+  probeEngine,
+  resolveEngineAdapter,
+  type EngineProvenance,
+  type EngineRecord,
+} from './engineAdapters.js';
 import type { AppContext } from '../server.js';
 
 const DEFAULT_PYTHON = '/usr/bin/python3';
+
+/**
+ * GC-5 — the interpreter resolution order (GC-1 F18, the "no /usr/bin
+ * assumption" spine): 1) config-declared `analysis.python` (the provisioned
+ * venv path lives in gitignored config DATA, not here — bait #3), 2) the
+ * CLA_ANALYSIS_PYTHON env override (mirrors the F2 SDK-dir precedent),
+ * 3) the constructor-injected interpreter (DEFAULT_PYTHON last-resort for
+ * revisions with NO provisioned-venv engine requirement). The constructor
+ * channel `python = DEFAULT_PYTHON` is intact (F20); the env+config layers
+ * merely precede it.
+ */
+function resolveInterpreter(ctx: AppContext, injected: string): string {
+  const fromConfig = ctx.appConfig?.analysis?.python;
+  if (typeof fromConfig === 'string' && fromConfig.trim()) return fromConfig.trim();
+  const fromEnv = process.env.CLA_ANALYSIS_PYTHON;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  return injected;
+}
 
 /** Resolve the computable_lab_analysis SDK package dir for PYTHONPATH.
  *  Preference: CLA_ANALYSIS_SDK_DIR env → module-relative (deterministic,
@@ -57,6 +83,42 @@ interface InputSpec {
   path: string;
   /** Inline data handed directly to the SDK (small inline artifact/table). */
   inline?: unknown;
+  /**
+   * GC-6 (D5) — provenance pass-through from the source data-reference: the
+   * DREF's OWN pinned values (sourcePath = the DREF payload.path, contentHash
+   * when the DREF declares one). The reader rides these for channel identity +
+   * hash provenance — no re-hash (GC-5's execute-time re-hash leg is
+   * untouched). Conditional spread only — exactOptionalPropertyTypes (F20).
+   *
+   * FAME-7 fix run 2 (R1 / D11 leg b) — the bound REF identity + the LINKING
+   * ARTIFACT's own provenance echo, additive on the same meta (same comment
+   * discipline as the GC-6 block above):
+   *  - recordRefId — the bound input ref's own record id (the DREF id on the
+   *    data-reference branch; the artifact id on the artifact branch);
+   *  - artifactRecordId — the linking artifact's record id (data-reference
+   *    branch: the artifact whose one-way dataReferenceRef link points at the
+   *    DREF — the same reverse lookup the declared-inputs name gate uses;
+   *    artifact branch: the artifact itself). ABSENT when no artifact links
+   *    the DREF (honestly — never invented);
+   *  - producerRunId — the producer run id the linking artifact's OWN record
+   *    declares (its runRef, runner-stamped at its production). ABSENT when
+   *    the artifact declares no runRef.
+   * Additive only: every arm provisions and hands to the SDK exactly what it
+   * did before (same path, same inline value, same dataKind); the meta keys
+   * are additive pass-through (exactOptionalPropertyTypes conditional
+   * spreads — absent when unresolvable, never invented). The existing inline
+   * CONSUMPTION path is unchanged (what a script reads via ctx.input().inline
+   * / the provisioned file is byte-identical); the inline arm simply rides
+   * the artifact's own provenance echo in meta where it surfaced NOTHING
+   * before. No hardcoded policy values (record-type names only, R8).
+   */
+  meta?: {
+    sourcePath: string;
+    contentHash?: string;
+    recordRefId?: string;
+    artifactRecordId?: string;
+    producerRunId?: string;
+  };
 }
 
 export interface RunInputs {
@@ -88,6 +150,12 @@ export interface OutputManifest {
   views: ManifestView[];
   metrics: Array<{ name: string; value: unknown; unit?: string; label?: string }>;
   logs: Array<{ message: string; level: string; code?: string }>;
+  /**
+   * GC-5: a compact copy of the run's engineProvenance (the ACTUAL engine +
+   * interpreter + package versions), echoed into the stored manifest so the
+   * UI/provenance story reads from the manifest too. Absent on legacy runs.
+   */
+  engine?: EngineProvenance;
 }
 
 export class AnalysisRunner {
@@ -118,6 +186,26 @@ export class AnalysisRunner {
       let deviceId: string;
       let path: string;
       let dataKind: string | undefined = ref.dataKind;
+      // GC-5 (F3 / GC-4 fold): the data-reference's declared contentHash (the
+      // sha256 of the bytes AT ACQUISITION). When present, the execute-time
+      // provision re-hashes the streamed bytes and a drift is a NAMED declared
+      // failure (DATA_HASH_MISMATCH 409) — closes the submit→execute window.
+      let declaredContentHash: string | undefined;
+      // FAME-7 fix run 2 (R1 / D11 leg b): the linking artifact's own provenance
+      // echo, resolved PER INPUT (never a process cache, one list per input —
+      // the same reverse lookup the declared-inputs name gate uses; record-type
+      // name, not a domain literal, R8). Set in the data-reference branch
+      // (the artifact whose one-way dataReferenceRef link points at the DREF);
+      // the artifact branch surfaces the artifact itself.
+      let linkingArtifactRecordId: string | undefined;
+      let linkingProducerRunId: string | undefined;
+      // GC-6 (D5): per-input provenance for the data-reference branch only —
+      // the DREF's pinned values handed to the SDK (the reader's meta.source /
+      // channel identity + hash provenance). Absent for the artifact branch.
+      // FAME-7 fix run 2 (R1 / D11 leg b): additive bound-ref + linking-
+      // artifact provenance echo (recordRefId / artifactRecordId /
+      // producerRunId — the InputSpec.meta shape above).
+      let inputMeta: InputSpec['meta'] | undefined;
 
       if (ref.type === 'analysis-output-artifact') {
         // Resolve the artifact → its data-reference (or inline) for provisioning.
@@ -125,24 +213,58 @@ export class AnalysisRunner {
         if (!artEnv) {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact not found: ${ref.id}`, 404);
         }
-        const art = artEnv.payload as { dataReferenceRef?: { id?: string }; inlineValue?: unknown; dataKind?: string };
+        const art = artEnv.payload as { dataReferenceRef?: { id?: string }; inlineValue?: unknown; dataKind?: string; runRef?: { id?: string } };
         dataKind = dataKind ?? art.dataKind;
+        // FAME-7 fix run 2 (R1 / D11 leg b) — the artifact-typed branch
+        // surfaces the ARTIFACT'S OWN provenance echo instead of nothing: the
+        // pre-fix artifact branch passed NO meta at all (the D11 defect's
+        // artifact arm). artifactRecordId = the bound artifact itself;
+        // producerRunId = the producer run the artifact's OWN record declares
+        // (its runRef, runner-stamped at its production) — absent when the
+        // record declares no runRef (honestly, never invented).
+        linkingArtifactRecordId = ref.id;
+        linkingProducerRunId = typeof art.runRef?.id === 'string' ? art.runRef.id : undefined;
         if (art.dataReferenceRef?.id) {
           const refId = art.dataReferenceRef.id;
           const drefEnv = await this.ctx.store.get(refId);
           if (!drefEnv) {
             throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact dref not found: ${refId}`, 404);
           }
-          const dp = drefEnv.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
+          const dp = drefEnv.payload as { storageDeviceId?: string; path?: string; dataKind?: string; contentHash?: string };
           if (!dp.storageDeviceId || !dp.path) {
             throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact dref has no device/path`, 400);
           }
           deviceId = dp.storageDeviceId;
           path = dp.path;
           dataKind = dataKind ?? dp.dataKind;
+          declaredContentHash = typeof dp.contentHash === 'string' ? dp.contentHash : undefined;
+          // FAME-7 fix run 2 (R1 / D11 leg b): the artifact-typed DREF arm now
+          // surfaces the artifact's OWN provenance echo (it previously passed
+          // NO meta at all). recordRefId/artifactRecordId = the bound artifact
+          // itself (the run bound the artifact, not the DREF); producerRunId =
+          // the artifact's own runRef (absent when the record declares none).
+          inputMeta = {
+            sourcePath: dp.path,
+            ...(declaredContentHash ? { contentHash: declaredContentHash } : {}),
+            recordRefId: ref.id,
+            artifactRecordId: ref.id,
+            ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+          };
         } else if (art.inlineValue !== undefined) {
           // inline artifact (small table/metric) → hand to the SDK as inline data
-          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: `${inputDir}/${name}.inline`, inline: art.inlineValue };
+          const inlinePath = `${inputDir}/${name}.inline`;
+          // FAME-7 fix run 2 (R1 / D11 leg b): the inline arm surfaces the
+          // artifact's own provenance echo in meta (it previously surfaced
+          // NOTHING). sourcePath = the inline provision path (honest — that is
+          // where the SDK reads it); recordRefId/artifactRecordId = the bound
+          // artifact; producerRunId = the artifact's own runRef.
+          const inlineMeta: InputSpec['meta'] = {
+            sourcePath: inlinePath,
+            recordRefId: ref.id,
+            artifactRecordId: ref.id,
+            ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+          };
+          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: inlinePath, inline: art.inlineValue, meta: inlineMeta };
           continue;
         } else {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact has no dataReferenceRef or inlineValue`, 400);
@@ -152,13 +274,73 @@ export class AnalysisRunner {
         if (!env) {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference not found: ${ref.id}`, 404);
         }
-        const payload = env.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
+        const payload = env.payload as { storageDeviceId?: string; path?: string; dataKind?: string; contentHash?: string };
         if (!payload.storageDeviceId || !payload.path) {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference has no device/path`, 400);
+        }
+        // GC-12 fix-cycle-3 (DIRFIX-2, architect ruling A-named-error): a
+        // DIRECTORY-kind data-reference (the ACQP signal-collection manifest
+        // DREF) is NOT a runner-consumable input. The runner streams EVERY
+        // data-reference via provider.read(path) into <inputDir>/<name>.bin,
+        // i.e. it can only handle files; reading a directory would throw EISDIR
+        // (relabeled INTERNAL_ERROR). Refuse EARLY — after loading the DREF
+        // payload and BEFORE provider.read — with a NAMED 400-class token.
+        // The guard keys off the RECORD'S DECLARED dataKind (not a filename),
+        // so it survives "remove every hardcoded value". No directory
+        // expansion (deferred by ruling — no engine consumes collections
+        // today).
+        if (payload.dataKind === 'signal-collection') {
+          throw new AnalysisServiceError(
+            'INPUT_IS_DIRECTORY',
+            `input ${name} (data-reference ${ref.id}) declares dataKind 'signal-collection' — a directory, not a file. The analysis runner provisions file-kind data-references only; it cannot stream a directory into a run input. Point the run's input at one of the package's member file DREFs (acquisition-package.files), not the signal-collection manifest.`,
+            400,
+          );
         }
         deviceId = payload.storageDeviceId;
         path = payload.path;
         dataKind = dataKind ?? payload.dataKind;
+        declaredContentHash = typeof payload.contentHash === 'string' ? payload.contentHash : undefined;
+        // FAME-7 fix run 2 (R1 / D11 leg b): the DREF CARRIES no producer
+        // identity of its own — the linking artifact does (the one that
+        // declares `dataReferenceRef: {id: <this DREF>}` — artifactPromotion's
+        // additive link). Resolve it via the SAME reverse lookup the
+        // declared-inputs name gate uses (one list per input, no cache): its
+        // record id + its OWN runRef (the producer run, runner-stamped at its
+        // production) become the bound input's provenance echo. Absent when no
+        // artifact links the DREF — honestly, never invented (a DREF the name
+        // gate cannot prove is a declared rejection there; here the runner
+        // simply passes nothing it cannot prove).
+        {
+          try {
+            const artifacts = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
+            const linking = artifacts.find((e) => {
+              const p = e.payload as { dataReferenceRef?: { id?: unknown } } | null | undefined;
+              return p?.dataReferenceRef?.id === ref.id;
+            });
+            if (linking) {
+              linkingArtifactRecordId = linking.recordId;
+              const lr = (linking.payload as { runRef?: { id?: unknown } } | null)?.runRef;
+              linkingProducerRunId = typeof lr?.id === 'string' ? lr.id : undefined;
+            }
+          } catch {
+            // A list failure means the link cannot be proven — pass nothing
+            // (the named rejection lives in the declared-inputs gate, not the
+            // execute path; the runner never invents a producer id).
+          }
+        }
+        // GC-6 (D5): pass the DREF's pinned provenance through to the SDK —
+        // ~4 additive lines (OQ2 ruling: KEEP the touch). Conditional spread:
+        // contentHash only when the DREF declares one (exactOptionalPropertyTypes).
+        // FAME-7 fix2 (R1): + the bound ref id + the linking artifact's provenance
+        // echo (recordRefId = the DREF id; artifactRecordId / producerRunId when
+        // a linking artifact is resolvable — absent otherwise, never invented).
+        inputMeta = {
+          sourcePath: path,
+          ...(declaredContentHash ? { contentHash: declaredContentHash } : {}),
+          recordRefId: ref.id,
+          ...(linkingArtifactRecordId ? { artifactRecordId: linkingArtifactRecordId } : {}),
+          ...(linkingProducerRunId ? { producerRunId: linkingProducerRunId } : {}),
+        };
       } else {
         throw new AnalysisServiceError('BAD_INPUT', `input ${name} must be a data-reference or analysis-output-artifact`, 400);
       }
@@ -170,27 +352,47 @@ export class AnalysisRunner {
       const chunks: Buffer[] = [];
       for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
       await writeFile(outPath, Buffer.concat(chunks));
+      // GC-5 execute-time re-hash (F3 / the GC-4 OQ1 fold): the bytes the run
+      // will actually consume are hashed while they stream. If the source
+      // data-reference declared a contentHash (sha256 at acquisition) and the
+      // live bytes no longer match, that is a NAMED declared failure — the
+      // submit→execute drift window GC-4 explicitly assigned here.
+      if (declaredContentHash) {
+        const actual = createHash('sha256').update(Buffer.concat(chunks)).digest('hex');
+        if (actual !== declaredContentHash) {
+          throw new AnalysisServiceError(
+            'DATA_HASH_MISMATCH',
+            `input ${name} bytes drifted between submit and execute: data-reference declares contentHash ${declaredContentHash.slice(0, 12)}… but the provisioned bytes hash ${actual.slice(0, 12)}… — create a new run against fresh data`,
+            409,
+          );
+        }
+      }
       specs[name] = {
         dataKind: dataKind ?? 'table',
         path: outPath,
+        ...(inputMeta ? { meta: inputMeta } : {}),
       };
     }
     return specs;
   }
 
-  /** Spawn the python SDK run and capture stdout manifest JSON. */
+  /** Spawn the python SDK run and capture stdout manifest JSON.
+   *  `interpreterPath` is the RESOLVED interpreter (GC-5 resolution order);
+   *  it defaults to the constructor-injected `this.python` so the legacy
+   *  call site (no pinned engine) keeps byte-identical behavior. */
   private async runPython(
     entryScriptPath: string,
     inputs: Record<string, InputSpec>,
     inputDir: string,
     parameters?: Record<string, unknown>,
+    interpreterPath: string = this.python,
   ): Promise<OutputManifest> {
     const sdkDir = this.sdkDir();
     const inputsJson = JSON.stringify(inputs);
     const parametersJson = JSON.stringify(parameters ?? {});
     return new Promise<OutputManifest>((resolvePromise, rejectPromise) => {
       const child = spawn(
-        this.python,
+        interpreterPath,
         ['-m', 'computable_lab_analysis', 'run', entryScriptPath, '--inputs', inputsJson, '--parameters', parametersJson, '--input-dir', inputDir],
         {
           env: {
@@ -405,6 +607,160 @@ export class AnalysisRunner {
     return `AOUT-${String(max + 1).padStart(6, '0')}`;
   }
 
+  /**
+   * GC-5 — the execute-time engine gate (§c/§e). Runs BEFORE the status flips
+   * to 'running': a failing gate leaves the run visibly failed with its NAMED
+   * token, never a silent interpreter/engine/capability swap.
+   *
+   *  1. resolve the pinned engine (the SHARED resolver — one resolver with the
+   *     createRevision gate: absent / wrong-kind / unresolvable →
+   *     ENGINE_REF_UNRESOLVED; archived → ENGINE_REF_UNRESOLVED 409);
+   *  2. availability (declared): available:false → ENGINE_UNAVAILABLE;
+   *  3. resolve the interpreter (GC-1 F18 order); the provisioned-venv trap:
+   *     a provisioned-venv engine with declared packages that lands on the
+   *     last-resort interpreter → ENGINE_UNAVAILABLE (never a silent /usr/bin
+   *     run);
+   *  4. PROBE the resolved interpreter (one cheap -c call; package NAMES come
+   *     from the record — bait #3: no package literal in TS); a dead
+   *     interpreter → ENGINE_UNAVAILABLE (probeEngine's declared error);
+   *  5. actual-vs-declared constraints (V1 grammar): unparseable →
+   *     ENGINE_VERSION_CHECK_UNSUPPORTED; mismatch → ENGINE_VERSION_MISMATCH
+   *     (observed-vs-required in the message, inspectEndpoint precedent);
+   *  6. capability check: every revision.requiredCapabilities name must be
+   *     declared 'supported' or 'approximate' → else
+   *     ENGINE_CAPABILITY_UNSUPPORTED (naming the capability).
+   *
+   * Returns the resolved engine + the RESOLVED interpreter + the machine-
+   * readable engineProvenance (the ACTUAL versions) the completion write
+   * persists. approximate capabilities are surfaced (warning manifest logs),
+   * never hidden.
+   */
+  private async engineGate(
+    engineRef: { id: string; kind?: string; type?: string; revisionRef?: { id?: string } },
+    requiredCapabilities: string[] | undefined,
+  ): Promise<{ engine: EngineRecord; interpreterPath: string; provenance: EngineProvenance; approximate: Array<{ capability: string; support: string }> }> {
+    // (1) resolve — the shared resolver (ENGINE_REF_UNRESOLVED on miss).
+    const env = await resolveEngineRef(this.ctx.store, engineRef);
+    const engine = env.payload as unknown as EngineRecord;
+
+    // (2) declared availability.
+    if (engine.availability?.available === false) {
+      throw new AnalysisServiceError(
+        'ENGINE_UNAVAILABLE',
+        `engine ${engine.id} is declared unavailable (${engine.availability.note ?? 'no note'}) — no fallback engine is substituted`,
+        409,
+      );
+    }
+
+    // (3) interpreter resolution (config analysis.python → env
+    //     CLA_ANALYSIS_PYTHON → the constructor-injected last-resort).
+    const interpreterPath = resolveInterpreter(this.ctx, this.python);
+    const declaredPackages = engine.version_constraints?.packages ?? [];
+    // l1t2245 defect 3: `lastResort` is derived from the RESOLVED
+    // interpreter, not from the raw config/env values. resolveInterpreter
+    // TRIMS both layers, so a whitespace-only `analysis.python` /
+    // CLA_ANALYSIS_PYTHON value counts as ABSENT there (resolution falls
+    // through to the constructor-injected last-resort) — and the trap must
+    // fire exactly when that fall-through happened. Raw truthiness of the
+    // untrimmed values let a whitespace-only declaration bypass the trap
+    // (a silent last-resort run of a provisioned-venv engine).
+    const lastResort = interpreterPath === this.python;
+    if (engine.runtime_requirements?.interpreter === 'provisioned-venv' && lastResort && declaredPackages.length > 0) {
+      throw new AnalysisServiceError(
+        'ENGINE_UNAVAILABLE',
+        `engine ${engine.id} requires a provisioned-venv interpreter with declared packages, but resolution landed on the last-resort interpreter (${interpreterPath}) — declare analysis.python in config or set CLA_ANALYSIS_PYTHON; a silent system run is refused`,
+        409,
+      );
+    }
+
+    // (4) probe the RESOLVED interpreter (package names from the record).
+    const probe = await probeEngine(interpreterPath, declaredPackages.map((p) => p.name));
+
+    // (5) actual-vs-declared constraints.
+    const pythonConstraint = engine.version_constraints?.python;
+    if (pythonConstraint) {
+      const outcome = checkVersionConstraint(probe.python, pythonConstraint);
+      if (outcome === 'unsupported') {
+        throw new AnalysisServiceError(
+          'ENGINE_VERSION_CHECK_UNSUPPORTED',
+          `engine ${engine.id} declares an unparseable python constraint '${pythonConstraint}' (V1 grammar: ==/>=/<=/>/< + dotted versions) — never a guess; fix the record`,
+          409,
+        );
+      }
+      if (outcome === 'mismatch') {
+        throw new AnalysisServiceError(
+          'ENGINE_VERSION_MISMATCH',
+          `engine ${engine.id} requires python ${pythonConstraint} but the resolved interpreter ${interpreterPath} reports ${probe.python}`,
+          409,
+        );
+      }
+    }
+    const packages = declaredPackages.map((p) => {
+      const actual = probe.packages[p.name] ?? 'absent';
+      if (actual === 'absent') {
+        throw new AnalysisServiceError(
+          'ENGINE_VERSION_MISMATCH',
+          `engine ${engine.id} declares package ${p.name} ${p.constraint} but it is ABSENT from the resolved interpreter ${interpreterPath}`,
+          409,
+        );
+      }
+      const outcome = checkVersionConstraint(actual, p.constraint);
+      if (outcome === 'unsupported') {
+        throw new AnalysisServiceError(
+          'ENGINE_VERSION_CHECK_UNSUPPORTED',
+          `engine ${engine.id} declares an unparseable constraint '${p.constraint}' on package ${p.name} — never a guess; fix the record`,
+          409,
+        );
+      }
+      if (outcome === 'mismatch') {
+        throw new AnalysisServiceError(
+          'ENGINE_VERSION_MISMATCH',
+          `engine ${engine.id} requires ${p.name} ${p.constraint} but the resolved interpreter ${interpreterPath} reports ${actual}`,
+          409,
+        );
+      }
+      return { name: p.name, required: p.constraint, actual };
+    });
+
+    // (6) capability check (requiredCapabilities ⊆ declared supported/
+    //     approximate).
+    const declaredCaps = new Map((engine.capabilities?.declared ?? []).map((c) => [c.capability, c.support]));
+    for (const cap of requiredCapabilities ?? []) {
+      const support = declaredCaps.get(cap);
+      if (support !== 'supported' && support !== 'approximate') {
+        throw new AnalysisServiceError(
+          'ENGINE_CAPABILITY_UNSUPPORTED',
+          `engine ${engine.id} does not support the required capability '${cap}' (declared support: ${support ?? 'absent'}) — no silent capability drop`,
+          409,
+        );
+      }
+    }
+    const approximate = (engine.capabilities?.declared ?? []).filter((c) => c.support === 'approximate');
+
+    const provenance: EngineProvenance = {
+      engineRef: {
+        kind: 'record',
+        type: 'analysis-engine',
+        id: engine.id,
+        ...(engineRef.revisionRef?.id
+          ? { revisionRef: { kind: 'record', type: 'record-revision', id: engineRef.revisionRef.id } }
+          : {}),
+      },
+      engineRecordId: engine.id,
+      engineVersion: engine.engine_version ?? 'unknown',
+      adapter: engine.implementation.adapter,
+      interpreterPath,
+      interpreterVersion: probe.python,
+      packages,
+      probedAt: new Date().toISOString(),
+      ...(engine.capabilities?.declared?.length
+        ? { capabilitiesReported: engine.capabilities.declared.map((c) => ({ capability: c.capability, support: c.support })) }
+        : {}),
+    };
+
+    return { engine, interpreterPath, provenance, approximate };
+  }
+
   /** Execute a run (assumes queued). Transitions status + persists outputs. */
   async executeRun(runId: string): Promise<{ recordId: string; status: string; manifest: OutputManifest; artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }> }> {
     return withRecordLock(this.ctx.store, `analysis:${runId}`, () => this.executeLocked(runId));
@@ -440,9 +796,39 @@ export class AnalysisRunner {
     if (!revId) throw new AnalysisServiceError('BAD_RUN', `run ${runId} missing revisionRef`, 400);
     const revEnv = await service.getRevision(revId);
     if (!revEnv) throw new AnalysisServiceError('NOT_FOUND', `revision not found: ${revId}`, 404);
-    const revPayload = (runPayload.frozenRevisionRef ? (await new RecordRevisionService(this.ctx.store).read(runPayload.frozenRevisionRef)).payload.snapshot : revEnv.payload) as { entryScript?: string; sdkVersion?: string; sequenceMethod?: Record<string, unknown> };
+    const revPayload = (runPayload.frozenRevisionRef ? (await new RecordRevisionService(this.ctx.store).read(runPayload.frozenRevisionRef)).payload.snapshot : revEnv.payload) as {
+      entryScript?: string;
+      sdkVersion?: string;
+      sequenceMethod?: Record<string, unknown>;
+      engineRef?: { id: string; kind?: string; type?: string; revisionRef?: { id?: string } };
+      requiredCapabilities?: string[];
+    };
 
     if (!revPayload.entryScript) throw new AnalysisServiceError('BAD_REVISION', `revision ${revId} missing entryScript`, 400);
+
+    // GC-5 engine gate (§c/§e): BEFORE the status flips to 'running' — a
+    // failing gate marks the run 'failed' (visibly, with its NAMED token) and
+    // re-throws, never a silent swap. Resolves the pinned engine (shared
+    // resolver), probes the RESOLVED interpreter for ACTUAL versions, checks
+    // capabilities, and builds the machine-readable engineProvenance written
+    // at completion. Absent engineRef = the legacy path (gate skipped, no
+    // provenance — byte-identical behavior).
+    // l1t2245 defect 2: a revision carrying BOTH sequenceMethod and engineRef
+    // dispatches to the SEQUENCE path (spec §d: "sequenceMethod → sequence
+    // path untouched") — the pinned engine does NOT execute, so the gate is
+    // skipped entirely: no resolve, no probe, no manifest engine echo, and NO
+    // engineProvenance written for an engine that never ran (false
+    // provenance is a knowledge-layer defect; a failing gate would also
+    // block a valid sequence run for an unused engine).
+    let engineGate: { engine: EngineRecord; interpreterPath: string; provenance: EngineProvenance; approximate: Array<{ capability: string; support: string }> } | null = null;
+    if (revPayload.engineRef && !revPayload.sequenceMethod) {
+      try {
+        engineGate = await this.engineGate(revPayload.engineRef, revPayload.requiredCapabilities);
+      } catch (err) {
+        await service.setRunStatus(runId, 'failed');
+        throw err;
+      }
+    }
 
     // Mark running
     await service.setRunStatus(runId, 'running');
@@ -457,10 +843,50 @@ export class AnalysisRunner {
       try {
         manifest = revPayload.sequenceMethod
           ? await executeSequenceMethod(this.ctx, revPayload.sequenceMethod, runPayload.inputs ?? {}, runPayload.parameters ?? {}, inputDir)
-          : await this.runPython(entryScriptPath, inputs, inputDir, runPayload.parameters);
+          : engineGate
+            // Registry-data-driven dispatch (§d): the record's
+            // implementation.adapter selects the shipped adapter. The
+            // python-entry-script adapter wraps the existing runPython with
+            // the RESOLVED interpreter; stub-echo is the declared second
+            // adapter (pluggability probe). No TS engine-name literal here.
+            ? await resolveEngineAdapter(engineGate.engine).execute({
+                interpreterPath: engineGate.interpreterPath,
+                entryScriptPath,
+                inputs,
+                inputDir,
+                parameters: runPayload.parameters ?? {},
+                sdkDir: this.sdkDir(),
+                parameterCount: Object.keys(runPayload.parameters ?? {}).length,
+                spawnPython: (interpreterPath, p, i, d, params) =>
+                  this.runPython(p, i, d, params, interpreterPath),
+              })
+            : await this.runPython(entryScriptPath, inputs, inputDir, runPayload.parameters);
       } catch (err) {
         await service.setRunStatus(runId, 'failed');
         throw err;
+      }
+
+      // GC-5: echo a compact provenance copy into the manifest (TS type
+      // OutputManifest.engine) — absent on the legacy/sequence paths. Approximate
+      // capability support is surfaced as a WARNING manifest log — reported,
+      // never hidden (the S/A/U/NV legend's A leg).
+      if (engineGate) {
+        manifest = {
+          ...manifest,
+          engine: engineGate.provenance,
+          ...(engineGate.approximate.length > 0
+            ? {
+                logs: [
+                  ...manifest.logs,
+                  ...engineGate.approximate.map((c) => ({
+                    message: `engine ${engineGate.provenance.engineRecordId} reports capability '${c.capability}' as APPROXIMATE — approximation is declared, not hidden`,
+                    level: 'warning',
+                    code: 'ENGINE_CAPABILITY_APPROXIMATE',
+                  })),
+                ],
+              }
+            : {}),
+        };
       }
 
       // Persist each artifact + its views
@@ -475,9 +901,14 @@ export class AnalysisRunner {
       const storedArtifacts = await Promise.all(Object.values(artifactRefs).map(r => this.ctx.store.get(r.artifactRecordId)));
       const persistedManifest = { ...manifest, artifacts: storedArtifacts.map(e => {
         const p = e!.payload as Record<string, unknown>;
-        return { name: p.name, dataKind: p.dataKind, ...(p.inlineValue !== undefined ? { value: p.inlineValue } : {}), ...(p.dataReferenceRef ? { dataReferenceRef: p.dataReferenceRef } : {}) };
+        return { name: p.name, dataKind: p.dataKind, ...(p.inlineValue !== undefined ? { value: p.inlineValue } : {}), ...(p.dataReferenceRef ? { dataReferenceRef: p.dataReferenceRef } : {}) } as Record<string, unknown>;
       }), artifactRefs };
-      const saved = await this.ctx.store.update({ envelope: { ...current, payload: { ...(current.payload as Record<string, unknown>), status: 'succeeded', completedAt: new Date().toISOString(), outputManifest: persistedManifest, outputArtifactRefs: Object.values(artifactRefs).map(r => ({ kind: 'record', id: r.artifactRecordId, type: 'analysis-output-artifact' })) } }, message: `Complete analysis ${runId}` });
+      // GC-5: the machine-readable engineProvenance rides the SAME completion
+      // write (F8 — no new framework). Written ONCE at completion; the
+      // idempotent re-read path (F6) returns the stored record untouched, so
+      // old runs keep byte-stable provenance. Absent on legacy runs (exact
+      // optional spread — F20).
+      const saved = await this.ctx.store.update({ envelope: { ...current, payload: { ...(current.payload as Record<string, unknown>), status: 'succeeded', completedAt: new Date().toISOString(), outputManifest: persistedManifest, ...(engineGate ? { engineProvenance: engineGate.provenance } : {}), outputArtifactRefs: Object.values(artifactRefs).map(r => ({ kind: 'record', id: r.artifactRecordId, type: 'analysis-output-artifact' })) } }, message: `Complete analysis ${runId}` });
       if (!saved.success) throw new AnalysisServiceError('SAVE_FAILED', saved.error ?? 'Could not persist analysis results', 500);
 
       // Capture a corpus training pair (surface:analysis → accepted manifest).

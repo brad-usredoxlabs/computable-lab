@@ -31,6 +31,9 @@ properties:
         terminal:
           type: boolean
           default: false
+        contentLocked:
+          type: boolean
+          default: false
         description:
           type: string
     minItems: 2

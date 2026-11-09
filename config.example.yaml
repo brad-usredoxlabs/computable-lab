@@ -80,6 +80,30 @@ repositories:
   records:
     directory: records # Where records are stored
 
+# Example: external storage devices (raw instrument data NEVER lives in git).
+# Devices are declared in the gitignored config.yaml; records carry a
+# data-reference (pointer + sha256 + size) while the bytes stay on the device.
+# The local-mount example below is the read-only NAS carrying instrument .D
+# acquisition directories (GC-4: acquisition-package registration pins a .D
+# directory by its per-file data-references + one signal-collection manifest
+# data-reference). The mount path is CONFIG DATA — the one place it may appear
+# in this repo; no code or test ever hardcodes it.
+# storageDevices:
+#   - id: gc-fid-nas
+#     label: 'GC-FID NAS (read-only)'
+#     kind: local-mount # s3 | local-mount
+#     mountPath: /mnt/vast/gc-fid
+#     # default: true   # device new acquisitions fall back to
+#   # s3 shape (secrets are referenced by ENV VAR NAME, never a literal):
+#   # - id: lab-s3
+#   #   label: 'Lab S3'
+#   #   kind: s3
+#   #   entrypoint: https://s3.example.org
+#   #   region: us-east-1
+#   #   bucket: lab-raw
+#   #   accessKeyEnv: LAB_S3_ACCESS_KEY
+#   #   secretKeyEnv: LAB_S3_SECRET_KEY
+
 # Example: Offline/local-first configuration (durable embedded Git, no external service)
 # repositories:
 #   - id: main

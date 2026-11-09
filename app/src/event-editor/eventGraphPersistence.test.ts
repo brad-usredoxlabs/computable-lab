@@ -12,6 +12,9 @@ import {
   RunDeckLockConflictError,
   writeRunDeckMemory,
 } from './eventGraphPersistence'
+// vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
+// RegExp arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is not a constructor').
+// Rejection sites are awaited in try/catch and matched on the message instead.
 
 const event: PlateEvent = {
   eventId: 'evt-1',
@@ -125,7 +128,7 @@ describe('event-editor accepted event graph persistence', () => {
       new RunDeckLockConflictError('Run RUN-001 is locked to manual/manual_single_plate'),
     )
 
-    await expect(persistAcceptedEventGraph({
+    const persistP = persistAcceptedEventGraph({
       eventGraphId: 'EVG-001',
       runId: 'RUN-001',
       events: [event],
@@ -133,7 +136,11 @@ describe('event-editor accepted event graph persistence', () => {
       placements: [placement],
       platformId: 'manual',
       variantId: 'manual_freeform',
-    }, saveEventGraph, ensureDeckLock)).rejects.toThrow(/locked to/)
+    }, saveEventGraph, ensureDeckLock)
+    let e: unknown
+    try { await persistP; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/locked to/)
 
     expect(saveEventGraph).not.toHaveBeenCalled()
   })
@@ -213,11 +220,15 @@ describe('event-editor accepted event graph persistence', () => {
     })
     const updateRecord = vi.fn()
 
-    await expect(ensureRunDeckLock(
+    const lockP = ensureRunDeckLock(
       { runId: 'RUN-001', platformId: 'manual', variantId: 'manual_freeform' },
       getRecord,
       updateRecord,
-    )).rejects.toThrow(/explicit layout replacement/i)
+    )
+    let e: unknown
+    try { await lockP; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/explicit layout replacement/i)
     expect(updateRecord).not.toHaveBeenCalled()
   })
   it('hydrates older deckLayout slot placements when editorLayout is absent', () => {

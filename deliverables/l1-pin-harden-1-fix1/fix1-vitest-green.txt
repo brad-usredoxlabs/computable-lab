@@ -1,0 +1,17 @@
+npm notice run npx
+npm notice run 'vitest' run src/analysis/ViewRenderer.cellrender.test.tsx src/analysis/cssRuleScan.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/l1-pin-harden-1-lane1/app
+
+(node:401997) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:401997) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/analysis/cssRuleScan.test.ts  (16 tests) 10ms
+ ✓ src/analysis/ViewRenderer.cellrender.test.tsx  (18 tests) 105ms
+
+ Test Files  2 passed (2)
+      Tests  34 passed (34)
+   Start at  04:04:23
+   Duration  14.12s (transform 441ms, setup 2.74s, collect 1.95s, tests 115ms, environment 17.10s, prepare 1.45s)
+

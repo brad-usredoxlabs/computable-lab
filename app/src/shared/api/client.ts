@@ -139,6 +139,101 @@ export function isSignatureRejection(error: unknown, token?: SignatureRejection)
   return (token ? [token] : all).some(t => error.code === t || error.message.includes(t))
 }
 
+/**
+ * === GC-12 (deliverable D) — the GC attach failure-surface error type ===
+ * The server's RunSheetHandlers glue propagates GC-4's AcquisitionPackageError
+ * tokens VERBATIM as `{ error: <TOKEN>, message }` (the same wire shape the
+ * signature/record rejections use — the token lands in ApiError.message,
+ * code degrades to an HTTP_### default). This type recovers the NAMED token
+ * so the attach panel can render the per-token named message (bait #6: every
+ * token in ACQUISITION_PACKAGE_ERROR_CODES has an explicit surface — no
+ * conflation, no silent disable).
+ *
+ * The token set mirrors server/src/storage/acquisitionPackage.ts
+ * ACQUISITION_PACKAGE_ERROR_CODES EXACTLY (the 8 real tokens — the spec's
+ * "TRAVERSAL_BLOCKED" is the draft-time hypothesis; the merged token is
+ * PACKAGE_PATH_ESCAPE / PACKAGE_SYMLINK_ESCAPE). A token NOT in the set is
+ * surfaced as-is (the message still carries the server's honest wording).
+ */
+export const ACQUISITION_PACKAGE_CLIENT_ERROR_CODES = [
+  'PACKAGE_ACQUIRING',
+  'PACKAGE_SYMLINK_ESCAPE',
+  'PACKAGE_PATH_ESCAPE',
+  'PACKAGE_FILE_MISSING',
+  'PACKAGE_NOT_A_FILE',
+  'PACKAGE_HASH_MISMATCH',
+  'PACKAGE_HASH_DRIFT',
+  'PACKAGE_DEVICE_MISSING',
+] as const
+
+export type AcquisitionPackageClientErrorCode =
+  (typeof ACQUISITION_PACKAGE_CLIENT_ERROR_CODES)[number]
+
+export class AcquisitionPackageClientError extends Error {
+  public readonly code: string
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'AcquisitionPackageClientError'
+    this.code = code
+  }
+  static isAcquisitionPackageError(error: unknown): error is AcquisitionPackageClientError {
+    return error instanceof AcquisitionPackageClientError
+  }
+}
+
+/** The NAMED per-token message the attach panel renders (D-failure surfaces).
+ *  GC-4's honest wording — each token names the EXACT cause (no conflation:
+ *  a missing DEVICE is never dressed up as a missing FILE, and vice versa). */
+export const ACQUISITION_PACKAGE_CLIENT_ERROR_MESSAGES: Record<string, string> = {
+  PACKAGE_ACQUIRING: 'The acquisition package is still being acquired — try again in a moment.',
+  PACKAGE_SYMLINK_ESCAPE: 'The acquisition directory resolves through a symbolic link that escapes the storage device — it was refused.',
+  PACKAGE_PATH_ESCAPE: 'The acquisition directory escapes the storage device (a path traversal like ../ was refused).',
+  PACKAGE_FILE_MISSING: 'The acquisition directory has no .D file — nothing to register.',
+  PACKAGE_NOT_A_FILE: 'The acquisition path is not a directory of .D data — check the directoryKey.',
+  PACKAGE_HASH_MISMATCH: 'The recorded acquisition hash does not match the .D on disk — the data changed after registration.',
+  PACKAGE_HASH_DRIFT: 'The acquisition data drifted from its registered hash — it was refused, not re-verified.',
+  PACKAGE_DEVICE_MISSING: 'The storage device is not configured (or not mounted) — the acquisition directory could not be read.',
+}
+
+/**
+ * Recover the named token from the server's `{ error: TOKEN, message }` wire
+ * shape. The token lands in ApiError.message (the "TOKEN: message" prefix the
+ * ApiError.fromResponse builder produces) and/or code. A token outside the
+ * known set is still returned verbatim (the message is preserved). Non-API
+ * errors (network, etc.) map to a generic code so the panel never crashes.
+ */
+export function toAcquisitionPackageClientError(err: unknown): AcquisitionPackageClientError {
+  if (AcquisitionPackageClientError.isAcquisitionPackageError(err)) return err
+  let rawCode: string | undefined
+  let rawMessage: string
+  if (ApiError.isApiError(err)) {
+    rawCode = err.code
+    rawMessage = err.message
+  } else if (err instanceof Error) {
+    rawMessage = err.message
+  } else {
+    rawMessage = String(err)
+  }
+  // The wire shape is `{ error: TOKEN, message }`; ApiError builds the message
+  // as "TOKEN: message" when the token != the text, and sets code to the body
+  // code (absent → HTTP_###). The TOKEN is therefore the message prefix up to
+  // the first ": " OR the code field when it is a known token.
+  let token: string | undefined
+  if (rawCode && (ACQUISITION_PACKAGE_CLIENT_ERROR_CODES as readonly string[]).includes(rawCode)) {
+    token = rawCode
+  } else {
+    for (const known of ACQUISITION_PACKAGE_CLIENT_ERROR_CODES) {
+      if (rawMessage === known || rawMessage.startsWith(`${known}: `)) {
+        token = known
+        break
+      }
+    }
+  }
+  const code = token ?? 'ACQUISITION_PACKAGE_UNKNOWN'
+  const message = ACQUISITION_PACKAGE_CLIENT_ERROR_MESSAGES[token ?? ''] ?? rawMessage
+  return new AcquisitionPackageClientError(code, message)
+}
+
 /** The persisted workspace session (GET/PUT /api/session). */
 export interface WorkspaceSessionPayload {
   version: 1
@@ -1286,6 +1381,13 @@ export interface VendorExaSearchResponse {
   configured: boolean
   query: string
   items: VendorExaHit[]
+  /**
+   * Server-authored typed refusal, present ONLY when `configured` is false
+   * (mirror of the server interface): 'not_configured' (no key / disabled)
+   * or 'key_rejected' (upstream rejected the credential — 401/403 by status).
+   * Type-only mirror; absent on the happy path.
+   */
+  reason?: 'not_configured' | 'key_rejected'
 }
 
 export interface VendorFromExaResponse {
@@ -2353,6 +2455,13 @@ export const apiClient = {
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
+    /** FAME-3 W6 (OQ-4 OPT-A step 7): the edit-record arm's target record.
+     * The record-drafting envelope itself is additionalProperties:false and
+     * carries NO target (the trust boundary is Ajv + the server's guard); the
+     * target rides the compile REQUEST BODY as body.target (FormDraftService),
+     * forwarded verbatim by the flow. Absent on the create arm and on every
+     * non-edit adapter (conditional-spread — never an undefined slot). */
+    target?: { recordId: string }
   }): Promise<{
     draftId: string
     revision: number
@@ -3266,6 +3375,79 @@ export const apiClient = {
     return request(`/analysis-artifacts/${encodeURIComponent(id)}/promote`, {
       method: 'POST',
     })
+  },
+
+  /** GC-10 OQ-1(a): read the stored bytes of a data-reference-backed analysis
+   *  output artifact via the read-only content route (GET-only; the storage
+   *  path is resolved server-side from the immutable DREF record — the client
+   *  supplies ONLY the AOUT-* record id). The route answers with the envelope
+   *  `{ artifactId, dataReferenceId, content }` whose `content` field is the
+   *  artifact's stored JSON, PARSED — this method returns that `content`
+   *  field directly (the unwrapped trace payload object), or null when the
+   *  envelope carries no content (the route always fills it on 2xx). */
+  async getAnalysisArtifactContent(id: string): Promise<unknown> {
+    const res = await fetch(`${API_BASE}/analysis-artifacts/${encodeURIComponent(id)}/content`)
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const body = (await res.json()) as { error?: string; message?: string }
+        detail = body.message || body.error || ''
+      } catch {
+        detail = ''
+      }
+      throw new Error(detail || `analysis artifact content unavailable (HTTP ${res.status})`)
+    }
+    const body = (await res.json()) as { content?: unknown }
+    return body && typeof body === 'object' && 'content' in body ? body.content : body
+  },
+
+  // === GC-12: the GC run-sheet attach/analyze routes (D4) ==================
+  // Thin wrappers over the server's RunSheetHandlers glue. The server
+  // propagates AcquisitionPackageError tokens as {error: TOKEN, message} —
+  // these wrap that in AcquisitionPackageClientError so the attach panel can
+  // render the NAMED token + message per token (the explicit failure
+  // surfaces; GC-4's honest wording, no conflation).
+
+  /**
+   * Register a .D acquisition directory (GC-4 registration flow) and attach
+   * the minted package to the target entry (the server glue does the entry
+   * PUT). `deviceId` is the CONFIG storage device id (from GET /config) —
+   * never a mount path. `entryRef` names the instrument-sequence-entry the
+   * package attaches to; `sampleRef`/`sourceRunRef` ride the package record.
+   */
+  async registerAcquisitionPackage(body: {
+    deviceId: string
+    directoryKey: string
+    entryRef: { kind: 'record'; id: string; type: string }
+    sampleRef?: { kind: 'record'; id: string; type: string; label?: string }
+  }): Promise<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }> {
+    try {
+      return await request<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }>(
+        '/acquisition-packages/register',
+        { method: 'POST', body: JSON.stringify(body) },
+      )
+    } catch (err) {
+      throw toAcquisitionPackageClientError(err)
+    }
+  },
+
+  /**
+   * The VERIFY-FIRST input resolution (bait #11): the server re-verifies the
+   * package (PACKAGE_HASH_DRIFT refused) and returns the pinned
+   * `{signal, package}` data-reference input refs. The Analyze flow calls
+   * THIS — never client-side input resolution from the ACQP payload.
+   */
+  async getPackageAnalysisInputs(
+    packageId: string,
+  ): Promise<{ signal: { kind: 'record'; id: string; type: 'data-reference' }; package: { kind: 'record'; id: string; type: 'data-reference' } }> {
+    try {
+      return await request<{ signal: { kind: 'record'; id: string; type: 'data-reference' }; package: { kind: 'record'; id: string; type: 'data-reference' } }>(
+        `/acquisition-packages/${encodeURIComponent(packageId)}/analysis-inputs`,
+        { method: 'POST' },
+      )
+    } catch (err) {
+      throw toAcquisitionPackageClientError(err)
+    }
   },
 
   async executeInstrumentApplianceJob(
@@ -4489,6 +4671,25 @@ export const apiClient = {
         `/lifecycle/${encodeURIComponent(lifecycleId)}/transitions`,
       )
       return response.terminalStates ?? []
+    } catch (error) {
+      if (ApiError.isApiError(error) && error.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
+  /**
+   * L1-RECORD-LOCK-GUARD (LEG2a): lifecycle-scoped content-locked-state facts
+   * (server echo of the lifecycle YAML); same endpoint + 404 -> [] as the
+   * terminal-states accessor. Typed accessor only — no policy, no fallback.
+   */
+  async getLifecycleContentLockedStates(lifecycleId: string): Promise<string[]> {
+    try {
+      const response = await request<{ contentLockedStates?: string[] }>(
+        `/lifecycle/${encodeURIComponent(lifecycleId)}/transitions`,
+      )
+      return response.contentLockedStates ?? []
     } catch (error) {
       if (ApiError.isApiError(error) && error.status === 404) {
         return []

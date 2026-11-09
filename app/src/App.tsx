@@ -50,6 +50,10 @@ const ClaimCollectionView = lazy(async () => import('./collections/ClaimCollecti
 const LabCollectionView = lazy(async () => import('./collections/LabCollectionView').then((m) => ({ default: m.LabCollectionView })))
 // Phase 7: Claim workspace
 const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((m) => ({ default: m.ClaimWorkspace })))
+// GC-13 gate-fix (D5, gate G7): the reciprocal claim -> analysis-run
+// landing surface (the run's GC evidence context; NOT the Run·Design
+// plate canvas).
+const GcEvidenceRunPage = lazy(async () => import('./run/gc/GcEvidenceRunPage').then((m) => ({ default: m.GcEvidenceRunPage })))
 // Phase 8: Lab entity workspace
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
 const IngestionPage = lazy(async () => import('./ingestion/IngestionPage').then((m) => ({ default: m.IngestionPage })))
@@ -200,6 +204,11 @@ export function App() {
                   to /runs/:runId. Old route redirects for one release cycle. */}
               <Route path="/project/:studyId/run/:runId" element={<RunWorkspaceRedirect />} />
               <Route path="/runs/:runId" element={<DeferredRoute><RunWorkspacePage /></DeferredRoute>} />
+              {/* GC-13 gate-fix (D5, gate G7): a reciprocal claim ->
+                  analysis-run link lands on the GC evidence surface (the
+                  run's evidence/claim back-links), never the Run·Design
+                  plate canvas, which serves `run` records. */}
+              <Route path="/gc-run/:runId" element={<DeferredRoute><GcEvidenceRunPage /></DeferredRoute>} />
 
               {/* Phase 2a: standalone artifact routes (PDF + document) */}
               <Route path="/artifact/:kind/:artifactId" element={<DeferredRoute><ArtifactHostPage /></DeferredRoute>} />

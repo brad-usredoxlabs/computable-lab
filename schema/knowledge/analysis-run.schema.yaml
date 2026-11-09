@@ -69,6 +69,90 @@ properties:
     additionalProperties: true
     description: "Validated output manifest describing artifacts + views (for UI rendering)."
 
+  # GC-5: machine-readable engine provenance — the ACTUAL engine + interpreter +
+  # package versions that ran, written ONCE at completion by the AnalysisRunner
+  # (probe → dispatch → record). Absent on legacy (no-engineRef) runs and on
+  # runs that failed the engine gate before status flipped to 'running'. The
+  # idempotent re-read path returns the stored manifest + record untouched, so
+  # old runs keep byte-stable provenance.
+  engineProvenance:
+    type: object
+    additionalProperties: false
+    required: [engineRef, engineRecordId, engineVersion, adapter, interpreterPath, interpreterVersion, packages, probedAt]
+    properties:
+      engineRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      engineRecordId:
+        type: string
+        description: "The engine record id this run dispatched on."
+      engineVersion:
+        type: string
+        description: "The engine_version the pinned record declares."
+      adapter:
+        type: string
+        description: "The shipped adapter id the record's implementation.adapter declared (the dispatch key)."
+      interpreterPath:
+        type: string
+        description: "The ACTUAL interpreter path that ran (resolved per the GC-1 order)."
+      interpreterVersion:
+        type: string
+        description: "The ACTUAL interpreter version, probed."
+      packages:
+        type: array
+        description: "Declared vs ACTUAL versions of every declared package."
+        items:
+          type: object
+          additionalProperties: false
+          required: [name, required, actual]
+          properties:
+            name: { type: string }
+            required: { type: string, description: "The declared constraint (from the record)." }
+            actual: { type: string, description: "The probed actual version." }
+      probedAt:
+        type: string
+        format: date-time
+      capabilitiesReported:
+        type: array
+        description: "The capability declaration as reported by the pinned record (approximate support is surfaced, never hidden)."
+        items:
+          type: object
+          additionalProperties: false
+          required: [capability, support]
+          properties:
+            capability:
+              type: string
+              enum:
+              - baseline_control
+              - width_slope_sensitivity
+              - area_height_reject
+              - timed_integration_windows
+              - peak_detection
+              - deconvolution
+              - curve_fitting
+              - weighted_regression
+            support:
+              type: string
+              enum: [supported, approximate, unsupported, unverified]
+
+  # GC-13 (OQ-2 ruling, adopted): the measurement context the run's inputs
+  # were ACQUIRED under — how the plate was read (equipment_ref +
+  # readout_def_refs), with calibration/authorization refs pinned ON the
+  # context record (measurement-context.schema.yaml acquisition_context).
+  # OPTIONAL, zero-backfill (GC-5 optional-engineRef precedent): runs minted
+  # before this field — and runs whose acquisition context was never
+  # recorded — leave it absent. The ref datatype already carries the
+  # optional REV- snapshot pin (revisionRef), so a pinned context freezes
+  # with the run snapshot automatically (zero new framework). Absent is a
+  # NAMED gap, rendered as an honest arm by the provenance view — never a
+  # silent skip, never an error.
+  measurementContextRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: "record" }
+        type: { const: "measurement-context" }
+
   startedAt:
     type: string
     format: date-time

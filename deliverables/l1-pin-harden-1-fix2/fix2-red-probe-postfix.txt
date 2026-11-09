@@ -1,0 +1,23 @@
+node v26.8.1
+scanner+pin extracted from commit WORKTREE
+CASE K  bare nested td                              -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE K2 bare nested th                              -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE L  @media inside style rule, bare td head      -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE M  bare td nested under .view-spec__table inside @media -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE N  bare nested head list th, td                -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE O  bare nested :hover td                       -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE P  &-block then bare td sibling                -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE Q  parent selector list distribution           -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE R  :is(&) td (ambiguous & placement)           -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE S  :where(&) > td (ambiguous & placement)      -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CASE D2 @supports > style > @media > bare td        -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CTRL &-control & td                                 -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+CTRL &-control bare & block (table element, not a cell selector) -> []  CLEAN
+CTRL &-control &.x glued                            -> ["a .view-spec__table th/td-cell selector still declares overflow-wrap: anywhere"]  FLAG
+GUARD benign nested font-size                       -> []  CLEAN
+GUARD benign nested td padding                      -> []  CLEAN
+GUARD benign nested thead                           -> []  CLEAN
+GUARD benign nested @media font-size                -> []  CLEAN
+SHIPPED AnalysisPage.css -> []
+RED (evasion accepted): 0/11
+PARSER DUMP K: [[".analysis-right",[]],[".view-spec__table th, .view-spec__table td",[]],[".view-spec__cell-item",[]],[".view-spec__table",[]],[".view-spec__table td",[]]]

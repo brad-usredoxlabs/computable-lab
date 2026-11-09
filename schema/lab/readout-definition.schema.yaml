@@ -31,7 +31,7 @@ properties:
 
   instrument_type:
     type: string
-    enum: [ plate_reader, qpcr, gc_ms, lc_ms, microscopy, other ]
+    enum: [ plate_reader, qpcr, gc_ms, gc_fid, lc_ms, microscopy, other ]
 
   mode:
     type: string

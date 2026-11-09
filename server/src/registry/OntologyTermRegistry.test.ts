@@ -11,7 +11,8 @@ describe('OntologyTermRegistry', () => {
 
   it('loads all manual seed terms', () => {
     const manualTerms = listBySource('manual');
-    expect(manualTerms).toHaveLength(4);
+    // GC-2 F: +6 FAME/FFA identity terms (fame-local.yaml, source manual).
+    expect(manualTerms).toHaveLength(12);
   });
 
   it('loads all chebi seed terms', () => {
@@ -60,9 +61,10 @@ describe('OntologyTermRegistry', () => {
     expect(term).toBeUndefined();
   });
 
-  it('listBySource("manual") returns all 4 terms', () => {
+  it('listBySource("manual") returns all 10 terms', () => {
     const terms = listBySource('manual');
-    expect(terms).toHaveLength(4);
+    // 4 seed placeholders + 6 GC-2 FAME/FFA terms (fame-local.yaml).
+    expect(terms).toHaveLength(12);
   });
 
   it('listBySource("chebi") returns ≥ 20 terms', () => {
@@ -80,9 +82,10 @@ describe('OntologyTermRegistry', () => {
 
   it('reload() clears cache and re-reads', () => {
     const first = registry.list();
-    expect(first.length).toBeGreaterThanOrEqual(24); // 4 manual + ≥20 chebi
+    expect(first.length).toBeGreaterThanOrEqual(30); // 4 manual + 6 FAME/FFA + ≥20 chebi
     registry.reload();
     const second = registry.list();
-    expect(second.length).toBeGreaterThanOrEqual(24);
+    // 4 manual + 6 FAME/FFA + ≥20 chebi
+    expect(second.length).toBeGreaterThanOrEqual(30);
   });
 });

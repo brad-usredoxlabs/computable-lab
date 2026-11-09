@@ -75,6 +75,7 @@ import {
   createChemistryHandlers,
   createIngestionHandlers,
   createRunWorkspaceHandlers,
+  createRunSheetHandlers,
   createRecordSearchHandlers,
   createOntologyTermHandlers,
   createVerbActionMapHandlers,
@@ -531,6 +532,13 @@ export async function initializeApp(
     // Same list the record API walls read below: the store backstop and the
     // API answer 405/APPEND_ONLY from one data source (W2-5 §3.2).
     appendOnlyKinds: appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
+    // L1-RECORD-LOCK-GUARD-1 (AM-10): the store's content-lock policy is
+    // engine-backed — the server's OWN loaded LifecycleEngine (the same
+    // instance the lifecycle API and handler echoes read), never a
+    // second hardcoded set. Absent config falls back to the shared
+    // defaultContentLockedStates (declared YAML); here production injects
+    // the real engine.
+    contentLockedStates: (id) => lifecycleEngine.contentLockedStates(id),
   });
 
   // Local credential/session stores live under server.dataDir/auth (non-git):
@@ -883,6 +891,9 @@ export async function createServer(
   );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
+  // GC-12 (deliverable D): the GC run-sheet attach + Analyze glue (thin
+  // wrapper over the GC-4 shipped registration service).
+  const runSheetHandlers = createRunSheetHandlers(ctx);
   const checkinHandlers = createCheckinHandlers({
     ctx,
     ...(aiProfile?.inference ? {
@@ -1608,6 +1619,7 @@ export async function createServer(
       checkinHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
+      runSheetHandlers,
       runDraftHandlers,
       platformHandlers,
       labSettingsHandlers,

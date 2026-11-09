@@ -16,6 +16,9 @@ import {
   replaceDraftBody,
   saveSemanticDraftEdit,
 } from './semanticDraft'
+// vitest#5285: the global jest-dom/vitest extend (setup.ts) breaks rejects toThrow with a
+// RegExp arg AND with a string arg under the lockfile-pinned vitest 1.6.0 store ('errorLike is
+// not a constructor'). Rejection sites are awaited in try/catch and matched on the message.
 
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
@@ -196,7 +199,11 @@ describe('saveSemanticDraftEdit (TapTab lock discipline — bait 6)', () => {
 
   it('refuses with ZERO writes when the record carries no save token', async () => {
     mockClient.getRecord.mockResolvedValue({ recordId: XDR_ID, schemaId: 'x', payload: xdrPayload(), meta: {} })
-    await expect(saveSemanticDraftEdit(XDR_ID, 0, nextDraft)).rejects.toThrow(/no save token/)
+    const p = saveSemanticDraftEdit(XDR_ID, 0, nextDraft)
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toMatch(/no save token/)
     expect(mockClient.updateRecord).not.toHaveBeenCalled()
   })
 
@@ -231,9 +238,11 @@ describe('saveSemanticDraftEdit (TapTab lock discipline — bait 6)', () => {
     mockClient.updateRecord.mockRejectedValue(
       new ApiError({ status: 409, code: 'CONFLICT', message: 'SHA mismatch: expected sha-current, found sha-newer' }),
     )
-    await expect(saveSemanticDraftEdit(XDR_ID, 0, nextDraft)).rejects.toThrow(
-      'Someone changed this protocol - reload and try again.',
-    )
+    const p = saveSemanticDraftEdit(XDR_ID, 0, nextDraft)
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toContain('Someone changed this protocol - reload and try again.')
     expect(mockClient.updateRecord).toHaveBeenCalledTimes(1)
     expect(mockClient.getRecord).toHaveBeenCalledTimes(1)
   })
@@ -243,6 +252,10 @@ describe('saveSemanticDraftEdit (TapTab lock discipline — bait 6)', () => {
     mockClient.updateRecord.mockRejectedValue(
       new ApiError({ status: 405, code: 'APPEND_ONLY', message: 'vendor-protocol-candidate is append-only' }),
     )
-    await expect(saveSemanticDraftEdit(XDR_ID, 0, nextDraft)).rejects.toThrow('vendor-protocol-candidate is append-only')
+    const p = saveSemanticDraftEdit(XDR_ID, 0, nextDraft)
+    let e: unknown
+    try { await p; e = new Error('DNAAFIX: expected rejection, promise resolved') } catch (err) { e = err }
+    expect(e).toBeInstanceOf(Error)
+    expect((e as Error).message).toContain('vendor-protocol-candidate is append-only')
   })
 })

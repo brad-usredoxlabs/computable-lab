@@ -1,9 +1,30 @@
-# UI specification for Evidence records
+# UI specification for Evidence records.
+#
+# GC-13 (OQ-4): this file previously referenced $.claimId and $.content —
+# properties the evidence schema does NOT declare (unevaluatedProperties:
+# false would reject them; there is no claimId/content on Evidence). The
+# form below binds ONLY declared properties. The stance (supports/refutes/
+# assesses) is the scientist's EXPLICIT choice — the GC-13 authoring form
+# (app/src/run/gc/) starts it empty; no AI/default pre-fills it.
+#
+# GC-16 (W1b, architect GAP-1 audit): the three stance fields were bound to
+# a single `record-ref` widget, which commits ONE structured ref object —
+# but evidence.schema.yaml declares supports/refutes/assesses as
+# `type: array` (minItems: 1, items: $ref datatypes/ref) with
+# unevaluatedProperties: false. A draft built from that spec would 422 with
+# "Expected type: array". Rebound to the repo's array-of-refs idiom — the
+# `reflist` widget (precedent: conversation.linkedArtifacts,
+# instrument-sequence-entry.analysisRunRefs), which serializes as an array
+# of structured refs. `sources` stays the `array` widget with typed
+# {type, ref} item hints because its items are OBJECTS (type + ref), not
+# bare refs. The stance target shape (each entry's type is assertion or
+# claim) is the lint's job (evd-supports/refutes/assesses-target-shape),
+# never a client-side kind table.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/evidence.schema.yaml"
 
 display:
-  titleField: "$.title"
+  titleField: "$.id"
   icon: "evidence"
 
 form:
@@ -11,33 +32,270 @@ form:
   sections:
   - title: "Identity"
     fields:
-    - path: "$.recordId"
+    # GC-16 FIX1 D4 (provisional-pending-ruling, default D-A — the decision
+    # override file was absent at work time): the knowledge kinds get NO
+    # client-minted id. The form EXPOSES the schema-declared `id` field as an
+    # editable input so the scientist supplies the stable identifier; the
+    # server's required-check (Ajv) is the single authority and refuses a
+    # missing/invalid one (the schema speaks). Anti-pattern ref: the registry
+    # OQ-3 comment (RecordRegistryPage.tsx:68-70) names a client-side
+    # kind->prefix table the anti-pattern; RecordCreatePanel's ID_PREFIXES is
+    # no longer seeded for the knowledge triplet.
+    - path: "$.id"
       widget: "text"
-      label: "Record ID"
-      readonly: true
+      label: "ID"
     - path: "$.kind"
       widget: "text"
       label: "Kind"
       readonly: true
       hidden: true
-  - title: "Evidence Content"
+  - title: "Stance (the scientist's explicit choice)"
+    help: >
+      Exactly one of the three stances is required (schema anyOf). The
+      targets must be assertion or claim refs (evidence.lint.yaml
+      evd-supports-target-shape, severity error). Nothing here is
+      pre-decided: the form starts empty and submission is the
+      scientist's act.
     fields:
-    - path: "$.title"
-      widget: "text"
-      label: "Title"
-    - path: "$.claimId"
-      widget: "ref"
-      label: "Claim"
-    - path: "$.content"
-      widget: "markdown"
-      label: "Content"
+    # GC-16 FIX1 D2 (data leg; the authoring leg is requires-rescope — see
+    # the D2/D3 authoring-proof test). The stance fields are `type: array,
+    # items: $ref datatypes/ref` in evidence.schema.yaml. Rebound from
+    # `reflist` (whose Add button is a stub and whose entries are
+    # {value,source} — not datatypes/ref objects, so a hand-carried value
+    # 422s on required:kind) to the repo's `array` + typed item-hint idiom
+    # (the $.sources precedent: an `object` item hint over the item's
+    # sub-fields). The taptap `array` widget accepts this declarative shape
+    # (loader-honored `items:`) but CANNOT commit a populated datatypes/ref
+    # OBJECT — its "+ Add item" commits `{}` and renders no authorable item
+    # sub-slots. That authoring gap is a widget-component platform gap (out
+    # of this lane's boundary); the declarative spec is the schema-faithful
+    # binding it should carry. Each entry's target type (assertion/claim) is
+    # the LINT's job (evd-supports/refutes/assesses-target-shape), never a
+    # client-side kind table.
+    - path: "$.supports"
+      widget: "array"
+      label: "Supports (assertion/claim refs)"
+      required: false
+      help: >
+        The assertion(s)/claim(s) this bundle supports — an array of record
+        refs (schema type: array, items: ref). Leave empty unless the bundle
+        supports a target; at least one stance field (supports / refutes /
+        assesses) must be non-empty for a stance-bearing bundle. Each entry
+        is a datatypes/ref object { kind: record, type, id, label? }.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table).
+        # GC-16 FIX RUN 4 (D18, data leg): that select is NOT readonly — the
+        # D11 surface-gap ruling (ui-v1's field definition has no
+        # const/seed/default keyword) stands: a seeded kind:record value the
+        # author need not touch is NOT expressible on the ui-v1 surface.
+        # But a readonly single-option select with no seed makes kind:record
+        # UNAUTHORABLE (no author action can produce it — the review's
+        # D18), so readonly is DROPPED: the discriminator is no longer
+        # marked readonly and becomes authorable only once R1 renders item
+        # sub-slots. At HEAD the array widget commits [{}] with no item
+        # sub-slots rendered (the repo's own green D2/D3 leg proves no
+        # author action yet produces kind:record), so dropping readonly
+        # removes a contradictory declaration only — it does not make the
+        # value authorable until R1. Seeding it
+        # WITHOUT the author touching the field is the R1 widget task's
+        # item-hint consumption (architect ruling item 4: the data-leg
+        # seeding stays in GC-16's ui.yaml scope as a DATA edit; the ui-v1
+        # keyword that would make it data-only does not exist), NOT a
+        # widget hardcode.
+        fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
+    - path: "$.refutes"
+      widget: "array"
+      label: "Refutes (assertion/claim refs)"
+      required: false
+      help: >
+        The assertion(s)/claim(s) this bundle refutes — an array of record
+        refs. Lint evd-refutes-target-shape requires each entry's type to be
+        assertion or claim.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table).
+        # GC-16 FIX RUN 4 (D18, data leg): that select is NOT readonly — the
+        # D11 surface-gap ruling (ui-v1's field definition has no
+        # const/seed/default keyword) stands: a seeded kind:record value the
+        # author need not touch is NOT expressible on the ui-v1 surface.
+        # But a readonly single-option select with no seed makes kind:record
+        # UNAUTHORABLE (no author action can produce it — the review's
+        # D18), so readonly is DROPPED: the discriminator is no longer
+        # marked readonly and becomes authorable only once R1 renders item
+        # sub-slots. At HEAD the array widget commits [{}] with no item
+        # sub-slots rendered (the repo's own green D2/D3 leg proves no
+        # author action yet produces kind:record), so dropping readonly
+        # removes a contradictory declaration only — it does not make the
+        # value authorable until R1. Seeding it
+        # WITHOUT the author touching the field is the R1 widget task's
+        # item-hint consumption (architect ruling item 4: the data-leg
+        # seeding stays in GC-16's ui.yaml scope as a DATA edit; the ui-v1
+        # keyword that would make it data-only does not exist), NOT a
+        # widget hardcode.
+        fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
+    - path: "$.assesses"
+      widget: "array"
+      label: "Assesses (assertion/claim refs)"
+      required: false
+      help: >
+        The assertion(s)/claim(s) this bundle assesses (inconclusive /
+        invalid result) — an array of record refs. Lint
+        evd-assesses-target-shape requires each entry's type to be assertion
+        or claim.
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Target ref"
+        # GC-16 FIX RUN 3 (D11, data leg; same for supports/refutes/assesses):
+        # the datatypes/ref OBJECT the schema declares
+        # (schema/core/datatypes/ref.schema.yaml) REQUIRES `kind`
+        # (enum record|ontology); kind:record then-requires id+type. The hint
+        # declares the discriminator as a single-option select (value
+        # "record" — the schema's own enum vocabulary, never a client-side
+        # kind table).
+        # GC-16 FIX RUN 4 (D18, data leg): that select is NOT readonly — the
+        # D11 surface-gap ruling (ui-v1's field definition has no
+        # const/seed/default keyword) stands: a seeded kind:record value the
+        # author need not touch is NOT expressible on the ui-v1 surface.
+        # But a readonly single-option select with no seed makes kind:record
+        # UNAUTHORABLE (no author action can produce it — the review's
+        # D18), so readonly is DROPPED: the discriminator is no longer
+        # marked readonly and becomes authorable only once R1 renders item
+        # sub-slots. At HEAD the array widget commits [{}] with no item
+        # sub-slots rendered (the repo's own green D2/D3 leg proves no
+        # author action yet produces kind:record), so dropping readonly
+        # removes a contradictory declaration only — it does not make the
+        # value authorable until R1. Seeding it
+        # WITHOUT the author touching the field is the R1 widget task's
+        # item-hint consumption (architect ruling item 4: the data-leg
+        # seeding stays in GC-16's ui.yaml scope as a DATA edit; the ui-v1
+        # keyword that would make it data-only does not exist), NOT a
+        # widget hardcode.
+        fields:
+        - path: "kind"
+          widget: "select"
+          label: "Kind (ref discriminator — schema-required)"
+          options:
+          - { value: "record", label: "Record (computable-lab record ref)" }
+        - path: "type"
+          widget: "text"
+          label: "Record type (assertion / claim)"
+        - path: "id"
+          widget: "text"
+          label: "Record ID"
+        - path: "label"
+          widget: "text"
+          label: "Label"
+  - title: "Sources (the context arm)"
+    help: >
+      Sources map declared kinds to the existing type enum (OQ-1 ruling,
+      no enum widening): analysis-output-artifact -> result,
+      data-reference -> file, measurement-context -> measurement_context,
+      context -> context. A stance-bearing bundle must include at least one
+      context- or measurement_context-typed source (evd-sources-need-
+      context-arm, severity error) — the WHY over the complete biological
+      context, not just WHERE on a plate.
+    fields:
+    - path: "$.sources"
+      widget: "array"
+      label: "Sources"
+      required: true
+      # Item hints ride the loader-honored `items:` key (UISpecLoader
+      # validates field.items for widget: array; the ui-v1 field
+      # definition has no `properties` member — that shape was inert).
+      # House item-hint shape: an object widget over the item's
+      # sub-fields (inferFieldHint convention: path $.item).
+      items:
+        path: "$.item"
+        widget: "object"
+        label: "Source entry"
+        fields:
+        - path: "type"
+          widget: "select"
+          label: "Type"
+          required: true
+          options:
+          - { value: "result", label: "Result (analysis artifact)" }
+          - { value: "context", label: "Context" }
+          - { value: "measurement_context", label: "Measurement context" }
+          - { value: "event", label: "Event" }
+          - { value: "publication", label: "Publication" }
+          - { value: "file", label: "File (data reference)" }
+          - { value: "event_graph", label: "Event graph" }
+        - path: "ref"
+          widget: "record-ref"
+          label: "Ref"
+          required: true
+  - title: "Assessment and lifecycle"
+    fields:
+    - path: "$.assessment"
+      widget: "select"
+      label: "Assessment"
+      options:
+      - { value: "supports", label: "Supports" }
+      - { value: "refutes", label: "Refutes" }
+      - { value: "inconclusive", label: "Inconclusive" }
+    - path: "$.quality"
+      widget: "object"
+      label: "Quality notes"
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      options:
+      - { value: "active", label: "Active" }
+      - { value: "retracted", label: "Retracted" }
 
 list:
   columns:
-  - path: "$.recordId"
+  - path: "$.id"
     label: "ID"
     width: "120px"
-  - path: "$.title"
-    label: "Title"
-  - path: "$.claimId"
-    label: "Claim"
+  - path: "$.assessment"
+    label: "Assessment"
+  - path: "$.status"
+    label: "Status"

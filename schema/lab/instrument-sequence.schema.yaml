@@ -1,0 +1,122 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/instrument-sequence.schema.yaml"
+title: "Instrument Sequence"
+description: >
+  The ChemStation run-sheet header (GC-3): one instrument sequence links a study
+  and its RUN record, the equipment asset, the operator, and an ordered list of
+  injection rows. Each row is a SEPARATE instrument-sequence-entry record —
+  referenced here by entryRefs, never inlined — so per-entry lint, GC-4's
+  acquisition-package attachment, and UI addressing all target entry records by
+  id. Cross-record refs are shape-pinned (type: const) so wrong-kind refs are
+  rejected at AJV validation; ref TARGET EXISTENCE is resolution-time
+  (orchestrator resolution 2: no store-resolution gate in GC-3 — deferred to
+  GC-4's resolver), not lint's job (the v1 lint DSL cannot open the store).
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- title
+- entryRefs
+
+properties:
+  kind:
+    const: "instrument-sequence"
+
+  id:
+    type: string
+    pattern: "^ISEQ-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., ISEQ-2026-0041)."
+
+  # ---------------------------------------------------------------------------
+  # Study/run binding — OPTIONAL on the header (build-up state: a planned
+  # empty run-sheet stays valid while it is being assembled; bait #7). A
+  # sequence bound to nothing is suspicious-but-not-fatal, which R2 (lint,
+  # warning) flags — mirroring run.lint.yaml's parent-link spirit.
+  # ---------------------------------------------------------------------------
+
+  studyRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: study }
+    description: "The study this run sheet belongs to."
+
+  runRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: run }
+    description: >
+      The study RUN record whose execution this sheet documents (schema/studies/
+      run.schema.yaml). Run recordIds are free strings (no ^RUN- pattern on the
+      run schema), so no id-prefix lint can be declared for this ref.
+
+  operatorRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+    description: >
+      The operator who ran the sequence. Deliberately NOT type-pinned: no
+      {type: const user} ref precedent exists in-tree (orchestrator resolution
+      4) — the closest vocabulary is run.schema.yaml's executedBy ^USR-, which
+      the entry/header lint mirrors as an id-prefix regex instead of inventing
+      a pin.
+
+  instrumentRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+    description: >
+      The equipment asset performing the sequence. The `instrument` RECORD KIND
+      was retired by the INSTR-COLLAPSE ruling; equipment is the asset
+      (AcquisitionContextContract precedent: equipment-typed refs accepted,
+      instrument-typed rejected).
+
+  # ---------------------------------------------------------------------------
+  # Entry addressing — the ONLY way the header reaches its rows. Separate
+  # records, referenced by id (orchestrator resolution 3). uniqueItems +
+  # nonEmpty-on-write discipline live in lint R1 (warning: an empty run-sheet
+  # is suspicious, not fatal — so the array itself may be empty at build-up).
+  # ---------------------------------------------------------------------------
+  entryRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: instrument-sequence-entry }
+    uniqueItems: true
+    description: >
+      Ordered references to the instrument-sequence-entry records (one per
+      injection row). Order is the run-table order; each entry is addressable
+      by id for per-entry lint and GC-4's acquisition-package attachment.
+
+  # Registry-kind lifecycle (GC-3, orchestrator resolution 1: both new kinds
+  # join the minimal registry-ops coverage per the GC-2 gc-method precedent —
+  # draft default state, same treatment as calibration-record). The vocabulary
+  # is the registry-ops lifecycle's own.
+  lifecycleId:
+    type: string
+    enum: [registry-ops]
+    description: "Lifecycle governing this record's state transitions (declared per kind in schema/registry/registry-kinds.registry.yaml)."
+
+  state:
+    type: string
+    enum: [draft, active, archived]
+    description: "Lifecycle state (operational). DISTINCT from domain status/result fields."

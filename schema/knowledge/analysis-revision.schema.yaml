@@ -71,12 +71,71 @@ properties:
           type: string
           enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric, sequence, sequence-collection, alignment, sequence-hits ]
         required: { type: boolean }
+        # FAME-7 (OQ-3 ratified — .hermes/plans/2026-11-02_fame-7-oq1234-decision.md):
+        # generic per-slot declaration keys (zero domain nouns in the schema; the
+        # domain string VALUES live in revision records, never here).
+        #   acceptsKinds — the record `type` strings this input slot admits
+        #     (narrows the global config/drafting/analysis-composition.yaml
+        #     `inputKinds` set per slot; absent ⇒ that set is the gate — OQ-4).
+        #     NO enum here: admissibility is policy DATA, validated against the
+        #     config per call (a schema enum would restart-gate a data edit).
+        #   acceptedArtifactNames — the producer artifact payload's own `name`
+        #     field values this slot accepts (generic string matching; absent ⇒
+        #     no name gate). One term, one entity: the artifact field is `name`,
+        #     the declaration key is `acceptedArtifactNames`; nothing renames
+        #     either. A revision with NO `inputs` array carries no contract
+        #     (server-side named skip — OQ-3); absent vs empty-array is
+        #     semantic and both stay valid here.
+        acceptsKinds:
+          type: array
+          items: { type: string }
+        acceptedArtifactNames:
+          type: array
+          items: { type: string }
 
   # A JSON-Schema fragment that constrains `parameters` for a run of this
   # revision. The UI renders controls from it without executing Python.
   parameterSchema:
     type: object
     additionalProperties: true
+
+  # GC-5: the pinned analysis-engine record (the registry DATA the runner
+  # resolves, probes, dispatches and records as engine provenance). OPTIONAL —
+  # bait #2: existing revisions (DNA sequenceMethod revisions, demo revisions,
+  # the AI-drafting surface) stay valid with zero backfill; required-ness lives
+  # in GC-7 authoring practice, not the schema. The ref datatype already carries
+  # the optional REV- snapshot pin (revisionRef), so the pinned engine freezes
+  # with the revision snapshot automatically (zero new framework).
+  engineRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: "record" }
+        type: { const: "analysis-engine" }
+        id: { type: string, pattern: "^ENG-[A-Za-z0-9_-]+$" }
+
+  # GC-5: the capabilities this method NEEDS. Every name must appear in the
+  # pinned engine's capabilities.declared with support 'supported' or
+  # 'approximate' or the run is a NAMED declared failure
+  # (ENGINE_CAPABILITY_UNSUPPORTED) — never dropped silently.
+  requiredCapabilities:
+    type: array
+    items:
+      type: string
+      enum:
+      - baseline_control
+      - width_slope_sensitivity
+      - area_height_reject
+      - timed_integration_windows
+      - peak_detection
+      - deconvolution
+      # GC-8 D1 (orchestrator ruling 2026-10-27_GC-8-D1-capability-enum-ruling.md):
+      # the spec-mandated capability terms for the calibration/quantification
+      # revision pair (spec §A7). Enum widening ratified by the ruling; the
+      # values are NOT invented — the spec text names them.
+      - curve_fitting
+      - weighted_regression
 
   createdBy:
     type: string

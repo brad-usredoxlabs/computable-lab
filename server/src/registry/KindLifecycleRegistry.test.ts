@@ -41,16 +41,18 @@ function fixture(name: string, content: string): string {
 
 // INSTR-COLLAPSE-2 C3: 'instrument' retired WITH the kind (coverage file now
 // declares 6 kinds; the collapse ruling supersedes the older "KEEP AT 7").
-const KINDS = ['person', 'equipment', 'equipment-class', 'training-record', 'competency-authorization', 'calibration-record']
+// GC-4: the .D acquisition-package kind joins the coverage (9 → 10).
+// GC-5: the declared analysis-engine kind joins the coverage (10 → 11).
+const KINDS = ['person', 'equipment', 'equipment-class', 'training-record', 'competency-authorization', 'calibration-record', 'gc-method', 'instrument-sequence', 'instrument-sequence-entry', 'acquisition-package', 'analysis-engine']
 
 function deps(engine = realEngine(), knownKinds: Set<string> = new Set(KINDS)): KindLifecycleRegistryDeps {
   return { lifecycle: engine, knownKinds }
 }
 
 describe('KindLifecycleRegistry (QMS7-3 loader)', () => {
-  it('loads the REAL coverage file: exactly the 6 covered kinds, registry-ops/draft', () => {
+  it('loads the REAL coverage file: exactly the 11 covered kinds, registry-ops/draft', () => {
     const registry = loadKindLifecycleRegistry(COVERAGE_FILE, deps())
-    expect(registry.size).toBe(6)
+    expect(registry.size).toBe(11)
     expect([...registry.kinds()].sort()).toEqual([...KINDS].sort())
     expect(registry.lifecycle).toBe('registry-ops')
     const entry = registry.entryFor('equipment-class')

@@ -433,3 +433,64 @@
     display: none;
   }
 }
+
+/* GC-12 (D2): the GC run-sheet create form (additive — the inline form the
+   "New GC run sheet" action opens on /runs). */
+.run-collection__gc-create {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--cl-border, #d0d7de);
+  border-radius: 8px;
+  background: var(--cl-surface-subtle, #f6f8fa);
+  max-width: 480px;
+}
+
+.run-collection__gc-create label {
+  font-size: 12px;
+  color: var(--cl-text-muted, #6e7781);
+}
+
+.run-collection__gc-create input,
+.run-collection__gc-create select {
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border, #d0d7de);
+  border-radius: 6px;
+}
+
+.run-collection__gc-create__notready,
+.gc-run-create__notready {
+  font-size: 12px;
+  color: var(--cl-text-muted, #6e7781);
+}
+
+.gc-run-create__note {
+  font-size: 12px;
+  color: var(--cl-text-error, #cf222e);
+}
+
+/* GC-12 dirfix MINOR-FIX (defect 1): the gc-method read's SETTLED FAILURE
+   arm — the named fetch error + the Retry control. Error-coloured (the
+   note line's token) + flex/8px so the Retry button is a real affordance
+   sitting in the method row (dead-chrome ban: the failure is a live
+   surface, not a dead end). */
+.gc-run-create__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cl-text-error, #cf222e);
+}
+
+/* GC-12 bfix1 (minor 3): the create-form action row rendered its two
+   buttons touching ("CancelCreate GC run sheet" — no rule styled the
+   container, so the default inline buttons had zero separation). */
+.run-collection__gc-create [data-testid='gc-run-create-actions'] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

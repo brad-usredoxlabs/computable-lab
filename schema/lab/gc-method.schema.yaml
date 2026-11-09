@@ -1,0 +1,324 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/gc-method.schema.yaml"
+title: "GC Method"
+description: >
+  GC-FID method record: acquisition + analysis triplets captured NOW as declarative
+  data (GC-D2). Vendor-derived values live ONLY in provenance_capture.source_files.
+  key_values and may move into executable fields only by scientist-entered data
+  (GC-1 unknown-is-unknown). Executability is declared data: analysis.executable_binding.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- method_version
+
+properties:
+  kind:
+    const: "gc-method"
+
+  id:
+    type: string
+    pattern: "^GCM-[A-Za-z0-9_-]+$"
+
+  name:
+    type: string
+    minLength: 1
+
+  # The captured ChemStation method name, verbatim (GC-1: ACQ.TXT is the only
+  # sanctioned vendor extraction; it feeds method_name, never executable fields).
+  method_name:
+    type: string
+
+  # Record-level method version (ChemStation "method version"). Edits are
+  # immutable-pinned via REV- snapshots by the revision contract; this is data,
+  # not a second revision system.
+  method_version:
+    type: integer
+    minimum: 1
+
+  # ---------------------------------------------------------------------------
+  # Acquisition (GC-D2: capture NOW, declaratively). NOTHING is required
+  # inside — an absent section is unknown, never a default value.
+  # ---------------------------------------------------------------------------
+  acquisition:
+    type: object
+    additionalProperties: false
+    properties:
+      # Temperature program. Units live in field names: no unit-less numbers.
+      oven:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [step, hold_time_min, target_temp_c]
+          properties:
+            step:
+              type: integer
+              minimum: 1
+            hold_time_min:
+              type: number
+              minimum: 0
+            # null = isothermal segment (no ramp). null is a CAPTURE, not a
+            # default: a missing key is unknown, null is "known to be flat".
+            ramp_rate_c_per_min:
+              anyOf:
+              - type: number
+                exclusiveMinimum: 0
+              - type: "null"
+            target_temp_c:
+              type: number
+      # Injector.
+      inlet:
+        type: object
+        additionalProperties: false
+        properties:
+          mode:
+            type: string
+            enum: [split, splitless, on_column]
+          temp_c:
+            type: number
+          pressure_psi:
+            type: number
+          split_ratio:
+            type: number
+            exclusiveMinimum: 0
+          carrier_gas:
+            type: string
+            enum: [helium, nitrogen, hydrogen, other]
+      # Diversion/saver hardware: real ChemStation semantics undocumented on
+      # the acquired method, so capture is position + free-text only.
+      diverter:
+        $ref: "#/$defs/setpoint"
+      saver:
+        $ref: "#/$defs/setpoint"
+      # Column.
+      column:
+        type: object
+        additionalProperties: false
+        properties:
+          length_m:
+            type: number
+            exclusiveMinimum: 0
+          id_mm:
+            type: number
+            exclusiveMinimum: 0
+          film_thickness_um:
+            type: number
+            exclusiveMinimum: 0
+          stationary_phase:
+            type: string
+          flow_mode:
+            type: string
+            enum: [constant_flow, constant_pressure, other]
+
+  # ---------------------------------------------------------------------------
+  # Analysis (ChemStation integration parameters, captured declaratively).
+  # ---------------------------------------------------------------------------
+  analysis:
+    type: object
+    additionalProperties: false
+    properties:
+      # pybaselines global integration settings (GC-1 engine verdict).
+      global:
+        type: object
+        additionalProperties: false
+        properties:
+          baseline_correction:
+            type: string
+            enum: [none, tangent_skim, vertical_drop, other]
+          skim_ratio:
+            type: number
+          valley_to_peak_ratio:
+            type: number
+          peak_width_s:
+            type: number
+            exclusiveMinimum: 0
+      # ChemStation timed-event menu: integration on/off windows + per-window
+      # peak acceptance. Capture only — executability is declared separately
+      # (executable_binding) and lint-blocked from silent use (D).
+      timed_events:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [at_min, integration]
+          properties:
+            at_min:
+              type: number
+              minimum: 0
+            integration:
+              type: string
+              enum: [on, off]
+            slope_sensitivity:
+              type: number
+            peak_width_s:
+              type: number
+              exclusiveMinimum: 0
+            area_reject_au:
+              type: number
+            height_reject_au:
+              type: number
+      # The FAME/FFA identities this method integrates. compound_ref is a
+      # record|ontology ref; the FAME terms live in
+      # schema/registry/ontology-terms/fame-local.yaml (source: manual,
+      # confirmed ChEBI CURIEs in meta.chibi_id).
+      compound_assignments:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [label, compound_ref]
+          properties:
+            label:
+              type: string
+              minLength: 1
+            compound_ref:
+              $ref: "./datatypes/ref.schema.yaml"
+            expected_rt_min:
+              type: number
+              minimum: 0
+            rt_window_min:
+              type: number
+              exclusiveMinimum: 0
+            response_factor:
+              type: number
+            # FAME-3: the entry's domain qualification (distinct from the
+            # record-level lifecycle). EXACTLY the two task terms — "unassigned"
+            # is the ABSENCE of an entry (unknown-is-unknown, the :46-48
+            # doctrine), never a stored value. Absent = unknown, never a
+            # default.
+            assignment_state:
+              type: string
+              enum: [verified, provisional]
+            # FAME-3: the entry's provenance — who entered it, when, and which
+            # run + peak it was read from (the task's who/when/which run+peak).
+            # All four keys declared; additionalProperties:false — no second
+            # vocabulary.
+            provenance:
+              type: object
+              additionalProperties: false
+              properties:
+                entered_by:
+                  $ref: "./datatypes/ref.schema.yaml"
+                recorded_at:
+                  type: string
+                  format: date-time
+                source_run_ref:
+                  $ref: "./datatypes/ref.schema.yaml"
+                source_peak_label:
+                  type: string
+            # FAME-3: the REPORTING face as a declaration (the FID face is the
+            # entry's identity; the basis note renders beside it). NO enum — a
+            # missing basis term is a scientist-minted local term via the
+            # existing mint mechanism. Absent = unknown, never a default.
+            reporting_basis_ref:
+              $ref: "./datatypes/ref.schema.yaml"
+      # Internal-standard calibration block.
+      calibration:
+        type: object
+        additionalProperties: false
+        properties:
+          istd_ref:
+            $ref: "./datatypes/ref.schema.yaml"
+          istd_amount:
+            type: object
+            additionalProperties: false
+            required: [value, unit]
+            properties:
+              value:
+                type: number
+              unit:
+                type: string
+                minLength: 1
+          dilution_factor:
+            type: number
+            exclusiveMinimum: 0
+          multiplier:
+            type: number
+          calibration_levels:
+            type: array
+            items:
+              $ref: "./datatypes/ref.schema.yaml"
+      # EXECUTABLE-USE GATE (declared data, optional): timed_events/global are
+      # capture; a record is executable only with a declared engine binding.
+      # The lint rule (gc-method.lint.yaml) refuses executable interpretation
+      # of captured timed events without it.
+      executable_binding:
+        type: object
+        additionalProperties: false
+        required: [engine_ref, declared_at]
+        properties:
+          engine_ref:
+            $ref: "./datatypes/ref.schema.yaml"
+          declared_at:
+            type: string
+            format: date-time
+
+  # ---------------------------------------------------------------------------
+  # Provenance capture — the ONLY home for vendor-derived values. A value may
+  # move from source_files.key_values into an executable field ONLY by
+  # scientist-entered data in the sections above (GC-1 unknown-is-unknown).
+  # ---------------------------------------------------------------------------
+  provenance_capture:
+    type: object
+    additionalProperties: false
+    required: [entered_by]
+    properties:
+      entered_by:
+        $ref: "./datatypes/ref.schema.yaml"
+      source_files:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [file, role]
+          properties:
+            file:
+              type: string
+              minLength: 1
+            role:
+              type: string
+              enum: [acq_txt, iq1_mth, da_m, other]
+            # Imported key-values ONLY: {key, raw_value} pairs, NEVER mapped
+            # into executable fields (GC-1 .M verdict).
+            key_values:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [key, raw_value]
+                properties:
+                  key:
+                    type: string
+                    minLength: 1
+                  raw_value:
+                    type: string
+
+  # Registry-kind lifecycle (GC-2 E: gc-method is covered by the minimal
+  # registry-ops lifecycle — draft default state, same treatment as
+  # calibration-record). The vocabulary is the registry-ops lifecycle's own.
+  lifecycleId:
+    type: string
+    enum: [registry-ops]
+    description: "Lifecycle governing this record's state transitions (declared per kind in schema/registry/registry-kinds.registry.yaml)."
+
+  state:
+    type: string
+    enum: [draft, active, archived]
+    description: "Lifecycle state (operational). DISTINCT from domain status/result fields."
+
+$defs:
+  setpoint:
+    type: object
+    additionalProperties: false
+    properties:
+      position:
+        type: string
+      description:
+        type: string

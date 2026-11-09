@@ -3,17 +3,26 @@
  *
  * The record-drafting envelope has two declarations: the compile-side
  * RECORD_DRAFT_ENVELOPE_SCHEMA (recordDraftCompile.ts — Ajv authority,
- * additionalProperties:false, required [operation,kind,fields]) and the
- * model-facing `recordDraft` tool-def property (submitSuggestionTool.ts).
- * Two authorities for one contract drift. This test pins them in lockstep:
- * the tool-def property's required keys and additionalProperties:false MUST
- * equal the compile-side envelope's, every tool-declared property must exist
- * in the envelope with the same structural type, and the envelope may carry
- * ONLY the compiler-injected extras (requestId — the workstate-intent
- * precedent). The compile-side schema is NEVER weakened to satisfy this test.
+ * additionalProperties:false, required [operation]) and the model-facing
+ * `recordDraft` tool-def property (submitSuggestionTool.ts).
  *
- * RED at the fix base: the tool-def recordDraft property declares neither
- * `required` nor `additionalProperties:false` — the lockstep assertions fail.
+ * OQ-4 OPT-A (architect ruling 20261101T032x): the envelope is TWO-ARMED. The
+ * CREATE arm (compose-record) requires [operation, kind, fields]; the EDIT arm
+ * (edit-record) requires [operation, term, fields] (the compound noun the
+ * server resolves — never a self-invented CURIE). The tool-def twin must widen
+ * to the same closed two-verb vocabulary + the `term` property (step 6 of the
+ * W6 contract), so the model-facing contract can never drift looser than the
+ * compile-side Ajv authority. Two authorities for one contract drift. This test
+ * pins them in lockstep: the tool-def property's required keys and
+ * additionalProperties:false MUST equal the compile-side envelope's, every
+ * tool-declared property must exist in the envelope with the same structural
+ * type, and the envelope may carry ONLY the compiler-injected extras
+ * (requestId — the workstate-intent precedent). The compile-side schema is
+ * NEVER weakened to satisfy this test.
+ *
+ * RED at the fix base: the tool-def recordDraft property declared
+ * operation const 'compose-record' + no `term` property — the widened
+ * vocabulary + term-shape assertions fail.
  */
 import { describe, expect, it } from 'vitest';
 import { AGENT_INTENT_TOOL_DEF } from '../ai/submitSuggestionTool.js';
@@ -41,8 +50,10 @@ describe('record-drafting envelope lockstep — tool-def property vs compile-sid
 
   it('required keys are IDENTICAL on both sides (no looser model-facing contract)', () => {
     expect(toolRecordDraft?.required).toEqual(envelope.required);
-    // The compile-side authority stays exactly [operation, kind, fields].
-    expect(envelope.required).toEqual(['operation', 'kind', 'fields']);
+    // The compile-side authority is the two-armed envelope: required
+    // [operation] at the top level; the per-arm required sets ride the
+    // anyOf (compose-record -> +kind +fields; edit-record -> +term +fields).
+    expect(envelope.required).toEqual(['operation']);
   });
 
   it('additionalProperties:false on BOTH sides — neither side accepts smuggled keys', () => {
@@ -67,9 +78,14 @@ describe('record-drafting envelope lockstep — tool-def property vs compile-sid
     expect(extras).toEqual(['requestId']);
   });
 
-  it('the verb is the same closed vocabulary on both sides (const vs single-value enum)', () => {
-    expect(envelope.properties?.operation?.const).toBe('compose-record');
-    expect(toolRecordDraft?.properties?.operation?.enum).toEqual(['compose-record']);
+  it('the verb is the SAME closed two-verb vocabulary on both sides (OQ-4 OPT-A two-armed envelope)', () => {
+    expect(envelope.properties?.operation?.enum).toEqual(['compose-record', 'edit-record']);
+    expect(toolRecordDraft?.properties?.operation?.enum).toEqual(['compose-record', 'edit-record']);
+  });
+
+  it('the edit arm\'s `term` property matches on both sides (type + minLength)', () => {
+    expect(toolRecordDraft?.properties?.term?.type).toBe(envelope.properties?.term?.type);
+    expect(toolRecordDraft?.properties?.term?.minLength).toBe(envelope.properties?.term?.minLength);
   });
 
   it('kind and fields shapes match on both sides', () => {

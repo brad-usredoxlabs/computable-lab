@@ -20,6 +20,7 @@ states:
   description: "In operational use."
 - id: archived
   label: "Archived"
+  contentLocked: true
   terminal: true
   description: "Retired from operational use; kept, readable, historically referenceable."
 transitions:

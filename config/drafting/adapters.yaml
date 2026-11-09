@@ -36,7 +36,13 @@ adapters:
   # declared properties.id.pattern.
   record-drafting:
     domain: registry-records
-    operations: [compose-record]
+    # OQ-4 OPT-A (architect ruling 20261101T032x): the record-drafting adapter
+    # gains the edit-record operation — a proposal that EDITs an existing
+    # record (append ONE governed entry to a declared path, DATA-guarded by
+    # config/drafting/record-edit-guards.yaml) instead of composing a new one.
+    # The create arm (compose-record) is byte-identical; the edit arm stages
+    # ZERO writes (the onAccept hook applies the single governed edit).
+    operations: [compose-record, edit-record]
     projection: {}
     # QMS7-7 FIX1 (adv-review D2): the landing tab kind is DATA, not a TS
     # literal. The compiled landing document (the surface the accepted record

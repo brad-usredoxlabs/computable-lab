@@ -1,0 +1,135 @@
+# FAME-1 — acquisition-status interpretation rules for the .D RUN.LOG member.
+#
+# DATA, not code (the config/sequence-analysis loader precedent,
+# sequenceRuntime.ts:15): this file is the ONLY place the status
+# interpretation lives. The generic reader
+# (server/src/storage/acquisitionPackageStatus.ts) strict-UTF-16-decodes the
+# run_log member (d_reader._strict_utf16 doctrine: FF FE BOM consumed by the
+# utf-16 family; BOM-less falls back to explicit utf-16-le; ANY decode
+# failure is an honest failure, never a crash), then applies `rules` IN FILE
+# ORDER — the FIRST matching rule determines the status (precedence = file
+# order, which is data, NOT a code branch sorted by a coded severity).
+#
+# UNKNOWN IS THE FLOOR: `fallbackStatus` is DECLARED here (a coded completed
+# default is a reject — reviewer bait #4/#5). Every path that cannot read
+# evidence lands on it: no run_log member, unreadable member, decode
+# failure, or zero rule hits (e.g. a plain-ASCII log — the
+# lane1-gate-fixtures shape — whose utf-16le decode yields mojibake, never
+# a rule hit).
+#
+# Patterns are regexes over ONE decoded RUN.LOG line, line-anchored to the
+# real corpus (reviewer bait #6): the WEGMANS 20201023 log carries BOTH an
+# "Instrument Error - Method/Sequence stopped" line AND "Method aborted"
+# (aborted wins — its rule precedes the others); KERRYGOLD / RESTEK-60-
+# RESTEK-H carry "Instrument run completed" AND "Method stopped by user"
+# (stopped-by-user wins — do NOT declare a pattern matching bare
+# "Instrument run completed" as completed); COUNTRYSIDE / RES35077-* end
+# with "Method completed" (completed).
+#
+# Every matched line is preserved VERBATIM on the package record
+# (acquisitionStatusEvidence.matched[].line — the d_reader lossless
+# doctrine: unrecognized lines survive; matched lines are never rewritten
+# nor dropped).
+#
+# ruleId is referenced by the evidence (matched[].ruleId); the schema
+# pattern-enforces its shape (^[a-z][a-z0-9-]*$) and the lint belt re-checks
+# it. The note is ops-readable evidence about WHY the line carries the
+# declared status.
+
+ruleset:
+  id: gc-run-log-acquisition-status
+  version: 1
+
+# The never-completed default (bait #4: DECLARED, not coded).
+fallbackStatus: unknown
+
+# File order = precedence order (first match wins the status).
+#
+# Corpus line shape (the two-column ChemStation layout d_reader pins,
+# d_reader._RUN_LOG_RE): <category><2+ ws><message><ws><HH:MM:SS>
+# <MM/DD/YY>. Every pattern below is ANCHORED to that shape (bait #6: a
+# pattern keyed on bare "completed" would misclassify the KERRYGOLD /
+# RESTEK-60-RESTEK-H "Instrument run completed" lines). The trailing
+# timestamp is optional in each pattern so a truncated line (category +
+# message only, as the drive receipts render them) still classifies — but
+# the line must still START with the category, so no other status line
+# (e.g. "Instrument run completed") can ever satisfy a different rule.
+rules:
+  # --- aborted (the drive finding F2 case: WEGMANS aborted mid-acquisition)
+  - id: aborted-method-aborted
+    status: aborted
+    pattern: '^Method\s+Method aborted(?:\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{2})?$'
+    note: >-
+      The instrument's method state line says the Method was aborted. This is
+      the authoritative abort signal in the verified corpus (WEGMANS 20201023:
+      the run carried ~37.6 min of a never-completed acquisition).
+  - id: aborted-method-sequence-stopped
+    status: aborted
+    pattern: '^Method\s+Instrument Error - Method/Sequence stopped(?:\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{2})?$'
+    note: >-
+      An instrument error stopped the Method/Sequence. Declared as an
+      aborted-corroborating rule (WEGMANS carries this line alongside the
+      I/O-error lines and "Method aborted"); on its own it is still an
+      aborted acquisition, never a completed one.
+  - id: aborted-io-error
+    status: aborted
+    pattern: '^6890\s+1 I/O error with 6890 GC(?:\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{2})?$'
+    note: >-
+      The 6890 I/O error with the 6890 GC (WEGMANS 20201023, verbatim).
+      Declared as an aborted-corroborating rule: the hardware error that
+      precedes the method abort in the verified corpus.
+  # --- stopped-by-user (run finished, the operator stopped the sequence)
+  - id: stopped-by-user-method-stopped-by-user
+    status: stopped-by-user
+    pattern: '^Method\s+Method stopped by user(?:\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{2})?$'
+    note: >-
+      The method was stopped by the user (KERRYGOLD 20201023 and RESTEK-60-
+      RESTEK-H 20201024 both carry "Instrument run completed" BEFORE this
+      line — the run finished, the sequence was stopped by the operator;
+      by precedence this is stopped-by-user, NOT completed).
+  # --- completed (only the explicit method-completed line; a bare
+  #   "Instrument run completed" must NEVER classify a package completed —
+  #   bait #6)
+  - id: completed-method-completed
+    status: completed
+    pattern: '^Method\s+Method completed(?:\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{2})?$'
+    note: >-
+      The method's terminal state line says Method completed (COUNTRYSIDE
+      20201023 "Method completed 15:24:43"; RES35077-4/RES35077-5 end the
+      same way).
+
+# ---------------------------------------------------------------------------
+# FAME-1 (D3): the per-status RUN-SHEET DISPLAY QUALIFICATION — DATA, not a
+# TSX branch. Which classified statuses render as VISIBLY QUALIFIED on the
+# run sheet (a non-collapsing warning line next to "attached: ACQP-…") is a
+# domain/policy decision that belongs in THIS file (the rule file already
+# knows every status it can emit), not in a hardcoded status-literal branch
+# in GcSectionChrome.tsx. A status with qualified: true renders visibly
+# qualified; a status with qualified: false (or absent) renders a quiet word.
+# The registration stamps this onto the package payload
+# (acquisitionStatusQualified) so the chrome renders the DECLARED flag —
+# changing the qualified set is a data edit here, never a TSX rebuild.
+# (The four statuses are the schema's fixed vocabulary; qualification is
+# policy about that vocabulary, declared once, here.)
+# ---------------------------------------------------------------------------
+statusQualification:
+  - status: completed
+    qualified: false
+    note: >-
+      A completed acquisition is the quiet, expected outcome — no run-sheet
+      warning. The package stays attached and the evidence stays readable.
+  - status: aborted
+    qualified: true
+    note: >-
+      An aborted acquisition is a non-completed outcome that an operator
+      should see at a glance — visibly qualified (the WEGMANS F2 finding).
+  - status: stopped-by-user
+    qualified: true
+    note: >-
+      An operator-stop is a non-completed outcome — visibly qualified.
+  - status: unknown
+    qualified: true
+    note: >-
+      Unknown (no parseable log / no rule hit) is the DECLARED floor — it is
+      visibly qualified because an unexplained non-completed state is the
+      one a reviewer most needs to see (never silently treated as completed).

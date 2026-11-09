@@ -8,6 +8,7 @@ import { apiClient } from '../../../shared/api/client';
 import { WidgetRenderer } from './WidgetRenderer';
 import { focusAdjacentTapTabField } from '../tabNavPlugin';
 import { normalizeRefFieldValue } from '../refValue';
+import { curieFromOntologyTerm, commitRefSelection } from '../refSelectionValue';
 
 interface SelectedOntologyTerm {
   label: string;
@@ -16,22 +17,6 @@ interface SelectedOntologyTerm {
   synonyms?: string[];
   ontology?: string;
   oboId?: string;
-}
-
-function curieFromOntologyTerm(term: SelectedOntologyTerm): { curie: string; namespace: string } | null {
-  if (term.oboId && /^[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_]+$/.test(term.oboId)) {
-    const namespace = term.oboId.split(':')[0]!.toUpperCase();
-    return { curie: `${namespace}:${term.oboId.split(':').slice(1).join(':')}`, namespace };
-  }
-  const iriTail = term.iri?.split(/[\/#]/).filter(Boolean).pop();
-  if (iriTail && /^[A-Za-z][A-Za-z0-9]+_[A-Za-z0-9_]+$/.test(iriTail)) {
-    const [prefix, ...rest] = iriTail.split('_');
-    return { curie: `${prefix.toUpperCase()}:${rest.join('_')}`, namespace: prefix.toUpperCase() };
-  }
-  const namespace = term.ontology?.trim().toUpperCase();
-  if (!namespace) return null;
-  const id = term.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return { curie: `${namespace}:${id}`, namespace };
 }
 
 function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
@@ -66,12 +51,11 @@ function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
         }
       }
       if (attrs.suggestionPlan?.valueShape === 'ontology-ref') {
-        const curie = curieFromOntologyTerm(t);
-        updateAttributes({
-          value: curie
-            ? { kind: 'ontology', id: curie.curie, namespace: curie.namespace, label: t.label, ...(t.iri ? { uri: t.iri } : {}) }
-            : v,
-        });
+        // W2 part 2 (single construction site): the canonical ref OBJECT is
+        // built by refSelectionValue.commitRefSelection — the SAME
+        // derivation the top-level arm always applied, now shared with the
+        // ObjectWidget ref sub-field arm (no rival dialect of one entity).
+        updateAttributes({ value: commitRefSelection(v, s, t) });
         return;
       }
       setSidebarTerm({ label: t.label, iri: t.iri ?? '', definition: t.definition, synonyms: t.synonyms, ontology: t.ontology });
@@ -154,6 +138,7 @@ function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
         onRefSelect={handleRefSelect}
         onCancel={() => {}}
         objectProperties={attrs.objectConfig?.properties}
+        arrayItemHint={attrs.itemHint}
         multiselectOptions={attrs.multiselectConfig?.options}
         recordId={attrs.recordId}
         onRecordPatch={handleRecordPatch}
@@ -181,6 +166,10 @@ export const FieldRow = Node.create({
       help: { default: null },
       recordId: { default: null },
       arraySchema: { default: null },
+      // WIDGET-R1: the item-hint for array widgets (the projection's
+      // `items` member). JSON-serializable (plain defaults) so it round-trips
+      // through parseHTML/JSON like the other composite configs.
+      itemHint: { default: null },
       objectConfig: { default: null },
       reflistConfig: { default: null },
       multiselectConfig: { default: null },

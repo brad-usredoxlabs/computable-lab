@@ -1,4 +1,34 @@
-# Lint rules for Assertion records
+# Lint rules for Assertion records (GC-13 — the required-context floor).
+#
+# An assertion is a claim evaluated IN A CONTEXT: a scoped assertion
+# (single_context / comparison / series) must range over at least one
+# context_ref or it asserts in the void (severity error — create-blocking).
+# 'global' scopes range over no context by definition and stay clean.
+#
+# INTENT (not expressible in the v1 DSL — recorded, not faked; gc-method
+# INTENT-comment pattern): scope comparison / series should require at
+# LEAST TWO context_refs (the canonical shape, compiler-specs/40 §5). The
+# DSL has no array-length operator (compare is scalar-numeric only) and no
+# "not everyItem(index < n)" primitive, so the >=2 floor cannot be declared
+# honestly. The >=1 floor is enforced by the rule below; the >=2 shape is
+# reviewer-enforced at the gate (G5) until the DSL gains a length op —
+# that is a stop-boundary item for the architect, not a coder invention.
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/assertion.schema.yaml"
-rules: []
+rules:
+  - id: "asn-scoped-assertion-needs-context"
+    title: "A scoped assertion must range over at least one context"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "not"
+      not:
+        op: "equals"
+        path: "scope"
+        value: "global"
+    assert:
+      op: "nonEmpty"
+      path: "context_refs"
+    message:
+      template: "assertion '{{$.id}}' (scope '{{$.scope}}') declares no context_refs — an assertion outside a context is not testable"
+      paths: [ "$.id", "$.scope" ]

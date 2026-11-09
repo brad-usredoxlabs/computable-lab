@@ -361,8 +361,13 @@
   flex-direction: column;
 }
 
+/* Single-pane workspace (no right pane: /splash, /ingestion, /claims, /chat, /gc-run, ...).
+   The lone pane here is a plain flex child, NOT a react-resizable-panels Panel, so it is
+   the only pane that can own its own scroll. */
 .cl-app--workspace .cl-workspace__panels--single > .cl-workspace__pane {
   flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .cl-app--workspace .cl-workspace__pane {
@@ -374,14 +379,12 @@
   background: var(--cl-bg);
 }
 
-/* Left-pane workspace surfaces (pages like /ingestion, /lab, /browse) render
-   their content directly as tall blocks; the pane clips anything past its
-   fixed bottom edge. Let the left pane scroll vertically so long content
-   (e.g. a long list of search hits) stays reachable instead of being cut off. */
-.cl-app--workspace .cl-workspace__pane--left {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
+/* Pane-level overflow is not controllable on the PanelGroup shapes: the library stamps
+   every Panel with an INLINE overflow:hidden (react-resizable-panels@3.0.6, getPanelStyle(),
+   dist/react-resizable-panels.js:1458), which no stylesheet rule can beat without
+   !important. Pages rendered in a PanelGroup own their scroll door on their own content
+   root instead (.analysis, .graph-search, .sequences-page, .record-create-panel,
+   .registry-page's columns, ...). Do not re-add overflow here. */
 
 .cl-app--workspace .cl-workspace__pane--right {
   background: var(--cl-bg-elev);
@@ -392,15 +395,6 @@
 .cl-app--workspace .cl-workspace__pane--nav {
   background: var(--cl-bg-elev);
   border-right: 1px solid var(--cl-border);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* The action/center pane behaves like the old left pane — long content
-   (deck, event list, record) scrolls rather than clipping. */
-.cl-app--workspace .cl-workspace__pane--action {
-  overflow-y: auto;
-  overflow-x: hidden;
 }
 
 .cl-app--workspace .cl-workspace__pane--chat {

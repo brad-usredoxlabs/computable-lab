@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import type { JSONContent } from '@tiptap/core'
 import { apiClient } from '../../../shared/api/client'
+import { primeContentLockedStates } from '../../../shared/records/contentLockedStatesCache'
 import type { RecordEnvelope } from '../../../types/kernel'
 import type { ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
 import { RichTextToolbar } from '../../../editor/taptab/RichTextToolbar'
@@ -51,10 +52,13 @@ export function ProtocolStepEditModal({ protocolId, step, mode = 'edit', onClose
   useEffect(() => {
     if (!editor) return
     let cancelled = false
-    void apiClient.getRecord(protocolId).then(record => {
+    void apiClient.getRecord(protocolId).then(async record => {
       if (cancelled) return
       const payload = record.payload as Record<string, unknown>
+      const lid = typeof payload.lifecycleId === 'string' ? payload.lifecycleId : undefined
+      if (lid) await primeContentLockedStates(lid)
       const stored = editableProtocolSteps(payload).find(s => s.stepId === step.stepId)
+      if (cancelled) return
       if (!stored) throw new Error('This step no longer exists. Reload the protocol.')
       if (mode !== 'edit') {
         editor.commands.setContent(plainTextDocument(''))

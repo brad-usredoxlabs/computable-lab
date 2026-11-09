@@ -1,0 +1,98 @@
+/* GC-13 gate-fix (D5, gate G7) — GcEvidenceRunPage: the reciprocal
+ * claim -> analysis-run landing surface. The GC evidence context for an
+ * analysis-run id — the SHIPPED GcEvidenceHandoff (the run's output
+ * artifacts + the gc-evidence-claim-link* back-links) — NOT the Run·Design
+ * plate canvas.
+ *
+ * The page owns its own chrome (header / refusal / section); the shipped
+ * component's markup (gc-ev__* / gc-prov__* — unstyled upstream) gets its
+ * minimum legibility scoped HERE. Styling reads the theme tokens
+ * (tokens.css) like every other workspace surface; link affordance matches
+ * the GC-12 .gc-results a pattern (var(--color-primary) + underline, hover
+ * thickens). */
+
+.gc-evidence-run {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.gc-evidence-run__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.gc-evidence-run__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 4px 0;
+  flex: 1;
+}
+
+.gc-evidence-run__kind {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--cl-type-run-soft);
+  color: var(--cl-type-run);
+  vertical-align: middle;
+}
+
+.gc-evidence-run__id {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+}
+
+.gc-evidence-run__status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  background: var(--cl-success-soft);
+  color: var(--cl-success);
+  border: 1px solid var(--cl-success-border);
+}
+
+.gc-evidence-run__section {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.gc-evidence-run__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 12px 0;
+}
+
+.gc-evidence-run__empty,
+.gc-evidence-run__hint {
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.gc-evidence-run__error {
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+/* GC-13 gatefix3 (gate2 D1): the hand-off / provenance-panel rules that
+   used to live HERE (scoped under .gc-evidence-run — a class only this
+   page rendered, so the GC-12 results surface got bare markup) now live
+   in the components' OWN sheets: GcEvidenceHandoff.css (gc-ev__*) and
+   GcProvenancePanel.css (gc-prov__*), each imported by the component
+   itself so both mount sites reach them. This page keeps its OWN chrome
+   only (header / kind chip / refusal / section). */
+

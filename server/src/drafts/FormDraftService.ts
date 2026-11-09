@@ -199,7 +199,12 @@ export class FormDraftService {
       let writes = compiled.writes;
       let volatile: Record<string,string[]> = {};
       if(authoring.onAccept){
-        const outcome = await authoring.onAccept(compiled.writes,this.clock(),this.ctx.store);
+        // OQ-4 OPT-A: the hook receives the draft's stored input (intent +
+        // target) as ONE additive trailing arg. The edit-record arm arms its
+        // single governed edit from it; existing hooks (receiving, chain)
+        // ignore the extra arg — additive, byte-identical.
+        const outcome = await authoring.onAccept(compiled.writes,this.clock(),this.ctx.store,
+          { intent: structuredClone(draft.input.intent), ...(draft.input.target !== undefined ? { target: draft.input.target } : {}) });
         writes = outcome.writes;
         volatile = outcome.volatileFields ?? {};
       }

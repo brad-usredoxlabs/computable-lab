@@ -1,0 +1,158 @@
+# UI specification for Analysis Engine records (GC-5 — declared engine
+# registry).
+#
+# EDITOR-1 + GC-2/GC-3 browser-gate lesson (promoted doctrine): the frontend
+# documentMapper (app/src/editor/taptab/documentMapper.ts:171) renders ONLY
+# kind:section blocks and SKIPS every other block kind. Every block below is a
+# SECTION claiming its slots EXPLICITLY (list order = field order); every slot
+# is a LEAF SCALAR (no object value bound to a textarea — the '[object Object]'
+# defect class); the two array-of-object paths (version_constraints.packages,
+# capabilities.declared) are `array` widgets WITH an explicit `properties`
+# sub-field list (documentMapper.ts:228 projects arraySchema from
+# slot.properties). NEVER kind: repeater. Every slot is claimed exactly once —
+# the loader errors on unknown / double-claimed / unclaimed slots.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.engine_family"
+
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Engine identity. state advances only via lifecycle transitions (registry-ops: draft -> active -> archived). A declared stub engine carries 'STUB' in the title."
+      slots: ["id-slot", "title-slot", "state-slot"]
+    - id: "implementation"
+      kind: "section"
+      label: "Implementation (dispatch data)"
+      help: "The dispatch table the AnalysisRunner reads. adapter is a closed enum of the shipped adapter ids — the schema refuses an unshipped adapter declaratively."
+      slots: ["adapter-slot", "entry-slot", "module-slot"]
+    - id: "version-constraints"
+      kind: "section"
+      label: "Version constraints (declared)"
+      help: "Machine-checkable at probe time: the runner probes the ACTUAL interpreter and declared packages; a mismatch is a NAMED declared failure, never a silent run."
+      slots: ["python-constraint-slot", "packages-slot"]
+    - id: "capabilities"
+      kind: "section"
+      label: "Capabilities (declared)"
+      help: "The closed capability vocabulary from the GC-1 capability matrix. support mirrors the S/A/U/NV legend: supported / approximate / unsupported / unverified."
+      slots: ["capabilities-declared-slot"]
+    - id: "availability"
+      kind: "section"
+      label: "Availability (declared)"
+      help: "An operator declares whether this engine is installable/runnable here. Distinct from lifecycle state; available=false is a NAMED execute-time failure (ENGINE_UNAVAILABLE), never a fallback."
+      slots: ["available-slot", "availability-note-slot"]
+    - id: "runtime-requirements"
+      kind: "section"
+      label: "Runtime requirements"
+      help: "provisioned-venv = only runnable via the GC-1 interpreter resolution order; with declared packages the last-resort interpreter must not satisfy it. Absent numbers are unknown, never a default."
+      slots: ["interpreter-slot", "min-timeout-slot", "max-input-bytes-slot"]
+  slots:
+    # --- identity ---
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+      help: "Pattern ^ENG-[A-Za-z0-9_-]+$."
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+      required: true
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
+    # --- implementation (leaf scalars) ---
+    - id: "adapter-slot"
+      path: "$.implementation.adapter"
+      label: "Adapter"
+      widget: "select"
+      required: true
+      options:
+        - { value: "python-entry-script", label: "Python entry script" }
+        - { value: "stub-echo", label: "Stub echo (declared stub — no scientific computation)" }
+    - id: "entry-slot"
+      path: "$.implementation.entry"
+      label: "Entry"
+      widget: "text"
+      required: true
+      help: "For python-entry-script: documents the SDK module invocation; for stub-echo: 'stub'."
+    - id: "module-slot"
+      path: "$.implementation.module"
+      label: "Module"
+      widget: "text"
+      help: "Optional importable module name (data, never a host file path)."
+    # --- version constraints (leaf scalar + packages array) ---
+    - id: "python-constraint-slot"
+      path: "$.version_constraints.python"
+      label: "Python constraint"
+      widget: "text"
+      required: true
+      help: "Free constraint string, e.g. >=3.14,<3.15. Unknown syntax is a declared failure at probe time, never a guess."
+    - id: "packages-slot"
+      path: "$.version_constraints.packages"
+      label: "Declared packages"
+      widget: "array"
+      help: "Host packages the engine needs; the runner probes these ACTUAL versions. Names arrive from this record — never from code."
+      properties:
+        - { name: "name", widget: "text", label: "Package name", required: true }
+        - { name: "constraint", widget: "text", label: "Constraint", required: true }
+    # --- capabilities (declared array) ---
+    - id: "capabilities-declared-slot"
+      path: "$.capabilities.declared"
+      label: "Declared capabilities"
+      widget: "array"
+      help: "Closed capability vocabulary (GC-1 matrix control ids). Ontology terms are deliberately NOT minted."
+      properties:
+        - { name: "capability", widget: "select", label: "Capability", required: true, options: [ { value: "baseline_control", label: "Baseline control" }, { value: "width_slope_sensitivity", label: "Width/slope sensitivity" }, { value: "area_height_reject", label: "Area/height reject" }, { value: "timed_integration_windows", label: "Timed ON/OFF integration windows" }, { value: "peak_detection", label: "Peak detection" }, { value: "deconvolution", label: "Deconvolution" } ] }
+        - { name: "support", widget: "select", label: "Support", required: true, options: [ { value: "supported", label: "Supported (S)" }, { value: "approximate", label: "Approximate (A)" }, { value: "unsupported", label: "Unsupported (U)" }, { value: "unverified", label: "Unverified (NV)" } ] }
+    # --- availability (leaf scalars) ---
+    - id: "available-slot"
+      path: "$.availability.available"
+      label: "Available here"
+      widget: "checkbox"
+      required: true
+    - id: "availability-note-slot"
+      path: "$.availability.note"
+      label: "Availability note"
+      widget: "text"
+    # --- runtime requirements (leaf scalars) ---
+    - id: "interpreter-slot"
+      path: "$.runtime_requirements.interpreter"
+      label: "Interpreter"
+      widget: "select"
+      required: true
+      options:
+        - { value: "provisioned-venv", label: "Provisioned venv" }
+        - { value: "system", label: "System" }
+    - id: "min-timeout-slot"
+      path: "$.runtime_requirements.min_timeout_seconds"
+      label: "Min timeout (seconds)"
+      widget: "number"
+    - id: "max-input-bytes-slot"
+      path: "$.runtime_requirements.max_input_bytes"
+      label: "Max input bytes"
+      widget: "number"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "160px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.implementation.adapter"
+    label: "Adapter"
+    width: "200px"
+  - path: "$.availability.available"
+    label: "Available"
+    width: "100px"
+  - path: "$.state"
+    label: "State"
+    width: "100px"

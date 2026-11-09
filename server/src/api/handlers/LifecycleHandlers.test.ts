@@ -193,3 +193,62 @@ describe('LifecycleHandlers.getTransitions — terminalStates echo (QMS7-6)', ()
   })
 })
 
+// ---------------------------------------------------------------------------
+// L1-RECORD-LOCK-GUARD-1 (AM-1 #4): the GET /lifecycle/:id/transitions
+// response carries `contentLockedStates: string[]` — the engine's read-only
+// report of the YAML-declared `contentLocked: true` states, same shape and
+// semantics as terminalStates (exact array = YAML declaration order; loaded
+// but undeclared = []; this is the served shape leg 2 consumes).
+// ---------------------------------------------------------------------------
+
+describe('LifecycleHandlers.getTransitions — contentLockedStates echo (L1-RECORD-LOCK-GUARD-1)', () => {
+  // The file-level LIFECYCLES_DIR above reads server/schema, which is a
+  // SYMLINK to the trunk worktree (pre-existing tests pass against trunk
+  // data by design). The contentLocked declarations land in THIS worktree's
+  // schema/, reached four levels up from src/api/handlers — so this block
+  // loads from the worktree dir. The production code under test
+  // (engine + handler) is identical either way.
+  const WORKTREE_LIFECYCLES_DIR = fileURLToPath(
+    new URL('../../../../schema/core/lifecycles', import.meta.url),
+  )
+
+  function realEngine() {
+    const engine = new LifecycleEngine()
+    const count = loadLifecyclesFromDir(WORKTREE_LIFECYCLES_DIR, engine)
+    expect(count).toBeGreaterThanOrEqual(1)
+    return engine
+  }
+
+  it('echoes the YAML-declared contentLocked set for each of the four declared lifecycles (exact array, served shape for leg 2)', async () => {
+    const engine = realEngine()
+    const { handlers } = makeHandlers({ engine, userId: 'USR-X' })
+    const reply = makeReply()
+
+    const expected: Record<string, string[]> = {
+      'document-control': ['approved', 'effective', 'superseded', 'archived'],
+      'document-controlled-signing': ['approved', 'effective', 'superseded', 'archived'],
+      'lab-sample': ['archived'],
+      'registry-ops': ['archived'],
+    }
+    for (const [lifecycleId, declared] of Object.entries(expected)) {
+      const body = await handlers.getTransitions(makeRequest(lifecycleId), reply as never)
+      expect((body as { lifecycleId: string }).lifecycleId).toBe(lifecycleId)
+      // Exact served shape: the array, in YAML declaration order — not a Set.
+      expect((body as { contentLockedStates: string[] }).contentLockedStates).toEqual(declared)
+    }
+  })
+
+  it('a loaded lifecycle with NO contentLocked declarations echoes an empty array (declared-but-empty, not undefined)', async () => {
+    // service-request is loaded from disk but declares no contentLocked state:
+    // the handler must serialize [] (AM-9f), never omit the field and never
+    // fall back to an invented set.
+    const engine = realEngine()
+    const { handlers } = makeHandlers({ engine, userId: 'USR-X' })
+    const reply = makeReply()
+
+    const body = await handlers.getTransitions(makeRequest('service-request'), reply as never)
+
+    expect((body as { contentLockedStates: string[] }).contentLockedStates).toEqual([])
+  })
+})
+

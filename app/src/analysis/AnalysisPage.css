@@ -1,9 +1,18 @@
+/* SHELL-PANE-SCROLL-1: this page's left pane is a react-resizable-panels Panel, whose
+   inline overflow:hidden clips the report column at the pane edge (measured 3625 px of
+   content in an 829 px pane at 1440x900 — the run list was unreachable). The pane cannot
+   scroll itself, so the page-owned content root does. Same door shape as .analysis-right
+   on the opposite pane. */
 .analysis {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 1.25rem 2rem;
   max-width: 720px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
 }
 
 .analysis__header h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
@@ -54,7 +63,22 @@
 
 .analysis__error { color: #c92a2a; font-size: .85rem; }
 
-.analysis-right { padding: 1rem 1.25rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
+/* FAME-LAYOUT-1 — the report pane's content is taller than the pane and (for any
+   view-spec table) wider than it. react-resizable-panels pins the Panel itself to
+   inline overflow:hidden, so the scroll door lives on the page-owned content root:
+   this element fills the pane box and scrolls both axes, which makes every bound
+   column and the report's last row user-reachable at the shipped viewport. Generic
+   by construction — no column, artifact or renderer knowledge here (R8). */
+.analysis-right {
+  padding: 1rem 1.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
 .analysis-right__title { font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 
 /* PB-CH-6 — Analysis-local chat column (compact, above the artifact area). */
@@ -85,6 +109,17 @@
 .view-spec__title { font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .35rem; }
 .view-spec__table { border-collapse: collapse; width: 100%; font-size: .85rem; }
 .view-spec__table th, .view-spec__table td { border: 1px solid #e5e7eb; padding: .3rem .5rem; text-align: left; }
+/* FAME-8 GATEFIX5 (supersedes the GATEFIX4 `anywhere` rule; architect decision 2026-11-02):
+   plain cells never break a token in layout — auto table layout sizes every column to its honest
+   min-content (longest whole token), so numbers and header words stay intact; `break-word` is only
+   the last-resort valve if a cell is ever artificially narrowed. Genuinely wide tables then exceed
+   the pane and stay reachable through the .analysis-right door (overflow:auto, :72-81);
+   `.view-spec__table { width:100% }` (:110) keeps narrow tables fitting. */
+.view-spec__table th, .view-spec__table td { overflow-wrap: break-word; white-space: normal; }
+/* Array-valued cells (ViewRenderer value-shape branch, .view-spec__cell-item) keep D1's collapse —
+   they wrap anywhere INSIDE their own column — with a content floor so auto layout cannot starve
+   the column to one character. */
+.view-spec__cell-item { overflow-wrap: anywhere; min-width: 12ch; }
 .view-spec__table th { background: #f9fafb; font-weight: 600; }
 .view-spec__signal { max-width: 100%; color: #1971c2; }
 .view-spec__metric-value { font-size: 1.5rem; font-weight: 700; }
@@ -92,3 +127,158 @@
 .view-spec__error { color: #c92a2a; font-size: .85rem; }
 .view-spec__figure { max-width: 100%; border-radius: 6px; }
 .view-spec__empty { color: #9ca3af; font-size: .85rem; }
+
+/* GC-9 — parameter-form wiring (deliverable B/C). The labeled form is the
+   primary path; raw JSON is a demoted disclosure that can never block it. */
+.analysis__params-noschema { color: #6b7280; font-size: .85rem; }
+
+.analysis__params-advanced { border: 1px dashed #cbd5e1; border-radius: 6px; padding: .5rem .6rem; background: #f8fafc; }
+.analysis__params-advanced summary { cursor: pointer; font-size: .8rem; color: #475569; user-select: none; }
+.analysis__params-advanced > *:not(summary) { margin-top: .5rem; }
+
+.analysis__params-override { color: #e67700; font-size: .8rem; font-weight: 600; }
+
+.analysis__params-preview { display: flex; flex-direction: column; gap: .25rem; }
+.analysis__params-preview-label { font-size: .75rem; color: #6b7280; }
+.analysis__params-preview pre { margin: 0; padding: .5rem .6rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; font-size: .78rem; max-height: 14rem; overflow: auto; }
+
+/* ParameterForm (deliverable A) control layout. */
+.paramform { display: flex; flex-direction: column; gap: .5rem; }
+.paramform__field { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.paramform__field > label { min-width: 9rem; font-size: .85rem; color: #374151; }
+.paramform__field > input, .paramform__field > select { flex: 0 1 12rem; }
+.paramform__unit { color: #6b7280; font-size: .75rem; }
+.paramform__missing { color: #c92a2a; font-size: .7rem; font-weight: 600; text-transform: uppercase; }
+.paramform__group { border: 1px solid #e5e7eb; border-radius: 6px; padding: .5rem .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.paramform__group legend { font-size: .8rem; font-weight: 600; color: #374151; padding: 0 .3rem; }
+.paramform__list { display: flex; flex-direction: column; gap: .4rem; }
+.paramform__list-label { font-size: .85rem; color: #374151; }
+.paramform__row { display: flex; align-items: center; gap: .5rem; border: 1px solid #eef2f7; border-radius: 6px; padding: .4rem .5rem; }
+.paramform__row .paramform__field { flex: 1; }
+.paramform__row .paramform__field > input, .paramform__row .paramform__field > select { flex: 1; min-width: 5rem; }
+.paramform__remove, .paramform__add, .paramform__reset { font-size: .75rem; padding: .25rem .55rem; }
+.paramform__unsupported { border: 1px solid #f5c2c7; background: #fff5f5; color: #c92a2a; border-radius: 6px; padding: .5rem .6rem; font-size: .8rem; }
+.paramform__field-actions { display: inline-flex; align-items: center; gap: .4rem; }
+.paramform__override { color: #e67700; font-size: .7rem; font-weight: 600; text-transform: uppercase; }
+/* GC-10 [C] — ChromatogramView (interactive single-trace; handwritten SVG). */
+.view-spec__chromatogram { display: flex; flex-direction: column; gap: .4rem; }
+.chromatogram__toolbar { display: flex; align-items: center; gap: .6rem; font-size: .8rem; color: #374151; flex-wrap: wrap; }
+.chromatogram__reset { font-size: .75rem; padding: .2rem .55rem; }
+.chromatogram__readout { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #f1f3f5; border-radius: 4px; padding: .1rem .45rem; }
+.chromatogram__decim { color: #e67700; font-size: .72rem; }
+.chromatogram__svg { width: 100%; height: auto; display: block; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; user-select: none; }
+.chromatogram__frame { fill: #fbfcfe; stroke: #d1d5db; stroke-width: 1; }
+.chromatogram__tick { stroke: #9ca3af; stroke-width: 1; }
+.chromatogram__ticklabel { fill: #6b7280; font-size: 9px; font-family: ui-monospace, monospace; }
+.chromatogram__axislabel { fill: #374151; font-size: 10px; font-weight: 600; }
+.chromatogram__trace { stroke: #1971c2; stroke-width: 1.4; fill: none; }
+.chromatogram__hover { stroke: #c2255c; stroke-width: 1; stroke-dasharray: 3 2; }
+.chromatogram__sel { fill: rgba(25, 113, 194, 0.14); stroke: #1971c2; stroke-width: 1; stroke-dasharray: 4 2; }
+.chromatogram__marker { cursor: pointer; }
+.chromatogram__markerline { stroke: #2f9e44; stroke-width: 1; }
+.chromatogram__markerlabel { fill: #2f9e44; font-size: 9px; font-weight: 600; }
+.chromatogram__marker--saturated .chromatogram__markerline { stroke: #e8590c; stroke-width: 1.6; }
+.chromatogram__marker--saturated .chromatogram__markerlabel { fill: #e8590c; }
+.chromatogram__marker--active .chromatogram__markerline { stroke: #1971c2; stroke-width: 2; }
+.chromatogram__marker--active .chromatogram__markerlabel { fill: #1971c2; }
+.chromatogram__markersat { fill: #e8590c; font-size: 9px; font-weight: 700; }
+.chromatogram__legend { color: #e8590c; font-size: .75rem; font-weight: 600; }
+.chromatogram__tablewrap { display: flex; flex-direction: column; gap: .3rem; }
+.chromatogram__skipnote { color: #6b7280; font-size: .75rem; }
+.chromatogram__table { border-collapse: collapse; width: 100%; font-size: .8rem; }
+.chromatogram__table th { border: 1px solid #e5e7eb; padding: .25rem .5rem; text-align: left; color: #374151; font-weight: 600; background: #f9fafb; }
+.chromatogram__table td { border: 1px solid #e5e7eb; padding: .25rem .5rem; }
+.chromatogram__table tr { cursor: pointer; }
+.chromatogram__table tr:hover { background: #f9fafb; }
+.chromatogram__row--active { background: #e7f5ff !important; }
+.chromatogram__rowlabel { font-weight: 600; color: #374151; }
+.chromatogram__row-saturated { color: #e8590c; font-weight: 600; }
+.chromatogram__rowflags { color: #6b7280; font-family: ui-monospace, monospace; font-size: .72rem; }
+.chromatogram__empty { color: #6b7280; font-size: .85rem; padding: 1rem 0; }
+
+/* GC-10 [D] — CompareTraces (same-axes multi-trace overlay; handwritten SVG).
+   FIX2R defect 3: the surface must FIT the results pane (the pane is
+   overflow:hidden — an overflowing grid is clipped, not scrollable). No
+   arbitrary pixel widths: the grid columns shrink (minmax), the middle
+   column's content wraps, and the overlay svg is responsive to the column
+   it lands in (width:100% + viewBox; no fixed svg width in the tree). */
+.compare-surface { display: flex; flex-direction: column; gap: .5rem; border: 1px solid #d1d5db; border-radius: 8px; padding: .75rem; background: #fff; width: 100%; min-width: 0; box-sizing: border-box; container-type: inline-size; }
+.compare-surface__header { display: flex; align-items: center; justify-content: space-between; }
+.compare-surface__header h2 { margin: 0; font-size: 1rem; }
+.compare-surface__body { display: grid; grid-template-columns: 1fr; gap: .75rem; align-items: start; }
+.compare-surface__body > * { min-width: 0; }
+/* FIX3 defect 3 (advreview cycle 3, D3-NEW MAJOR): the F2 three-track rule
+   minmax(9rem,14rem) minmax(0,1fr) minmax(7.5rem,16rem) let the side tracks
+   grow to their maxima first and collapse the overlay track to ~2px at the
+   532px pane (measured [224,2,256]). The body now stacks to a single column
+   by default; at >= 40rem (640px @ the 16px root font) the EXACT F2 track
+   split is restored, so wide panes render identically to the F2 review.
+   No new px: rem breakpoints only. Measured (real Chromium 151): 400px
+   [374] no overflow; 532px [506] no overflow; 700px [224,170,256]; 1000px
+   [224,470,256]. The stacked dividers are the same-file rules below. */
+@container (min-width: 40rem) {
+  .compare-surface__body { grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) minmax(7.5rem, 16rem); }
+}
+@container (max-width: 39.9375rem) {
+  .compare-surface__select { border-right: 0; padding-right: 0; }
+  .compare-surface__saved { border-left: 0; padding-left: 0; }
+}
+.compare-surface__select { display: flex; flex-direction: column; gap: .5rem; border-right: 1px dashed #e5e7eb; padding-right: .5rem; }
+.compare-surface__run { display: flex; flex-direction: column; gap: .25rem; }
+.compare-surface__run-toggle { text-align: left; font-weight: 600; font-size: .85rem; }
+.compare-surface__artifact { display: flex; align-items: center; gap: .35rem; font-size: .8rem; cursor: pointer; }
+.compare-surface__artifact > span:nth-child(2) { overflow-wrap: anywhere; }
+.compare-surface__artifact-id { color: #9ca3af; font-family: ui-monospace, monospace; font-size: .68rem; margin-left: auto; overflow-wrap: anywhere; }
+.compare-surface__overlay { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.compare-surface__conflicts { display: flex; flex-direction: column; gap: .25rem; }
+.compare-surface__conflicts > * { overflow-wrap: anywhere; }
+.compare-surface__conv-hint { color: #6b7280; font-size: .75rem; }
+.compare-surface__hint { color: #6b7280; font-size: .78rem; }
+.compare-surface__decim { color: #e67700; font-size: .72rem; }
+.compare-overlay__svg { width: 100%; height: auto; display: block; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
+.compare-overlay__frame { fill: #fbfcfe; stroke: #d1d5db; stroke-width: 1; }
+.compare-overlay__tick { stroke: #9ca3af; stroke-width: 1; }
+.compare-overlay__ticklabel { fill: #6b7280; font-size: 9px; font-family: ui-monospace, monospace; }
+.compare-overlay__axislabel { fill: #374151; font-size: 10px; font-weight: 600; }
+.compare-overlay__trace { fill: none; }
+.compare-overlay__toolbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; min-height: 1.4rem; }
+.compare-overlay__reset { padding: .15rem .6rem; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; font-size: .75rem; cursor: pointer; }
+.compare-overlay__reset:hover { background: #f3f4f6; }
+.compare-overlay__readout { display: inline-flex; gap: .75rem; font-family: ui-monospace, monospace; font-size: .72rem; flex-wrap: wrap; }
+.compare-overlay__readout-row { white-space: nowrap; }
+.compare-overlay__hover { stroke: #c2255c; stroke-width: 1; stroke-dasharray: 3 2; }
+.compare-overlay__sel { fill: rgba(25, 113, 194, 0.14); stroke: #1971c2; stroke-width: 1; stroke-dasharray: 4 2; }
+.compare-surface__legend { display: flex; flex-direction: column; gap: .2rem; }
+.compare-surface__legend-row { display: flex; align-items: center; gap: .4rem; font-size: .8rem; }
+.compare-surface__legend-row--hidden { opacity: .45; }
+.compare-surface__swatch { width: .8rem; height: .8rem; border-radius: 3px; display: inline-block; }
+.compare-surface__conversions { display: flex; flex-direction: column; gap: .3rem; }
+.compare-surface__conversion { display: flex; align-items: center; gap: .5rem; font-size: .78rem; flex-wrap: wrap; }
+.compare-surface__conversion label { display: inline-flex; align-items: center; gap: .25rem; }
+.compare-surface__conversion input { width: 4.5rem; padding: .2rem .3rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: .75rem; }
+.compare-surface__conversion-label { font-weight: 600; color: #374151; }
+.compare-surface__actions { display: flex; align-items: center; gap: .5rem; }
+.compare-surface__save-result { font-size: .78rem; color: #374151; }
+.compare-surface__saved { display: flex; flex-direction: column; gap: .3rem; border-left: 1px dashed #e5e7eb; padding-left: .5rem; }
+.compare-surface__saved-title { font-weight: 600; font-size: .85rem; }
+.compare-surface__saved-row { display: flex; flex-direction: column; gap: .2rem; font-size: .78rem; }
+.compare-surface__saved-row button { align-self: flex-start; font-size: .72rem; padding: .15rem .45rem; }
+
+/* GC-10 [E] — the prominent Compare action in the results header. */
+.analysis-right__title { display: flex; align-items: center; gap: .6rem; }
+.analysis-right__title-text { flex: 0 1 auto; }
+.analysis-compare-btn {
+  margin-left: auto;
+  padding: .35rem .8rem;
+  border: 1px solid #1971c2;
+  background: #e7f5ff;
+  color: #1864ab;
+  border-radius: 6px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.analysis-compare-btn:hover:not(:disabled) { background: #d0ebff; }
+.analysis-compare-btn:disabled { background: #f1f3f5; border-color: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+.analysis-compare-btn__reason { font-weight: 400; color: #6b7280; }

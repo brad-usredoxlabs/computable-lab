@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { getReadoutDefinitionRegistry } from './ReadoutDefinitionRegistry.js';
 
 describe('ReadoutDefinitionRegistry', () => {
-  it('list() returns 7 entries', () => {
+  it('list() returns 8 entries', () => {
     const registry = getReadoutDefinitionRegistry();
     const entries = registry.list();
 
-    expect(entries).toHaveLength(7);
+    expect(entries).toHaveLength(8);
   });
 
   it('RDEF-QPCR-FAM has correct properties', () => {
@@ -63,5 +63,17 @@ describe('ReadoutDefinitionRegistry', () => {
     expect(entry!.name).toBe('GC-MS Peak Area');
     expect(entry!.instrument_type).toBe('gc_ms');
     expect(entry!.mode).toBe('peak_area');
+  });
+
+  it('RDEF-GCFID-PEAK_AREA has correct properties (GC-2)', () => {
+    const registry = getReadoutDefinitionRegistry();
+    const entry = registry.get('RDEF-GCFID-PEAK_AREA');
+
+    expect(entry).toBeDefined();
+    expect(entry!.name).toBe('GC-FID Peak Area');
+    expect(entry!.instrument_type).toBe('gc_fid');
+    expect(entry!.mode).toBe('peak_area');
+    expect(entry!.channel_label).toBe('FID');
+    expect(entry!.units).toBe('pA');
   });
 });

@@ -1,0 +1,493 @@
+# SPEC — L1-RECORD-LOCK-GUARD-1 (lane 1) · draft l1t1905
+
+Draft author: cl-spec-composer (draft l1t1905). REVIEWED AND PROMOTED by the lane-1 orchestrator on the
+302ND tick: read the binding AMENDMENT below before any section of this draft. Not yet dispatched (corpus
+priority — no fleet slot this tick). Trunk under test:
+`cl/integration-1` @ `819a2f448c73c15648571b2822195422948c472e` (worktree
+`/mnt/vast/home/brad/git/cl-integration-1`, clean apart from untracked `node_modules`/`ready`).
+
+
+---
+
+## READ FIRST — ORCHESTRATOR AMENDMENT (binding, 302ND lane-1 tick)
+
+Authority: architect ruling `.hermes/plans/2026-11-03_l1-record-lock-policy-decision.md`
+(Q1 = declare the policy in lifecycle DATA, Q2 = store-level no-op, Q3 = scope/pins), which the
+orchestrator requested and then re-verified against the trunk at `819a2f44`. This amendment
+**supersedes** the draft's §3 OUT-list, §5 (both legs' placement), §5-A2 and assumption
+AS-L1T1905-2. Everything else in the draft stands unchanged: §2 measured cause and the
+`dbda2eda` receipt, §4 acceptance criteria (VERBATIM, none weakened), §6 first check, §7 bars,
+§8 worker contract, §9 browser brief, §10 reviewer bait.
+
+### AM-1 Policy placement = declared lifecycle DATA (not a TS pair)
+The `approved/effective` pair in `RecordRegistryPage.tsx:554-560` must NOT survive as the
+predicate. Declare the policy; three sites currently hardcode it and all three must consume ONE
+resolver.
+
+Add to IN scope (draft §3 OUT-list is void for these):
+1. `schema/core/lifecycle.meta.schema.yaml` — optional per-state boolean `contentLocked`,
+   `default: false`, sibling of `initial`/`terminal` (insert after :31-33). `additionalProperties:false`
+   is at :7, so the schema lands BEFORE any YAML uses the field or QMS7-3 coverage goes red.
+2. `server/src/lifecycle/types.ts` — `contentLocked?: boolean` on the `states[]` item.
+3. `server/src/lifecycle/LifecycleEngine.ts` — `contentLockedStates(lifecycleId): ReadonlySet<string> | undefined`,
+   a byte-for-byte mirror of `terminalStates()` (:129-137). Undefined when the lifecycle is not
+   loaded (fail-open, matching today's absent-`lifecycleId` pass-through).
+4. `server/src/api/handlers/LifecycleHandlers.ts` — additive `contentLockedStates` beside
+   `terminalStates` (:81-82) on `GET /lifecycle/:lifecycleId/transitions`.
+5. The FOUR lifecycle YAMLs (exact set so no live lock is silently dropped):
+   - `document-control.lifecycle.yaml`: `contentLocked: true` on approved, effective, superseded, archived;
+   - `document-controlled-signing.lifecycle.yaml`: the same four — it has the same state shape and is
+     locked by today's global list, so omitting it SILENTLY UNLOCKS a live surface;
+   - `lab-sample.lifecycle.yaml`: `contentLocked: true` on `archived`;
+   - `registry-ops.lifecycle.yaml`: `contentLocked: true` on `archived`.
+   `lab-vocabulary-control`, `service-request`, `tyf-order` contain none of those states — touch nothing.
+   No MANIFEST/golden/treeState pin covers these YAMLs (checked).
+6. `app/src/shared/api/client.ts` — mirror `getLifecycleTerminalStates` (:4668) as
+   `getLifecycleContentLockedStates`.
+7. Consumers, ALL reading the declared set: `RecordHandlers.ts:1139`, `RecordStoreImpl.ts:285-290`,
+   `RecordRegistryPage.tsx:554-560`, `RecordEditPanel.tsx`. After this item, grep for the four state
+   strings must return only lifecycle YAML DATA and proof/evidence files.
+   Ordering: schema -> types -> engine -> endpoint echo -> 4 YAMLs -> server consumers -> client.
+
+### AM-2 Store resolver by CONFIG injection
+`RecordStoreConfig` (`server/src/store/types.ts:203+`) already carries the precedent
+(`appendOnlyKinds`). Add `contentLockedStates?: (lifecycleId: string) => ReadonlySet<string> | undefined`
+and wire it at the single factory `createRecordStore` (`RecordStoreImpl.ts:1048-1055`) from the
+server bootstrap where the engine exists. The store must NOT re-invent a set and must NOT take an
+engine dependency.
+
+### AM-3 No-op belongs in the STORE, and the predicate must survive transitions
+Place the short-circuit in `updateUnlocked` before `serializeRecord` (draft §5's handler-only
+placement is superseded): an API-bypassing caller (seed-promotion path, scripts) must get the same
+no-op. Return the stored envelope, 200, no write, no index rebuild.
+
+**TRAP the draft's wording would have hit — this is the reason for the amendment's pin set:**
+`controlledContent` strips `state`, so ANY lifecycle transition (approved->effective,
+effective->superseded) is also "content-equal". A short-circuit keyed on content equality alone
+would swallow every state transition and freeze the state machine. Required guard at the store:
+
+    String(storedPayload.state) === String(incomingPayload.state)
+    && controlledContent(storedPayload) === controlledContent(incomingPayload)
+    && no signed transition is being applied
+
+If "signed transition" cannot be expressed at the store layer, key the store short-circuit on
+state equality + content equality only (a transition changes state, so it bypasses the
+short-circuit naturally) and keep the handler's transition logic untouched — but then the handler
+must NOT short-circuit before applying `lifecycleTransition`.
+
+### AM-4 Client predicate
+Locked = `state ∈ contentLockedStates(lifecycleId)` OR `state ∈ terminalStates(lifecycleId)`.
+`RecordRegistryPage.tsx:568`'s "do not touch it" comment is SUPERSEDED by the ruling — that branch
+is what this item rewrites. `/registry` behaviour (S10: saveGone, headerButtons, draft-copy 200)
+must be identical before and after. `terminalLocked` keeps using `getLifecycleTerminalStates`.
+
+### AM-5 YAML reload and the browser gate are the ORCHESTRATOR's
+The coder performs no lane-stack restart and makes no acceptance-1 claim. Orchestrator pre-gate
+after merge + `cl-lane-stack.sh 1 restart`:
+`GET :3092/api/lifecycle/document-control/transitions` includes
+`contentLockedStates: ['approved','effective','superseded','archived']`;
+`document-control-signing` the same four; `document-registry-ops` / `sample` `['archived']`.
+If the served payloads do not show those, the YAML did not reload — stop, do not re-grade the UI.
+
+### AM-6 amendment to §7 bars (additions, others unchanged)
+- `server`: run `src/governance/lifecycleMeta.test.ts`-equivalent coverage — concretely
+  `server/src/api/handlers/LifecycleHandlers.test.ts` plus whatever test validates YAML against the
+  meta-schema (locate it, do not guess) — must stay green after the schema + YAML edits.
+- New RED tests (all three, before the fix):
+  (a) no-op PUT on an effective controlled document -> 200, no `update`/adapter write, `meta.contentSha` unchanged;
+  (b) `approved → effective` (and `effective -> superseded`) still WRITES and advances state
+      (this is the transition-swallow regression pin);
+  (c) a content-changing PUT on a locked record is still 409 `CONTROLLED_RECORD_LOCKED` at handler AND store.
+
+### AM-7 amendment to §10 reviewer bait (additions)
+11. Strip-then-short-circuit: swallowing transitions (see AM-3 trap).
+12. Schema field added but YAML not populated => silent unlock, green tests, real defect.
+13. `document-controlled-signing` forgotten (same four states; live lock lost).
+14. Store resolver `undefined` treated as "not locked" everywhere, including records WITH a
+    lifecycleId whose YAML was not loaded — that must be an explicit, stated fail-open, not a guess.
+15. Keeping the old TS `approved/effective` pair "for safety" alongside the declared set => two
+    policies; automatic reject.
+
+### AM-8 Assumption closure
+AS-L1T1905-2 (§11: "Leg A may keep the approved/effective pair in TS ... debt: true") is CLOSED: debt false once the lock is declared in lifecycle DATA and every consumer reads it. Any trace of the old hardcoded predicate in the diff is a defect, not a fallback.
+
+### AM-9 Lifetime-id corrections + the located meta-schema pin (303RD tick, verified first-hand at ccec9e2d)
+
+AM-5 above names the pre-gate lifecycles loosely. The REAL ids, read from the `id:` field of
+`schema/core/lifecycles/*.yaml`, are: `document-control`, `document-controlled-signing`,
+`lab-sample`, `registry-ops` (plus untouched `lab-vocabulary-control`, `service-request`,
+`tyf-order`). The orchestrator pre-gate after merge must therefore be:
+
+```
+GET :3092/api/lifecycle/document-control/transitions            -> contentLockedStates [approved,effective,superseded,archived]
+GET :3092/api/lifecycle/document-controlled-signing/transitions -> contentLockedStates [approved,effective,superseded,archived]
+GET :3092/api/lifecycle/lab-sample/transitions                  -> contentLockedStates [archived]
+GET :3092/api/lifecycle/registry-ops/transitions                -> contentLockedStates [archived]
+```
+
+Two load-bearing facts measured today (they change AM-6's task from "locate it" to "close it"):
+
+1. **The one existing meta-schema pin covers ONLY `registry-ops`**:
+   `server/src/governance/registryOpsLifecycle.test.ts:666-676` reads
+   `core/lifecycle.meta.schema.yaml` + `core/lifecycles/registry-ops.lifecycle.yaml` and validates
+   with a fresh `createValidator()`. Editing `document-control`, `document-controlled-signing`, or
+   `lab-sample` would be validated by NOTHING today.
+2. **The runtime loader does not validate either**: `server/src/lifecycle/LifecycleLoader.ts:13-39`
+   parses each `*.lifecycle.yaml` and calls `engine.loadLifecycle(spec)` — no Ajv, no meta-schema,
+   and a failing file is only `console.warn`-ed. Consequence: a misspelt field or a `contentLocked`
+   set on a state id that does not exist in the file fails SILENTLY (no lock, green tests).
+
+Required additions to AM-6's pin set (RED-first where meaningful):
+- (d) a meta-schema validation pin for EACH of the four edited YAMLs (extend the registryOps
+  pattern, or loop the four files through one fresh-validator assertion);
+- (e) an engine-level pin: `contentLockedStates(id)` for each of the four ids equals exactly the
+  state set declared in AM-1 (this is the pin that catches a typo'd state id — the loader cannot);
+- (f) a negative pin that `contentLockedStates('service-request')` (or any lifecycle whose YAML
+  declares no `contentLocked`) returns an EMPTY set, not `undefined`, so "declared but empty" and
+  "lifecycle not loaded" stay distinguishable at the handler.
+- Store resolution: `undefined` (lifecycle not loaded) ⇒ fail-open skip, matching today's
+  absent-`lifecycleId` pass-through — but this must be an explicit, commented decision in the diff,
+  not an accident of `undefined?.has(...)` (bait 14).
+
+## AM-10 (ORCHESTRATOR, 305TH tick 2026-11-03T20:1x — measured first-hand at af301799; binding)
+
+AM-2's config injection has a WIRING surface I measured myself; do not let the store half become a
+test-only feature.
+
+1. **Production `createRecordStore` call sites = exactly 3**: `server/src/server.ts:527` (the ONE
+   web-server path), `server/src/scripts/applyOwnershipDefaults.ts:282` and
+   `server/src/scripts/migrateRecordLifecycles.ts:512`. The signature is
+   `createRecordStore(repo, validator, lintEngine, config?: RecordStoreConfig)`
+   (`server/src/store/RecordStoreImpl.ts:1048-1056`), so config is OPTIONAL and 38 test call sites
+   pass none.
+2. Requirements:
+   - (a) `server.ts:527` MUST pass the real resolver (engine-backed). A pin that injects a fake
+     resolver into a hand-built store is VACUOUS for this — at least one pin must assert the
+     PRODUCTION construction site wires it (import/call-shape assertion on `server.ts`, or an
+     integration test through the real `buildServer`).
+   - (b) The two scripts write records in bulk. Either wire them to the same resolver, or declare them
+     OUT OF SCOPE in the diff with a one-line comment naming why (they are maintenance/migration
+     tools, run by a human, never over Brad's live dir). Silence is not an option: an unwired config
+     there is a lock bypass on a path that can touch effective records.
+   - (c) The absent-config default must be EXPLICIT and commented (AM-9 (f) already forbids relying on
+     `undefined?.has(...)`), because 38 existing test stores will take that branch — state in the
+     report which direction it fails and why that cannot hide the production defect.
+
+## AM-11 (ORCHESTRATOR, 320TH tick 2026-11-04T01:0x — measured first-hand at 53109901; binding)
+
+The no-op short-circuit is a THIRD early return inside `updateUnlocked`, and its POSITION is a semantic
+decision that no existing pin constrains. Measured, first-hand:
+
+1. `updateUnlocked` (`server/src/store/RecordStoreImpl.ts`) already has FOUR typed rejection walls before it
+   writes, in this order: `appendOnlyWallError` (:741-742 — the hardcoded governance triple
+   `record-revision`/`signature`/`audit-event` plus `config.appendOnlyKinds`), `contentLockError` (:744-745),
+   the `expectedSha` mismatch check (:761-765, `SHA mismatch: expected …, got …`), and `validate`/`lint`
+   (:772-777 / :786-791). The lifecycle-bypass previous-payload snapshot sits between them (:747-753);
+   `serializeRecord` is at :796. **The no-op goes IMMEDIATELY BEFORE `serializeRecord`** (which is what AM-3
+   already says) — i.e. after all four walls. Any earlier placement silently turns an existing typed rejection
+   into a 200:
+   - before the append-only wall: an equal-content PUT on an append-only kind returns 200 where it returns
+     `APPEND_ONLY: immutable records cannot be updated` today;
+   - before the SHA check: a failed optimistic-concurrency precondition returns 200 with the stored record;
+   - before validate/lint: schema drift or a lint error stops surfacing on a no-edit save.
+2. Every existing append-only pin uses a CONTENT-DIFFERENT payload, so none of them constrains the ordering:
+   `server/src/store/AppendOnlyWall.attestation.test.ts:72` updates with a tampered `claims[0].claimStatus`,
+   and `server/src/store/RecordStore.test.ts:665` updates a seed append-only record to `"(edited)"`. A
+   content-EQUAL update on an append-only kind is pinned NOWHERE.
+   => A NEW pin is required: a content-equal PUT on a stored append-only record (`kind: 'attestation'`) still
+   returns `APPEND_ONLY: immutable records cannot be updated` and writes nothing. This is NEW behavior, not a
+   regression, so it cannot be shown RED-before-fix; the report must say so instead of manufacturing a red.
+3. The SEED candidate path (`target.mode === 'seed'`) must be decided EXPLICITLY and pinned: either the no-op
+   does not fire on a seed candidate (QMS7-2 promotion unchanged) or it does and the returned envelope is
+   pinned (which `meta` the caller gets, no promotion audit event appended). Every case in
+   `server/src/api/handlers/RecordHandlers.seedPromotion.test.ts` uses a CHANGED title, so it catches neither
+   choice.
+4. Regression bar 1d (in the LEG-1 dispatch brief) runs DIRECTORIES so no un-enumerated suite is missed:
+   `src/store` + `src/scripts` + `src/integration/W25CandidateImmutability.test.ts` +
+   `src/api/handlers/RecordHandlers.seedPromotion.test.ts` => **9 files / 99 tests**, measured PASSED by me at
+   53109901 in 4.8 s. It structurally covers the append-only wall, `LifecycleBypassAudit.test.ts`, and the own
+   suites of BOTH AM-10 script sites (`migrateRecordLifecycles`, `applyOwnershipDefaults`) — none of which was
+   in any prior bar.
+
+No acceptance criterion, AM-1..AM-10, boundary or token changes. This amendment only forbids a placement
+that would weaken an existing wall and names the pins that make the placement non-vacuous.
+
+## 1. Goal (one sentence)
+
+Make `/record/<id>` refuse to write an approved/effective (or lifecycle-terminal) controlled
+document — no enabled Save, a declared draft-copy affordance instead — and make a no-edit
+save a byte-level no-op at the API so `meta.contentSha` cannot drift, without adding a second
+hardcoded lifecycle list in TS.
+
+## 2. Corrected problem statement (defect narrowing, criteria unchanged)
+
+The 301ST handoff's sentence "NO content-immutability guard on plain PUT `/records/:id`" is
+**wrong as written**. Two guards already exist, both keyed on the same hardcoded state set:
+
+- `server/src/api/handlers/RecordHandlers.ts:1139-1141` — `CONTROLLED_RECORD_LOCKED` (409) when
+  stored `lifecycleId` is set, stored state ∈ {approved, effective, superseded, archived}, and
+  `controlledContent(previous) !== controlledContent(proposed)`.
+- `server/src/store/RecordStoreImpl.ts:285-291` (`contentLockError`) — the same predicate at the
+  store wall, so an API-bypassing service hits it too.
+
+What the gate actually observed is a **no-edit** save: content, state, revision and signatures
+unchanged, so the semantic guard passes, and the record still got a new `contentSha` and a new
+data-repo commit. Acceptance criteria 1-5 stand verbatim; only the diagnosis narrows.
+
+### Measured cause (verified first-hand, not a hypothesis)
+
+`controlledContent` (`server/src/revisions/RecordRevisionService.ts:32-36`) strips
+`state/createdAt/createdBy/updatedAt` then `canonical()` sorts keys — so it is blind to the very
+field that changed. `RecordHandlers.ts:1195-1216` injects `updatedAt: new Date().toISOString()`
+into the payload unconditionally, `store.update` (RecordStoreImpl.ts:696-698 → `updateUnlocked`
+:700-840) re-serializes with `serializeRecord` and calls `repo.updateFile` with **no
+content-equality short-circuit anywhere in that path** (grep: none exists — do not claim one is
+missing before checking, and do not assume one exists).
+
+Proof the drift is exactly the timestamp refresh and not key-order/formatting churn — the lane
+data repo's own commit for the gate's no-edit click:
+
+```
+cd /home/brad/.computable-lab-lane1/worktrees/main
+git show --stat dbda2eda            # 1 file changed, 1 insertion(+), 1 deletion(-)
+git show dbda2eda -- records/controlled-document/DOC-DEMO-SOP__demo-gc-fid-standard-injection-sop.yaml \
+  | grep '^[-+][^-+]'
+-updatedAt: 2026-10-19T19:22:03.106Z
++updatedAt: 2026-11-03T23:49:44.028Z
+```
+
+So the orchestrator's serialization-order hypothesis is **not** the cause here (the file was
+already written by the same serializer, so key order is stable). A coder who finds different
+evidence on their own worktree must say so and re-derive; do not implement a byte-diff fix for a
+timestamp bug.
+
+## 3. Scope
+
+IN scope (product code):
+
+- `server/src/api/handlers/RecordHandlers.ts` — no-op short-circuit in `updateRecord` only.
+- `server/src/api/handlers/RecordHandlers.writeGates.test.ts` **or** one new
+  `server/src/api/handlers/RecordHandlers.controlledLock.test.ts` — RED-first pins.
+- `app/src/event-editor/create/RecordEditPanel.tsx` — lock affordance + draft-copy.
+- one new shared module `app/src/shared/records/lifecycleLock.ts` (name is a suggestion) — the
+  single predicate home.
+- `app/src/pages/RecordRegistryPage.tsx` — import that module, delete its inline
+  `contentLocked` pair (`:554-560`). Behaviour must not change.
+- `app/src/event-editor/create/RecordEditPanel.qms6e.test.tsx`,
+  `app/src/shared/shell/RecordHostPage.share.test.tsx` — only to extend apiClient mocks and add
+  new cases; do not weaken existing assertions.
+
+OUT of scope: `RecordStoreImpl.ts` (optional defence-in-depth at most, see Leg B2), lifecycle
+YAML/meta-schema, `LifecycleEngine`, `LifecycleHandlers`, any stack restart, any data-repo edit,
+any new API contract/token, `/registry` behaviour changes.
+
+## 4. Acceptance criteria (verbatim from the task block)
+
+```
+1. /record/DOC-DEMO-SOP (effective) renders NO enabled Save; the lock affordance is 'Create draft revision'
+   (or an equivalent that mints via POST /records/:id/draft-copy). Browser-verified on :5192.
+2. A no-edit submit on an effective record does not change meta.contentSha (or is refused with a typed
+   rejection); a content-changing submit is refused, never silently accepted.
+3. /registry S10 still passes unchanged (saveGone true, headerButtons ['Create draft revision','Cancel'],
+   draft-copy 200, original untouched).
+4. A DRAFT record still saves normally on /record (S1(b) preserved: PUT 200, reload shows the edit).
+5. RED-first pin at the layer that was fixed + no new type errors.
+```
+
+## 5. Remedy decision rule (not a guess)
+
+Land **both** legs. Order: **B first, then A**. B is the smaller, provable, policy-free change
+and it is what makes acceptance 2 true for the bare API; A is what acceptance 1 grades on :5192.
+
+### Leg B (MANDATORY) — no-edit save is a true no-op. Hardening of an existing guard, NOT a new one.
+
+In `updateRecord`, after the last write gate (the QMS7-4 archive-guard block ending
+`RecordHandlers.ts:1184`) and **before** the protocol `version` branch at `:1186`, add:
+
+> if `String(previous.state) === String(proposed.state)`
+> and `controlledContent(previous) === controlledContent(proposed)`
+> and no `signatureRefs` were presented
+> and no `lifecycleTransition` fired
+> → return status 200 with `{ success: true, record: existing }` and touch nothing.
+
+Notes that make this correct rather than plausible:
+
+- Reuse `controlledContent` (already imported). Do **not** hand-roll a diff, and do not add
+  `updatedAt` to the strip list anywhere — that would silently weaken the lock.
+- Return the **stored** envelope (`existing`, which carries `meta.contentSha` from the file sha);
+  the client's reload then shows the same sha. Do not fabricate a response envelope.
+- Placing it after the gates keeps "a refusal persists nothing" and keeps the 409 path
+  byte-identical; placing it before `:1186` means a no-op protocol save no longer bumps
+  `version`. A no-op must not mint a revision, an audit event, or an index rebuild. If, and only
+  if, a test or contract requires the protocol version bump on a no-edit PUT, narrow the
+  short-circuit to records with `previous.lifecycleId` present and say so in the report.
+- Do **not** implement this at the git adapter: `EmbeddedGitRepoAdapter.commitPaths` already
+  returns `{success:true}` on a clean tree, but the file is written before that check, so the
+  no-op must be decided above the store.
+- Acceptance 2's "content-changing submit is refused" is **already true and already tested**
+  (`RecordHandlers.writeGates.test.ts:247-268`, 409 `CONTROLLED_RECORD_LOCKED`, `updateCalls`
+  empty). Add one effective/controlled-document case to pin the surface you touched; do not
+  re-implement the refusal and do not invent a new token.
+
+### B2 (optional, only if free) — store-level equality short-circuit
+
+`RecordStoreImpl.updateUnlocked` may skip `repo.updateFile` when the serialized `content` equals
+`target.content`. Keep it as a second, clearly-labelled commit; it must not change any error
+path. If it costs more than a few lines, skip it and say so — Leg B in the handler is sufficient
+for the acceptance bar.
+
+### Leg A (MANDATORY) — data-driven lock affordance on /record.
+
+- Create ONE predicate home (suggested `app/src/shared/records/lifecycleLock.ts`) exporting:
+  `isContentLocked(payload)` (the approved|effective pair, moved verbatim out of
+  `RecordRegistryPage.tsx:554-560`) and `isRecordWriteLocked(payload, terminalStates)` =
+  `isContentLocked(payload) || (payload.state ∈ terminalStates)`. Keep the fail-open contract of
+  `terminalStates` (empty ⇒ not terminal), matching `RecordRegistryPage.tsx:251-262`.
+- `RecordRegistryPage` imports the module and deletes its inline pair; `contentLocked ||
+  terminalLocked` composition and the `:884-905` affordance swap stay behaviourally identical.
+- `RecordEditPanel` consumes the same predicate. When `formData.lifecycleId` is present, fetch
+  `apiClient.getLifecycleTerminalStates(lifecycleId)` once (effect keyed on lifecycleId,
+  try/catch ⇒ `[]`). Locked ⇒ render **no** `record-edit-save`; render
+  `data-testid="record-edit-draft-copy"` labelled exactly `Create draft revision` plus the
+  existing `Close`, and pass `disabled` to `ProjectionTapTabEditor` so the body is not editable
+  (registry parity, `RecordRegistryPage.tsx:944`). Unlocked (draft, in_review, no lifecycleId) ⇒
+  today's Save, untouched.
+- Draft-copy: call `apiClient.createDraftCopy(recordId, {})` (no new endpoint), dispatch
+  `cl:records-changed`, then surface the new record — navigating to `/record/<newId>` is the
+  cheapest correct option (the host is route-driven, `App.tsx:217`). On failure show the existing
+  error banner via `describeApiError`. Never submit the form on a locked record.
+
+### A2 — declared lock policy in lifecycle DATA: OUT of this item
+
+The `approved/effective` pair is **not** declared anywhere: `lifecycle.meta.schema.yaml` allows
+only `id/label/initial/terminal/description` per state (`additionalProperties: false`), and
+`document-controlled-signing.lifecycle.yaml` marks only superseded/archived `terminal: true`.
+Making the pair data-driven therefore requires a meta-schema edit + YAML edits + engine accessor
++ endpoint field + client accessor + a **lane-stack restart**, which only the orchestrator may
+perform. Do not do this silently and do not do it in this worktree. Leg A's obligation is
+"reuse the one predicate, do not create a second list" — that is satisfied by the shared module.
+If the coder believes A2 is required, STOP and return `requires-rescope` with the file list.
+
+## 6. First targeted check (cheapest proof of the mechanism, run before writing code)
+
+```
+cd /home/brad/.computable-lab-lane1/worktrees/main
+git show dbda2eda --stat --format='%h %s'
+git show dbda2eda -- records/controlled-document/DOC-DEMO-SOP__demo-gc-fid-standard-injection-sop.yaml | grep '^[-+][^-+]'
+```
+
+Expected exactly (measured 2026-11-03 by the composer at `819a2f44`):
+
+```
+dbda2eda Update DOC-DEMO-SOP
+ .../DOC-DEMO-SOP__demo-gc-fid-standard-injection-sop.yaml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+-updatedAt: 2026-10-19T19:22:03.106Z
++updatedAt: 2026-11-03T23:49:44.028Z
+```
+
+Two changed lines, both `updatedAt`. If that is what you see, the fix is the Leg B short-circuit
+above; if you see body/key reordering, stop and report the real diff instead of implementing
+either leg blind.
+
+Second, RED-first at the fixed layer (write before fixing), in the handler harness that already
+exists (`RecordHandlers.writeGates.test.ts` exports its own fake store — `makeGateStore`,
+`updateCalls`):
+
+> no-op PUT on an `effective` controlled-document (payload identical to stored, fresh
+> `updatedAt` only) ⇒ 200, `updateCalls.length === 0`, returned `record.meta.contentSha` equals
+> the stored one. Currently RED: `updateCalls.length === 1`.
+
+## 7. Verification bars (numbers measured by the composer at 819a2f44 — not invented)
+
+Run every command from the worktree root unless stated.
+
+| # | command | expected |
+|---|---|---|
+| 1 | `cd server && ./node_modules/.bin/vitest run src/api/handlers/RecordHandlers.writeGates.test.ts src/api/handlers/RecordHandlers.lifecycle.test.ts src/store/RecordStore.test.ts` | baseline `3 files / 62 tests passed`; after the change: 63+ tests, 0 failed |
+| 2 | `cd server && ./node_modules/.bin/vitest run src/governance/archivedAssignment.test.ts src/revisions/SignatureIntegrity.test.ts src/revisions/RevisionStorage.test.ts` | baseline `3 files / 22 tests passed`; must stay all-green (pins `controlledContent` semantics, `archivedAssignment.test.ts:479`) |
+| 3 | `cd app && ./node_modules/.bin/vitest run src/event-editor/create/RecordEditPanel.qms6e.test.tsx src/shared/shell/RecordHostPage.share.test.tsx src/pages/RecordRegistryPage.test.tsx src/pages/RecordRegistryPage.qms6e.test.tsx src/pages/RecordRegistryPage.archiveBrowsing.test.tsx` | baselines measured separately: `RecordEditPanel.qms6e` (part of 4 files/31) + `RecordHostPage.share` 6 tests; combined must be all-green, with ≥2 new panel tests |
+| 4 | `./node_modules/.bin/tsc --noEmit -p server` | rc 0, zero output (hard bar — server tsconfig has `exactOptionalPropertyTypes: true`) |
+| 5 | `./node_modules/.bin/tsc --noEmit -p app \| grep -c 'error TS'` | **21** — the pre-existing baseline, and none of them in the touched files |
+| 6 | `git -c core.fileMode=false diff --stat` | only the files listed in §3 |
+| 7 | manual probe (no browser): `curl -s :3092/api/records/DOC-DEMO-SOP \| grep contentSha` before/after a scripted no-op PUT against the **lane** backend only | identical value; `git -C /home/brad/.computable-lab-lane1/worktrees/main log -1 --format=%h` unchanged. Do not run this against Brad's `:3001`. |
+
+`pnpm install --frozen-lockfile` fails on this trunk (known lockfile drift) — use the existing
+`node_modules`, in the worktree you are given.
+
+## 8. Worker contract
+
+- Fresh worktree: `wt/l1-record-lock-guard-1-lane1-<ts>` off `cl/integration-1` @ `819a2f44`.
+- Branch: `cl/lane1-record-lock-guard-1-l1t<HHMM>`.
+- Report: `/home/brad/.hermes/cl/lanes/1/record-lock-guard-1-report-l1t<HHMM>.md`, ending with
+  exactly `RECORD-LOCK-GUARD-1 DONE <40-char sha>` or `RECORD-LOCK-GUARD-1 BLOCKED <one-line reason>`.
+- In the report: which legs landed, the measured before/after `contentSha` for the no-op probe,
+  the RED evidence for each new test (failing assertion text before the fix), the exact app-tsc
+  error count, whether the protocol-version narrowing was needed, and the browser-brief path.
+- No merge, no lane-stack restart, no task-list edit, no data-repo commit of your own.
+- Worker writes product code only on the branch; the browser gate is not yours (below).
+
+## 9. Browser gate hand-off (acceptance 1 — NOT the coder's job)
+
+Leave, next to the report, `record-lock-guard-1-browser-brief-l1t<HHMM>.md` containing:
+
+1. the branch name and last commit sha (the orchestrator merges and re-pins; the gate pins the
+   **served** revision on `:5192`, not your branch);
+2. testids/expected DOM for `/record/DOC-DEMO-SOP`: no `record-edit-save`,
+   `record-edit-draft-copy` present with text `Create draft revision`, header buttons
+   `['Create draft revision', 'Close']`, State `effective`, editor body non-editable;
+3. the pre-gate baseline read commands the reviewer must run **first**
+   (`GET :3092/api/records/DOC-DEMO-SOP` → `meta.contentSha`, and
+   `git -C /home/brad/.computable-lab-lane1/worktrees/main log -1 --format='%h %ci'`) — do not
+   reuse the `l1t1845` receipts or its `contentSha`;
+4. the no-drift probe for the reviewer: click-through may not add a data-repo commit and the
+   `contentSha` must be unchanged, with `idle`/`consoleErrors`/`pageErrors` captured;
+5. the note that `DOC-20660FF4E9734191` / `DOC-A56FD77A9B124087` 404 for `USR-BRAD` is an ACL read
+   filter, not fixture loss.
+
+## 10. Reviewer bait (pre-empt each explicitly)
+
+1. **UI-only fix.** Enabling `Create draft revision` and leaving bare-API drift is exactly the
+   half-fix the task block calls out (`description` A-alone residual gap). Leg B must be in the
+   diff, with the `updateCalls.length === 0` pin.
+2. **Over-locking DRAFTS.** Gating on "has `lifecycleId`" or "not draft" removes Save from
+   `in_review` (`RecordEditPanel.qms6e.test.tsx` uses `state: 'in_review'`) and breaks acceptance
+   4 / S1(b). The gate is the predicate, never the presence of a lifecycle.
+3. **A second TS lifecycle list.** Adding `['approved','effective','superseded','archived']` (or
+   any subset) inside the panel or a new helper is an automatic reject. Superseded/archived must
+   come from `getLifecycleTerminalStates`. Note the pre-existing lists at
+   `RecordHandlers.ts:1139` and `RecordStoreImpl.ts:286` are out of scope — do not "fix" them by
+   adding a third, and do not delete them without an architect ruling.
+4. **`exactOptionalPropertyTypes` (server).** Threading anything optional into a response or the
+   store options must use the spread-if-defined idiom already used at `RecordHandlers.ts:1232-1238`
+   (envelope/meta) and `:1390-1396` (response); a bare `{ record: existing, validation: undefined }`
+   fails `tsc -p server`.
+5. **YAML/reload trap.** `tsx --watch` does not reload YAML. Any lifecycle-YAML or meta-schema
+   edit needs a `cl-lane-stack.sh 1 restart` **by the orchestrator**, and it is why A2 is out of
+   scope. Do not restart, do not hand-edit the data repo, do not assume your YAML edit is live.
+6. **"Writes only happen on submit."** They don't: the panel loads via GET, but the store may
+   write on any PUT including a no-op one, and `updateRecord` also runs `indexManager.rebuild()`
+   after a write. Verify the panel does not PUT on mount/open before claiming the only write path
+   is Save.
+7. **ACL 404 as fixture loss.** `DOC-20660FF4E9734191` / `DOC-A56FD77A9B124087` are visible as
+   `USR-QMS-ADMIN` and return 404 only for the default viewer. Never delete, re-mint, or "repair"
+   them.
+8. **Mock-shape breakage.** `RecordEditPanel.qms6e.test.tsx:19-25` mocks `apiClient` with four
+   methods only; a new `getLifecycleTerminalStates` call throws `is not a function` (the registry
+   suites already log that noise at `RecordRegistryPage.tsx:195`). Extend the mock, keep the
+   try/catch fail-open, and do not let a caught TypeError masquerade as "lock unavailable".
+9. **Silently changing `/registry`.** Extracting the predicate must be a pure move: if
+   `RecordRegistryPage.test.tsx`'s "Create draft revision replaces Save when locked" case changes
+   shape, the move was not pure.
+10. **Claiming the browser pass.** Acceptance 1 is a browser verdict on the served revision by
+    `cl-browser-reviewer`; a unit test asserting absent Save does not discharge it.
+
+## 11. Assumptions
+
+- AS-L1T1905-1 The drift cause is the unconditional `updatedAt` refresh at
+  `RecordHandlers.ts:1205-1216`, proven by data-repo commit `dbda2eda` (single-line diff). Debt:
+  false.
+- AS-L1T1905-2 Leg A may keep the `approved/effective` pair in TS **as the single existing
+  predicate**, reused by a shared module, because no lifecycle DATA field declares content-lock
+  today; declaring one is scoped out (A2) pending an architect ruling. Debt: **true** until A2 or
+  a ruling.
