@@ -50,6 +50,7 @@ describe('MaterialProfileHandlers', () => {
       'single_active_formulation',
       'sample',
       'other',
+      'vendor-product',
     ]);
   });
 

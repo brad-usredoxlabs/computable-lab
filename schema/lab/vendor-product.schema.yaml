@@ -37,6 +37,18 @@ properties:
   grade:
     type: string
 
+  storage_recommendation:
+    type: string
+
+  status:
+    type: string
+
+  lifecycleId:
+    type: string
+
+  provenance:
+    type: object
+
   product_url:
     type: string
     format: uri

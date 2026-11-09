@@ -359,7 +359,7 @@ export interface MaterialRefInput {
 
 
 export type MaterialProfileControl = 'app-owned' | 'free-text' | 'ontology-ref' | 'local-material-required' | 'record-ref'
-export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance'
+export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance' | 'vendor-product'
 
 export interface MaterialProfileField {
   path: string

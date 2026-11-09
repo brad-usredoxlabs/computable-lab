@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
 
-export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance';
+export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance' | 'vendor-product';
 export type MaterialProfileControl =
   | 'app-owned'
   | 'free-text'
@@ -127,7 +127,7 @@ const VALID_CONTROLS = new Set<MaterialProfileControl>([
   'local-material-required',
   'record-ref',
 ]);
-const VALID_LAYERS = new Set<MaterialProfileLayer>(['concept', 'formulation', 'instance']);
+const VALID_LAYERS = new Set<MaterialProfileLayer>(['concept', 'formulation', 'instance', 'vendor-product']);
 
 function asObject(value: unknown, context: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
