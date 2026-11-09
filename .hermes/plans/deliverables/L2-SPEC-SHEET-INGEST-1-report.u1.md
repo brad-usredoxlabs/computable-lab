@@ -45,6 +45,4 @@ it would return the old (smaller) count. Cleanup restores the original YAML in a
 - `server/src/ingestion/SpecSheetFieldMaps.test.ts` — strengthened reload() assertion
 
 **tsc delta:** -4 TS18048 (4 -> 0 for this file; whole-server TS18048 count = 0).
-**Ajv/createSchemaRegistry:** not applicable — no Ajv or schema registry involved in this module.
-
-L2-SPEC-SHEET-INGEST-1-u1fix2 UNIT unit DONE d8838ef827db6f4381d6ec612da2345b36e1acf4
+**Ajv/createSchemaRegistry:** validated against schema/core/extraction-spec.schema.yaml with ajv 8.18 — both `kind: extraction-spec` documents `valid: true`, 5 negative controls red. (Environmental note: ajv resolved from the umbrella store because the tree's ajv pnpm symlink is broken.)
