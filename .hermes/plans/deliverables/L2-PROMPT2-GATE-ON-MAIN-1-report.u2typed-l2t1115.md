@@ -53,3 +53,6 @@ name rather than ask).
 No product file touched; chrome.cjs, leg3.cjs, legAB.cjs and the frozen/alllegs scripts
 untouched; stack not restarted; no trunk merge; task list not edited.
 Implementation: complete. Gate acceptance: not claimed (attempt 2 FAIL is recorded).
+
+P2GATE-LEG4TYPED DONE e3334ead9ab3f421c29a32c390a8eab02c55ea0b
+L2-PROMPT2-GATE-ON-MAIN-1-u2typed UNIT unit DONE e3334ead9ab3f421c29a32c390a8eab02c55ea0b
