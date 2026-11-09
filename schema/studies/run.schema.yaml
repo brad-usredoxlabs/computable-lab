@@ -140,16 +140,18 @@ properties:
     type: array
     description: "Ordered list of protocols followed in this run. The first entry is the run's lead protocol."
     items:
-      type: object
-      additionalProperties: false
-      required: [ kind, id ]
-      properties:
-        kind:
-          const: "record"
-        id:
-          type: string
-        type:
-          type: string
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        additionalProperties: false
+        properties:
+          kind: { type: string }
+          id: { type: string }
+          label: { type: string }
+          revisionRef: { type: object }
+          namespace: { type: string }
+          uri: { type: string }
+          type: { type: string }
 
   methodPlatform:
     type: string
