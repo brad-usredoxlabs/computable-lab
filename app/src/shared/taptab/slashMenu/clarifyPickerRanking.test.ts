@@ -47,6 +47,8 @@ import {
   __setCandidateRankingPolicy,
   __setMaterialSelectionPolicies,
   getCandidateRankingPolicy,
+  getMaterialSelectionPolicies,
+  PolicyGuardError,
 } from './policy'
 import { resolveMaterial } from './resolvers'
 import type { MaterialSearchItem } from '../../api/client'
@@ -832,5 +834,63 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only guard on 
       },
     ]
     expect(() => __setMaterialSelectionPolicies(mixed)).not.toThrow()
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw propagates on fetch path', () => {
+  /**
+   * On the REAL load path, fetchSelectionPolicies returns two `only` policies
+   * for the same concept -> guardDuplicateOnlyPolicies throws PolicyGuardError
+   * -> the .catch must re-throw it (not swallow into fail-open []).
+   */
+  it('fetch path with duplicate only policies rejects with PolicyGuardError, not fail-open []', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+
+    // Mock fetch to return two 'only' policies for the same concept
+    fetchSpy.mockImplementation(async (url: string) => {
+      if (String(url).includes('material-selection-policy')) {
+        return {
+          ok: true,
+          json: async () => ({
+            records: [
+              {
+                recordId: 'POL-DUP-1',
+                payload: {
+                  material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+                  vendor_product_ref: { kind: 'record', id: 'VP-A' },
+                  selection: 'only',
+                },
+              },
+              {
+                recordId: 'POL-DUP-2',
+                payload: {
+                  material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+                  vendor_product_ref: { kind: 'record', id: 'VP-B' },
+                  selection: 'only',
+                },
+              },
+            ],
+            total: 2,
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({ records: [], total: 0 }) }
+    })
+
+    __resetMaterialSelectionPolicies()
+
+    // The fetch path must REJECT, not resolve to []
+    let caught: unknown
+    try {
+      await getMaterialSelectionPolicies()
+      expect.fail('should have thrown')
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(PolicyGuardError)
+    expect((caught as Error).message).toMatch(/POL-DUP-1.*POL-DUP-2/)
+
+    vi.unstubAllGlobals()
   })
 })

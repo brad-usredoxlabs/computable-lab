@@ -98,6 +98,12 @@ type SelectionKind = 'only' | 'default' | 'alternative'
 type RefKind = 'ontology' | 'record'
 
 /**
+ * Discriminates a guard error from a fetch failure so the loader's .catch
+ * can re-throw the guard but still fail-open on genuine network errors.
+ */
+export class PolicyGuardError extends Error {}
+
+/**
  * Guard: throw when two `only` policies claim the same material concept.
  * Mirrors normalizeMaterialSelectionPolicies (MaterialSelectionPolicy.ts:51-60)
  * — same concept key `kind:id`, error names BOTH recordIds.
@@ -116,7 +122,7 @@ function guardDuplicateOnlyPolicies(policies: SelectionPolicy[]): void {
   }
   for (const [conceptKey, ids] of conceptToOnlyIds) {
     if (ids.length > 1) {
-      throw new Error(
+      throw new PolicyGuardError(
         `Duplicate 'only' selection for material concept ${conceptKey}: ` +
           `${ids[0]} and ${ids[1]}`,
       )
@@ -158,7 +164,10 @@ function fetchSelectionPolicies(): Promise<SelectionPolicy[]> {
         selCache = policies
         return policies
       })
-      .catch(() => {
+      .catch((err) => {
+        // PolicyGuardError (duplicate-only) must propagate to the caller;
+        // a genuine fetch failure stays fail-open.
+        if (err instanceof PolicyGuardError) throw err
         // Fetch failure => no policies (fail-open, never fabricate)
         selCache = []
         return []
