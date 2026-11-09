@@ -97,4 +97,7 @@ No product code changes in this unit. The server tsc errors (7) involve Fastify 
 - Browser gate is the orchestrator's responsibility
 - Server tsc errors remain unresolved (not this unit's scope)
 
+L2-LAB-MATERIAL-CREATE-1 UNIT u2 DONE 749099c3fa3fdef3cf8ad2ede6e38165b69a2284
+L2-LAB-MATERIAL-CREATE-1-u2pw UNIT unit DONE 749099c3fa3fdef3cf8ad2ede6e38165b69a2284
+
 
