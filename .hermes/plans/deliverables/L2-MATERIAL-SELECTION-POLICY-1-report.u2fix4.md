@@ -87,4 +87,4 @@ fix is real; the claim was false. D7 is now genuinely closed.
 
 - e2b03a86 — fix product code
 
-L2-MATERIAL-SELECTION-POLICY-1-u2fix4 UNIT unit DONE e2b03a8685948afbc04f5b34f085ac0bd1d53689
+L2-MATERIAL-SELECTION-POLICY-1-u2fix4 UNIT unit DONE eb932f31d66c11131b8bdb5527b0c7351a9844f3
