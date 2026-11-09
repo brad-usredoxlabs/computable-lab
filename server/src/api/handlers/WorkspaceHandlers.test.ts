@@ -179,12 +179,13 @@ describe('WorkspaceHandlers', () => {
 
   describe('PUT', () => {
     // Phase 12: PUT inputs are normalized through parseWorkspaceState
-    // before persistence. v2 is the canonical version on the wire; a
+    // before persistence. v3 is the canonical version on the wire (v1/v2
+    // inputs migrate to v3 on parse); a
     // project-details tab is always present after parsing (auto-inserted
-    // when absent). Tests use a v2 input shape with project-details
+    // when absent). Tests use a v3 input shape with project-details
     // already included so PUT/GET round-trips are loss-less.
     const validState: WorkspaceState = {
-      version: 2,
+      version: 3,
       studyId: 'STU-000001',
       tabs: [
         { id: 'details:STU-000001', kind: 'project-details', title: 'Project' },
@@ -246,9 +247,9 @@ describe('WorkspaceHandlers', () => {
       expect(result?.state).toEqual(validState);
     });
 
-    it('v1 legacy payload migrates to v2 on parse (browse → find, project-details inserted)', async () => {
+    it('v1 legacy payload migrates to v3 on parse (browse → find, project-details inserted)', async () => {
       // Older client builds POST v1 shapes. The parser accepts them but
-      // emits v2 so the workspace UI always sees the new union.
+      // emits v3 so the workspace UI always sees the canonical version.
       const v1Payload = {
         version: 1,
         studyId: 'STU-000001',
@@ -270,7 +271,7 @@ describe('WorkspaceHandlers', () => {
         makeRequest({ studyId: 'STU-000001' }, v1Payload),
         reply,
       );
-      expect(result?.state.version).toBe(2);
+      expect(result?.state.version).toBe(3);
       expect(result?.state.rightPaneMode).toBe('find');
       // project-details auto-inserted at index 0.
       expect(result?.state.tabs[0].kind).toBe('project-details');
