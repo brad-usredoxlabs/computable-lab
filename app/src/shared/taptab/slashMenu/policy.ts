@@ -19,7 +19,7 @@
  * fetch).
  */
 import { apiClient } from '../../api/client'
-import type { CandidateRankingPolicy } from './clarifyPickerRanking'
+import type { CandidateRankingPolicy, SelectionPolicy } from './clarifyPickerRanking'
 
 type Stored =
   | { kind: 'none' }
@@ -77,4 +77,90 @@ export function __resetCandidateRankingPolicy(): void {
 export function __setCandidateRankingPolicy(policy: CandidateRankingPolicy | null): void {
   cache = policy ? { kind: 'policy', policy } : { kind: 'none' }
   inflight = null
+}
+
+/**
+ * L2-MATERIAL-SELECTION-POLICY-1 — cached loader for material-selection-policy
+ * records. Fetches from `GET /records?kind=material-selection-policy` and maps
+ * each envelope's payload to a client-side SelectionPolicy. Malformed entries
+ * are silently dropped (the picker must never throw on a bad record).
+ *
+ * Fetch failure => empty array: the picker keeps all candidates and focuses by
+ * canBeDefault alone (never fabricates a policy).
+ */
+type SelectionKind = 'only' | 'default' | 'alternative'
+type RefKind = 'ontology' | 'record'
+
+let selCache: SelectionPolicy[] | null = null
+let selInflight: Promise<SelectionPolicy[]> | null = null
+
+function fetchSelectionPolicies(): Promise<SelectionPolicy[]> {
+  if (selCache) return Promise.resolve(selCache)
+  if (!selInflight) {
+    selInflight = apiClient
+      .listRecordsByKind('material-selection-policy')
+      .then((res) => {
+        const policies: SelectionPolicy[] = []
+        for (const envelope of res.records ?? []) {
+          const payload = envelope.payload as Record<string, unknown> | undefined
+          const mr = payload?.material_ref as { kind?: string; id?: string } | undefined
+          const vpr = payload?.vendor_product_ref as { kind?: string; id?: string } | undefined
+          const sel = payload?.selection as string | undefined
+          if (
+            !mr || !vpr || typeof sel !== 'string' ||
+            !['only', 'default', 'alternative'].includes(sel) ||
+            !['ontology', 'record'].includes(mr.kind) ||
+            !['ontology', 'record'].includes(vpr.kind)
+          ) {
+            continue
+          }
+          policies.push({
+            recordId: envelope.recordId,
+            material_ref: { kind: mr.kind as RefKind, id: mr.id! },
+            vendor_product_ref: { kind: vpr.kind as RefKind, id: vpr.id! },
+            selection: sel as SelectionKind,
+          })
+        }
+        selCache = policies
+        return policies
+      })
+      .catch(() => {
+        // Fetch failure => no policies (fail-open, never fabricate)
+        selCache = []
+        return []
+      })
+      .finally(() => {
+        selInflight = null
+      })
+  }
+  return selInflight
+}
+
+/**
+ * The declared material selection policies, or [] when none are declared or
+ * the fetch failed. Awaited once per resolver first-paint; the cache makes
+ * subsequent calls synchronous.
+ */
+export async function getMaterialSelectionPolicies(): Promise<SelectionPolicy[]> {
+  return fetchSelectionPolicies()
+}
+
+/** Test-only: clear the module cache between tests. */
+export function __resetMaterialSelectionPolicies(): void {
+  selCache = null
+  selInflight = null
+}
+
+/** Test-only: seed deterministic policies without a fetch. */
+export function __setMaterialSelectionPolicies(policies: SelectionPolicy[]): void {
+  selCache = policies
+  selInflight = null
+}
+
+/** Test-only: reset all policy caches. */
+export function __resetAllPolicies(): void {
+  cache = null
+  inflight = null
+  selCache = null
+  selInflight = null
 }
