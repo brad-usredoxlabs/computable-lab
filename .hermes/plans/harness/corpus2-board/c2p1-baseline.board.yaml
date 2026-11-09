@@ -90,6 +90,8 @@ workspace:
       eventGraphId: EVG-corpus2-prompt1-dmem-baseline
       title: EVG-corpus2-prompt1-dmem-baseline
   activeTabId: tab-deck-EVG-corpus2-prompt1-dmem-baseline
-  rightPaneMode: find
+  rightPaneMode: ai  # corrected 2026-11-09: was `find`, which contradicts the code default
+                      # (app/src/event-editor/workspace/types.ts:305 -> 'ai') and leaves the harness
+                      # chat unmounted at RightPane.tsx:95, so cold drivers cannot reach the chat pane.
   rightPaneCollapsed: false
   paneWidths: { left: 0.6, right: 0.4 }

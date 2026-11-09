@@ -111,7 +111,21 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
     }
     out.after = await page.evaluate(async () => (await (await fetch('/api/records/EVG-corpus2-prompt1-dmem-baseline')).json()).record.payload.events.length)
     step('after', 'events', { before: out.before, after: out.after, unchanged: out.after === out.before }); await shot(page, 'after-discard')
-    out.status = (out.answer.submitted && out.previewWells.length > 0) ? 'PASS' : 'FAIL'
+    // Status (AMENDED 2026-11-09 per Brad's clarification-defaults ruling, same decision doc as
+    // leg3): when the app resolves the request without asking, there is no grouped-answer submit
+    // to exercise and this leg is NOT APPLICABLE, not failed. `failedCriteria` is always populated
+    // so a receipt never again says FAIL with an empty reason.
+    if (!cardSeen) {
+      out.status = 'NA'
+      out.failedCriteria = []
+      out.naReason = 'no clarification card: the request resolved without asking, so the grouped two-slot submit had nothing to exercise'
+    } else {
+      const failed = []
+      if (!(out.answer && out.answer.submitted === true)) failed.push('answer-not-submitted')
+      if (!out.previewWells || out.previewWells.length === 0) failed.push('no-preview-after-submit')
+      out.failedCriteria = failed
+      out.status = failed.length ? 'FAIL' : 'PASS'
+    }
   } catch (e) { out.error = String(e).slice(0, 1000); out.status = 'FAIL'; step('error', out.error); try { await shot(page, 'error') } catch {} }
   out.trail = trail; await browser.close()
   fs.writeFileSync(OUT, JSON.stringify(out, null, 1)); console.log('WROTE', OUT)

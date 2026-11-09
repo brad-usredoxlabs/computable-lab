@@ -11,22 +11,25 @@ const PROMPT = 'Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.'
 const OUT = path.join(DIR, 'leg3.json')
 
 // leg3Verdict: pure function returning { status, failedCriteria } based on six criteria.
-// Criteria (pre-registered 2026-11-08T03:00 UTC, immutable after this timestamp):
-//   (a) card-not-seen       — cardSeen === true
-//   (b) answer-not-submitted — answer.submitted === true
-//   (c) preview-not-settled  — settled === true && previewBarText non-empty
-//   (d) no-preview-wells     — previewWells.length > 0
-//   (e) tooltip-missing      — hoverE2.tooltip non-empty && hoverE2.tipVolume non-empty
-//   (f) discard-unchanged    — discarded === true && after === before
+// Criteria (pre-registered 2026-11-08T03:00 UTC; AMENDED 2026-11-09 per Brad's ruling on
+// clarification defaults — see .hermes/plans/decisions/CLARIFY-DEFAULT-ghost-first-ruling.md):
+//   (a) card-unanswered     — IF a clarification card appeared, it must have been answered.
+//                             A card is no longer REQUIRED: when the noun and verb resolve
+//                             with reasonable certainty the app proposes on the plate and
+//                             lets the tooltip show the assumptions. Amendment approved by
+//                             Brad 2026-11-09: "In this case the correct action is A."
+//   (b) preview-not-settled — settled === true && previewBarText non-empty
+//   (c) no-preview-wells    — previewWells.length > 0
+//   (d) tooltip-missing     — hoverE2.tooltip non-empty && hoverE2.tipVolume non-empty
+//   (e) discard-unchanged   — discarded === true && after === before
 function leg3Verdict(out) {
   const failed = []
-  if (out.cardSeen !== true) failed.push('card-not-seen')
-  if (out.answer && out.answer.submitted !== true) failed.push('answer-not-submitted')
+  if (out.cardSeen === true && !(out.answer && out.answer.submitted === true)) failed.push('card-unanswered')
   if (out.settled !== true || !out.previewBarText || !String(out.previewBarText).trim()) failed.push('preview-not-settled')
   if (!out.previewWells || out.previewWells.length === 0) failed.push('no-preview-wells')
   if (!out.hoverE2 || !out.hoverE2.tooltip || !String(out.hoverE2.tooltip).trim() || !out.hoverE2.tipVolume || !String(out.hoverE2.tipVolume).trim()) failed.push('tooltip-missing')
   if (out.discarded !== true || out.after !== out.before) failed.push('discard-unchanged')
-  return { status: failed.length ? 'FAIL' : 'PASS', failedCriteria: failed }
+  return { status: failed.length ? 'FAIL' : 'PASS', failedCriteria: failed, clarificationPath: out.cardSeen === true ? 'asked-and-answered' : 'not-required' }
 }
 
 const T0 = Date.now(), el = () => +((Date.now() - T0) / 1000).toFixed(2)
