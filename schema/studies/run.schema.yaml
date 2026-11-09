@@ -134,7 +134,22 @@ properties:
         type: string
       type:
         type: string
-    description: "Local protocol selected as the reusable method for this run."
+    description: "Local protocol selected as the reusable method for this run. (legacy single-protocol form; read-compat only)"
+
+  localProtocolRefs:
+    type: array
+    description: "Ordered list of protocols followed in this run. The first entry is the run's lead protocol."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ kind, id ]
+      properties:
+        kind:
+          const: "record"
+        id:
+          type: string
+        type:
+          type: string
 
   methodPlatform:
     type: string
