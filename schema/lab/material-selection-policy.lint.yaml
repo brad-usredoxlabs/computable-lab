@@ -11,7 +11,7 @@ rules:
       path: "$.since"
     message:
       template: "Selection policy '{{$.recordId}}' must declare 'since'"
-      paths: ["$.since"]
+      paths: ["$.recordId", "$.since"]
   - id: "material-selection-policy-non-only-requires-reason"
     title: "Non-only selections must justify the choice"
     severity: "error"
@@ -27,4 +27,4 @@ rules:
       path: "$.reason"
     message:
       template: "Selection policy '{{$.recordId}}' with selection '{{$.selection}}' requires a 'reason'"
-      paths: ["$.recordId", "$.reason"]
+      paths: ["$.recordId", "$.selection", "$.reason"]
