@@ -9,6 +9,13 @@ import type { RecordEnvelope, RecordStore } from '../store/types.js';
 function makeMockStore(getResult?: RecordEnvelope | null, createResult?: { success: boolean }): RecordStore {
   const records = new Map<string, RecordEnvelope>();
   if (getResult) records.set(getResult.recordId, getResult);
+  return makeMockStoreFromRecords(records, createResult);
+}
+
+function makeMockStoreFromRecords(
+  records: Map<string, RecordEnvelope>,
+  createResult?: { success: boolean },
+): RecordStore {
   return {
     get: async (recordId: string) => records.get(recordId) ?? null,
     getByPath: async () => null,
@@ -19,8 +26,17 @@ function makeMockStore(getResult?: RecordEnvelope | null, createResult?: { succe
     delete: async () => ({ success: true }),
     validate: async () => ({ valid: true, errors: [] }),
     lint: async () => ({ valid: true, errors: [] }),
-    exists: async () => getResult !== null,
+    exists: async (id: string) => records.has(id),
   } as unknown as RecordStore;
+}
+
+function makeMultiRecordStore(
+  envelopes: RecordEnvelope[],
+  createResult?: { success: boolean },
+): RecordStore {
+  const records = new Map<string, RecordEnvelope>();
+  for (const e of envelopes) records.set(e.recordId, e);
+  return makeMockStoreFromRecords(records, createResult);
 }
 
 function makeLocalProtocolEnvelope(recordId: string, title: string): RecordEnvelope {
@@ -202,6 +218,91 @@ describe('PlannedRunFromLocalProtocolService', () => {
 
       const payload = result.envelope.payload as Record<string, unknown>;
       expect(payload.title).toBe('Plan: Untitled local-protocol');
+    });
+
+    /* --- Ordered-list tests (u2) --- */
+
+    it('two protocol refs: payload carries both ids in the supplied order', async () => {
+      const protoA = makeLocalProtocolEnvelope('LPR-alpha', 'Alpha Protocol');
+      const protoB = makeLocalProtocolEnvelope('LPR-beta', 'Beta Protocol');
+      const mockStore = makeMultiRecordStore([protoB, protoA], { success: true });
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(['LPR-beta', 'LPR-alpha']);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('Expected ok');
+      const payload = result.envelope.payload as Record<string, unknown>;
+      const refs = payload.localProtocolRefs as Array<{ id: string }> | undefined;
+      expect(refs).toBeDefined();
+      expect(refs).toHaveLength(2);
+      expect(refs![0].id).toBe('LPR-beta');
+      expect(refs![1].id).toBe('LPR-alpha');
+    });
+
+    it('duplicate protocol refs collapse to one entry keeping the first position', async () => {
+      const protoA = makeLocalProtocolEnvelope('LPR-alpha', 'Alpha Protocol');
+      const mockStore = makeMockStore(protoA, { success: true });
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(['LPR-alpha', 'LPR-alpha']);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('Expected ok');
+      const payload = result.envelope.payload as Record<string, unknown>;
+      const refs = payload.localProtocolRefs as Array<{ id: string }> | undefined;
+      expect(refs).toBeDefined();
+      expect(refs).toHaveLength(1);
+      expect(refs![0].id).toBe('LPR-alpha');
+      // When deduped to one, the legacy singular field should also be present
+      expect(payload.localProtocolRef).toBeDefined();
+    });
+
+    it('single protocol ref via array still writes legacy localProtocolRef', async () => {
+      const protoA = makeLocalProtocolEnvelope('LPR-alpha', 'Alpha Protocol');
+      const mockStore = makeMockStore(protoA, { success: true });
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(['LPR-alpha']);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('Expected ok');
+      const payload = result.envelope.payload as Record<string, unknown>;
+      // Legacy singular must be present for a single-ref list
+      expect(payload.localProtocolRef).toBeDefined();
+      expect((payload.localProtocolRef as { id: string }).id).toBe('LPR-alpha');
+      // And the list must also carry one entry
+      const refs = payload.localProtocolRefs as Array<{ id: string }> | undefined;
+      expect(refs).toBeDefined();
+      expect(refs).toHaveLength(1);
+    });
+
+    it('unresolvable ref returns 404 naming the id', async () => {
+      const protoA = makeLocalProtocolEnvelope('LPR-alpha', 'Alpha Protocol');
+      const mockStore = makeMockStore(protoA, { success: true });
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(['LPR-alpha', 'LPR-nonexistent']);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error('Expected not ok');
+      expect(result.status).toBe(404);
+      expect(result.reason).toContain('LPR-nonexistent');
+    });
+
+    it('non-local-protocol ref returns 400 naming the id and kind', async () => {
+      const protoA = makeLocalProtocolEnvelope('LPR-alpha', 'Alpha Protocol');
+      const nonProto = makeProtocolEnvelope('PRT-some-protocol', 'Some Protocol');
+      const mockStore = makeMultiRecordStore([protoA, nonProto], { success: true });
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(['LPR-alpha', 'PRT-some-protocol']);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error('Expected not ok');
+      expect(result.status).toBe(400);
+      expect(result.reason).toContain('PRT-some-protocol');
+      expect(result.reason).toContain('protocol');
     });
   });
 });
