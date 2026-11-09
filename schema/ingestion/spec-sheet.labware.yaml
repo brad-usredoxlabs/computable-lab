@@ -1,0 +1,56 @@
+# Spec-sheet field map for labware records.
+#
+# Every targetField MUST be a property path that exists in
+# schema/workflow/labware-definition.schema.yaml.
+#
+# CRITICAL (labware-definition.schema.yaml :130-137): physical_geometry
+# fields are OPTIONAL — omit unknown values rather than inventing them.
+# A spec sheet that does not state dimensions MUST leave those fields ABSENT,
+# never defaulted to guesses.
+#
+# Only capacity.max_well_volume_uL is marked required: a sheet must state
+# the well volume for the labware to be usable. Geometry dimensions are
+# optional — the schema forbids inventing them.
+#
+kind: extraction-spec
+id: XSPEC-SPEC-SHEET-LABWARE
+status: draft
+notes: >
+  Labware spec-sheet field map. Per labware-definition.schema.yaml:130-137,
+  physical_geometry fields are optional and MUST NOT be invented when absent
+  from the source. Only capacity.max_well_volume_uL is required — a labware
+  record is unusable without stated capacity. All geometry dimensions are
+  optional: mark them required:false so an unstated dimension stays absent.
+
+targets:
+  - targetSchema: workflow/labware-definition
+    recordKind: labware
+    idPrefix: LW-
+    fieldMappings:
+      - targetField: display_name
+        source: "Display name / Product name from the spec sheet"
+        required: true
+      - targetField: vendor
+        source: "Vendor / Manufacturer from the spec sheet"
+      - targetField: capacity.max_well_volume_uL
+        source: "Max well volume as stated on the sheet"
+        unit: "uL"
+        required: true
+      - targetField: physical_geometry.well_length_mm
+        source: "Well length as stated on the sheet"
+        unit: "mm"
+        required: false
+      - targetField: physical_geometry.well_width_mm
+        source: "Well width as stated on the sheet"
+        unit: "mm"
+        required: false
+      - targetField: physical_geometry.well_depth_mm
+        source: "Well depth as stated on the sheet"
+        unit: "mm"
+        required: false
+      - targetField: topology.addressing
+        source: "Addressing type (grid/linear/single) from the sheet"
+      - targetField: topology.rows
+        source: "Number of rows for grid addressing"
+      - targetField: topology.columns
+        source: "Number of columns for grid addressing"

@@ -1,0 +1,45 @@
+# Spec-sheet field map for vendor-product records.
+#
+# Every targetField MUST be a property that exists in schema/lab/vendor-product.schema.yaml.
+# material_ref is the ontology anchor — NOT read from a sheet, so it is excluded.
+#
+# Fields from Brad's approved list with no declared home in the schema:
+#   - "storage recommendation" — no property in vendor-product.schema.yaml (excluded; note below)
+#
+kind: extraction-spec
+id: XSPEC-SPEC-SHEET-VENDOR-PRODUCT
+status: draft
+notes: >
+  Vendor-product spec-sheet field map. material_ref is the ontology anchor and is
+  NOT extracted from a sheet — it is resolved separately. "Storage recommendation"
+  has no declared property in lab/vendor-product.schema.yaml and is therefore
+  excluded rather than invented.
+
+targets:
+  - targetSchema: lab/vendor-product
+    recordKind: vendor-product
+    idPrefix: VPR-
+    fieldMappings:
+      - targetField: vendor
+        source: "Vendor / Manufacturer name from the sheet header or product listing"
+        required: true
+      - targetField: catalog_number
+        source: "Catalog number / Product number from the sheet"
+        required: true
+      - targetField: name
+        source: "Product name / Chemical name from the sheet"
+        required: true
+      - targetField: package_size
+        source: "Package size / Quantity as stated on the sheet"
+        unit: "mL"
+        transform: parse_volume
+      - targetField: formulation
+        source: "Formulation / Stock concentration / Presentation described on the sheet"
+      - targetField: grade
+        source: "Grade / Purity / Quality specification from the sheet"
+      - targetField: product_url
+        source: "Vendor product URL / Catalog page URL"
+      - targetField: documents
+        source: "Associated documents (MSDS, CoA, spec sheets) referenced or linked"
+      - targetField: synonyms
+        source: "Synonyms / Alternative names listed on the sheet"
