@@ -100,4 +100,26 @@ describe('LabCollectionView', () => {
     fireEvent.click(btn)
     expect(screen.getByTestId('material-new-target')).toBeDefined()
   })
+
+  it('does NOT show "+ New material" on non-materials categories', () => {
+    render(
+      <MemoryRouter initialEntries={['/lab/labware']}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+          <Route path="/lab/materials/new" element={<div data-testid="material-new-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    // Button must be absent on the labware category.
+    expect(screen.queryByTestId('lab-category-new-material')).toBeNull()
+  })
 })
