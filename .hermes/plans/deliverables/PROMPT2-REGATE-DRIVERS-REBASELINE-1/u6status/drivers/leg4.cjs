@@ -53,6 +53,22 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
       out.answer.slotCount = await page.locator('[data-testid="chat-clarification-slot"]').count()
       step('slots', 'count', { slotCount: out.answer.slotCount })
 
+      // Single-arm variant: one request renders as numbered options in the chat log
+      // (`.chat-log-clarification-options li button`) with NO slot testids. Until 2026-11-09 the
+      // driver iterated zero slots here, answered nothing, and then reported
+      // `no-preview-after-submit` — a FAIL that was the instrument's, not the product's.
+      if (out.answer.slotCount === 0) {
+        try {
+          const picked = await chrome.pickNumberedOption(page, 'clofibrate')
+            || await chrome.pickNumberedOption(page, '.')
+          out.answer.numberedOption = picked
+          step('answer-numbered', picked ? 'picked' : 'NO matching numbered option', picked || {})
+        } catch (e) {
+          out.answer.numberedOptionError = String(e).slice(0, 300)
+          step('answer-numbered', 'FAILED', { error: out.answer.numberedOptionError })
+        }
+      }
+
       // Use answerAllSlots to drive every slot and record per-slot results.
       // u3fix2 FIX-2: per-slot values derived from each slot's rendered
       // identity (concept -> Clofibrate, quantity/volume -> 1), never a scalar
@@ -121,8 +137,12 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
       out.naReason = 'no clarification card: the request resolved without asking, so the grouped two-slot submit had nothing to exercise'
     } else {
       const failed = []
-      if (!(out.answer && out.answer.submitted === true)) failed.push('answer-not-submitted')
+      // Picking a numbered option IS submitting the answer for the single-arm variant, which
+      // renders no slot testids and therefore no Submit button.
+      const answered = out.answer && (out.answer.submitted === true || Boolean(out.answer.numberedOption))
+      if (!answered) failed.push('answer-not-submitted')
       if (!out.previewWells || out.previewWells.length === 0) failed.push('no-preview-after-submit')
+      out.answerMode = out.answer && out.answer.numberedOption ? 'numbered-option' : 'slot-card'
       out.failedCriteria = failed
       out.status = failed.length ? 'FAIL' : 'PASS'
     }

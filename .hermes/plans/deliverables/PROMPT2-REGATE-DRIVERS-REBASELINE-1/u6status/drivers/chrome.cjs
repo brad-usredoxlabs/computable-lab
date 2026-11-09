@@ -316,4 +316,4 @@ async function apply(page) {
 
 async function discard(page) { await page.locator('[data-testid="chat-preview-discard"]').click() }
 
-module.exports = { card, slots, anySurface, arm, answerSlot, answerSlotBySurface, answerAllSlots, identityKind, slotIdentity, submitAnswers, previewBar, apply, discard, ANY, CARD, SINGLE }
+module.exports = { card, slots, anySurface, arm, answerSlot, answerSlotBySurface, answerAllSlots, identityKind, slotIdentity, submitAnswers, previewBar, apply, discard, pickNumberedOption, ANY, CARD, SINGLE }
