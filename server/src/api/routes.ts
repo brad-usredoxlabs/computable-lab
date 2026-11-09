@@ -50,6 +50,7 @@ import type { SignatureHandlers } from './handlers/SignatureHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
 import type { VendorDocumentHandlers } from './handlers/VendorDocumentHandlers.js';
 import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
+import type { SpecSheetHandlers } from './handlers/SpecSheetHandlers.js';
 import type { IngestionHandlers } from './handlers/IngestionHandlers.js';
 import type { IngestionAIHandlers } from './handlers/IngestionAIHandlers.js';
 import type { AiIngestionHandlers } from './handlers/AiIngestionHandlers.js';
@@ -169,6 +170,7 @@ export interface RouteOptions {
   artifactBlobHandlers?: ArtifactBlobHandlers;
   vendorPdfBlobHandlers?: VendorPdfBlobHandlers;
   predicatesHandlers?: PredicatesHandlers;
+  specSheetHandlers?: SpecSheetHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -545,6 +547,12 @@ export function registerRoutes(
 
   if (vendorDocumentHandlers) {
     fastify.post('/vendors/:id/documents/extract', vendorDocumentHandlers.extractVendorDocument.bind(vendorDocumentHandlers));
+  }
+
+  // Spec-sheet extraction engine: url + recordKind -> proposals (no store writes)
+  const { specSheetHandlers } = options;
+  if (specSheetHandlers) {
+    fastify.post('/ingestion/spec-sheet/extract', specSheetHandlers.extractSpecSheet.bind(specSheetHandlers));
   }
 
   const { chemistryHandlers } = options;
