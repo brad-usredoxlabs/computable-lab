@@ -49,4 +49,4 @@ Previous marker named `f12ce43d` (8-hex, parent commit) — replaced with full 4
 2. runProtocolList.test.ts: Tests 9 passed (9) — unchanged
 3. tsc --noEmit: exit 0, no diagnostics
 
-L2-RUN-PROTOCOL-LIST-1 UNIT u1fix4 DONE PLACEHOLDER_SHA
+L2-RUN-PROTOCOL-LIST-1 UNIT u1fix4 DONE ad13806d0264edd594bb7330336efa3ff65db491
