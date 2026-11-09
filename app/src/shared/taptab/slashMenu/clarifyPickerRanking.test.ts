@@ -838,16 +838,11 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only guard on 
 })
 
 describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw propagates on fetch path', () => {
-  /**
-   * On the REAL load path, fetchSelectionPolicies returns two `only` policies
-   * for the same concept -> guardDuplicateOnlyPolicies throws PolicyGuardError
-   * -> the .catch must re-throw it (not swallow into fail-open []).
-   */
-  it('fetch path with duplicate only policies rejects with PolicyGuardError, not fail-open []', async () => {
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
+  const fetchSpy = vi.fn()
 
-    // Mock fetch to return two 'only' policies for the same concept
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
     fetchSpy.mockImplementation(async (url: string) => {
       if (String(url).includes('material-selection-policy')) {
         return {
@@ -877,10 +872,14 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw 
       }
       return { ok: true, json: async () => ({ records: [], total: 0 }) }
     })
-
     __resetMaterialSelectionPolicies()
+  })
 
-    // The fetch path must REJECT, not resolve to []
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fetch path with duplicate only policies rejects with PolicyGuardError, not fail-open []', async () => {
     let caught: unknown
     try {
       await getMaterialSelectionPolicies()
@@ -890,7 +889,5 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw 
     }
     expect(caught).toBeInstanceOf(PolicyGuardError)
     expect((caught as Error).message).toMatch(/POL-DUP-1.*POL-DUP-2/)
-
-    vi.unstubAllGlobals()
   })
 })
