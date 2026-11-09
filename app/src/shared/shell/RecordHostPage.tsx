@@ -8,7 +8,7 @@
  * Mirrors ArtifactHostPage: wraps the panel in the workspace shell (tab strip +
  * right pane) so the two-pane layout and the per-tab breadcrumb are preserved.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { WorkspaceTabStrip } from './WorkspaceTabStrip'
@@ -21,6 +21,44 @@ import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { recordCreateTabId, recordEditTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
 import { apiClient, type AccessPolicyResponse } from '../../shared/api/client'
 import { ShareRecordDialog } from '../sharing/ShareRecordDialog'
+import { SurfaceChatBridge } from './SurfaceChatBridge'
+import type { AiContext } from '../../types/aiContext'
+
+/**
+ * L2-CHAT-UI-1 LEG C2: the record host's universal chat. Renders nothing
+ * (SurfaceChatBridge); RightPane's panelSlot?.chat arm shows
+ * HarnessChatPane. Thread-scoped on the recordId — one conversation per
+ * record (the run/deck scope discipline), so switching /record/<id> re-keys
+ * the chat instead of carrying a stale thread.
+ */
+function RecordSurfaceChat({ recordId, nodeType, studyId }: {
+  recordId: string | undefined
+  nodeType: string | undefined
+  studyId: string
+}) {
+  const isCreate = !!nodeType
+  const aiContext = useMemo<AiContext>(() => ({
+    surface: 'analysis',
+    summary: isCreate
+      ? `Record creation — new ${nodeType} (study ${studyId})`
+      : `Record editor — ${recordId ?? '(unknown record)'} (study ${studyId})`,
+    surfaceContext: {
+      studyId,
+      ...(recordId ? { recordId } : {}),
+      mode: isCreate ? 'record-create' : 'record-edit',
+      ...(isCreate ? { nodeType } : {}),
+    },
+  }), [recordId, nodeType, studyId, isCreate])
+  return (
+    <SurfaceChatBridge
+      host="record-host"
+      base={{
+        context: aiContext,
+        ...(recordId && !isCreate ? { scope: recordId } : {}),
+      }}
+    />
+  )
+}
 
 export function RecordHostPage() {
   const { recordId, nodeType, parentId } = useParams<{
@@ -156,6 +194,8 @@ export function RecordHostPage() {
 
   return (
     <WorkspaceProvider studyId={studyId}>
+      {/* L2-CHAT-UI-1 LEG C2: universal chat registrar (renders nothing). */}
+      <RecordSurfaceChat recordId={recordId} nodeType={nodeType} studyId={studyId} />
       <AppShell
         brand={isCreate ? 'New record' : 'Record'}
         layout="workspace"

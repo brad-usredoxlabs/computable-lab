@@ -1007,6 +1007,18 @@ function LabwareEventEditorContent({
     })),
     manualPipettingMode,
   })
+  // L2-CHAT-1 FIX1 D6 (mount-duty exemption, stated not omitted): this surface
+  // wires the universal chat's EVENT path (onAcceptEvent -> local addEvent) but
+  // NOT its GHOST seam (onProposalDrafted / onPreviewDiscarded) on purpose —
+  // this route's editor is a local-state editor, NOT an EventEditorProvider
+  // consumer (there is no useEventEditor context here), and the deck ghost
+  // mount (useDeckGhostMount) requires that context: it calls useEventEditor()
+  // and writes the preview via actions.setPreview. Mounting ghosts here would
+  // either crash (missing provider) or write into a dead state tree the deck
+  // never renders. The chat still gets its full accept/reject/discard cycle;
+  // it simply has no deck to ghost onto. The spec's "one chat, one
+  // event/ghost path" holds for the provider-backed mounts (run workspace,
+  // /deck/:id); this standalone route is the documented event-path-only mount.
   const { chat: aiChat } = useSurfaceChat({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,

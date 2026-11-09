@@ -122,6 +122,13 @@ export interface AddMaterialDetails extends BaseEventDetails {
   aliquot_ref?: string | Ref
   material_instance_ref?: string | Ref
   vendor_product_ref?: string | Ref
+  /** L2-PROMPT1-GHOST-1: the compiler writes the material NAME under this
+   * bare key for accepted add_material (real committed shape — scout
+   * receipt record-after.json: details = { material, volumeUl, volume,
+   * wells }, no *_ref). Declared data, not an undeclared extra: it is the
+   * LAST fallback of getAddMaterialRef (the five *_ref precedences are
+   * unchanged), so tooltip/ribbon/summary name the material. */
+  material?: string
   formulation_kind?: FormulationKind
   material_source_requirement?: {
     status: 'unresolved' | 'provided' | 'linked'
@@ -611,7 +618,10 @@ export function getRefLabel(ref: string | { label?: string; id?: string } | unde
 }
 
 export function getAddMaterialRef(details: AddMaterialDetails): string | Ref | undefined {
-  return details.aliquot_ref || details.material_instance_ref || details.material_spec_ref || details.vendor_product_ref || details.material_ref
+  // L2-PROMPT1-GHOST-1 (b): `details.material` (the compiler's material
+  // NAME) is the LAST fallback — after the five *_ref fields, whose
+  // precedence is unchanged.
+  return details.aliquot_ref || details.material_instance_ref || details.material_spec_ref || details.vendor_product_ref || details.material_ref || details.material
 }
 
 export function parseMaterialLikeRef(ref: string | Ref | undefined): Ref | null {

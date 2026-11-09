@@ -1,0 +1,136 @@
+# CHATHOST-SWEEP-1 Change 3 — the blessed MANIFEST for the chat-host inventory
+# shrink-guard (the "vocabulary golden MANIFEST bless" convention, applied to the
+# chat-host set).
+#
+# The guard: a tick-time check (harness/l2-trunk-journeys/chat-hosts-shrink-guard.py,
+# importable by check-gate.py) FAILS when the inventory's host-id set SHRINKS without
+# a spec citing it. A host may be DELETED only with a re-bless (a new sha256 here) AND
+# a spec path named in `bless_note`; a host that was never listed is never "allowed to
+# shrink" — it simply is not part of this manifest.
+#
+# The blessed sha256 is over the CANONICAL form: the inventory's host ids, sorted
+# ascending, one per line, a single trailing newline. Recomputed from
+# config/chat/chat-hosts.yaml by
+#   python3 .hermes/plans/harness/l2-trunk-journeys/chat-hosts-shrink-guard.py --recompute
+# and blessed here EXACTLY ONCE (the golden-MANIFEST bless discipline: comment the
+# BEFORE/AFTER, bless once).
+#
+# blessed_sha256 = sha256("artifact-host\nevent-editor\nproject-deck-tab\nrecord-
+#                    host\nregistry-host\nrun-workspace\n")
+blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+
+# FIRST-BLESS ANCHOR (fix2 D2 + CONSOLIDATE-1 OBS-B option (i)): the sha AND the
+# id set of the ORIGINAL (first) bless, carried as DATA in the same writable
+# manifest (not guard constants). The guard uses them as a TRIPWIRE: an accidental
+# or uncited rewrite of the blessed set goes RED. A deliberate rewrite that moves
+# the anchor together with the blessed set is NOT stopped by this guard; that class
+# is policed by adversarial review and the trunk merge
+# (decisions/CHATHOST-SWEEP-c3-cyclecap-l2t1805.md). No claim of immutability: the
+# anchor is data in a writable file, exactly like the top-level bless. A manifest
+# without first_blessed_sha256 or first_blessed_ids fails closed.
+first_blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+# The ORIGINAL (first) bless's host-id set, written once, in the same block as
+# first_blessed_sha256 (CONSOLIDATE-1 OBS-B option (i), ratified). The guard
+# asserts the anchor invariant canonical_sha(first_blessed_ids) ==
+# first_blessed_sha256 (a mismatch fails closed, reason "anchor-invariant") and
+# derives the removed-set FROM THIS ANCHOR SET (first_blessed_ids - current
+# inventory ids), so a dropped host is named on EVERY path — including the
+# deliberate authorized rewrite that the top-level set already forgets (c3 D3).
+# A missing or empty first_blessed_ids fails closed (reason "no-anchor-set").
+# A re-bless does NOT overwrite this anchor set; it APPENDS a blessed_records
+# entry below.
+first_blessed_ids:
+  - run-workspace
+  - event-editor
+  - project-deck-tab
+  - record-host
+  - artifact-host
+  - registry-host
+
+# The host ids this manifest blesses. The TOP-LEVEL blessed_sha256/blessed_ids is
+# the record of the ORIGINAL (first) bless: the guard ASSERTS the manifest
+# invariant canonical_sha(blessed_ids) == blessed_sha256 (the hashed payload is the
+# authority — fix1 D1: trimming blessed_ids while blessed_sha256 stays breaks the
+# invariant and the guard goes RED, fail-closed). The guard ALSO asserts the anchor
+# invariant canonical_sha(first_blessed_ids) == first_blessed_sha256 and derives the
+# removed-set from the ANCHOR id set (first_blessed_ids), not from this mutable
+# top-level record — that is what lets it name a host a deliberate rewrite already
+# dropped (CONSOLIDATE-1 OBS-B option (i)). FIX2 D2: the guard ALSO compares
+# blessed_sha256 against the first_blessed_sha256 anchor (the tripwire, see above) —
+# a CONSISTENT top-level rewrite (trimmed blessed_ids + re-set blessed_sha256,
+# invariant intact) is a blessed-set change and is authorized ONLY by a
+# blessed_records entry citing an existing spec (the top-level bless_note is prose,
+# never authorization). A re-bless does NOT overwrite these fields; it APPENDS a
+# blessed_records entry below.
+blessed_ids:
+  - run-workspace
+  - event-editor
+  - project-deck-tab
+  - record-host
+  - artifact-host
+  - registry-host
+
+# A deletion is allowed ONLY when a re-bless is APPENDED to blessed_records AND
+# the spec that authorized the deletion is cited (fix1 D1+D2). The guard
+# authorizes a shrink ONLY via such a record whose blessed_sha256 EQUALS the
+# current inventory sha, whose blessed_ids reproduce that sha (hashes
+# consistently), and whose bless_note cites a spec path that EXISTS in the
+# repo (a missing spec file keeps the RED — D2). Any inventory-sha mismatch
+# that is a shrink without such a record is RED; pure growth (no host removed)
+# is allowed and re-blessed by the item that added the host.
+# blessed_records:            # appended on an authorized re-bless (none yet)
+#   - blessed_sha256: <sha256 of the NEW id set == the current inventory sha>
+#     blessed_ids: [ ...the NEW set... ]
+#     bless_note: "Deleted <host>; authorized by <spec path that exists>."
+#     blessed_at: <ts>
+#   before: dcf32649...75156b (6 hosts — this first bless, 2026-11-02)
+#   spec:   .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md
+blessed_note: "First bless (L2-CHATHOST-SWEEP-1 Change 3): 6 universal-chat hosts enumerated from the registrar/bridge wiring at trunk 4bea98a5. Spec .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md. A future host deletion must APPEND a blessed_records entry whose blessed_sha256 equals the new inventory sha, whose blessed_ids reproduce it, and whose bless_note cites the authorizing spec (existing file)."
+blessed_at: "20261102T145032Z"
+base_sha: "4bea98a56752a4e69b6cca3b922d1cfd03c39121"
+
+# DEFENSIBLE RE-BLESS (D-6 / l2t0200, CHATHOST-CONSOLIDATE-1 grader fix): the
+# id set is UNCHANGED (pure field growth — answer_selector added per row; no
+# host removed, renamed or reordered), so the guard was already green and this
+# record is DATA HYGIENE, not a shrink authorization: it pins the current
+# inventory sha as a NEWER consistent bless record (blessed_sha256 == the
+# current canonical_sha; blessed_ids reproduce it) and cites the AUTHORITING
+# SPEC (the real spec path, not a decisions/ or config/ token — a decisions/
+# or config/ path would NOT satisfy the guard's spec_cited check).
+# before: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+#         (the first-bless sha; current sha at this append, guard exit 0)
+blessed_records:
+  - blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+    blessed_ids:
+      - run-workspace
+      - event-editor
+      - project-deck-tab
+      - record-host
+      - artifact-host
+      - registry-host
+    bless_note: "Re-bless (D-6 l2t0200, CHATHOST-CONSOLIDATE-1): id set unchanged (answer_selector field added to all six rows — pure growth, no host dropped); recorded so the current inventory sha carries a NEWER consistent record. Authorized by .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md."
+    blessed_at: "20261104T074841Z"
+# CHATHOST-CONSOLIDATE-1 (alert_texts + probe_seed DATA, live 6/6 close): a
+# second DEFENSIBLE re-bless under the SAME D-6 hygiene rule as the one above.
+# The id set is AGAIN unchanged — the alertseed unit ADDED a `probe_seed:`
+# field to the event-editor and record-host rows only (pure field growth: no
+# host removed, renamed or reordered), so the guard is green with the SAME
+# sha (dcf32649...75156b) and this record is DATA HYGIENE, not a shrink
+# authorization: it *** the current inventory sha as an EVEN NEWER consistent
+# bless record (blessed_sha256 == the current canonical_sha; blessed_ids
+# reproduce it) and cites the AUTHORITING SPEC (the real spec path that exists
+# in the repo — a decisions/ or config/ token would NOT satisfy the guard's
+# spec_cited check; the authorizing ARCHITECT RULING, which lives outside the
+# three spec trees, is named for provenance in the same note).
+# before: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+#         (the first-bless sha; current sha at this append, guard exit 0)
+  - blessed_sha256: dcf326497e83976112405fde5396113659301cf715032591fd103af33875156b
+    blessed_ids:
+      - run-workspace
+      - event-editor
+      - project-deck-tab
+      - record-host
+      - artifact-host
+      - registry-host
+    bless_note: "Re-bless (CHATHOST-CONSOLIDATE-1 alertseed unit, live 6/6 close): id set unchanged (probe_seed field ADDED to the event-editor and record-host rows — pure field growth, no host dropped); recorded so the current inventory sha carries a NEWER consistent record. Authorized by .hermes/plans/2026-11-02_0500-L2-CHATHOST-SWEEP-1-spec.md; the authorizing architect ruling (decisions/CHATHOST-noerrorframe-probe-seed-l2t0400-ruling.md) is named for provenance."
+    blessed_at: "20261104T115036Z"

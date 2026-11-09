@@ -938,6 +938,21 @@
   position: relative;
 }
 
+/* L2-SUITE-A-uifix3 D2 (regate-5): the per-WELL footprint mark. The tile-level
+   outline above (data-affected) is the attention surface; the PAINTED well is
+   the deliverable — without a rule here the glyph cells carry
+   data-affected-well="true" in the DOM (the gate trail's markedWells ["A1"])
+   yet stay visually identical to their neighbors: the gate's pixel diff
+   showed only the tile rectangle changing at accept, and the mark absent
+   after a reload. Paint the well cell's interior (fill + stroke), preview
+   color (same family as the tile's affected outline/tag). The attribute is
+   set by LabwareGlyph on the exact affected cells only, so the rule is
+   data-driven — no per-well styling decisions in code. */
+.event-editor [data-affected-well="true"] {
+  fill: var(--cl-preview, #be4bdb);
+  stroke: var(--cl-preview, #be4bdb);
+}
+
 /* ---- Protocol-planning per-step layering (past dimmed, current highlighted) ---- */
 
 .event-editor .tile[data-past-step='true'] {
@@ -3841,6 +3856,11 @@
 /* ---- Well tooltip ---- */
 
 .event-editor .well-tooltip {
+  /* Resolve panel width so fixed-layout table columns don't collapse
+     (content-box budget = 260 - 2×10px padding - 2×1px border = 238px). */
+  width: 260px;
+  min-width: 120px;
+  max-width: 260px;
   /* Fixed (viewport-relative) + flipped in JS so the scrollable focus stage's
      overflow can't clip it at the right/bottom edges (column 12 / row H). */
   position: fixed;
@@ -3853,8 +3873,6 @@
   font-size: 11px;
   color: var(--cl-text);
   pointer-events: none;
-  min-width: 120px;
-  max-width: 260px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 10;
 }
@@ -3897,6 +3915,7 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
+  table-layout: fixed; /* D-1: forces columns to fit panel width */
 }
 
 .event-editor .well-tooltip__material > td {
@@ -3913,6 +3932,7 @@
   font-weight: 600;
   color: var(--cl-text);
   max-width: 130px;
+  padding-right: 6px; /* D-2: gutter before concentration cell */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3924,17 +3944,21 @@
 }
 
 .event-editor .well-tooltip__material-conc {
-  padding-left: 10px;
+  width: 60px;
+  padding-left: 6px;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--cl-accent);
   font-variant-numeric: tabular-nums;
 }
 
 .event-editor .well-tooltip__material-vol {
-  padding-left: 10px;
+  width: 75px;
+  padding-left: 6px;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   color: var(--cl-text-dim);
   font-variant-numeric: tabular-nums;
 }

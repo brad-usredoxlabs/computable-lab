@@ -61,6 +61,20 @@ describe('W2-7 T7 no-bypass closure (AC5, §6)', () => {
       // unauthorized bypass) is preserved: a declared consumer, not a second
       // compiler. Pipeline modules themselves stay untouched.
       join('ai', 'shorthandChat.ts'),
+      // WELLSET-RESOLVER-1 (spec Deliverables, sanctioned): the resolve_wellsets
+      // pass module — a pipeline module registered IN the frozen pipeline's
+      // buildRegistry (the resolve_roles registration precedent), not a second
+      // compiler or a bypass. It imports no compileScientistIntent symbol; it
+      // matches this grep on the doc-comment naming its registration seam.
+      join('compiler', 'scientistIntent', 'resolveWellsetsPass.ts'),
+      // L2-CLARIFY-CARD-1 A2 (sanctioned): the slot-coverage gate predicate.
+      // A PURE helper the compiler's non-bar path CALLS (compileScientistIntent
+      // imports it); it imports no compileScientistIntent symbol and adds no
+      // down-route — it reads the parsed intent + the pass's own output and
+      // returns the unbound declared slots. Matches this grep on the doc-comment
+      // naming its call seam (compileScientistIntent.ts), same as the
+      // resolveWellsetsPass.ts precedent above.
+      join('compiler', 'resolution', 'nounCoverage.ts'),
     ]);
     const unexpected = rel.filter((f) => !known.has(f));
     expect(unexpected).toEqual([]);
@@ -82,7 +96,17 @@ describe('W2-7 T7 no-bypass closure (AC5, §6)', () => {
     const pipelinePath = join(REPO_ROOT, 'schema', 'registry', 'compile-pipelines', 'scientist-intent-compile.yaml');
     const sha = createHash('sha256').update(readFileSync(pipelinePath)).digest('hex');
     // Pinned at claim base f19cfa95 (measured in this worktree before any edit).
-    expect(sha).toBe('b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8');
+    // WELLSET-RESOLVER-1 RE-PIN (l2t0310): the spec DELIBERATELY extends the
+    // pass-list by declaring the resolve_wellsets pass (family expand, after
+    // resolve_roles) — the frozen-list guard exists against UNDECLARED drift;
+    // an item whose whole deliverable is one declared pass advances the pin.
+    // WELLSET-RESOLVER-1 FIX RUN 1 RE-PIN (advc D3): the DECLARED EDGES now
+    // cover the pass's reads (resolve_wellsets depends_on resolve_roles/
+    // resolve_nouns/resolve_labware) and its republished-slot consumers
+    // (compute_volumes / lab_state / emit_instrument_run_files gained the
+    // resolve_wellsets edge). The pass-LIST is unchanged — this pin guards
+    // undeclared drift, not this item's declared edge corrections.
+    expect(sha).toBe('b91ef3b4e5e30e619e5fa7b44daa5d2be1f45c8b7bfaad0a4c169f2ad1bd8536');
   });
 
   it('(e) derive_execution_scale_plan is NOT bolted onto the scientist-intent pipeline (bait #9 refusal)', () => {

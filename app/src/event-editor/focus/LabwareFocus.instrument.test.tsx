@@ -37,6 +37,7 @@ function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState 
     eventGraphId: null,
     eventGraphSave: null,
     labwares: {},
+    equipments: {},
     placements: [],
     focusPlacementId: null,
     selection: null,
@@ -44,7 +45,7 @@ function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState 
     tipState: { kind: 'empty' },
     preview: null,
     graphLemurSource: null,
-    runDeckLock: null,
+    runDeck: null,
     fixIt: {
       isOpen: false,
       seed: null,

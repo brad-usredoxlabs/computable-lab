@@ -61,6 +61,38 @@ export interface SlashSuggestion {
    * resort, never the default).
    */
   pinBottom?: boolean
+  /**
+   * L2-CLARIFY-PICKER-1 P1: whether this row may hold the FOCUSED (keyboard)
+   * default. The defaultability decision is the DATA flag ONLY: it is the
+   * registry's `candidate_ranking.families.<family>.can_be_default` for the
+   * row's family (the label shape only CLASSES the family; it never decides
+   * defaultability). A composition row's never-default behavior comes from
+   * the data — the shipped YAML declares `can_be_default: false` for the
+   * `composition` family (the W1 bug: Enter on the opened list committed a
+   * composition); a family the data declares `can_be_default: true`, or a
+   * family whose flag is ABSENT, is defaultable. Absent (no ranking
+   * declared) or `true` = defaultable; `false` = the first-defaultable focus
+   * skips the row.
+   */
+  canBeDefault?: boolean
+  /**
+   * L2-CLARIFY-PICKER-1 P2: the per-row commit-consequence line — what picking
+   * this row BINDS, generated from the row's own record (no new chrome) by
+   * `consequenceFor` (./clarifyPickerRanking) using the ONE shared kind-word
+   * vocabulary (./tokens `ANSWER_KIND_WORD` / `KIND_WORD`). e.g.
+   * `binds material record MAT-dmem-ykg0 "DMEM" (concept)` vs
+   * `binds formulation MSP-… (composition of 6 components)`. Rendered inline
+   * so the W3 hover-card unreachability stops mattering. Absent when the row
+   * carries no bindable record (e.g. the mint floor).
+   */
+  consequence?: string
+  /**
+   * L2-CLARIFY-PICKER-1 P1: the presentation label of the CONTAINS section this
+   * row collapsed under (the data-declared `contains_section_label` template,
+   * e.g. `contains "DMEM" (9)`). Present ONLY on the first row of a contains
+   * band; a row in the equality band or the below-contains band carries none.
+   */
+  sectionLabel?: string
 }
 
 /**
@@ -138,6 +170,15 @@ export interface SlashResolverContext {
    * them to do the data modelling.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+  /**
+   * L2-CLARIFY-PICKER-1 P2 (advc-c1 DEFECT 8): this resolver pass is a
+   * PICKER-constructed one (the clarification card's bounded mount pass + the
+   * open popover), not the doc-editor `/m` menu. Only picker passes attach the
+   * per-row commit-consequence line + the focus-default flag (the W1
+   * never-default row is a PICKER concern); the editor's `/m` stays
+   * chrome-free and byte-stable (bait 6). Absent for editor invocations.
+   */
+  pickerRows?: boolean
 }
 
 /**

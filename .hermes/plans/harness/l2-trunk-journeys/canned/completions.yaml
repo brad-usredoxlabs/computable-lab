@@ -1,0 +1,126 @@
+# Canned completions — DATA, not driver logic (ruling Q-B).
+#
+# The fake server (fake-inference.py) does ONLY the (journey, turn) lookup and
+# the SSE/JSON framing. Every completion's CONTENT — the scientist-intent
+# shorthand YAML, the protocol_edit ops, the intentId — lives HERE.
+#
+# Keying (fix4 D3): the JOURNEY SET IS THIS FILE — the server iterates
+# `journeys.items()` keyed by each block's own id (no hardcoded id tuple in
+# code: adding a journey block = it dispatches). Matching runs on the
+# CURRENT user message FIRST, the whole conversation (history) SECOND, so a
+# thread whose history mentions several journey prompts binds by the current
+# turn. Turn: 2 iff a prior assistant message rides the request (the
+# deterministic turn-2 key on this trunk) or the product's
+# "[Answered clarifications]" marker is present (secondary key), else 1.
+# The model writes ONLY shorthand / protocol_edit ops — it never writes events
+# (the deterministic compiler owns event-graph expansion). A fixed intentId on
+# BOTH turns is what makes the J2 answer-turn intentId stability deterministic.
+
+model: l2trunkj-fake
+
+journeys:
+  # J1 — deck surface, "mix all wells that have material". The live-proven
+  # shorthand (rendered the green intent card 20261101T034018Z) verbatim:
+  # one mix action over the symbolic wellset token.
+  J1:
+    prompt_contains: "mix all wells"
+    turn1:
+      intent: event_shorthand
+      shorthand: |
+        intentId: mix-all-wells-with-material
+        actions:
+          - action: mix
+            wells: all-wells-containing-materials
+
+  # J2 — clarification round trip. Turn 1 carries the 50/50/10 (110%)
+  # composition that the DETERMINISTIC compiler turns into the
+  # composition-fraction-sum reading card (whole-mixture-supplement reading —
+  # pinned by compositionFractions.test.ts:32-78); the model only writes the
+  # shorthand. The deck seed has NO placed plate, so the turn-1 shorthand
+  # creates the 96-well plate first (mirrors the live-proven green sample
+  # 20261101T034018Z). Turn 2 is the RESOLVED reading (45/45/10, sums to 100)
+  # so a non-fold model call still compiles to a clean answer with the SAME
+  # intentId and no re-ask. intentId is IDENTICAL on both turns: that is the
+  # stability the D3 assertion pins, now made deterministic instead of a
+  # sampler lottery.
+  J2:
+    prompt_contains: "Trypsin-EDTA"
+    turn1:
+      intent: event_shorthand
+      shorthand: |
+        intentId: add-trypsin-dmem-fbs
+        sourcePrompt: "Add 100uL of 50/50 Trypsin-EDTA/DMEM with 10% FBS to wells A2:H6"
+        actions:
+          - action: create_container
+            labware: "96-well plate"
+          - action: add_material
+            labware: "96-well plate"
+            volumeUl: 100
+            targetWells: [A2:H6]
+            # SWEEP-CALIB U2: the composition MUST ride the canonical
+            # `params.composition` form (the taught grammar; the live model's
+            # green-baseline shorthand 20261101T225814Z used exactly this).
+            # A top-level `composition:` sibling is NON-canonical: the
+            # deterministic compiler then fires the per-component material
+            # ambiguous-noun bars (3) IN ADDITION to composition-fraction-sum
+            # (1) => 4 requests => ChatLog renders the GROUPED card
+            # (chat-clarification-*, not chat-log-request-*) and J2's pinned
+            # single-card selector never matches (the post-CARD-1 fake-red).
+            params:
+              composition:
+                - { material: "Trypsin-EDTA", role: other, fraction: "50%" }
+                - { material: "DMEM", role: buffer_component, fraction: "50%" }
+                - { material: "FBS", role: additive, fraction: "10%" }
+    turn2:
+      intent: event_shorthand
+      shorthand: |
+        intentId: add-trypsin-dmem-fbs
+        sourcePrompt: "Add 100uL of 50/50 Trypsin-EDTA/DMEM with 10% FBS to wells A2:H6"
+        actions:
+          - action: add_material
+            labware: "96-well plate"
+            volumeUl: 100
+            targetWells: [A2:H6]
+            # SWEEP-CALIB U2: canonical `params.composition` (same seam as
+            # turn1). Fractions sum to 100 so the composition-fraction-sum
+            # bar does not fire; the canonical form also avoids the
+            # non-canonical top-level `composition:` multi-request trap.
+            params:
+              composition:
+                - { material: "Trypsin-EDTA", role: other, fraction: "45%" }
+                - { material: "DMEM", role: buffer_component, fraction: "45%" }
+                - { material: "FBS", role: additive, fraction: "10%" }
+
+  # J3 — protocol-edit via chat. step-lyse exists on the scratch copy
+  # (XDR-JOURNEYS-3, a copy of XDR-w28-gate0001). The op sets the step's label
+  # to the asserted string so the expectedSha round trip lands the write.
+  J3:
+    prompt_contains: "step-lyse"
+    turn1:
+      intent: protocol_edit
+      ops:
+        - op: step_update
+          stepId: step-lyse
+          label: "Lyse the sample (journeys J3)"
+
+  # CHATHOST-SWEEP — §6 LEG-C6-SWEEP-DEBT: the ONE block that serves ALL six
+  # inventory chat hosts. The driver's sweep probe asks the single shared
+  # prompt CHATHOST_SWEEP_PROMPT (run-journeys.py) on every host; this block
+  # is keyed by that prompt (prompt_contains), so there is no per-host code
+  # and no per-host prompt string anywhere. The completion is the minimal
+  # host-agnostic agent_intent — one symbolic mix action over a symbolic
+  # wellset token, the same live-proven shape as J1 — so the deterministic
+  # compiler renders a clean, user-visible answer (an intent card) on ANY
+  # host's universal chat pane without fabricating events or assuming
+  # host-specific context (no create_container, no material, no attached
+  # protocol). One turn only: pick_completion falls back to turn1 on the
+  # answer turn, so a block with turn1 is complete.
+  CHATHOST-SWEEP:
+    prompt_contains: "CHATHOST-SWEEP probe"
+    turn1:
+      intent: event_shorthand
+      shorthand: |
+        intentId: chathost-sweep-probe
+        actions:
+          - action: mix
+            wells: all-wells

@@ -78,6 +78,30 @@ describe('graph/labware WellTooltip', () => {
     expect(meta?.textContent).toBe('1 mM · 100.0 µL')
   })
 
+  // L2-COMPBIND-u14 unit 14: the graph tooltip must render concentration
+  // through formatLadderedConcentration (matching the deck-view tooltip),
+  // so a ghost/dosed well shows the laddered concentration (e.g. "1.5 mM")
+  // instead of the raw formatComputedConcentration form ("0.0015 M").
+  it('concentration renders via laddered formatter (not raw formatComputedConcentration)', () => {
+    const { container } = renderTooltip((labwareId) => ({
+      eventId: 'evt-laddered-conc',
+      event_type: 'add_material',
+      details: {
+        labwareId,
+        wells: ['A1'],
+        material_ref: { kind: 'ontology', id: 'CHEBI:12345', namespace: 'CHEBI', label: 'ghost-reagent' },
+        volume: { value: 50, unit: 'uL' },
+        concentration: { value: 0.0015, unit: 'M' },
+      },
+    }))
+
+    const meta = container.querySelector('.well-tooltip__material-meta')
+    // formatLadderedConcentration converts 0.0015 M → "1.5 mM";
+    // formatComputedConcentration leaves it as "0.0015 M"
+    expect(meta?.textContent).toContain('1.5 mM')
+    expect(meta?.textContent).not.toContain('0.0015 M')
+  })
+
   // CELLRATE-1 twin leg: the post-fix rate-only shape keeps the declared rate
   // and shows the per-well total LABELED derived with the operands readable.
   it('rate-only cells row: declared rate kept, per-well total shown labeled derived', () => {

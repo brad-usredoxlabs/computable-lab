@@ -393,7 +393,7 @@ function collectParts(e: Dict, details: Dict, mentions: PromptMention[] = []): R
 
   const text = eventSearchText(e, details);
   const mentionParts = mentions
-    .filter((mention) => mention.type === 'material' && mention.entityKind === 'material')
+    .filter((mention) => mention.type === 'material' && (mention.entityKind === 'material' || mention.entityKind === 'material-spec'))
     .filter((mention) => mentionMatchesText(mention, text))
     .flatMap((mention) => {
       const part = partFromMention(mention, text);
@@ -643,6 +643,62 @@ function trySplitMixedBiologicalAdd<T>(e: Dict, details: Dict, parts: RefPart[],
 }
 
 /**
+ * Expand a formulation material-spec record into a composition snapshot.
+ * Returns { ref, snapshot, formulationKind? } on success, null otherwise.
+ * Passthrough only — never infers roles or concentrations.
+ */
+async function expandFormulationComposition(
+  ref: Dict,
+  store: RecordStore | undefined,
+): Promise<{ ref: Dict; snapshot: Dict[]; formulationKind?: string } | null> {
+  if (!store || ref.kind !== 'record') return null;
+  const id = stringValue(ref.id);
+  if (!id) return null;
+
+  const envelope = await store.get(id).catch(() => null);
+  if (!envelope) return null;
+  const payload = asDict(envelope?.payload);
+  if (!payload || payload.kind !== 'material-spec') return null;
+
+  const formulation = asDict(payload.formulation);
+  const composition = Array.isArray(formulation?.composition) ? formulation.composition : [];
+  if (composition.length === 0) return null;
+
+  const entries: Dict[] = [];
+  for (const raw of composition) {
+    const entry = asDict(raw);
+    if (!entry) continue;
+    const componentRef = asDict(entry.component_ref);
+    if (!componentRef) continue;
+    const role = normalizeRole(entry.role);
+    if (!role) continue;
+
+    const conc = concentrationValue(entry.concentration);
+    const participation = declaredParticipation(entry.participation);
+    const source = stringValue(entry.source);
+    const nested = Array.isArray(entry.composition) ? entry.composition : undefined;
+
+    entries.push({
+      component_ref: componentRef,
+      role,
+      ...(participation ? { participation } : {}),
+      ...(conc ? { concentration: conc } : {}),
+      ...(source ? { source } : {}),
+      ...(nested ? { composition: nested } : {}),
+    });
+  }
+
+  if (entries.length < 2) return null;
+
+  const formulationKind = stringValue(payload.formulation_kind);
+  return {
+    ref: { ...ref, type: 'material-spec' },
+    snapshot: entries,
+    ...(formulationKind ? { formulationKind } : {}),
+  };
+}
+
+/**
  * Normalize material references on drafted add_material events. See module doc.
  * Store-backed sibling refs are preserved only when the referenced record exists.
  * Missing/fabricated ALQ/MSP/MINST/VP refs are stripped and rebuilt from
@@ -661,6 +717,25 @@ export async function enrichAddMaterialRefs<T>(
       const rawDetails = asDict(e.details) ?? {};
       const sanitized = await stripMissingRecordRefs(rawDetails, options.store);
       const details = stripLegacyMaterialScalarFields(sanitized.details);
+
+      // Arm 1 — expand a bound material_spec_ref into composition_snapshot
+      if (!sanitized.stripped) {
+        const existingSnapshot = Array.isArray(details.composition_snapshot)
+          ? (details.composition_snapshot as unknown[])
+          : [];
+        if (existingSnapshot.length === 0) {
+          const msr = details.material_spec_ref;
+          if (msr && asDict(msr)?.kind === 'record') {
+            const expanded = await expandFormulationComposition(asDict(msr)!, options.store);
+            if (expanded) {
+              const expandedDetails: Dict = { ...details, material_ref: expanded.ref, material_spec_ref: expanded.ref, composition_snapshot: expanded.snapshot };
+              if (expanded.formulationKind) expandedDetails.formulation_kind = expanded.formulationKind;
+              return [withDetailsIfChanged(ev, rawDetails, expandedDetails)];
+            }
+          }
+        }
+      }
+
       const hasSiblingRef = Object.keys(RECORD_REF_FIELDS).some((field) => details[field] !== undefined);
       if (hasSiblingRef && !sanitized.stripped) return [withDetailsIfChanged(ev, rawDetails, details)];
 
@@ -680,6 +755,18 @@ export async function enrichAddMaterialRefs<T>(
       const existingSnapshot = Array.isArray(details.composition_snapshot)
         ? (details.composition_snapshot as unknown[])
         : [];
+
+      // Arm 2 — expand single formulation ref into composition_snapshot
+      if (refs.length === 1 && existingSnapshot.length === 0) {
+        const expanded = await expandFormulationComposition(refs[0]!, options.store);
+        if (expanded) {
+          next.material_ref = expanded.ref;
+          next.material_spec_ref = expanded.ref;
+          next.composition_snapshot = expanded.snapshot;
+          if (expanded.formulationKind) next.formulation_kind = expanded.formulationKind;
+        }
+      }
+
       if (refs.length > 1 && existingSnapshot.length === 0) {
         // One ledger line per component: the well engine renders snapshot
         // entries individually, so a mixture stops collapsing onto one line.
@@ -696,4 +783,31 @@ export async function enrichAddMaterialRefs<T>(
     }),
   );
   return dedupeExactAddMaterialEvents(chunks.flat());
+}
+
+/**
+ * Enrich compiler-draft events through enrichAddMaterialRefs.
+ * A thin wrapper: absent/empty events ⇒ return the SAME
+ * object; otherwise runs enrichAddMaterialRefs over the events array.
+ *
+ * Does NOT mint draft refs for label-only materials — that fabrication
+ * breaks graph parity with the deterministic compiler. The model-tool
+ * branch mints via `toMaterialRef` (separate path) and is unaffected.
+ *
+ * The compiler owns material_ref on this path (ruling SCIENCE-shorthand-materialref-l2t2650).
+ * enrichAddMaterialRefs can write material_ref on events the compiler did not bind
+ * (latent second writer; writes material_ref at :481) and deletes composition_snapshot
+ * at :523 while stripping draft-only fields, but is a measured no-op on
+ * compiler-emitted events (12/12 unchanged per advc probe).
+ */
+export async function enrichDraftResultEvents<T extends { events?: unknown[] }>(
+  result: T,
+  opts: { labeler: MaterialLabeler } & EnrichAddMaterialRefsOptions,
+): Promise<T> {
+  if (!Array.isArray(result.events) || result.events.length === 0) return result;
+  result.events = await enrichAddMaterialRefs(result.events, opts.labeler, {
+    store: opts.store,
+    ...(opts.mentions ? { mentions: opts.mentions } : {}),
+  });
+  return result;
 }

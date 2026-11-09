@@ -39,9 +39,10 @@ function asString(value: unknown): string {
 
 /** Volume-unit spellings a biologist actually types (µL, ul, ml, L, …). */
 const VOLUME_UNIT_RE = /(?:µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL])\b/;
-/** Count words after a number: cells, beads, particles, units, spheres… */
+/** Count words after a number: cells, beads, particles, units, spheres,
+ *  cycles (mix/pipette cycles — a count the turn can state in prose)… */
 const COUNT_WORD_RE =
-  /\b(cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliter(s)?|microlitres?)\b/;
+  /\b(cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/;
 
 export function isVolumeUnit(unit: string): boolean {
   return VOLUME_UNIT_RE.test(unit.trim());
@@ -71,6 +72,13 @@ export interface StatedQuantity {
   kind: 'volume' | 'count';
 }
 
+/** The ONE amount-with-unit grammar, shared by `extractQuantity` and
+ *  `clauseStatesKind` (ONE-grammar law — this list EXTENDS, never a second).
+ *  Filler window requires a leading LETTER so a well-address digit (B2) can
+ *  never be read as an amount — embedded digits in filler words (HepG2) are
+ *  still allowed. Stateful /g: reset lastIndex before each scan. */
+const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z][a-zA-Z0-9]{0,23}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?|cycles?)\b/gi;
+
 /**
  * Find the `N <unit>` the biologist attached to a material in a sentence.
  * Returns null when no amount-with-unit is associated with that material.
@@ -83,14 +91,10 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
   if (!sentence) return null;
   const haystack = sentence;
   const label = materialLabel.trim();
-  // Number (digits, comma or dot thousand group) + optional filler words + a
-  // unit word. The number class deliberately EXCLUDES whitespace so "10,000"
-  // stays one token and cannot swallow the words after it.
-  const tokenRe = /(\d[\d,\.]*(?:\.\d+)?)\s*(?:[a-zA-Z0-9]{0,24}\s+){0,2}(µl|μl|µL|μL|u[lL]|U[lL]|[mM][lL]|[lL](?![a-zA-Z])|cells?|beads?|particles?|units?|spheroids?|organoids?|colonies?|embryos?|blastocysts?|microcarriers?|microliters?|microlitres?)\b/gi;
-
   let best: StatedQuantity | null = null;
   let bestDist = Infinity;
   let match: RegExpExecArray | null;
+  tokenRe.lastIndex = 0; // stateful /g — fresh scan each call
 
   while ((match = tokenRe.exec(haystack)) !== null) {
     const amount = parseAmount(match[1]!);
@@ -120,6 +124,70 @@ export function extractQuantity(sentence: string, materialLabel: string): Stated
     }
   }
   return best;
+}
+
+/** True when a material-less action's declared-`kind` slot is STATED — the
+ *  DEFAULT-KEEP rule (cycle 9 unit 1 / c8; R1.2: never strip a volume the
+ *  scientist actually stated): EITHER (A) VALUE-MATCH — the turn carries an
+ *  amount-with-unit of `kind` whose amount EQUALS `slotValue` (the
+ *  scientist's number, present in their own words, whatever clause owns it)
+ *  — OR (B) the clause rule (cycle 7 unit 2 / D1; cycle 11 / c10 D1+D2) — a
+ *  CLAUSE naming the action's verb carries an amount-with-unit of `kind`,
+ *  and when `slotValue` is provided that amount's parsed value EQUALS
+ *  `slotValue` (the value-INDEPENDENT clause arm over-KEPT a not-in-turn
+ *  number — c10 D2; with no `slotValue` the added value-check is inert
+ *  but clause segmentation differs from c9 (splitter changed — c12 D1);
+ *  that path is unreachable from production (sole caller always supplies
+ *  `slotValue`). Clause boundary (c8 D2 + c10 D1):
+ *  sentence punctuation (with OR without following whitespace), `,`/`;`, a
+ *  newline, a tab, `&`, and the case-insensitive `then`/`and`/`plus`/`to`
+ *  junction. Over-KEEP of an unrelated SAME-NUMBER amount (the VALUE-MATCH
+ *  arm) is the accepted friction-first trade; over-KEEP of a number NOT in
+ *  the turn and over-STRIP of a stated amount are defects. Reuses the ONE
+ *  grammar via `tokenRe` — no second grammar, no special-case table. */
+export function clauseStatesKind(
+  words: string,
+  verb: string,
+  kind: 'volume' | 'count',
+  slotValue?: number,
+): boolean {
+  const stem = (verb.split('_')[0] ?? verb).trim();
+  if (!stem || !words) return false;
+  const verbRe = new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}\\b`, 'i');
+  const clauses = words
+    .split(/(?<=[.!?])\s*|[,;]+|\n+|\t+|&|\b(?:then|and|plus|to)\b/i)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  const statedInClause = clauses.some((clause) => {
+    if (!verbRe.test(clause)) return false;
+    tokenRe.lastIndex = 0; // stateful /g — fresh scan each clause
+    let m: RegExpExecArray | null;
+    while ((m = tokenRe.exec(clause)) !== null) {
+      const amount = parseAmount(m[1]!);
+      if (amount === null) continue;
+      // c10 D2 (cycle 11): when the slot's value is known, the clause arm is
+      // the VALUE-MATCH restricted to the verb clause — a same-kind amount
+      // keeps the slot only when its parsed value EQUALS the slot value.
+      // `slotValue === undefined` makes the added value-check inert; but
+      // clause segmentation differs from c9 (splitter changed — c12 D1) so
+      // a decimal can fragment via the no-whitespace punctuation arm.
+      // Production never reaches this path (sole caller supplies slotValue).
+      if (slotValue !== undefined && amount !== slotValue) continue;
+      const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
+      if (volumeUnit === (kind === 'volume')) return true;
+    }
+    return false;
+  });
+  if (statedInClause) return true;
+  if (slotValue === undefined) return false;
+  tokenRe.lastIndex = 0; // stateful /g — fresh scan of the whole turn
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(words)) !== null) {
+    if (parseAmount(m[1]!) !== slotValue) continue;
+    const volumeUnit = /^[µμuU][lL]$|^[mM][lL]$|^[lL]$/.test(m[2]!);
+    if (volumeUnit === (kind === 'volume')) return true;
+  }
+  return false;
 }
 
 export interface QuantityReconciliation {

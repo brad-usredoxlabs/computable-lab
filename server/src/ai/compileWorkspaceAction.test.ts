@@ -303,6 +303,34 @@ describe('compileWorkspaceAction — surface check (registry membership only)', 
     expect(result.diagnostics[0]!.code).toBe('UNSUPPORTED_SURFACE');
   });
 
+  it('same-surface target-less open-surface -> MISSING_TARGET naming declared tabs', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences' },
+      { ...deps(), requestingSurface: 'sequences' },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics[0]!.code).toBe('MISSING_TARGET');
+    // Message names the surface and every declared tab (dynamic, not hardcoded).
+    const tabs = deps().surfaces.get('sequences')!.tabs;
+    for (const tab of tabs) {
+      expect(result.diagnostics[0]!.message).toContain(tab);
+    }
+    // Actionable sentence, not an Ajv dump.
+    expect(result.diagnostics[0]!.message).not.toContain('Ajv');
+    expect(result.diagnostics[0]!.message).not.toContain('must have required property');
+  });
+
+  it('same-surface open-surface WITH target -> ok:true (target-aware guard)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } },
+      { ...deps(), requestingSurface: 'sequences' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.target).toMatchObject({ kind: 'sequence-tab', tab: 'Analysis' });
+  });
+
   it('a registered surface id compiles open-surface with no target', async () => {
     const result = await compileWorkspaceAction(
       { action: 'open-surface', surface: 'analysis', contextNote: 'open the analysis surface' },
@@ -312,6 +340,26 @@ describe('compileWorkspaceAction — surface check (registry membership only)', 
     if (!result.ok) return;
     expect(result.action).toMatchObject({ action: 'open-surface', surface: 'analysis' });
     expect(result.action.contextNote).toBe('open the analysis surface');
+  });
+
+  it('different-surface target-less open-surface -> ok:true (not MISSING_TARGET)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'analysis' },
+      { ...deps(), requestingSurface: 'sequences' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.surface).toBe('analysis');
+  });
+
+  it('no requestingSurface -> no MISSING_TARGET (PB-CH-1 stubbed callers)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'analysis' },
+      deps(),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.surface).toBe('analysis');
   });
 
   it('open-surface with NO surface -> diagnostic, not an action', async () => {

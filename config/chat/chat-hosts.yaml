@@ -1,0 +1,288 @@
+# CHATHOST-SWEEP-1 Change 1 — the chat-host inventory as DATA.
+#
+# A "chat host" is a ROUTED page that registers the universal chat pane
+# (useSurfaceChat -> useRegisterAiChat — the ONE registrar SurfaceChatBridge,
+# "L2-CHAT-UI-1 LEG C: the universal-chat registrar").
+# Every chat browser gate from now on MUST sweep THIS set: per host, one live round
+# trip with a request-body receipt, or the verdict is not-accept (spec Change 2).
+#
+# THE PRODUCT READS THIS AT BUILD TIME as the mount contract. The ONE registrar
+# (app/src/shared/shell/SurfaceChatBridge.tsx) imports the file via a vite `?raw`
+# import (the participationConvention.ts:16-17 precedent) and resolves each host
+# door's `required_providers` / `optional_providers` / `ghost_mount` from it: the
+# capability facts live here in DATA, and no TypeScript branches on a host name
+# (the `host` prop is passed to a data lookup, never compared). The lane gate
+# machinery (harness/l2-trunk-journeys) and the contract tests import it too.
+# A host is a declarable fact, not a grep memory.
+#
+# ENUMERATED 2026-11-02 by the coder from the registrar/bridge wiring (grep is
+# authority over the spec's screened 6-host starting list). The grep CONFIRMED the
+# spec's 6 hosts as the real, live, routed universal-chat host set.
+#
+#   id  — machine HOST id (the machine contract a browser gate keys its verdict
+#         on; the SWEEP KEY the gate grades on — see the gate note below).
+#   surface — the machine SURFACE id this host posts as AiContext.surface
+#         (app/src/types/aiContext.ts: the union the server reads off every
+#         /api/ai/** request). This is the FOURTH field spec Change 1 names
+#         ("each entry names its surface id — the machine contract the server
+#         reads"); fix1 D3 adds it explicitly so the inventory and the server
+#         contract cannot drift apart. The gate ALSO accepts a `surface:`
+#         value as a verdict-table key (alias of `id`) — see check-gate.py.
+#
+#   THE FOUR-WAY 'analysis' COLLISION (documented, not fixed here): FOUR of
+#   the six hosts post the SAME surface id `analysis` (project-deck-tab,
+#   record-host, artifact-host, registry-host — see each entry's `surface:`
+#   below). `analysis` is the declared no-params AiContext surface: the server
+#   disambiguates those hosts by the record/artifact/registry-scoped thread
+#   scope (or the scratch-study "_" scope for registry-host), NOT by a unique
+#   surface id. The remaining two hosts post DISTINCT surfaces (run-workspace,
+#   event-editor). Hosts and surfaces are DIFFERENT vocabularies: a sweep must
+#   grade per HOST (the inventory id), because one surface can back many hosts.
+#   NO host id is forced into the AiSurface union (fix1 D4 ruling: hosts and
+#   surfaces are different vocabularies) — only the `surface:` field is a
+#   member of that union, pinned by the contract test (see below).
+#
+#   mount — the registrar component + file:line that registers the chat.
+#   route — how a browser reaches it (App.tsx route, App.tsx:202-225).
+#   note — how its context reaches the AI request.
+#
+# The `id`s below are the SWEEP KEY. The contract test
+# (app/src/shared/config/chatHostInventory.contract.test.ts) pins that the
+# shorthand-drafting surface list is a SUBSET of these ids (YAML-vs-YAML; the
+# drafting⊆inventory pin) and that every `surface:` field is a member of the
+# app's AiSurface union (read from types/aiContext.ts — the true pin). It does
+# NOT pin `id` membership in the AiSurface union: 4 of the 6 host ids
+# (record-host, artifact-host, registry-host, project-deck-tab) are NOT
+# AiSurface members by design — host id ≠ surface id (fix1 D4: the prior
+# "every id is a member of the AiSurface union" claim was FALSE and is
+# corrected here and in the report; the hosts are NOT forced into the union).
+#
+# =============================================================================
+# EXCLUDED by the grep (verified, NOT in this set) — so a future sweep does not
+# "discover" them as hosts:
+#   - app/src/graph/RunWorkspacePage.tsx:69  useSurfaceChat — DEAD page: its own
+#     header says "imported by nothing (no route serves it; the /runs/:runId route
+#     lazy-imports run/RunWorkspacePage)". Not a host.
+#   - app/src/graph/LabwareEventEditor.tsx:1022  useSurfaceChat — reachable ONLY via
+#     the ?screen=labware-editor&fixture= fixture boot (main.tsx:11-31) + RunEditorRouter
+#     (itself unrouted). Not a normal app route -> not a host.
+#   - legacy useRegisterAiChat pages (literature/LiteratureBody, sequences/SequencesPage,
+#     protocol-ide/ProtocolIdePage, ingestion vendor-pdf ReviewAiPanel, analysis/
+#     AnalysisChatPanel, editor Formulations/Materials) — the PRE-universal-chat
+#     generation (AiTabPanel-era). The defect class + this item scope the sweep to the
+#     universal-chat host family. Surfaced here so the exclusion is a declared fact,
+#     never a silent grep miss.
+# =============================================================================
+
+hosts:
+  - id: run-workspace
+    surface: run-workspace
+    mount: app/src/run/RunWorkspacePage.tsx:184 <SurfaceChatBridge host="run-workspace"> (the ONE registrar, INSIDE EventEditorProvider); deck slice publisher <DeckChatSlice/> at app/src/run/RunWorkspacePage.tsx:183 (app/src/event-editor/deck/DeckChatSlice.tsx:238) — no second door
+    route: /runs/:runId  (App.tsx:202)
+    required_providers: [deck]
+    optional_providers: []
+    ghost_mount: true
+    # D-6 (l2t0150) A-leg: the host's assistant-answer render selector as
+    # DATA — the universal ChatLog log root (role=log,
+    # aria-label="Conversation", ChatLog.tsx:391) that contains this host's
+    # assistant rows (the row classes are the ONE universal set the driver
+    # matches: D-6 B-now). The sweep injects this value as the probe's
+    # `log_selector`. All six hosts render through the ONE SurfaceChatBridge
+    # -> ChatLog, so one value is universal — DATA per row, never a per-host
+    # code branch.
+    answer_selector: '[aria-label="Conversation"]'
+    note: >-
+      AiContext.surface 'run-workspace' (RunWorkspacePage.tsx:102). The ONE registrar
+      (host="run-workspace") mounts INSIDE EventEditorProvider and passes its own base
+      context (the run surface/summary/editorMode) to the ONE collector
+      (app/src/shared/lib/collectSurfaceContext.ts). The J1 selectedWells channel rides the
+      deck slice: <DeckChatSlice/> (:183) publishes the editor's live selection as
+      contextPatch.selectedWells (the object form, DeckChatSlice.tsx:182-184) and the
+      collector merges it into the posted AiContext (the /api/ai/** request body) — the run
+      door keeps its 'run-workspace' surface (only a generic 'analysis' base yields to the
+      deck slice's surface). Event-drafting shorthand surface (config/drafting/shorthand-
+      drafting.yaml).
+
+  - id: event-editor
+    surface: event-editor
+    mount: app/src/shared/shell/DeckHostPage.tsx:148 <SurfaceChatBridge host="event-editor"> (the ONE registrar, INSIDE EventEditorProvider); deck slice publisher <DeckChatSlice/> at app/src/shared/shell/DeckHostPage.tsx:147 (app/src/event-editor/deck/DeckChatSlice.tsx:238) — no second door
+    route: /deck/:eventGraphId/:runId?  (App.tsx:212)
+    required_providers: [deck]
+    optional_providers: []
+    ghost_mount: true
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
+    # CHATHOST-CONSOLIDATE-1: the REAL record this record-by-id host must
+    # mount for its probe to OPEN (the deck /deck/:eventGraphId fetches its
+    # event graph by eventGraphId on mount). DATA, read BY ID by the probe
+    # builder (no per-host code) and materialised through the SAME
+    # seed_journey / teardown_journey machinery every journey uses. recordId
+    # == the probe's :eventGraphId token (probe_nav_path substitutes it to
+    # CHATHOST-PROBE — the same token goto navigates to). MINIMAL J1 shape:
+    # the deck's chat affordance (right-pane tab strip) mounts UNCONDITIONALLY
+    # once the graph loads — there is NO labware/placement gate before the
+    # chat pane (verified in the live tree: DeckHostPage renders rightPane
+    # once meta exists; RightPane's AI/Search/Details/Protocol strip and
+    # DeckChatSlice mount without labwares). A minimal J1 (status draft,
+    # events []) is therefore sufficient — labwares/editorLayout are NOT
+    # needed to mount the chat affordance (verified, not guessed). Empirical
+    # shape (live :3093): POST 201 -> GET 200 -> GET /api/ui/record/.../editor
+    # 200 (blocks present) -> DELETE 200 -> GET 404.
+    probe_seed:
+      record:
+        recordId: CHATHOST-PROBE
+        schemaId: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+        payload:
+          id: CHATHOST-PROBE
+          recordId: CHATHOST-PROBE
+          kind: event-graph
+          name: L2 chat-host probe event graph (TEST DATA)
+          status: draft
+          events: []
+          labwares: []
+      teardown:
+        delete_record: CHATHOST-PROBE
+    note: >-
+      AiContext.surface 'event-editor' — the deck slice declares it (DeckChatSlice.tsx:41,
+      :146) and the collector posts it for this door: the registrar mounts without a
+      page-local base (the generic 'analysis' base, SurfaceChatBridge.tsx:158), so the deck
+      slice's surface wins (app/src/shared/lib/collectSurfaceContext.ts:148). The deck pane
+      posts the selectedWells/sourceSelection channels via the deck slice's contextPatch
+      (the projection, DeckChatSlice.tsx:84-90, :182-184; J1/J2 journeys ride it).
+      Event-drafting shorthand surface (config/drafting/shorthand-drafting.yaml).
+
+  - id: project-deck-tab
+    surface: analysis   # four-way collision: same surface as record/artifact/registry-host
+    mount: app/src/event-editor/projects/ProjectWorkspacePage.tsx:83 <ProjectWorkspaceDoor> (page-level, ABOVE EventEditorProvider — the ONE registrar, host="project-deck-tab", :132); deck branch :287 renders <DeckChatSlice/> (the deck slice publisher) — no second door
+    route: /project/:studyId  and  /project/:studyId/event-graph/:eventGraphId  (App.tsx:178-179)
+    required_providers: []
+    optional_providers: [deck]
+    ghost_mount: true
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
+    note: >-
+      THE LEG-F SURVIVOR (the fix ships in this branch). The page-level door
+      (ProjectWorkspaceDoor -> the ONE registrar, host="project-deck-tab", mounted ABOVE
+      EventEditorProvider at ProjectWorkspacePage.tsx:83) registers on EVERY tab, so on a
+      non-deck tab it sends {studyId, activeTabKind} — no labwares/events/selection; on a
+      deck tab the deck slice is published from INSIDE the provider (DeckChatSlice,
+      ProjectWorkspacePage.tsx:287) and the page-level registrar collects it through the
+      app-level slice store (position-independent — the store, not a context), so the door
+      no longer stands down. AiContext.surface 'analysis' (ProjectWorkspacePage.tsx:111).
+      This was the host LEG F's gate was structurally blind to (green gate, dead UI) —
+      it is in the inventory so no future gate can repeat the miss.
+
+  - id: record-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/artifact/registry-host
+    mount: app/src/shared/shell/RecordHostPage.tsx:198 <RecordSurfaceChat> (app/src/shared/shell/RecordHostPage.tsx:53 SurfaceChatBridge)
+    route: /record/:recordId  and  /record/new/:nodeType/:parentId?  (App.tsx:208-209)
+    required_providers: []
+    optional_providers: []
+    ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
+    # CHATHOST-CONSOLIDATE-1: the REAL record this record-by-id host must
+    # mount for its probe to OPEN (the record host /record/:recordId fetches
+    # its record by recordId on mount). DATA, read BY ID by the probe builder
+    # (no per-host code) and materialised through the SAME seed_journey /
+    # teardown_journey machinery every journey uses. recordId == the probe's
+    # :recordId token (probe_nav_path substitutes it to CHATHOST-PROBE — the
+    # same token goto navigates to). OPENABLE SHAPE — DETERMINED EMPIRICALLY
+    # (real GET/POST against live :3093, recorded so the fixture is evidenced,
+    # not guessed): a MINIMAL ALIQUOT. The record host is schema-generic
+    # (RecordHostPage -> the UI spec loader projects the record's schema into
+    # editable blocks/slots); the aliquot schema is one of the lab schemas
+    # proven to project. Minimal = kind + id + ONE valid ref (the aliquot
+    # anyOf requires material_spec_ref | parent_aliquot_ref |
+    # parent_material_instance_ref; the minimal ref is an ontology ref with
+    # kind/namespace/id/label). The payload carries NO top-level recordId:
+    # the store derives the record id from the payload's `id` field
+    # (RecordParser RECORD_ID_FIELDS = [recordId, id]), so recordId == id ==
+    # the probe token. Empirical proof (live :3093):
+    #   POST /api/records {aliquot} -> 201
+    #   GET  /api/records/CHATHOST-PROBE -> 200
+    #   GET  /api/ui/record/CHATHOST-PROBE/editor -> 200 (2 blocks, Identity +
+    #        material sections, real slots — the record host OPENS for
+    #        editing, no load error)
+    #   DELETE -> 200 ; GET -> 404
+    probe_seed:
+      record:
+        recordId: CHATHOST-PROBE
+        schemaId: https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml
+        payload:
+          kind: aliquot
+          id: CHATHOST-PROBE
+          material_spec_ref:
+            kind: ontology
+            namespace: ChEBI
+            id: CHEBI:16236
+            label: water
+      teardown:
+        delete_record: CHATHOST-PROBE
+    note: >-
+      AiContext.surface 'analysis' (RecordHostPage.tsx:41). Thread-scoped on the recordId
+      (one conversation per record). Context = the record being created/edited + owning study.
+
+  - id: artifact-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/record/registry-host
+    mount: app/src/shared/shell/ArtifactHostPage.tsx:49 <SurfaceChatBridge>
+    route: /artifact/:kind/:artifactId  (App.tsx:205)
+    required_providers: []
+    optional_providers: []
+    ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
+    note: >-
+      AiContext.surface 'analysis' (ArtifactHostPage.tsx:40). Thread-scoped on the artifactId.
+      Context = the artifact + its study.
+
+  - id: registry-host
+    surface: analysis   # four-way collision: same surface as project-deck-tab/record/artifact-host
+    mount: app/src/shared/shell/RegistryHostPage.tsx:77 <RegistrySurfaceChat> (app/src/shared/shell/RegistryHostPage.tsx:51 SurfaceChatBridge)
+    route: /registry  (App.tsx:225)
+    required_providers: []
+    optional_providers: []
+    ghost_mount: false
+    # D-6 (l2t0150) A-leg: assistant-answer render selector (DATA) — the
+    # universal ChatLog log root (same registrar as every other host).
+    answer_selector: '[aria-label="Conversation"]'
+    note: >-
+      AiContext.surface 'analysis' (RegistryHostPage.tsx:41). Not instance-scoped (rides the
+      scratch study) -> the server's reserved "_" thread scope. Context follows the live
+      record-selection pointer via WorkspaceContext (RecordRegistryPage re-targets the active
+      tab). This is the bridge's home surface (the '.' / '..' refusal pin lives in
+      RegistryHostPage.surfaceChat.test.tsx).
+
+# =============================================================================
+# SLICES — the closed vocabulary that `required_providers` / `optional_providers`
+# draw from (§2.3). A slice id names a PUBLISHED STATE BUNDLE, never a host id
+# and never a `surface:` value: the three vocabularies (host ids, surface values,
+# slice ids) stay DISJOINT, pinned by the contract test (chatDoorRegistry.
+# contract.test.ts). Only `deck` is ever *required*; `workspace` and
+# `protocol-selection` are consumed by the collector when published. A slice is
+# a declared fact about a provider's published state, not a host and not a route.
+#   id        — the slice id.
+#   publisher — the file:line of the slice's usePublishSurfaceSlice call (the truth
+#     pin 3 reads). When a slice is deliberately NOT PUBLISHED (spec §8.4: the
+#     collector does not consume it) the value names the owning provider and carries a
+#     NOT PUBLISHED marker; pin 3 greps app/src for contradicting call sites, so a
+#     pointer can no longer name a file that publishes nothing.
+#   carries   — what the bundle carries (prose, not a schema).
+# =============================================================================
+slices:
+  - id: deck
+    publisher: "app/src/event-editor/deck/DeckChatSlice.tsx:238 — usePublishSurfaceSlice('deck', bundle); the only publisher of this slice in app/src (the EventEditorProvider it reads, EventEditorContext.tsx, publishes nothing itself)"
+    carries: >-
+      event graph, labwares, placements, well selection, staged preview, deck scope
+  - id: workspace
+    publisher: "app/src/event-editor/workspace/WorkspaceContext.tsx:89 — NOT PUBLISHED — no usePublishSurfaceSlice('workspace') call exists in app/src (spec §8.4: a slice the collector does not consume need not be published — the collector's CollectorSlices carries no workspace slice, collectSurfaceContext.ts:86-89). The named provider owns the state the slice carries; it publishes nothing today. The entry stays declared so the id remains a declared fact."
+    carries: >-
+      studyId, active tab (kind, recordId, artifactId, eventGraphId)
+  - id: protocol-selection
+    publisher: "app/src/event-editor/protocol/ProtocolSelectionContext.tsx:160 — NOT PUBLISHED — no usePublishSurfaceSlice('protocol-selection') call exists in app/src (the registrar reads the focused step directly from this provider, SurfaceChatBridge.tsx:200; §8.4 forbids publishing a slice the collector does not consume). The named provider owns the state the slice carries; it publishes nothing today. The entry stays declared so the id remains a declared fact."
+    carries: >-
+      focused step (ordinal, label) — the pane's working-focus box only

@@ -10,9 +10,13 @@ import {
   buildPreviewWellIndex,
   previewLawnPlacements,
 } from '../lib/previewProjection'
+import { buildEventWellIndex } from '../lib/eventWellIndex'
 import type { Labware } from '../../types/labware'
+import type { WellId } from '../../types/plate'
 import type { LawnSurfaceId, EventEditorPlacement } from '../types'
 import { DEFAULT_LAWN_SURFACE_ID } from '../types'
+
+const EMPTY_WELL_SET: ReadonlySet<WellId> = new Set()
 
 interface LawnSurfaceProps {
   widthMm: number
@@ -67,7 +71,28 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
     [state.placements, surfaceId],
   )
 
-  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview, [...new Set(state.placements.map((p) => p.labwareId))]), [state.preview, state.placements])
+  // L2-SUITE-A-uifix1 D4: the per-well footprint data source (committed +
+  // preview events' details.wells) — the lawn tiles mark the actual wells
+  // the events touch, staged OR accepted (same index as the slot surface).
+  const eventWellIndex = useMemo(
+    () =>
+      buildEventWellIndex(
+        state.events,
+        state.preview,
+        state.committedOfferByEvent,
+        // L2-SUITE-A-uifix2 FIX2 (D2): the deck's placed vessels — the
+        // attribution fallback for a well-bearing committed event that names
+        // no labware and carries no offer binding (same index as the slot
+        // surface).
+        [...new Set(state.placements.map((p) => p.labwareId))],
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS
+        // marker — a batch that offered MORE THAN ONE distinct vessel
+        // forbids the placed-vessel fallback (never guess its target).
+        state.committedOfferAmbiguousByEvent,
+      ),
+    [state.events, state.preview, state.committedOfferByEvent, state.placements, state.committedOfferAmbiguousByEvent],
+  )
   const ghostLawnPlacements = useMemo(
     () =>
       previewLawnPlacements(state.preview).filter(
@@ -267,6 +292,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
           const leftPx = Math.round(placement.location.xMm / scale)
           const topPx = Math.round(placement.location.yMm / scale)
           const affected = previewIndex.byLabware.has(placement.labwareId)
+          const affectedWells = eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET
           return (
             <div
               key={placement.placementId}
@@ -281,6 +307,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
                 width={tileSize.w}
                 height={tileSize.h}
                 affected={affected}
+                affectedWells={affectedWells}
                 onRemove={() => actions.removePlacement(placement.placementId)}
                 onFocus={() => actions.setFocus(placement.placementId)}
                 onRotate={() => {
@@ -345,6 +372,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
           const tileSize = isPortrait ? LAWN_TILE_PORTRAIT : LAWN_TILE_LANDSCAPE
           const leftPx = Math.round(placement.location.xMm / scale)
           const topPx = Math.round(placement.location.yMm / scale)
+          const ghostAffectedWells = eventWellIndex.get(placement.labwareId) ?? EMPTY_WELL_SET
           return (
             <div
               key={`ghost-${placement.placementId}`}
@@ -359,6 +387,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
                 width={tileSize.w}
                 height={tileSize.h}
                 ghost
+                affectedWells={ghostAffectedWells}
                 onFocus={() => actions.setFocus(placement.placementId)}
               />
             </div>

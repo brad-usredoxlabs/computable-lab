@@ -680,6 +680,7 @@ export function DualLabwarePane({
             labwareId={hoveredWell.labwareId}
             events={displayEvents}
             computedStates={computedStates}
+            labwares={displayLabwares}
             semanticInfo={
               hoveredWell.labwareId === sourceLabware?.labwareId
                 ? sourceTooltipMeta?.get(hoveredWell.wellId)

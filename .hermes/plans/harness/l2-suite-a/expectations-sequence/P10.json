@@ -1,0 +1,8 @@
+{
+  "deterministic": false,
+  "verdict_in": ["proposal", "honest-failure"],
+  "grounding_required": true,
+  "navigation_surface": "sequences",
+  "require_two_directional_variants": true,
+  "note": "P10 layer (a), OQ3 RULED (c): the TWO-PROPOSAL STRUCTURAL expression is asserted over the complete held-session proposal set — a save_sequence proposal (the AI-authored reverse-complement residues; model-complement CORRECTNESS is never asserted, B4) PLUS two run_blastn proposals with IDENTICAL parameters whose oriented query refs DIFFER (the 5'->3' variant vs the reverse-complement variant). The hold (B5) is asserted on the PRIMARY P10 request: history carries P9's prompt and context.lastActionResult carries P9's result/ids. 'cards' is NOT an honest P10 outcome: the held session already answered the P9 ambiguity, so turn 10 must act (propose or name the wall). Structural-only (B9): channel shapes and ref membership, never prose, never operation-name intent-pinning."
+}

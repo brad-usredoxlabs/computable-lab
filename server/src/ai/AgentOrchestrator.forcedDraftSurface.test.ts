@@ -20,7 +20,7 @@
  * (OQ-2), not silently absorbed.
  *
  * Pins (spec §RED-first test plan):
- *  1. [RED at base] surface=workspace.deck, forceDraftTool:true -> the composed
+ *  1. [RED at base] surface=run-workspace, forceDraftTool:true -> the composed
  *     forced section contains NO event_graph / labwareRequirements token.
  *  2. [GREEN at base, must stay GREEN] surface=event-editor and surface absent
  *     (legacy no-surface callers) -> the composed forced section === the exported
@@ -139,19 +139,31 @@ function forcedSection(system: string): string {
 }
 
 describe('SH-PROMPT-HYGIENE-1 — forced-draft instruction per drafting surface', () => {
-  it('pin 1 [RED at base]: the shorthand surface (workspace.deck) forced section names NO event_graph / labwareRequirements token', async () => {
-    const section = forcedSection(await runSystem('workspace.deck'));
+  it('pin 1 [RED at base]: the shorthand surface (run-workspace) forced section names NO event_graph / labwareRequirements token', async () => {
+    const section = forcedSection(await runSystem('run-workspace'));
     expect(section).not.toMatch(/event_graph|labwareRequirements/);
   });
 
-  it('pin 2 [byte-stability]: event-editor and no-surface callers get the exported const VERBATIM (strict equality)', async () => {
-    expect(forcedSection(await runSystem('event-editor'))).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
+  it('pin 2 [byte-stability]: a NON-shorthand surface and no-surface callers get the exported const VERBATIM (strict equality)', async () => {
+    // 2026-10-31 ANSWER-CHANNEL: `event-editor` (the /deck/:id deck chat) is now
+    // a DECLARED shorthand surface — the campaign's own fixture called it "the
+    // run chat (surface workspace.deck)" while no client ever sent that id, so
+    // the deck chat was being told to draft raw event JSON. `protocol-builder`
+    // is the non-migrated control that still takes the strict-equality arm.
+    expect(forcedSection(await runSystem('protocol-builder'))).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
     expect(forcedSection(await runSystem())).toBe(FORCED_DRAFT_TOOL_INSTRUCTION);
   });
 
-  it('pin 3 [warm/real parity]: buildPrefixRequest and run() render the identical forced section on workspace.deck (selection lives inside buildPrefixRequest — bait #5)', async () => {
-    const warm = forcedSection(await warmSystem('workspace.deck'));
-    const real = forcedSection(await runSystem('workspace.deck'));
+  it('pin 2b: the deck chat (event-editor) composes the SHORTHAND instruction, like the run chat', async () => {
+    const draftTool = (await import('./AgentOrchestrator.js')).FORCED_DRAFT_TOOL_INSTRUCTION;
+    const deckSection = forcedSection(await runSystem('event-editor'));
+    expect(deckSection).not.toBe(draftTool);
+    expect(deckSection).not.toMatch(/event_graph|labwareRequirements/);
+  });
+
+  it('pin 3 [warm/real parity]: buildPrefixRequest and run() render the identical forced section on run-workspace (selection lives inside buildPrefixRequest — bait #5)', async () => {
+    const warm = forcedSection(await warmSystem('run-workspace'));
+    const real = forcedSection(await runSystem('run-workspace'));
     expect(warm).toBe(real);
     // Parity extends to the non-migrated arm too.
     expect(forcedSection(await warmSystem('event-editor'))).toBe(forcedSection(await runSystem('event-editor')));
@@ -180,7 +192,7 @@ describe('SH-PROMPT-HYGIENE-1 — forced-draft instruction per drafting surface'
     expect(onlyDisclosed, `variant discloses a verb outside the enum: ${onlyDisclosed.join(', ')}`).toEqual([]);
     expect(onlyEnum, `variant omits an enum verb: ${onlyEnum.join(', ')}`).toEqual([]);
     // The variant is what the deck surface actually composes.
-    expect(forcedSection(await runSystem('workspace.deck'))).toBe(text);
+    expect(forcedSection(await runSystem('run-workspace'))).toBe(text);
   });
 
   it('pin 5 [literal hygiene]: AgentOrchestrator.ts source carries NO quoted surface-name literal (repeatEcho.test.ts:373 idiom)', () => {

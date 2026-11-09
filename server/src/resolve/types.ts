@@ -46,6 +46,9 @@ export interface ProviderHit {
   termKind?: string;
   /** Material/physical domain hint when the hit carries one (e.g. cell_line). */
   domain?: string;
+  /** Present only when true: the record's payload structurally declares a testable
+   * formulation (both concentration and solvent_ref are present objects). */
+  formulationDeclared?: boolean;
 }
 
 /**
@@ -69,6 +72,9 @@ export interface RankedCandidate {
   domain?: string;
   /** Present only on the tier-5 affordance: the free text to mint locally. */
   mint?: { label: string; domain?: string };
+  /** Present only when true: the source record structurally declares a testable
+   * formulation (both concentration and solvent_ref are present objects). */
+  formulationDeclared?: boolean;
 }
 
 /**

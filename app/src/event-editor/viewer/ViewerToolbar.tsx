@@ -41,8 +41,10 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
     case 'collection':
     case 'splash':
     case 'registry':
+    case 'protocol-review':
       // These surfaces carry their own headers inside the viewer body —
-      // no per-surface toolbar.
+      // no per-surface toolbar. (protocol-review is hosted by its own route,
+      // ProtocolReviewHostPage; the tab kind exists so links/URLs round-trip.)
       return null
     case 'execution':
       // Show mode switcher so user can navigate back to plan/deck view.

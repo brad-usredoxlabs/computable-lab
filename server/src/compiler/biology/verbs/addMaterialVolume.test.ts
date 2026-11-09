@@ -78,3 +78,80 @@ describe('add_material expands a compact well range (D3)', () => {
     }
   });
 });
+
+/**
+ * L2-LABSTATE-CONTENTS-1 fix run 3 (architect ruling l2t1050 Q-A, Brad card (A)
+ * 2026-11-02): the CONTENTS-LEDGER CANONICAL SHAPE requires the expander to emit
+ * CONCRETE well addresses, never range strings. The scalar `wells` form expands
+ * through the ONE parser (the leg above); the ARRAY form — the lowered
+ * `targetWells: [A1:H1]` shorthand carrier — must route through the SAME
+ * expandWellTokens call, element by element. A range string left inside the
+ * array becomes a single non-address KEY in the lab_state contents ledger
+ * (wellCount "2 well(s)" where 16 carry materials; the 8-channel column-aligned
+ * shape can never fire). RED at base: the array form fell through unexpanded.
+ */
+describe('add_material expands an ARRAY of well range strings to concrete wells (Q-A canonical shape)', () => {
+  const eventWells = (events: Array<{ details?: unknown }>): string[] =>
+    events.map((e) => (e.details as Record<string, unknown>)['well'] as string);
+
+  it('expands wells: ["A1:H1","A2:H2"] to the 16 CONCRETE per-well events (A1..H1 + A2..H2), no range-string key', () => {
+    const events = getExpander('add_material')!.expand({
+      verb: 'add_material',
+      params: { labware_id: 'plate', wells: ['A1:H1', 'A2:H2'], material: 'beads' },
+    });
+    const wells = eventWells(events);
+    // 8 + 8 concrete per-well events — one per CONCRETE address, not one per range token.
+    // Corner semantics (wellRange.ts): row LETTERS span rows, NUMBERS span columns —
+    // A1:H1 = column 1 across rows A..H (the 8-channel column shape), A2:H2 = column 2.
+    expect(events.length).toBe(16);
+    expect(new Set(wells).size).toBe(16);
+    expect(wells.sort()).toEqual(
+      ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2'].sort(),
+    );
+    // The ledger-consumption contract: every emitted well parses as a well
+    // address — NONE is a range string ("A1:H1" is exactly the defect).
+    for (const w of wells) {
+      expect(w).not.toContain(':');
+    }
+  });
+
+  it('expands a mixed array ["A1","B1:H1"]: the concrete element passes through, the range element expands (dedupe keeps A1 once)', () => {
+    const events = getExpander('add_material')!.expand({
+      verb: 'add_material',
+      params: { labware_id: 'plate', wells: ['A1', 'B1:H1'], material: 'DMEM' },
+    });
+    const wells = eventWells(events);
+    // B1:H1 = column 1 across rows B..H (7 wells) + singleton A1 = 8, A1 deduped to one
+    expect(events.length).toBe(8);
+    expect(wells.sort()).toEqual(['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'].sort());
+    for (const w of wells) {
+      expect(w).not.toContain(':');
+    }
+  });
+
+  it('REGRESSION: a plain concrete array ["A1","B1"] is byte-unchanged (2 events, same keys, no dedupe surprise)', () => {
+    const events = getExpander('add_material')!.expand({
+      verb: 'add_material',
+      params: { labware_id: 'plate', wells: ['A1', 'B1'], material: 'DMEM' },
+    });
+    const wells = eventWells(events);
+    expect(events.length).toBe(2);
+    expect(wells).toEqual(['A1', 'B1']);
+    // per-well legacy branch shape preserved: one details.well each, material carried
+    for (const e of events) {
+      const details = e.details as Record<string, unknown>;
+      expect(details['material']).toBe('DMEM');
+    }
+  });
+
+  it('REGRESSION: the undefined leg is unchanged (no wells, single modern event with details.well)', () => {
+    const events = getExpander('add_material')!.expand({
+      verb: 'add_material',
+      params: { labware_id: 'plate', well: 'C3', material: 'DMEM' },
+    });
+    expect(events.length).toBe(1);
+    const details = events[0]!.details as Record<string, unknown>;
+    expect(details['well']).toBe('C3');
+    expect('wells' in details).toBe(false);
+  });
+});

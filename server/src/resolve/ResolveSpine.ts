@@ -242,6 +242,7 @@ function toCandidate(
     ...(hit.definition ? { definition: hit.definition } : {}),
     ...(hit.termKind ? { termKind: hit.termKind } : {}),
     ...(hit.domain ? { domain: hit.domain } : {}),
+    ...(hit.formulationDeclared ? { formulationDeclared: hit.formulationDeclared } : {}),
   };
 }
 

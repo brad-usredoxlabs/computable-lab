@@ -1,0 +1,58 @@
+{
+  "synthLabel": "SYNTH",
+  "note": "SYNTH — synthetic utterances, REAL store records. Authorized by H-A=YES in ~/.hermes/cl/lanes/2/decisions/MATRESREPLAY-worksheet-answers-brad.md (Brad, 2026-10-26 ~18:1x EDT, [BRAD, BINDS]). Exactly three cases: 2' (known-vendor product MISSING locally), 3 (explicit physical bottle, W-T11 intent), 6 (\"make 1 mL...\" future instruction, W-T12 intent). NO real transcript exists for any of the three (harvest T11/T12/2' recorded absences). Every artifact derived from this file carries the SYNTH label.",
+  "storeBasis": {
+    "store": "/home/brad/.computable-lab/worktrees/main/records/ (live main data repo, read-only)",
+    "replayStoreBasisNote": "D10 (advc-cycle-1): the ABSENCE claims below are true of the LIVE store only. The REPLAYED (harvest) store differs: it does NOT contain MAT-NCIT-C185409 (DMEM — analogs MAT-dmem-ykg0/MAT-XCO-0000988 stand in), and it DOES contain an exact FBS concept local:MAT-fbs-3776 (top spine hit, score 1.15, in both T4 fbs and SYNTH-case6 fbs fates) — so 'FBS -> concept-level mint-on-confirm (no local record)' describes the LIVE store, NOT the replay store. Where the replay store carries an exact record the answers file calls absent, the fate evidence (flood, not absence) governs.",
+    "verifiedPresent_2026-10-26": [
+      { "recordId": "MAT-NCIT-C185409", "kind": "material", "file": "material/MAT-NCIT-C185409__dulbeccos-modified-eagle-medium.yaml", "sha256": "251398681f6112a1380e1093f5c5acfad727468c213aabee77f0a8b81eb53c43" },
+      { "recordId": "MAT-MESH-D056945", "kind": "material", "file": "material/MAT-MESH-D056945__hepg2-cell.yaml", "sha256": "4032d8760d6be41084899efc60a413e70debb851f30ae47fc3405e12379428d8" },
+      { "recordId": "MAT-hep-g2-hepg2-hb-8065-atc-7hdl", "kind": "material", "file": "material/MAT-hep-g2-hepg2-hb-8065-atc-7hdl__hep-g2-hepg2-hb-8065-atcc.yaml", "sha256": "eb7a604e49738ca32a59991b30e2065535550e06c9cdce6033a2c02a3c908f0d" },
+      { "recordId": "VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB", "kind": "vendor-product", "file": "vendor-product/VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB__hep-g2-hepg2-hb-8065-atcc.yaml", "sha256": "e2b4021f24424cd4dd35aba9d96e93d4af11fba129b485c173698830fbf42846" }
+    ],
+    "verifiedAbsent_2026-10-26": [
+      "no record anywhere under the live store contains 'PCS-500', 'HB-9999', 'LOT-20261103', 'B-2024-17', '10% FBS in DMEM', 'NHEK', or 'make 1 mL' (grep -ril over records/: 0 hits each, checked 2026-10-26 ~20:30 EDT)"
+    ]
+  },
+  "turns": [
+    {
+      "id": "SYNTH-case2-prime",
+      "SYNTH": true,
+      "case": "2' known-vendor product MISSING locally (P4 probe: does a known vendor identity wrongly disable/wrongly satisfy product lookup)",
+      "shape_note": "SYNTH — HepG2 ATCC VPR SHAPE (a vendor-product whose catalog identity the lab recognizes), but the vendor product itself has NO local record. Utterance is synthetic; the vendor (ATCC) and the catalog-number FORM are real-world plausible; the specific catalog number HB-9999 is invented and verified ABSENT from the live store.",
+      "utterance": "order note: Hep G2 [HEPG2] - HB-9999 | ATCC",
+      "nouns": ["Hep G2 [HEPG2] - HB-9999 | ATCC", "HB-9999"],
+      "intended_binding_ref": "W-T9 (spectrum attestation) + W-T10 (blank never coerced) by analogy; the case's own intent: this is a KNOWN VENDOR identity that is missing locally — the spine must NOT silently bind the real ATCC HB-8065 records as 'the same thing', must not fabricate a product identity from the catalog-shaped token alone (AC-3), and a remote product lookup is exactly what must NOT be wrongly disabled (F3).",
+      "engine_arms": ["add_material", "wash"],
+      "real_records_referenced_for_shape": ["VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB", "MAT-hep-g2-hepg2-hb-8065-atc-7hdl"],
+      "expected_real_records_TO_BIND": [],
+      "must_not_bind": ["VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB", "MAT-hep-g2-hepg2-hb-8065-atc-7hdl", "MAT-MESH-D056945"]
+    },
+    {
+      "id": "SYNTH-case3-bottle",
+      "SYNTH": true,
+      "case": "3 explicit physical bottle (W-T11 intent)",
+      "shape_note": "SYNTH — utterance names a REAL concept (HepG2, MAT-MESH-D056945) plus an explicit physical bottle with a lot string that exists NOWHERE in the store.",
+      "utterance": "add 100 uL of the HepG2 bottle, lot LOT-20261103, from the culture room fridge, to A1",
+      "nouns": ["HepG2 bottle, lot LOT-20261103", "HepG2"],
+      "intended_binding_ref": "W-T11 [BRAD answers file]: material concept + source reference; the bottle itself must be a real INSTANCE/ALIQUOT record (lot/instance identity), NEVER a name string typed into a material slot. Must not invent the bottle; must not degrade the known concept to unknown-noun.",
+      "engine_arms": ["add_material", "wash"],
+      "real_records_referenced_for_shape": ["MAT-MESH-D056945"],
+      "expected_real_records_TO_BIND": ["MAT-MESH-D056945 at concept level (plus honest instance/aliquot gap for the bottle)"],
+      "must_not_bind": ["any name-string mint that swallows the lot as a material label without instance semantics"]
+    },
+    {
+      "id": "SYNTH-case6-make-1mL",
+      "SYNTH": true,
+      "case": "6 \"make 1 mL...\" not-yet-happened future instruction (W-T12 intent)",
+      "shape_note": "SYNTH — future-tense prep instruction over REAL concept records (DMEM MAT-NCIT-C185409, FBS concept absent locally per the answers file, HepG2 MAT-MESH-D056945). 'make 1 mL...' matches no existing record (verified absent).",
+      "utterance": "tomorrow make 1 mL of 10% FBS in DMEM for the HepG2 passage",
+      "nouns": ["10% FBS in DMEM", "FBS", "DMEM", "HepG2"],
+      "intended_binding_ref": "W-T12 [BRAD answers file]: binds NOTHING as an existing instance; becomes a planned step/recipe with the stated quantity as scientist truth; must not fail as unresolvable; must not invent a lot/bottle that does not exist yet.",
+      "engine_arms": ["add_material"],
+      "real_records_referenced_for_shape": ["MAT-NCIT-C185409", "MAT-MESH-D056945"],
+      "expected_real_records_TO_BIND": ["DMEM -> MAT-NCIT-C185409 (concept; ABSENT from the replayed harvest store — analogs stand in, see storeBasis.replayStoreBasisNote); HepG2 -> MAT-MESH-D056945 (concept); FBS -> concept-level mint-on-confirm per the answers file (LIVE store has no FBS record; NOTE the replayed harvest store DOES carry local:MAT-fbs-3776 — see storeBasis.replayStoreBasisNote)"],
+      "must_not_bind": ["any existing instance/aliquot record (none may be treated as the future product)", "no invented lot"]
+    }
+  ]
+}

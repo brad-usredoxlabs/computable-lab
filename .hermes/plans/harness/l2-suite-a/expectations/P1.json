@@ -1,0 +1,8 @@
+{
+  "prompt": 1,
+  "prompt_text": "Navigate to the freeform manual deck",
+  "expectation_source": "spec per-prompt criteria P1 (B7: assert the OUTCOME — deck on manual_freeform — not the intent name; NEVER prose-only)",
+  "verdict_in": ["events-bound", "cards", "honest-failure", "action-delivered"],
+  "outcome": "deck-manual_freeform",
+  "deterministic": false
+}

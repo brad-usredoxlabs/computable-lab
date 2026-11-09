@@ -1,0 +1,44 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+ ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts  (6 tests | 3 failed) 411ms
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > RED (wire gap): the reading answer reaches the §14.2 RECORD leg via scientistAnswers — the fraction bar settles, ZERO model calls on the answer turn
+     → expected the fold leg to consume the turn; logs:
+[agent jvezg2] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent jvezg2] skipping compiler preflight for forced draft tool mode
+[agent jvezg2] tools=1 docDiscussion=false maxTurns=2
+[agent jvezg2] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent jvezg2] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"jvezg2","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":132,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent jvezg2] done event_shorthand success=true events=0 clarifications=2 elapsedMs=132
+[agent mt72tz] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=378 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=2
+[agent mt72tz] skipping compiler preflight for forced draft tool mode
+[agent mt72tz] tools=1 docDiscussion=false maxTurns=2
+[agent mt72tz] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent mt72tz] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"mt72tz","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":61,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent mt72tz] done event_shorthand success=true events=0 clarifications=2 elapsedMs=61: expected 2 to be 1 // Object.is equality
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > advc-c1 D2 (log honesty): a READING-ONLY batch logs the distinct recompile line — the folded line fires only when a real splice ran
+     → expected the recompile leg to consume the turn; logs:
+[agent 5ujr4z] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 5ujr4z] skipping compiler preflight for forced draft tool mode
+[agent 5ujr4z] tools=1 docDiscussion=false maxTurns=2
+[agent 5ujr4z] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent 5ujr4z] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"5ujr4z","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":50,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 5ujr4z] done event_shorthand success=true events=0 clarifications=2 elapsedMs=50
+[agent u6d754] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=242 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent u6d754] skipping compiler preflight for forced draft tool mode
+[agent u6d754] tools=1 docDiscussion=false maxTurns=2
+[agent u6d754] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent u6d754] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"u6d754","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":52,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent u6d754] done event_shorthand success=true events=0 clarifications=2 elapsedMs=52: expected 2 to be 1 // Object.is equality
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > honest-survivor characterization: a free-text role-gap answer splices the noun (the fold’s shipped carrier) and the bars re-derive honestly — zero model calls, no crash, no silent swallow
+     → expected 2 to be 1 // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed (6)
+   Start at  10:59:45
+   Duration  2.67s (transform 945ms, setup 0ms, collect 1.57s, tests 411ms, environment 0ms, prepare 153ms)
+

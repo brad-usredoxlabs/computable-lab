@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { defaultScientistIntentVocabulary } from './vocabulary.js';
+import { defaultScientistIntentVocabulary, formatArgDomain } from './vocabulary.js';
 import { buildScientistIntentToolSchema, INTENT_COMPILE_SYSTEM_PROMPT } from './intentCompile.js';
 
 const WIRE_SCHEMA_PATH = join(process.cwd(), 'schema', 'workflow', 'scientist-intent.schema.yaml');
@@ -143,7 +143,7 @@ describe('scientist-intent-vocabulary.mirror-drift', () => {
       const line = mirror.find((l) => l.startsWith(`- ${verb}`));
       expect(line, `mirror ARGUMENTS line for ${verb}`).toBeDefined();
       for (const a of vocab.argContracts(verb)) {
-        const rendered = `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`;
+        const rendered = `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`;
         expect(line!, `${verb}.${a.name}`).toContain(rendered);
       }
     }

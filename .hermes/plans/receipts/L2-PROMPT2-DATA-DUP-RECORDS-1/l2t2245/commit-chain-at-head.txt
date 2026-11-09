@@ -1,0 +1,44 @@
+# commit-chain-at-head.txt — receipt for adversarial defects N1 (cycle-2 review l2t0035)
+# and D1/D2 (cycle-3 narrow-delta review l2t0150)
+# Item: L2-PROMPT2-DATA-DUP-RECORDS-1 (lane 2)
+# Worktree: /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245
+# Branch:   cl/lane2-prompt2-datadup-1-l2t2245
+# Purpose:  the report states the docs-commit chain by REFERENCE (every commit after fe913e3f that
+#           touches .hermes/plans/) and never names a tip or a count. This file is a CAPTURE of that
+#           chain at one moment; it is not the current state. Re-run the commands below to get the
+#           chain as it is now.
+# Captured: 2026-11-03T07:04:37Z (HEAD at time of capture: 3f87ef36)
+
+# ===== Block 1 =====
+# Command: git -c core.fileMode=false log --oneline -6
+# Output follows verbatim, unedited:
+3f87ef36 docs(lane2): fix N1 — state the commit chain as it actually is, commit-agnostically (L2-PROMPT2-DATA-DUP-RECORDS-1 l2t2245)
+252f5feb docs(lane2): close adversarial evidence-trail defects D1-D5 — L2-PROMPT2-DATA-DUP-RECORDS-1 (l2t2245 c2)
+365c3333 docs(lane2): DATA-DUP-RECORDS-1 evidence trail — report + receipts from the run that died at report-finalize (filed verbatim)
+fe913e3f data(lane2): land identityCollapse survivor order as DATA (YAML + meta-schema) with contract test — L2-PROMPT2-DATA-DUP-RECORDS-1
+659caa7b docs(lane2): DATA-DUP-RECORDS-1 l2t2245 — STEP 0 trunk merge + pin re-read + STEP 1 RED receipt (legs 1-2 fail on missing shipped block)
+cf855add Merge branch 'cl/integration-2' into cl/lane2-prompt2-datadup-1-l2t2245
+
+# ===== Block 2 =====
+# Command: git -c core.fileMode=false log --oneline fe913e3f..HEAD -- .hermes/plans/
+# Output follows verbatim, unedited:
+3f87ef36 docs(lane2): fix N1 — state the commit chain as it actually is, commit-agnostically (L2-PROMPT2-DATA-DUP-RECORDS-1 l2t2245)
+252f5feb docs(lane2): close adversarial evidence-trail defects D1-D5 — L2-PROMPT2-DATA-DUP-RECORDS-1 (l2t2245 c2)
+365c3333 docs(lane2): DATA-DUP-RECORDS-1 evidence trail — report + receipts from the run that died at report-finalize (filed verbatim)
+
+# ===== Historical capture (cycle-2, left verbatim and unchanged) =====
+# The block below is the previous version of this file: purpose + capture + output, byte-identical
+# to what it was at that time. It is retained for the record and is NOT current state.
+
+# Purpose:  the report's "(1) Commits" list asserted that 365c3333 was the branch tip and the
+#           commit carrying the report. It was not: at the graded HEAD the tip is 252f5feb.
+#           This file records the chain as it actually is, observed by running the command below.
+# Command:  git -c core.fileMode=false log --oneline -5
+# Captured: 2026-11-03T06:52:10Z (HEAD at time of capture: 252f5feb)
+# Output follows verbatim, unedited:
+
+252f5feb docs(lane2): close adversarial evidence-trail defects D1-D5 — L2-PROMPT2-DATA-DUP-RECORDS-1 (l2t2245 c2)
+365c3333 docs(lane2): DATA-DUP-RECORDS-1 evidence trail — report + receipts from the run that died at report-finalize (filed verbatim)
+fe913e3f data(lane2): land identityCollapse survivor order as DATA (YAML + meta-schema) with contract test — L2-PROMPT2-DATA-DUP-RECORDS-1
+659caa7b docs(lane2): DATA-DUP-RECORDS-1 l2t2245 — STEP 0 trunk merge + pin re-read + STEP 1 RED receipt (legs 1-2 fail on missing shipped block)
+cf855add Merge branch 'cl/integration-2' into cl/lane2-prompt2-datadup-1-l2t2245

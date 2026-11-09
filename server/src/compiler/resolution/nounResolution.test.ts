@@ -345,9 +345,10 @@ actions:
 
 describe('noun-resolution.policy-is-data', () => {
   // Pool: the hint lookup yields candidate A (single match); the spine yields
-  // candidate B (single tier-0 hit). Shipped strategyOrder runs hint_search
-  // first -> binds A. The fixture copy swaps symbolic_label ahead of
-  // hint_search -> binds B. Same engine code, same pool, zero TS diff.
+  // candidate B (single tier-0 hit). declaration_precedence contributes nothing
+  // for this fixture so hint_search is the first strategy that binds -> binds A.
+  // The fixture copy swaps symbolic_label ahead of hint_search -> binds B. Same
+  // engine code, same pool, zero TS diff.
   function pool() {
     return spineWith(
       hits({ curie: 'local:plate-B', label: 'Gemini plate', namespace: 'local', level: 'unknown' }),
@@ -360,7 +361,7 @@ describe('noun-resolution.policy-is-data', () => {
   it('strategyOrder swap flips WHICH candidate binds — shipped outcome unchanged', async () => {
     const shipped = shippedVocab();
     const flipped = fixtureVocab('vocab-policy-flip');
-    expect(shipped.policies().strategyOrder).toEqual(['explicit_wells', 'hint_search', 'symbolic_label', 'ontology_resolution', 'mint_local']);
+    expect(shipped.policies().strategyOrder).toEqual(['declaration_precedence', 'explicit_wells', 'hint_search', 'symbolic_label', 'ontology_resolution', 'mint_local']); // Ruling 11a181c0 Q1: declared formulation takes precedence
     expect(flipped.policies().strategyOrder).toEqual(['explicit_wells', 'symbolic_label', 'hint_search', 'ontology_resolution', 'mint_local', 'accept_top_ranked']);
 
     const contract = shipped.argContracts('read').find((a) => a.name === 'labware')!;
@@ -378,14 +379,14 @@ describe('noun-resolution.policy-is-data', () => {
       depsFor({ spine: f.spine, tracker: f.tracker, searchLabwareByHint, vocab: flipped }),
     );
 
-    expect(shippedOutcome.bindings.map((b) => b.curie)).toEqual(['LBW-A']); // hint_search first
+    expect(shippedOutcome.bindings.map((b) => b.curie)).toEqual(['LBW-A']); // hint_search first: declaration_precedence contributes nothing when it cannot narrow a declared twin
     expect(flippedOutcome.bindings.map((b) => b.curie)).toEqual(['local:plate-B']); // symbolic_label first
   });
 
   it('ambiguity strategyRef flip changes the AMBIGUOUS-pool arm (clarify -> accept top)', async () => {
     const shipped = shippedVocab();
     const flipped = fixtureVocab('vocab-policy-flip');
-    expect(shipped.policies().ambiguity.strategyRef).toBe('symbolic_label');
+    expect(shipped.policies().ambiguity.strategyRef).toBe('declaration_precedence'); // Ruling 11a181c0 Q1
     expect(flipped.policies().ambiguity.strategyRef).toBe('accept_top_ranked');
 
     // Ambiguous pool: TWO hint matches in the acceptance band, no spine hit.
@@ -590,7 +591,9 @@ actions:
       hits(),
     );
     const outcome = await resolveScientistIntentNouns(doc, vocab, depsFor({ spine, tracker, vocab }));
-    expect(outcome.traces.some((t) => t.startsWith('domain-expectation: declared labware vs doc expected cellType for transfer.source'))).toBe(true);
+    // D3 (advc-full-l2t2475): transfer.source is declared [labware, material] since the u5 widening;
+    // the trace now renders the set form. Was: "declared labware".
+    expect(outcome.traces.some((t) => t.startsWith('domain-expectation: declared [labware, material] vs doc expected cellType for transfer.source'))).toBe(true);
   });
 
   it('N3 quirk consumed + pinned: whitespace-only actionLocation.argument is dropped at parse; clarification still carries actionIndex+action', async () => {

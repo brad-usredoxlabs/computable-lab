@@ -3,7 +3,6 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ProtocolSelectionProvider, useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolNavPanel } from './ProtocolNavPanel'
-import { ChatContextHeader } from '../ai/ChatContextHeader'
 import { apiClient } from '../../../shared/api/client'
 import { __resetContentLockedStatesCache } from '../../../shared/records/contentLockedStatesCache'
 
@@ -29,7 +28,16 @@ function Seed() {
   return <output data-testid="visible-ids">{[...(sel?.visibleSteps ?? [])].join(',')}</output>
 }
 function mount() {
-  render(<ProtocolSelectionProvider><Seed /><ProtocolNavPanel /><ChatContextHeader /></ProtocolSelectionProvider>)
+  // LEG D re-pin: the dead ChatContextHeader is dropped from this render.
+  // FIX RUN 1 (advc D13): the AiPanelProvider that was added here under the
+  // rationale "the pane calls useAiPanel(), which THROWS without an
+  // AiPanelProvider" is REMOVED — that rationale was wrong twice over:
+  // HarnessChatPane consumes the OPTIONAL seam (useOptionalAiPanel, which
+  // returns null provider-free instead of throwing) and is not even mounted
+  // in this suite's render tree (ProtocolNavPanel and its unmocked children
+  // consume no AiPanelContext). Provider-free is the honest test posture
+  // here; nothing in the tree needs one.
+  render(<ProtocolSelectionProvider><Seed /><ProtocolNavPanel /></ProtocolSelectionProvider>)
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -57,7 +65,11 @@ describe('step actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete step 1' }))
     await waitFor(() => expect(screen.queryByTestId('protocol-nav-step-s1')).toBeNull())
     expect(screen.getByTestId('protocol-nav-step-s2')).toHaveTextContent('1')
-    expect(screen.getByTestId('chat-context-header')).toHaveTextContent('No step focused')
+    // LEG D re-pin: the dead ChatContextHeader no longer renders (dropped from
+    // this render), so the cleared-focus assertion now names its ABSENCE — the
+    // working focus lives in SurfaceFocusHeader (HarnessChatPane), which renders
+    // nothing without a published ChatFocusContext either.
+    expect(screen.queryByTestId('chat-context-header')).toBeNull()
     expect(screen.getByTestId('visible-ids')).toHaveTextContent('s2')
     expect(apiClient.updateRecord).toHaveBeenCalledWith('PRT-1', { ...payload, steps: [{ ...steps[1], ordinal: 1 }] }, { expectedSha: 'initial' })
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))

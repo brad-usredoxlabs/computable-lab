@@ -1,0 +1,42 @@
+D1 STATUS RE-CAPTURE (read-only) — 2026-11-03T06:24:07Z
+harness: curl -s -w '%{http_code}' against live :3093 (health 200 at capture time)
+purpose: the original removal-log.txt status column printed the literal sentinel 'CODE' for
+         these 8 ids (shell variable never expanded). Re-capturing status here with a
+         harness form that demonstrably expands it. DELETE is NOT re-issued (records are gone
+         and non-idempotent status would prove nothing) — this is the GET-after probe with
+         explicit status, plus the data-repo commit that carried each removal.
+---
+MSP-API-mu50x5z7 {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50x5z7"} | HTTP=404
+MSP-API-mu50yjk9 {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50yjk9"} | HTTP=404
+MSP-API-mu50yysb {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu50yysb"} | HTTP=404
+MSP-API-mu7uyw18 {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7uyw18"} | HTTP=404
+MSP-API-mu7uzgnr {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7uzgnr"} | HTTP=404
+MSP-API-mu7v07f1 {"error":"NOT_FOUND","message":"Record not found: MSP-API-mu7v07f1"} | HTTP=404
+MSP-API-mujsue6o {"error":"NOT_FOUND","message":"Record not found: MSP-API-mujsue6o"} | HTTP=404
+MAT-TEST-DMSO {"error":"NOT_FOUND","message":"Record not found: MAT-TEST-DMSO"} | HTTP=404
+---
+REMOVAL PROOF per id: data-repo commit (author, date, paths touched), read-only git
+80f1bacc computable-lab 2026-11-03T00:36:38-05:00 Delete MSP-API-mu50x5z7
+records/material-spec/MSP-API-mu50x5z7__1-mm-clofibrate-in-dmso.yaml
+
+92c617fb computable-lab 2026-11-03T00:36:40-05:00 Delete MSP-API-mu50yjk9
+records/material-spec/MSP-API-mu50yjk9__1-mm-clofibrate-in-dmso.yaml
+
+d1ce44a7 computable-lab 2026-11-03T00:36:41-05:00 Delete MSP-API-mu50yysb
+records/material-spec/MSP-API-mu50yysb__1-mm-clofibrate-in-dmso.yaml
+
+34aa406c computable-lab 2026-11-03T00:36:42-05:00 Delete MSP-API-mu7uyw18
+records/material-spec/MSP-API-mu7uyw18__1-mm-clofibrate-in-dmso.yaml
+
+b6d17972 computable-lab 2026-11-03T00:36:43-05:00 Delete MSP-API-mu7uzgnr
+records/material-spec/MSP-API-mu7uzgnr__1-mm-clofibrate-in-dmso.yaml
+
+ebb88f86 computable-lab 2026-11-03T00:36:45-05:00 Delete MSP-API-mu7v07f1
+records/material-spec/MSP-API-mu7v07f1__1-mm-clofibrate-in-dmso.yaml
+
+a7faaad4 computable-lab 2026-11-03T00:36:46-05:00 Delete MSP-API-mujsue6o
+records/material-spec/MSP-API-mujsue6o__1-mm-clofibrate-in-dmso.yaml
+
+0442b918 computable-lab 2026-11-03T00:36:47-05:00 Delete MAT-TEST-DMSO
+records/material/MAT-TEST-DMSO__dmso.yaml
+

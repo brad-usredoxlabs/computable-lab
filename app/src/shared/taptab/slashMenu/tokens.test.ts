@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { mentionToToken, mentionBadge, badgeStyles } from './tokens'
+import {
+  mentionToToken,
+  mentionBadge,
+  badgeStyles,
+  VOCABULARY_BADGE,
+  VOCABULARY_SUBTITLE,
+  LOCAL_VOCABULARY,
+  detailOntologyFieldLabel,
+} from './tokens'
 import type { SlashMention } from './types'
 
 describe('mentionToToken', () => {
@@ -192,5 +200,64 @@ describe('badgeStyles', () => {
   it('falls back to a neutral palette for unknown badges', () => {
     const css = badgeStyles('Unknown')
     expect(css.background).toBe('#e5e7eb')
+  })
+  // L2-TERM-1 (UC-D4): the new vocabulary tiers need their own palettes, and
+  // 'Local' must NOT be indistinguishable from the neutral unknown fallback.
+  it('returns distinct palettes for the L2-TERM-1 vocabulary tiers', () => {
+    const tiers = ['Local', 'Composition', 'New', 'Ontology'] as const
+    const seen = new Set<string>()
+    for (const badge of tiers) {
+      const css = badgeStyles(badge)
+      seen.add(css.background)
+    }
+    // L2-TERM-1 fix-1 (D2): pairwise-distinct backgrounds across ALL four
+    // tiers — two tiers must never share a palette (the old `size > 1`
+    // assertion was trivially satisfiable).
+    expect(seen.size).toBe(tiers.length)
+    // The local/composite/mint tiers must never wear the ontology purple
+    // (background #f3e8ff / color #7e22ce) — a regression to it is exactly
+    // the UC-D4 "local reads as Ontology" contradiction.
+    for (const badge of ['Local', 'Composition', 'New']) {
+      const css = badgeStyles(badge)
+      expect(css.background).not.toBe('#f3e8ff')
+      expect(css.color).not.toBe('#7e22ce')
+    }
+    // ...and never the neutral unknown-badge gray.
+    expect(badgeStyles('Local').background).not.toBe('#e5e7eb')
+    expect(badgeStyles('Composition').background).not.toBe('#e5e7eb')
+  })
+})
+
+describe('L2-TERM-1 (UC-D4) vocabulary map', () => {
+  it('defines four distinct tier words — ontology, local, composition, mint', () => {
+    expect(VOCABULARY_BADGE).toEqual({
+      ontology: 'Ontology',
+      local: 'Local',
+      composition: 'Composition',
+      mint: 'New',
+    })
+    // The four tiers are VISIBLY DISTINCT terms (UC-D4): no two tiers share
+    // a word, and the local/composite tiers never wear the ontology word.
+    const words = Object.values(VOCABULARY_BADGE)
+    expect(new Set(words).size).toBe(words.length)
+    expect(VOCABULARY_BADGE.local).not.toBe(VOCABULARY_BADGE.ontology)
+    expect(VOCABULARY_BADGE.composition).not.toBe(VOCABULARY_BADGE.ontology)
+  })
+
+  it('pairs each tier with an honest subtitle', () => {
+    expect(VOCABULARY_SUBTITLE.local).toBe('Local record')
+    expect(VOCABULARY_SUBTITLE.composition).toBe('Composition')
+    expect(VOCABULARY_SUBTITLE.mint).toBe('mint a draft term into the lab namespace')
+    // A local record is not an ontology term; a composition is not a term.
+    expect(VOCABULARY_SUBTITLE.local).not.toContain('Ontology')
+    expect(VOCABULARY_SUBTITLE.composition).not.toContain('Ontology')
+  })
+
+  it('the popover field label maps the vocabulary value, never a hard "Ontology"', () => {
+    // A 'local' value is the lab's own vocabulary, not an ontology.
+    expect(detailOntologyFieldLabel(LOCAL_VOCABULARY)).toBe('Vocabulary')
+    // A namespace value IS an ontology.
+    expect(detailOntologyFieldLabel('CHEBI')).toBe('Ontology')
+    expect(detailOntologyFieldLabel('XCO')).toBe('Ontology')
   })
 })

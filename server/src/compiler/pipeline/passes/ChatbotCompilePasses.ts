@@ -23,10 +23,22 @@ import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
 import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
 import { getOperationRegistry } from '../../../registry/OperationRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
-import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
+import {
+  applyEventToLabState,
+  emptyLabState,
+  isContentBearing,
+  normalizeTypeKey,
+  type FoldOutcome,
+  type LabIdentityRules,
+} from '../../../compiler/state/LabState.js';
+import {
+  defaultScientistIntentVocabulary,
+  type ScientistIntentVocabulary,
+} from '../../../compiler/scientistIntent/vocabulary.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 import { normalizeProtocolIntent, type ProtocolIntent } from '../../../compiler/protocolIntent/ProtocolIntent.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
+import type { RecordStore } from '../../../store/types.js';
 import { renderPromptTemplate } from '../../../registry/PromptTemplateRegistry.js';
 import {
   getExecutionScaleProfileRegistry,
@@ -1072,7 +1084,17 @@ export function createResolvePriorLabwareReferencesPass(): Pass {
  *   resolve_prior_labware_references output and passing the resolved
  *   instanceId as labware_id to the expander
  */
-export function createExpandBiologyVerbsPass(): Pass {
+export function createExpandBiologyVerbsPass(opts: {
+  /** WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): stamp DECLARED PROVENANCE —
+   *  `details.sourceActionIndex` = the ai_precompile index of the candidate
+   *  that expanded to each emitted event — onto every expanded event. The
+   *  scientist-intent registry opts IN (its resolve_wellsets pass joins
+   *  wellset tokens on this identity and STRIPS it before republishing the
+   *  resolve_roles slot, so no artifact ever carries it). Default FALSE:
+   *  the chatbot chain stays byte-identical (SPINE-7 pins + goldens). */
+  stampCandidateProvenance?: boolean;
+} = {}): Pass {
+  const stampProvenance = opts.stampCandidateProvenance === true;
   return {
     id: 'expand_biology_verbs',
     family: 'expand' as const,
@@ -1087,7 +1109,8 @@ export function createExpandBiologyVerbsPass(): Pass {
         { resolvedLabwareRefs?: Array<{ hint: string; matched: { instanceId: string; labwareType: string } }> } | undefined;
       const resolvedPriorRefs = priorLabwareOutput?.resolvedLabwareRefs ?? [];
 
-      for (const cand of candidateEvents) {
+      for (let candIndex = 0; candIndex < candidateEvents.length; candIndex++) {
+        const cand = candidateEvents[candIndex]!;
         const { verb, ...params } = cand;
 
         // Pass through 'run_protocol' events unchanged — expand_protocol will handle them
@@ -1129,6 +1152,23 @@ export function createExpandBiologyVerbsPass(): Pass {
           continue;
         }
         const expanded = expander.expand({ verb, params });
+        // WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): DECLARED PROVENANCE (opt-in
+        // only — the scientist-intent registry; the chatbot chain stays
+        // byte-identical): stamp the emitting candidate's ai_precompile index
+        // onto every event this candidate expanded to. Verb-name + per-verb
+        // ordinal is NOT an identity (resuspend/dilute/shake/bead_beat EMIT
+        // event_type:'mix', so per-verb counts can disagree and a same-event-
+        // type neighbour silently steals a wellset-token join). The index is
+        // candidate DATA (the loop position), not a verb branch. The
+        // resolve_wellsets pass STRIPS the key before republishing, so no
+        // shipped artifact ever carries it.
+        if (stampProvenance) {
+          for (const e of expanded) {
+            const d = (e.details ?? {}) as Record<string, unknown>;
+            d.sourceActionIndex = candIndex;
+            e.details = d;
+          }
+        }
         for (const e of expanded) events.push(e);
       }
 
@@ -1725,12 +1765,57 @@ export interface LabStatePassOutput {
  * - Folds directives FIRST, then events, via applyDirectiveToLabState / applyEventToLabState
  * - Increments turnIndex by 1
  * - Returns { events, snapshotAfter }
+ *
+ * L2-LABSTATE-CONTENTS-1 (spec §5.2/§7): the pass threads the DATA-declared
+ * labware identity resolution rules into the fold (the vocabulary's
+ * `labwareIdentityResolution` section — the rules are DATA, never a TS branch)
+ * so a content-bearing event carrying a SYMBOLIC labwareId (the shipped
+ * expander's top-level labwareId / transfer source_labware|destination_labware
+ * hint) resolves to a snapshot instance via the never-guess ladder (rung R1 raw
+ * instanceId + the declared rungs). A no-op fold of a content-bearing event
+ * surfaces as a `lab_state_unresolved_labware_reference` (or the material
+ * sibling) DIAGNOSTIC — the fold is pure, so the never-guess surface is
+ * no-op + this pass's diagnostic (lab_state is family emit, AFTER validate —
+ * no clarification channel exists here; the contents-wellset clarification
+ * stays the WELLSET resolver's jurisdiction). The WELLSET resolver's merged
+ * read-half stays untouched — this is the write-side fold, not a second event
+ * vocabulary (the canonical-shape test proves one shape feeds the ledger).
  */
-export function createLabStatePass(): Pass {
+export function createLabStatePass(
+  opts: { vocabulary?: ScientistIntentVocabulary } = {},
+): Pass {
+  const vocabulary = opts.vocabulary ?? defaultScientistIntentVocabulary();
+  // The DATA-declared identity rules (frozen per-load; absent section => the
+  // empty order/tokenFields => the fold falls back to rung R1 ONLY, the raw
+  // path — the D5 fail-closed semantics: an EMPTY `order` resolves rung R1
+  // ONLY, exactly as the 2-arg fold call; the raw path keeps working).
+  // Threaded at THIS seam, never imported into the pure fold module (LabState.ts
+  // keeps no vocabulary import).
+  const rules: LabIdentityRules = {
+    order: [...vocabulary.labwareIdentityResolution().order],
+    tokenFields: [...vocabulary.labwareIdentityResolution().tokenFields],
+  };
+  // D6 (advc fix-run 1): the content-bearing event-type classification for the
+  // fold's §7 never-guess surface is DATA (the vocabulary's
+  // `labStateContentBearingEventTypes` list — the fold-side twin of the read
+  // half's `materialBearingEventTypes`), threaded at THIS seam, never a TS
+  // literal list in the fold module (one DATA declaration of the concept,
+  // consumed by both halves — no double vocabulary).
+  const contentBearingEventTypes = vocabulary.labStateContentBearingEventTypes();
+
+  // The §7 no-op reason -> diagnostic code mapping (the code strings live in
+  // the PASS, not the fold — the pure module carries no reporting policy).
+  const REASON_CODE: Record<FoldOutcome['reason'] & string, string> = {
+    labware_unresolved: 'lab_state_unresolved_labware_reference',
+    material_unresolved: 'lab_state_unresolved_material_reference',
+    wells_unpairable: 'lab_state_unresolvable_wells',
+    event_incomplete: 'lab_state_incomplete_event',
+  };
+
   return {
     id: 'lab_state',
     family: 'emit' as const,
-    run({ state }: PassRunArgs): PassResult {
+    run({ pass_id, state }: PassRunArgs): PassResult {
       const prior = (state.input as { labState?: LabStateSnapshot }).labState
         ?? emptyLabState();
       // resolve_roles aggregates all expanded events (mint, patterns, verbs, protocol)
@@ -1738,16 +1823,165 @@ export function createLabStatePass(): Pass {
         { events?: PlateEventPrimitive[] } | undefined;
       const events = resolvedRolesOutput?.events ?? [];
 
+      const diagnostics: PassDiagnostic[] = [];
+      const collectDiagnostic = (
+        event: PlateEventPrimitive,
+        outcome: FoldOutcome,
+      ): void => {
+        if (outcome.changed) return;
+        if (!outcome.reason) return;
+        if (!isContentBearing(event, contentBearingEventTypes)) return; // a non-content-bearing no-op is expected (not a never-guess surface)
+        const code = REASON_CODE[outcome.reason];
+        if (!code) return;
+        const details = event.details as Record<string, unknown> | undefined;
+        const hint =
+          (typeof details?.labwareId === 'string' ? details.labwareId : undefined)
+          ?? (typeof details?.source_labware === 'string' ? details.source_labware : undefined)
+          ?? (typeof event.labwareId === 'string' ? event.labwareId : undefined)
+          ?? '';
+        diagnostics.push({
+          severity: 'warning',
+          code,
+          message: `lab_state fold no-op (${outcome.reason}): content-bearing event '${event.event_type}' did not resolve a labware instance / material identity (never-guess — no contents written).`,
+          pass_id,
+          details: {
+            hint,
+            event_type: event.event_type,
+            eventId: event.eventId,
+            reason: outcome.reason,
+          },
+        });
+      };
+
+      // L2-LABSTATE-CONTENTS-1 fix3 (a): carry the compiler's RESOLVED DESIGN
+      // identity onto the create_container event's declared carrier (and onto
+      // the same-document content-bearing events that name the same labware),
+      // BEFORE the fold. The expander's create_container emits only {slot,
+      // labwareType} — the design's resolved record id (the resolve_labware
+      // pass's resolvedLabwares slot) never reaches the create's carrier, so
+      // the minted instance's identityTokens are ABSENT and rung R2 (declared
+      // identityTokens) can never match a design-ref hint. With the record id
+      // on details.labwareId the minted instance carries identityTokens =
+      // [recordId] and R2 EXACTLY matches a design-ref hint (zero hardcoded
+      // vocab strings — the identity rides the resolve_labware pass's resolved
+      // output, never a literal). The join is GENERIC: the create event's
+      // declared labware identity (its candidate's labware hint via the
+      // expand pass's sourceActionIndex provenance, else its labwareType)
+      // normalizes (normalizeTypeKey — the SAME R3 normalization the rung
+      // evaluators use) to the resolvedLabwares entry's hint; a UNIQUE
+      // normalized match carries the recordId, a tie/zero never (never-guess).
+      const aiPrecompile = state.outputs.get('ai_precompile') as
+        { candidateEvents?: Array<Record<string, unknown>> } | undefined;
+      const candidateEvents = aiPrecompile?.candidateEvents ?? [];
+      const labwareResolveOutput = state.outputs.get('resolve_labware') as
+        { resolvedLabwares?: Array<{ hint: string; recordId: string; title?: string }> } | undefined;
+      const resolvedLabwares = labwareResolveOutput?.resolvedLabwares ?? [];
+      // The resolved-design-identity map: normalized create-labware key ->
+      // recordId. A key with >1 distinct recordIds is dropped (never-guess —
+      // a tie is never a pick). Absent/empty resolvedLabwares => inert (the
+      // fold runs byte-identically to pre-fix).
+      const typeKeyToRecordId = new Map<string, string>();
+      const typeKeyRecordCount = new Map<string, Set<string>>();
+      for (const rl of resolvedLabwares) {
+        if (typeof rl?.hint !== 'string' || typeof rl?.recordId !== 'string') continue;
+        const key = normalizeTypeKey(rl.hint);
+        if (!key) continue;
+        let set = typeKeyRecordCount.get(key);
+        if (!set) { set = new Set(); typeKeyRecordCount.set(key, set); }
+        set.add(rl.recordId);
+      }
+      for (const [key, set] of typeKeyRecordCount) {
+        if (set.size === 1) typeKeyToRecordId.set(key, [...set][0]!);
+      }
+      const recordIdFor = (event: PlateEventPrimitive): string | undefined => {
+        const details = (event.details ?? {}) as Record<string, unknown>;
+        // The create's DESIGN identity: the emitting candidate's labware hint
+        // (the provenance join — the sourceActionIndex stamp) else the event's
+        // own labwareType (the expander default). Both normalize to the SAME
+        // type key (the hint '96-well plate' and the type '96-well-plate').
+        const saIdx = typeof details.sourceActionIndex === 'number' ? details.sourceActionIndex : undefined;
+        const cand = saIdx !== undefined ? candidateEvents[saIdx] : undefined;
+        const designHint =
+          (typeof cand?.labware === 'string' && cand.labware.trim() ? cand.labware : undefined)
+          ?? (typeof cand?.labware_id === 'string' && cand.labware_id.trim() ? cand.labware_id : undefined)
+          ?? (typeof details.labwareType === 'string' ? details.labwareType : undefined)
+          ?? (typeof event.labwareId === 'string' ? event.labwareId : undefined);
+        if (typeof designHint !== 'string' || !designHint.trim()) return undefined;
+        return typeKeyToRecordId.get(normalizeTypeKey(designHint));
+      };
+      // Pre-fold: carry the resolved DESIGN record id onto the create_container
+      // event's declared carrier (details.labwareId — the mint's identityTokens
+      // carrier, rung R2). ONLY the create is rewritten: the create is the
+      // emit site of the identity (the minted instance's identityTokens ride
+      // it), and it ships NO carrier today (details = {slot, labwareType}).
+      // The content-bearing events (add_material / mix) keep their expander-
+      // emitted carrier verbatim — the live binder rewrites THOSE to the record
+      // id post-pipeline (the wire done-frame shape), and the fold resolves
+      // them through the ladder (R2 once the instance carries the token, R3 on
+      // a single-instance type). The events array is rebuilt immutably; the
+      // resolve_roles slot (upstream) is never mutated.
+      const foldEvents = events.map((event) => {
+        if (event.event_type !== 'create_container') return event;
+        const details = (event.details ?? {}) as Record<string, unknown>;
+        const rid = recordIdFor(event);
+        if (!rid) return event;
+        return { ...event, details: { ...details, labwareId: rid } } as PlateEventPrimitive;
+      });
+
       // Fold directives FIRST, then events (events depend on post-directive state)
       let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
       const directives = (state.outputs.get('apply_directives') as { directives?: DirectiveNode[] } | undefined)?.directives ?? [];
       for (const d of directives) {
         snapshot = applyDirectiveToLabState(snapshot, d);
       }
-      for (const event of events) {
-        snapshot = applyEventToLabState(snapshot, event);
+      for (const event of foldEvents) {
+        const result = applyEventToLabState(snapshot, event, rules);
+        snapshot = result.snapshot;
+        collectDiagnostic(event, result.outcome);
       }
-      return { ok: true, output: { events, snapshotAfter: snapshot } };
+      // L2-LABSTATE-CONTENTS-1 (spec §11): env-gated arm-log for the live
+      // no-seed multi-turn drive. The wire done frame (the AgentResult the
+      // /api/ai/draft-events/stream path returns) does NOT carry labStateDelta,
+      // so the per-turn committed ledger is captured from the backend log.
+      // INERT unless LABSTATE_ARM_LOG=1 (never in production traffic). Emits
+      // the PRIOR committed ledger (the persistence proof — a later turn's
+      // prior must already contain an earlier turn's contents) and the
+      // POST-FOLD snapshot (the contents this turn wrote), both as compact
+      // labware -> well -> material records.
+      if (process.env.LABSTATE_ARM_LOG === '1') {
+        const summarize = (s: LabStateSnapshot): Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> => {
+          const out: Record<string, Record<string, Array<{ materialId: string; kind?: string }>>> = {};
+          for (const [iid, inst] of Object.entries(s.labware)) {
+            const wells: Record<string, Array<{ materialId: string; kind?: string }>> = {};
+            for (const [wid, mats] of Object.entries(inst.wells)) {
+              if (mats.length > 0) wells[wid] = mats.map((m) => ({ materialId: m.materialId, ...(m.kind !== undefined ? { kind: m.kind } : {}) }));
+            }
+            out[iid] = wells;
+          }
+          return out;
+        };
+        // D3 (advc fix-run 1): the drive's never-guess control leg needs the
+        // §7 DIAGNOSTIC codes in a captured channel — the wire done frame does
+        // not carry them (the AgentResult has no diagnostics field), so they
+        // ride this env-gated log line (the drive captures the backend-log
+        // window per turn). `unresolved_codes` is the sorted-unique list of
+        // the lab_state diagnostic codes this turn produced (empty list when
+        // the fold wrote everything / nothing content-bearing no-op'd).
+        const unresolvedCodes: string[] = [];
+        for (const d of diagnostics) unresolvedCodes.push(d.code);
+        console.log(`[lab_state ARM-LOG] turn=${snapshot.turnIndex} prior_labware=${JSON.stringify(summarize(prior))} after_labware=${JSON.stringify(summarize(snapshot))} unresolved_codes=${JSON.stringify([...new Set(unresolvedCodes)].sort())}`);
+      }
+      return {
+        ok: true,
+        // The events the fold actually processed (the pre-fold carried-identity
+        // list — the emit-site carrier proof: a create whose resolvedLabwares
+        // carry a recordId ships details.labwareId = that recordId, and the
+        // minted instance's identityTokens carry it for the R2 rung). The wire
+        // done-frame events ride the resolve_roles slot (untouched); this is
+        // the labStateDelta.events artifact only.
+        output: { events: foldEvents, snapshotAfter: snapshot },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      };
     },
   };
 }
@@ -2351,7 +2585,51 @@ function resolveCellTypeLink(
  * - For cell_region events with cell_type_id, resolves against the Cell Ontology registry
  *   and attaches cellTypeTerm on the expanded events (or emits a warning if unknown)
  */
-export function createResolveRolesPass(): Pass {
+/**
+ * Options for createResolveRolesPass.
+ */
+export interface ResolveRolesPassOptions {
+  /**
+   * Synchronous lookup: given a recordId, return the formulation's
+   * formulation.composition entries (each with component_ref + role).
+   * When absent or returning undefined/empty, the pass falls back to the
+   * legacy single-entry snapshot (role: 'other').
+   * Synchronous — no awaits, no async.
+   */
+  materialComposition?: (recordId: string) => readonly unknown[] | undefined;
+}
+
+/**
+ * Prefetch material-spec formulation.composition entries from the store so
+ * the resolve_roles pass can expand them into composition_snapshot.
+ *
+ * Used by BOTH the chatbot pipeline (runChatbotCompile.ts) and the
+ * scientist-intent shorthand seam (shorthandChat.ts) — ONE source of truth
+ * prevents duplicate local vocabulary.
+ *
+ * @param store — record store (may be undefined when the caller has none).
+ * @returns Map of recordId -> composition array (undefined when no specs carry composition).
+ */
+export async function buildMaterialCompositionLookup(
+  store: RecordStore | undefined,
+): Promise<Map<string, readonly unknown[]> | undefined> {
+  if (!store) return undefined;
+  const materialSpecs = await store.list({ kind: 'material-spec', schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml', limit: 10000 });
+  const compMap = new Map<string, readonly unknown[]>();
+  for (const env of materialSpecs) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    const formulation = payload?.formulation as Record<string, unknown> | undefined;
+    const composition = formulation?.composition;
+    if (Array.isArray(composition) && composition.length > 0) {
+      compMap.set(env.recordId, composition);
+    }
+  }
+  return compMap.size > 0 ? compMap : undefined;
+}
+
+export function createResolveRolesPass(
+  opts?: ResolveRolesPassOptions,
+): Pass {
   return {
     id: 'resolve_roles',
     family: 'expand' as const,
@@ -2386,11 +2664,66 @@ export function createResolveRolesPass(): Pass {
       let counter = 0;
       const allDiagnostics: PassDiagnostic[] = [];
 
+      /** Build the canonical material_ref + composition_snapshot shapes.
+       * ref.schema.yaml §52-55: type is record-specific; §73-77: kind=record
+       * requires id+type. composition-entry.schema.yaml §9: required
+       * [component_ref, role]; §15-22: role enum. We use 'other' (§22) as the
+       * honest gap arm — the binding carries no composition role. */
+      function buildMaterialEmission(
+        recordId: string,
+      ): Record<string, unknown> {
+        // If a composition lookup is available and returns entries, expand them
+        // into the snapshot (one level — the formulation's declared entries).
+        // Otherwise, fall back to the legacy single-entry with role: 'other'.
+        // The lookup is keyed by material-SPEC recordId, so the composition arm
+        // means the bound ref describes a material-spec (sibling:
+        // materialRefLabels.ts types those refs 'material-spec'); the legacy
+        // single-entry fallback keeps 'material' — record kind is unknowable here.
+        const compositionEntries = opts?.materialComposition?.(recordId);
+        const hasComposition = Array.isArray(compositionEntries) && compositionEntries.length > 0;
+        const typedRef = {
+          kind: 'record' as const,
+          type: (hasComposition ? 'material-spec' : 'material') as 'material' | 'material-spec',
+          id: recordId,
+        };
+        const snapshot = hasComposition
+          ? (compositionEntries as Array<{ component_ref: unknown; role: string; concentration?: unknown; participation?: unknown; source?: unknown }>).map((entry) => ({
+              component_ref: entry.component_ref,
+              role: entry.role,
+              ...(entry.participation !== undefined ? { participation: entry.participation } : {}),
+              ...(entry.concentration !== undefined ? { concentration: entry.concentration } : {}),
+              ...(entry.source !== undefined ? { source: entry.source } : {}),
+            }))
+          : [{ component_ref: typedRef, role: 'other' as const }];
+
+        return {
+          material_ref: typedRef,
+          // composition-entry.schema.yaml §11: component_ref $ref ./ref.schema.yaml
+          // §22: 'other' is the honest gap arm (no declared role on the binding)
+          composition_snapshot: snapshot,
+        };
+      }
+
       for (const ev of events) {
         const details = ev.details as Record<string, unknown> | undefined;
         const role = details?.role as string | undefined;
+        const lookupKey = typeof details?.material === 'string' ? details.material : typeof details?.recordId === 'string' ? details.recordId : undefined;
 
         if (!role) {
+          // No role — pass through unchanged, but still emit material_ref +
+          // composition_snapshot for add_material events when the material label
+          // is resolved by resolve_nouns (compiler is the ONE emitter per ruling).
+          if (ev.event_type === 'add_material' && lookupKey) {
+            const materialBinding = nounBindings?.[lookupKey];
+            if (materialBinding?.recordId) {
+              const enrichedDetails = {
+                ...ev.details,
+                ...buildMaterialEmission(materialBinding.recordId),
+              } as Record<string, unknown>;
+              out.push({ ...ev, details: enrichedDetails });
+              continue;
+            }
+          }
           // No role — pass through unchanged
           out.push(ev);
           continue;
@@ -2448,6 +2781,20 @@ export function createResolveRolesPass(): Pass {
           // Attach cellTypeTerm on expanded events if resolved
           if (cellTypeTerm) {
             (expandedEvent.details as Record<string, unknown>).cellTypeTerm = cellTypeTerm;
+          }
+
+          // RULING: The compiler is the ONE emitter of material_ref on add_material events.
+          // Look up the resolved material binding from resolve_nouns — zero verb branches,
+          // zero name tests, zero id literals. The label is the event's details.material;
+          // the binding carries the authoritative recordId from the spine/vocabulary path.
+          if (ev.event_type === 'add_material' && lookupKey) {
+            const materialBinding = nounBindings?.[lookupKey];
+            if (materialBinding?.recordId) {
+              Object.assign(
+                expandedEvent.details as Record<string, unknown>,
+                buildMaterialEmission(materialBinding.recordId),
+              );
+            }
           }
 
           out.push(expandedEvent);

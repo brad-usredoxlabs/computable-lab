@@ -11,6 +11,7 @@
 import { defaultRoleResolver } from '../roles/RoleResolver.js';
 import { ONTOLOGY_DOMAINS } from '../../ontology/domains.js';
 import { suggestExistingTerms, type TermLike } from '../../materials/termReconciliation.js';
+import { declaredDomains } from '../scientistIntent/vocabulary.js';
 import type { ProviderHit, RankedCandidate, ResolveOptions, ResolveProvider, ResolveTier } from '../../resolve/types.js';
 import type { CandidateAdapter, TierOutcome } from './types.js';
 
@@ -229,17 +230,25 @@ export function createRoleAddressAdapter(ctx?: Partial<RoleAddressContext>): Can
 // the map lives in data. No new ontology search.
 // ---------------------------------------------------------------------------
 
+/** Resolve an ONTOLOGY_DOMAINS key case-insensitively. */
+function findOntologyDomainKey(tag: string): string | undefined {
+  return Object.keys(ONTOLOGY_DOMAINS).find(
+    (k) => k.toLowerCase() === tag.toLowerCase()
+  );
+}
+
 /** Namespace prefixes an ontology domain's primary ontology produces (e.g.
  *  chemical -> CHEBI via the ONTOLOGY_DOMAINS primary 'chebi'). Local tiers
  *  (namespace 'local') are NEVER filtered — the lab's own records always
  *  remain eligible (prefer what the lab already has). */
 export function declaredNamespacesForDomain(domain: string | undefined): Set<string> | undefined {
   if (!domain) return undefined;
-  const config = (ONTOLOGY_DOMAINS as Record<string, { primary: string }>)[domain];
-  if (!config) return undefined; // a domain tag with no ontology declaration imposes no filter
+  const key = findOntologyDomainKey(domain);
+  const config = key ? (ONTOLOGY_DOMAINS as Record<string, { primary: string }>)[key] : undefined;
+  if (!config || !key) return undefined; // a domain tag with no ontology declaration imposes no filter
   const primary = config.primary.toUpperCase();
   const namespaces = new Set<string>([primary, 'local']);
-  for (const ols of (ONTOLOGY_DOMAINS as Record<string, { olsOntologies?: string[] }>)[domain]?.olsOntologies ?? []) {
+  for (const ols of (ONTOLOGY_DOMAINS as Record<string, { olsOntologies?: string[] }>)[key]?.olsOntologies ?? []) {
     namespaces.add(ols.toUpperCase());
   }
   return namespaces;
@@ -258,16 +267,20 @@ export function declaredNamespacesForDomain(domain: string | undefined): Set<str
  *  (absence of a claim is not a conflict — "prefer what the lab has"). NO
  *  domain NAME is branched on: the check compares two declared data fields
  *  (the vocabulary's domain tag vs the candidate's term kind). */
-function claimsConflictingLandingZone(candidate: RankedCandidate, domain: string): boolean {
-  return candidate.termKind !== undefined && candidate.termKind.toLowerCase() !== domain.toLowerCase();
+/**
+ * Check whether a candidate's termKind conflicts with the declared domain tag.
+ * The tag arrives normalised (lowercased) by declaredDomains — no additional
+ * casing transform is required. */
+function claimsConflictingLandingZone(candidate: RankedCandidate, tag: string): boolean {
+  return candidate.termKind !== undefined && candidate.termKind.toLowerCase() !== tag;
 }
 
 export function filterCandidatesByDeclaredDomain(
   candidates: RankedCandidate[],
-  domain: string | undefined,
+  domain: string | readonly string[] | undefined,
 ): { eligible: RankedCandidate[]; rejected: RankedCandidate[] } {
-  if (!domain) return { eligible: candidates, rejected: [] };
-  const namespaces = declaredNamespacesForDomain(domain);
+  const declared = declaredDomains(domain);
+  if (declared.length === 0) return { eligible: candidates, rejected: [] };
   const eligible: RankedCandidate[] = [];
   const rejected: RankedCandidate[] = [];
   for (const candidate of candidates) {
@@ -275,16 +288,21 @@ export function filterCandidatesByDeclaredDomain(
       eligible.push(candidate); // the mint affordance is not a namespace claim
       continue;
     }
-    if (namespaces) {
-      // Ontology bridge declared for this tag: the namespace filter is the authority.
-      if (namespaces.has(candidate.namespace.toUpperCase())) eligible.push(candidate);
-      else rejected.push(candidate);
-    } else if (claimsConflictingLandingZone(candidate, domain)) {
-      // No ontology bridge: the term-spine landing-zone taxonomy is the authority.
-      rejected.push(candidate);
-    } else {
-      eligible.push(candidate);
+    let admitted = false;
+    for (const tag of declared) {
+      const tagNs = declaredNamespacesForDomain(tag);
+      if (tagNs) {
+        if (tagNs.has(candidate.namespace.toUpperCase())) {
+          admitted = true;
+          break;
+        }
+      } else if (!claimsConflictingLandingZone(candidate, tag)) {
+        admitted = true;
+        break;
+      }
     }
+    if (admitted) eligible.push(candidate);
+    else rejected.push(candidate);
   }
   return { eligible, rejected };
 }

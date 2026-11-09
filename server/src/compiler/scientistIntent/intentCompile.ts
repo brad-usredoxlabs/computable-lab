@@ -15,7 +15,7 @@
  * volume, and robot action is owned by the deterministic compiler.
  */
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
-import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+import { defaultScientistIntentVocabulary, formatArgDomain, type ScientistIntentVocabulary } from './vocabulary.js';
 import { compileScientistIntent, type ScientistIntentCompileDeps } from './compileScientistIntent.js';
 import { liftScientistIntent } from './liftScientistIntent.js';
 import { parse as parseYaml } from 'yaml';
@@ -62,7 +62,7 @@ function promptArgContractBlock(vocab: ScientistIntentVocabulary): string {
   const lines: string[] = [];
   for (const verb of vocab.verbs()) {
     const args = vocab.argContracts(verb)
-      .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+      .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
       .join(', ');
     lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
   }

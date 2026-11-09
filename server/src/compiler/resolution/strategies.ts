@@ -12,6 +12,7 @@
  */
 import type { RankedCandidate } from '../../resolve/types.js';
 import type { ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
+import { declaredDomains } from '../scientistIntent/vocabulary.js';
 import { filterCandidatesByDeclaredDomain } from './adapters.js';
 import type {
   EngineFailure,
@@ -47,19 +48,26 @@ async function gatherFrom(
  *  (SPINE-1's declaration, "SPINE-3 is that consumer") fills it when the
  *  vocabulary declares none, and a declared/expected disagreement is traced. */
 function withDomainFilter(req: ResolutionRequest, outcome: StrategyOutcome): StrategyOutcome {
-  const effectiveDomain = req.declared.domain ?? req.expectedDomain;
+  const declaredSlot = req.declared.domain;  // the only permitted read (ruling c94bd866 §1.2)
+  const declaredTags = declaredDomains(declaredSlot);
+  const expectedTags = declaredDomains(req.expectedDomain);
+  const effectiveDomain = declaredSlot ?? req.expectedDomain;
   const { eligible, rejected } = filterCandidatesByDeclaredDomain(outcome.candidates, effectiveDomain);
+  const containsExpected = expectedTags.length > 0 && declaredTags.length > 0
+    ? declaredTags.some((t) => expectedTags.includes(t))
+    : false;
   const disagreement =
-    req.declared.domain && req.expectedDomain && req.declared.domain !== req.expectedDomain
-      ? [`domain-expectation: declared ${req.declared.domain} vs doc expected ${req.expectedDomain} for ${req.verb}.${req.argument}`]
+    declaredSlot && req.expectedDomain && !containsExpected
+      ? [`domain-expectation: declared ${declaredTags.length === 1 ? declaredTags[0] : '[' + declaredTags.join(', ') + ']'} vs doc expected ${req.expectedDomain} for ${req.verb}.${req.argument}`]
       : [];
+  const effectiveDomainStr = Array.isArray(effectiveDomain) ? '[' + effectiveDomain.join(', ') + ']' : effectiveDomain ?? 'none';
   return {
     candidates: eligible,
     failures: outcome.failures,
     traces: [
       ...outcome.traces,
       ...disagreement,
-      ...rejected.map((r) => `domain-mismatch: ${r.curie} rejected for declared domain ${effectiveDomain ?? 'none'}`),
+      ...rejected.map((r) => `domain-mismatch: ${r.curie} rejected for declared domain ${effectiveDomainStr}`),
     ],
   };
 }
@@ -126,6 +134,43 @@ const mintLocal: ResolutionStrategy = {
   resolveAmbiguity: () => 'clarify',
 };
 
+// declaration_precedence — resolves a multi-candidate in-band set to the
+// SINGLE candidate carrying formulationDeclared: true when it is the unique
+// top-score winner. formulationDeclared is a typed contract term
+// (server/src/resolve/types.ts:51: "Present only when true: the record's
+// payload structurally declares a testable formulation"). The narrowed band
+// (one candidate) binds through the existing inBand.length === 1 path.
+// When the strategy cannot narrow (single spine hit, or multiple candidates
+// without a unique declared winner), it contributes an empty candidate set —
+// preserving failures and traces — so the engine falls through to the next
+// strategy in strategyOrder (resolutionEngine.ts:386).
+// The precedence is DECLARED IN DATA (ruling 11a181c0 Q1): the strategy id
+// is named in strategyOrder and ambiguity.strategyRef — no TS comparator,
+// no name/level literal. This strategy gathers the spine once, but
+// candidates are only contributed when a declared twin pair was narrowed.
+const declarationPrecedence: ResolutionStrategy = {
+  id: 'declaration_precedence',
+  applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
+  gather: async (req, ctx) => {
+    const outcome = withDomainFilter(req, await gatherFrom(req, ctx, ['spine']));
+    // Narrow the band: sort by score DESC, curie ASC (matches resolutionEngine sortCandidates)
+    const sorted = [...outcome.candidates].sort((a, b) => b.score - a.score || a.curie.localeCompare(b.curie));
+    if (sorted.length > 1) {
+      const topScore = sorted[0]!.score;
+      // Count candidates at top score that carry formulationDeclared === true
+      const declaredAtTop = sorted.filter((c) => c.score === topScore && c.formulationDeclared === true);
+      // Exactly one declared candidate at top score => narrow to it
+      if (declaredAtTop.length === 1) {
+        return { candidates: [declaredAtTop[0]!], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: narrowed to declared formulation'] };
+      }
+    }
+    // Not narrowed — contribute empty candidates so the engine falls through
+    // to the next strategy (resolutionEngine.ts:386). Keep failures/traces.
+    return { candidates: [], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: not narrowed — no contribution'] };
+  },
+  resolveAmbiguity: () => 'clarify',
+};
+
 // accept_top_ranked — an ambiguity-arm strategy that accepts the top-ranked
 // in-band candidate. Reachable ONLY when the vocabulary DATA names it
 // (strategyOrder + ambiguity.strategyRef); the shipped vocabulary does not.
@@ -144,5 +189,6 @@ export function buildStrategyRegistry(): Map<string, ResolutionStrategy> {
     [ontologyResolution.id, ontologyResolution],
     [mintLocal.id, mintLocal],
     [acceptTopRanked.id, acceptTopRanked],
+    [declarationPrecedence.id, declarationPrecedence],
   ]);
 }

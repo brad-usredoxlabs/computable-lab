@@ -1,0 +1,7 @@
+{
+  "deterministic": false,
+  "verdict_in": ["proposal", "cards", "honest-failure"],
+  "grounding_required": true,
+  "navigation_surface": "sequences",
+  "note": "P9 layer (a): honest trichotomy — NEVER the silent success-with-nothing. 'align all 16S sequences' is a GENUINE ambiguity (addendum: no lane record is labeled 16S; the 3 sequence records are pUC19 probe / Gate Seq Alpha / Gate Seq Beta). A grounded run_mafft proposal over grounded refs, a server-compiled navigation frame to the sequences surface, answerable cards naming which records are treated as the 16S set, or a named wall are ALL honest outcomes. The verdict is NEVER pinned to a guessed record set (OQ2). If a proposal, every record ref must resolve in context.records (B2). Channel shapes only — never prose, never intent-name-pinned (B9)."
+}

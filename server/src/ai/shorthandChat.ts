@@ -38,6 +38,7 @@ import {
   type ScientistIntentCompileDeps,
 } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
+import { buildMaterialCompositionLookup } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
 import type { RecordStore } from '../store/types.js';
 import type {
@@ -45,7 +46,17 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import type { LabStateSnapshot } from '../compiler/state/LabState.js';
+import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
+import { MATERIAL_SCHEMA_ID } from '../materials/MaterialGrounding.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import { loadCanonicalLabelPolicy } from '../compiler/resolution/canonicalLabelPolicy.js';
+import {
+  assumedQuantityFor,
+  assumedWellsFor,
+  loadAssumedQuantities,
+} from '../compiler/resolution/assumedQuantities.js';
+import { foldSameNounCards } from '../compiler/resolution/clarificationDedupe.js';
 import {
   formatFractionString,
   loadFractionConvention,
@@ -54,6 +65,63 @@ import {
 } from '../compiler/scientistIntent/compositionFractions.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
+import {
+  clarificationAskCount,
+  clarificationLoopEscalation,
+  clarificationLoopRequestIds,
+} from './clarificationLoopAsk.js';
+
+/** The inner key of the model's mint structured token.
+ * The model's tool/args shape declares `mint?: { label: string; domain?: string }`
+ * (server/src/resolve/types.ts:74). The measured draw-5 blob
+ * `{mint:{label:clofibrate,domain:chemical}}` confirms the key is `label`. */
+const MINT_INNER_KEY = 'label';
+
+/**
+ * Extract the human-readable label from a fact's label string.
+ *
+ * If the label is a serialized structured token carrying an inner `label` field
+ * (e.g. `{mint:{label:clofibrate,domain:chemical}}`), returns the inner label
+ * (`clofibrate`). Otherwise returns the label unchanged.
+ *
+ * This is the DISPLAY seam: `displayLabel`, `query`, `mintable`, and escalation
+ * copy all derive from this result. The raw `unresolvedFact.label` stays
+ * verbatim (provenance).
+ *
+ * When no usable inner label exists, returns `undefined` — the caller should
+ * fall back to the fact's `reason`-driven copy.
+ */
+function extractHumanLabel(label: string): string | undefined {
+  if (typeof label !== 'string' || label.length === 0) return undefined;
+  const trimmed = label.trim();
+  // Only attempt extraction when the label looks like a structured token
+  const looksLikeStructured = trimmed.startsWith('{') && trimmed.endsWith('}');
+  if (!looksLikeStructured) return label;
+  // Try JSON parse first (handles quoted values)
+  try {
+    const parsed = JSON.parse(label);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [, value] of Object.entries(parsed)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const inner = (value as Record<string, unknown>)[MINT_INNER_KEY];
+          if (typeof inner === 'string' && inner.length > 0) return inner;
+        }
+      }
+      // Valid JSON object but no usable inner label — don't render
+      return undefined;
+    }
+  } catch {
+    // Not valid JSON — try regex fallback for unquoted values
+  }
+  // Regex fallback for unquoted values (e.g. {mint:{label:clofibrate,...}})
+  // Capture up to the structural delimiters (comma or closing brace) allowing
+  // spaces and hyphens within the label value.
+  const match = new RegExp(`${MINT_INNER_KEY}:([\\w\\s-]+?)(?:,|})`).exec(label);
+  if (match && match[1]) return match[1].trim();
+  // Structured token without usable inner label — don't render the serialization
+  return undefined;
+}
+
 import type {
   AgentClarificationAnswer,
   AgentClarificationRequest,
@@ -131,6 +199,23 @@ export interface ShorthandCompileDeps {
    * byte-identically. No deck context wired ⇒ zero behavior change.
    */
   deckLabwares?: readonly DeckLabwareSummary[];
+  /**
+   * WELLSET-RESOLVER-1: the conversation's PRIOR lab state (the committed
+   * contents layer) — read from the LabStateCache keyed by the conversation
+   * and threaded VERBATIM into compileScientistIntent (whose resolve_wellsets
+   * pass folds it into the contents ledger beside the current document's own
+   * events). Absent: every other caller is byte-unchanged (the compile's own
+   * `deps.priorLabState ?? emptyLabState()` arm). exactOptionalPropertyTypes:
+   * the key is ABSENT, never undefined — the caller spreads conditionally.
+   */
+  priorLabState?: LabStateSnapshot;
+  /**
+   * ANSWER-BIND-1: the caller-validated clarification answers (mention idiom
+   * parsed + recordId confirmed in the store by the handler). Threaded VERBATIM
+   * into compileScientistIntent — the pass, not this module, decides slot
+   * matching. Absent: every other caller is byte-unchanged.
+   */
+  answeredSlots?: readonly import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[];
 }
 
 /**
@@ -196,6 +281,35 @@ export interface ResolvedLabwareOffer {
   title?: string;
 }
 
+/**
+ * L2-FREEFORM-1 H1 (bait B3): one REFUSED labware ref. The binder no longer
+ * fail-opens — an event whose top-level `labwareId` is a raw scientist LABEL
+ * that it cannot bind (an AMBIGUOUS deck name with duplicate plates, or an
+ * UNMATCHED label) is DROPPED from `events` and reported here LOUDLY. The
+ * refusal is STRUCTURE, not lexicon (never-guess): `candidates` lists EVERY
+ * deck/record id the name collided with (ambiguous) or is EMPTY (unmatched);
+ * the server mints no id, guesses no disambiguation. The complete-path mapper
+ * rides these on `AgentResult.unboundRefs` + answerable clarification cards so
+ * the scientist picks — the silent success-with-zero-events shape cannot exit.
+ */
+export interface UnboundLabwareRef {
+  /** The event the refusal belongs to (the dropped event's own id, if any). */
+  eventId?: string;
+  /** The raw scientist label as the model emitted it (verbatim). */
+  label: string;
+  /** Every deck/record id the label collided with (ambiguous) — or [] (unmatched). */
+  candidates: string[];
+  reason: 'ambiguous' | 'unmatched';
+}
+
+/** The binder's report: the surviving bound events + the refused refs. */
+export interface BindShorthandEventsResult<T extends object> {
+  /** The events that SURVIVED (bound, already-a-deck-id, or no top-level ref). */
+  events: T[];
+  /** The refs the binder REFUSED (dropped) — empty when every event bound. */
+  unboundRefs: UnboundLabwareRef[];
+}
+
 export function bindShorthandEventsToDeck<T extends object>(
   events: readonly T[],
   deck: readonly DeckLabwareSummary[] | undefined,
@@ -209,10 +323,12 @@ export function bindShorthandEventsToDeck<T extends object>(
   // still wins a collision: a labware physically on the deck binds to the
   // deck id first. Zero name literals — every pair is compile output.
   resolved?: readonly ResolvedLabwareOffer[] | undefined,
-): T[] {
+): BindShorthandEventsResult<T> {
   const hasDeck = Array.isArray(deck) && deck.length > 0;
   const hasResolved = Array.isArray(resolved) && resolved.length > 0;
-  if ((!hasDeck && !hasResolved) || events.length === 0) return [...events];
+  if ((!hasDeck && !hasResolved) || events.length === 0) {
+    return { events: [...events], unboundRefs: [] };
+  }
   const idByName = new Map<string, { id: string; ambiguous: boolean }>();
   const knownIds = new Set<string>();
   if (hasDeck) {
@@ -241,6 +357,42 @@ export function bindShorthandEventsToDeck<T extends object>(
       }
     }
   }
+  // L2-FREEFORM-1 H1 (bait B3): the binder now classifies a raw label it CANNOT
+  // bind and REFUSES it (never-guess: an ambiguous name lists EVERY candidate,
+  // an unmatched one lists none). The refused event is DROPPED from `events`
+  // and rides `unboundRefs` so the mapper can report LOUDLY. `candidates` is
+  // collected per name across the deck (ambiguous) — structural, no lexicon.
+  const nameCandidateIds = new Map<string, string[]>();
+  if (hasDeck) {
+    for (const lw of deck!) {
+      if (!lw || typeof lw.labwareId !== 'string') continue;
+      if (typeof lw.name !== 'string') continue;
+      const key = lw.name.trim().toLowerCase();
+      if (!key) continue;
+      const list = nameCandidateIds.get(key);
+      if (list) {
+        if (!list.includes(lw.labwareId)) list.push(lw.labwareId);
+      } else {
+        nameCandidateIds.set(key, [lw.labwareId]);
+      }
+    }
+  }
+  const classifyRefusal = (ref: unknown): UnboundLabwareRef | undefined => {
+    if (typeof ref !== 'string' || !ref.trim()) return undefined;
+    if (knownIds.has(ref)) return undefined; // already a deck id
+    if (hasResolved && (resolved as Array<{ recordId: string }>).some((offer) => offer?.recordId === ref)) {
+      return undefined; // already a resolved record id (H2 channel)
+    }
+    const key = ref.trim().toLowerCase();
+    const hit = idByName.get(key);
+    if (hit && !hit.ambiguous) return undefined; // clean single bind — not a refusal
+    const bound = resolvedByName.get(key);
+    if (bound && !bound.ambiguous) return undefined; // clean resolved bind
+    if (hit) {
+      return { label: ref, candidates: nameCandidateIds.get(key) ?? [], reason: 'ambiguous' };
+    }
+    return { label: ref, candidates: [], reason: 'unmatched' };
+  };
   const bindRef = (ref: unknown): string | undefined => {
     if (typeof ref !== 'string' || !ref.trim()) return undefined;
     if (knownIds.has(ref)) return undefined; // already a deck id
@@ -250,10 +402,26 @@ export function bindShorthandEventsToDeck<T extends object>(
     const bound = resolvedByName.get(key);
     return bound && !bound.ambiguous ? bound.id : undefined;
   };
-  return events.map((raw) => {
+  // The binder REFUSES an event whose TOP-LEVEL labwareId is a raw label it
+  // cannot bind (ambiguous or unmatched) — that event is dropped from the
+  // bound set and reported in `unboundRefs`. An event with NO top-level ref,
+  // or one whose top-level ref binds cleanly / is already an id, survives
+  // with the existing details-side repair arms (Task 21/22, COMP-1) intact.
+  const kept: T[] = [];
+  const unboundRefs: UnboundLabwareRef[] = [];
+  for (const raw of events) {
     const ev = raw as Record<string, unknown>;
-    let changed = false;
+    const refusal = classifyRefusal(ev.labwareId);
+    if (refusal) {
+      unboundRefs.push(
+        typeof ev.eventId === 'string' && ev.eventId.length > 0
+          ? { ...refusal, eventId: ev.eventId }
+          : refusal,
+      );
+      continue; // dropped — the raw label never rides through
+    }
     const next: Record<string, unknown> = { ...ev };
+    let changed = false;
     const boundTop = bindRef(ev.labwareId);
     if (boundTop) {
       next.labwareId = boundTop;
@@ -325,8 +493,9 @@ export function bindShorthandEventsToDeck<T extends object>(
         changed = true;
       }
     }
-    return (changed ? next : raw) as T;
-  });
+    kept.push((changed ? next : raw) as T);
+  }
+  return { events: kept, unboundRefs };
 }
 
 /**
@@ -393,6 +562,11 @@ export async function compileShorthandDeterministically(
   if (!deps.store) return null;
   const spine = createResolveSpineFromContext({ store: deps.store });
   const reuseBindings = deps.reuseBindings ?? [];
+
+  // GATE-4-D1 (u9): prefetch material-spec formulation.composition entries
+  // so the resolve_roles pass expands them into solute+solvent snapshots.
+  const materialCompositionMap = await buildMaterialCompositionLookup(deps.store);
+
   return compileScientistIntent(doc, {
     spine: reuseBindings.length > 0
       ? composeSpineWithReuseBindings(spine, reuseBindings)
@@ -401,6 +575,18 @@ export async function compileShorthandDeterministically(
     ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
     ...(deps.answeredClarificationLabels
       ? { answeredClarificationLabels: deps.answeredClarificationLabels }
+      : {}),
+    // ANSWER-BIND-1: the validated answers ride into the pass verbatim — the
+    // pass matches them against the PARSED intent's declared resolvable slots.
+    ...(deps.answeredSlots ? { answeredSlots: deps.answeredSlots } : {}),
+    // WELLSET-RESOLVER-1: the committed contents layer rides the compile as
+    // the resolve_wellsets pass's priorLabState (conditional spread — the key
+    // is ABSENT, never undefined, per exactOptionalPropertyTypes).
+    ...(deps.priorLabState ? { priorLabState: deps.priorLabState } : {}),
+    // GATE-4-D1: the composition prefetch lookup — conditional spread so the
+    // key is ABSENT (not undefined) when empty, respecting exactOptionalPropertyTypes.
+    ...(materialCompositionMap
+      ? { materialComposition: (id: string) => materialCompositionMap!.get(id) }
       : {}),
   });
 }
@@ -457,6 +643,17 @@ export interface HeldShorthandIntent {
    * Travels with the held intent; MAX_HELD eviction semantics unchanged.
    */
   answeredSlots?: readonly AnsweredSlot[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the per-requestId ask ledger (the N=1
+   * occurrence counter for the requestId-identity loop detector — the
+   * `looped` flag flips on the SECOND occurrence of a content-keyed
+   * factRequestId, paraphrase or not; clarificationLoopAsk.ts). Data on the
+   * hold (the `answeredSlots` precedent): the fold re-hold advances it and
+   * the fold arm's mapper reads it (the LIVE seed — it outranks the wire
+   * channel); the take/clear/eviction lifecycle is unchanged. Absent on a
+   * hold minted before this leg (undefined ⇒ first ask).
+   */
+  loopAskCounts?: Record<string, number>;
 }
 
 /** One closed slot identity (SH-QA-1 ledger entry). */
@@ -570,6 +767,15 @@ export function clearHeldShorthandIntent(key: string): boolean {
  * AgentClarificationRequest.id (the app echoes it verbatim; no wire SHAPE
  * change). The legacy `unresolved-<n>` positional mint is retired here and
  * kept ONLY as the fold's pinned back-compat fallback (OQ2 ruling).
+ *
+ * CARD1-D3 (ruling §3(ii), l2t1430): the `label` rides the key as the
+ * CANONICAL identity — `canonicalLabelKey(fact.label)` (NFKC -> trim ->
+ * collapse inner whitespace -> toLowerCase("en")) — so a case / extra-space /
+ * NFKC variant of the SAME term mints the SAME id (`1 mM Clofibrate  in DMSO`
+ * === `1 mM clofibrate in DMSO` -> one id). The OTHER key components
+ * (actionIndex, action, argument, reason) are UNCHANGED verbatim (reason is
+ * prose, never canonicalized — ruling §3(i)). Everything else about the
+ * `unresolved-c-<sha1-10hex>` shape is preserved.
  */
 export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
   const key = JSON.stringify([
@@ -577,7 +783,7 @@ export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
     fact.actionLocation?.action ?? null,
     fact.actionLocation?.argument ?? null,
     fact.reason,
-    fact.label,
+    canonicalLabelKey(fact.label),
   ]);
   const digest = createHash('sha1').update(key).digest('hex').slice(0, 10);
   return `unresolved-c-${digest}`;
@@ -740,8 +946,24 @@ export function answeredClarificationLabelsFromBatch(
  */
 export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
+  /**
+   * D3 (CARD1-D3 ruling l2t1430 §2 rule 3 + §3 read path (i)): precomputed
+   * canonical-label map, keyed by `canonicalLabelKey(fact.label)` -> the
+   * record TITLE for facts whose local-term record is GROUNDED in the store
+   * (STAGE A). Built by the async store-GET seam in `shorthandResultFromCompile`
+   * (the ruling's "plumbing a READ-ONLY store reference into the map" — done
+   * one level up so this mapper stays synchronous for its direct unit callers).
+   * Absent / no entry for a key => STAGE B: the label's IDENTITY FORM
+   * (`canonicalLabelKey`), which is the 10-identical-fresh-draws guarantee.
+   */
+  canonicalLabels?: ReadonlyMap<string, string>,
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
+  // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE policy, loaded PER call
+  // (the nounShape discipline — never process-cached, so a data edit needs no
+  // stack restart). The stamp reads whatever the DATA declares — zero
+  // verb/argument/value literals here.
+  const assumedValues = loadAssumedQuantities();
   // SH-QA-3 (fix 2, OQ3 ruling): the mint affordance is gated by the
   // noun-shape DATA (config/drafting/shorthand-drafting.yaml `nounShape:`,
   // loaded PER call). A card whose label is a prose sentence REFUSES the
@@ -755,6 +977,19 @@ export function clarificationsFromUnresolvedFacts(
   // (the nounShape/fraction-convention discipline) — only consulted to render
   // a reading option's fractions through the declared template.
   const fractionConfig = loadFractionConvention();
+  // CARD1-D3 FIX-2 (advc c7 DEFECT 1, BLOCKER — the declared policy was DEAD
+  // DATA with zero production call sites): the STAGE A/B display FORM is the
+  // DECLARED `canonicalLabel` policy (the vocabulary DATA block under the
+  // material domain), loaded PER call — the nounShape/assumedValues law,
+  // never process-cached, so a data edit needs no stack restart. The code
+  // only FOLLOWS the declared tokens (the render branch below); it carries
+  // no display rule of its own and NO hardcoded fallback policy:
+  // `loadCanonicalLabelPolicy` THROWS on an absent or malformed block
+  // (naming the path), so this render path STOPS instead of limping on the
+  // pre-FIX-2 `?? identityKey` implicit default — the loader's throw-on-
+  // absent arm is now load-bearing on the render path: deleting the YAML
+  // block fails the render loudly.
+  const canonicalPolicy = loadCanonicalLabelPolicy();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
@@ -767,23 +1002,142 @@ export function clarificationsFromUnresolvedFacts(
     const menuProvider = readings
       ? 'choice'
       : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
-    const mintable = isMintableLabel(fact.label, nounShape);
+    // CARD-1 D2: extract the human label from a structured token blob so the
+    // display seam never renders the raw serialization. A plain string passes
+    // through byte-identically. When the token carries no usable inner label,
+    // returns undefined — the display falls back to the fact's reason.
+    const humanLabel = extractHumanLabel(fact.label);
+    // When extractHumanLabel returns undefined (structured token, no inner label),
+    // fall back to the reason — the template supports a label-free reading.
+    // For plain strings, humanLabel is the original label.
+    const displayLabelSource = humanLabel ?? fact.reason;
+    const mintable = isMintableLabel(displayLabelSource, nounShape);
     const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i)): the DISPLAYED
+    // label token is the canonical label — the record TITLE when a local-term
+    // record for this identity is GROUNDED (STAGE A, resolved by the store-GET
+    // seam upstream and passed on `canonicalLabels`), else the label's IDENTITY
+    // FORM (STAGE B, `canonicalLabelKey`). This is the ONE label token the
+    // ruling scopes the fold to — the sentence template around it stays
+    // byte-identical and the raw `unresolvedFact` mirror keeps the model's
+    // verbatim label (provenance). NEVER `canonicalLabelKey` of a grounded
+    // record (the map always resolves STAGE A first).
+    // FIX-2 (advc c7 DEFECT 1): the display FORM is chosen by the DECLARED
+    // policy tokens (loaded per call above), not by an implicit
+    // `?? identityKey` fallback — ruling §6: policy in the YAML block, code
+    // only follows it, no hardcoded fallback policy. The loader has already
+    // thrown on an absent / non-token block, so each arm sees only a declared
+    // token; the unknown-token arms are unreachable for valid DATA and THROW
+    // loudly rather than invent a second display rule (fail-loud parity with
+    // the loader).
+    // CARD-1 D2: use the human label (extracted inner label or the fact's reason)
+    // so the blob serialization never reaches display. The raw label on
+    // `unresolvedFact` stays verbatim (provenance contract).
+    // D3 ruling: identity derives from the LABEL — never from the reason.
+    // For a blob, use the extracted inner label; for a plain string, use
+    // the original label. A reason must never enter an identity key.
+    const identityKey = canonicalLabelKey(humanLabel ?? fact.label);
+    const groundedTitle = canonicalLabels?.get(identityKey);
+    // The display label uses displayLabelSource (humanLabel ?? fact.reason)
+    // so the blob serialization never reaches display. Keep this separate from
+    // identityKey — the identity key is for grounded-title lookup, the display
+    // source controls what the scientist sees.
+    let displayLabel: string;
+    if (groundedTitle !== undefined) {
+      // STAGE A (a record is grounded): the declared `mintedDisplay` token
+      // (`record-title`) says the record's TITLE is the display form.
+      if (canonicalPolicy.mintedDisplay === 'record-title') {
+        displayLabel = groundedTitle;
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE A display token "${canonicalPolicy.mintedDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    } else {
+      // STAGE B (no grounded record): the declared `preMintDisplay` token
+      // (`identity-case`) says the label's IDENTITY FORM is the display form.
+      if (canonicalPolicy.preMintDisplay === 'identity-case') {
+        displayLabel = canonicalLabelKey(displayLabelSource);
+      } else {
+        throw new Error(
+          `canonical-label policy: STAGE B display token "${canonicalPolicy.preMintDisplay}" ` +
+            `is not a declared token — no hardcoded fallback policy`,
+        );
+      }
+    }
     const nounPrompt = mintable
-      ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
-      : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
+      ? `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+      : `The draft names "${displayLabel}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
     const message = factMessage(fact);
+    // L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE control for a DECLARED
+    // slot — keyed on the vocabulary's declared KIND (data, one source) + an
+    // exact (verb, argument) join in the assumed-value DATA. A fact whose slot
+    // has NO declaration gets NO `clarifyControl` key (conditional spread below;
+    // exactOptionalPropertyTypes — never `undefined`). The quantity arm's prompt
+    // is the DATA `question` rendered with {label}{value}{unit}{verb}; the
+    // noun template is NOT used (it would name the argument as if it were
+    // an unbound NOUN).
+    // `entityType` is the declared argument name so the answer sentence reads
+    // `Use <n> <unit> for <argument>.` (the sentence SHAPE is untouched — only
+    // the `target` token differs, and only for request families that did not
+    // exist before).
+    const slotKind = loc?.action && typeof loc.argument === 'string'
+      ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.kind
+      : undefined;
+    let clarifyControl: AgentClarificationRequest['clarifyControl'];
+    let assumedPrompt: string | undefined;
+    if (slotKind === 'quantity' && loc?.action && typeof loc.argument === 'string') {
+      const entry = assumedQuantityFor(loc.action, loc.argument, assumedValues);
+      if (entry) {
+        // Project the DECLARED control fields — the wire type
+        // (AgentClarificationRequest.clarifyControl) declares EXACTLY these:
+        // label/value/unit/source/question. The entry ALSO carries its join
+        // keys (verb/argument); projecting keeps the wire object byte-equal to
+        // the declared shape (no phantom fields the app mirror type does not
+        // declare). `question` is the RAW DATA template (the client renders
+        // the server's declared sentence, not invented copy); the card's
+        // `prompt` is the RENDERED form (below). Data-driven: every value
+        // comes from the assumed-value DATA, no verb/argument/value literals.
+        clarifyControl = {
+          kind: 'quantity',
+          label: entry.label,
+          value: entry.value,
+          unit: entry.unit,
+          source: entry.source,
+          question: entry.question,
+        };
+        assumedPrompt = renderAssumedQuestion(entry.question, {
+          label: entry.label, value: entry.value, unit: entry.unit, verb: loc.action,
+        });
+      }
+    } else if (slotKind === 'wells' && loc?.action && typeof loc.argument === 'string') {
+      const entry = assumedWellsFor(loc.action, loc.argument, assumedValues);
+      if (entry) {
+        clarifyControl = { kind: 'wells', question: entry.question };
+        assumedPrompt = entry.question;
+      }
+    }
     return {
       id: factRequestId(fact),
       kind,
       // The READING arm's prompt is the bar's OWN data-derived message (the
       // message is consulted ONLY on this arm — a fact without readings keeps
       // the noun template byte-identically, whatever else it carries).
-      prompt: readings && message ? message : nounPrompt,
+      // The assumed-value arm (clarifyControl present) uses the DATA question
+      // instead of the noun template (it would say `The draft names "volumeUl"…`).
+      prompt: assumedPrompt ?? (readings && message ? message : nounPrompt),
       origin: 'harness',
-      entityType: kind,
+      // The assumed-value arms key off the DECLARED argument name so the
+      // answer sentence reads `Use 100 uL for volumeUl.`; every other fact
+      // keeps the domain-map `kind` byte-identically.
+      entityType: clarifyControl ? loc!.argument! : kind,
       menuProvider,
-      query: fact.label,
+      // D3 (ruling l2t1430 §3 read path (i)): the request's LABEL rides the
+      // canonical display string (STAGE A record title / STAGE B identity
+      // form) — one entity, one string, everywhere. The `unresolvedFact`
+      // mirror below keeps the RAW model label verbatim (provenance).
+      query: displayLabel,
       // Forced-draft mode offers NO model-authored options; the live /m or /l
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched. A READING fact's
@@ -796,8 +1150,130 @@ export function clarificationsFromUnresolvedFacts(
       })),
       allowCreateLocal,
       unresolvedFact: fact,
+      ...(clarifyControl !== undefined ? { clarifyControl } : {}),
     };
   });
+}
+
+/**
+ * D3 (CARD1-D3 ruling l2t1430 §3 read path (i)) — the READ-ONLY canonical-label
+ * seam. `canonicalLabel(fact)`, batched: for each unresolved fact, resolve the
+ * fact's local-term record by its identity id
+ * (`localMaterialIdForLabel(fact.label)`) and, when a record EXISTS, return its
+ * TITLE (STAGE A — the record owns the label; the mint-offer seam's
+ * `payload.name` is that title, read verbatim like VocabHandlers' store GET).
+ * Facts with no grounded record are ABSENT from the map, so the caller renders
+ * their IDENTITY FORM (STAGE B, `canonicalLabelKey`) — never a lowercased
+ * record title, never the raw model label.
+ *
+ * READ-ONLY: this helper issues `store.get` ONLY. It never writes, mints, or
+ * otherwise mutates the store (the ruling: "ask-time is read-only"; the mint
+ * path owns the write).
+ *
+ * The map is keyed by `canonicalLabelKey(fact.label)` so the same identity
+ * (case/whitespace-drift variants) resolves to ONE title — the same
+ * `MAT-…` id the mint path derives. Deduped by recordId so a batch naming the
+ * same identity twice issues one GET. Absent store / absent record / malformed
+ * payload => no entry (STAGE B), which is the byte-identical pre-grounding
+ * behavior — the 10-fresh-draws guarantee.
+ */
+export async function canonicalLabelsForFacts(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  store?: RecordStore,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!store) return map;
+  // identityKey -> { recordId, title? } — dedupe by recordId.
+  const byKey = new Map<string, { recordId: string; title: string }>();
+  // First pass: resolve each fact to its identity id + record id, deduping.
+  for (const fact of facts) {
+    if (typeof fact.label !== 'string') continue;
+    const key = canonicalLabelKey(fact.label);
+    if (byKey.has(key)) continue;
+    const recordId = localMaterialIdForLabel(fact.label);
+    byKey.set(key, { recordId, title: '' });
+  }
+  // Second pass: one GET per distinct recordId (all in parallel — read-only).
+  await Promise.all([...byKey.values()].map(async (entry) => {
+    const env = await store.get(entry.recordId).catch(() => null);
+    // The material record's title lives in `payload.name` (VocabHandlers
+    // mint-offer GET precedent: `payloadName` = `payload.name.trim()`). A
+    // non-material / malformed payload yields no title => STAGE B (absent).
+    const payload: unknown = env?.payload;
+    const title =
+      payload && typeof payload === 'object' && typeof (payload as { name?: unknown }).name === 'string'
+        ? (payload as { name: string }).name.trim()
+        : '';
+    if (title) entry.title = title;
+  }));
+  // THIRD PASS — STAGE A name-keyed fallback: when the id-keyed GET misses
+  // (legacy record id predates the D3 scheme), resolve by the mint handler's
+  // own case-insensitive exact-name lookup. Mirrors VocabHandlers.ts:124-131
+  // and MaterialGrounding.ts:211-223.
+  // Cost model: ONE store.list per call, ZERO when every id hit. Two call
+  // sites total (AgentOrchestrator :1607 / :3224) ⇒ at most two store.list
+  // per turn, never N+1.
+  const unresolvedKeys = new Set<string>();
+  for (const [key, entry] of byKey) {
+    if (!entry.title) unresolvedKeys.add(key);
+  }
+  if (unresolvedKeys.size > 0 && typeof (store as { list?: unknown }).list === 'function') {
+    try {
+      const materials = await (store as { list?: (filter?: { schemaId?: string; limit?: number }) => Promise<any[]> }).list?.({ schemaId: MATERIAL_SCHEMA_ID, limit: 10000 });
+      if (materials && Array.isArray(materials)) {
+        // Build name.toLowerCase() -> envelope ONCE — first-match (set-if-absent)
+        // to mirror .find() semantics in the mint (MaterialGrounding.ts).
+        const nameMap = new Map<string, { payload: unknown }>();
+        for (const env of materials) {
+          const p = env?.payload;
+          if (p && typeof p === 'object' && typeof (p as { name?: unknown }).name === 'string') {
+            const lowered = (p as { name: string }).name.trim().toLowerCase();
+            if (!nameMap.has(lowered)) nameMap.set(lowered, { payload: p });
+          }
+        }
+        // For each title-less key, match against the lowered stored name
+        // the mint uses (payloadName.toLowerCase()). On hit, set entry.title
+        // to the stored name verbatim — NEVER a folded form.
+        for (const key of unresolvedKeys) {
+          // Find the fact whose canonicalLabelKey matches this key
+          const factForKey = [...facts].find((f) =>
+            typeof f.label === 'string' && canonicalLabelKey(f.label) === key
+          );
+          if (factForKey) {
+            const loweredLabel = factForKey.label.toLowerCase();
+            const match = nameMap.get(loweredLabel);
+            if (match) {
+              const entry = byKey.get(key)!;
+              entry.title = (match.payload as { name: string }).name.trim();
+            }
+          }
+        }
+      }
+    } catch {
+      // list failed or threw — STAGE B behavior preserved
+    }
+  }
+  for (const [key, entry] of byKey) {
+    if (entry.title) map.set(key, entry.title);
+  }
+  return map;
+}
+
+/** L2-CLARIFY-TARGET-1 (Change 2): render the DATA-declared question template
+ *  for a slot by substituting the declared placeholders. The template and the
+ *  value/unit/label it names all come from the `assumedValues:` DATA — the TS
+ *  carries no wording, no number, no unit. An absent placeholder is left as
+ *  is (the loader already validates the quantity `question` carries `{value}`
+ *  and `{unit}`). */
+function renderAssumedQuestion(
+  template: string,
+  vars: Record<string, string | number>,
+): string {
+  let out = template;
+  for (const [key, value] of Object.entries(vars)) {
+    out = out.split(`{${key}}`).join(String(value));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -839,6 +1315,71 @@ function entryLabelCarrier(entry: unknown, label: string): EntryLabelCarrier | n
 }
 
 /**
+ * GHOSTPAINT-1 Leg 2B: applySoleDeckPlacement helper.
+ *
+ * When a folded document carries an action that names wells but has no labware
+ * identity, and the deck placements hold exactly one distinct non-empty
+ * labwareId, inject that id into the action's labware slot BEFORE the compile.
+ * The existing expander reads params.labware (simpleVerbs.ts:526) and emits a
+ * TOP-LEVEL labwareId, which the existing binder copies DOWN into
+ * details.labwareId (shorthandChat.ts:378-391).
+ *
+ * Zero or multiple placements write nothing. Actions that already carry
+ * labware, labware_id (in params), or labwareHint are never touched.
+ *
+ * PURE: returns a structuredClone-fresh doc; never mutates the argument.
+ */
+export function applySoleDeckPlacement(
+  doc: ScientistIntent,
+  placementLabwareIds: readonly string[],
+  deck?: readonly DeckLabwareSummary[],
+): ScientistIntent {
+  const distinct = new Set(
+    placementLabwareIds.filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+  if (distinct.size !== 1) return structuredClone(doc);
+  const sole = distinct.values().next().value;
+  if (!sole) return structuredClone(doc);
+
+  // Resolve the sole placement id against the deck: if a deck entry has
+  // labwareId === sole, inject the NAME (the compile's name-only lookup
+  // then resolves it back to that recordId — parity with the unfolded path).
+  // Unresolved placement id => no injection, never an unresolvable token.
+  let injectName: string | undefined;
+  if (Array.isArray(deck) && deck.length > 0) {
+    const deckEntry = deck.find(lw => typeof lw?.labwareId === 'string' && lw.labwareId === sole);
+    if (deckEntry && typeof deckEntry.name === 'string' && deckEntry.name.length > 0) {
+      injectName = deckEntry.name;
+    }
+  }
+
+  const out = structuredClone(doc);
+  for (const action of out.actions) {
+    const a = action as unknown as Record<string, unknown>;
+    // Guard: action must name wells
+    const hasWells = Array.isArray(a.sourceWells) && a.sourceWells.length > 0
+      || typeof a.sourceWells === 'string' && a.sourceWells.length > 0
+      || Array.isArray(a.targetWells) && a.targetWells.length > 0
+      || typeof a.targetWells === 'string' && a.targetWells.length > 0;
+    if (!hasWells) continue;
+    // Guard: action must carry NO labware identity
+    if (typeof a.labware === 'string' && a.labware.length > 0) continue;
+    if (typeof a.labwareHint === 'string' && a.labwareHint.length > 0) continue;
+    const params = a.params as Record<string, unknown> | undefined;
+    if (params && typeof params.labware_id === 'string' && params.labware_id.length > 0) continue;
+    // D4: also skip when params.labware is already set (the expander reads it)
+    if (params && typeof params.labware === 'string' && params.labware.length > 0) continue;
+    if (injectName) {
+      // Inject: the labware slot is optional; direct assignment on a fresh clone
+      // is safe under exactOptionalPropertyTypes (the clone has no pre-existing
+      // undefined labware).
+      a.labware = injectName;
+    }
+  }
+  return out;
+}
+
+/**
  * Fold clarification answers onto the held intent DETERMINISTICALLY. An answer
  * maps 1:1 when its requestId is the join id of a held unresolved fact AND the
  * fact carries an actionLocation (actionIndex + argument) AND the answer names
@@ -855,6 +1396,13 @@ export function foldAnswersIntoShorthand(
 ): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[]; bindings: AcceptedShorthandBinding[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
+  // L2-CLARIFY-TARGET-1 (Change 3): the DECLARED-kind splice arm needs the
+  // vocabulary (the declared KIND decides the arm — data, one source) and the
+  // assumed-value DATA (the quantity arm's unit check reads the DECLARATION's
+  // own unit — no `'uL'` literal). Per-call loaders, zero verb/argument
+  // literals.
+  const foldVocabulary = defaultScientistIntentVocabulary();
+  const foldAssumedValues = loadAssumedQuantities();
   // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
   // over the held bar's facts (exact match wins). A fact-order shift between
   // compiles cannot mis-fold anymore (the live iteration-2 hazard).
@@ -895,6 +1443,56 @@ export function foldAnswersIntoShorthand(
     if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return null;
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return null;
+    // L2-CLARIFY-TARGET-1 (Change 3): the DECLARED-kind splice arm. A `quantity`
+    // or `wells` slot cannot reach the string/array splice below (a numeric or
+    // ABSENT slot returns null at the `else` arm) — so a card answer for a
+    // numeric or absent slot could never fold (the RED this item fixes). The
+    // arm is keyed on the DECLARED KIND (data, one source — zero verb/argument
+    // literals):
+    //   `quantity` — the value comes from the answer's OWN `ref`
+    //     {kind:'quantity', value, unit} (PREFERRED — the APPROVED number,
+    //     never the assumed one). The unit must equal the DECLARATION's own
+    //     unit (assumedQuantityFor — no `'uL'` literal); ANY mismatch or a
+    //     missing ref/declaration ⇒ null (never guess — no ad-hoc label
+    //     parsing; the existing quantity parser is sentence-oriented, not a
+    //     slot-value parser). The NUMBER is written into action[argument]
+    //     (scientist-intent.schema.yaml types volumeUl as number).
+    //   `wells` — the answer's LABEL is expanded with the ONE parser
+    //     expandWellTokens and the ARRAY is written (a range STRING in a
+    //     declared `kind: wells` slot is a symbolic well LABEL to the engine
+    //     (SPINE-7) and would bar again — never write the string).
+    // Both arms: the answered fact is dropped exactly as the existing arms do;
+    // NO record bindings are recorded (the ref carries no `id`).
+    const declaredKind = typeof loc.action === 'string'
+      ? foldVocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.kind
+      : undefined;
+    if (declaredKind === 'quantity' || declaredKind === 'wells') {
+      if (declaredKind === 'quantity') {
+        const declared = typeof loc.action === 'string'
+          ? assumedQuantityFor(loc.action, loc.argument, foldAssumedValues)
+          : null;
+        const ref = (answer.ref ?? undefined) as
+          | { kind?: unknown; value?: unknown; unit?: unknown }
+          | undefined;
+        const refValue = ref && typeof ref.value === 'number' && Number.isFinite(ref.value)
+          ? ref.value
+          : null;
+        // No declaration for the arg ⇒ null (unchanged behaviour — the string/
+        // array arms already returned null for a numeric/absent slot). No ref,
+        // wrong ref kind, or unit mismatch ⇒ null (never guess).
+        if (!declared || refValue === null || ref?.kind !== 'quantity' || ref.unit !== declared.unit) {
+          return null;
+        }
+        action[loc.argument] = refValue;
+      } else {
+        const wells = expandWellTokens([label]);
+        if (wells.length === 0) return null;
+        action[loc.argument] = wells;
+      }
+      answered.add(fact);
+      answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
+      continue;
+    }
     // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
     // 'slot-not-string' — slotType=array (action-level composition) AND
     // slotType=undefined (composition nested under `params`; the schema
@@ -1135,8 +1733,44 @@ export function dropSatisfiedFacts(
     const entry = bySlot.get(`slot:${loc.actionIndex}:${loc.argument}`);
     if (!entry) return true;
     const value = (doc.actions[entry.actionIndex] as Record<string, unknown> | undefined)?.[entry.argument];
-    return value !== entry.label;
+    // CARD1-D3 (ruling §3(iii)): the slot is satisfied by the CANONICAL label,
+    // not the raw string — a case / extra-space / NFKC variant of the answered
+    // label still satisfies the slot (a fact re-derived under a drifted casing
+    // of an already-answered value must be dropped, not re-asked). The
+    // NON-STRING slot value keeps the existing "return true" arm (a non-string
+    // can never equal the answered string label; the old `value !==
+    // entry.label` arm returned true for it). The string comparison now rides
+    // the canonical key both sides.
+    if (typeof value !== 'string') return true;
+    return canonicalLabelKey(String(value ?? '')) !== canonicalLabelKey(entry.label);
   });
+}
+
+/**
+ * CARD1-D2 (fix5 U2): the answered-requestId drop for the re-extract answer
+ * turn. When the held-intent fold key flips between the ask turn and the
+ * answer turn (the `eventGraphId` null→real flip — `deriveContextCacheKey`
+ * folds it, so `takeHeldShorthandIntent` returns null), the model RE-EXTRACTS
+ * and re-derives the SAME fact. Post-D3 the fact's identity is CANONICAL-STABLE
+ * (`factRequestId` rides `canonicalLabelKey(fact.label)`), so the re-derived
+ * fact mints the SAME id the ask turn already offered — the id the client
+ * posts back in `clarificationAnswers[].requestId` (ALREADY ON THE WIRE).
+ *
+ * This drops, from a re-extract's clarifications, any fact whose
+ * `factRequestId` is in the answered-requestId set the wire carries. Pure and
+ * total: an empty set is a no-op (a fresh ask — no `clarificationAnswers` —
+ * never reaches a non-empty set, so a fresh ask stays free to ask). Keyed ONLY
+ * on the fact's content identity (the on-wire `requestId`), NEVER on prose and
+ * NEVER on a regex over the question. A fact the thread did NOT answer keeps
+ * its id out of the set and survives (the negative case: a different fact /
+ * different thread still asks).
+ */
+export function dropAnsweredRequestIds(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  answeredRequestIds: ReadonlySet<string>,
+): ScientistIntentUnresolvedFact[] {
+  if (answeredRequestIds.size === 0) return [...facts];
+  return facts.filter((fact) => !answeredRequestIds.has(factRequestId(fact)));
 }
 
 /**
@@ -1155,10 +1789,50 @@ export function heldReextractionContext(
   return [
     'CLARIFICATION ANSWERS for your previous shorthand document:',
     ...answerLines,
-    'Re-emit the COMPLETE corrected shorthand document (intent "event_shorthand") with these answers folded in. Keep every other action unchanged. Never write events, labware record ids, or deck slots.',
+    'Re-emit the COMPLETE corrected shorthand document (intent "event_shorthand") with these answers folded in. Keep every other action unchanged and KEEP the held document\'s intentId exactly as it appears below — do not mint a new intentId. Never write events, labware record ids, or deck slots.',
     'Held document:',
     heldYaml,
   ].join('\n');
+}
+
+/**
+ * L2-INTENTID-REDRAFT-1 (spec §2(b)): the deterministic identity-carry at the
+ * ai/ seam for the PERMITTED extraction-only fallback answer turn (OQ1). When
+ * the fold's never-guess null falls through to the model re-extract, the
+ * sampler re-emits the held document and MAY mint a FRESH intentId (Stage A:
+ * the contract quotes `intentId: <short id>` with no stability requirement) —
+ * that fresh id becomes the answer turn's result shorthand and the UI renders
+ * a NEW intent card with a DIFFERENT identity (the churn J2 grades). This
+ * carry makes the HELD identity win (a REUSE of held identity — the
+ * reuseBindings discipline — never a mint, never a guess about a NEW draft),
+ * rewriting the intentId field ONLY: actions/unresolved are untouched (the
+ * sampler's re-extraction is otherwise authoritative).
+ *
+ * Pure and total: returns null (no-op, nothing to carry) when the ids agree or
+ * the held id is absent; otherwise the carried doc (intentId replaced) + the
+ * re-serialized yaml that carries it. The yaml mirrors the fold's canonical
+ * re-serialization (shorthandChat.ts:1069-1074) key order — intentId,
+ * sourcePrompt (conditional — never dropped), actions, unresolved — so the
+ * result shorthand is the SAME canonical shape the fold arm emits. The held
+ * intentId rides the held document's OWN field (the identity the pre-answer
+ * card showed) — read, never re-derived. The caller applies the carry ONLY on
+ * the fallback answer turn (the model-turn result site), never on fresh turns
+ * (a fresh ask must stay free to mint) and never on the fold-SUCCESS arm (the
+ * fold already re-serializes the held intentId verbatim).
+ */
+export function carryShorthandIdentity(
+  doc: ScientistIntent,
+  heldIntentId: string | undefined,
+): { doc: ScientistIntent; yaml: string } | null {
+  if (!heldIntentId || doc.intentId === heldIntentId) return null;
+  const carried: ScientistIntent = { ...doc, intentId: heldIntentId };
+  const yaml = stringifyYaml({
+    intentId: carried.intentId,
+    ...(typeof carried.sourcePrompt === 'string' ? { sourcePrompt: carried.sourcePrompt } : {}),
+    actions: carried.actions,
+    unresolved: carried.unresolved,
+  });
+  return { doc: carried, yaml };
 }
 
 // ---------------------------------------------------------------------------
@@ -1186,12 +1860,41 @@ export function malformedShorthandRepairPrompt(
     'actions:',
     '  - action: add_material',
     '    material: "DMEM"',
-    '    volumeUl: 100',
     '    targetWells: [A1]',
     defaultScientistIntentVocabulary().contractBlock(),
     'Re-emit the agent_intent call with intent "event_shorthand" and a corrected `shorthand` document. Do not emit events.',
     'Rejected document:',
     rejectedYaml,
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Empty-shorthand repair (L2-SUITE-A-uifix2 FIX2, D4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The ONE repair prompt for the EMPTY-shorthand model-output gap (gate
+ * re-gate-3 D4: P5/P7 arrived with intent=event_shorthand and NO shorthand
+ * YAML — junk envelope keys or a bare clarification, never a document).
+ * Same discipline as malformedShorthandRepairPrompt: the contract is QUOTED
+ * from the registered vocabulary (data, never prose-invented), the original
+ * request is restated, and the re-ask demands the SAME intent with the
+ * `shorthand` field present. Origin-based: only the empty-shorthand guard
+ * emits it — a schema-REJECTED non-empty document keeps its own prompt.
+ */
+export function emptyShorthandRepairPrompt(prompt: string): string {
+  return [
+    'Your agent_intent call used intent "event_shorthand" but the `shorthand` field was EMPTY — there is no scientist-intent document to compile, so nothing could be drafted.',
+    'Re-emit the agent_intent call with intent "event_shorthand" and a COMPLETE `shorthand` document for this request: ' + prompt,
+    'The contract: a scientist-intent YAML document — top-level `intentId` + `actions[]` (each action carries `action` from the CLOSED vocabulary plus natural-language noun labels and numeric parameters); optional `unresolved`. No resolved record ids, no deck slots, no event primitives.',
+    'The shape the schema accepts (the verb is the VALUE of the `action` key):',
+    'intentId: <short id>',
+    'actions:',
+    '  - action: add_material',
+    '    material: "DMEM"',
+    '    targetWells: [A1]',
+    defaultScientistIntentVocabulary().contractBlock(),
+    'If the request genuinely CANNOT be drafted (a missing fact you cannot resolve), still emit the `shorthand` document with the action described and put the missing fact under `unresolved` — an empty `shorthand` field is never an acceptable answer.',
   ].join('\n');
 }
 
@@ -1244,15 +1947,81 @@ export function shorthandResultFromCompile(
   shorthandYaml: string,
   note: string,
   deck?: readonly DeckLabwareSummary[],
+  options?: {
+    /**
+     * L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's prior per-requestId
+     * ask ledger (from the PREVIOUS done result's `loopAskCounts` — the
+     * fold-free re-extraction seam) or the held intent's ledger (the fold
+     * seam). The needs-clarification branch advances it by THIS turn's asks
+     * (clarificationAskCount) and, when a requestId reaches its SECOND
+     * occurrence, flips the result into the honest escalation (error names
+     * the unresolvable noun — composed from requestId-scoped data, never a
+     * vocabulary literal — while the card channel STAYS: the refusal never
+     * removes the question). Absent ⇒ first ask ⇒ today's byte-identical
+     * cards-only shape.
+     */
+    priorLoopAskCounts?: Record<string, number>;
+    /**
+     * D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the precomputed
+     * canonical-label map (STAGE A record titles), built by the read-only
+     * store-GET seam `canonicalLabelsForFacts` upstream (the two
+     * AgentOrchestrator call sites, which hold the read-only store). Forwarded
+     * VERBATIM to `clarificationsFromUnresolvedFacts` so the card's displayed
+     * label is the record title when grounded, else the identity form. Absent
+     * ⇒ STAGE B everywhere (the pre-grounding behavior; every direct test
+     * caller stays byte-unchanged).
+     */
+    canonicalLabels?: ReadonlyMap<string, string>;
+  },
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
-    const requests = clarificationsFromUnresolvedFacts(compiled.clarifications);
+    const requests = foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications, options?.canonicalLabels));
     const legacy = legacyClarificationFromRequests(requests);
+    // L2-FREEFORM-1 H4 (OQ4 ruling): the requestId-identity loop detector.
+    // THIS turn's asks advance the ledger unconditionally (count = prior +
+    // this turn's content-keyed ids — stable across compiles,
+    // paraphrase-invariant); a count reaching 2 flips `looped` (N=1) — the
+    // honest escalation, with the QUESTION intact (B7: the card channel
+    // stays beside the error; the pick still works). Absent prior ⇒ first
+    // ask ⇒ the cards-only shape, with the count riding so the NEXT turn
+    // (fold re-hold or fold-free re-extraction) can see it.
+    const prior = options?.priorLoopAskCounts;
+    const counts =
+      requests.length > 0
+        ? clarificationAskCount(prior, requests.map((r) => r.id))
+        : {};
+    const loopedIds = clarificationLoopRequestIds(counts);
+    const loopedRequests = requests.filter((r) => loopedIds.includes(r.id));
+    if (loopedRequests.length > 0) {
+      const nounShape = loadNounShape();
+      const loopedFacts = loopedRequests.map((r) => {
+        const fact = r.unresolvedFact;
+        return {
+          label: extractHumanLabel(fact?.label ?? r.query ?? '') ?? r.query ?? fact?.label ?? '',
+          ...(typeof fact?.reason === 'string' && fact.reason.trim() !== '' ? { reason: fact.reason } : {}),
+          ...(fact && nounShape ? { mintRefused: !isMintableLabel(extractHumanLabel(fact.label) ?? fact.label, nounShape) } : {}),
+        };
+      });
+      return {
+        success: true,
+        events: [],
+        error: clarificationLoopEscalation(loopedFacts),
+        ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
+        ...(legacy ? { clarification: legacy } : {}),
+        ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
+        shorthand: shorthandYaml,
+      };
+    }
     return {
       success: true,
       events: [],
       ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
       ...(legacy ? { clarification: legacy } : {}),
+      // L2-FREEFORM-1 H4: the ledger rides on the FIRST ask too (absent when
+      // the turn asked nothing — conditional spread,
+      // exactOptionalPropertyTypes) so the NEXT turn's seed (the held
+      // intent's live count or the wire channel) starts at 1, not 0.
+      ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
       shorthand: shorthandYaml,
     };
   }
@@ -1263,7 +2032,7 @@ export function shorthandResultFromCompile(
       shorthand: shorthandYaml,
     };
   }
-  const events = bindShorthandEventsToDeck(
+  const { events: boundEvents, unboundRefs } = bindShorthandEventsToDeck(
     compiledEventsToProposals(compiled.terminalArtifacts.events),
     deck,
     // REVISE-GHOST-1 fix3 (gate Defect 1, f2mjyr 'events=3' with ghostTiles=0):
@@ -1275,6 +2044,46 @@ export function shorthandResultFromCompile(
     // discipline as labwareAdditions (exactOptionalPropertyTypes).
     compiled.terminalArtifacts.resolvedLabwares,
   );
+  // L2-FREEFORM-1 H1 (defense-in-depth): the binder REFUSES any event whose
+  // raw labware label it cannot bind (ambiguous deck name / unmatched). Those
+  // events are DROPPED (boundEvents carries only the survivors) and the
+  // refusal report rides LOUDLY — the silent shape { success, events>0-raw,
+  // cards==0, no error } can no longer exit this mapper. OQ1 granularity:
+  // surviving events stay; unbound refs ride the `unboundRefs` channel + a
+  // card per distinct label so the scientist disambiguates. When NOTHING
+  // binds, the whole turn is an honest failure naming the labels (the
+  // emptyDraftMessage family's "nothing applied" doctrine).
+  const refusedCards: AgentClarificationRequest[] = unboundRefs.map((ref) => ({
+    id: `unbound-${ref.reason}-${ref.label}`,
+    kind: 'labware' as const,
+    prompt: `The draft names "${ref.label}" as labware, but ${
+      ref.reason === 'ambiguous'
+        ? `the deck has ${ref.candidates.length > 1 ? 'multiple plates with that name' : 'no unique match'} — pick the plate you meant.`
+        : 'the lab spine could not match that name to a plate — pick the plate you meant.'
+    }`,
+    origin: 'harness' as const,
+    entityType: 'labware' as const,
+    menuProvider: '/l' as const,
+    query: ref.label,
+    options: ref.candidates.map((candidate) => ({ id: candidate, label: candidate })),
+  }));
+  if (unboundRefs.length > 0 && boundEvents.length === 0) {
+    const labels = [...new Set(unboundRefs.map((ref) => ref.label))].join(', ');
+    return {
+      success: false,
+      error: `no proposal: the draft named labware ${labels}, but none of it could be bound to the deck or the lab inventory — nothing was applied. ${
+        unboundRefs.some((ref) => ref.reason === 'ambiguous')
+          ? 'Rename the duplicate plates on the deck (or pick a plate) and re-ask.'
+          : 'Name the plate explicitly and re-ask.'
+      }`,
+      ...(unboundRefs.length > 0
+        ? { unboundRefs: unboundRefs as NonNullable<AgentResult['unboundRefs']> }
+        : {}),
+      ...(refusedCards.length > 0 ? { clarificationRequests: refusedCards } : {}),
+      shorthand: shorthandYaml,
+      notes: [note],
+    };
+  }
   // The compileResultToAgentResult precedent: gaps ride unresolvedRefs through
   // the same loose proposal shape the compiler path already emits.
   const unresolvedRefs = compiled.terminalArtifacts.gaps.map((gap) => ({
@@ -1283,11 +2092,16 @@ export function shorthandResultFromCompile(
     reason: `other: ${gap.message}`,
   }));
   const requests = compiled.clarifications.length > 0
-    ? clarificationsFromUnresolvedFacts(compiled.clarifications)
+    // L2-SUITE-A-uifix3 D4 (regate-5): the same-response same-noun fold —
+    // the same unresolved noun asked through two reason codes (the engine's
+    // ambiguous-noun + the producer's unrealized-mixture-blob-material)
+    // with the same only-action ships ONE card (the specific reason), not
+    // two identical mint cards. Same choke as the no-events arm above.
+    ? foldSameNounCards(clarificationsFromUnresolvedFacts(compiled.clarifications, options?.canonicalLabels))
     : [];
   return {
     success: true,
-    events,
+    events: boundEvents,
     // COMP-1 Task 20 (Part IV): the raw mapper's precedent
     // (compileResultToAgentResult, AgentOrchestrator.ts:612) — the compile
     // already puts resolve_labware's additions on terminalArtifacts
@@ -1312,7 +2126,14 @@ export function shorthandResultFromCompile(
       ? { resolvedLabwares: compiled.terminalArtifacts.resolvedLabwares }
       : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
+    // L2-FREEFORM-1 H1: the binder's refusal report rides when something
+    // unbound (mixed granularity per OQ1 — the surviving events stay, the
+    // unbound labels are reported LOUDLY). Absent-or-value (exactOptionalPropertyTypes).
+    ...(unboundRefs.length > 0
+      ? { unboundRefs: unboundRefs as NonNullable<AgentResult['unboundRefs']> }
+      : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
+    ...(refusedCards.length > 0 ? { clarificationRequests: [...requests, ...refusedCards] } : {}),
     shorthand: shorthandYaml,
     notes: [note],
   };

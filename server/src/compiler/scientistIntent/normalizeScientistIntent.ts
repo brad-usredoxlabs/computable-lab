@@ -72,6 +72,26 @@ import { parse as parseYaml } from 'yaml';
  *  out of this item's edit scope, so the canonical regex is NOT imported. */
 export const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/;
 
+/** TARGET-1 WELLS DOOR (ruling l2t2310, option (i) SHAPE-GATED) — the ONE
+ *  address-literal predicate. A trimmed scalar is an address literal iff the
+ *  expander's ONE parser (expandWellTokens) resolves it to one or more tokens
+ *  and EVERY token is plate-address-shaped under WELL_ADDRESS_SHAPE_RE — the
+ *  SAME two-step test the (b) arm below applies to a scalar well claim with no
+ *  declared kind:wells argument (the "realize only where a consumer exists"
+ *  rule, one direction). This is the shape the doc-door (resolutionEngine)
+ *  uses to keep a kind:'wells' ADDRESS literal off the noun-resolution spine:
+ *  "A1:H12" -> ["A1","A2",...,"H12"] all shaped => literal (skip the door);
+ *  "control_well" / "bogus_role" -> not shaped => NOT a literal (still ride the
+ *  door's role-address arm); "A1:ZZ99" -> ZZ99 not shaped => NOT a literal
+ *  (still enter the door and bar). Zero field names, zero verb names, zero new
+ *  policy literals — the parser + the parity-pinned regex already exist. */
+export function isWellAddressLiteral(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const tokens = expandWellTokens([trimmed]);
+  return tokens.length > 0 && tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token));
+}
+
 /** Task 17 interim cue home (DATA): config/drafting/mixture-material-cues.yaml.
  *  Loaded PER call (the drafting-config precedent — never process-cached, so a
  *  cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
@@ -714,19 +734,44 @@ function toCandidateEvent(
   for (const [eventKey, sciKeys] of mappings) {
     const found = firstKeyed(action, sciKeys);
     if (found === undefined) continue;
-    // A SCALAR on a declared kind:wells argument is a symbolic well LABEL, not
-    // an address array. The well-position family ('wells') carries the label as
-    // candidate `wellRole` — a producer key written ONLY on this chain (the
-    // chatbot chain's candidates never carry it, so chatbot lowering stays
+    // A SCALAR on a declared kind:wells argument is, by default, a symbolic well
+    // LABEL, not an address array. The well-position family ('wells') carries the
+    // label as candidate `wellRole` — a producer key written ONLY on this chain
+    // (the chatbot chain's candidates never carry it, so chatbot lowering stays
     // byte-identical). The transfer/aliquot expanders lower wellRole into event
     // details.role — the exact key the resolve_roles authoritative seam
     // (ChatbotCompilePasses.ts :2391/:2410) looks up in the resolve_nouns
     // slot's resolvedByLabel (keyed by the engine-bound LABEL), so the emitted
     // wells EQUAL the engine binding's addresses. Array forms pass through
     // verbatim.
+    // TARGET-1 WELLS DOOR (ruling l2t2310, option (i) SHAPE-GATED): an
+    // address-LITERAL scalar (isWellAddressLiteral — the SAME shape test the
+    // doc-door uses and the (b) arm below applies) is a LITERAL value, not a
+    // label. L2-CLARIFY-TARGET-1 fix1/D1 (adversarial l2t0230): the carry must
+    // be CO-EXTENSIVE with the lowering's actual ability to consume the value.
+    // Only addMaterialExpander expanded a raw STRING (expandWellTokens on
+    // params.wells); transferExpander passed the string VERBATIM into
+    // details.wells (the array-only downstream readers — AgentOrchestrator
+    // :626/:4313, forceMaterialClarifications :165/:189, ProtocolIdeHandlers
+    // :228 — read a string as EMPTY) and aliquotExpander ITERATED the string
+    // char-by-char (6 events whose wells are "A","1",":","H","1","2"). Both
+    // are silent data loss/corruption — the exact ground the ruling rejected
+    // the bare (i) on (§4a "no silent drops"). The fix: carry the
+    // address-literal EXPANDED through the SAME ONE parser (expandWellTokens)
+    // into a CONCRETE address array — the shape EVERY target-wells expander
+    // natively consumes (params.wells / p.wells as string[]; the array branch
+    // of addMaterialExpander runs expandWellTokens idempotently on it, so
+    // add_material is byte-identical). One parser, one change point, zero
+    // verb/field-name tables, zero new policy literals. Symbolic labels keep
+    // the wellRole/clarity behaviour below, untouched.
     if (typeof found.value === 'string' && found.value.trim() && wellsLabelArgs.has(found.key)) {
+      const scalar = found.value.trim();
+      if (eventKey === 'wells' && isWellAddressLiteral(scalar)) {
+        event[eventKey] = expandWellTokens([scalar]);
+        continue;
+      }
       if (eventKey === 'wells') {
-        event.wellRole = found.value.trim();
+        event.wellRole = scalar;
         continue;
       }
       // SPINE-7 fix1/D1 (orchestrator fallback (b), chosen because symmetric
@@ -811,16 +856,34 @@ function toCandidateEvent(
   //     by the expander's ONE parser (expandWellTokens, simpleVerbs Task 15);
   //     anything that is not a well address has no consumer and would ship a
   //     fabricated well — bar it instead.
+  //     WELLSET-RESOLVER-1 exemption: a value carried on a declared
+  //     `kind: wellset` argument that is a member of the vocabulary's
+  //     wellsetValueTokens DATA list HAS a consumer — the resolve_wellsets
+  //     pass realizes it into a concrete well set downstream (the same
+  //     "realize only where a consumer exists" rule the bar enforces, applied
+  //     the other way). Membership is vocabulary DATA — no token literal, no
+  //     verb-name branch here.
   if (wellsLabelArgs.size === 0) {
     const wellsClaim = firstKeyed(action, ['targetWells', 'wells']);
     if (wellsClaim && typeof wellsClaim.value === 'string' && wellsClaim.value.trim()) {
-      const tokens = expandWellTokens([wellsClaim.value.trim()]);
-      if (!tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token))) {
-        unrealized.push({
-          label: wellsClaim.value.trim(),
-          reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
-          actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: wellsClaim.key },
-        });
+      const claimValue = wellsClaim.value.trim();
+      const declaredWellsetCarrier = vocabulary
+        .argContracts(verb)
+        .some((contract) => contract.kind === 'wellset' && contract.name === wellsClaim.key);
+      const declaredToken =
+        declaredWellsetCarrier && vocabulary.wellsetValueTokens().includes(claimValue);
+      if (!declaredToken) {
+        // TARGET-1 WELLS DOOR: the (b) arm now applies the SAME ONE
+        // address-literal predicate the doc-door uses (isWellAddressLiteral) —
+        // a verbatim refactor of the inline expandWellTokens + WELL_ADDRESS_
+        // SHAPE_RE test, behaviour byte-identical.
+        if (!isWellAddressLiteral(claimValue)) {
+          unrealized.push({
+            label: claimValue,
+            reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
+            actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: wellsClaim.key },
+          });
+        }
       }
     }
   }

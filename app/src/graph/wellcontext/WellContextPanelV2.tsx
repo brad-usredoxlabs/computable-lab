@@ -137,6 +137,7 @@ export function WellContextPanelV2({
               onEventClick={onEventClick}
               compact={compact}
               showLabwareHeader={wellsByLabware.size > 1}
+              labwares={labwares}
             />
           )
         })}
@@ -159,6 +160,7 @@ function LabwareWellsSection({
   onEventClick,
   compact,
   showLabwareHeader,
+  labwares,
 }: {
   labware: Labware
   wells: WellId[]
@@ -168,6 +170,10 @@ function LabwareWellsSection({
   onEventClick?: (eventId: string) => void
   compact: boolean
   showLabwareHeader: boolean
+  /** L2-PROMPT1-GHOST-1: the bench's placed set — getWellEvents applies the
+   *  SAME single-placed-vessel rule the fill (computeLabwareStates) applies,
+   *  so an attributed well's history agrees with its fill. */
+  labwares: Map<string, Labware>
 }) {
   return (
     <div className="labware-section">
@@ -181,7 +187,7 @@ function LabwareWellsSection({
       <div className="wells-list">
         {wells.map((wellId) => {
           const state = getWellState(computedStates, labware.labwareId, wellId)
-          const wellEvents = getWellEvents(events, labware.labwareId, wellId)
+          const wellEvents = getWellEvents(events, labware.labwareId, wellId, labwares)
           const errors = validation 
             ? getWellErrors(validation, labware.labwareId, wellId)
             : []

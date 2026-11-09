@@ -20,7 +20,7 @@ async function withTempStore<T>(
 describe('AiThreadStore', () => {
   it('returns an empty thread when no file exists yet', async () => {
     await withTempStore(async (store) => {
-      const thread = await store.getThread('alice', 'browser');
+      const thread = await store.getThread('alice', 'browser', undefined, 'tid-1');
       expect(thread.endpoint).toBe('browser');
       expect(thread.userId).toBe('alice');
       expect(thread.messages).toEqual([]);
@@ -33,16 +33,16 @@ describe('AiThreadStore', () => {
       await store.append('alice', 'event-editor', {
         message: { role: 'user', content: 'hello' },
         mentions: [{ kind: 'material', ref: { recordId: 'mat-1' }, label: 'Tris' }],
-      });
+      }, undefined, 'tid-1');
       await store.append('alice', 'event-editor', {
         message: { role: 'assistant', content: 'hi back' },
         mentions: [
           { kind: 'material', ref: { recordId: 'mat-1' }, label: 'Tris' }, // dupe
           { kind: 'labware', ref: { recordId: 'lab-1' } },
         ],
-      });
+      }, undefined, 'tid-1');
 
-      const thread = await store.getThread('alice', 'event-editor');
+      const thread = await store.getThread('alice', 'event-editor', undefined, 'tid-1');
       expect(thread.messages).toHaveLength(2);
       expect(thread.messages[0]).toMatchObject({ role: 'user', content: 'hello' });
       expect(thread.messages[1]).toMatchObject({ role: 'assistant', content: 'hi back' });
@@ -55,17 +55,17 @@ describe('AiThreadStore', () => {
     await withTempStore(async (store) => {
       await store.append('alice', 'browser', {
         message: { role: 'user', content: 'A1' },
-      });
+      }, undefined, 'tid-1');
       await store.append('bob', 'browser', {
         message: { role: 'user', content: 'B1' },
-      });
+      }, undefined, 'tid-1');
       await store.append('alice', 'protocols', {
         message: { role: 'user', content: 'A2' },
-      });
+      }, undefined, 'tid-1');
 
-      const aliceBrowser = await store.getThread('alice', 'browser');
-      const bobBrowser = await store.getThread('bob', 'browser');
-      const aliceProtocols = await store.getThread('alice', 'protocols');
+      const aliceBrowser = await store.getThread('alice', 'browser', undefined, 'tid-1');
+      const bobBrowser = await store.getThread('bob', 'browser', undefined, 'tid-1');
+      const aliceProtocols = await store.getThread('alice', 'protocols', undefined, 'tid-1');
 
       expect(aliceBrowser.messages[0]?.content).toBe('A1');
       expect(bobBrowser.messages[0]?.content).toBe('B1');
@@ -77,9 +77,9 @@ describe('AiThreadStore', () => {
     await withTempStore(async (store) => {
       await store.append('alice', 'literature', {
         message: { role: 'user', content: 'foo' },
-      });
-      await store.clear('alice', 'literature');
-      const thread = await store.getThread('alice', 'literature');
+      }, undefined, 'tid-1');
+      await store.clear('alice', 'literature', undefined, 'tid-1');
+      const thread = await store.getThread('alice', 'literature', undefined, 'tid-1');
       expect(thread.messages).toEqual([]);
     });
   });
@@ -90,16 +90,19 @@ describe('AiThreadStore', () => {
         for (let i = 0; i < 5; i++) {
           await store.append('alice', 'browser', {
             message: { role: 'user', content: `m${i}` },
-          });
+          }, undefined, 'live-thread');
         }
-        const live = await store.getThread('alice', 'browser');
+        const live = await store.getThread('alice', 'browser', undefined, 'live-thread');
         // Threshold 3: rotation fires after the 4th append (4 > 3) and keeps
         // the last 2; the 5th append re-grows to 3. So live ≤ threshold + 1.
         expect(live.messages.length).toBeLessThanOrEqual(4);
         // But it must be smaller than the total appended count — we rotated.
         expect(live.messages.length).toBeLessThan(5);
-        const files = await readdir(join(root, 'alice'));
+        // Snapshots live in the thread's OWN scope directory
+        // ({user}/{endpoint}/{scope}/), never as a thread in the listing.
+        const files = await readdir(join(root, 'alice', 'browser', '_'));
         expect(files.some((f) => f.includes('.snapshot.json'))).toBe(true);
+        expect(await store.listThreads('alice', 'browser', undefined)).toHaveLength(1);
       },
       { snapshotThresholdMessages: 3, snapshotKeepTail: 2 },
     );
@@ -107,9 +110,9 @@ describe('AiThreadStore', () => {
 
   it('refuses path-traversal user ids', async () => {
     await withTempStore(async (store) => {
-      await expect(store.getThread('../etc', 'browser')).rejects.toThrow();
+      await expect(store.getThread('../etc', 'browser', undefined, 'tid-1')).rejects.toThrow();
       await expect(
-        store.append('a/b', 'browser', { message: { role: 'user', content: 'x' } }),
+        store.append('a/b', 'browser', { message: { role: 'user', content: 'x' } }, undefined, 'tid-1'),
       ).rejects.toThrow();
     });
   });

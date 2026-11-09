@@ -45,7 +45,7 @@ describe('the client cannot ghost the shipped shorthand event (characterization 
     expect(getAffectedWells(asShipped)).toEqual([])
   })
   it('buckets the event under no labware', () => {
-    const index = buildPreviewWellIndex({ previewEvents: [asShipped] } as never)
+    const index = buildPreviewWellIndex({ previewEvents: [asShipped] } as never, [])
     expect([...index.byLabware.keys()]).toEqual([])
   })
 })
@@ -61,7 +61,7 @@ describe('the required shape ghosts', () => {
   } as unknown as PlateEvent
   it('finds the wells and buckets them under the labware', () => {
     expect(getAffectedWells(fixed)).toEqual(['A1', 'A2', 'A3'])
-    const index = buildPreviewWellIndex({ previewEvents: [fixed] } as never)
+    const index = buildPreviewWellIndex({ previewEvents: [fixed] } as never, [])
     expect([...index.byLabware.keys()]).toEqual(['LBW-96-1'])
     expect([...(index.byLabware.get('LBW-96-1') ?? [])]).toEqual(['A1', 'A2', 'A3'])
   })
@@ -119,7 +119,7 @@ describe('the fixed shorthand payload ghosts end-to-end through normalizePreview
     expect(details.labwareId).toBe('LBW-96-1')
     expect(details.wells).toEqual(['A1'])
     expect(getAffectedWells(preview[0]!)).toEqual(['A1'])
-    const index = buildPreviewWellIndex({ previewEvents: preview } as never)
+    const index = buildPreviewWellIndex({ previewEvents: preview } as never, [])
     expect([...index.byLabware.keys()]).toEqual(['LBW-96-1'])
     expect([...(index.byLabware.get('LBW-96-1') ?? [])]).toEqual(['A1'])
   })

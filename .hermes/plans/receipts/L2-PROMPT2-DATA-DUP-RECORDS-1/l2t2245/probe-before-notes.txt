@@ -1,0 +1,14 @@
+BEFORE-STATE CAPTURE — L2-PROMPT2-DATA-DUP-RECORDS-1 (l2t2245)
+captured_at: 2026-11-03T05:32:03Z
+endpoint: POST http://localhost:3093/api/resolve (lane-2 store, OQ1)
+
+clofibrate term '1 mM clofibrate in DMSO': 21 candidates (spec expects 21)
+  8 share exact label '1 mM Clofibrate in DMSO' at level spec (7 shells + MSP-PR9-TEST-CLO-1MM)
+  mangled concept present: 1 mM clofibrate1 mM Clofibrate in DMSO
+DMSO term 'DMSO': 21 candidates total
+  exact-label 'DMSO' concept candidates: 2 (both 1.15 — spec before-state)
+  NOTE: the spec's DMSO '2 candidates' was measured on the exact-label identity set; the live
+  resolve window additionally surfaces lexical-support candidates (fenofibrate-in-dmso, rpmi-dmso,
+  clofibrate+dmso draft spec, 7 shells, 7 aliquots, mangled concept, mint row). The identity-level
+  measurement is: exact-label 'DMSO' 2 -> 1 (MAT-PR9-TEST-DMSO). Full dump recorded in probe jsons.
+  The dump CHANGED is proven by before/after diff (non-vacuity leg).

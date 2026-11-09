@@ -23,7 +23,7 @@ import { describe, it, expect } from 'vitest';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore, RecordEnvelope } from '../../store/types.js';
 import { createVocabHandlers } from './VocabHandlers.js';
-import { localMaterialIdForLabel } from '../../materials/termId.js';
+import { canonicalLabelKey, localMaterialIdForLabel } from '../../materials/termId.js';
 import type { ApiError } from '../types.js';
 
 const MATERIAL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material.schema.yaml';
@@ -271,5 +271,69 @@ describe('POST /vocab/mint — validation and generic create-failure pins unchan
     const err = result as ApiError;
     expect(err.error).toBe('VALIDATION_FAILED');
     expect(err.message).toBe('Minting "bad mint" failed: Validation failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. D5 (CARD1-D3 ruling l2t1430 §3(iii), pin 6) — the minted durable name and
+//    the offered name are ONE canonical string per entity: the `MAT-` id keys
+//    off `canonicalLabelKey(label)`, so case/whitespace drift on the SAME
+//    entity cannot mint a second record; and the minted durable name resolves
+//    to that ONE entity string everywhere (a re-mint of a case-variant returns
+//    the first mint's title, never a concat or a duplicate). The stored TITLE
+//    itself stays the scientist's raw phrasing (the titleAdoption policy —
+//    ruling §2 rule 3: the identity key is NEVER fed back into storage as the
+//    durable title), so a pre-mint offer renders the identity form while the
+//    minted record keeps human case.
+// ---------------------------------------------------------------------------
+
+describe('POST /vocab/mint — D5: one entity, one canonical string (ruling §3(iii))', () => {
+  it('the offered MAT- id is built from canonicalLabelKey — a case variant of the same label mints the SAME id (no second record, no concat)', async () => {
+    const { store, byId } = makeMintStore();
+    const handlers = createVocabHandlers(store);
+
+    const a = await handlers.mintTerm(makeMintRequest({ refKind: 'material', label: '1 mM Clofibrate in DMSO' }), makeReply());
+    const b = await handlers.mintTerm(makeMintRequest({ refKind: 'material', label: '1 mM clofibrate in dmso' }), makeReply());
+
+    const oka = a as { success: true; recordId: string; label: string };
+    const okb = b as { success: true; recordId: string; label: string };
+    expect(oka.success).toBe(true);
+    expect(okb.success).toBe(true);
+    // ONE canonical string per entity: the id is derived from the identity key
+    // (case/whitespace folded), so both phrasings land on ONE recordId.
+    const key = canonicalLabelKey('1 mM Clofibrate in DMSO');
+    expect(canonicalLabelKey('1 mM clofibrate in dmso')).toBe(key);
+    expect(oka.recordId).toBe(localMaterialIdForLabel(key));
+    expect(okb.recordId).toBe(oka.recordId);
+    // The durable name is the SAME entity, not a seed+noun concat of the two
+    // phrasings: one record in the store, and the re-mint returns the FIRST
+    // mint's title (titleAdoption — the raw scientist phrasing, never the
+    // identity key).
+    expect(byId.size).toBe(1);
+    expect(okb.label).toBe(oka.label);
+    expect(okb.label).toBe('1 mM Clofibrate in DMSO');
+    const stored = byId.get(oka.recordId)!;
+    expect((stored.payload as { name: string }).name).toBe('1 mM Clofibrate in DMSO');
+  });
+
+  it('a double-space / case-variant label collapses onto the SAME recordId as the trimmed identity key (identity-key derivation, not raw-hash)', async () => {
+    const { store, byId } = makeMintStore();
+    const handlers = createVocabHandlers(store);
+
+    const raw = '  1 mM Clofibrate   in DMSO ';
+    const a = await handlers.mintTerm(makeMintRequest({ refKind: 'material', label: raw }), makeReply());
+    const b = await handlers.mintTerm(makeMintRequest({ refKind: 'material', label: '1 mM clofibrate in dmso' }), makeReply());
+
+    const oka = a as { success: true; recordId: string; label: string };
+    const okb = b as { success: true; recordId: string; label: string };
+    expect(oka.success).toBe(true);
+    expect(okb.success).toBe(true);
+    // The id is derived from canonicalLabelKey (NFKC + trim + collapse + fold),
+    // so the raw padded/case-variant label and the clean identity form share ONE
+    // recordId — the offered name and the durable name are one string.
+    expect(oka.recordId).toBe(localMaterialIdForLabel(canonicalLabelKey(raw)));
+    expect(okb.recordId).toBe(oka.recordId);
+    expect(byId.size).toBe(1);
+    expect(okb.label).toBe(oka.label);
   });
 });

@@ -1208,6 +1208,11 @@ export async function createServer(
         ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
         residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store, labProfileFor(ctx, appConfig)),
         store: ctx.store,
+        // L2-SUITE-A-uifix2 FIX2 (D1): the platform manifest registry —
+        // the deck_layout model-output gap resolves a missing variantId
+        // against the DECLARED variant titles (config/platforms/*.yaml)
+        // and degrades to a plain-language choice wall from them.
+        platformRegistry: ctx.platformRegistry,
         sequenceActionSchema: sequenceActionPromptSchema(ctx.schemaRegistry),
         sequenceOligoGuidance: await sequenceConfig('oligo-modifications'),
         validateSequenceAction: (request: unknown) => ctx.validator.validate(request, 'https://computable-lab.com/schema/bio/sequence-action.schema.yaml'),

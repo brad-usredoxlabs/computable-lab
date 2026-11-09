@@ -6,7 +6,7 @@
  * (or the final result) exactly when a long run is streaming hardest.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { parseSseBlocks } from '../../shared/api/client'
 import ExtractionProgressPanel from './ExtractionProgressPanel'
 

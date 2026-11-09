@@ -52,6 +52,9 @@ const SEED_RECORDS = [
       name: '1 mM Clofibrate in DMSO',
       title: '1 mM Clofibrate in DMSO',
       synonyms: ['1 mm clofibrate in dmso'],
+      // D5-1: the gate is MOOT only for a record that STRUCTURALLY declares
+      // a testable formulation — the seed must carry one for T1's subject.
+      formulation: { concentration: { value: 1, unit: 'mM' }, solvent_ref: { recordId: 'MAT-dmso' } },
     },
   },
   {
@@ -62,6 +65,7 @@ const SEED_RECORDS = [
       name: '5 mg/mL Lysozyme in PBS',
       title: '5 mg/mL Lysozyme in PBS',
       synonyms: ['5 mg/ml lysozyme in pbs'],
+      formulation: { concentration: { value: 5, unit: 'mg/mL' }, solvent_ref: { recordId: 'MAT-pbs' } },
     },
   },
   {
@@ -72,6 +76,7 @@ const SEED_RECORDS = [
       name: '0.1% Triton X-100 in water',
       title: '0.1% Triton X-100 in water',
       synonyms: ['0.1% triton x-100 in water'],
+      formulation: { concentration: { value: 0.1, unit: '%' }, solvent_ref: { recordId: 'MAT-water' } },
     },
   },
 ];
@@ -80,8 +85,16 @@ function mockStore(seeds: typeof SEED_RECORDS) {
   return {
     get: vi.fn(async () => null),
     getRecord: vi.fn(async (id: string) => seeds.find((r) => r.recordId === id) ?? null),
-    list: vi.fn(async (filter?: { kind?: string }) =>
-      seeds.filter((r) => !filter?.kind || r.payload.kind === filter.kind),
+    // The real RecordStore.list filters by schemaId as well as kind — honouring
+    // it here keeps tier-0 (canonical TERM records) from masquerading as
+    // material records, so these seeds resolve at tier 1 (records) where the
+    // formulation declaration lives.
+    list: vi.fn(async (filter?: { kind?: string; schemaId?: string }) =>
+      seeds.filter(
+        (r) =>
+          (!filter?.kind || r.payload.kind === filter.kind) &&
+          (!filter?.schemaId || r.schemaId === filter.schemaId),
+      ),
     ),
   };
 }
@@ -247,9 +260,14 @@ function binding(over: Partial<BoundNoun>): BoundNoun {
   };
 }
 
+// WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required args
+// (volumeUl + targetWells). runGatedPass's minimal fixture supplies BOTH (targetWells
+// as the ARRAY form — invisible to the doc-door, satisfies the §5.2 sweep) so the
+// required-arg sweep stays SILENT and the only possible bar is the gated material
+// fact the T4 subject is about (no weakening of the suppression assertion).
 async function runGatedPass(bindings: BoundNoun[], gated: readonly typeof gatedBlobFact[]) {
   return createResolveNounsPass({
-    intent: unitIntent([{ action: 'add_material', material: gated[0]?.label ?? 'x', volumeUl: 10 }]),
+    intent: unitIntent([{ action: 'add_material', material: gated[0]?.label ?? 'x', volumeUl: 10, targetWells: ['A1'] }]),
     vocabulary: defaultScientistIntentVocabulary(),
     spine: createResolveSpine({}), // declared test seam
     resolve: stubEngine({ bindings, clarifications: [], failures: [], traces: [] }),
@@ -259,7 +277,8 @@ async function runGatedPass(bindings: BoundNoun[], gated: readonly typeof gatedB
 
 describe('shqa1.t4-gate-is-a-slot-identity-join (B4)', () => {
   it('T4: a binding for slot 0:material suppresses the gated fact WITHOUT any store — even when the binding label differs', async () => {
-    const result = await runGatedPass([binding({})], [gatedBlobFact]);
+    // D5-1: suppression needs the bound record to DECLARE the formulation.
+    const result = await runGatedPass([binding({ formulationDeclared: true })], [gatedBlobFact]);
     expect(result.ok).toBe(true);
     const output = result.output as ResolveNounsOutput;
     expect(output.clarifications).toEqual([]);

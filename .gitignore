@@ -34,6 +34,13 @@ app/dev-dist/
 # Environment and config
 .env
 config.yaml
+# Backups of config.yaml carry LIVE API KEYS. A dated backup (config.yaml.bak-*)
+# was swept into a merge commit by `git add -A` on 2026-11-09 and blocked the push
+# via GitHub secret scanning; never let one in again.
+config.yaml.bak*
+*.bak-[0-9]*
+nano.*.save
+.claude/settings.local.json
 
 # Test artifacts
 test-results/
@@ -55,3 +62,4 @@ scripts/.ontology-cache/*
 # SDK test byproduct (analysisRunner tests run real python entry scripts)
 server/model.pkl
 app/dist-viewer/
+__pycache__/

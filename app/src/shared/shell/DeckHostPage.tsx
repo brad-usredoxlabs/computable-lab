@@ -25,7 +25,8 @@ import { ProtocolSelectionProvider } from '../../event-editor/protocol/ProtocolS
 import { ProtocolPreviewBridge } from '../../event-editor/protocol/ProtocolPreviewBridge'
 import { Viewer } from '../../event-editor/viewer/Viewer'
 import { DeckToolbar } from '../../event-editor/viewer/deck/DeckToolbar'
-import { DeckSurfaceChat } from '../../event-editor/deck/DeckSurfaceChat'
+import { DeckChatSlice } from '../../event-editor/deck/DeckChatSlice'
+import { SurfaceChatBridge } from './SurfaceChatBridge'
 import { ChatFocusProvider } from '../../agent/ChatFocusContext'
 import { useDeckAutosave } from '../../event-editor/deck/useDeckAutosave'
 import { apiClient } from '../../shared/api/client'
@@ -133,10 +134,18 @@ export function DeckHostPage() {
         {...(runId ? { runId } : {})}
       >
         <FocusModalsProvider>
-          {/* The deck route's universal chat: persisted thread + proposal flow,
-              plus the working-focus carrier its pane header renders. */}
+          {/* The deck route's universal chat: the ONE registrar (host
+              "event-editor" — the YAML door registry id). The deck slice is
+              PUBLISHED by DeckChatSlice (inside EventEditorProvider) and the
+              registrar collects it through the store — position-independent, so
+              the bridge and the publisher don't need to be siblings. The deck
+              slice is REQUIRED for this host (config/chat/chat-hosts.yaml
+              required_providers: [deck]); a missing publisher is a loud error,
+              never a silent empty pane. The working-focus carrier its pane
+              header renders is published by the registrar. */}
           <ChatFocusProvider>
-            <DeckSurfaceChat />
+            <DeckChatSlice />
+            <SurfaceChatBridge host="event-editor" />
             <DeckAutosave />
             <ProtocolSelectionProvider>
               <AppShell

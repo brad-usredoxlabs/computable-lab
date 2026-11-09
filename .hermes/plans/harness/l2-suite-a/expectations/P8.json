@@ -1,0 +1,9 @@
+{
+  "prompt": 8,
+  "prompt_text": "Place the plate  into the CO2 incubator for an overnight incubation",
+  "expectation_source": "spec per-prompt criteria P8: the result's event kind is an equipment/incubator move (incubate or equipment placement of the plate into a CO2 incubator), NOT an add_material event — a kind assertion on the done payload (Bait: the double space in the prompt is VERBATIM content, B6). An answerable card naming the incubator equipment is the cards arm; success-with-nothing FAILS.",
+  "verdict_in": ["events-bound", "cards"],
+  "kind_not": "add_material",
+  "kind_in": ["incubate", "incubator", "equipment"],
+  "deterministic": false
+}

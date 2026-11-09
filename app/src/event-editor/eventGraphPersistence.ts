@@ -2,6 +2,7 @@ import { apiClient } from '../shared/api/client'
 import { normalizeEventGraphEventsForSave } from '../editor/lib/serialDilutionPlan'
 import type { Labware } from '../types/labware'
 import type { PlateEvent } from '../types/events'
+import type { Equipment } from '../types/equipment'
 import type { EventEditorPlacement, LabwareOrientation, PlacementLocation } from './types'
 
 export interface EventEditorLayoutSnapshot {
@@ -183,6 +184,12 @@ export function hydrateEventEditorGraph(graph: LoadEventGraphResult): {
   runId: string | null
   events: PlateEvent[]
   labwares: Record<string, Labware>
+  // Interesting: the load endpoint does not return equipments (they are added
+  // during editing through add_equipment / preview actions), but the editor's
+  // load reducer expects the field. Hydration therefore starts the record empty
+  // — the same result the network path always produced — instead of reading a
+  // property the wire never carries.
+  equipments: Record<string, Equipment>
   placements: EventEditorPlacement[]
 } {
   const editorPlacements = parseEditorLayoutPlacements(graph.editorLayout)
@@ -191,11 +198,20 @@ export function hydrateEventEditorGraph(graph: LoadEventGraphResult): {
     runId: graph.runId ?? null,
     events: Array.isArray(graph.events) ? graph.events as PlateEvent[] : [],
     labwares: labwareRecord(graph.labwares),
+    equipments: {},
     placements: editorPlacements.length > 0 ? editorPlacements : parseDeckLayoutPlacements(graph.deckLayout),
   }
 }
 
-function isRunDeckLock(value: unknown): value is RunDeckLock {
+/**
+ * The ONE structural guard for a valid run deck lock — the shape both the
+ * persist path (ensureRunDeckLock) and the route-load deck resolution
+ * (EventEditorContext's set_run_deck effect) must agree on. Exported so the
+ * guard lives here exactly once (L2-CHAT-1 regatefix2-fix1 D3: it was
+ * hand-copied inline in the provider — two copies of a guardrail predicate
+ * that must stay byte-consistent).
+ */
+export function isRunDeckLock(value: unknown): value is RunDeckLock {
   return Boolean(value)
     && typeof value === 'object'
     && !Array.isArray(value)

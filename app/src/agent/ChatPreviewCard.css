@@ -44,6 +44,34 @@
   overflow-y: auto;
 }
 
+/* L2-CHAT-1 regatefix2 D1 — the adoption refusal wall (token-only; mirrors
+   .preview-bar__error's shape in eventEditor.css). */
+.chat-preview__error {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--cl-warn);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-1);
+  color: var(--cl-warn);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chat-preview__error-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.chat-preview__error-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-preview__event {
   display: flex;
   align-items: center;
@@ -55,12 +83,51 @@
   color: var(--cl-text-faint);
 }
 
-.chat-preview__event-label {
+/* L2-SUITE-A-uifix2 [B] — the event row's text group: the verb label and the
+   human-readable detail line (mix "75 uL · 3 cycles") stack under each other,
+   the Drop/Include toggle stays at the row's right edge. The label was the
+   flex fill before; the group now fills and the detail rides beneath it. */
+.chat-preview__event-text {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-preview__event-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* L2-CLARIFY-TARGET-1 (Change 5 / P7) + fix run 4 / D1 CONFORM (ruling
+   l2t0937 Q3, shape (A) — COMPOSE): the row's ONE detail line IS its
+   CHECKABLE FACT (fact + the residual detail fields, `75 uL · 3 cycles`).
+   It is the row's primary identity (`A2 ← 100 uL DMEM (MAT-…)`), so it takes
+   the row's own text colour. (Pre-conformance the fact had its own
+   `.chat-preview__row-fact` span + line; the conformed shape has ONE line —
+   the dead block is gone, this selector carries its styling.) The
+   no-fact fallback line keeps its dim secondary look (it is the
+   human-readable summary of a field the raw-JSON "View changes" modal also
+   carries). No dead chrome: it renders only when there is a displayable
+   field. */
+.chat-preview__event-text .chat-preview__event-details[data-testid='chat-preview-row-fact'] {
+  color: var(--cl-text);
+  font-weight: 600;
+}
+
+/* The detail line is dim (it is the human-readable summary of a field the
+   raw-JSON "View changes" modal also carries — secondary, not a second title).
+   No dead chrome: it renders only when there is a displayable field. */
+.chat-preview__event-details {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-text-dim);
+  font-size: 11px;
 }
 
 .chat-preview__toggle {

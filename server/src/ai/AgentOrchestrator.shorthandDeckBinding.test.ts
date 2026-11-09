@@ -166,7 +166,11 @@ describe('SHORTHAND-CHAT deck binding (plate1 false-bar)', () => {
   });
 
   it('a store-resolvable labware hint is unaffected: deck composition never shadows store evidence', async () => {
-    const model = stubModel([{ toolCalls: [shorthandCall(`intentId: store-hint-leg\nactions:\n  - action: add_material\n    material: DMEM\n    volume: 50\n    labware: plate\n`)] }]);
+    const model = stubModel([{ toolCalls: [shorthandCall(`intentId: store-hint-leg\nactions:\n  - action: add_material\n    material: DMEM\n    volume: 50\n    labware: plate\n    targetWells: [A1]\n`)] }]);
+    // WHY (L2-CLARIFY-TARGET-1 flip): add_material now REQUIRES targetWells (volume
+    // is satisfied via the satisfiedBy object arm). Supplying it keeps the subject
+    // the COMPLETE store-hint binding leg (labwareId LAB-plate-1), not a
+    // required-arg bar.
     const orchestrator = createAgentOrchestrator(
       model.client,
       { getToolDefinitions: () => [], executeTool: vi.fn() },
@@ -208,22 +212,29 @@ describe('deckLabwareExactMatches + bindShorthandEventsToDeck (unit arms)', () =
     expect(deckLabwareExactMatches(undefined, 'plate1')).toEqual([]);
   });
 
-  it('binds label→deck id on top-level and details.labwareId; leaves unknown labels and real deck ids untouched', () => {
+  it('binds label→deck id on top-level and details.labwareId; leaves real deck ids untouched; REFUSES an unmatched label (H1)', () => {
     const events = [
       { eventId: 'e1', labwareId: 'plate1', details: { well: 'A1' } },
       { eventId: 'e2', labwareId: 'lw-a', details: { labwareId: 'Plate 2', well: 'B1' } },
       { eventId: 'e3', labwareId: 'somewhere-else', details: { well: 'C1' } },
     ];
-    const out = bindShorthandEventsToDeck(events, deck);
+    const { events: out, unboundRefs } = bindShorthandEventsToDeck(events, deck);
     expect(out[0]!.labwareId).toBe('lw-a');
     expect(out[1]!.labwareId).toBe('lw-a'); // already a deck id — untouched
     expect((out[1]!.details as Record<string, unknown>).labwareId).toBe('lw-b');
-    expect(out[2]!.labwareId).toBe('somewhere-else'); // never invented
-    expect(out[2]).toBe(events[2]); // byte-passthrough when nothing changes
+    // L2-FREEFORM-1 H1 (was: out[2].labwareId === 'somewhere-else' — the
+    // fail-open pin): the unmatched label is now REFUSED — dropped from the
+    // bound set and reported LOUDLY (never-guess; the card/report names it).
+    expect(out).toHaveLength(2);
+    expect(unboundRefs).toHaveLength(1);
+    expect(unboundRefs[0]!.label).toBe('somewhere-else');
+    expect(unboundRefs[0]!.reason).toBe('unmatched');
+    expect(unboundRefs[0]!.candidates).toEqual([]);
+    expect(unboundRefs[0]!.eventId).toBe('e3');
   });
 
   it('expands a compact range in the scalar details.well into details.wells', () => {
-    const out = bindShorthandEventsToDeck(
+    const { events: out } = bindShorthandEventsToDeck(
       [{ eventId: 'e1', details: { well: 'A2:H2' } }],
       deck,
     );
@@ -232,12 +243,19 @@ describe('deckLabwareExactMatches + bindShorthandEventsToDeck (unit arms)', () =
     expect(d.wells).toEqual(['A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2']);
   });
 
-  it('ambiguous deck handles are NOT bound', () => {
+  it('ambiguous deck handles are REFUSED, not bound (H1: the fail-open pin flips)', () => {
     const dup = [
       { labwareId: 'lw-x', name: 'plate1' },
       { labwareId: 'lw-y', name: 'plate1' },
     ];
-    const out = bindShorthandEventsToDeck([{ eventId: 'e1', labwareId: 'plate1' }], dup);
-    expect(out[0]!.labwareId).toBe('plate1');
+    // L2-FREEFORM-1 H1 (was: out[0].labwareId === 'plate1' — the event rode
+    // through with its raw label): the ambiguous ref is REFUSED — dropped and
+    // reported with BOTH candidates listed (never-guess).
+    const { events: out, unboundRefs } = bindShorthandEventsToDeck([{ eventId: 'e1', labwareId: 'plate1' }], dup);
+    expect(out).toHaveLength(0);
+    expect(unboundRefs).toHaveLength(1);
+    expect(unboundRefs[0]!.label).toBe('plate1');
+    expect(unboundRefs[0]!.reason).toBe('ambiguous');
+    expect(unboundRefs[0]!.candidates).toEqual(['lw-x', 'lw-y']);
   });
 });

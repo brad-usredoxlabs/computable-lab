@@ -373,6 +373,17 @@ export interface ActiveDeckScope {
 export interface EditorContext {
   /** Current labware definitions. */
   labwares: LabwareSummary[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
+   * ledger from the PREVIOUS done result (result.loopAskCounts) — the
+   * fold-free re-extraction seam. A non-1:1 clarification answer drop
+   * consumes the held intent and re-extracts (zero model calls); without
+   * this wire channel the occurrence count would reset there and a
+   * paraphrase loop could never flip. Absent on every context that carries
+   * no prior ledger (exactOptionalPropertyTypes: key ABSENT, never
+   * undefined).
+   */
+  loopAskCounts?: Record<string, number>;
   /** Current event summary — string from frontend, or structured object. */
   eventSummary: string | {
     totalEvents: number;
@@ -608,6 +619,21 @@ export interface AgentClarificationRequest {
    * actionLocation.
    */
   unresolvedFact?: import('../compiler/scientistIntent/types.js').ScientistIntentUnresolvedFact;
+  /**
+   * L2-CLARIFY-TARGET-1 (Change 2): the ASSUMED-VALUE control the CARD renders
+   * for a declared quantity/wells slot, sourced from the assumed-value DATA
+   * (config/drafting/shorthand-drafting.yaml `assumedValues:`), never a
+   * TypeScript literal. A `quantity` arm carries the declared number the
+   * scientist approves or edits (`value` is the assumption's value; the
+   * scientist's APPROVED number — never the assumed one — is what travels on
+   * the answer's `ref`). A `wells` arm carries the declared target-slot
+   * question. STAMPED only when the DATA declares the slot; a fact with no
+   * declaration gets NO `clarifyControl` key (exactOptionalPropertyTypes: the
+   * key is ABSENT via a conditional spread, never `undefined` — bait 5).
+   */
+  clarifyControl?:
+    | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
+    | { kind: 'wells'; question: string };
 }
 
 export interface AgentClarificationAnswer {
@@ -714,6 +740,20 @@ export interface AgentResult {
   error?: string;
   /** If the agent needs more information from the user. */
   clarificationNeeded?: string;
+  /**
+   * L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable marker for a
+   * doc-discussion prose answer. A doc-discussion turn (an attached-file
+   * question) answers in plain prose by design — zero events, zero cards —
+   * and its ONLY deliverable channel is `clarificationNeeded` (the prose
+   * body). Without a marker the result is indistinguishable from a silent
+   * empty draft at the wire, and the client's draftEmptiness wall
+   * FALSE-FIRES on a legitimate paragraph of answer. The marker rides ONLY
+   * on a doc-discussion SUCCESS result with non-empty prose (the empty
+   * answer keeps the honest error and never rides the marker) — a data-
+   * shaped boolean, no surface/turn-kind branch in the wall (repo rule #1).
+   * Absent (never undefined) on every other turn.
+   */
+  proseDeliverable?: boolean;
   /** Structured clarification request with options. */
   clarification?: AgentClarification;
   /** Structured clarification requests for menu-backed follow-up. */
@@ -734,8 +774,35 @@ export interface AgentResult {
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>;
   /** Bench equipment the draft wants on the bench (never a deck slot). */
   equipmentRequirements?: AgentEquipmentRequirement[];
+  /**
+   * L2-FREEFORM-1 H1: unbound labware refs — the events whose raw scientist
+   * label the binder REFUSED (ambiguous deck name or unmatched), reported
+   * LOUDLY. The binder DROPS these events from `events` (they never ride
+   * through with a raw label); this channel + the clarification cards name
+   * the label + candidate deck ids so the scientist can disambiguate. The
+   * complete-path mapper ships it ONLY when something unbound (conditional
+   * spread, exactOptionalPropertyTypes); a no-unbound result ships NO key.
+   */
+  unboundRefs?: Array<{
+    eventId?: string;
+    label: string;
+    candidates: string[];
+    reason: 'ambiguous' | 'unmatched';
+  }>;
   /** Records the draft wants CREATED (the add; nothing is written until Accept). */
   recordCreations?: AgentRecordCreation[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the per-requestId clarification ask ledger
+   * (the N=1 occurrence counter for the requestId-identity loop detector —
+   * the `looped` flag flips on the SECOND occurrence of a content-keyed
+   * factRequestId, paraphrase or not; clarificationLoopAsk.ts). Rides the
+   * done result so the occurrence state SURVIVES a fold-free re-extraction
+   * (a non-1:1 answer drop re-extracts and the model re-asks: the hold is
+   * consumed, and without this the count would reset and the loop could
+   * never flip). Plain Record (JSON-safe, wire-shaped); absent on every
+   * turn that asked nothing (conditional spread, exactOptionalPropertyTypes).
+   */
+  loopAskCounts?: Record<string, number>;
   /** Place the created record on the bench in the same turn (explicit, never implied). */
   alsoPlace?: AgentAlsoPlace;
   /** Token usage for observability. */

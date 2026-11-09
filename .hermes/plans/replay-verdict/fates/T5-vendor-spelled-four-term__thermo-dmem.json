@@ -1,0 +1,1241 @@
+{
+  "turn": "T5-vendor-spelled-four-term",
+  "utterance": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+  "noun": "Thermo DMEM",
+  "source": "derived: MAT-thermo-trypsin-edta-ther-1tuz + MSP-DRAFT-EVG_MV7Q7F5I_* provenance.sourceLabel (accepted EVG-mv7q7f5i-el9g)",
+  "spine_ranked": [
+    {
+      "curie": "local:MAT-thermo-dmem-1vq1",
+      "label": "Thermo DMEM",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1lj9",
+      "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells\")."
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1tuz",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-apdv",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells\")."
+    },
+    {
+      "curie": "local:MAT-trypsin-edta-thermo-dmem-tnru",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "",
+      "label": "Create local term “Thermo DMEM”",
+      "namespace": "local",
+      "tier": 5,
+      "level": "concept",
+      "score": 0.05,
+      "source": "mint",
+      "mint": {
+        "label": "Thermo DMEM"
+      }
+    }
+  ],
+  "stage_fate": [
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MAT-thermo-dmem-1vq1",
+      "label": "Thermo DMEM",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1lj9",
+      "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1tuz",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-apdv",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MAT-trypsin-edta-thermo-dmem-tnru",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Thermo DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    }
+  ],
+  "engine": [
+    {
+      "arm": "add_material.material",
+      "engine_arm": "armA eligibility-absent",
+      "eligibility_loaded": false,
+      "declared_level": null,
+      "declared_levels_allowed_set": [
+        "concept",
+        "formulation",
+        "vendor-product",
+        "instance"
+      ],
+      "wantLevel_fires": false,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Thermo DMEM",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Thermo DMEM",
+              "confidence": 1,
+              "ref": "MAT-thermo-dmem-1vq1"
+            },
+            {
+              "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-1lj9"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-1tuz"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-apdv"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-trypsin-edta-thermo-dmem-tnru"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "add_material",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Thermo DMEM",
+          "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "RANKING (ambiguous-noun; 17 candidates, 5 distinct labels)"
+      ]
+    },
+    {
+      "arm": "add_material.material",
+      "engine_arm": "armB production (eligibility data loaded)",
+      "eligibility_loaded": true,
+      "declared_level": null,
+      "declared_levels_allowed_set": [
+        "concept",
+        "formulation",
+        "vendor-product",
+        "instance"
+      ],
+      "wantLevel_fires": false,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Thermo DMEM",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Thermo DMEM",
+              "confidence": 1,
+              "ref": "MAT-thermo-dmem-1vq1",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-1lj9",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-1tuz",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-thermo-trypsin-edta-ther-apdv",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-trypsin-edta-thermo-dmem-tnru",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y",
+              "tier": 1,
+              "referentLevel": "concept",
+              "eligibility": {
+                "display": "pass",
+                "suppress": "pass",
+                "bind": "pass",
+                "policyIds": {
+                  "display": "display-tier-legal",
+                  "suppress": "suppress-unconstrained-presence",
+                  "bind": "bind-unconstrained-identity"
+                }
+              }
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "add_material",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "local:MAT-thermo-dmem-1vq1: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MAT-thermo-dmem-1vq1: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MAT-thermo-dmem-1vq1: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-1lj9: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-1lj9: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MAT-thermo-trypsin-edta-ther-1lj9: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-1tuz: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-1tuz: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MAT-thermo-trypsin-edta-ther-1tuz: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-apdv: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MAT-thermo-trypsin-edta-ther-apdv: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MAT-thermo-trypsin-edta-ther-apdv: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MAT-trypsin-edta-thermo-dmem-tnru: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MAT-trypsin-edta-thermo-dmem-tnru: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MAT-trypsin-edta-thermo-dmem-tnru: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: sufficient-to-suppress=pass via suppress-unconstrained-presence: Path 'candidate.curie' exists",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: authorized-to-bind=pass via bind-unconstrained-identity: all: Path 'candidate.curie' exists; noneIn: none of the 1 value(s) selected by 'candidate.tier' are members of 'demanded.custodyNeverTiers'"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Thermo DMEM",
+          "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "RANKING (ambiguous-noun; 17 candidates, 5 distinct labels)"
+      ]
+    },
+    {
+      "arm": "wash.material",
+      "engine_arm": "armA eligibility-absent",
+      "eligibility_loaded": false,
+      "declared_level": "aliquot",
+      "declared_levels_allowed_set": null,
+      "wantLevel_fires": true,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Thermo DMEM",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "wash",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "level-mismatch: local:MAT-thermo-dmem-1vq1 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1lj9 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1tuz (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-apdv (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-thermo-dmem-tnru (level concept) ineligible for wantLevel aliquot"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [
+          "local:MAT-thermo-dmem-1vq1",
+          "local:MAT-thermo-trypsin-edta-ther-1lj9",
+          "local:MAT-thermo-trypsin-edta-ther-1tuz",
+          "local:MAT-thermo-trypsin-edta-ther-apdv",
+          "local:MAT-trypsin-edta-thermo-dmem-tnru"
+        ],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "LEVEL-FILTERING (local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-thermo-dmem-tnru)",
+        "RANKING (ambiguous-noun; 12 candidates, 2 distinct labels)"
+      ]
+    },
+    {
+      "arm": "wash.material",
+      "engine_arm": "armB production (eligibility data loaded)",
+      "eligibility_loaded": true,
+      "declared_level": "aliquot",
+      "declared_levels_allowed_set": null,
+      "wantLevel_fires": true,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Thermo DMEM",
+          "reason": "unknown-noun",
+          "candidates": [
+            {
+              "label": "Create local term “Thermo DMEM”",
+              "confidence": 0.05
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "wash",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "level-mismatch: local:MAT-thermo-dmem-1vq1 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1lj9 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1tuz (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-apdv (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-thermo-dmem-tnru (level concept) ineligible for wantLevel aliquot",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "level-mismatch: local:MAT-thermo-dmem-1vq1 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1lj9 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1tuz (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-apdv (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-thermo-dmem-tnru (level concept) ineligible for wantLevel aliquot",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: eligible-to-display=pass via display-tier-legal: allIn: all 1 value(s) selected by 'candidate.tier' are members of 'demanded.displayTiers'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: sufficient-to-suppress=fail via suppress-demanded-level-match: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'",
+        "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y: eligibility: authorized-to-bind=fail via bind-demanded-level-and-custody-guard: all: allIn: value \"concept\" selected by 'candidate.referentLevel' is not a member of 'demanded.demandedLevelSet'"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Create local term “Thermo DMEM”"
+        ],
+        "level_filtered": [
+          "local:MAT-thermo-dmem-1vq1",
+          "local:MAT-thermo-trypsin-edta-ther-1lj9",
+          "local:MAT-thermo-trypsin-edta-ther-1tuz",
+          "local:MAT-thermo-trypsin-edta-ther-apdv",
+          "local:MAT-trypsin-edta-thermo-dmem-tnru",
+          "local:MAT-thermo-dmem-1vq1",
+          "local:MAT-thermo-trypsin-edta-ther-1lj9",
+          "local:MAT-thermo-trypsin-edta-ther-1tuz",
+          "local:MAT-thermo-trypsin-edta-ther-apdv",
+          "local:MAT-trypsin-edta-thermo-dmem-tnru"
+        ],
+        "domain_filtered": [],
+        "catalog_scope_gate_fired": false,
+        "clarification_reasons": [
+          "unknown-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts)",
+          "constants_source": "parsed live from server/src/resolve/ResolveSpine.ts at run time (D12 tripwire; run aborts on mismatch)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4,
+            5
+          ],
+          "note": "REMOTE-CLAMP arithmetic (constants parsed from the product at run time — D12): tier-4 (vendor) max 0.58 < band.min 0.7 — a vendor hit is structurally unbindable through the engine even online; the structured field below_band_floor in THIS object lists exactly which tiers fall below the band floor (N1: compared against band.min, asserted at run time). After the clamp only tiers 0-1 saturate to 1.0 (tier-2 max is 0.98), so the CLAMPED CONFIDENCE value hides tier rank; armB clarification candidates still carry tier + referentLevel data — what is absent is an attestation-STRENGTH field, and rendering of tier/referentLevel is not evidenced."
+        }
+      },
+      "instrumented_cause": [
+        "LEVEL-FILTERING (local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+      ]
+    }
+  ],
+  "offline": {
+    "fetch_blocked": 0,
+    "fetch_blocked_note": "global fetch stubbed to throw; any stray remote call recorded here",
+    "localOnly": true,
+    "oak": "not built (no service URL)",
+    "vendor": "not wired"
+  }
+}

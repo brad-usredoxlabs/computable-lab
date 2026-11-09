@@ -351,4 +351,246 @@ describe('enrichAddMaterialRefs', () => {
     const [out] = await enrichAddMaterialRefs([event], stubLabeler);
     expect(out).toBe(event);
   });
+
+  /* ── S-1 through S-7: single-ref formulation composition expansion ── */
+
+  const formulationFixture = {
+    recordId: 'MSP-PR9-TEST-CLO-1MM',
+    schemaId: 'material-spec',
+    payload: {
+      kind: 'material-spec',
+      id: 'MSP-PR9-TEST-CLO-1MM',
+      name: '1 mM Clofibrate in DMSO',
+      material_ref: { kind: 'record', id: 'MAT-PR9-TEST-CLO', type: 'material', label: 'Clofibrate' },
+      formulation: {
+        concentration: { value: 1, unit: 'mM', basis: 'molar' },
+        solvent_ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', type: 'material', label: 'DMSO' },
+        composition: [
+          {
+            component_ref: { kind: 'record', id: 'MAT-PR9-TEST-CLO', type: 'material', label: 'Clofibrate' },
+            role: 'solute',
+            concentration: { value: 1, unit: 'mM', basis: 'molar' },
+          },
+          {
+            component_ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO', type: 'material', label: 'DMSO' },
+            role: 'solvent',
+          },
+        ],
+      },
+    },
+  };
+
+  function makeStoreWithFixture(fixture: any) {
+    return { get: async (id: string) => id === 'MSP-PR9-TEST-CLO-1MM' ? fixture : null };
+  }
+
+  it('S-1: expands a single bound formulation ref into its declared composition snapshot', async () => {
+    const store = makeStoreWithFixture(formulationFixture) as any;
+    const [out] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: '1 mM Clofibrate in DMSO' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store },
+    );
+    const details = (out as Record<string, unknown>).details as Record<string, unknown>;
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(2);
+    expect(snapshot[0]).toMatchObject({
+      role: 'solute',
+      component_ref: { kind: 'record', id: 'MAT-PR9-TEST-CLO' },
+      concentration: { value: 1, unit: 'mM', basis: 'molar' },
+    });
+    expect(snapshot[1]).toMatchObject({
+      role: 'solvent',
+      component_ref: { kind: 'record', id: 'MAT-PR9-TEST-DMSO' },
+    });
+    // solvent entry must have NO concentration key (eOPT discipline)
+    expect(snapshot[1]!.concentration).toBeUndefined();
+    // concentration key must be ABSENT, not undefined
+    expect('concentration' in snapshot[1]!).toBe(false);
+  });
+
+  it('S-2: expands a single formulation mention (entityKind material-spec) into a snapshot', async () => {
+    const store = makeStoreWithFixture(formulationFixture) as any;
+    const [out] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material: '1 mM Clofibrate in DMSO',
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      {
+        store,
+        mentions: [
+          { type: 'material', entityKind: 'material-spec', id: 'MSP-PR9-TEST-CLO-1MM', label: '1 mM Clofibrate in DMSO' },
+        ],
+      },
+    );
+    const details = (out as Record<string, unknown>).details as Record<string, unknown>;
+    expect((details.material_spec_ref as Record<string, unknown>).id).toBe('MSP-PR9-TEST-CLO-1MM');
+    expect((details.material_ref as Record<string, unknown>).type).toBe('material-spec');
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(2);
+  });
+
+  it('S-3: writes material_ref and material_spec_ref together so accept cannot mint a second spec', async () => {
+    const store = makeStoreWithFixture(formulationFixture) as any;
+    const [out] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: '1 mM Clofibrate in DMSO' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store },
+    );
+    const details = (out as Record<string, unknown>).details as Record<string, unknown>;
+    expect(details.material_ref).toBeDefined();
+    expect(details.material_spec_ref).toBeDefined();
+    expect((details.material_ref as Record<string, unknown>).id).toBe('MSP-PR9-TEST-CLO-1MM');
+    expect((details.material_spec_ref as Record<string, unknown>).id).toBe('MSP-PR9-TEST-CLO-1MM');
+    // getAddMaterialRef must resolve to the MSP id (R4 check)
+    expect((details.material_spec_ref as Record<string, unknown>).id).toBe('MSP-PR9-TEST-CLO-1MM');
+  });
+
+  it('S-4: does not expand when store misses / throws / payload is not material-spec / composition is empty', async () => {
+    // Store returns null
+    const nullStore = { get: async () => null } as any;
+    const [out1] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: 'stock' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store: nullStore },
+    );
+    expect((out1 as Record<string, unknown>).details).not.toHaveProperty('composition_snapshot');
+
+    // Store throws
+    const throwStore = { get: async () => { throw new Error('not found'); } } as any;
+    const [out2] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: 'stock' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store: throwStore },
+    );
+    expect((out2 as Record<string, unknown>).details).not.toHaveProperty('composition_snapshot');
+
+    // Payload kind is not material-spec
+    const wrongKindStore = {
+      get: async () => ({ payload: { kind: 'material-instance' } }),
+    } as any;
+    const [out3] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: 'stock' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store: wrongKindStore },
+    );
+    expect((out3 as Record<string, unknown>).details).not.toHaveProperty('composition_snapshot');
+
+    // No composition array
+    const noCompStore = {
+      get: async () => ({ envelope: { payload: { kind: 'material-spec', formulation: { concentration: { value: 1, unit: 'mM' } } } } }),
+    } as any;
+    const [out4] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: 'stock' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store: noCompStore },
+    );
+    expect((out4 as Record<string, unknown>).details).not.toHaveProperty('composition_snapshot');
+  });
+
+  it('S-5: drops entries with no component_ref or no role; no snapshot if < 2 valid', async () => {
+    const partialFixture = {
+      payload: {
+        kind: 'material-spec',
+        id: 'MSP-PARTIAL',
+        name: 'partial formulation',
+        material_ref: { kind: 'record', id: 'MAT-X', type: 'material', label: 'X' },
+        formulation: {
+          composition: [
+            { role: 'solute', concentration: { value: 1, unit: 'mM' } },
+            { component_ref: { kind: 'record', id: 'MAT-Y', type: 'material' } },
+          ],
+        },
+      },
+    };
+    const partialStore = { get: async () => partialFixture } as any;
+    const [out] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PARTIAL', type: 'material-spec', label: 'partial' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store: partialStore },
+    );
+    expect((out as Record<string, unknown>).details).not.toHaveProperty('composition_snapshot');
+  });
+
+  it('S-6: regression — multi-ref snapshot is byte-identical', async () => {
+    const events = [
+      addMaterial({
+        materials: [{ ref: { curie: 'CHEBI:17790' } }, { ref: { curie: 'CHEBI:15377' } }],
+      }),
+    ];
+    const [out] = await enrichAddMaterialRefs(events, stubLabeler);
+    const details = (out as Record<string, unknown>).details as Record<string, unknown>;
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(2);
+    expect((snapshot[0]!.component_ref as Record<string, unknown>).label).toBe('methanol');
+    expect((snapshot[1]!.component_ref as Record<string, unknown>).label).toBe('water');
+    expect(snapshot.every((s) => s.role === 'other')).toBe(true);
+    expect((details.material_ref as Record<string, unknown>).label).toBe('methanol');
+  });
+
+  it('S-7: idempotent — existing composition_snapshot is not overwritten', async () => {
+    const store = makeStoreWithFixture(formulationFixture) as any;
+    const [first] = await enrichAddMaterialRefs(
+      [addMaterial({
+        details: {
+          material_spec_ref: { kind: 'record', id: 'MSP-PR9-TEST-CLO-1MM', type: 'material-spec', label: '1 mM Clofibrate in DMSO' },
+          volume: { value: 1, unit: 'uL' },
+        },
+      })],
+      stubLabeler,
+      { store },
+    );
+    const firstDetails = (first as Record<string, unknown>).details as Record<string, unknown>;
+    const firstSnapshot = firstDetails.composition_snapshot as Array<Record<string, unknown>>;
+    expect(firstSnapshot).toHaveLength(2);
+
+    // Run enrichment again on the already-expanded event
+    const [second] = await enrichAddMaterialRefs(
+      [first],
+      stubLabeler,
+      { store },
+    );
+    const secondDetails = (second as Record<string, unknown>).details as Record<string, unknown>;
+    const secondSnapshot = secondDetails.composition_snapshot as Array<Record<string, unknown>>;
+    expect(secondSnapshot).toEqual(firstSnapshot);
+    expect(secondSnapshot).toHaveLength(2);
+  });
 });

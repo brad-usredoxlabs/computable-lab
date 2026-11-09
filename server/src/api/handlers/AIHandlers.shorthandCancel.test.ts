@@ -120,7 +120,8 @@ function shorthandCall(yaml: string) {
 function runRequest(runId: string): AgentRequest {
   return {
     prompt: 'add 100 uL of test reagent to A1:A12',
-    surface: 'workspace.deck',
+    // 'event-editor': shorthand-drafting DATA list (0257123d) retired the dead surface 'workspace.deck'.
+    surface: 'event-editor',
     forceDraftTool: true,
     context: {
       labwares: [{ labwareId: 'LAB-plate-1', labwareType: 'plate', name: 'Plate' }],

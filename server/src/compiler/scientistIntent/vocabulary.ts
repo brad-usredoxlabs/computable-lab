@@ -41,7 +41,7 @@ export function defaultVocabularyDataPath(): string {
 }
 
 export type ScientistIntentVerbClass = 'simple' | 'compound' | 'pattern';
-export type ScientistIntentArgKind = 'resolvable' | 'scalar' | 'wells' | 'quantity';
+export type ScientistIntentArgKind = 'resolvable' | 'scalar' | 'wells' | 'quantity' | 'wellset';
 
 /** One per-argument contract declaration (exactOptionalPropertyTypes: optional
  *  members are ABSENT-or-value, built by conditional spread only). */
@@ -49,8 +49,10 @@ export interface ScientistIntentArgContract {
   name: string;
   kind: ScientistIntentArgKind;
   required: boolean;
-  /** DECLARATION SLOT — where the noun must land (SPINE-3 adapters consume). */
-  domain?: string;
+  /** DECLARATION SLOT — where the noun must land (SPINE-3 adapters consume).
+   *  A single value names one landing zone; an array declares that ANY of the
+   *  listed zones is acceptable for this argument. */
+  domain?: string | readonly string[];
   capability?: string;
   hintEligible?: boolean;
   /** SPINE-8 DECLARATION SLOT — the MaterialLevel this argument's noun must
@@ -78,6 +80,22 @@ export interface ScientistIntentArgContract {
    *  the PANEL's pre-selection (P5). NEVER a filter, never suppression:
    *  binding a non-preferred allowed level is legal without a clarification. */
   preferred?: string;
+  /** L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-l2t2355
+   *  Q1) DECLARATION SLOT — the producer-side teaching for this argument: a
+   *  one-line phrase->value contract contractBlock() renders generically under
+   *  the verb line (the block the live chat sites embed). The render keys off
+   *  the FIELD's presence — no consumer branches on a verb or arg name; a
+   *  kind: wellset arg's line additionally composes the wellsetValueTokens
+   *  DATA list (token membership stays single-homed; zero token literals in
+   *  TS — the B3 discipline resolveWellsetsPass.ts honors). */
+  teaching?: string;
+  /** L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a))
+   *  DECLARATION SLOT — a list of ALTERNATIVE argument names whose presence
+   *  satisfies this contract (the §5.2 sweep's present-check: argumentPresent
+   *  on the contract's own name OR any of these). Names OTHER declared args of
+   *  the SAME verb; no dangling aliases (pinned by test — the lint DSL cannot
+   *  express cross-sibling membership). Absent = no alias (today's behavior). */
+  satisfiedBy?: readonly string[];
 }
 
 export interface ScientistIntentVerbEntry {
@@ -90,7 +108,7 @@ export interface ScientistIntentVerbEntry {
 
 export interface ScientistIntentVocabularyPolicies {
   strategyOrder: readonly string[];
-  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string };
+  ambiguity: { mode: string; confidenceAccept: { min: number; max: number }; strategyRef: string; identityCollapse?: { key: readonly string[]; survivor: readonly string[] } };
   hintAuthority: { mode: string; strategyRef: string };
   ruleIds: readonly string[];
 }
@@ -113,6 +131,83 @@ export interface ScientistIntentVocabulary {
    *  drift (the PB-CH-4b precedent: the model's menu must BE the compiler's
    *  membership check). */
   contractBlock(): string;
+  /**
+   * WELLSET-RESOLVER-1: the DECLARED contents-derived wellset token VALUES
+   * (the vocabulary's wellsetValueTokens DATA list, declaration order). The
+   * server-side resolve_wellsets pass reads THIS list to decide which
+   * kind:wellset argument values are declared tokens — the token membership is
+   * DATA (the B3 boundary: no token string-literal in the pass). Empty when the
+   * vocabulary declares no wellsetValueTokens section (the optional slot).
+   */
+  wellsetValueTokens(): readonly string[];
+  /**
+   * WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the DECLARED material-bearing
+   * EVENT TYPES (the vocabulary's materialBearingEventTypes DATA list) — the
+   * primitive event types that add material to a well. The resolve_wellsets
+   * pass reads THIS list to build the pending-draft layer of the contents
+   * ledger — no hardcoded taxonomy in TS. Empty when the vocabulary declares
+   * no materialBearingEventTypes section (the optional slot): the pending
+   * layer then contributes nothing (fail-closed to the committed layer).
+   */
+  materialBearingEventTypes(): readonly string[];
+  /**
+   * L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+   * RESOLUTION ladder (rung `order` + the instance `tokenFields` each rung
+   * reads, index-aligned). The lab_state pass reads THIS to thread the
+   * never-guess resolution rules into the fold (a symbolic labwareId resolves
+   * to a snapshot instance via the declared rungs — the rung ids + fields are
+   * DATA, never a TS branch). Absent section => the empty lists (fail-closed:
+   * the fold resolves rung R1 ONLY, the raw instanceId path — the pre-existing
+   * behavior, so every pre-existing test stays byte-unchanged). D5 (advc
+   * fix-run 1): the fold treats an EMPTY `order` the same as absent rules —
+   * rung R1 ONLY — so an absent section and a 2-arg fold call are identical;
+   * the code, this doc, and the pass comment agree.
+   */
+  labwareIdentityResolution(): {
+    order: readonly string[];
+    tokenFields: readonly string[];
+  };
+  /**
+   * L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the CONTENT-BEARING EVENT
+   * TYPES on the WRITE side — the DATA list of primitive event types whose
+   * no-op fold is a never-guess surface the lab_state pass surfaces as a
+   * diagnostic (§7). The fold-side twin of `materialBearingEventTypes` (the
+   * READ half's ledger taxonomy): one DATA declaration of the
+   * content-bearing concept, consumed by both halves — the TS carries no
+   * second literal list of event types (the B3 boundary / no-double-
+   * vocabulary discipline). Empty when the vocabulary declares no section
+   * (the optional slot): fail-closed, no event is content-bearing, so the
+   * pass surfaces no diagnostics (over-conservative, never-guess-safe).
+   */
+  labStateContentBearingEventTypes(): readonly string[];
+}
+
+/**
+ * Normalise a declaration domain slot into a lowercase array.
+ *
+ * `string` → single-element array; `readonly string[]` → element-wise trimmed + lowercased;
+ * blank/whitespace-only values yield the empty array (fail-closed parity).
+ * `undefined` / empty → empty array.
+ *
+ * Return type is `readonly string[]` — never `undefined` (satisfies exactOptionalPropertyTypes).
+ */
+export function declaredDomains(
+  arg?: string | readonly string[] | undefined,
+): readonly string[] {
+  if (arg === undefined) return [];
+  if (typeof arg === 'string') { const t = arg.trim().toLowerCase(); return t.length > 0 ? [t] : []; }
+  return arg.map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+}
+
+/**
+ * Render a domain slot as a pipe-separated string (e.g. `labware|material`).
+ * Both prompt emitters and the mirror must use this formatter so the slot
+ * renders unambiguously — never raw interpolation of `a.domain`.
+ */
+export function formatArgDomain(
+  arg?: string | readonly string[] | undefined,
+): string {
+  return declaredDomains(arg).join('|');
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -187,9 +282,9 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string | readonly string[]; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string; teaching?: string; satisfiedBy?: string[] }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
-  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies }
+  interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies; wellsetValueTokens?: string[]; materialBearingEventTypes?: string[]; labStateContentBearingEventTypes?: string[]; labwareIdentityResolution?: { order?: string[]; tokenFields?: string[] } }
 
   const raw = doc as RawDoc;
   const verbs: string[] = [];
@@ -202,7 +297,13 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       name: a.name,
       kind: a.kind,
       required: a.required,
-      ...(typeof a.domain === 'string' ? { domain: a.domain } : {}),
+      // Domain: accept string or non-empty array (meta-schema is the validation
+      // authority; conditional spread for exactOptionalPropertyTypes).
+      ...(typeof a.domain === 'string'
+        ? { domain: a.domain }
+        : Array.isArray(a.domain) && a.domain.length > 0
+        ? { domain: a.domain }
+        : {}),
       ...(typeof a.capability === 'string' ? { capability: a.capability } : {}),
       ...(typeof a.hintEligible === 'boolean' ? { hintEligible: a.hintEligible } : {}),
       // Generic narrowing of the DECLARED level slot (the meta-schema enum is
@@ -221,6 +322,18 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       // disclosure only (never a filter, never suppression).
       ...(Array.isArray(a.levels) && a.levels.length > 0 ? { levels: a.levels } : {}),
       ...(typeof a.preferred === 'string' ? { preferred: a.preferred } : {}),
+      // FIX RUN 2 [ruling LABSTATE-TOKENSITE-gate-l2t2355 Q1]: the DECLARED
+      // teaching slot (same SPINE-8 idiom — generic read, meta-schema is the
+      // authority, no per-verb/per-arg branches, conditional spread for
+      // exactOptionalPropertyTypes). Only consumed by contractBlock()'s
+      // generic render — the resolver/parser never read it (zero behavior).
+      ...(typeof a.teaching === 'string' ? { teaching: a.teaching } : {}),
+      // L2-CLARIFY-TARGET-1 Change 4a [ruling l2t2230 (a)]: the DECLARED
+      // satisfiedBy alias slot (same SPINE-8 idiom — generic read, the
+      // meta-schema is the structural authority, no per-verb/per-arg branches,
+      // conditional spread for exactOptionalPropertyTypes). The §5.2 sweep
+      // consumes it as the alias list whose presence satisfies the contract.
+      ...(Array.isArray(a.satisfiedBy) && a.satisfiedBy.length > 0 ? { satisfiedBy: a.satisfiedBy } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
@@ -235,6 +348,47 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const verbsFrozen: readonly string[] = Object.freeze(verbs);
   const patternsFrozen: ReadonlySet<string> = patterns;
   const policies: ScientistIntentVocabularyPolicies = raw.policies;
+  // WELLSET-RESOLVER-1: the DECLARED contents-derived wellset token VALUES
+  // (DATA — the meta-schema validates the shape; generic read, no per-value
+  // branch, frozen). Absent section ⇒ empty list (the optional slot).
+  const wellsetValueTokensFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.wellsetValueTokens) ? raw.wellsetValueTokens.filter((t) => typeof t === 'string') : [],
+  )
+  // WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the material-bearing event-type
+  // taxonomy is DATA (the vocabulary's materialBearingEventTypes list) — read
+  // per load, same discipline as the token list; absent section => [] (the
+  // pending-draft layer contributes nothing, fail-closed).
+  const materialBearingEventTypesFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.materialBearingEventTypes) ? raw.materialBearingEventTypes.filter((t) => typeof t === 'string') : [],
+  );
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the content-bearing event-type
+  // taxonomy on the WRITE side is DATA (the vocabulary's
+  // labStateContentBearingEventTypes list) — read per load, same discipline as
+  // the token lists above; absent section => [] (fail-closed: the lab_state
+  // pass surfaces no diagnostics, over-conservative never-guess). The lab_state
+  // pass threads this into isContentBearing at the pass seam — the fold module
+  // stays pure and carries no second literal list of event types.
+  const labStateContentBearingEventTypesFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labStateContentBearingEventTypes) ? raw.labStateContentBearingEventTypes.filter((t) => typeof t === 'string') : [],
+  );
+  // L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware identity
+  // resolution ladder (same fix2 idiom as the two lists above — generic read,
+  // meta-schema validates the shape, frozen, fail-closed to the empty lists
+  // when the section is absent => the fold resolves rung R1 ONLY, the raw
+  // instanceId path — D5, advc fix-run 1: the fold treats an empty `order`
+  // exactly as absent rules, so absent-section and 2-arg calls agree). The
+  // rung ids + instance fields are DATA — this module
+  // carries no rung-id or field-name policy branch.
+  const labwareIdentityResolutionOrderFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.order)
+      ? raw.labwareIdentityResolution.order.filter((t) => typeof t === 'string')
+      : [],
+  );
+  const labwareIdentityResolutionTokenFieldsFrozen: readonly string[] = Object.freeze(
+    Array.isArray(raw.labwareIdentityResolution?.tokenFields)
+      ? raw.labwareIdentityResolution.tokenFields.filter((t) => typeof t === 'string')
+      : [],
+  );
 
   // Deterministic wrap for the prompt block (width-bounded, declaration order;
   // reproduces the historical hand-wrapped block byte-for-byte at width 74).
@@ -259,13 +413,28 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   // Generated from verbsFrozen + the entries' arg contracts; NO hand-written
   // verb list (the same authority the Ajv enum injection and the prompt block
   // read), so a future verb addition auto-appears in every disclosure site.
+  // FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-l2t2355 Q1): an arg contract
+  // carrying the declared `teaching` slot gets ONE extra indented line under
+  // the verb line, keyed off the FIELD's presence (never off a verb or arg
+  // NAME). A `kind: wellset` arg's line additionally composes the declared
+  // token list from wellsetValueTokens DATA (kind is the declared arg-kind
+  // discriminant — the same shape parseScientistIntent/resolveWellsetsPass
+  // read; a KIND check, not a name branch). Zero token literals in TS: the
+  // B3 boundary.
   const contractBlock = (): string => {
     const lines: string[] = ['ACTIONS (the CLOSED vocabulary — never invent another):'];
     for (const verb of verbsFrozen) {
       const args = entries.get(verb)!.args
-        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
         .join(', ');
       lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
+      for (const a of entries.get(verb)!.args) {
+        if (typeof a.teaching !== 'string') continue; // generic FIELD-presence gate
+        const tokenClause = a.kind === 'wellset' && wellsetValueTokensFrozen.length > 0
+          ? ` Declared tokens: ${wellsetValueTokensFrozen.join(', ')}.`
+          : '';
+        lines.push(`  ${a.name}: ${a.teaching}${tokenClause}`);
+      }
     }
     return lines.join('\n');
   };
@@ -280,6 +449,13 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     promptVerbBlock,
     toolActionEnum: () => [...verbsFrozen],
     contractBlock,
+    wellsetValueTokens: () => wellsetValueTokensFrozen,
+    materialBearingEventTypes: () => materialBearingEventTypesFrozen,
+    labStateContentBearingEventTypes: () => labStateContentBearingEventTypesFrozen,
+    labwareIdentityResolution: () => ({
+      order: labwareIdentityResolutionOrderFrozen,
+      tokenFields: labwareIdentityResolutionTokenFieldsFrozen,
+    }),
   };
 }
 

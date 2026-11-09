@@ -17,20 +17,49 @@
  * guarantee — the id never changes for the same input).
  */
 
-/** Stable djb2 hash → 4 base-36 chars. Case-insensitive so "DMSO"/"dmso" agree. */
+/**
+ * CARD1-D3 (ruling §2, l2t1430): the ONE canonical label-identity key — the
+ * repo's single source of truth for how a free-text label normalizes onto its
+ * identity. Exactly the ruling's transform, in order:
+ *
+ *     NFKC(label).trim().replace(/\s+/g, ' ').toLowerCase('en')
+ *
+ * Punctuation (hyphens / slashes / parens) is NEVER rewritten — it is
+ * identity-relevant beyond the slug, and the collapse-insensitive join is
+ * EXACTLY trim + inner-whitespace + case, nothing else. The `toLowerCase('en')`
+ * is an ASCII-lowercase fold applied AFTER NFKC (the ruling's "ASCII-fold after
+ * NFKC"); it is scoped to the ONE label token, never to prose (a prose string is
+ * never canonicalized — see the scope-lock pin in shorthandChat).
+ */
+export function canonicalLabelKey(label: string): string {
+  // ASCII-fold after NFKC. `toLocaleLowerCase('en')` is the locale-argumented
+  // case fold the ruling's `toLowerCase('en')` names (the locale-independent
+  // `toLowerCase()` takes no args — the 'en' locale lives on
+  // toLocaleLowerCase). For the ASCII scientific-label domain the fold is
+  // byte-identical to a plain lowercase (locale-invariant over ASCII), so the
+  // identity digests are stable; the 'en' locale is honored for the
+  // non-ASCII tail.
+  return label.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en');
+}
+
+/** Stable djb2 hash → 4 base-36 chars. Case/whitespace-insensitive so
+ *  "DMSO"/"dmso" — and "clofibrate in DMSO" / "Clofibrate  in DMSO" — agree
+ *  (the hash is taken over `canonicalLabelKey`, the ONE identity source; the
+ *  pre-D3 raw trim+lower hash drifted on inner whitespace, so two case/space
+ *  variants of one entity minted TWO ids). */
 export function labelHash(label: string): string {
   let h = 5381;
-  const s = label.trim().toLowerCase();
+  const s = canonicalLabelKey(label);
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h.toString(36).slice(0, 4).padStart(4, '0');
 }
 
-/** Slugified portion of the label: lowercased, non-alnum → '-', ≤24 chars. */
+/** Slugified portion of the label: lowercased, non-alnum → '-', ≤24 chars.
+ *  Derived off `canonicalLabelKey` so the human-readable id segment and the
+ *  hash never diverge (the same key, two projections). */
 export function labelSlug(label: string): string {
   return (
-    label
-      .trim()
-      .toLowerCase()
+    canonicalLabelKey(label)
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 24) || 'term'

@@ -54,6 +54,19 @@ export interface AiThread {
   updatedAt: string;
 }
 
+/**
+ * L2-THREAD-SCOPED-1 — one row of the thread LIST (GET /api/ai/threads/
+ * :endpoint/threads). Pure store data (a readdir + a messages[0] read): NO
+ * new schema, NO new record type — threads remain non-records until promoted.
+ */
+export interface ThreadSummary {
+  threadId: string;
+  /** First USER message content, trimmed, truncated (store-side). */
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
 export interface AppendMessageInput {
   message: Omit<ThreadMessage, 'createdAt'> & { createdAt?: string };
   mentions?: ThreadMention[];

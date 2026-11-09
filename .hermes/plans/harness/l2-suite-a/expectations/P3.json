@@ -1,0 +1,12 @@
+{
+  "prompt": 3,
+  "prompt_text": "Put 100ul of \"DMEM with 10% FBS\" in wells B1:H6",
+  "expectation_source": "spec per-prompt criteria P3: events>0 bound with the well set EXACTLY the compiler's expansion of B1:H6 (well-range semantics are the compiler's — pinned here via lib/well-expansions.ts over server/src/ai/wellRange.ts expandWellTokens, NEVER re-derived), OR answerable cards for the DMEM/FBS noun (cards arm). Badge tier for 'DMEM with 10% FBS' in TERM-1's honest tiers: NEVER Ontology (UC-D4 / B4).",
+  "verdict_in": ["events-bound", "cards"],
+  "wells": ["B1", "B2", "B3", "B4", "B5", "B6", "C1", "C2", "C3", "C4", "C5", "C6", "D1", "D2", "D3", "D4", "D5", "D6", "E1", "E2", "E3", "E4", "E5", "E6", "F1", "F2", "F3", "F4", "F5", "F6", "G1", "G2", "G3", "G4", "G5", "G6", "H1", "H2", "H3", "H4", "H5", "H6"],
+  "badge": {
+    "never": ["Ontology"],
+    "note": "B4/UC-D4: 'DMEM with 10% FBS' is a composition reading or a local record — Composition or Local tier, never a false Ontology. allowed intentionally ABSENT (absent key, not null — B1): the honest tier is whichever of TERM-1's merged tiers the payload reports; only the forbidden word is pinned."
+  },
+  "deterministic": false
+}

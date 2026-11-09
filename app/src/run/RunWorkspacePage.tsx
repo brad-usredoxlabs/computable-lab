@@ -13,7 +13,8 @@ import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
-import { useSurfaceChat } from '../agent/useSurfaceChat'
+import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
+import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
@@ -22,6 +23,7 @@ import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
+import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
@@ -119,9 +121,13 @@ export function RunWorkspacePage() {
     editorMode: mode,
   }), [runId, resolvedStudyId, runTitle, mode, resolvedEventGraphId])
 
-  // The universal chat: one call gives the run surface its chat AND the
-  // proposal flow (compile → card → accept/reject) the pane renders.
-  useSurfaceChat({ aiContext, endpoint: 'event-editor' })
+  // CHATHOST-CONSOLIDATE-1: the universal chat is registered by the ONE
+  // registrar (host="run-workspace") INSIDE the EventEditorProvider below
+  // (the page's top-level call used to sit above the provider and therefore
+  // could never wire onAcceptEvent or the ghost seam — the spec §1 defect).
+  // The pane consumes the chat through the app-level AiPanelContext, so the
+  // call's position in the tree does not
+  // change what the pane sees.
 
   if (!runId) {
     return (
@@ -162,24 +168,50 @@ export function RunWorkspacePage() {
         >
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
-            <RunWorkspaceShell
-              navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
-              rightPane={<HarnessChatPane />}
-              viewerToolbar={
-                <div className="run-workspace-toolbar">
-                  <ModeToggle mode={mode} onChange={setMode} />
-                  <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
-                </div>
-              }
-            >
-              {/* GC-12 (D1/D2): the additive GC run-sheet section — mounts
-                  ONLY when the record resolved as kind 'run' (the /runs/:runId
-                  surface is a RUN-record id). The section renders NOTHING
-                  when no instrument-sequence links the run (the DNA case is
-                  byte-identical — bait #2) and owns its own single probe. */}
-              {runKind === 'run' ? <GcRunSheetSection runId={runId} /> : null}
-              <RunWorkspaceContent runId={runId} mode={mode} />
-            </RunWorkspaceShell>
+            {/* LEG E / E-α: the pane's working-focus carrier. The bridge
+                (below) PUBLISHES the run's resolved working focus — the
+                focused step from ProtocolSelectionContext — and the
+                HarnessChatPane's SurfaceFocusHeader (the rightPane slot)
+                RENDERS it; both live inside this provider so the run chat
+                keeps its "what are we looking at" header after LEG D deleted
+                the legacy ChatContextHeader. Deck precedent:
+                DeckHostPage.tsx:138 wraps the deck subtree the same way. */}
+            <ChatFocusProvider>
+              {/* CHATHOST-CONSOLIDATE-1: the ONE registrar (host
+                  "run-workspace" — the YAML door registry id). The deck slice is
+                  PUBLISHED by DeckChatSlice (inside EventEditorProvider, INSIDE
+                  the provider where it reads the real editor state) and the
+                  registrar collects it through the store. The run door passes its
+                  own base context (surface 'run-workspace', the run title, the
+                  plan/execute mode) — the collector keeps the run surface/summary/
+                  editorMode and merges the deck slice's endpoint/scope/handlers +
+                  the well-selection context (the J1 selectedWells channel, which
+                  the old top-level page call could never see). The deck slice is
+                  REQUIRED for this host (config/chat/chat-hosts.yaml
+                  required_providers: [deck]); a missing publisher is a loud
+                  error, never a silent empty pane. */}
+              <DeckChatSlice />
+              <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
+              <RunWorkspaceShell
+                navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
+                rightPane={<HarnessChatPane />}
+                viewerToolbar={
+                  <div className="run-workspace-toolbar">
+                    <ModeToggle mode={mode} onChange={setMode} />
+                    <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                  </div>
+                }
+              >
+                {/* GC-12 (D1/D2): the additive GC run-sheet section — mounts
+                    ONLY when the record resolved as kind 'run' (the /runs/:runId
+                    surface is a RUN-record id). The section renders NOTHING
+                    when no instrument-sequence links the run (the DNA case is
+                    byte-identical — bait #2) and owns its own single probe. */}
+                {runKind === 'run' ? <GcRunSheetSection runId={runId} /> : null}
+                <RunWorkspaceContent runId={runId} mode={mode} />
+              </RunWorkspaceShell>
+            </ChatFocusProvider>
+
           </FocusModalsProvider>
         </EventEditorProvider>
       </WorkspaceProvider>

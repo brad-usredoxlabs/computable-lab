@@ -13,12 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { createWorkspaceHandlers } from './WorkspaceHandlers.js';
@@ -120,16 +120,72 @@ describe('WorkspaceHandlers', () => {
         expect(result?.state).toEqual(defaultWorkspaceState('STU-000002'));
       }
     });
+
+    it('GET strips a derived deck tab that is already on disk in the sidecar', async () => {
+      // Seed the file directly, bypassing PUT — PUT would strip it for us
+      const studyId = 'STU-der002';
+      const filePath = join(
+        workspaceRoot,
+        recordsDir,
+        'studies',
+        studyId,
+        'workspace.yaml',
+      );
+      await mkdir(
+        join(workspaceRoot, recordsDir, 'studies', studyId),
+        { recursive: true },
+      );
+      await writeFile(
+        filePath,
+        stringifyYaml({
+          version: 3,
+          studyId,
+          tabs: [
+            {
+              id: 'tab-deck-EVG-legacy',
+              kind: 'deck',
+              eventGraphId: 'EVG-legacy',
+              title: 'Legacy deck',
+              derived: true,
+            },
+            {
+              id: 'details:STU-der002',
+              kind: 'project-details',
+              title: 'Project',
+            },
+          ],
+          activeTabId: 'tab-deck-EVG-legacy',
+          rightPaneMode: 'find',
+          rightPaneCollapsed: false,
+          paneWidths: { left: 0.6, right: 0.4 },
+        }),
+        'utf-8',
+      );
+
+      const { reply: getReply, state: getState } = makeReply();
+      const getResult = await handlers.getWorkspace(
+        makeRequest({ studyId }),
+        getReply,
+      );
+      expect(getState.status).toBe(200);
+      expect(getResult?.state.tabs).toHaveLength(1);
+      expect(getResult?.state.tabs[0].kind).toBe('project-details');
+      expect(getResult?.state.activeTabId).toBe('details:STU-der002');
+      expect(
+        JSON.stringify(getResult?.state).includes('tab-deck-EVG-legacy'),
+      ).toBe(false);
+    });
   });
 
   describe('PUT', () => {
     // Phase 12: PUT inputs are normalized through parseWorkspaceState
-    // before persistence. v2 is the canonical version on the wire; a
+    // before persistence. v3 is the canonical version on the wire (v1/v2
+    // inputs migrate to v3 on parse); a
     // project-details tab is always present after parsing (auto-inserted
-    // when absent). Tests use a v2 input shape with project-details
+    // when absent). Tests use a v3 input shape with project-details
     // already included so PUT/GET round-trips are loss-less.
     const validState: WorkspaceState = {
-      version: 2,
+      version: 3,
       studyId: 'STU-000001',
       tabs: [
         { id: 'details:STU-000001', kind: 'project-details', title: 'Project' },
@@ -191,9 +247,9 @@ describe('WorkspaceHandlers', () => {
       expect(result?.state).toEqual(validState);
     });
 
-    it('v1 legacy payload migrates to v2 on parse (browse → find, project-details inserted)', async () => {
+    it('v1 legacy payload migrates to v3 on parse (browse → find, project-details inserted)', async () => {
       // Older client builds POST v1 shapes. The parser accepts them but
-      // emits v2 so the workspace UI always sees the new union.
+      // emits v3 so the workspace UI always sees the canonical version.
       const v1Payload = {
         version: 1,
         studyId: 'STU-000001',
@@ -215,7 +271,7 @@ describe('WorkspaceHandlers', () => {
         makeRequest({ studyId: 'STU-000001' }, v1Payload),
         reply,
       );
-      expect(result?.state.version).toBe(2);
+      expect(result?.state.version).toBe(3);
       expect(result?.state.rightPaneMode).toBe('find');
       // project-details auto-inserted at index 0.
       expect(result?.state.tabs[0].kind).toBe('project-details');
@@ -284,6 +340,49 @@ describe('WorkspaceHandlers', () => {
         reply,
       );
       expect(state.status).toBe(400);
+    });
+
+    it('PUT + GET strips derived deck tabs from persisted state', async () => {
+      const stateWithDerived: WorkspaceState = {
+        version: 3,
+        studyId: 'STU-der001',
+        tabs: [
+          {
+            id: 'tab-deck-EVG-derived',
+            kind: 'deck',
+            eventGraphId: 'EVG-derived',
+            title: 'Derived deck',
+            derived: true,
+          },
+          {
+            id: 'details:STU-der001',
+            kind: 'project-details',
+            title: 'Project',
+          },
+        ],
+        activeTabId: 'tab-deck-EVG-derived',
+        rightPaneMode: 'find',
+        rightPaneCollapsed: false,
+        paneWidths: { left: 0.6, right: 0.4 },
+      };
+      const { reply: putReply } = makeReply();
+      const putResult = await handlers.putWorkspace(
+        makeRequest({ studyId: 'STU-der001' }, stateWithDerived),
+        putReply,
+      );
+      // PUT response must not contain the derived tab
+      expect(putResult?.state.tabs).toHaveLength(1);
+      expect(putResult?.state.tabs[0].kind).toBe('project-details');
+      expect(putResult?.state.activeTabId).toBe('details:STU-der001');
+
+      // GET returns the same stripped state
+      const { reply: getReply } = makeReply();
+      const getResult = await handlers.getWorkspace(
+        makeRequest({ studyId: 'STU-der001' }),
+        getReply,
+      );
+      expect(getResult?.state.tabs).toHaveLength(1);
+      expect(getResult?.state.tabs[0].kind).toBe('project-details');
     });
   });
 

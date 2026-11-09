@@ -71,6 +71,20 @@ actions:
     targetWells: [A1]
 `;
 
+/** L2-FREEFORM-1 H2: the same store-resolved labware document threaded WITH a
+ *  deck — the route's binder must bind the event to the RESOLVED record id
+ *  (3rd arg), not the raw hint label (the H1 refusal would otherwise drop it
+ *  as unmatched: the record id is not a deck id). */
+const RESOLVED_OFFER_DOC = `intentId: ff1-h2-resolved-offer
+actions:
+  - action: add_material
+    labware: Store Plate
+    material: DMEM
+    volumeUl: 50
+    targetWells: [A1]
+`;
+const RESOLVED_RECORD_ID = 'LAB-store-plate';
+
 /** A document naming a noun NOTHING can resolve (T5 loud-channel leg). */
 const UNRESOLVED_NOUN_DOC = `intentId: shqb1-unresolved
 actions:
@@ -176,7 +190,10 @@ async function postCompile(body: Record<string, unknown>) {
 /** The CHAT path's compile of the same document (the round-trip reference):
  *  the same store-backed spine + deck-composed lookup the AgentOrchestrator
  *  shorthand seam builds (AgentOrchestrator.ts:1213-1222), then the same
- *  post-pass shorthandResultFromCompile applies (shorthandChat.ts:570). */
+ *  post-pass shorthandResultFromCompile applies (shorthandChat.ts:570).
+ *  L2-FREEFORM-1 H2: the binder sees the compile's OWN resolved offers as its
+ *  3rd arg (the mapper threads terminalArtifacts.resolvedLabwares — the seam
+ *  this file's route leg mirrors). */
 async function chatPathEvents(doc: string) {
   const store = recordStoreWith(SEED_RECORDS);
   const spine = createResolveSpineFromContext({ store: store as never });
@@ -190,7 +207,11 @@ async function chatPathEvents(doc: string) {
     spine,
     ...(searchLabwareByHint ? { searchLabwareByHint } : {}),
   });
-  return bindShorthandEventsToDeck(compiled.terminalArtifacts.events, DECK);
+  return bindShorthandEventsToDeck(
+    compiled.terminalArtifacts.events,
+    DECK,
+    compiled.terminalArtifacts.resolvedLabwares,
+  ).events;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +276,45 @@ describe('SH-QB-1 T2 — the no-edit round-trip reproduces the chat path event-f
     // B5: deep-equal is the contract — not an event-type-only or length check.
     // Only the incidental Math.random() eventIds are normalized (the goldens
     // §4.4 idiom); every load-bearing field is asserted verbatim.
+    expect(normalizeIncidentalIds(routeEvents)).toEqual(
+      normalizeIncidentalIds(JSON.parse(JSON.stringify(chatEvents))),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-FREEFORM-1 H2 — the resolved-offer round-trip: the route's binder binds
+// to the RESOLVED record id, and the response is event-for-event equal to
+// the chat path's bound proposals (the round-trip contract, resolved arm)
+// ---------------------------------------------------------------------------
+
+describe('L2-FREEFORM-1 H2 — a store-resolved labware recompile threads the resolved offers through the binder', () => {
+  it('deck-threaded recompile of a resolved labware: the event rides the RESOLVED RECORD ID (top-level + details), never the raw hint label, and deep-equals the chat path', async () => {
+    const chatEvents = await chatPathEvents(RESOLVED_OFFER_DOC);
+    expect(chatEvents.length).toBeGreaterThan(0);
+
+    const { payload } = await postCompile({ intent: RESOLVED_OFFER_DOC, deckLabwares: DECK });
+    expect(payload.outcome).toBe('complete');
+    const routeEvents = payload.terminalArtifacts?.events ?? [];
+    expect(routeEvents.length).toBeGreaterThan(0);
+
+    // The H1 refusal must NOT have dropped the resolved-offer event (its
+    // record id is not a deck id — only the 3rd arg makes it bindable).
+    // RED (without the 3rd arg): events [] + the refusal riding
+    // terminalArtifacts.unboundRefs (the event dropped as unmatched).
+    expect('unboundRefs' in (payload.terminalArtifacts ?? {})).toBe(false);
+    for (const ev of routeEvents) {
+      expect(ev.labwareId).toBe(RESOLVED_RECORD_ID);
+      const details = (ev.details ?? {}) as Record<string, unknown>;
+      expect(details.labwareId).toBe(RESOLVED_RECORD_ID);
+      // The raw hint label never rides any channel (the fail-open shape is
+      // gone on this route too).
+      expect(JSON.stringify({ ...ev, eventId: 'normalized' })).not.toContain('"Store Plate"');
+    }
+
+    // The round-trip byte-compare: the route's surviving events deep-equal
+    // the chat path's bound proposals (the T2 contract, resolved arm;
+    // incidental eventIds normalized, every load-bearing field verbatim).
     expect(normalizeIncidentalIds(routeEvents)).toEqual(
       normalizeIncidentalIds(JSON.parse(JSON.stringify(chatEvents))),
     );

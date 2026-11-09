@@ -69,9 +69,33 @@ passes:
     depends_on: [expand_protocol_intent_patterns, expand_biology_verbs, lower_protocol_intent, resolve_nouns]
     description: Map role coordinates to concrete well addresses under current orientation.
 
+  # WELLSET-RESOLVER-1 (architect ruling SUITEA-P7-mix-wellset-scope-l2t0635):
+  # the server-side CONTENTS-DERIVED wellset resolver. Runs POST-expansion (the
+  # resolve_roles precedent: address materialization on the event list). Reads
+  # a declared kind:wellset token from the vocabulary (DATA membership — no
+  # verb-name branch), resolves it to a concrete well set from the run's
+  # contents ledger (the prior lab state PLUS the current document's own
+  # events = the pending-draft layer), and writes the set + the labware binding
+  # onto the matching post-expansion event, republishing the list to the
+  # resolve_roles slot so lab_state and the assembly see the concrete wells.
+  # Ambiguous contents (two or more labware carry materials) bars with ONE
+  # clarification on the existing unresolved-fact envelope (never-guess).
+  # FIX RUN 1 (advc D3): the declared deps COVER the slots the pass READS —
+  # resolve_roles (the post-expansion event list it resolves + republishes),
+  # resolve_nouns + resolve_labware (the identity slots the pending-draft
+  # layer folds onto), ai_precompile via transitivity through the expansion
+  # stages it already chained; and the consumers that READ the republished
+  # resolve_roles slot (compute_volumes, lab_state, emit_instrument_run_files)
+  # declare the resolve_wellsets edge so no Kahn tie-break/YAML-order
+  # coincidence can ever hand them the un-resolved event list.
+  - id: resolve_wellsets
+    family: expand
+    depends_on: [resolve_roles, resolve_nouns, resolve_labware]
+    description: Resolve declared contents-derived wellset tokens to a concrete well set from the run's contents ledger (prior lab state + current-document pending events, folded onto the resolved identity space); never-guess clarification on an ambiguous two-plate set.
+
   - id: compute_volumes
     family: expand
-    depends_on: [resolve_roles]
+    depends_on: [resolve_roles, resolve_wellsets]
     description: Resolve just_enough / percent / placeholder volumes to uL.
 
   - id: compute_resources
@@ -84,14 +108,18 @@ passes:
     depends_on: [compute_resources]
     description: Full deck layout plan with pinned slots, auto-filled remainder, conflicts.
 
+  # WELLSET-RESOLVER-1 FIX RUN 1 (advc D3): lab_state and
+  # emit_instrument_run_files READ the resolve_roles slot's event list — they
+  # declare the resolve_wellsets edge so the republished (concrete-wells) list
+  # is GUARANTEED, not a Kahn tie-break coincidence.
   - id: lab_state
     family: emit
-    depends_on: [resolve_roles]
+    depends_on: [resolve_roles, resolve_wellsets]
     description: Fold events over prior lab state and emit labStateDelta.
 
   - id: emit_instrument_run_files
     family: emit
-    depends_on: [resolve_roles]
+    depends_on: [resolve_roles, resolve_wellsets]
     description: Generate InstrumentRunFile artifacts for read-event instrument groups.
 
   - id: validate

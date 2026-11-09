@@ -4,7 +4,7 @@
  */
 
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import type { EditorView } from '@tiptap/pm/view';
+import type { EditorView } from 'prosemirror-view';
 
 /**
  * Widgets render `.taptab-widget-value` (`.taptab-field-value` kept for

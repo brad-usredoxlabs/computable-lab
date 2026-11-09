@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveEquipment,
@@ -8,6 +9,8 @@ import {
   resolveTarget,
 } from './resolvers'
 import type { SlashResolverContext } from './types'
+import { __resetCandidateRankingPolicy, __setCandidateRankingPolicy } from './policy'
+import type { CandidateRankingPolicy } from './clarifyPickerRanking'
 
 // SHORTHAND-CORPUS WS6 D1: the vendor Exa tier is a DECLARED capability
 // (integrations.exa), not a default. Stub the flag seam so each test declares
@@ -30,9 +33,34 @@ function ctx(
 
 const fetchSpy = vi.fn()
 
+/**
+ * L2-CLARIFY-PICKER-1: the declared candidate-ranking policy, byte-mirroring the
+ * `schema/lab/material-profile.registry.yaml` `candidate_ranking` block (OQ2).
+ * The resolver reads this from the module cache (./policy); seeding it in
+ * beforeEach makes the resolver path deterministic and — critically — means
+ * `getCandidateRankingPolicy` NEVER fires a fetch (no extra request pollutes
+ * the mock queue, so the byte-stability + request-shape pins hold).
+ */
+const DECLARED: CandidateRankingPolicy = {
+  containsSectionLabel: 'contains "{label}" ({count})',
+  families: {
+    'saved-stock': { rank: 0, canBeDefault: true },
+    'vendor-reagent': { rank: 1, canBeDefault: true },
+    'prepared-material': { rank: 2, canBeDefault: true },
+    'biological-derived': { rank: 3, canBeDefault: true },
+    'concept-only': { rank: 4, canBeDefault: true },
+    composition: { rank: 4, canBeDefault: false },
+  },
+}
+
 beforeEach(() => {
   fetchSpy.mockReset()
   vi.stubGlobal('fetch', fetchSpy)
+  // L2-CLARIFY-PICKER-1: default to NO declared ranking (byte-stable, no fetch)
+  // so the pre-existing request-shape / byte-stability pins are untouched. The
+  // P1 ranking tests seed DECLARED explicitly.
+  __resetCandidateRankingPolicy()
+  __setCandidateRankingPolicy(null)
   // Default declared capability: Exa ON (the server default when the config
   // carries no `enabled: false`). The D1 tests below flip it explicitly.
   flags.exaVendorEnabled.mockReset()
@@ -143,11 +171,12 @@ describe('resolveMaterial', () => {
         id: 'MINST-HEPG2',
       },
     })
-    // A bare material concept reads as an ontology term to biologists.
+    // L2-TERM-1 (UC-D4): a bare workspace material record is a LOCAL record
+    // of this lab — it badges Local with an honest subtitle, never Ontology.
     expect(out[2]).toMatchObject({
       key: 'material:MAT-TRIS',
-      badge: 'Ontology',
-      subtitle: 'Ontology term',
+      badge: 'Local',
+      subtitle: 'Local record',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-TRIS' },
     })
   })
@@ -201,6 +230,54 @@ describe('resolveMaterial', () => {
         id: 'TERM-faecalibacterium-prausnitzii-0001',
       },
     })
+  })
+
+  it('keeps the ontology tier for a true ontology hit (namespace badge + the map fallback)', async () => {
+    // L2-TERM-1 (UC-D4): true ontology hits (OAK/OLS4) keep the ontology
+    // vocabulary — a namespaced hit badges its namespace, a namespace-less
+    // hit falls back to the map's 'Ontology' word. The Local/Composition
+    // tiers are for records and composites; a real ontology hit must still
+    // read as ontology.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    // localOnly resolve → nothing (the workspace tier is empty)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+    // full resolve → one OAK hit with a namespace + one OLS4 hit without
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            curie: 'XCO:0000988',
+            label: "Dulbecco's Modified Eagle's Medium",
+            namespace: 'XCO',
+            tier: 1,
+            level: 'unknown',
+            score: 0.9,
+            source: 'oak',
+          },
+          {
+            curie: 'GO:0006915',
+            label: 'apoptotic process',
+            namespace: '',
+            tier: 2,
+            level: 'concept',
+            score: 0.8,
+            source: 'ols4',
+          },
+        ],
+      }),
+    } as Response)
+
+    const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    await resolveMaterial('dmem', ctx({ onUpdate: more }))
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(additions.find((s) => s.key === 'ontology:XCO:0000988')?.badge).toBe('XCO')
+    // The namespace-less hit takes the vocabulary map's fallback word — the
+    // ontology word is reserved for ontology rows, never local/composite.
+    expect(additions.find((s) => s.key === 'ontology:GO:0006915')?.badge).toBe('Ontology')
   })
 })
 
@@ -660,9 +737,9 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
   }
 
-  async function runMenu(query: string) {
+  async function runMenu(query: string, ctxOverrides: Partial<SlashResolverContext> = {}) {
     const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
-    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more) }))
+    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more), ...ctxOverrides }))
     // Let the below-first-paint stream (component expansion + ontology tiers) settle.
     await new Promise((r) => setTimeout(r, 0))
     return { out, additions }
@@ -708,7 +785,10 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
       id: 'MSP-DRAFT-EVG_MV7Q7F5I_1',
       label: AGGREGATE,
     })
-    expect(out[1]?.badge).toBe('Ontology')
+    // L2-TERM-1 (UC-D4): the surviving row's label IS the multi-part
+    // composite aggregate — the resolver's structural signal reads it as a
+    // composition, so it badges Composition, never Ontology.
+    expect(out[1]?.badge).toBe('Composition')
     // Mint stays the pinned floor — last, never replaced by an invented aggregate term.
     expect(out[2]).toMatchObject({ key: `mint:${AGGREGATE}`, badge: 'New', pinBottom: true })
   })
@@ -771,14 +851,17 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     ])
     expect(additions.map((s) => s.label)).toEqual(tokens)
     expect(additions.map((s) => s.mention.label === s.label)).toEqual([true, true, true, true])
+    // L2-TERM-1 (UC-D4): the per-component records are workspace records of
+    // this lab (single-token labels — not compositions), so they badge Local,
+    // never Ontology.
     expect(additions[0]).toMatchObject({
       label: 'Thermo trypsin-EDTA',
-      badge: 'Ontology',
+      badge: 'Local',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-trypsin-edta-1fqu' },
     })
     expect(additions[2]).toMatchObject({
       label: 'Thermo FBS',
-      badge: 'Ontology',
+      badge: 'Local',
       mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-fbs-1qbj' },
     })
     // The SAME label-collapse applies to streamed hits: the 'Thermo FBS'
@@ -816,10 +899,19 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
     // Expected values captured from the resolver at the pre-fix base tip
     // (154746ef) with the identical mock fixtures — the whole serialized row
     // list must not change by a single byte for delimiter-free queries.
+    // L2-TERM-1 (UC-D4): the 'Tris' row's badge/subtitle were deliberately
+    // corrected 'Ontology'/'Ontology term' → 'Local'/'Local record' — a bare
+    // workspace material record is a LOCAL record of this lab, never an
+    // ontology term. (The other bytes are unchanged.)
+    // L2-CLARIFY-CARD-1 (Change 2): the mint floor's label is the ONE-SOURCE
+    // sentence (mintLocalTermLabel, resolvers.ts) — 'Create local term "<q>"'
+    // became 'Create material record "<q>" in the lab (new record)'. The floor
+    // row and the card row now say the same thing; these two label bytes are
+    // the ONLY change to this byte-stability pin.
     const EXPECTED_TRIS =
-      '[{"key":"material-instance:MINST-HEPG2","label":"HepG2 P12","badge":"Instance","subtitle":"Existing prepared material","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MINST-HEPG2","definition":"Existing prepared material","extra":[{"label":"Kind","value":"material-instance"},{"label":"Category","value":"prepared-material"}]},"mention":{"type":"material","entityKind":"material-instance","id":"MINST-HEPG2","label":"HepG2 P12"}},{"key":"material:MAT-TRIS","label":"Tris","badge":"Ontology","subtitle":"Ontology term","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MAT-TRIS","extra":[{"label":"Kind","value":"material"},{"label":"Category","value":"concept-only"}]},"mention":{"type":"material","entityKind":"material","id":"MAT-TRIS","label":"Tris"}},{"key":"mint:tris","label":"Create local term \\"tris\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"tris\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"tris"}}]'
+      '[{"key":"material-instance:MINST-HEPG2","label":"HepG2 P12","badge":"Instance","subtitle":"Existing prepared material","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MINST-HEPG2","definition":"Existing prepared material","extra":[{"label":"Kind","value":"material-instance"},{"label":"Category","value":"prepared-material"}]},"mention":{"type":"material","entityKind":"material-instance","id":"MINST-HEPG2","label":"HepG2 P12"}},{"key":"material:MAT-TRIS","label":"Tris","badge":"Local","subtitle":"Local record","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MAT-TRIS","extra":[{"label":"Kind","value":"material"},{"label":"Category","value":"concept-only"}]},"mention":{"type":"material","entityKind":"material","id":"MAT-TRIS","label":"Tris"}},{"key":"mint:tris","label":"Create material record \\"tris\\" in the lab (new record)","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"tris\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"tris"}}]'
     const EXPECTED_DMEM =
-      '[{"key":"mint:dmem","label":"Create local term \\"dmem\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"dmem\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"dmem"}}]'
+      '[{"key":"mint:dmem","label":"Create material record \\"dmem\\" in the lab (new record)","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"dmem\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"dmem"}}]'
 
     mockMaterialsSearch([
       { recordId: 'MINST-HEPG2', kind: 'material-instance', title: 'HepG2 P12', category: 'prepared-material', subtitle: 'Existing prepared material' },
@@ -849,4 +941,116 @@ describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + compo
       .filter((u) => u.includes('/materials/search')).length
     expect(searchCalls).toBe(2)
   })
+
+  it('L2-CLARIFY-PICKER-1 (RED): the exact-match concept DMEM is the first + defaultable workspace row, NOT the W1 row-0 composition', async () => {
+    // The 18-row DMEM card's WORKSPACE page (formulations + material search):
+    // today (pre-item) the /m comparator sorted by the hardcoded per-category
+    // rank table, so the
+    // COMPOSITION formulation `DMEM + FBS` (saved-stock, rank 0) is the
+    // keyboard default and the plain `DMEM` the prompt named is buried.
+    // The new intent-ranking comparator (data-declared candidate_ranking)
+    // puts the equality-band concept first and never-defaults a composition.
+    __setCandidateRankingPolicy(DECLARED)
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-dmemhepg2-1a2b', kind: 'material', title: 'DMEMHepG2', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+          { recordId: 'MAT-trypan-blue-7f2a', kind: 'material', title: 'Trypan blue', category: 'vendor-reagent' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+        {
+          recipeId: 'REC-AGGR', recipeName: 'aggregate', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-02', name: 'Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM')
+
+    // P1: the row the prompt NAMED (exact label match) is first — not the
+    // composition. (RED: today out[0] is the `DMEM + FBS` composition, rank 0.)
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    // advc-c1 DEFECT 8: the DOC-EDITOR /m path (pickerRows absent) carries NO
+    // P2 chrome — the consequence line + focus-default flag are PICKER-
+    // constructed rows only (the editor stays byte-stable; bait 6). The
+    // comparison still reorders (equality-band concept first).
+    expect(out[0]?.consequence).toBeUndefined()
+    expect(out[0]?.canBeDefault).toBeUndefined()
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
+    // …and the composition row is STILL not the first row (the comparator is
+    // applied; only the chrome is absent).
+    expect(out.findIndex((r) => r.badge === 'Composition')).toBeGreaterThan(0)
+  })
+
+  it('L2-CLARIFY-PICKER-1 (advc-c1 DEFECT 8): a picker-constructed pass (pickerRows:true) carries the P2 chrome — consequence + the data-flag focus-default', async () => {
+    // The clarification picker's resolver pass sets ctx.pickerRows:true. ONLY
+    // then do the per-row P2 fields attach (advc-c1 DEFECT 8: the consequence
+    // must NOT leak into the doc-editor /m). The data flag drives
+    // canBeDefault (composition => false, the never-default row); consequence
+    // is generated from the row's own record.
+    __setCandidateRankingPolicy(DECLARED)
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['DMEM', [
+          { recordId: 'MAT-dmem-ykg0', kind: 'material', title: 'DMEM', category: 'concept-only' },
+          { recordId: 'MAT-dmem-fbs-9z9z', kind: 'material', title: 'DMEM + FBS', category: 'concept-only' },
+          { recordId: 'MAT-thermo-dmem-1vq1', kind: 'material', title: 'Thermo DMEM', category: 'concept-only' },
+        ]],
+      ]),
+      formulations: [
+        {
+          recipeId: 'REC-DMEM-FBS', recipeName: 'dmem fbs', recipeTags: [],
+          outputSpec: { id: 'MSP-DRAFT-EVG_CELLROX-01', name: 'DMEM + FBS' },
+          inputRoles: [], steps: [], availableInstances: [],
+        },
+      ],
+      resolveCandidates: [],
+      vendorItems: [],
+    })
+
+    const { out } = await runMenu('DMEM', { pickerRows: true })
+
+    // The concept row (the one the prompt named) is first and carries its
+    // commit-consequence line.
+    expect(out[0]).toMatchObject({ key: 'material:MAT-dmem-ykg0', label: 'DMEM' })
+    expect(out[0]?.consequence).toBe('binds material record MAT-dmem-ykg0 "DMEM" (concept)')
+    expect(out[0]?.canBeDefault).toBe(true) // defaultable => the data flag (true)
+    // The composition row carries the composition consequence + the
+    // never-default flag (the data flag: composition can_be_default: false).
+    const firstComposition = out.find((r) => r.badge === 'Composition')
+    expect(firstComposition).toBeTruthy()
+    expect(firstComposition!.consequence).toMatch(/composition of \d+ components/)
+    expect(firstComposition!.canBeDefault).toBe(false)
+  })
 });
+
+/**
+ * L2-CLARIFY-PICKER-1 — P1 source-pin (spec RED-plan item 3; the idiom
+ * precedent is receivingMintPin.test.ts:134 — readFileSync the source and
+ * pin the DELETION). The old hardcoded per-category rank table is gone from
+ * resolvers.ts: no rank integer survives in TS (the data is the authority —
+ * the registry `candidate_ranking` block). The pattern is split so this
+ * assertion file itself never carries the full identifier (the spec's
+ * `git grep` gate for the deleted table must come back empty).
+ */
+describe('L2-CLARIFY-PICKER-1 — P1 source-pin: the hardcoded rank table is deleted (grep-clean)', () => {
+  const resolversSrc = readFileSync('src/shared/taptab/slashMenu/resolvers.ts', 'utf8')
+  const DELETED = ['MATERIAL', 'CATEGORY', 'RANK'].join('_')
+
+  it('resolvers.ts carries no copy of the deleted hardcoded rank table', () => {
+    expect(resolversSrc).not.toContain(DELETED)
+  })
+})

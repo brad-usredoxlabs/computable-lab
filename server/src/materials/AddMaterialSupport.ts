@@ -9,6 +9,8 @@ import {
   ensureLocalMaterialForDraft,
   type RefShape as GroundingRefShape,
 } from './MaterialGrounding.js';
+import { searchOls4 } from '../resolve/providers/ols4.js';
+import { findOrAuthorFormulation, SolventUnresolvableError } from './formulationGrounding.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
@@ -203,6 +205,38 @@ function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId:
   };
 }
 
+function entriesMatch(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aRef = normalizeRef(a['component_ref']);
+  const bRef = normalizeRef(b['component_ref']);
+  if (!aRef || !bRef || aRef.id !== bRef.id) return false;
+  const aRole = typeof a['role'] === 'string' ? a['role'] : null;
+  const bRole = typeof b['role'] === 'string' ? b['role'] : null;
+  if (aRole !== bRole) return false;
+  const aConc = a['concentration'];
+  const bConc = b['concentration'];
+  if (aConc && bConc && typeof aConc === 'object' && typeof bConc === 'object') {
+    const aObj = aConc as Record<string, unknown>;
+    const bObj = bConc as Record<string, unknown>;
+    if (aObj.value !== bObj.value || aObj.unit !== bObj.unit) return false;
+  }
+  return true;
+}
+
+function compositionsEqual(a: Record<string, unknown>[], b: Record<string, unknown>[]): boolean {
+  if (a.length !== b.length) return false;
+  const bUsed = new Array(b.length).fill(false);
+  for (const entryA of a) {
+    let found = -1;
+    for (let j = 0; j < b.length; j++) {
+      if (bUsed[j]) continue;
+      if (entriesMatch(entryA, b[j]!)) { found = j; break; }
+    }
+    if (found === -1) return false;
+    bUsed[found] = true;
+  }
+  return true;
+}
+
 async function upsertProposedMaterialSpecFromComposition(
   store: RecordStore,
   eventGraphId: string,
@@ -218,6 +252,52 @@ async function upsertProposedMaterialSpecFromComposition(
   const composition = canonicalCompositionSnapshot(details['composition_snapshot']);
   if (composition.length < 2) return null;
 
+  /* ---- FIND: look for an existing material-spec with the same identity ---- */
+  const specs = await store.list({ kind: 'material-spec', limit: 10000 });
+  const candidates = specs.filter((env): env is RecordEnvelope => {
+    const payload = getEnvelopePayload(env);
+    if (!payload) return false;
+    const storedFormulation = payload['formulation'];
+    if (!storedFormulation || typeof storedFormulation !== 'object') return false;
+    const storedComp = (storedFormulation as Record<string, unknown>)['composition'];
+    const storedCanonical = canonicalCompositionSnapshot(storedComp);
+    if (!compositionsEqual(composition, storedCanonical)) return false;
+    // Cross-ref-level identity check: the candidate matches when its payload
+    // material_ref points to the same material OR when the event ref IS the spec
+    // (event names the spec directly; payload has material-level ref).
+    const storedRef = normalizeRef(payload['material_ref'], 'material');
+    if (storedRef) {
+      // payload material_ref matches the event ref (both material-level)
+      if (storedRef.id === materialRef.id) return true;
+    }
+    // Event ref names this spec directly — the candidate recordId IS the
+    // spec the event points at (spec-level ref, payload has material-level ref)
+    if (env.recordId === materialRef.id) return true;
+    return false;
+  });
+  if (candidates.length > 0) {
+    if (candidates.length > 1) {
+      // Prefer a canonical (non-ai-draft) spec over prior draft residue (D2)
+      candidates.sort((a, b) => {
+        const aPayload = getEnvelopePayload(a);
+        const bPayload = getEnvelopePayload(b);
+        const aTags = Array.isArray(aPayload?.['tags']) ? (aPayload['tags'] as string[]) : [];
+        const bTags = Array.isArray(bPayload?.['tags']) ? (bPayload['tags'] as string[]) : [];
+        const aIsDraft = aTags.includes('ai-draft');
+        const bIsDraft = bTags.includes('ai-draft');
+        if (aIsDraft !== bIsDraft) return aIsDraft ? 1 : -1;
+        return a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0;
+      });
+    }
+    const matched = candidates[0]!;
+    const matchedPayload = getEnvelopePayload(matched);
+    return toRecordRef(
+      matched.recordId,
+      'material-spec',
+      matchedPayload ? String(matchedPayload.name) : matched.recordId,
+    );
+  }
+
   const specId = implicitMaterialSpecId(eventGraphId, eventId);
   const existing = await store.get(specId);
   const componentLabels = composition
@@ -226,6 +306,18 @@ async function upsertProposedMaterialSpecFromComposition(
   const name = componentLabels.length > 0
     ? componentLabels.join(' + ')
     : `Draft formulation for ${refLabel(materialRef) ?? materialRef.id}`;
+  // Derive top-level concentration + solvent_ref from composition roles.
+  // Role vocabulary: schema/core/datatypes/composition-entry.schema.yaml:13-22
+  const soluteEntries = composition.filter((e) => e['role'] === 'solute' && e['concentration']);
+  const solventEntries = composition.filter((e) => e['role'] === 'solvent');
+  // Match formulationGrounding shape (formulationGrounding.ts:300): { value, unit } — no extra basis field.
+  const concRaw = soluteEntries.length === 1
+    ? ((soluteEntries[0] as Record<string, unknown>)['concentration'] as Record<string, unknown> | undefined)
+    : undefined;
+  const authoredConcentration = concRaw
+    ? { value: (concRaw as Record<string, unknown>).value, unit: (concRaw as Record<string, unknown>).unit }
+    : null;
+  const authoredSolventRef = solventEntries.length === 1 ? solventEntries[0]!['component_ref'] : null;
   const payload: Record<string, unknown> = {
     kind: 'material-spec',
     id: specId,
@@ -236,6 +328,8 @@ async function upsertProposedMaterialSpecFromComposition(
     formulation: {
       composition,
       notes: 'Draft formulation inferred from an add-material event composition snapshot.',
+      ...(authoredConcentration ? { concentration: authoredConcentration } : {}),
+      ...(authoredSolventRef ? { solvent_ref: authoredSolventRef } : {}),
     },
     tags: ['ai-draft', 'composition_snapshot'],
   };
@@ -280,6 +374,29 @@ async function upsertProposedMaterialSpecFromSingleActive(
   if (canonicalCompositionSnapshot(details['composition_snapshot']).length > 0) return null;
   const concentration = extractConcentration(details);
   if (!concentration) return null;
+
+  // Consult the identity-keyed FIND-THEN-AUTHOR seam. When we have a
+  // concentration and a resolvable solvent, prefer the identity-keyed
+  // spec over per-journey id. Guard: preserve today's per-journey path
+  // exactly when solvent is unresolvable.
+  const solventLabel = typeof details['solvent'] === 'string' && details['solvent'].trim()
+    ? details['solvent'].trim()
+    : null;
+  if (solventLabel) {
+    try {
+      const concObj = concentration as { value: number; unit: string };
+      const identityRef = await findOrAuthorFormulation(
+        { store, searchOntology: searchOls4 },
+        materialRef,
+        concObj,
+        solventLabel,
+      );
+      return toRecordRef(identityRef.id, 'material-spec', identityRef.label);
+    } catch (err) {
+      if (!(err instanceof SolventUnresolvableError)) throw err;
+      // Solvent unresolvable — fall through to the per-journey path exactly as before.
+    }
+  }
 
   const specId = implicitMaterialSpecId(eventGraphId, eventId);
   const conc = concentration as { value?: unknown; unit?: unknown };
@@ -625,6 +742,16 @@ export async function normalizeEventGraphMaterialUsage(
 
   void options;
   let changed = false;
+
+  // Batch-scoped memo: one upsert promise per material identity. Identity is
+  // judged with the SAME predicate the server FIND uses (compositionsEqual,
+  // order-insensitive), so memoized events and persisted records agree.
+  const identityMemo: Array<{
+    materialRefId: string;
+    composition: Record<string, unknown>[];
+    promise: Promise<RefShape | null>;
+  }> = [];
+
   const nextEvents = await Promise.all(events.map(async (event, index) => {
     if (event.event_type !== 'add_material') return event;
     const eventId = typeof event.eventId === 'string' && event.eventId.trim().length > 0 ? event.eventId.trim() : `event_${index + 1}`;
@@ -635,9 +762,33 @@ export async function normalizeEventGraphMaterialUsage(
     // A bare concept in a well is never right. Materialize it: a composition or a
     // concept+concentration → a formulation (material-spec); cells+count → an
     // instance. The well then references a formulation/instance, not a concept.
-    const proposedSpecRef =
-      (await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails))
-      ?? (await upsertProposedMaterialSpecFromSingleActive(store, eventGraphId, eventId, groundedDetails));
+    const materialRef = normalizeRef(groundedDetails['material_ref'], 'material');
+    const composition = canonicalCompositionSnapshot(groundedDetails['composition_snapshot']);
+    const useIdentityMemo = Boolean(materialRef && composition.length >= 2);
+
+    let proposedSpecRef: RefShape | null;
+    if (useIdentityMemo && materialRef) {
+      const memoized = identityMemo.find(
+        (entry) => entry.materialRefId === materialRef.id && compositionsEqual(entry.composition, composition),
+      );
+      if (memoized) {
+        proposedSpecRef = await memoized.promise;
+      } else {
+        const entry = {
+          materialRefId: materialRef.id,
+          composition,
+          promise: upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails),
+        };
+        identityMemo.push(entry);
+        proposedSpecRef = await entry.promise;
+      }
+    } else {
+      proposedSpecRef =
+        await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails);
+    }
+    if (!proposedSpecRef) {
+      proposedSpecRef = await upsertProposedMaterialSpecFromSingleActive(store, eventGraphId, eventId, groundedDetails);
+    }
     const proposedInstanceRef = proposedSpecRef
       ? null
       : await upsertProposedCellsInstance(store, eventGraphId, eventId, groundedDetails);
@@ -664,26 +815,40 @@ export async function normalizeEventGraphMaterialUsage(
         return null;
       })();
     if (!inferredSpec || inferredSpec.kind !== 'record') return { ...event, details: detailsWithProposedSpec };
-    const lot = extractInstanceLot(detailsWithProposedSpec);
+
+    // Expand composition_snapshot from the bound material-spec so downstream
+    // concentration/fraction math is statable (L2-PROMPT2-SCIENCE-CHAIN-1 u3).
+    const boundSpecEnvelope = await store.get(inferredSpec.id);
+    const boundSpecPayload = getEnvelopePayload(boundSpecEnvelope);
+    const boundFormulation = boundSpecPayload?.['formulation'] && typeof boundSpecPayload['formulation'] === 'object'
+      ? boundSpecPayload['formulation'] as Record<string, unknown>
+      : null;
+    const boundComposition = boundFormulation?.['composition'];
+    const expandedSnapshot = boundComposition ? canonicalCompositionSnapshot(boundComposition) : null;
+    const detailsWithExpanded = expandedSnapshot
+      ? { ...detailsWithProposedSpec, composition_snapshot: expandedSnapshot }
+      : detailsWithProposedSpec;
+
+    const lot = extractInstanceLot(detailsWithExpanded);
     if (!lot) {
       changed = true;
       return {
         ...event,
         details: {
-          ...detailsWithProposedSpec,
-          material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
-          material_source_requirement: detailsWithProposedSpec['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec, eventGraphId, eventId),
+          ...detailsWithExpanded,
+          material_spec_ref: detailsWithExpanded['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+          material_source_requirement: detailsWithExpanded['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec, eventGraphId, eventId),
         },
       };
     }
 
-    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, detailsWithProposedSpec);
+    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, detailsWithExpanded);
     changed = true;
     return {
       ...event,
       details: {
-        ...detailsWithProposedSpec,
-        material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+        ...detailsWithExpanded,
+        material_spec_ref: detailsWithExpanded['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
         aliquot_ref: aliquotRef,
       },
     };

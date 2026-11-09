@@ -49,6 +49,46 @@ clarification:
       field: vendor_product_ref
       question: 'Which catalog item for "{label}" should this use?'
       requires: [volume]
+  # ── Candidate ranking (L2-CLARIFY-PICKER-1 P1) ────────────────────────────
+  # How a clarification's material CANDIDATE rows are ordered for the picker,
+  # and which of them may hold the focused (keyboard) default. This is POLICY,
+  # not code: the comparator's algorithm (label-equality > contains-noun >
+  # family rank) is structural, but the RANK integers, the can-be-default
+  # flags, and the contains-section label are DATA declared here.
+  #
+  # `families` is keyed by the comparator's EXISTING search-category
+  # vocabulary (MaterialSearchItem['category']) PLUS the `composition`
+  # pseudo-family — a row whose label is a multi-part aggregate
+  # (aggregateComponentTokens(label).length > 1, the L2-TERM-1 UC-D4 signal)
+  # OVERRIDES its category family. A composition is a Composition under any
+  # ontology, and can NEVER be the focused default: the scientist's Enter must
+  # commit the concept the prompt named, not an aggregate (the W1 bug). The
+  # flag is enforced against `can_be_default`, never label shape.
+  #
+  # The initial ranks replicate today's observable ordering, so the data edit
+  # alone changes nothing except the composition/never-default rule; the
+  # equality/contains bands do the scientific reordering. ABSENT declaration =>
+  # NO ranking at all (the resolver keeps its emitted order) — there is no
+  # fallback table. Wording is data too: the section label is a TEMPLATE, so
+  # changing it here moves the on-screen section without a code change.
+  #
+  # NON-RANKED convention (advc-c1 DEFECT 2 / orch ruling): families not
+  # listed here are not ranked; their rows appear after all ranked rows in
+  # input order. No rank is fabricated in TS for an undeclared family — the
+  # old `?? 10` sent it to the bottom and the interim `?? 0` / `?? inputIndex`
+  # sent an undeclared-at-index-0 row to the top; both were silent TS policy.
+  # Likewise an ABSENT `can_be_default` for a family means the family is
+  # defaultable; the only non-defaultable family is one this table declares
+  # `can_be_default: false` (today: `composition`).
+  candidate_ranking:
+    contains_section_label: 'contains "{label}" ({count})'
+    families:
+      saved-stock:        { rank: 0, can_be_default: true }
+      vendor-reagent:     { rank: 1, can_be_default: true }
+      prepared-material:  { rank: 2, can_be_default: true }
+      biological-derived: { rank: 3, can_be_default: true }
+      concept-only:       { rank: 4, can_be_default: true }
+      composition:        { rank: 4, can_be_default: false }
 
 profiles:
   chemical:

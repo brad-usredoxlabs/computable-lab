@@ -2,315 +2,7 @@
    sources strip, scrollable message log, run-in-event-editor button,
    and textarea input. */
 
-.ai-tab {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.ai-tab__section {
-  padding: 8px 12px;
-  flex-shrink: 0;
-}
-
-.ai-tab__section--system-prompt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-bottom: 1px solid var(--cl-border);
-  background: var(--cl-bg-elev);
-  padding: 6px 12px;
-}
-
-/* Prefill (KV pre-warm) indicator — three phases: busy / ready / failed. */
-.ai-tab__warm {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  white-space: nowrap;
-  color: var(--cl-text-dim);
-}
-
-.ai-tab__warm--ready {
-  color: var(--cl-success, #3fb950);
-}
-
-.ai-tab__warm--failed {
-  color: var(--cl-text-faint);
-}
-
-.ai-tab__warm-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cl-accent);
-  animation: ai-tab-warm-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes ai-tab-warm-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-
-.ai-tab__system-prompt-kind {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--cl-accent);
-}
-
-/* Model/profile switcher — compact select in the ai-tab header. */
-.ai-tab__model-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.ai-tab__model-switch-select {
-  appearance: none;
-  max-width: 130px;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 18px 2px 6px;
-  border: 1px solid var(--cl-border);
-  border-radius: 4px;
-  background: var(--cl-bg-elev-2)
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path fill='%23888' d='M1 3l3 3 3-3z'/></svg>")
-    no-repeat right 4px center;
-  color: var(--cl-text);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ai-tab__model-switch-select:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.ai-tab__model-switch-status {
-  font-size: 10px;
-  color: var(--cl-text-dim);
-  white-space: nowrap;
-}
-
-.ai-tab__model-switch-status--error {
-  color: var(--cl-danger);
-}
-
-.ai-tab__section--sources {
-  border-bottom: 1px solid var(--cl-border);
-  padding: 8px 12px;
-}
-
-.ai-tab__section--log {
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/*
- * The questions tab scrolls exactly like the chat log.
- *
- * Reported 2026-09-20: with a run of clarifications (a per-well range) the cards
- * ran off the bottom of the pane and there was no way to reach the Answer
- * buttons — the panel was unstyled, and `.ai-tab__section`'s base rule is
- * `flex-shrink: 0`, so it could neither shrink nor scroll.
- */
-.ai-tab__section--questions {
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  /* THE scroll region for the questions flow. The pane above it is fixed
-   * chrome (focus header, status, sources, sub-tabs); the questions section
-   * owns whatever height is left and scrolls inside it, so the card is
-   * reachable instead of being clipped to a sliver. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-/* The panel lives inside the pane's scrolling body — it must NOT claim 100% of
- * a bounded parent and then starve its own list. With `height:100%` the list
- * collapsed to 49px (clientHeight 49 vs scrollHeight 155) and the question card
- * was clipped to a sliver: "answer the questions above" with no questions
- * visible. Content-sized, one scroll (the pane's), never an inner one. */
-
-/*
- * The changes tab scrolls exactly like the questions tab (CHANGES-UI-1,
- * 2026-10-20). The identical 2026-09-20 incident replayed here: a shorthand
- * draft renders its verbatim document plus up to 40 change rows, and
- * `.ai-tab__section`'s base rule is `flex-shrink: 0` — with no `--changes`
- * rule the section grew unbounded and pushed the Apply/Discard bar past the
- * pane. Same fix as --questions: the section flexes and the panel scrolls
- * internally (ChangesPanel.css owns the scrolling region).
- */
-.ai-tab__section--changes {
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.questions-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: auto;
-}
-
-/* Header and footer stay put; only the list moves. */
-.questions-panel__header {
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--cl-border);
-}
-
-.questions-panel__count {
-  font-weight: 600;
-  color: var(--cl-text);
-}
-
-.questions-panel__hint {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: var(--cl-text-dim, var(--cl-text));
-  opacity: 0.8;
-}
-
-/* This element carries TEXT ("0 of 1 answered"), so it must be a text row.
- * It used to be styled as a 3px-tall bar: the label spilled out of the box and
- * overlapped the action buttons on a phone. */
-.questions-panel__progress {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--cl-text-dim, var(--cl-text));
-  border-top: 1px solid var(--cl-border);
-}
-
-.questions-panel__list {
-  /* Content-sized: the card must render in full, never be squeezed into a
-   * few-pixel window by the header above it. */
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-}
-
-.questions-panel__actions {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;          /* a phone cannot fit two long buttons on one row */
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 12px;
-}
-
-.questions-panel__card {
-  border: 1px solid var(--cl-border);
-  border-radius: 6px;
-  background: var(--cl-bg-elev);
-  padding: 8px 10px;
-}
-
-.questions-panel__card--active {
-  border-color: var(--cl-accent);
-}
-
-.questions-panel__card-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 8px;
-  font-size: 11px;
-  color: var(--cl-text-dim, var(--cl-text));
-  opacity: 0.85;
-}
-
-.questions-panel__prompt {
-  margin: 6px 0 0;
-  color: var(--cl-text);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.questions-panel__snippet {
-  margin: 4px 0 0;
-  font-size: 11px;
-  font-style: italic;
-  color: var(--cl-text-dim, var(--cl-text));
-  opacity: 0.75;
-}
-
-.questions-panel__answered {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 6px;
-  color: var(--cl-accent);
-  font-size: 12px;
-}
-
-/* READING-CARD-ANSWER-1: the reading-choice rows (one per candidate reading,
-   array order — label + computed final fractions snippet). */
-.questions-panel__options {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.questions-panel__option {
-  appearance: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  border: 1px solid var(--cl-border);
-  border-radius: 4px;
-  background: var(--cl-bg-elev-2);
-  color: var(--cl-text);
-  font: inherit;
-  text-align: left;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.questions-panel__option:hover {
-  border-color: var(--cl-accent);
-}
-
-.questions-panel__option-label {
-  font-size: 12px;
-}
-
-.questions-panel__option-snippet {
-  font-size: 11px;
-  font-style: italic;
-  color: var(--cl-text-dim, var(--cl-text));
-  opacity: 0.85;
-}
-
-.questions-panel__btn,
-.questions-panel__change-btn {
+.questions-panel__btn {
   appearance: none;
   border: 1px solid var(--cl-border);
   border-radius: 4px;
@@ -333,21 +25,6 @@
   cursor: default;
 }
 
-.ai-tab__section--actions {
-  padding: 6px 12px;
-  border-top: 1px solid var(--cl-border);
-}
-
-.ai-tab__section--actions:empty {
-  display: none;
-}
-
-.ai-tab__section--input {
-  border-top: 1px solid var(--cl-border);
-  padding: 8px 12px;
-  background: var(--cl-bg-elev);
-}
-
 .message-log__clarification-answered {
   margin-top: 8px;
   padding: 7px 8px;
@@ -364,7 +41,6 @@
   color: var(--cl-text-dim);
   font-style: italic;
 }
-
 
 /* ---- SourcesStrip --------------------------------------------------- */
 
@@ -753,58 +429,6 @@
   background: color-mix(in srgb, var(--cl-accent) 18%, transparent);
 }
 
-/* ---- Revision hint (ghost preview active) -------------------------- */
-
-.ai-tab__section--revision {
-  padding-top: 0;
-}
-
-.ai-tab__revision-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, var(--cl-accent) 38%, var(--cl-border));
-  background: color-mix(in srgb, var(--cl-bg-elev-2) 86%, var(--cl-accent) 14%);
-  border-radius: 6px;
-}
-
-.ai-tab__revision-icon {
-  color: var(--cl-accent);
-  font-weight: 700;
-  flex: 0 0 auto;
-}
-
-.ai-tab__revision-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--cl-text-dim);
-}
-
-.ai-tab__revision-discard {
-  flex: 0 0 auto;
-  appearance: none;
-  font: inherit;
-  font-size: 11px;
-  background: transparent;
-  border: 1px solid var(--cl-border);
-  color: var(--cl-text-dim);
-  border-radius: 4px;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.ai-tab__revision-discard:hover:not(:disabled) {
-  color: var(--cl-text);
-  border-color: var(--cl-border-strong);
-}
-
-.ai-tab__revision-discard:disabled {
-  opacity: 0.5;
-}
-
 /* ---- Clarification cards ------------------------------------------- */
 
 .message-log__clarifications {
@@ -814,6 +438,13 @@
 }
 
 .message-log__clarification-card {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): the deck panel mounts the picker inside
+     this card (ProtocolIdeShell.tsx:521). As a grid item of
+     .message-log__clarifications it carries the default automatic minimum
+     (min-width:auto = its content's min-content), so an unclamped content
+     chain grows the card past the column in a narrow pane. min-width: 0
+     removes that floor so the clamps below it can take effect. */
+  min-width: 0;
   border: 1px solid var(--cl-border);
   border-radius: 6px;
   background: var(--cl-bg-elev-1);
@@ -862,6 +493,14 @@
 }
 
 .message-log__clarification-option {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the single-track
+     .message-log__clarification-options. box-sizing + min-width: 0 keep the
+     100% width INSIDE the track (padding/border no longer add to it) and
+     drop the automatic minimum so the label's overflow-wrap can engage
+     instead of the row growing past the track. */
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
   width: 100%;
   appearance: none;
   border: 1px solid var(--cl-border);
@@ -892,6 +531,16 @@
 
 .message-log__clarification-picker {
   display: grid;
+  /* L2-CLARIFY-CARD-1 (browser-gate tier1, FIX RUN 4 D4): without a column
+     constraint the single implicit track is max-content sized, so the nowrap
+     Create verb + the seeded label force the track (and the mint row's
+     width:100%) WIDER than the card — the reporter measured the mint row 150 px
+     past the card and the Create button 42 px off the viewport. Clamp the
+     single column to the container: min 0 lets the nowrap children shrink
+     instead of growing the track, and max-width keeps the whole picker (and
+     therefore the card content) inside the card at every width. */
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 100%;
   gap: 6px;
   margin-top: 8px;
 }
@@ -916,7 +565,37 @@
   bottom: calc(100% + 4px);
 }
 
+/* L2-CLARIFY-PICKER-1 (Change 4, W3 geometry — amendment (b)): the popover
+   portals to document.body, anchored at the field. `fixed` is what makes the
+   inline top/left/width/maxHeight (the field's viewport rect, measured on
+   open + scroll) place it correctly; its own overflow-y makes every row
+   reachable — no `--above` flip, so no clipped upward overflow. */
+.message-log__clarification-popover--portal {
+  position: fixed;
+  right: auto;
+  overflow-y: auto;
+}
+
+/* L2-CLARIFY-PICKER-1 (Change 4 / advc-c1 DEFECT 9): the popover's inline
+   `max-height` (distance to the viewport bottom) is the SINGLE governing
+   height cap — the list below it must NOT impose its own `min(280px,40vh)`
+   (the shared SlashSuggestionList cap) or the viewport-distance cap is inert
+   and the box renders ~280px on a phone. Inside the portal the list fills
+   the portal; the portal's OWN overflow-y scroll (above) reaches every row.
+   The editor's inline list (no portal wrapper) keeps its `min(280px,40vh)`
+   cap unchanged. */
+.message-log__clarification-popover--portal .slash-suggestion-list {
+  max-height: none;
+}
+
 .message-log__clarification-search {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track (minmax(0,1fr), see .message-log__clarification-picker). As a
+     content-box width:100% item its padding + border ADDED to the track
+     width — the automatic minimum (min-width:auto) carried that overflow
+     past the card. box-sizing + min-width: 0 keep it inside the track. */
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   appearance: none;
   border: 1px solid var(--cl-border);
@@ -938,126 +617,168 @@
   cursor: progress;
 }
 
-/* ---- Protocol Builder CTA banner (PDF tab with no candidate) ---- */
-
-.ai-tab__section--protocol {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--cl-border);
-}
-
-.ai-tab__section--protocol-cta {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--cl-border);
-}
-
-.ai-tab__protocol-cta-banner {
+/* L2-SUITE-A-uifix2 FIX2 [D5]: the VISIBLE create-local (mint) row on the
+   clarification card. The card's prompt promises "…or create a local term"
+   (the spine's tier-5 mint-local, architecture §2) — the affordance used to
+   live only inside the (closed) popover's floor row, i.e. dead chrome. The
+   row renders whenever the server allowed minting (allowCreateLocal) and
+   the question carries a name (the seeded query). */
+.message-log__clarification-mint {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track. The measured defect (CHATHOST-CONSOLIDATE-1 D2): this row ran
+     150 px past the card and its Create button 42 px off the 1440 px
+     viewport. fix4 clamped the TRACK (minmax(0,1fr) + max-width:100%) but a
+     content-box width:100% item's padding (16px) + border (2px) add to the
+     track width — the automatic minimum (min-width:auto) carried that 18px
+     past the card edge (the Create button is flex:none, the last flex item,
+     so it lands exactly at that overflow). box-sizing: border-box makes the
+     100% INCLUDE padding/border (the row stops at the track edge) and
+     min-width: 0 removes the automatic floor. Children already carry the
+     shrink discipline (label/preview min-width:0; the Create button is
+     flex:none with its own width — the fix2 D-3 pin below). */
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px dashed color-mix(in srgb, var(--cl-accent) 50%, var(--cl-border));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--cl-bg-elev-2) 88%, var(--cl-accent) 12%);
-}
-
-.ai-tab__protocol-cta-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--cl-text);
-}
-
-.ai-tab__protocol-cta-desc {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--cl-text-dim);
-}
-
-.ai-tab__protocol-cta-btn {
-  appearance: none;
-  align-self: flex-start;
-  border: 1px solid var(--cl-accent);
-  background: color-mix(in srgb, var(--cl-accent) 15%, transparent);
-  color: var(--cl-accent);
-  border-radius: 4px;
-  padding: 5px 12px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 100ms ease;
-}
-
-.ai-tab__protocol-cta-btn:hover {
-  background: color-mix(in srgb, var(--cl-accent) 25%, transparent);
-}
-
-/* ---- Disabled input (clarifying / other non-chat states) ----------- */
-
-.ai-tab__subtabs {
-  display: flex;
-  gap: 2px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--cl-border, #e0e0e0);
-  flex-shrink: 0;
-}
-.ai-tab__subtab {
-  padding: 4px 10px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--cl-text-muted, #666);
-  border-bottom: 2px solid transparent;
-  transition: border-color 0.15s, color 0.15s;
-}
-.ai-tab__subtab:hover {
-  color: var(--cl-text, #333);
-}
-.ai-tab__subtab--active {
-  color: var(--cl-accent, #2563eb);
-  border-bottom-color: var(--cl-accent, #2563eb);
-  font-weight: 500;
-}
-
-/* ---- Disabled input (clarifying / other non-chat states) ----------- */
-
-.ai-tab__section--input-disabled {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: var(--cl-bg-elev);
-  border-top: 1px solid var(--cl-border);
-}
-
-.ai-tab__input-disabled-text {
-  margin: 0;
-  font-size: 12px;
-  color: var(--cl-text-dim);
-  font-style: italic;
-}
-
-.ai-tab__input-cancel {
-  appearance: none;
-  background: transparent;
-  border: 1px solid var(--cl-border);
-  color: var(--cl-text-dim);
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px dashed var(--cl-border);
   border-radius: 4px;
-  padding: 4px 10px;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 100ms ease, border-color 100ms ease;
-}
-
-.ai-tab__input-cancel:hover {
+  background: var(--cl-bg-elev-2);
   color: var(--cl-text);
-  border-color: var(--cl-border-strong);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
 }
 
+.message-log__clarification-mint:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+}
+
+.message-log__clarification-mint:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.message-log__clarification-mint__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* L2-CLARIFY-CARD-1 (browser-gate fix2, D-3): the mint row's Create button
+   clipped its own verb to "Crea/te" (shots/c1-prompt-and-card.png) — the row
+   is a full-width flex line whose children all default to `flex: 0 1 auto`
+   (shrinkable), so the button was the one that collapsed and wrapped. Give
+   the button the width its verb needs (flex: none + nowrap) and let the
+   flexible siblings (the label input, the one-source preview sentence)
+   absorb the shrinkage instead (min-width:0 so they can). */
+.message-log__clarification-mint__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.message-log__clarification-mint__preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-log__clarification-mint__create {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* L2-CLARIFY-PICKER-1 (P3): the top-THREE ranked candidates as inline buttons
+   under the question (one click answers the card) + the search escape hatch
+   (opens the existing popover — pulldown + mint are the escape hatches).
+   Compact rows: badge + label; the consequence line is on the popover's rows
+   (P2) — the buttons are the fast path, the popover is the full ranked list. */
+.message-log__clarification-top3 {
+  /* L2-CLARIFY-TARGET-1 (uifix1 D4): grid item of the fix4-clamped picker
+     track — the top-three candidate rows (the "Composition rows" of the
+     CHATHOST D2 capture) ride this container. Same clamp as the mint row:
+     no automatic minimum, so an unclamped row cannot grow the track. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.message-log__clarification-top3__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-log__clarification-top3__row:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+}
+
+.message-log__clarification-top3__row:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.message-log__clarification-top3__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.message-log__clarification-top3__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The escape hatch: distinct from the candidate rows (dashed, dimmer) — it
+   opens the full ranked popover, it is not itself a candidate. */
+.message-log__clarification-top3__search {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px dashed var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-log__clarification-top3__search:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+  color: var(--cl-text);
+}
+
+.message-log__clarification-top3__search:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
 
 /* ── Term panel ────────────────────────────────────────────────────────────────
    Sits inside the review dialogue, under the change list, above Accept/Discard.

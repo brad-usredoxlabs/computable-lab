@@ -87,7 +87,7 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
   });
 
   it('bindShorthandEventsToDeck writes details.labwareId from the bound top-level id when absent', () => {
-    const out = bindShorthandEventsToDeck(
+    const { events: out } = bindShorthandEventsToDeck(
       [{ eventId: 'e1', labwareId: 'plate', details: { well: 'A1' } }],
       DECK,
     );
@@ -95,22 +95,28 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
   });
 
   it('deck-bound singular well rides the wells carrier the deck ghosts (details.wells)', () => {
-    const out = bindShorthandEventsToDeck(
+    const { events: out } = bindShorthandEventsToDeck(
       [{ eventId: 'e1', labwareId: 'plate', details: { well: 'A1' } }],
       DECK,
     );
     expect((out[0]!.details as Record<string, unknown>).wells).toEqual(['A1']);
   });
 
-  it('NO-OP arms (raw-path byte-identity): an existing details.labwareId is never overwritten; an unprovable label is never copied', () => {
+  it('NO-OP arms (raw-path byte-identity): an existing details.labwareId is never overwritten; an unmatched top-level label is REFUSED (H1)', () => {
     const input = [
       { eventId: 'e1', labwareId: 'plate', details: { labwareId: 'already-here', well: 'A1' } },
       { eventId: 'e2', labwareId: 'somewhere-else', details: { well: 'C1' } },
     ];
-    const out = bindShorthandEventsToDeck(input, DECK);
+    const { events: out, unboundRefs } = bindShorthandEventsToDeck(input, DECK);
+    // The bound event: details.labwareId is never overwritten (Task 21 no-op).
+    expect(out).toHaveLength(1);
     expect((out[0]!.details as Record<string, unknown>).labwareId).toBe('already-here');
-    expect((out[1]!.details as Record<string, unknown>).labwareId).toBeUndefined();
-    expect(out[1]).toBe(input[1]); // byte-passthrough: unprovable label, nothing changed
+    // L2-FREEFORM-1 H1 (was: out[1] byte-passthrough with the raw label): the
+    // unmatched top-level label is now REFUSED — dropped + reported, not
+    // carried through (the fail-open pin flips to the refusal report).
+    expect(unboundRefs).toHaveLength(1);
+    expect(unboundRefs[0]!.label).toBe('somewhere-else');
+    expect(unboundRefs[0]!.reason).toBe('unmatched');
   });
 
   it('NO-OP (fix1/D5): an event already instanced via details.labwareInstanceId gets no details-side write — no labwareId, no wells rewrite', () => {
@@ -125,7 +131,7 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
     const input = [
       { eventId: 'e1', labwareId: 'plate', details: { labwareInstanceId: 'LWI-96-1', well: 'A1' } },
     ];
-    const out = bindShorthandEventsToDeck(input, DECK);
+    const { events: out } = bindShorthandEventsToDeck(input, DECK);
     const details = out[0]!.details as Record<string, unknown>;
     expect(details.labwareId).toBeUndefined();
     expect(details.wells).toBeUndefined();

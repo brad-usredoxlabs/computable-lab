@@ -38,6 +38,9 @@ export type WorkspaceTab =
       eventGraphId: string
       /** When set, graphs saved from this canvas attach to the run. */
       runId?: string
+      /** Route-derived tabs are marked true so the server PUT strip can
+       *  distinguish them from user-persisted tabs. */
+      derived?: boolean
       title: string
     }
   | { id: string; kind: 'pdf'; artifactId: string; title: string }

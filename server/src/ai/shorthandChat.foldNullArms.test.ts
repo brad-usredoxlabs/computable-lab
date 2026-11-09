@@ -381,11 +381,17 @@ describe('ANSWER-FOLD-NULL-1 — AgentOrchestrator fold-success leg: done line, 
    *  test above), so the fold-SUCCESS consumer leg uses the basis-summing
    *  fractions. Same document, same 5 cards, fractions are DATA the fraction
    *  convention (config/drafting/composition-fraction-convention.yaml) accepts. */
+  // WHY (L2-CLARIFY-TARGET-1 flip): add_material now REQUIRES volumeUl (V1 flip)
+  // in addition to the already-present targetWells. LEG_YAML carries BOTH so the
+  // real-orchestrator recompile holds the ORIGINAL 5 cards (4 composition + 1
+  // material) — the subject of this fold test — not a 6th volumeUl required-arg
+  // card (no assertion weakening; the 5-card identity below is unchanged).
   const LEG_YAML = `intentId: seed-hepg2-32wells
 actions:
   - action: add_material
     labware: "seeding plate"
     material: "Trypsin-EDTA/DMEM/FBS mix"
+    volumeUl: 200
     targetWells: [A1:A3]
     composition:
       - material: "Trypsin-EDTA"
@@ -480,7 +486,7 @@ actions:
 
   const RUN_CHAT_REQUEST = {
     prompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL across A1:A3 of the seeding plate',
-    surface: 'workspace.deck' as const,
+    surface: 'run-workspace' as const,
     forceDraftTool: true,
     context: {
       labwares: [{ labwareId: 'LAB-seeding-plate-1', labwareType: 'plate', name: 'Seeding plate' }],
@@ -725,7 +731,7 @@ describe('ANSWER-FOLD-NULL-1 fix2 — live-replay characterization (evidence ans
    *  five LABEL cards in card order: the first answer splices the entry, so
    *  the role-gap fact's label matches no entry anymore — the fold refuses
    *  (never-guess) and the whole set nulls. This test pins the MEASURED arm
-   *  line (requestId unresolved-c-11c1711f72, slotType=array) on the replay's
+   *  line (requestId unresolved-c-272e97981e, slotType=array) on the replay's
    *  own document, before and after the nested-carrier fix (the fix must not
    *  change this outcome: a duplicate-label card whose noun slot was already
    *  spliced is not a 1:1 label->noun map). */
@@ -755,8 +761,8 @@ actions:
     { label: 'Thermo trypsin-EDTA', reason: 'composition-role-gap', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
   ];
 
-  it('the replay arm line reproduces exactly: slot-not-string requestId=unresolved-c-11c1711f72 slotType=array (duplicate-label role-gap card after the entry was spliced)', () => {
-    expect(factRequestId(REPLAY_LABEL_CARDS[4]!)).toBe('unresolved-c-11c1711f72');
+  it('the replay arm line reproduces exactly: slot-not-string requestId=unresolved-c-272e97981e slotType=array (duplicate-label role-gap card after the entry was spliced)', () => {
+    expect(factRequestId(REPLAY_LABEL_CARDS[4]!)).toBe('unresolved-c-272e97981e');
     const held: HeldShorthandIntent = {
       yaml: REPLAY_YAML,
       doc: parseShorthandForChat(REPLAY_YAML),
@@ -772,7 +778,7 @@ actions:
     expect(foldAnswersIntoShorthand(held, answers)).toBeNull();
     const report = foldNullArm(held, answers);
     expect(report?.arm).toBe('slot-not-string');
-    expect(report?.requestId).toBe('unresolved-c-11c1711f72');
+    expect(report?.requestId).toBe('unresolved-c-272e97981e');
     expect(report?.slotType).toBe('array');
   });
 });
@@ -823,7 +829,7 @@ describe('ANSWER-FOLD-NULL-1 fix2 — AgentOrchestrator fold-success leg on the 
 
   const NESTED_RUN_REQUEST = {
     prompt: 'add 50 uL of Mix Prime to A1 of the seeding plate',
-    surface: 'workspace.deck' as const,
+    surface: 'run-workspace' as const,
     forceDraftTool: true,
     context: {
       labwares: [{ labwareId: 'LAB-seeding-plate-1', labwareType: 'plate', name: 'Seeding plate' }],

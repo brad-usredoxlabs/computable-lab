@@ -1,0 +1,15 @@
+1.  Navigate to the freeform manual deck
+
+2. Place a 96-well plate on the deck.
+
+3. Put 100ul of "DMEM with 10% FBS" in wells B1:H6
+
+4.  Add 100uL of 50/50 Trypsin-EDTA/DMEM with 10% FBS to wells A2:H6
+
+5. Add 1uL 1mM clofibrate in DMSO to wells A2:H2 with an 8-channel pipette
+
+6. All 1uL DMSO (vehicle control) to A3:H3
+
+7. Do a pipette mix on all wells that contain materials with the 8-channel pipette (75ul, 3 cycles)
+
+8. Place the plate  into the CO2 incubator for an overnight incubation

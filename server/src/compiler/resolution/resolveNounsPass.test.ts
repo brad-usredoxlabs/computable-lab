@@ -41,8 +41,14 @@ const fixtureVocab = (dir: string) =>
   loadScientistIntentVocabulary({ path: join(process.cwd(), FIXTURES, dir, 'scientist-intent-vocabulary.yaml') });
 
 /** A spine whose tier-0 hits are keyed by the queried label (EngineSpineLike
- *  is structural — the same seam nounResolution.test.ts uses). */
-function spineReturning(bindings: Record<string, Array<[string, string]>>) {
+ *  is structural — the same seam nounResolution.test.ts uses). Curies listed
+ *  in `declaringFormulation` carry formulationDeclared:true (a record that
+ *  structurally declares a testable formulation — D5-1). */
+function spineReturning(
+  bindings: Record<string, Array<[string, string]>>,
+  declaringFormulation: string[] = [],
+) {
+  const declaring = new Set(declaringFormulation);
   return createResolveSpine({
     termProvider: async (term) =>
       (bindings[term] ?? []).map(([curie, label]) => ({
@@ -50,6 +56,7 @@ function spineReturning(bindings: Record<string, Array<[string, string]>>) {
         label,
         namespace: 'local' as const,
         level: 'unknown' as const,
+        ...(declaring.has(curie) ? { formulationDeclared: true } : {}),
       })),
   });
 }
@@ -329,6 +336,71 @@ describe('spine4.required-argument-sweep', () => {
 });
 
 // ---------------------------------------------------------------------------
+// L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a)):
+// the declared `satisfiedBy` alias slot — a required arg's presence is satisfied
+// by the presence of an ALTERNATE declared arg named in its `satisfiedBy` list
+// (data). The sweep's present-check is: argumentPresent(name) OR any satisfiedBy
+// name passes argumentPresent. The SHAPE arm: a plain object is PRESENT iff it has
+// a finite numeric `value` AND a non-empty-string `unit` (generic quantity-object;
+// `volume: {}` stays absent; a bare number already passes the number arm). NO unit
+// validation / conversion in the sweep. (Name literals in THIS test are fine — the
+// zero-literal law binds the implementation file, matching the existing spine4
+// sweep tests that drive 'transfer'/'sourceWells'/'spin'/'rpm' directly.)
+// ---------------------------------------------------------------------------
+
+describe('spine4.satisfiedBy-alias (ruling l2t2230 (a))', () => {
+  const shipped = shippedVocab();
+  const addMat = (volume: unknown) => {
+    const action: Record<string, unknown> = {
+      action: 'add_material',
+      labware: 'plate',
+      material: 'Test Reagent',
+    };
+    if (volume !== undefined) action.volume = volume;
+    return intentOf([action as never]);
+  };
+  const volumeUlFacts = (intent: ReturnType<typeof addMat>) =>
+    requiredArgumentClarifications(intent, shipped).filter(
+      (c) => c.actionLocation?.argument === 'volumeUl',
+    );
+
+  it('a stated volume OBJECT satisfies the required volumeUl (NO missing-required fact) — RED before the fix (the false bar)', () => {
+    // add_material.volumeUl declares satisfiedBy: [volume] (DATA). A volume
+    // stated via the object form is a STATED volume, not an invented one, so
+    // the required contract is satisfied. Before the fix the sweep checked only
+    // fields['volumeUl'] and false-barred a stated volume (the W11-contradicting
+    // false positive the dead run routed to the architect).
+    expect(volumeUlFacts(addMat({ value: 50, unit: 'uL' }))).toEqual([]);
+  });
+
+  it('a BLANK volume object (`{}`) does NOT satisfy — the shape arm requires a finite value AND a non-empty unit', () => {
+    // `{}` carries neither a finite numeric value nor a unit: ABSENT. The
+    // required-contract fact still fires (the guard that keeps the shape arm from
+    // becoming a blanket present).
+    const facts = volumeUlFacts(addMat({}));
+    expect(facts).toHaveLength(1);
+    expect(facts[0]!.reason).toBe(MISSING_REQUIRED_ARGUMENT_REASON);
+  });
+
+  it('a turn stating NO volume STILL fires the volumeUl fact (W11 stays shut — the invented-number defect is not re-opened)', () => {
+    // Absent alias entirely -> present-check (own name OR any satisfiedBy name)
+    // false -> the MISSING_REQUIRED_ARGUMENT(volumeUl) fact is the exact pair the
+    // assumed-value chip leg joins. The defect is an INVENTED number, not a
+    // stated one; only a STATED volume skips the chip.
+    const facts = volumeUlFacts(addMat(undefined));
+    expect(facts).toHaveLength(1);
+    expect(facts[0]!.reason).toBe(MISSING_REQUIRED_ARGUMENT_REASON);
+  });
+
+  it('a bare NUMBER volume satisfies (the number arm — consistent with the bare-numeric-volume-as-uL lowering) — RED before the fix', () => {
+    // A bare numeric volume is PRESENT via the existing number arm once the
+    // satisfiedBy alias routes the check to the `volume` field. Before the fix
+    // the sweep never looked at `volume` at all, so a bare number false-barred.
+    expect(volumeUlFacts(addMat(50))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The pass itself: bar shape + resolvedByLabel seam
 // ---------------------------------------------------------------------------
 
@@ -449,9 +521,17 @@ describe('spine4.resolve-nouns-pass', () => {
 // ---------------------------------------------------------------------------
 
 describe('comp4.many-cardinality at the pass seam', () => {
+  // WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required
+  // args (volumeUl + targetWells). This describe isolates the composition
+  // many-cardinality door (per-entry component resolution); supplying
+  // volumeUl + targetWells keeps the §5.2 required-arg sweep SILENT so the
+  // only clarification is the unbindable COMPONENT (Equine Serum) — the
+  // original single-fact subject (no weakening of the per-entry assertion).
   const mixtureAction = {
     action: 'add_material' as const,
     labware: 'plate',
+    volumeUl: 10,
+    targetWells: ['A1'],
     composition: [
       { material: 'trypsin-EDTA', role: 'solvent' },
       { material: 'Equine Serum', role: 'additive' },
@@ -547,16 +627,39 @@ describe('shqa1.gate — resolution-aware firing gate (channel owner)', () => {
   };
 
   it('a bound slot suppresses the gated fact: ok:true, clarifications [], blocked false', async () => {
+    // WHY (L2-CLARIFY-TARGET-1 flip): add_material now declares TWO required
+    // args (volumeUl + targetWells). This pin isolates the gated-slot
+    // suppression subject (the material slot binds and the gated fact is
+    // dropped); supplying targetWells keeps the §5.2 sweep silent so the
+    // outcome stays ok:true with zero clarifications (the original subject).
     const result = await createResolveNounsPass({
-      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10 }]),
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10, targetWells: ['A1'] }]),
       vocabulary: shippedVocab(),
-      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }, ['local:MAT-gated']),
       resolutionGatedClarifications: [gatedBlob],
     }).run(emptyRunArgs);
     expect(result.ok).toBe(true);
     const output = result.output as ResolveNounsOutput;
     expect(output.clarifications).toEqual([]);
     expect(output.blocked).toBe(false);
+  });
+
+  // D5-1: a bind to a record that declares NO testable formulation must NOT
+  // make the gated blob fact moot — the slot is occupied but nothing testable
+  // was bound. The fact survives, the bar blocks, and the binding stands.
+  it('D5-1: a bound slot whose record declares no formulation KEEPS the gated fact', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10, targetWells: ['A1'] }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-bare-concept', 'Gamma/Delta Mixture']] }),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+    // No silent un-bind: the slot is still occupied by the engine binding.
+    expect(output.bindings.some((b: BoundNoun) => b.curie === 'local:MAT-bare-concept')).toBe(true);
   });
 
   it('an unbound slot keeps the gated fact: it counts toward blocked and rides the bar diagnostic', async () => {

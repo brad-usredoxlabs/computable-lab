@@ -1,0 +1,56 @@
+[
+  {
+    "well": "E2",
+    "tipVolume": "100.0 µL",
+    "tipRows": [
+      {
+        "name": "Thermo DMEM",
+        "conc": "—",
+        "vol": "100.0 µL"
+      }
+    ],
+    "tipMeta": "1 event applied"
+  },
+  {
+    "well": "A2",
+    "tipVolume": "100.0 µL",
+    "tipRows": [
+      {
+        "name": "Thermo DMEM",
+        "conc": "—",
+        "vol": "100.0 µL"
+      }
+    ],
+    "tipMeta": "1 event applied"
+  },
+  {
+    "well": "D5",
+    "tipVolume": "100.0 µL",
+    "tipRows": [
+      {
+        "name": "Thermo DMEM",
+        "conc": "—",
+        "vol": "100.0 µL"
+      }
+    ],
+    "tipMeta": "1 event applied"
+  },
+  {
+    "well": "H5",
+    "tipVolume": "100.0 µL",
+    "tipRows": [
+      {
+        "name": "Thermo DMEM",
+        "conc": "—",
+        "vol": "100.0 µL"
+      }
+    ],
+    "tipMeta": "1 event applied"
+  },
+  {
+    "well": "A1",
+    "tipVolume": "0 µL",
+    "tipRows": [],
+    "tipMeta": null
+  }
+]

@@ -1,0 +1,10 @@
+concept	local:MAT-1-mm-clofibrate1-mm-clof-l84l	1 mM Clofibrate in DMSO	1.15
+spec	local:MSP-PR9-TEST-CLO-1MM	1 mM Clofibrate in DMSO	1.15
+unknown	local:vendor-catalog-3feh	Clofibrate | APExBIO	0.4
+unknown	local:vendor-catalog-jgkl	Clofibrate	0.4
+unknown	local:vendor-catalog-y7nf	Clofibrate	0.4
+unknown	local:vendor-labware-9mbm	Clofibrate	0.4
+unknown	local:vendor-equipment-1slq	Clofibrate Solubility in DMSO	0.4
+unknown	local:vendor-equipment-1ini	Clofibrate	0.4
+unknown	local:vendor-equipment-1hlv	Determination of clofibrate in biological fluids by thin-layer and gasâ€”liquid chromatography	0.4
+concept		Create local term “1 mM clofibrate in DMSO”	0.05

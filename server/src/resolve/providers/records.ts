@@ -52,6 +52,20 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 /**
+ * Return true iff the payload structurally declares a testable formulation:
+ * both `concentration` and `solvent_ref` must be present as non-null objects.
+ * Kind-agnostic structural read — no schema import, no kind switch.
+ */
+function declaresFormulation(payload: Record<string, unknown>): boolean {
+  const form = payload.formulation;
+  if (typeof form !== 'object' || form === null) return false;
+  const conc = (form as Record<string, unknown>).concentration;
+  const solvent = (form as Record<string, unknown>).solvent_ref;
+  return typeof conc === 'object' && conc !== null
+    && typeof solvent === 'object' && solvent !== null;
+}
+
+/**
  * Build a tier-1 record provider over the given store. `kinds` overrides the
  * default kind set (e.g. when a surface restricts to labware).
  */
@@ -81,6 +95,7 @@ export function createRecordProvider(store: RecordStore, kinds: string[] = DEFAU
           level: KIND_LEVEL[kind] ?? 'unknown',
           ...(definition ? { definition } : {}),
           ...(iri ? { uri: iri } : {}),
+          ...(declaresFormulation(payload) ? { formulationDeclared: true } : {}),
         });
         if (hits.length >= limit) return hits;
       }

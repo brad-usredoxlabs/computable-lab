@@ -1,0 +1,35 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/ui/surface-manifest.schema.yaml"
+
+display:
+  titleField: $.manifestVersion
+  subtitleField: $.surfaces[0].description
+
+list:
+  columns:
+  - path: $.manifestVersion
+    label: Version
+  - path: $.paneVocabulary
+    label: Panes
+  - path: $.surfaces[0].id
+    label: First Surface ID
+  - path: $.surfaces[0].route
+    label: First Route
+
+form:
+  layout: sections
+  sections:
+  - title: Manifest
+    fields:
+    - path: $.manifestVersion
+      label: Version
+      widget: text
+      readonly: true
+    - path: $.paneVocabulary
+      label: Pane Vocabulary
+      widget: chips
+      readonly: true
+    - path: $.surfaces
+      label: Surfaces
+      widget: array
+      readonly: true

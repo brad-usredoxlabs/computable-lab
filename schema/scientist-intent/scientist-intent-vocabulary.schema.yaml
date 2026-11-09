@@ -78,20 +78,35 @@ properties:
                 pattern: "^[a-z][a-zA-Z0-9_]*$"
               kind:
                 type: string
-                enum: [resolvable, scalar, wells, quantity]
+                enum: [resolvable, scalar, wells, quantity, wellset]
                 description: >-
                   resolvable = a symbolic noun the resolver spine must bind;
                   wells = a well-address list; quantity = a numeric parameter;
-                  scalar = free-text/scalar parameter.
+                  scalar = free-text/scalar parameter;
+                  wellset = a CONTENTS-DERIVED symbolic token (a member of the
+                  vocabulary's wellsetValueTokens DATA list) that the
+                  server-side resolve_wellsets pass resolves to a concrete well
+                  set from the run's contents ledger. It is an ARG KIND, not a
+                  referent level and not a resolvable noun (no knowledge-layer
+                  term, no strategyOrder noun).
               required:
                 type: boolean
               domain:
-                type: string
-                minLength: 1
+                oneOf:
+                  - type: string
+                    minLength: 1
+                  - type: array
+                    minItems: 1
+                    uniqueItems: true
+                    items:
+                      type: string
+                      minLength: 1
                 description: >-
-                  DECLARATION SLOT — free-text domain tag naming where the noun
-                  must land (e.g. labware, material, instrument). Required for
-                  resolvable args by lint policy (not by structure).
+                  DECLARATION SLOT — free-text domain tag(s) naming where the noun
+                  must land (e.g. labware, material, instrument). A single value
+                  names one landing zone; an array declares that ANY of the listed
+                  zones is acceptable for this argument. Required for resolvable
+                  args by lint policy (not by structure).
               capability:
                 type: string
                 minLength: 1
@@ -165,7 +180,138 @@ properties:
                   NEVER a filter, never suppression: binding a non-preferred
                   allowed level is legal without a clarification. Lint P6 pins
                   preferred ∈ levels.
+              teaching:
+                type: string
+                minLength: 1
+                description: >-
+                  L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling
+                  LABSTATE-TOKENSITE-gate-l2t2355 Q1) DECLARATION SLOT — the
+                  producer-side teaching for this argument: a one-line
+                  phrase->value contract the GENERATED contractBlock renders
+                  under the verb line (the single block the live chat sites
+                  embed). Interpreted generically — no consumer branches on a
+                  verb or arg NAME; the render keys off the FIELD's presence.
+                  For kind: wellset args the renderer additionally composes the
+                  declared token list from wellsetValueTokens DATA into the
+                  line, so the teaching text must NEVER re-list token
+                  literals (one authority for the token value).
+              satisfiedBy:
+                type: array
+                items:
+                  type: string
+                  pattern: "^[a-z][a-zA-Z0-9_]*$"
+                description: >-
+                  L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING
+                  (a)) DECLARATION SLOT — a list of ALTERNATIVE argument names
+                  whose presence satisfies this contract. The resolve_nouns
+                  pass's §5.2 required-argument sweep treats the contract as
+                  PRESENT when argumentPresent(fields[contract.name]) OR any
+                  name in this list passes argumentPresent (e.g. a declared
+                  quantity satisfied by a stated quantity-OBJECT alias). The
+                  list names OTHER declared args of the SAME verb (no dangling
+                  aliases — pinned by the satisfiedBy-alias test, the in-tree
+                  pattern for cross-sibling membership the lint DSL cannot
+                  express). Interpreted generically — no consumer branches on a
+                  verb or arg NAME.
 
+  wellsetValueTokens:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9-]*$"
+    description: >-
+      WELLSET-RESOLVER-1: the DATA list of symbolic token VALUES a `kind:
+      wellset` argument may carry (contents-derived sets). The server-side
+      resolve_wellsets pass reads this list from the vocabulary object to decide
+      which argument values are declared tokens — it never string-literal
+      compares a token in TS. Optional so existing fixture copies (which
+      declare no wellset tokens) stay structurally valid.
+  materialBearingEventTypes:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      WELLSET-RESOLVER-1 FIX RUN 1 (advc D8): the DATA list of primitive
+      event types that ADD material to a well (contents-bearing). The
+      resolve_wellsets pass reads this list from the vocabulary object to
+      build the pending-draft layer of the contents ledger — the TS carries
+      no hardcoded taxonomy. Optional: absent => the pending-draft layer
+      contributes nothing (fail-closed to the committed layer).
+  labStateContentBearingEventTypes:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the DATA list of primitive
+      event types whose NO-OP fold is a never-guess surface the lab_state pass
+      surfaces as a diagnostic (spec §7) — the fold-side twin of
+      materialBearingEventTypes (the read half's contents-ledger taxonomy).
+      The lab_state pass reads THIS list from the vocabulary object and
+      threads it into the fold's content-bearing test at the pass seam; the
+      TS carries no second literal list of event types (one DATA declaration
+      of the concept, consumed by both halves — no double vocabulary).
+      Optional: absent => no event is content-bearing for the fold, so the
+      pass surfaces no diagnostics (fail-closed, over-conservative,
+      never-guess-safe).
+  labwareIdentityResolution:
+    type: object
+    additionalProperties: false
+    unevaluatedProperties: false
+    required:
+    - order
+    - tokenFields
+    properties:
+      order:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [instanceIdentity, declaredIdentityTokens, uniqueLabwareType]
+        description: >-
+          L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware
+          identity resolution ladder the lab_state fold walks for a SYMBOLIC
+          labwareId (the shipped expander's top-level labwareId / the transfer
+          source_labware|destination_labware hints — a hint, never a pin).
+          First-hit-wins with never-guess: the first rung that yields exactly
+          one instance wins; zero advances; a tie is terminal (the fold no-ops
+          + a pass diagnostic). instanceIdentity is rung R1 (the raw
+          labwareInstanceId path — always present even when the whole section
+          is absent); declaredIdentityTokens is exact identity over the
+          instance's declared identityTokens; uniqueLabwareType is exact
+          identity (under a declared normalization) over the labwareType,
+          unique-match-only. The fold is a GENERIC field-identity evaluator
+          over these declared rungs (no rung-id or field-name branch in TS —
+          the PROTO-AI-3 doctrine, the B3 boundary).
+      tokenFields:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum: [instanceId, identityTokens, labwareType]
+        description: >-
+          L2-LABSTATE-CONTENTS-1 (spec §5.2): the instance field each rung of
+          `order` reads, index-aligned (instanceIdentity -> instanceId,
+          declaredIdentityTokens -> identityTokens, uniqueLabwareType ->
+          labwareType). The fold's rung evaluators read the declared field
+          generically — the field NAMES are data, not TS branches.
+    description: >-
+      L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware identity
+      resolution ladder (rung order + the instance field each rung reads).
+      Optional so existing fixture copies stay valid: an ABSENT section fails
+      CLOSED to rung R1 ONLY (the raw labwareInstanceId path keeps working;
+      every symbolic resolution is a never-guess no-op). D5 (advc fix-run 1):
+      the fold treats an EMPTY `order` exactly as ABSENT rules — rung R1 ONLY —
+      so the fail-closed read and the 2-arg fold call are identical (code,
+      comments, and tests agree).
   referentLevels:
     type: array
     minItems: 1
@@ -181,6 +327,58 @@ properties:
       a SET DIFF (never two local terms for one entity). Optional so existing
       fixture copies (which declare no levels slots) stay structurally valid.
 
+  canonicalLabel:
+    type: object
+    additionalProperties: false
+    unevaluatedProperties: false
+    required:
+    - preMintDisplay
+    - mintedDisplay
+    - titleAdoption
+    properties:
+      preMintDisplay:
+        type: string
+        enum: [identity-case]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE B): the PRE-MINT display form for
+          an unbound acceptance entity (no local-term record exists yet).
+          `identity-case` renders the label's IDENTITY FORM (canonicalLabelKey —
+          trimmed, whitespace-collapsed, ASCII-lowercased) and nothing else; the
+          model's one-char-case re-roll is not a canonical case to pretend at.
+          The token is DATA (the loader's fail-loud membership set); the VALUE
+          (the actual label) lives in the minted record, never in this block.
+      mintedDisplay:
+        type: string
+        enum: [record-title]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE A): the GROUNDED display form —
+          once a local-term record exists (recordId =
+          localMaterialIdForLabel(fact.label)), the canonical label is the
+          record's TITLE, full stop. The ask-time lookup replaces the raw label
+          everywhere it surfaces (READ of existing machinery; no new store).
+      titleAdoption:
+        type: string
+        enum: [scientist-phrasing-when-key-equal]
+        description: >-
+          CARD1-D3 (ruling l2t1430 §3, STAGE C — the transition): at the mint,
+          the record's title is adopted from the SCIENTIST's own phrasing at the
+          naming moment IF that phrasing normalizes to the same identity key
+          (raw sentence-cased text becomes the record title); otherwise the
+          title stays the identity form. From then on every surface reads
+          STAGE A's title.
+    description: >-
+      CARD1-D3 (ruling l2t1430 §3, "Policy home"): the material domain's
+      canonical-label POLICY for the unbound acceptance entity — the small
+      DATA block that decides how the record-owned label VALUE is DISPLAYED at
+      each stage. One block, no label VALUE (that would be a second
+      vocabulary; the record stays the single vocabulary). Consumed PER call
+      by the clarification render path (the nounShape/assumedValues law —
+      never process-cached, no stack restart on a data edit); there is NO
+      hardcoded fallback policy, so an ABSENT block in a vocabulary copy the
+      render path must use fails loud (the loader throws naming the path).
+      Optional in the meta-schema so existing fixture copies (which declare no
+      canonical-label block) stay structurally valid for the verb machinery;
+      the render path requires it on the copies it reads.
   policies:
     type: object
     additionalProperties: false
@@ -234,6 +432,25 @@ properties:
             type: string
             description: >-
               Strategy id this policy arm delegates to (lint: member of strategyOrder).
+          identityCollapse:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required: [key, survivor]
+            properties:
+              key:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: { type: string, enum: [normalized_label, candidate_level] }
+              survivor:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items: { type: string, enum: [declared_substance, stable_order] }
+            description: >-
+              Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
+              no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
       hintAuthority:
         type: object
         additionalProperties: false

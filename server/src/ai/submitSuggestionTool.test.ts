@@ -305,7 +305,7 @@ describe('agent_intent — the constrained emission menu', () => {
     // — the elicited execute-chain attestation (case 3' "make 1 mL, 10x100uL
     // aliquots") rides the SAME one forced tool; the 'chain' draft adapter remains
     // the trust boundary. Still ONE forced tool.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain']);
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain', 'answer']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool
@@ -330,5 +330,37 @@ describe('agent_intent — the constrained emission menu', () => {
 
   it('reports unknown intent and rejects non-string platform/variant', () => {
     expect(parseAgentIntentArgs({ intent: 'explode_the_lab', variantId: 7 })).toEqual({ intent: 'unknown' });
+  });
+  it('tool schema declares a text property with string type, minLength, maxLength, and description', () => {
+    const props = (AGENT_INTENT_TOOL_DEF.function.parameters as { properties: Record<string, any> }).properties;
+    expect(props.text).toBeDefined();
+    expect(props.text.type).toBe('string');
+    expect(props.text.minLength).toBe(1);
+    expect(typeof props.text.maxLength).toBe('number');
+    expect(props.text.maxLength).toBeGreaterThan(10);
+    expect(typeof props.text.description).toBe('string');
+  });
+
+  it('parses answer intent with text retained verbatim', () => {
+    const result = parseAgentIntentArgs({
+      intent: 'answer',
+      text: 'This sequences workspace tracks sequence records and their runs.',
+    });
+    expect(result.intent).toBe('answer');
+    expect(result.text).toBe('This sequences workspace tracks sequence records and their runs.');
+  });
+
+  it('rejects answer intent without text — falls to unknown', () => {
+    const result = parseAgentIntentArgs({ intent: 'answer' });
+    expect(result.intent).toBe('unknown');
+  });
+
+  it('rejects answer intent with whitespace-only text — falls to unknown', () => {
+    const result = parseAgentIntentArgs({ intent: 'answer', text: '   ' });
+    expect(result.intent).toBe('unknown');
+  });
+
+  it('unknown intents parse as unknown regardless of extra fields', () => {
+    expect(parseAgentIntentArgs({ intent: 'nonexistent' }).intent).toBe('unknown');
   });
 });

@@ -744,6 +744,11 @@ export function registerRoutes(
   if (aiThreadHandlers) {
     fastify.get('/ai/threads/:endpoint', aiThreadHandlers.getThread.bind(aiThreadHandlers));
     fastify.post('/ai/threads/:endpoint', aiThreadHandlers.appendMessage.bind(aiThreadHandlers));
+    // L2-THREAD-SCOPED-1: the scope-filtered thread LIST (amendment A-3).
+    // The literal `/threads` segment is a sibling of the `:endpoint` param
+    // routes (distinct path shapes), so pathname-matched e2e stubs
+    // (which match `/ai/threads/<endpoint>` exactly) are unaffected.
+    fastify.get('/ai/threads/:endpoint/threads', aiThreadHandlers.listThreads.bind(aiThreadHandlers));
     fastify.post('/ai/threads/:endpoint/promote', aiThreadHandlers.promote.bind(aiThreadHandlers));
   }
 

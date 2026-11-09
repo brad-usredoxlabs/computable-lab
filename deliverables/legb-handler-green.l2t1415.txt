@@ -1,0 +1,107 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+ ✓ src/api/handlers/AIHandlers.deckStreamError.test.ts  (1 test) 5ms
+ ✓ src/api/handlers/AIHandlers.draftEventsStreamSurface.test.ts  (2 tests) 5ms
+ ✓ src/api/handlers/AIHandlers.attachments.test.ts  (4 tests) 7ms
+ ✓ src/api/handlers/KnowledgeAIHandlers.assertions.test.ts  (2 tests) 1667ms
+stdout | src/api/handlers/AIHandlers.foldStreamTerminal.test.ts > REVISE-GHOST-1 fix4 — the answer-fold stream must terminate on the events=0 re-hold arm > fold re-hold (events=0, surviving cards): assistStream emits the done frame, ends the reply, and the payload carries the surviving clarifications
+[agent 8hqtpt] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 8hqtpt] skipping compiler preflight for forced draft tool mode
+[agent 8hqtpt] tools=1 docDiscussion=false maxTurns=2
+[agent 8hqtpt] turn 1 starting, promptChars=39056, docDiscussion=false
+[agent 8hqtpt] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"8hqtpt","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":187,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 8hqtpt] done event_shorthand success=true events=0 clarifications=1 elapsedMs=187
+[agent h6x7k8] start surface=workspace.deck model=test-model promptLen=39 effectivePromptLen=119 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent h6x7k8] skipping compiler preflight for forced draft tool mode
+[agent h6x7k8] tools=1 docDiscussion=false maxTurns=2
+[agent h6x7k8] turn 1 starting, promptChars=39064, docDiscussion=false
+[agent h6x7k8] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"h6x7k8","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":61,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent h6x7k8] done event_shorthand success=true events=0 clarifications=1 elapsedMs=61
+
+ ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts  (1 test | 1 failed) 261ms
+   ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts > REVISE-GHOST-1 fix4 — the answer-fold stream must terminate on the events=0 re-hold arm > fold re-hold (events=0, surviving cards): assistStream emits the done frame, ends the reply, and the payload carries the surviving clarifications
+     → expected 2 to be 1 // Object.is equality
+stdout | src/api/handlers/AIHandlers.shorthandCancel.test.ts > SH-QC-1-OQ1 — clear held shorthand intent on cancel > R2 leak proof: cancel between a needs-clarification turn and a later answer — the answer does NOT fold the cancelled intent
+[agent 56l4vu] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 56l4vu] skipping compiler preflight for forced draft tool mode
+[agent 56l4vu] tools=1 docDiscussion=false maxTurns=2
+[agent 56l4vu] turn 1 starting, promptChars=39049, docDiscussion=false
+[agent 56l4vu] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"56l4vu","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":75,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 56l4vu] done event_shorthand success=true events=0 clarifications=1 elapsedMs=75
+[agent p2296x] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=96 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent p2296x] skipping compiler preflight for forced draft tool mode
+[agent p2296x] tools=1 docDiscussion=false maxTurns=2
+[agent p2296x] turn 1 starting, promptChars=39034, docDiscussion=false
+[agent p2296x] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"p2296x","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":58,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent p2296x] done event_shorthand success=true events=12 clarifications=0 elapsedMs=58
+
+stdout | src/api/handlers/AIHandlers.shorthandCancel.test.ts > SH-QC-1-OQ1 — clear held shorthand intent on cancel > R4 regression pin: WITHOUT a cancel the answer-path fold still takes the held intent (zero model calls)
+[agent tcu3cp] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent tcu3cp] skipping compiler preflight for forced draft tool mode
+[agent tcu3cp] tools=1 docDiscussion=false maxTurns=2
+[agent tcu3cp] turn 1 starting, promptChars=39049, docDiscussion=false
+[agent tcu3cp] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"tcu3cp","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":44,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent tcu3cp] done event_shorthand success=true events=0 clarifications=1 elapsedMs=44
+[agent z91fgb] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=155 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent z91fgb] skipping compiler preflight for forced draft tool mode
+[agent z91fgb] tools=1 docDiscussion=false maxTurns=2
+[agent z91fgb] turn 1 starting, promptChars=39418, docDiscussion=false
+[agent z91fgb] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"z91fgb","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":46,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null}
+[agent z91fgb] done event_shorthand success=true events=0 clarifications=1 elapsedMs=46
+
+ ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts  (8 tests | 1 failed) 825ms
+   ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts > SH-QC-1-OQ1 — clear held shorthand intent on cancel > R4 regression pin: WITHOUT a cancel the answer-path fold still takes the held intent (zero model calls)
+     → expected 2 to be 1 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/handlers/AIHandlers.foldStreamTerminal.test.ts > REVISE-GHOST-1 fix4 — the answer-fold stream must terminate on the events=0 re-hold arm > fold re-hold (events=0, surviving cards): assistStream emits the done frame, ends the reply, and the payload carries the surviving clarifications
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/api/handlers/AIHandlers.foldStreamTerminal.test.ts:222:31
+    220| 
+    221|     // Zero model calls on the fold turn (the deterministic fold consu…
+    222|     expect(model.callCount()).toBe(1);
+       |                               ^
+    223|   });
+    224| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/api/handlers/AIHandlers.shorthandCancel.test.ts > SH-QC-1-OQ1 — clear held shorthand intent on cancel > R4 regression pin: WITHOUT a cancel the answer-path fold still takes the held intent (zero model calls)
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/api/handlers/AIHandlers.shorthandCancel.test.ts:320:31
+    318|     // The mandatory deterministic fold arm is UNTOUCHED by this item:…
+    319|     // intent (never cancelled) folds with ZERO model calls.
+    320|     expect(model.callCount()).toBe(1);
+       |                               ^
+    321|     expect(second.success).toBe(true);
+    322|     expect(second.events?.length ?? 0).toBeGreaterThan(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  2 failed | 4 passed (6)
+      Tests  2 failed | 16 passed (18)
+   Start at  14:50:12
+   Duration  4.35s (transform 2.31s, setup 2ms, collect 14.16s, tests 2.77s, environment 1ms, prepare 508ms)
+

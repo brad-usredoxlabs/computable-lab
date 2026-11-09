@@ -170,7 +170,14 @@ describe('golden.intent-to-clarification.labware-hint-lookup-failure', () => {
     const payload = assertBar(run);
 
     const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
-    expect(clarifications).toHaveLength(3);
+    // WHY (L2-CLARIFY-TARGET-1 flip): the canned add_material action now omits
+    // the two REQUIRED args (volumeUl — the V1 flip — and targetWells — Change 4),
+    // so the §5.2 sweep adds TWO missing-required-argument facts to this bar. The
+    // subject of this golden is UNCHANGED (the 2 resolution-lookup-failed facts
+    // below + the unknown-noun+mint contrast arm); the count goes 3 -> 5 and the
+    // blessed record is re-blessed to the new truth (BLOCKER-2 ruling). No other
+    // body field moved (localMacro/terminalArtifacts/error/outcome byte-identical).
+    expect(clarifications).toHaveLength(5);
 
     // Clause 3: EVERY failing hintEligible-arg clarification carries reason
     // VERBATIM 'resolution-lookup-failed', its actionLocation, and NO mint

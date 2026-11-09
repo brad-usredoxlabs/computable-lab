@@ -1,0 +1,84 @@
+# J1 — deck surface: select wells, ask, assert the OUTGOING request body
+# carries the declared context channels BY NAME (the 2026-10-31 selectedWells
+# channel regression, pinned forever). Deck pane: DeckSurfaceChat.tsx (the
+# projection emits selectedWells/sourceSelection; the pane's outgoing
+# selectedWells is the OBJECT form carrying the labware).
+id: J1
+title: "deck surface: selectedWells rides the outgoing request body BY NAME"
+file: J1.yaml            # (driver bookkeeping; ignored by the executor)
+timeout_s: 360
+selection_affordance: >-
+  REAL UI: click the placed plate tile (deck canvas), then click well A1 and
+  Ctrl+click well B1 in the plate focus grid (LabwareFocus.handleWellClick:
+  plain click selects, Ctrl+click toggle-adds; wells carry data-well-id per
+  WellGrid.tsx:267). NEVER a stubbed route.
+log_selector: '[aria-label="Conversation"]'
+seed:
+  record:
+    recordId: EVG-JOURNEYS-1
+    schemaId: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+    payload:
+      id: EVG-JOURNEYS-1
+      recordId: EVG-JOURNEYS-1
+      kind: event-graph
+      name: L2 trunk journeys J1 deck (TEST DATA)
+      status: draft
+      events: []
+      labwares:
+        - labwareId: LBW-JOURNEYS-1
+          labwareType: plate_96
+          name: Journeys Plate
+          addressing:
+            type: grid
+            rows: 8
+            columns: 12
+            rowLabels: [A, B, C, D, E, F, G, H]
+            columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+          geometry: { maxVolume_uL: 300, minVolume_uL: 10, wellShape: round }
+      methodContext:
+        runId: none
+        vocabId: liquid-handling/v1
+        platform: manual
+        deckVariant: manual_freeform
+        locked: false
+      editorLayout:
+        surface: event-editor/v1
+        placements:
+          - placementId: pl-LBW-JOURNEYS-1
+            labwareId: LBW-JOURNEYS-1
+            location: { kind: lawn, xMm: 16, yMm: 16 }
+            orientation: landscape
+teardown: { delete_record: EVG-JOURNEYS-1 }
+steps:
+  - step: goto
+    path: /deck/EVG-JOURNEYS-1
+  - step: ensure_deck_variant_freeform
+  - step: open_plate_named
+    labware_name: Journeys Plate
+  - step: click_wells
+    wells: [A1, B1]
+  - step: screenshot
+    tag: wells-selected
+  - step: open_ai_tab
+  - step: ask
+    text: "mix all wells that have material"
+expected_wire:
+  endpoints: ["/api/ai/draft-events/stream"]
+assert:
+  request_body_channels:
+    - path: context.eventGraphId
+      equals: EVG-JOURNEYS-1
+    - path: context.selectedWells.labwareId
+      equals: LBW-JOURNEYS-1
+    - path: context.selectedWells.wells
+      # D5: EXACT set equality on the clicked wells (order-insensitive) —
+      # a partial-loss regression (wells: ["A1"]) must go RED. Never any-of.
+      equals_set: [A1, B1]
+    - path: context.sourceSelection
+      present: true
+    - path: context.selection
+      absent: true
+  rendered:
+    - assistant_answer_visible: true
+    - turns_at_least: 1
+    - no_error_frame: true

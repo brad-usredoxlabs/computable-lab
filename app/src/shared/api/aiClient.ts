@@ -176,7 +176,15 @@ export async function* streamAssist(
   signal?: AbortSignal,
   files?: File[],
   enableThinking?: boolean,
+  clarificationAnswers?: AiClarificationAnswer[],
 ): AsyncGenerator<AiStreamEvent> {
+  // ANSWER-CHANNEL: the structured clarification answers ride the request as
+  // DATA alongside the sentence the scientist sees. The server's answer fold
+  // (AgentOrchestrator's shorthand arm) needs the answer's `ref` to bind the
+  // chosen record; the rendered "Use [[material:ID|Label]] for material."
+  // sentence alone is re-compiled by the model, which re-derives the
+  // ambiguity and re-asks forever. Absent => the wire shape is byte-identical
+  // to before this parameter existed.
   const foundryReview = context.foundryReview as { protocolId?: unknown; variant?: unknown } | undefined
   const foundryProtocolId = typeof foundryReview?.protocolId === 'string' ? foundryReview.protocolId : null
   const foundryVariant = typeof foundryReview?.variant === 'string' ? foundryReview.variant : null
@@ -249,6 +257,11 @@ export async function* streamAssist(
     if (enableThinking !== undefined) {
       formData.append('enableThinking', String(enableThinking))
     }
+    // ANSWER-CHANNEL: multipart carries the answers as a JSON field (the
+    // server's multipart branch parses exactly this field name).
+    if (clarificationAnswers && clarificationAnswers.length > 0) {
+      formData.append('clarificationAnswers', JSON.stringify(clarificationAnswers))
+    }
     for (const file of files) {
       formData.append('files[]', file)
     }
@@ -258,9 +271,20 @@ export async function* streamAssist(
       signal,
     })
   } else {
-    const body = surface === 'event-editor'
-      ? { prompt, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}) }
-      : { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}) }
+    // ANSWER-CHANNEL: conditional spread so a turn WITHOUT answers sends the
+    // byte-identical body it always sent.
+    const answerField = clarificationAnswers && clarificationAnswers.length > 0
+      ? { clarificationAnswers }
+      : {}
+    // L2-INTENTID-REDRAFT-1 (leg B): the event-editor JSON body now carries
+    // its `surface` — the multipart branch above already appended it, and the
+    // legacy /ai/draft-events/stream handler reads + passes it so the
+    // orchestrator's shorthand answer arm (fold / identity carry) engages on
+    // the LIVE event-editor path. With surface in BOTH arms the conditional
+    // collapsed: one body, same key order as the multipart (prompt, surface,
+    // context, history). For the non-event-editor surfaces the body is
+    // byte-identical to before.
+    const body = { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}), ...answerField }
 
     response = await fetch(endpoint, {
       method: 'POST',

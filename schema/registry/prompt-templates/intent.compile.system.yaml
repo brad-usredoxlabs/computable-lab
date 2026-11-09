@@ -1,3 +1,10 @@
+# WHY (L2-CLARIFY-TARGET-1 flip): the add_material ARGUMENTS line below now reads
+# `volumeUl:quantity ... targetWells:wells` — the V1 required-arg flip (volumeUl)
+# plus the Change-4 targetWells declaration both landed in the SHIPPED vocabulary
+# (schema/scientist-intent/scientist-intent-vocabulary.yaml); this mirror's line
+# tracks the generated promptArgContractBlock(vocab) byte-for-byte (enforced by
+# vocabularyMirrorDrift.test.ts (f)). One line changed; the teaching line is
+# untouched. Any OTHER prompt-string diff would be a defect (spec Change 4).
 kind: prompt-template
 id: intent.compile.system
 prompt_kind: compiler.intent.system
@@ -31,17 +38,17 @@ content: |
   source_wells_to_duplicate_target_columns | repeat_rows | bead_beat
 
   ARGUMENTS (declared per-verb arguments; a name written with '?' is OPTIONAL — the compiler treats its absence as legal):
-  - seed — source?:resolvable(labware), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
+  - seed — source?:resolvable(labware|material), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
   - incubate — labware?:resolvable(labware), source?:resolvable(labware), duration?:scalar, temperatureC?:quantity, rpm?:quantity
-  - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
-  - resuspend — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
-  - dilute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
+  - mix — source?:resolvable(labware|material), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, volume?:quantity, cycles?:quantity, rpm?:quantity, temperatureC?:quantity, wells?:wellset(labware)
+  - resuspend — source?:resolvable(labware|material), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
+  - dilute — source?:resolvable(labware|material), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
   - shake — labware?:resolvable(labware), duration?:scalar, rpm?:quantity, temperatureC?:quantity, cycles?:quantity
   - count — labware?:resolvable(labware), mode?:scalar, readout?:scalar
   - read — labware?:resolvable(labware), instrument?:resolvable(instrument), mode?:scalar, wavelength?:scalar, readout?:scalar
-  - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl?:quantity, volume?:quantity, composition?:resolvable(material)
+  - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl:quantity, volume?:quantity, composition?:resolvable(material), targetWells:wells
   - create_container — labware?:resolvable(labware), source_name?:scalar
-  - transfer — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
+  - transfer — source?:resolvable(labware|material), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
   - stain — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, volumeUl?:quantity
   - fix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
   - permeabilize — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar

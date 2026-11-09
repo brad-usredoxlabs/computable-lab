@@ -450,13 +450,19 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain', 'answer'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. compose_record_draft: propose a NEW record for human review via the `recordDraft` envelope (operation \"compose-record\" + `kind` + `fields` — fields the target schema declares ONLY, e.g. title/materialType for a training-material) — the server COMPILES this into a review card via POST /api/drafts/compile: it resolves the kind through the schema corpus, DERIVES the record id from the declared pattern of that schema (never supply an id), validates the fields against the target schema, and NOTHING is written until the user accepts; Accept creates exactly ONE governed DRAFT record. You never supply a timestamp and never invent an id.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. compose_record_draft: propose a NEW record for human review via the `recordDraft` envelope (operation \"compose-record\" + `kind` + `fields` — fields the target schema declares ONLY, e.g. title/materialType for a training-material) — the server COMPILES this into a review card via POST /api/drafts/compile: it resolves the kind through the schema corpus, DERIVES the record id from the declared pattern of that schema (never supply an id), validates the fields against the target schema, and NOTHING is written until the user accepts; Accept creates exactly ONE governed DRAFT record. answer: respond to a direct question with a short `text` — cite only surface facts from the injected context; never invent ids. You never supply a timestamp and never invent an id.',
         },
         platformId: {
           type: 'string',
           description: 'deck_layout only: target deck platform id (omit to keep the current platform).',
+        },
+        text: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 800,
+          description: 'answer only: the model\'s direct response to a question. Cite only facts from the injected surface context; never invent identifiers or references.',
         },
         variantId: {
           type: 'string',
@@ -642,7 +648,6 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             + 'actions:\n'
             + '  - action: add_material\n'
             + '    material: "DMEM"\n'
-            + '    volumeUl: 100\n'
             + '    targetWells: [A1]\n\n'
             + SHORTHAND_CONTRACT_BLOCK,
         },
@@ -815,7 +820,7 @@ export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDef
 }
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'compose_record_draft' | 'compose_receiving' | 'compose_execute_chain' | 'sequence_action' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'compose_record_draft' | 'compose_receiving' | 'compose_execute_chain' | 'sequence_action' | 'answer' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -886,11 +891,21 @@ export interface AgentIntentArgs {
   receiving?: Record<string, unknown>;
   /** MATRES-CHAIN (OQ-3(a) ratified): the execute-chain attestation envelope, carried verbatim. */
   chain?: Record<string, unknown>;
+  /** SEQ-ANSWER-CONTRACT-1: the answer text payload — the model's direct response to a question. Absent when the intent is not 'answer' or when the model provides no text. */
+  text?: string;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
+  if (intent === 'answer') {
+    // SEQ-ANSWER-CONTRACT-1: answer requires a non-empty text payload.
+    // Fail-closed: no text or empty text → unknown (step 3).
+    if (typeof args.text === 'string' && args.text.trim().length > 0) {
+      return { intent: 'answer', text: args.text };
+    }
+    return { intent: 'unknown' };
+  }
   if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft' || intent === 'compose_receiving' || intent === 'compose_execute_chain') {
     return {
       intent,

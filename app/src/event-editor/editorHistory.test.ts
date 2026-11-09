@@ -179,6 +179,7 @@ describe('editorHistory (via eventEditorReducer)', () => {
       runId: null,
       events: [],
       labwares: {},
+      equipments: {},
       placements: [],
     })
     expect(loaded.history.past).toHaveLength(0)
@@ -202,6 +203,7 @@ describe('editorHistory (via eventEditorReducer)', () => {
       runId: null,
       events: [event('e1'), event('e2')],
       labwares: {},
+      equipments: {},
       placements: [],
     })
     expect(reloaded.history.past).toHaveLength(0)

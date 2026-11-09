@@ -63,6 +63,7 @@ import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { stripRedundantMixtureLabels } from './mixtureLabelRedundancy.js';
 import { capResolvedLabwares } from './deckReviewFold.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+import { createResolveWellsetsPass } from './resolveWellsetsPass.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
   createResolveNounsPass,
@@ -75,6 +76,7 @@ import type { TermLike } from '../../materials/termReconciliation.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from './types.js';
 import type { TerminalArtifacts, Gap, CompileOutcome } from '../pipeline/CompileContracts.js';
 import type { ScientistIntentNormalized } from './normalizeScientistIntent.js';
+import { unboundDeclaredSlots, UNBOUND_SLOT_REASON } from '../resolution/nounCoverage.js';
 
 const SCIENTIST_INTENT_PIPELINE_PATH = resolve(
   process.cwd(),
@@ -126,6 +128,14 @@ export interface ScientistIntentCompileDeps {
    *  after any answer, so without suppression the bar loops forever).
    *  Absent: every other caller is byte-identically unchanged. */
   answeredClarificationLabels?: readonly string[];
+  /**
+   * GATE-4-D1 (u9 composition-prefetch wire): synchronous lookup that returns
+   * formulation.composition entries for a given material-spec recordId.
+   * Threaded into createResolveRolesPass so add_material events expand into
+   * solute+solvent snapshot entries instead of the legacy single self-referential
+   * role:'other' entry. Absent: every other caller is byte-unchanged.
+   */
+  materialComposition?: (recordId: string) => readonly unknown[] | undefined;
 }
 
 export interface ScientistIntentCompileResult {
@@ -196,7 +206,13 @@ function buildRegistry(
   registry.register(createValidateProtocolIntentPass());
   registry.register(createLowerProtocolIntentPass());
   registry.register(createExpandProtocolIntentPatternsPass());
-  registry.register(createExpandBiologyVerbsPass());
+  // WELLSET-RESOLVER-1 FIX RUN 2 (advc D12): this chain opts INTO declared
+  // candidate provenance (details.sourceActionIndex) — the identity the
+  // resolve_wellsets candidate->event join correlates on. resolve_wellsets
+  // STRIPS the stamp before republishing the resolve_roles slot, so no
+  // downstream artifact carries it. The chatbot pipeline registers the pass
+  // WITHOUT the opt and stays byte-identical.
+  registry.register(createExpandBiologyVerbsPass({ stampCandidateProvenance: true }));
   registry.register(createApplyDirectivesPass());
   registry.register(createLabwareResolvePass({
     searchLabwareByHint: deps.searchLabwareByHint ?? (async () => []),
@@ -208,7 +224,22 @@ function buildRegistry(
     compoundClassRegistry: getCompoundClassRegistry(),
     ontologyTermRegistry: getOntologyTermRegistry(),
   }));
-  registry.register(createResolveRolesPass());
+  registry.register(createResolveRolesPass({
+    ...(deps.materialComposition ? { materialComposition: deps.materialComposition } : {}),
+  }));
+  // WELLSET-RESOLVER-1: the server-side contents-derived wellset resolver.
+  // Declared in scientist-intent-compile.yaml (family expand, after
+  // resolve_roles) — resolves a declared kind:wellset token to a concrete well
+  // set from the run's contents ledger (priorLabState + the current document's
+  // own events) and writes it onto the post-expansion events, republishing the
+  // list to the resolve_roles slot. Vocabulary-driven (no verb branch); the
+  // vocabulary is the SAME instance the resolve_nouns registration threads
+  // (deps.vocabulary ?? the shipped singleton) — never the default singleton
+  // behind an injected vocab.
+  const wellsetVocabulary = deps.vocabulary ?? defaultScientistIntentVocabulary();
+  registry.register(createResolveWellsetsPass({
+    vocabulary: wellsetVocabulary,
+  }));
   registry.register(createComputeVolumesPass());
   registry.register(createComputeResourcesPass());
   registry.register(createPlanDeckLayoutPass());
@@ -297,6 +328,12 @@ export async function compileScientistIntent(
     mentions: [],
     editorLabwares: [],
     labState: deps.priorLabState ?? emptyLabState(),
+    // WELLSET-RESOLVER-1 FIX RUN 1 (advc D2): the scientist's answers ALSO
+    // ride the PIPELINE INPUT so the resolve_wellsets pass consumes them —
+    // the answered ambiguity fact's reading id (a resolved record identity)
+    // re-pins the ledger and the recompile converges instead of re-firing.
+    // Conditional spread: the key is ABSENT, never undefined.
+    ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
   };
 
   const result = await runPipeline(spec, registry, input, undefined, deps.onPassEvent);
@@ -344,6 +381,51 @@ export async function compileScientistIntent(
   }
 
   const nounsOutput = result.outputs.get('resolve_nouns') as ResolveNounsOutput | undefined;
+
+  // L2-CLARIFY-CARD-1 A2 — the slot-coverage gate (the W12 silent-stage
+  // backstop). Placement (spec): immediately after the resolve_nouns output
+  // read, i.e. on the non-bar path only — the bar arm above already returned.
+  // This is the ONLY path where a document can compile past the engine
+  // UNPROVED: the engine's doc-door silently skips a resolvable slot whose
+  // value is not a string (resolutionEngine.ts:505-509) and silently skips a
+  // `many`-contract entry whose noun is absent/blank (resolutionEngine.ts:
+  // 489-502), so a slot can be PRESENT yet carry no binding AND no
+  // clarification — and the pipeline below would ship an event with the bare
+  // label (the W12 class). On the shipped (Ajv-validated, string-valued) path
+  // the engine always binds or clarifies, so this arm is inert there by
+  // construction; it is the deterministic backstop for a constructed/bypassed
+  // document. The predicate is PURE (declared contracts + the pass's own
+  // output); `nounsOutput === undefined` is "no proof of binding" (bar), never
+  // "nothing to check" (bait 6).
+  const unbound = unboundDeclaredSlots(compileIntent, vocabulary, nounsOutput);
+  if (unbound.length > 0) {
+    // The SAME atomic arm as the bar: ZERO events, one synthesized fact per
+    // leftover slot. `reason` = the engine's OWN stable unknown-noun code;
+    // `actionLocation` is fully known (actionIndex + action + argument come
+    // from the declared contract walk); `label` = the raw slot value.
+    const clarifications: ScientistIntentUnresolvedFact[] = unbound.map((slot) => ({
+      label: slot.value,
+      reason: UNBOUND_SLOT_REASON,
+      actionLocation: {
+        actionIndex: slot.actionIndex,
+        action: slot.action,
+        argument: slot.argument,
+      },
+    }));
+    const terminalArtifacts: TerminalArtifacts = {
+      events: [],
+      directives: [],
+      gaps: [],
+    };
+    if (normalized.protocolIntent) terminalArtifacts.protocolIntent = normalized.protocolIntent;
+    return {
+      terminalArtifacts,
+      normalized,
+      outcome: 'needs-clarification',
+      diagnostics: result.diagnostics,
+      clarifications,
+    };
+  }
 
   const eventOutput = (result.outputs.get('resolve_roles') as { events?: unknown[] } | undefined)?.events ?? [];
   const directiveOutput = (result.outputs.get('apply_directives') as { directives?: unknown[] } | undefined)?.directives ?? [];

@@ -2,6 +2,10 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { WellId } from '../../types/plate'
 import { formatVolume, type WellComputedState } from '../../graph/lib/eventGraph'
 import { describeCellTotal, formatComputedConcentration, formatComputedCount } from '../../shared/lib/formHelpers'
+import {
+  loadConcentrationDisplayConvention,
+  formatLadderedConcentration,
+} from '../../graph/lib/mixtureShareFormat'
 
 interface WellTooltipProps {
   wellId: WellId
@@ -76,7 +80,7 @@ export function WellTooltip({ wellId, state, isTubeRack = false, clientX, client
         <table className="well-tooltip__materials">
           <tbody>
             {rows.map((m, idx) => {
-              const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown)
+              const conc = formatLadderedConcentration(m.concentration, loadConcentrationDisplayConvention(), m.concentrationUnknown)
               const count = formatComputedCount(m.count)
               const density = formatComputedConcentration(m.counterDensity)
               // SH-QA-4: a carrier-marked row (multi-entry composition_snapshot)
@@ -114,8 +118,8 @@ export function WellTooltip({ wellId, state, isTubeRack = false, clientX, client
                     {m.materialRef}
                     {m.role ? <span className="well-tooltip__material-role"> · {m.role}</span> : null}
                   </td>
-                  <td className="well-tooltip__material-conc">{concCell}</td>
-                  <td className="well-tooltip__material-vol">{volCell}</td>
+                  <td className="well-tooltip__material-conc" title={concCell}>{concCell}</td>
+                  <td className="well-tooltip__material-vol" title={volCell}>{volCell}</td>
                 </tr>
               )
             })}

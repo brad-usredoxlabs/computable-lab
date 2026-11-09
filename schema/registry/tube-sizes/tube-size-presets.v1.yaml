@@ -1,0 +1,37 @@
+kind: tube-size-registry
+version: 1
+description: >
+  Tube-size presets for the lightweight tube-occupancy feature. Mirrors
+  app/src/types/tubeSizes.ts so the deck picker, the /t slash command, and the
+  AI event-detail gate never disagree on sizes. `hints` are the free-text /
+  enum spellings that resolveTubeHint accepts (matched after
+  normalizeTubeHint: lowercase + spaces removed).
+tubes:
+  - sizeLabel: '0.2 mL'
+    maxVolume_uL: 200
+    wellShape: round
+    hints: ['0.2ml', '0.2 ml', '0p2ml']
+  - sizeLabel: '0.5 mL'
+    maxVolume_uL: 500
+    wellShape: round
+    hints: ['0.5ml', '0.5 ml', '0p5ml']
+  - sizeLabel: '1.5 mL'
+    maxVolume_uL: 1500
+    wellShape: round
+    hints: ['1.5ml', '1.5 ml', '1p5ml']
+  - sizeLabel: '2 mL'
+    maxVolume_uL: 2000
+    wellShape: round
+    hints: ['2ml', '2 ml']
+  - sizeLabel: '5 mL'
+    maxVolume_uL: 5000
+    wellShape: round
+    hints: ['5ml', '5 ml']
+  - sizeLabel: '15 mL'
+    maxVolume_uL: 15000
+    wellShape: conical
+    hints: ['15ml', '15 ml']
+  - sizeLabel: '50 mL'
+    maxVolume_uL: 50000
+    wellShape: conical
+    hints: ['50ml', '50 ml']

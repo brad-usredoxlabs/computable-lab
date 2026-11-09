@@ -1,0 +1,41 @@
+# L-SM-2: surface-pane-vocabulary-closure — spec §3.3
+# DSL-only / no-TS policy: business rule declared in data, interpreted by
+# the generic LintEngine. Every surface pane must be a member of the
+# manifest's paneVocabulary. The static values list is the drift surface —
+# pinned by the test to the manifest's paneVocabulary entries.
+#
+# Predicate shape: nested everyItem over surfaces[].panes[], inner assert
+# is `in` against a static values list. This is the only shape that works
+# with the shipped DSL (measured PASS on the real manifest, FAIL on phantom
+# pane). The allIn/valuesPath and allIn/collectionPath traps reject the
+# valid manifest — see brief REVIEWER BAIT #1.
+
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/ui/surface-manifest.schema.yaml"
+
+rules:
+  - id: surface-pane-vocabulary-closure
+    title: "Surface panes must be declared in the pane vocabulary"
+    severity: error
+    scope: record
+    assert:
+      op: everyItem
+      collectionPath: surfaces
+      assert:
+        op: everyItem
+        collectionPath: panes
+        assert:
+          op: in
+          path: "."
+          values:
+            - ai-chat
+            - event-editor
+            - deck
+            - project-tabs
+            - collection-list
+    message:
+      template: >-
+        Surface {{surfaces[*].id}} mounts pane {{surfaces[*].panes[*]}} which is not in the declared pane vocabulary.
+      paths:
+        - surfaces[*].id
+        - surfaces[*].panes[*]

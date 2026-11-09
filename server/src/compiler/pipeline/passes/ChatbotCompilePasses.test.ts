@@ -24,9 +24,13 @@ import {
   createFallbackSideEvidenceEventsPass,
   createLabStatePass,
 } from './ChatbotCompilePasses.js';
-import type { PipelineState } from '../types.js';
+import type { PipelineState, PassDiagnostic } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
 import { PROTOCOL_INTENT_KIND, PROTOCOL_INTENT_VERSION } from '../../protocolIntent/ProtocolIntent.js';
+import { addMaterialExpander, transferExpander } from '../../biology/verbs/simpleVerbs.js';
+import type { PlateEventPrimitive } from '../../biology/BiologyVerbExpander.js';
+import { applyEventToLabState } from '../../state/LabState.js';
+import type { LabStateSnapshot } from '../../state/LabState.js';
 
 describe('createExtractEntitiesPass', () => {
   it('prompt-only input produces entities from single ExtractionRunnerService call', async () => {
@@ -1848,5 +1852,520 @@ describe('createLabStatePass — fold order', () => {
     const syncResult = result as { ok: boolean; output: { snapshotAfter: { turnIndex: number } } };
     expect(syncResult.ok).toBe(true);
     expect(syncResult.output.snapshotAfter.turnIndex).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lab_state pass — L2-LABSTATE-CONTENTS-1 legs (spec §5.2/§7)
+// ---------------------------------------------------------------------------
+
+/** Build the pass's mockState for the lab_state pass: the prior snapshot + the
+ *  resolve_roles events the pass folds (the REAL expander output — the
+ *  canonical-shape proof at the pass seam, never a hand-crafted shape). */
+function labStatePassState(
+  prior: LabStateSnapshot,
+  events: PlateEventPrimitive[],
+): PipelineState {
+  return {
+    input: { labState: prior },
+    context: {},
+    meta: {},
+    outputs: new Map([
+      ['resolve_roles', { events }],
+      ['apply_directives', { directives: [] }],
+    ]),
+    diagnostics: [],
+  };
+}
+
+/** A prior snapshot holding ONE 96-well plate (hand-built — the expander does
+ *  not mint instanceIds; the fold's create handler does). The labwareId the
+ *  symbolic add-material events carry is the plate TYPE token — the rung R3
+ *  (unique declared labwareType) resolution the OQ-3 ratified live winner. */
+function singlePlateSnapshot(): LabStateSnapshot {
+  return {
+    deck: [{ slot: 'A1', labwareInstanceId: 'PLATE-A' }],
+    mountedPipettes: [],
+    labware: {
+      'PLATE-A': {
+        instanceId: 'PLATE-A',
+        labwareType: '96-well-plate',
+        slot: 'A1',
+        orientation: 'landscape',
+        wells: {},
+      },
+    },
+    reservoirs: {},
+    mintCounter: 1,
+    turnIndex: 0,
+  };
+}
+
+describe('createLabStatePass — L2-LABSTATE-CONTENTS-1 (the canonical shape at the pass seam)', () => {
+  it('threads the DATA rules: a REAL addMaterialExpander symbolic event writes contents (unique declared type, the OQ-3 live winner)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    const events = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: '96-well-plate', wells: 'A1..H1', material: 'A', volume_uL: 100 },
+    });
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // The 8 per-well events (the expander pre-expands the range string) all
+    // folded onto the single instance via the DATA-declared rung — contents
+    // are in the ledger (the dead-write the ruling names is gone).
+    const wells = out.output.snapshotAfter.labware[instanceId]!.wells;
+    const addWells = Object.keys(wells);
+    expect(addWells).toHaveLength(8);
+    for (const w of addWells) {
+      expect(wells[w]![0]!.materialId).toBe('A'); // the verbatim string material (no invented id)
+      expect(wells[w]![0]!.kind).toBe('A');
+    }
+    // A successful write => NO diagnostic (the never-guess surface only fires
+    // on a no-op).
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('unknown plate (the control turn): no-op fold + a lab_state_unresolved_labware_reference diagnostic, NO contents (never-guess)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    const events = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: 'a-plate-that-was-never-placed', wells: 'A1..H1', material: 'X', volume_uL: 100 },
+    });
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // No contents written (the snapshot's labware is unchanged in its wells).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells)).toHaveLength(0);
+    // The 8 no-op events each surface the §7 never-guess diagnostic (the fold
+    // is pure — the reporting rides the pass).
+    const diags = out.diagnostics ?? [];
+    expect(diags).toHaveLength(8);
+    for (const d of diags) {
+      expect(d.code).toBe('lab_state_unresolved_labware_reference');
+      expect(d.severity).toBe('warning');
+      expect(d.details).toMatchObject({ reason: 'labware_unresolved' });
+      expect((d.details as { hint: string }).hint).toBe('a-plate-that-was-never-placed');
+      expect((d.details as { event_type: string }).event_type).toBe('add_material');
+    }
+  });
+
+  // D1 (advc fix-run 1, Mutant 4 class) at the PASS seam: the REAL
+  // transferExpander destination-only output (no source_labware; top-level
+  // labwareId = the TARGET) must fold to a labware_unresolved no-op + the
+  // §7 diagnostic — and must NOT self-transfer inside the destination
+  // plate. The pass's content-bearing test (DATA list + declared source
+  // carrier) surfaces this shape as a diagnostic, so the wrong write is
+  // visible (pre-fix the fold wrote silently AND the classifier returned
+  // false, so no diagnostic existed at all).
+  it('transfer destination-only (real expander, no source_labware): no-op + lab_state_unresolved_labware_reference diagnostic, NO write (D1)', () => {
+    const pass = createLabStatePass();
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    // Seed the destination plate's A1 so a self-transfer would be visible.
+    const seeded = applyEventToLabState(prior, {
+      eventId: 'evt-seed-d1-pass',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'A1',
+        material: { materialId: 'mat-seed', kind: 'seed', volumeUl: 100 },
+      },
+    });
+    const events = transferExpander.expand({
+      verb: 'transfer',
+      params: { labware: '96-well-plate', source_well: 'A1', well: 'B1', volume_uL: 40 },
+    });
+    expect(events).toHaveLength(1);
+    const d = events[0]!.details as Record<string, unknown>;
+    expect(d.source_labware).toBeUndefined();
+    expect(d.destination_labware).toBe('96-well-plate');
+    expect(events[0]!.labwareId).toBe('96-well-plate');
+
+    const result = pass.run({ pass_id: 'lab_state', state: labStatePassState(seeded, events) });
+    const out = result as { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // NO write: A1 unchanged (100), B1 absent (no self-transfer A1->B1).
+    const wells = out.output.snapshotAfter.labware[instanceId]!.wells;
+    expect(wells['A1']).toEqual([{ materialId: 'mat-seed', kind: 'seed', volumeUl: 100 }]);
+    expect(wells['B1']).toBeUndefined();
+    // The §7 never-guess diagnostic (content-bearing transfer with an
+    // unresolvable SOURCE side).
+    const diags = out.diagnostics ?? [];
+    expect(diags).toHaveLength(1);
+    expect(diags[0]!.code).toBe('lab_state_unresolved_labware_reference');
+    expect(diags[0]!.severity).toBe('warning');
+    expect((diags[0]!.details as { reason: string }).reason).toBe('labware_unresolved');
+  });
+
+  it('absent DATA section (injected vocabulary) fails CLOSED to rung R1 ONLY: symbolic no-op + diagnostic, raw labwareInstanceId still writes', () => {
+    // The fail-closed arm: a vocabulary whose labwareIdentityResolution section
+    // is ABSENT => the loader returns the empty lists => the fold resolves rung
+    // R1 ONLY (the raw instanceId path) — D5: an EMPTY `order` is treated
+    // exactly as absent rules, so an absent section and a 2-arg fold call are
+    // identical (the pre-fix fold ran ZERO rungs for an empty order — not even
+    // R1 — contradicting the R1-only doc claim).
+    const emptyResolution = () => ({ order: [] as readonly string[], tokenFields: [] as readonly string[] });
+    const stubVocab = {
+      labwareIdentityResolution: emptyResolution,
+      labStateContentBearingEventTypes: () => ['add_material', 'transfer'] as readonly string[],
+    } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
+    const pass = createLabStatePass({ vocabulary: stubVocab });
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+
+    // (a) the symbolic (shipped) shape: R1 misses ('96-well-plate' is not an
+    // instanceId) => no-op + the §7 diagnostic.
+    const symbolic = addMaterialExpander.expand({
+      verb: 'add_material',
+      params: { labware: '96-well-plate', well: 'A1', material: 'A', volume_uL: 100 },
+    });
+    const r1 = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, symbolic) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(Object.keys(r1.output.snapshotAfter.labware[instanceId]!.wells)).toHaveLength(0);
+    expect(r1.diagnostics ?? []).toHaveLength(1);
+    expect(r1.diagnostics![0]!.code).toBe('lab_state_unresolved_labware_reference');
+
+    // (b) the RAW path (details.labwareInstanceId) still writes — the R1 rung
+    // is always present, so the raw byte-stable contract is intact.
+    const rawEvent: PlateEventPrimitive = {
+      eventId: 'raw-1',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'A1',
+        material: 'RAW',
+        volumeUl: 50,
+      },
+    };
+    const r2 = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, [rawEvent]) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(r2.output.snapshotAfter.labware[instanceId]!.wells['A1']![0]!.materialId).toBe('RAW');
+    expect(r2.diagnostics ?? []).toHaveLength(0);
+  });
+
+  // D5 (advc fix-run 1): the R1-DEFAULT semantics for an empty `order`,
+  // proven at the PASS seam — a symbolic hint that EQUALS an instanceId
+  // resolves through rung R1 (a write, no diagnostic) even when the
+  // vocabulary's section is absent (empty lists). The pre-fix pass path ran
+  // ZERO rungs for an empty order, so this shape no-op'd while the 2-arg
+  // fold call resolved it — code and docs now agree on R1-ONLY.
+  it('absent DATA section: a symbolic hint that EQUALS an instanceId still resolves via rung R1 (the R1 default — the pre-fix gap is gone)', () => {
+    const emptyResolution = () => ({ order: [] as readonly string[], tokenFields: [] as readonly string[] });
+    const stubVocab = {
+      labwareIdentityResolution: emptyResolution,
+      labStateContentBearingEventTypes: () => ['add_material', 'transfer'] as readonly string[],
+    } as unknown as NonNullable<Parameters<typeof createLabStatePass>[0]>['vocabulary'];
+    const pass = createLabStatePass({ vocabulary: stubVocab });
+    const prior = singlePlateSnapshot();
+    const instanceId = Object.keys(prior.labware)[0]!;
+    // The shipped shape with a hint that IS the instanceId (R1 rung).
+    const ev: PlateEventPrimitive = {
+      eventId: 'evt-r1-hint',
+      event_type: 'add_material',
+      labwareId: instanceId,
+      details: {
+        well: 'C1',
+        material: 'A',
+        volumeUl: 10,
+      },
+    };
+    const r = pass.run({ pass_id: 'lab_state', state: labStatePassState(prior, [ev]) }) as
+      { output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    // R1 resolves the hint to the instance: contents land, no diagnostic.
+    expect(r.output.snapshotAfter.labware[instanceId]!.wells['C1']).toEqual([
+      { materialId: 'A', kind: 'A', volumeUl: 10 },
+    ]);
+    expect(r.diagnostics ?? []).toHaveLength(0);
+  });
+
+  // ==========================================================================
+  // L2-LABSTATE-CONTENTS-1 FIX RUN 3 — the REAL emit site (the pass's (a)
+  // carrier) + the RED→GREEN repeat-create leg (the (b) idempotent reuse) at
+  // the PASS seam. The legs are byte-shaped on the receipt wire shapes: a
+  // create WITHOUT a carrier + a design-ref add_material (hint = the design's
+  // resolved record id), with the resolve_labware slot carrying the resolved
+  // design identity (recordId). The assertion is on the PASS OUTPUT for a
+  // fixture whose resolvedLabwares carry a recordId — NEVER on a string literal
+  // of the seed id (the recordId is derived from the pass's resolved output).
+  // ==========================================================================
+  it('fix3 (a) emit-site: a create whose resolvedLabwares carry a recordId ships details.labwareId = that recordId (the mint identityTokens carrier), and the R2 rung then EXACTLY matches a design-ref hint (ONE match)', () => {
+    const pass = createLabStatePass();
+    // The prior as the live drive commits it AFTER turn A: ONE 96-well plate
+    // whose identityTokens carry the design's resolved recordId (turn A's
+    // create carried the (a) emit-carrier, so the mint left the token). This
+    // is the post-turn-A committed state the drive's turn 1 reads.
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      labware: {
+        [instanceId]: { ...base.labware[instanceId]!, identityTokens: ['lbw-design-record'] },
+      },
+    };
+    // The REAL expander output: a create (NO carrier — the shipped shape) + a
+    // design-ref add_material (the hint is the design's resolved RECORD ID, not
+    // the type token — what the live binder puts on the add).
+    const createEv = {
+      eventId: 'evt-create-fix3',
+      event_type: 'create_container' as const,
+      details: { slot: 'target', labwareType: '96-well-plate' },
+    };
+    const addEv = {
+      eventId: 'evt-add-fix3',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-design-record',
+      details: { well: 'A1', material: 'bead', labwareId: 'lbw-design-record', wells: ['A1'] },
+    };
+    // The resolve_labware slot carries the resolved DESIGN identity (the
+    // recordId the compiler resolved — NOT a seed literal). The pass's (a)
+    // carries it onto the create's details.labwareId (the mint's identityTokens
+    // carrier), so the instance carries the token and the design-ref add
+    // resolves via R2 (EXACTLY one match).
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv, addEv] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'Generic 96 (test)' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { events: PlateEventPrimitive[]; snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // (a) THE EMIT SITE: the create the pass folded carries the resolved
+    // recordId on details.labwareId (derived from the pass's resolvedLabwares
+    // output, never a literal). The wire done-frame events (resolve_roles slot)
+    // are untouched; this is the labStateDelta.events artifact.
+    const foldedCreate = out.output.events.find((e) => e.event_type === 'create_container')!;
+    const d = foldedCreate.details as Record<string, unknown>;
+    expect(d.labwareId).toBe('lbw-design-record'); // the resolved recordId, NOT the seed literal
+    // (b) IDEMPOTENT CREATE: the re-emitted create (carrier = the recordId)
+    // resolves to the EXISTING prior instance (R2 exact — the instance's
+    // identityTokens carry the token) => REUSE, no re-mint.
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    expect(out.output.snapshotAfter.labware[instanceId]!.identityTokens).toEqual(['lbw-design-record']);
+    // The design-ref add resolves via R2 (the instance's identityTokens carry
+    // the token) to the SAME instance and writes A1 (ONE match — no tie).
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells)).toEqual(['A1']);
+    expect(out.output.snapshotAfter.labware[instanceId]!.wells['A1']![0]!.materialId).toBe('bead');
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('fix3 turn-1 shape: 8 wire-shaped design-ref add_material events (A1..H1, top-level+details labwareId = the recordId) all resolve R2 (ONE match) and write the SAME instance — A1..H1 (the drive invariant)', () => {
+    const pass = createLabStatePass();
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      labware: { [instanceId]: { ...base.labware[instanceId]!, identityTokens: ['lbw-design-record'] } },
+    };
+    // The SHIPPED wire shape (receipt turn 1): 8 add_material events, one per
+    // well A1..H1, each top-level + details labwareId = the design recordId.
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const addEvents: PlateEventPrimitive[] = cols.map((c) => ({
+      eventId: `evt-add-${c}1`,
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-design-record',
+      details: { well: `${c}1`, material: 'bead', labwareId: 'lbw-design-record', wells: [`${c}1`] },
+    }));
+    // The re-emitted create (no carrier) rides the same turn (the live drive
+    // re-emits the placement every turn the plate is referenced).
+    const createEv: PlateEventPrimitive = { eventId: 'evt-create-t1', event_type: 'create_container' as const, details: { slot: 'target', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv, ...addEvents] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'Generic 96 (test)' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // Idempotent create (b): the re-emitted create reuses the SAME instance
+    // (no re-mint) — ONE instance, and it is the prior's.
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([instanceId]);
+    // All 8 add_material events resolve via R2 (the instance's identityTokens
+    // carry the recordId — ONE match, no tie) and write A1..H1 to the SAME
+    // instance (the drive invariant: no tie, contents on the placed instance).
+    expect(Object.keys(out.output.snapshotAfter.labware[instanceId]!.wells).sort()).toEqual(
+      cols.map((c) => `${c}1`).sort(),
+    );
+    for (const c of cols) {
+      expect(out.output.snapshotAfter.labware[instanceId]!.wells[`${c}1`]![0]!.materialId).toBe('bead');
+    }
+    expect(out.diagnostics ?? []).toHaveLength(0);
+  });
+
+  it('fix3 CONTROL (never-guess at the pass seam): a ghost-plate design-ref add (no matching instance/tokens, non-unique type) => no-op + lab_state_unresolved_labware_reference diagnostic; contents NEVER written to the seed plate (the §7 arm-lines>=1 equivalent)', () => {
+    const pass = createLabStatePass();
+    // A prior with the SEED plate (token lbw-design-record) + a second same-TYPE
+    // instance carrying a DIFFERENT token (the ghost plate's own design) — the
+    // ghost design-ref hint matches the ghost instance EXACTLY (R2, one match),
+    // so it must NOT leak to the seed plate; and a hint matching NO token with a
+    // non-unique type no-ops (never-guess). This is the fold's never-guess
+    // surface at the pass seam (the live drive's turn X could not reach the
+    // fold — see the report's control-leg diagnosis — so the unit leg is the
+    // proof the fold never writes the seed plate on an unresolved design-ref).
+    const base = singlePlateSnapshot();
+    const seedId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      mintCounter: 2,
+      deck: [...base.deck, { slot: 'A2', labwareInstanceId: 'GHOST' }],
+      labware: {
+        [seedId]: { ...base.labware[seedId]!, identityTokens: ['lbw-design-record'] },
+        'GHOST': { instanceId: 'GHOST', labwareType: '96-well-plate', slot: 'A2', orientation: 'landscape', wells: {}, identityTokens: ['lbw-ghost-plate'] },
+      },
+    };
+    // The ghost-plate design-ref add (hint = the ghost record id).
+    const ghostAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-ghost-pass',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-ghost-plate',
+      details: { well: 'C1', material: 'x', labwareId: 'lbw-ghost-plate', wells: ['C1'] },
+    };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [ghostAdd] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'seed' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(out.ok).toBe(true);
+    // The ghost hint EXACTLY matches the GHOST instance (R2, one match) — it
+    // writes the ghost plate and NEVER the seed plate.
+    expect(Object.keys(out.output.snapshotAfter.labware['GHOST'].wells)).toEqual(['C1']);
+    expect(Object.keys(out.output.snapshotAfter.labware[seedId].wells)).toHaveLength(0); // seed plate NEVER written
+    expect(out.diagnostics ?? []).toHaveLength(0); // the ghost add resolved (R2 one-match) — no diagnostic
+    // The never-guess no-op arm: a design-ref hint matching NO instance token
+    // with a non-unique type (two same-type instances) => the fold no-ops and
+    // the §7 diagnostic fires (lab_state_unresolved_labware_reference) — the
+    // arm-lines>=1 channel the drive's control leg needs. NOTHING is written.
+    const mysteryAdd: PlateEventPrimitive = {
+      eventId: 'evt-add-mystery-pass',
+      event_type: 'add_material' as const,
+      labwareId: 'lbw-never-seen',
+      details: { well: 'C1', material: 'y', labwareId: 'lbw-never-seen', wells: ['C1'] },
+    };
+    const mysteryState: PipelineState = {
+      ...state,
+      outputs: new Map([
+        ['resolve_roles', { events: [mysteryAdd] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-record', title: 'seed' }] }],
+      ]),
+    };
+    const outMystery = pass.run({ pass_id: 'lab_state', state: mysteryState }) as
+      { ok: boolean; output: { snapshotAfter: LabStateSnapshot }; diagnostics?: PassDiagnostic[] };
+    expect(outMystery.ok).toBe(true);
+    const diags = outMystery.diagnostics ?? [];
+    expect(diags).toHaveLength(1);
+    expect(diags[0]!.code).toBe('lab_state_unresolved_labware_reference');
+    expect(diags[0]!.severity).toBe('warning');
+    expect((diags[0]!.details as { hint: string }).hint).toBe('lbw-never-seen');
+    // NOTHING written: no third instance, both plates' wells untouched.
+    expect(Object.keys(outMystery.output.snapshotAfter.labware)).toEqual([seedId, 'GHOST']);
+    expect(Object.keys(outMystery.output.snapshotAfter.labware[seedId].wells)).toHaveLength(0);
+  });
+
+  it('fix3 (a) emit-site is INERT without a resolved recordId: an absent/empty resolve_labware slot leaves the create carrierless (byte-stable, pre-CL)', () => {
+    const pass = createLabStatePass();
+    const base = singlePlateSnapshot();
+    const instanceId = Object.keys(base.labware)[0]!;
+    const createEv = { eventId: 'evt-create-inert', event_type: 'create_container' as const, details: { slot: 'target', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: base },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv] }],
+        ['apply_directives', { directives: [] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { output: { events: PlateEventPrimitive[]; snapshotAfter: LabStateSnapshot } };
+    const foldedCreate = out.output.events.find((e) => e.event_type === 'create_container')!;
+    expect((foldedCreate.details as Record<string, unknown>).labwareId).toBeUndefined(); // no carrier (inert)
+    // Inert (no resolve_labware slot => no (a) carrier) => the create carries
+    // NO identity carrier => the (b) reuse is inert => the base MINT path
+    // re-mints (byte-stable pre-CL: every carrierless create re-mints).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toHaveLength(2);
+    expect(Object.keys(out.output.snapshotAfter.labware)[0]!).toBe(instanceId);
+  });
+
+  it('fix3 (b) control (never-guess, no over-reuse): a create whose carrier matches NO existing instance (zero rung) re-mints; two distinct designs on one type stay DISTINCT (R2 exact, not R3 type)', () => {
+    const pass = createLabStatePass();
+    // A prior with TWO 96-well plates, EACH carrying a DIFFERENT design token
+    // (two distinct designs placed on the same type). A create for design A
+    // must reuse instance A (R2 exact) and NEVER collapse onto instance B (R3
+    // type would tie; R2 exact picks A only).
+    const base = singlePlateSnapshot();
+    const aId = Object.keys(base.labware)[0]!;
+    const prior: LabStateSnapshot = {
+      ...base,
+      mintCounter: 2,
+      deck: [...base.deck, { slot: 'A2', labwareInstanceId: 'PLATE-B' }],
+      labware: {
+        [aId]: { ...base.labware[aId]!, identityTokens: ['lbw-design-A'] },
+        'PLATE-B': { instanceId: 'PLATE-B', labwareType: '96-well-plate', slot: 'A2', orientation: 'landscape', wells: {}, identityTokens: ['lbw-design-B'] },
+      },
+    };
+    // A create for design A (the pass's (a) carrier = the resolved recordId).
+    const createEv = { eventId: 'evt-create-ctrl', event_type: 'create_container' as const, details: { slot: 'A1', labwareType: '96-well-plate' } };
+    const state = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [createEv] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-A', title: 'design A' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const out = pass.run({ pass_id: 'lab_state', state }) as
+      { output: { snapshotAfter: LabStateSnapshot } };
+    // Design A reuses instance A (R2 exact) — NO third instance, and instance
+    // B is untouched (the R2 rung is identity-specific, never a type pick).
+    expect(Object.keys(out.output.snapshotAfter.labware)).toEqual([aId, 'PLATE-B']);
+    expect(out.output.snapshotAfter.labware[aId]!.identityTokens).toEqual(['lbw-design-A']);
+    expect(out.output.snapshotAfter.labware['PLATE-B']!.identityTokens).toEqual(['lbw-design-B']);
+    // The ZERO arm: a create for a design NO instance carries (a fresh record
+    // id) yields ZERO at every rung => the base mint re-mints (never-guess —
+    // no pick among the two same-type instances).
+    const stateFresh = {
+      input: { labState: prior },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', { events: [{ eventId: 'evt-create-fresh', event_type: 'create_container' as const, details: { slot: 'A3', labwareType: '96-well-plate' } }] }],
+        ['apply_directives', { directives: [] }],
+        ['resolve_labware', { resolvedLabwares: [{ hint: '96-well plate', recordId: 'lbw-design-C', title: 'design C' }] }],
+      ]),
+      diagnostics: [],
+    };
+    const outFresh = pass.run({ pass_id: 'lab_state', state: stateFresh }) as
+      { output: { snapshotAfter: LabStateSnapshot } };
+    expect(Object.keys(outFresh.output.snapshotAfter.labware)).toHaveLength(3); // the fresh design re-mints (zero rung => base mint)
   });
 });

@@ -36,6 +36,7 @@
  */
 import type { ScientistIntent } from './types.js';
 import type { ScientistIntentVocabulary } from './vocabulary.js';
+import { declaredDomains } from './vocabulary.js';
 import { loadMixtureCues } from './normalizeScientistIntent.js';
 import { loadNounShape } from '../resolution/nounShape.js';
 
@@ -229,9 +230,12 @@ export function stripRedundantMixtureLabels(
       // FIX c2/D3 (spec B7 "must NOT touch labware/source/target"): strip
       // candidates are confined to the domains DECLARED in the nounShape DATA
       // (`stripDomains`) — a contract whose vocabulary `domain:` is not listed
-      // is never a strip candidate. A DATA/contract condition, zero name
+      // is never a strip candidate. A contract that declares NO domain is also
+      // never a candidate (fail-closed). A DATA/contract condition, zero name
       // literals. Absent `stripDomains:` ⇒ no confinement (silent-off parity).
-      if (nounShape?.stripDomains && !nounShape.stripDomains.has((contract.domain ?? '').toLowerCase())) continue;
+      // ALL-of: strip only when EVERY declared domain is in stripDomains.
+      const contractDomains = declaredDomains(contract.domain);
+      if (nounShape?.stripDomains && !(contractDomains.length > 0 && contractDomains.every((d) => nounShape.stripDomains!.has(d)))) continue;
       const value = action[contract.name];
       if (typeof value !== 'string' || value.trim().length === 0) continue;
       if (!isRedundantAgainstComponents(value, componentLabels, cues, nounShape)) continue;

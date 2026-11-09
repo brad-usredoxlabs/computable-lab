@@ -22,7 +22,92 @@ treeState:
   # canonical `referentLevels` list the vocabulary lint/meta-schema check
   # against. No verb, no arg, no strategyOrder, no policy value changed.
   # Before/after diff recorded in MATRES-ELIG-report.l2t1445-coder1.md.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 32c5b5b17fc8f38bb8e108db61b8336887a7270bafb079cdde221bebb7af3ba5}
+  # WELLSET-RESOLVER-1 REBLESS (this item, l2t0310, blessed ONCE in the same
+  # commit): the mix verb gained the DECLARED `wells` kind:wellset carrier +
+  # the top-level wellsetValueTokens DATA list (token: all-wells-containing-
+  # materials). No other verb, arg, referentLevel, or policy value changed;
+  # no golden fixture/record moved (the resolve_wellsets pass is byte-identical
+  # passthrough when no token is present). BEFORE: vocab 32c5b5b1.. (plus a
+  # pre-existing trunk drift from the claim-tip 54342f5e..), AFTER: 65bff52145
+  # b2bb1f173c0d6a6006e8b7967bd2d9a7e93b23a460ed8ba6742398.
+  # WELLSET-RESOLVER-1 FIX RUN 1 REBLESS (advc cycle-1 D8, blessed ONCE in the
+  # fix commit): the vocabulary gained the top-level materialBearingEventTypes
+  # DATA list (add_material / multi_dispense / dispense — the contents-bearing
+  # event taxonomy the resolver pass now reads INSTEAD of a hardcoded TS
+  # array). No verb, arg, token, referentLevel, or policy value changed; the
+  # only other delta is comments. BEFORE: 65bff521.., AFTER: 0ce55142e6f7714b
+  # 99689ba528123f789bc93452e4e63784c2cee3ca80847927.
+  # LABSTATE-CONTENTS-1 REBLESS (merge rider, orch l2t1130, blessed ONCE): the
+  # vocabulary pin was stale against shipped at the fix-run-2 base (0ce55142 vs
+  # 93aab606 — named by the fix-run-2 report and advc O-1) and the merged
+  # LABSTATE vocabulary DATA teaching (296065aa on f577f382) moved the hash
+  # again. No golden fixture/record moved; the delta is the LABSTATE
+  # contents-phrase teaching DATA + comments. BEFORE: 0ce55142..,
+  # AFTER: 15e5820dd22fb27c26b86e2720be6cc71c9022506f698ba842c708cd44d773eb.
+  # LABSTATE-CONTENTS-1 FIX RUN 4 REBLESS (ruling LABSTATE-DRIVEBAR-l2t1125
+  # "PRODUCT DEFECTS" item 1, blessed ONCE, same discipline as b6bb2386): the
+  # add_material.labware arg gained the OPTIONAL `teaching:` string (the
+  # producer-side container-carry discipline the live-sampler labware-less
+  # drafting gap was missing) + a comment. No verb, arg kind, token,
+  # referentLevel, or policy value changed; no golden fixture/record moved.
+  # BEFORE: 15e5820d..,
+  # AFTER: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
+  # L2-CLARIFY-TARGET-1 REBLESS (this item, blessed ONCE): the mandated flip
+  # landed in the SHIPPED vocabulary DATA — (1) the V1 required-arg flip
+  # (add_material.volumeUl required:true) + the Change-4 targetWells declaration
+  # (kind:wells, required:true), and (2) the ruling l2t2230 (a) `satisfiedBy:
+  # [volume]` alias slot on the volumeUl contract. Only DECLARATION SLOTS moved
+  # (required flag + one new arg + one new optional slot); no verb, no arg
+  # rename, no strategyOrder, no policy value changed. The wire schema and
+  # pipeline pins are UNCHANGED (verified byte-OK). Golden fixture/record
+  # re-blesses for the count delta are recorded in the item report
+  # (L2-CLARIFY-TARGET-1-report.l2t1810.md, CONTINUATION RUN l2t2245).
+  # BEFORE: 4f72ede5810d824a431f788d05f0c99a449ea9046e488e14c009469e2ce3f471.
+  # AFTER: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
+  # L2-CLARIFY-TARGET-1 FIX RUN 1 MERGE RIDER (adversarial l2t0230 fix1, blessed
+  # ONCE): the STEP 0 merge of cl/integration-2 brought trunk's l2t2030
+  # identityCollapse policy DATA into policies.ambiguity (a NEW additive policy
+  # block; no verb, arg, referentLevel, or prior policy value changed) on TOP of
+  # this item's Change-4 targetWells declaration — the merged vocabulary is the
+  # clean UNION of both (three-way: merge-base 4f72ede5.. / this-branch
+  # fa919ec5.. / trunk 01bcfe9e.. / merged 7908fa38..). Trunk landed the
+  # identityCollapse vocabulary change WITHOUT re-blessing this treeState pin,
+  # so the pin went stale against the merged content (the exact "merge rider"
+  # case blessed once at LABSTATE-CONTENTS-1 above). The re-bless is OUTCOME-
+  # INERT and PROVEN: (a) identityCollapse has NO resolution consumer (grep:
+  # only the vocabulary.ts type decl + its own loader test) — it is declared-
+  # but-unwired data; (b) ALL 553 golden outcome replays pass byte-green with
+  # the merged vocabulary (pre-merge AND post-merge); the ONLY failures are the
+  # two pure hash-ledger checks (versions-current + B4 "MANIFEST did not move").
+  # No golden fixture/record moved — ONLY this one treeState sha256 pin
+  # re-hashed. BEFORE: fa919ec5f0114701ff8276fd8c9676674d4489d06ef48c6b05bc89351eb139cc.
+  # AFTER: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
+  # CARD1-D3 REBLESS (this item, ruling l2t1430 §3 "Policy home"): the vocabulary
+  # data file gained the ADDITIVE `canonicalLabel` policy block — the material
+  # domain's UNBOUND-acceptance-entity display/identity policy (preMintDisplay /
+  # mintedDisplay / titleAdoption). The label VALUE lives in the minted local-term
+  # record, never here; this block holds only the display/identity POLICY (the
+  # record stays the single vocabulary; NO hardcoded fallback — absent/malformed
+  # fails loud). Purely additive — +14 lines / 0 deletions vs baseline 10062725
+  # (commit e5324baf) — and no golden fixture and no golden record moved: ONLY this
+  # one treeState sha256 pin re-hashed.
+  # BEFORE: 7908fa38645e93f07633b580513a657383c10ad4cecfc8a120eaa9430fb2142e.
+  # AFTER: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
+  # L2-PROMPT2-COMPOSITION-BIND-1 UNIT 2 REBLESS (advc-c3 D1, ruling l2t1840 §5):
+  # the vocabulary pin re-hashed ONCE — the delta is the contenderOrder DATA
+  # addition (additive policy block; no verb, arg, referentLevel, or prior policy
+  # value changed). No golden fixture/record moved — ONLY this one treeState sha256
+  # pin re-hashed. BEFORE: 9a71c88468ef1741286bdf569d56e52e796413c65d2a7302dd0aa46756c1e946.
+  # AFTER: 9418de04d14d16cde3c38244506486df9d946f139dabd3f4582bdb4a7b050676.
+  # L2-PROMPT2-COMPOSITION-BIND-1 FIX CYCLE REBLESS (advc-full-l2t2475 D1+D6):
+  # the vocabulary pin re-hashed ONCE — the delta is the D6 removal of the dead
+  # contenderOrder DATA block (3 comments + key + 2 items from vocabulary.yaml,
+  # matching schema property, loader type member, and pass-through test pin removed).
+  # No verb, arg, referentLevel, or policy value changed; the delta is the D6 removal
+  # only. One bless, no second bless owed.
+  # BEFORE: 212c83f52aa03d2642d611aab051651856d0073e5bc522daa294e9b4c12b1c6e.
+  # AFTER: d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab (c1precfix1b: ruling 11a181c0 Q1 — declaration_precedence first in strategyOrder, strategyRef updated).
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
@@ -41,8 +126,25 @@ treeState:
   # 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4 (one
   # deliberate re-hash, same commit; before/after captured by
   # server/scripts/cellrate-bless.mts).
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4}
-  - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
+  # WELLSET-RESOLVER-1 REBLESS (same bless): the wire schema gained the
+  # ADDITIVE action-level `wells` oneOf (array|string) — the wellset token
+  # carrier (Ajv declares only that the KEY exists; the vocabulary-driven pass
+  # decides token membership). additionalProperties posture UNCHANGED.
+  # BEFORE: 647f524d.. (plus pre-existing trunk drift from the claim-tip
+  # 85eee51a..), AFTER: 78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6.
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 78682999056a930eeb86b29fd1c26e8baa27a08ac90ed45a18c175a59b8f32c6}
+  # WELLSET-RESOLVER-1 REBLESS (same bless): the pipeline gained the DECLARED
+  # resolve_wellsets pass (family expand, depends_on mirroring resolve_roles).
+  # BEFORE: b47eee0c.., AFTER: 6b1943773e9e6a110c8ad128118346a2ea89d1e14702682da14a1fbecd73aaca.
+  # WELLSET-RESOLVER-1 FIX RUN 1 REBLESS (advc cycle-1 D3, blessed ONCE in the
+  # fix commit): the declared EDGES now COVER the pass's reads and its
+  # republished-slot consumers — resolve_wellsets depends_on [resolve_roles,
+  # resolve_nouns, resolve_labware] and compute_volumes / lab_state /
+  # emit_instrument_run_files gained the resolve_wellsets edge. No pass was
+  # added or removed (the pass-list length is unchanged); correctness no longer
+  # rests on Kahn's FIFO tie-break / YAML textual order. BEFORE: 6b194377..,
+  # AFTER: b91ef3b4e5e30e619e5fa7b44daa5d2be1f45c8b7bfaad0a4c169f2ad1bd8536.
+  - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b91ef3b4e5e30e619e5fa7b44daa5d2be1f45c8b7bfaad0a4c169f2ad1bd8536}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
   - {name: golden.intent-to-graph.labware-hint-regression, path: fixtures/labware-hint-regression.yaml, sha256: 17774b3aacbfda6cb385316a8474fa17123c38c90fa6e27145025aa759c100e3}
@@ -118,7 +220,17 @@ records:
   # MATRES-ELIG-report.l2t1445-coder2-fix1.md.
   - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: c750c1effbf3434d51f740f7728931079ebb30b05b464b8ac64d32a6399caf08}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
-  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
+  # L2-CLARIFY-TARGET-1 REBLESS (this item, blessed ONCE): the mandated flip
+  # (add_material.volumeUl required:true + targetWells declaration) means this
+  # fixture's canned add_material action now omits TWO required args -> the
+  # §5.2 sweep adds two missing-required-argument facts to the bar (3 -> 5).
+  # Drift probe (temp re-capture, this run) proved the ONLY divergence is
+  # body.clarifications (the two new missing-required-argument facts,
+  # volumeUl + targetWells); localMacro/terminalArtifacts/error/outcome are
+  # byte-identical. Fixture bytes UNCHANGED. Before/after + the 5-card count
+  # assertion are recorded in L2-CLARIFY-TARGET-1-report.l2t1810.md (CONT
+  # l2t2245). BEFORE: 5d994a19.. AFTER: fcc39d21..
+  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: fcc39d212fce0943b201caafefb0a1edb06eae6fb68e228bb02aa218b8180fb4}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}
   # SPINE7-REBLESS: rule-file pins re-hashed once on the SPINE-7 tip (wire
   # schema widened + aliquot.targetWells required); new golden records blessed

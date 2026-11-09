@@ -317,6 +317,30 @@ export function buildPreviewFromDraft({
     const proposal = proposedLabware[index]!
     const labware = assignVisibleLabwareHandle(proposal.labware, allocatedLabwares)
     allocatedLabwares.push(labware)
+    // L2-SUITE-A-uifix1 D5: an offer whose labwareId ALREADY has a placement
+    // REUSES that placement — never a second tile of the same physical
+    // vessel. The resolved arm (and the additions arm) mints a ghost + a
+    // placement per resolved labware offer EVEN WHEN the deck already
+    // carries one, because the offer is a hint the pipeline bound against a
+    // record the lab ALREADY OWNS (the arm's own header) and the events'
+    // labwareId already resolves to the existing placement. Repeated drafts
+    // therefore stacked placements of the deck's own plate (the gate: three
+    // placements of lbw-seed-plate-96-flat, the tile relabelled plate2).
+    // Withholding the duplicate placement also withholds the shadowing
+    // preview labware (the "plate2" relabel's source): the record already
+    // exists — previewLabwares must not shadow it with a renamed copy. The
+    // deliverable (the EVENT) still mounts — the ghost is the event, not a
+    // duplicate tile. Reusing the existing placement is NOT a skip.
+    //
+    // Scoped to EXISTING (committed) placements, deliberately NOT to
+    // placements created earlier in this batch: two `labwareAdditions` of
+    // the same record with no pre-existing placement are TWO NEW VESSELS
+    // ("add two plates" — draftPreview.test.ts lawn-packing pin), and the
+    // shared loop must keep placing them. A resolved offer for a record the
+    // lab already owns (a pre-existing placement) is a duplicate.
+    if (existingPlacements.some((p) => p.labwareId === labware.labwareId)) {
+      continue
+    }
     const slotId = normalizeDeckSlot(proposal.deckSlot)
     const implicitSingleSlot = !slotId
       && activeDeckScope?.locked
@@ -462,6 +486,12 @@ export function buildPreviewFromDraft({
       previewEquipments,
       ...(recordCreations.length > 0 ? { recordCreations } : {}),
       ...(alsoPlace ? { alsoPlace } : {}),
+      // L2-SUITE-A-uifix2 A: carry the draft's resolved offers WITH the
+      // preview so the deck's event-well index can attribute the staged
+      // (preview) arm's well-bearing-but-unbound events to the offered
+      // vessel (the staged arm must mark the tile's wells, not just the
+      // ghost). Absent when the draft offered nothing (exactOptional).
+      ...(resolvedLabwares.length > 0 ? { resolvedLabwares } : {}),
       previewPlacements,
       // Expand any compact well ranges the AI emitted ("A1:H12") into literal
       // wells, so committed events keep the existing per-well format.

@@ -1,7 +1,7 @@
 /**
  * SHORTHAND-CHAT — the run-chat shorthand acceptance suite (RED-first).
  *
- * The run chat (surface `workspace.deck`, forced `agent_intent` tool) moves from
+ * The run chat (surface `run-workspace`, forced `agent_intent` tool) moves from
  * "model composes event JSON" to "model emits scientist-intent shorthand": the
  * stubbed model emits ONLY an `event_shorthand` call carrying a scientist-intent
  * YAML document; the compiled event graph is produced ONLY by the frozen
@@ -115,7 +115,7 @@ function shorthandCall(yaml: string) {
 
 const RUN_CHAT_REQUEST = {
   prompt: 'add 100 uL of test reagent to A1:A12',
-  surface: 'workspace.deck' as const,
+  surface: 'run-workspace' as const,
   forceDraftTool: true,
   context: {
     labwares: [{ labwareId: 'LAB-plate-1', labwareType: 'plate', name: 'Plate' }],
@@ -165,7 +165,7 @@ async function directCompileDeckBound() {
       events: bindShorthandEventsToDeck(
         direct.terminalArtifacts.events as unknown as Array<Record<string, unknown>>,
         RUN_CHAT_REQUEST.context.labwares,
-      ),
+      ).events,
     },
   };
 }
@@ -388,7 +388,7 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
   it('DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash', async () => {
     const { holdShorthandIntent } = await import('./shorthandChat.js');
     const { deriveContextCacheKey } = await import('./systemPrompt.js');
-    const key = deriveContextCacheKey('workspace.deck' as never, RUN_CHAT_REQUEST.context as never);
+    const key = deriveContextCacheKey('run-workspace' as never, RUN_CHAT_REQUEST.context as never);
     const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
     // A held document whose folded re-serialization CANNOT pass Ajv (a field
     // the wire schema forbids): the fold's final parse through
@@ -433,7 +433,16 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(model.callCount()).toBe(1);
     expect(JSON.stringify(model.captured[0].messages)).toMatch('CLARIFICATION ANSWERS');
     expect(result.success).toBe(true);
-    expect(result.shorthand).toBe(ADD_DMEM_YAML);
+    // L2-INTENTID-REDRAFT-1 (criterion 2): the fallback answer turn's result
+    // shorthand carries the HELD identity (the held doc's intentId), not the
+    // fresh id the model minted on the re-extracted blob (ADD_DMEM_YAML =
+    // intentId: chat-add-dmem). This byte-exact pin predates the carry and
+    // asserted the model's verbatim bytes; the carry contract (spec §2(b):
+    // "the HELD identity wins") necessarily re-stamps ONLY the intentId —
+    // the re-extracted actions are otherwise byte-stable (no action/
+    // unresolved rewrite).
+    expect(result.shorthand).toMatch('intentId: chat-add-mystery');
+    expect(result.shorthand).not.toMatch('chat-add-dmem');
   });
 
   it('re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document', async () => {
@@ -606,6 +615,8 @@ actions:
       'compose_receiving',
       // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain.
       'compose_execute_chain',
+      // SEQ-ANSWER (DELIBERATE golden diff): answer on the SAME forced tool.
+      'answer',
     ]);
     expect(params.properties.shorthand?.type).toBe('string');
     const parsed = parseAgentIntentArgs({ intent: 'event_shorthand', shorthand: ADD_DMEM_YAML });
@@ -699,12 +710,80 @@ actions:
     expect('termManifest' in result).toBe(false);
   });
 
+  it('D1 pin: the compiler-draft return path surfaces material_ref on events (compiler is the emitter; wire is idempotent pass-through)', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+    compileSpy.mockRestore();
+
+    expect(result.success).toBe(true);
+    expect(result.events?.length).toBeGreaterThan(0);
+    // The compiler emits material_ref on all add_material events (12/12 per
+    // ruling SCIENCE-shorthand-materialref-l2t2650); the enrichDraftResultEvents
+    // wire is an idempotent pass-through on this path. This pin proves the
+    // compiler-draft return path surfaces material_ref.
+    const firstDetails = (result.events?.[0] as Record<string, unknown>).details as Record<string, unknown>;
+    expect(typeof firstDetails.material_ref).toBe('object');
+  });
+
+  it('L2-PROMPT2-SCIENCE-CHAIN-1: fold-path bind drives bindFoldPicksOntoCompile — material_ref carries record ref', async () => {
+    const model = stubModel([{ toolCalls: [shorthandCall(AMBIGUOUS_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    // FIRST run must HOLD the ambiguous intent: the deterministic fold arm
+    // requires a held intent, else the second run takes the plain model path and
+    // the bind call site (AgentOrchestrator.ts:1646) is never reached.
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add 50 uL of mystery goop to A1' });
+    expect(first.clarificationRequests?.length).toBeGreaterThan(0);
+    expect(model.callCount()).toBe(1);
+
+    const second = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{
+        requestId: first.clarificationRequests![0].id,
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-reagent-1', kind: 'record' },
+      }],
+    });
+
+    // ZERO new model calls => the deterministic fold arm ran => :1646 executed.
+    expect(model.callCount()).toBe(1);
+    expect(second.success).toBe(true);
+    expect(second.events?.length).toBe(1);
+    const details = (second.events![0] as unknown as Record<string, unknown>).details as Record<string, unknown>;
+    const matRef = details.material_ref as Record<string, unknown>;
+    // Real binder: material_ref is the ANSWERED record ref, not the draft mint.
+    // Under M1 (bindFoldPicksOntoCompile stubbed) this stays a mint:/unbound.
+    expect(matRef.kind).toBe('record');
+    expect(matRef.id).toBe('MAT-test-reagent-1');
+    expect(String(matRef.id)).not.toMatch(/^mint:/);
+  });
+
   it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
     const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
     const policy = loadShorthandDraftingPolicy();
-    expect(policy?.surfaces).toContain('workspace.deck');
+    expect(policy?.surfaces).toContain('run-workspace');
+    // ANSWER-CHANNEL 2026-10-31: the deck chat (/deck/:id) is event drafting on
+    // the same universal pane and MUST fold too — it was silently on the
+    // raw-events arm (this assertion used to pin the opposite).
+    expect(surfaceDraftsShorthand('event-editor')).toBe(true);
     // AS-4: the raw-events code stays for surfaces not yet moved.
-    expect(surfaceDraftsShorthand('event-editor')).toBe(false);
     expect(surfaceDraftsShorthand('protocol-builder')).toBe(false);
     expect(surfaceDraftsShorthand(undefined)).toBe(false);
   });

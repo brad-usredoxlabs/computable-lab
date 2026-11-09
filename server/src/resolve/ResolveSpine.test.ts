@@ -135,4 +135,26 @@ describe('resolve() spine', () => {
     expect(vendor?.tier).toBe(4);
     expect(vendor?.uri).toBe('https://example.com/rotenone');
   });
+
+  it('carries formulationDeclared into RankedCandidate when the hit provides it', async () => {
+    stubFetch({});
+    const spine = createResolveSpine({
+      recordProvider: staticProvider([
+        { curie: 'local:MAT-9', label: 'formulated record', namespace: 'local', formulationDeclared: true },
+      ]),
+    });
+    const out = await spine.resolve('formulated');
+    expect(out.find((c) => c.curie === 'local:MAT-9')?.formulationDeclared).toBe(true);
+  });
+
+  it('omits formulationDeclared from RankedCandidate when the hit does not carry it', async () => {
+    stubFetch({});
+    const spine = createResolveSpine({
+      recordProvider: staticProvider([
+        { curie: 'local:MAT-10', label: 'plain record', namespace: 'local' },
+      ]),
+    });
+    const out = await spine.resolve('plain');
+    expect('formulationDeclared' in (out.find((c) => c.curie === 'local:MAT-10') ?? {})).toBe(false);
+  });
 });

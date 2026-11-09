@@ -1,3 +1,5 @@
+import * as fs from 'fs'
+import * as path from 'path'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { computeLabwareStates } from '../../graph/lib/eventGraph'
@@ -92,6 +94,22 @@ describe('WellTooltip (event-editor focus)', () => {
     expect(concCell?.textContent).toBe('1 mM')
   })
 
+  // D2: truncated cells expose their full text via title attributes so the
+  // concentration and mixture-share are recoverable even when ellipsis clips.
+  it('conc and vol cells carry title matching their text content', () => {
+    const { container } = renderTooltip(mixtureEvent)
+
+    const concCells = Array.from(container.querySelectorAll('.well-tooltip__material-conc'))
+    const volCells  = Array.from(container.querySelectorAll('.well-tooltip__material-vol'))
+
+    for (const cell of concCells) {
+      expect(cell.getAttribute('title')).toBe(cell.textContent)
+    }
+    for (const cell of volCells) {
+      expect(cell.getAttribute('title')).toBe(cell.textContent)
+    }
+  })
+
   // CELLRATE-1 (RED-first): the post-fix compiled shape — a rate-only event
   // (counter_density declared, NO count). The cells row keeps the declared
   // rate AND shows the per-well total LABELED derived with the operands
@@ -129,5 +147,80 @@ describe('WellTooltip (event-editor focus)', () => {
     for (const cell of volCells) {
       expect(cell.textContent, 'composition row must not claim a volume').not.toBe('100.0 µL')
     }
+  })
+
+  // L2-VACUOUS-PINS-DEBT u3: diluted multi-entry composition snapshot — the
+  // clofibrate row must show the LADDERED value (3.268 uM, from convention rung
+  // uM/perBase:1000000) and NEVER the raw declared-unit literal (0.003268 mM).
+  // This pin flips RED when WellTooltip.tsx:83 is changed to formatComputedConcentration.
+  it('diluted multi-entry: clofibrate row shows laddered 3.268 uM, not raw 0.003268 mM', () => {
+    const { container } = (() => {
+      const labware = createLabware('plate_96', 'tt-plate')
+      const events: PlateEvent[] = [
+        {
+          eventId: 'evt-clofibrate',
+          event_type: 'add_material',
+          details: {
+            labwareId: labware.labwareId,
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'CHEBI:3750', namespace: 'CHEBI', label: 'clofibrate' },
+            volume: { value: 1, unit: 'uL' },
+            concentration: { value: 1, unit: 'mM' },
+          },
+        },
+        {
+          eventId: 'evt-water',
+          event_type: 'add_material',
+          details: {
+            labwareId: labware.labwareId,
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'CHEBI:787', namespace: 'CHEBI', label: 'water' },
+            volume: { value: 305, unit: 'uL' },
+          },
+        },
+      ]
+      const states = computeLabwareStates(events, new Map([[labware.labwareId, labware]]))
+      const state = states.get(labware.labwareId)?.get('A1')
+      if (!state) throw new Error('A1 state missing')
+      return render(<WellTooltip wellId="A1" state={state} clientX={10} clientY={10} />)
+    })()
+
+    const rows = Array.from(container.querySelectorAll('.well-tooltip__material'))
+    const clofibrateRow = rows.find((row) => row.textContent?.includes('clofibrate'))
+    expect(clofibrateRow).toBeTruthy()
+    const concCell = clofibrateRow?.querySelector('.well-tooltip__material-conc')?.textContent
+    // LADDERED value from convention: 0.003268 mM -> 3.268 uM
+    expect(concCell).toBe('3.268 uM')
+    // Raw declared-unit literal must NOT appear
+    expect(concCell).not.toContain('0.003268 mM')
+  })
+
+  // u5css RED pin: CSS declarations must NOT clip conc/vol cells and MUST wrap.
+  // Reads eventEditor.css directly, strips comments, extracts rule bodies,
+  // and asserts declaration-level properties (not raw text that a comment could satisfy).
+  it('u5css pin: conc and vol cells wrap (no ellipsis, white-space: normal, overflow-wrap: anywhere)', () => {
+    const cssPath = path.resolve(__dirname, '../styles/eventEditor.css')
+    const raw = fs.readFileSync(cssPath, 'utf8')
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, '')
+
+    function ruleBody(selector: string): string {
+      const re = new RegExp(selector + '\\s*\\{([^}]*)\\}', 's')
+      const m = re.exec(css)
+      expect(m, 'selector ' + selector + ' not found in CSS').toBeTruthy()
+      return m![1]
+    }
+
+    const tooltipBody = ruleBody('\\.event-editor \\.well-tooltip')
+    expect(tooltipBody).toContain('pointer-events: none')
+
+    const concBody = ruleBody('\\.event-editor \\.well-tooltip__material-conc')
+    expect(concBody).not.toContain('text-overflow: ellipsis')
+    expect(concBody).toContain('white-space: normal')
+    expect(concBody).toContain('overflow-wrap: anywhere')
+
+    const volBody = ruleBody('\\.event-editor \\.well-tooltip__material-vol')
+    expect(volBody).not.toContain('text-overflow: ellipsis')
+    expect(volBody).toContain('white-space: normal')
+    expect(volBody).toContain('overflow-wrap: anywhere')
   })
 })

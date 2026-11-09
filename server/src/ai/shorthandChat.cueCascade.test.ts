@@ -148,17 +148,22 @@ describe('shqa1.t6-fold-loop-regression (the Brad trap)', () => {
     expect(first.success).toBe(true);
     expect(first.events ?? []).toHaveLength(0);
     const requests = first.clarificationRequests ?? [];
-    // The pinned same-slot two-fact first bar: unknown-noun + blob (B1).
+    // The pinned same-slot first bar, POST-FOLD (L2-SUITE-A-uifix3 D4): the
+    // material noun's two same-action cards (unknown-noun +
+    // unrealized-mixture-blob-material, one mint row each) fold to the
+    // SPECIFIC card — one material card, the blob reason. (Pre-D4 the bar
+    // shipped the material pair un-folded — the regate-5 gate defect this
+    // run fixes; the plate noun binds the seeded deck and bars nothing.)
     const reasons = requests.map((r) => (r.unresolvedFact as { reason: string }).reason);
-    expect(reasons).toContain('unknown-noun');
     expect(reasons).toContain('unrealized-mixture-blob-material');
+    expect(requests.filter((r) => (r.unresolvedFact as { actionLocation?: { argument?: string } }).actionLocation?.argument === 'material')).toHaveLength(1);
     expect(model.callCount()).toBe(1);
 
     const materialCard = requests.find(
-      (r) => (r.unresolvedFact as { actionLocation?: { argument?: string } }).actionLocation?.argument === 'material'
-        && (r.unresolvedFact as { reason: string }).reason === 'unknown-noun',
+      (r) => (r.unresolvedFact as { actionLocation?: { argument?: string } }).actionLocation?.argument === 'material',
     )!;
-    expect(materialCard, 'the unknown-noun card for the material slot').toBeDefined();
+    expect(materialCard, 'the material-slot card (the D4 fold survivor)').toBeDefined();
+    expect((materialCard.unresolvedFact as { reason: string }).reason).toBe('unrealized-mixture-blob-material');
 
     const second = await orchestrator.run({
       ...RUN_CHAT_REQUEST,
@@ -197,12 +202,15 @@ actions:
 
     const first = await orchestrator.run(RUN_CHAT_REQUEST);
     const requests = first.clarificationRequests ?? [];
-    expect(requests.length).toBeGreaterThanOrEqual(3);
+    // POST-FOLD (L2-SUITE-A-uifix3 D4): the material noun's two same-action
+    // cards fold to one (the specific blob card), so the bar is the plate
+    // card + the material survivor — not the pre-fold 3-card shape.
+    expect(requests.length).toBeGreaterThanOrEqual(2);
     const materialCard = requests.find(
-      (r) => (r.unresolvedFact as { actionLocation?: { argument?: string } }).actionLocation?.argument === 'material'
-        && (r.unresolvedFact as { reason: string }).reason === 'unknown-noun',
+      (r) => (r.unresolvedFact as { actionLocation?: { argument?: string } }).actionLocation?.argument === 'material',
     )!;
     expect(materialCard).toBeDefined();
+    expect((materialCard.unresolvedFact as { reason: string }).reason).toBe('unrealized-mixture-blob-material');
 
     const second = await orchestrator.run({
       ...RUN_CHAT_REQUEST,

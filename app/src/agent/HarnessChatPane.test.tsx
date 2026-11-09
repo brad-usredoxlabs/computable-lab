@@ -79,7 +79,7 @@ describe('HarnessChatPane', () => {
     const accept = vi.fn()
     const reject = vi.fn()
     const flow = {
-      card: { phase: 'review' as const, summary: 'Add 1 mM clofibrate to A1:C3', draftId: 'DRF-1', revision: 2 },
+      card: { adapter: 'workstate', phase: 'review' as const, summary: 'Add 1 mM clofibrate to A1:C3', draftId: 'DRF-1', revision: 2 },
       proposeWorkstate: vi.fn(),
       acceptWorkstate: async () => { accept() },
       rejectWorkstate: reject,

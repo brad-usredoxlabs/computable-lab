@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { isRunDeckLock, writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
 import { EMPTY_HISTORY, withEditorHistory, type EditorHistory, type UndoableSnapshot } from './editorHistory'
 import { persistEditorHistory, loadEditorHistory, snapshotFingerprint } from './editorHistoryStorage'
@@ -17,7 +17,7 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
-import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
+import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiResolvedLabware, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
 import type { DraftTermRow } from './right-pane/ai/TermPanel'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
@@ -99,6 +99,17 @@ export interface EventEditorPreview {
   alsoPlace?: AiAlsoPlace
   /** Proposed concrete labware additions that produced preview labware. */
   labwareAdditions?: AiLabwareAddition[]
+  /**
+   * L2-SUITE-A-uifix2 A: the draft's resolved placement offers — the
+   * labware hints the compile bound against REAL inventory records. The
+   * preview path's resolved arm already consumes these to PLACE the ghost
+   * (keyed by recordId); the deck's event-well index reads the SAME field to
+   * ATTRIBUTE the draft's well-bearing-but-unbound events (an add_material
+   * with `details.wells` and no `labwareId`) to the offered vessel — so the
+   * staged (preview) arm marks the tile's wells, not just the ghost. Absent
+   * on previews that carried no offers.
+   */
+  resolvedLabwares?: AiResolvedLabware[]
   /** Ontology terms proposed during draft compile; draftOnly entries materialize on Accept. */
   ontologyBindings?: DraftOntologyBinding[]
   /** Vendor protocol candidate GraphLemur used as source material for this preview. */
@@ -289,6 +300,54 @@ export interface EventEditorState {
   events: PlateEvent[]
   tipState: TipState
   preview: EventEditorPreview | null
+  /**
+   * L2-SUITE-A-uifix2 A: the resolved-labware offer of the turn whose events
+   * were MOST RECENTLY COMMITTED (the just-accepted arm). A committed event
+   * that carries wells but no explicit labware reference (the compiled
+   * add_material) cannot attribute itself — the offer the pipeline bound it
+   * against is not in the record. So the deck's event-well index reads this
+   * binding for the committed arm.
+   *
+   * L2-SUITE-A-uifix2-fix1 [D1]: the binding is PER-BATCH (keyed by eventId),
+   * not one offer applied to every committed event. A second accepted turn
+   * used to OVERWRITE the single top-level field and re-route (or erase) the
+   * first turn's footprints — the exact failure the pre-fix comment claimed
+   * was prevented. Each committed event now carries the offer recordId that
+   * was live when ITS batch was staged (`commit_preview` merges
+   * `committedBindingForPreview` into the running map, never resetting the
+   * map); a later turn commits a NEW batch over the old one without touching
+   * the earlier binding. Cleared only on a deck load (the offer is not a
+   * record field — the accepted-then-reloaded arm rides defect 5 / the
+   * deck-variant item). NOT part of the undo/redo snapshot (turn-scoped, not
+   * a deck mutation the user can undo).
+   *
+   * OPTIONAL (house state-field pattern): older reducer snapshots / test
+   * state literals predate the field, so absent means "no committed event is
+   * bound to an offer" — read it as `state.committedOfferByEvent ?? {}`.
+   *
+   * L2-SUITE-A-uifix2 FIX4 (advc2 cycle-2, defect 2): a map ENTRY may also be
+   * an EXPLICIT null (the legacy /pre-fix sentinel — the old capture wrote
+   * `null` for BOTH zero and multiple offers). eventWellIndex classifies an
+   * explicit null as AMBIGUOUS (the placed-vessel fallback is FORBIDDEN —
+   * never guess); only an ABSENT entry is "no offer" (the fallback allowed).
+   * The current capture never writes null — it writes the recordId for the
+   * single-offer case and NOTHING for the zero-offer case — so the binding
+   * map and the marker map cannot drift.
+   */
+  committedOfferByEvent?: Record<string, string | null>
+  /**
+   * L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the per-batch AMBIGUOUS-OFFER
+   * marker, keyed by eventId — true when THAT event's batch offered MORE
+   * THAN ONE distinct vessel. `committedOfferByEvent` is tri-state: a
+   * recordId = the batch's single offer, an absent entry = the batch
+   * carried no offer (the deck's placed-vessel fallback is allowed), and
+   * this marker = the batch was genuinely ambiguous (the fallback is
+   * FORBIDDEN — the placed-vessel guess is exactly what the never-guess
+   * note at eventWellIndex.ts forbids). Captured at the same instant as
+   * `committedOfferByEvent` (commit time, when the batch's resolvedLabwares
+   * are still visible) and cleared with it. Same optionality contract.
+   */
+  committedOfferAmbiguousByEvent?: Record<string, boolean>
   graphLemurSource: EventEditorGraphLemurSource | null
   fixIt: FixItState
   /**
@@ -437,6 +496,8 @@ const initialState: EventEditorState = {
   events: [],
   tipState: { kind: 'empty' },
   preview: null,
+  committedOfferByEvent: {},
+  committedOfferAmbiguousByEvent: {},
   graphLemurSource: null,
   fixIt: {
     isOpen: false,
@@ -577,6 +638,62 @@ function normalizePreviewPlacementLocations(
   return changed ? { ...preview, previewPlacements } : preview
 }
 
+/** L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2, defects
+ *  1-2): the per-batch offer capture for the events of ONE preview — the
+ *  TRI-STATE, with ONE representation per fact (the binding map and the
+ *  marker map cannot drift — this capture is the ONLY producer of both):
+ *    - the batch's SINGLE distinct vessel -> binding[ev] = that recordId;
+ *    - NO vessel (zero offers)            -> NO binding entry AND no marker
+ *      (absent = no offer: the placed-vessel fallback is ALLOWED). FIX4: the
+ *      legacy `binding[ev] = null` sentinel is GONE — the old shape wrote
+ *      null for BOTH zero and multiple offers, and the index now classifies
+ *      an explicit null as AMBIGUOUS, so writing it for the zero case would
+ *      have forbidden the D2 fallback.
+ *    - MORE THAN ONE distinct vessel      -> NO binding entry AND
+ *      ambiguous[ev] = true (the explicit ambiguous marker: the batch's
+ *      target is genuinely ambiguous, so the placed-vessel fallback is
+ *      FORBIDDEN — never guess; the batch's real target may be a vessel
+ *      that is not even placed yet). FIX4: the legacy `binding[ev] = null`
+ *      written alongside the marker is GONE — the marker ALONE carries the
+ *      ambiguity.
+ *  Both maps ride the committed events (merged into the running state maps
+ *  at commit time), so a later turn cannot re-route (or erase) them. */
+function committedOfferCapturesForPreview(
+  events: PlateEvent[],
+  preview: { resolvedLabwares?: AiResolvedLabware[] },
+): { binding: Record<string, string>; ambiguous: Record<string, boolean> } {
+  const ids = (preview.resolvedLabwares ?? [])
+    .map((offer) => offer.recordId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const distinct = new Set(ids)
+  const isAmbiguous = distinct.size > 1
+  const binding: Record<string, string> = {}
+  const ambiguous: Record<string, boolean> = {}
+  for (const event of events) {
+    // Single-offer case ONLY writes a binding entry (the recordId). The
+    // zero-offer case writes NOTHING (absent = no offer) and the
+    // multi-offer case writes ONLY the marker — never a null sentinel, so
+    // the two maps describe the same fact and cannot disagree.
+    if (!isAmbiguous && distinct.size === 1) binding[event.eventId] = ids[0] as string
+    if (isAmbiguous) ambiguous[event.eventId] = true
+  }
+  return { binding, ambiguous }
+}
+
+/** L2-SUITE-A-uifix2-fix1 [D1]: merge a per-batch committed offer binding
+ *  INTO the running state binding, keeping each event's OWN entry. A new
+ *  batch's events are bound to the offer live when THAT batch was staged; an
+ *  earlier turn's events keep the binding captured when THEY were staged —
+ *  a later turn neither re-routes nor erases them. */
+function mergeCommittedOfferBinding(
+  prev: Record<string, string | null>,
+  added: Record<string, string | null>,
+): Record<string, string | null> {
+  const next: Record<string, string | null> = { ...prev }
+  for (const [eventId, recordId] of Object.entries(added)) next[eventId] = recordId
+  return next
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
@@ -615,6 +732,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         focusPlacementId: null,
         selection: null,
         preview: null,
+        // L2-SUITE-A-uifix2 A: a fresh deck load has no offer binding (the
+        // offer is not a record field) — the accepted-then-reloaded arm rides
+        // defect 5 / the deck-variant item, so the per-batch binding is
+        // cleared (a different graph's events are not bound to a stale offer).
+        // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3): the ambiguous marker is
+        // part of the same per-batch capture — cleared with it.
+        committedOfferByEvent: {},
+        committedOfferAmbiguousByEvent: {},
         graphLemurSource: null,
         tipState: { kind: 'empty' },
       }
@@ -863,6 +988,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return {
         ...state,
         preview,
+        // L2-SUITE-A-uifix2-fix1 [D1]: a fresh draft does NOT touch the
+        // committed per-batch binding. The committed events from the prior
+        // turn keep the offer captured when THEY were staged (the pre-fix code
+        // cleared the single global field here, which ERASED the prior turn's
+        // footprints the moment a new draft was staged — half of the D1
+        // re-route/erase defect). The new preview's own events are attributed
+        // via the staged arm (preview.resolvedLabwares), independent of the
+        // committed binding.
         ...(droppedFocus ? { focusPlacementId: null, selection: null } : {}),
       }
     }
@@ -886,15 +1019,52 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       if (!preview) return state
       // After commit, preview placements live in state.placements under the
       // same placementIds, so focus stays valid without further fixup.
+      const committedEvents = action.previewEvents ?? preview.previewEvents
+      // L2-SUITE-A-uifix2 A: the just-accepted arm. The committed events from
+      // this preview keep the offer binding that was LIVE when they were
+      // staged (the preview's OWN resolvedLabwares) so the deck's event-well
+      // index can attribute a well-bearing-but-unbound event (the compiled
+      // add_material) to the vessel the pipeline bound it against. NOT
+      // persisted — a reloaded deck has no binding (the accepted-then-reloaded
+      // arm rides defect 5 / the deck-variant item).
+      // L2-SUITE-A-uifix2-fix1 [D1]: the binding is PER-BATCH (keyed by
+      // eventId) and MERGED into the running map — each committed event is
+      // bound to the single-vessel offer of ITS OWN batch (this preview). An
+      // earlier turn's events keep the binding captured when THEY were staged,
+      // so this turn neither re-routes them onto this turn's vessel nor erases
+      // them (the pre-fix single top-level field OVERWROTE the binding on every
+      // commit and applied it to ALL committed events — the exact re-route the
+      // pre-fix comment claimed was prevented).
+      // L2-SUITE-A-uifix2 FIX3 (advc1 defect 3) + FIX4 (advc2 cycle-2): the
+      // capture is TRI-STATE with ONE representation per fact — a batch that
+      // offered MORE THAN ONE distinct vessel is genuinely ambiguous, so its
+      // events carry ONLY the ambiguous marker (the deck's placed-vessel
+      // fallback must NOT guess their target — it may be a vessel that is
+      // not even placed yet); a zero-offer batch writes NO binding entry
+      // (absent = no offer: the fallback stays allowed); the marker rides
+      // the batch, merged like the binding.
+      const { binding: committedBinding, ambiguous: committedAmbiguous } =
+        committedOfferCapturesForPreview(committedEvents, preview)
       return {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
         equipments: { ...state.equipments, ...(preview.previewEquipments ?? {}) },
         placements: [...state.placements, ...preview.previewPlacements],
-        events: [...state.events, ...(action.previewEvents ?? preview.previewEvents)],
+        events: [...state.events, ...committedEvents],
         eventGraphId: action.eventGraphId ?? state.eventGraphId,
         eventGraphSave: action.eventGraphCommit ?? state.eventGraphSave,
         preview: null,
+        committedOfferByEvent: mergeCommittedOfferBinding(
+          state.committedOfferByEvent ?? {},
+          committedBinding,
+        ),
+        // Per-event merge, keeping each event's OWN marker (an earlier
+        // turn's ambiguity is never erased by a later commit — the same
+        // per-batch discipline as the binding).
+        committedOfferAmbiguousByEvent: {
+          ...(state.committedOfferAmbiguousByEvent ?? {}),
+          ...committedAmbiguous,
+        },
       }
     }
     case 'open_fixit': {
@@ -1213,6 +1383,18 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // default before the record is loaded.
   const runDeckLoadedRef = useRef(false)
   const lastPersistedDeckRef = useRef<string | null>(null)
+  // L2-CHAT-1 regatefix2-fix1 D2 (gate defect D2): the deck the run was
+  // RESOLVED to by a DISAGREEING methodDeckLock — the route opened on the
+  // LOCK, not the record's remembered deck. The persist-on-change effect
+  // below suppresses the one memory write-back for that forced deck:
+  // writing it back would rewrite the record's methodPlatform/
+  // methodVariantId on a mere page load, clobbering the user's remembered
+  // variant (the design intent regatefix2 D1a claimed: "suppress the one
+  // memory write-back ... without clobbering the user's remembered
+  // variant"). A deliberate deck change AWAY from the locked deck clears
+  // the gate and resumes the normal write-back (the user just chose that
+  // deck — persisting that memory is the point of it).
+  const lockResolvedDeckRef = useRef<RunDeckMemory | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1240,23 +1422,51 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   useEffect(() => {
     if (!runId) {
       runDeckLoadedRef.current = false
+      lockResolvedDeckRef.current = null
       dispatch({ type: 'set_run_deck', deck: null })
       return
     }
     let cancelled = false
+    lockResolvedDeckRef.current = null
     apiClient.getRecord(runId)
       .then((record) => {
         if (cancelled) return
         const payload = (record.payload ?? {}) as Record<string, unknown>
         runDeckLoadedRef.current = true
-        if (
+        const memory =
           typeof payload.methodPlatform === 'string'
           && typeof payload.methodVariantId === 'string'
-        ) {
-          dispatch({ type: 'set_run_deck', deck: { platformId: payload.methodPlatform, variantId: payload.methodVariantId } })
-        } else {
-          dispatch({ type: 'set_run_deck', deck: null })
-        }
+            ? { platformId: payload.methodPlatform, variantId: payload.methodVariantId }
+            : null
+        // L2-CHAT-1 regatefix2 D1: the run's methodDeckLock is the
+        // AUTHORITATIVE deck guardrail (eventGraphPersistence.ensureRunDeckLock
+        // refuses any save off the lock — RunDeckLockConflictError). The
+        // mutable memory (methodPlatform/methodVariantId) drives only reload
+        // UX (its own doc comment says so). When a VALID lock exists and
+        // DISAGREES with the memory, resolve to the LOCK: otherwise the route
+        // opens on the memory's deck and every adoption save refuses
+        // (the gate's silent-nothing run: memory manual_freeform, lock
+        // manual_collapsed). No lock (or a matching lock) falls back to the
+        // memory — today's behavior. (regatefix2-fix1 D3: the lock shape is
+        // checked by the ONE exported structural guard,
+        // eventGraphPersistence.isRunDeckLock — the same predicate the
+        // persist path enforces; no inline copy.)
+        const rawLock = payload.methodDeckLock
+        const lockedDeck = isRunDeckLock(rawLock)
+            ? { platformId: rawLock.platformId, variantId: rawLock.variantId }
+            : null
+        const deck =
+          lockedDeck && memory &&
+          (lockedDeck.platformId !== memory.platformId || lockedDeck.variantId !== memory.variantId)
+            ? lockedDeck
+            : memory
+        // regatefix2-fix1 D2: a DISAGREEING lock forced the route onto the
+        // locked deck — remember that, so the persist effect below suppresses
+        // the one memory write-back for the forced deck (no clobber of the
+        // record's remembered variant on load).
+        lockResolvedDeckRef.current =
+          deck === lockedDeck && lockedDeck !== null && deck !== memory ? lockedDeck : null
+        dispatch({ type: 'set_run_deck', deck })
       })
       .catch(() => {
         if (!cancelled) {
@@ -1273,8 +1483,21 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // every change so a reload remembers it — deliberately NOT a lock, just a
   // mutable memory of the last deck the user left the run on. Assumes the
   // platform/variant are valid (the switcher only offers manifest variants).
+  // regatefix2-fix1 D2 (gate defect D2): EXCEPT for the deck the route was
+  // FORCED onto by a disagreeing methodDeckLock — writing that back would
+  // rewrite the record's methodVariantId on a mere page load, clobbering the
+  // user's remembered variant. The write-back stays suppressed while the deck
+  // sits on the locked deck; a deliberate change away from it resumes it.
   useEffect(() => {
     if (!state.runId || !runDeckLoadedRef.current) return
+    const forcedDeck = lockResolvedDeckRef.current
+    if (
+      forcedDeck !== null &&
+      forcedDeck.platformId === state.platformId &&
+      forcedDeck.variantId === state.variantId
+    ) {
+      return
+    }
     const key = `${state.runId}:${state.platformId}:${state.variantId}`
     if (lastPersistedDeckRef.current === key) return
     lastPersistedDeckRef.current = key

@@ -784,6 +784,7 @@ policies:
     - symbolic_label
     - hint_search
     - explicit_wells
+    - declaration_precedence
   ambiguity:
     mode: clarify
     confidenceAccept:

@@ -5,6 +5,7 @@ import { compileScientistIntent } from './compileScientistIntent.js';
 import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm, composeIntentPrompt } from './intentCompile.js';
 import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 import { liftScientistIntent, canonicalActionName, coerceNumeric } from './liftScientistIntent.js';
+import { defaultScientistIntentVocabulary } from './vocabulary.js';
 import { loadDeckReviewPolicy } from './deckReviewFold.js';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -538,5 +539,81 @@ actions:
       deckReviewPolicyPath: join(policyDir, 'does-not-exist.yaml'),
     }));
     expect(terminalArtifacts.resolvedLabwares!.length).toBe(BROAD_LABELS.length);
+  });
+});
+
+/**
+ * L2-SUITE-A Q1VOL (architect ARCH-RULING Q1, 2026-10-27): the `mix` verb
+ * declares a `volume` quantity arg (kind: quantity, required: false) in the
+ * SPINE-2 vocabulary DATA — the P7 "pipette mix (75ul, 3 cycles)" fix. The
+ * expander (simpleVerbs.ts mixExpander) ALREADY consumes params.volume; the
+ * param never arrived because normalizeScientistIntent carries vocabulary-
+ * DECLARED args onto the candidate event and the small model only emits what
+ * the generated ARGUMENTS block advertises. Declaring ONLY `volume` (no
+ * volumeUl twin — architect ruling; no channel/pipette/wells args — out of
+ * this fix-run) closes it with zero server code.
+ *
+ * Watch-out pinned (COMP-1 Task 16, Part III D4): a declared quantity that is
+ * neither a number nor {value, unit} BARS with the producer clarification
+ * (unrealized-declared-argument) — the string "75 ul" is the correct LOUD
+ * outcome, never a silent drop.
+ */
+describe('mix volume declaration (L2-SUITE-A Q1VOL)', () => {
+  it('the mix verb declares volume (kind quantity, optional) in the vocabulary DATA', () => {
+    const contracts = defaultScientistIntentVocabulary().argContracts('mix');
+    const volume = contracts.find((c) => c.name === 'volume');
+    expect(volume, 'mix must declare a volume arg').toBeDefined();
+    expect(volume!.kind).toBe('quantity');
+    expect(volume!.required).toBe(false);
+    // The architect ruling: NO volumeUl twin, NO channel/pipette/wells args —
+    // the declaration is exactly `volume` (what mixExpander reads).
+    expect(contracts.some((c) => c.name === 'volumeUl')).toBe(false);
+  });
+
+  it('mix with a numeric volume compiles and the emitted mix event carries details.volume', async () => {
+    const doc = parseScientistIntent(`
+intentId: q1vol-mix-numeric
+actions:
+  - action: mix
+    labware: plate
+    cycles: 3
+    volume: 75
+`);
+    const { terminalArtifacts, outcome, clarifications } = await compileScientistIntent(doc, {
+      spine: createResolveSpine({}),
+      searchLabwareByHint: async (hint: string) => [{ recordId: `LAB-${hint}`, title: hint }],
+    });
+    expect(clarifications).toEqual([]);
+    expect(outcome).toBe('complete');
+    const mixEvent = terminalArtifacts.events.find((e) => e.event_type === 'mix') as
+      { event_type: string; details: Record<string, unknown> } | undefined;
+    expect(mixEvent, 'a mix event must ship').toBeDefined();
+    expect(mixEvent!.details['volume']).toBe(75);
+    expect(mixEvent!.details['cycles']).toBe(3);
+  });
+
+  it('mix with a STRING volume ("75 ul") bars with the declared-quantity clarification (never a silent drop)', async () => {
+    const doc = parseScientistIntent(`
+intentId: q1vol-mix-string
+actions:
+  - action: mix
+    labware: plate
+    cycles: 3
+    volume: 75 ul
+`);
+    const { terminalArtifacts, outcome, clarifications } = await compileScientistIntent(doc, {
+      spine: createResolveSpine({}),
+      searchLabwareByHint: async (hint: string) => [{ recordId: `LAB-${hint}`, title: hint }],
+    });
+    expect(outcome).toBe('needs-clarification');
+    const bar = clarifications.find((c) => c.reason === 'unrealized-declared-argument');
+    expect(bar, 'the declared-quantity bar must fire on the string volume').toBeDefined();
+    expect(bar!.actionLocation).toMatchObject({
+      actionIndex: 0,
+      action: 'mix',
+      argument: 'volume',
+    });
+    // Atomic bar: no half-resolved graph ships (the 422 arm's contract).
+    expect(terminalArtifacts.events).toEqual([]);
   });
 });

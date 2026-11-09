@@ -75,6 +75,36 @@ export interface MaterialClarificationLayer {
 
 export interface MaterialClarificationPolicy {
   layers: Partial<Record<ClarificationLayerId, MaterialClarificationLayer>>;
+  /**
+   * Candidate-ranking POLICY for a clarification's material picker rows
+   * (L2-CLARIFY-PICKER-1 P1). ABSENT when the registry declares none — the
+   * comparator then keeps its resolver-emitted order (there is no fallback
+   * table). Optional, never `undefined` (eOPT: omitted, not set to undefined).
+   */
+  candidateRanking?: CandidateRanking;
+}
+
+/**
+ * ONE declared family in the candidate-ranking table: its declared rank
+ * integer and whether a row in it may hold the focused (keyboard) default.
+ * The `composition` pseudo-family is keyed like any other family — the
+ * comparator routes a multi-part aggregate label to it, overriding the row's
+ * category family. Code never decides these values; they are DATA.
+ */
+export interface CandidateRankingFamily {
+  rank: number;
+  canBeDefault: boolean;
+}
+
+/**
+ * The candidate-ranking declaration (DATA). `families` is keyed by the
+ * comparator's search-category vocabulary plus the `composition` pseudo-family;
+ * `containsSectionLabel` is the template for the contains-noun section header
+ * (`{label}` = the query noun, `{count}` = the row count).
+ */
+export interface CandidateRanking {
+  containsSectionLabel: string;
+  families: Record<string, CandidateRankingFamily>;
 }
 
 export interface MaterialProfileRegistryDocument {
@@ -208,6 +238,16 @@ export class MaterialProfileRegistry {
     return structuredClone(this.clarification);
   }
 
+  /**
+   * The declared candidate-ranking policy for the material picker, or null when
+   * the registry declares none. NULL is the honest absent: the comparator then
+   * keeps its resolver-emitted order (there is no fallback table, ever).
+   */
+  candidateRanking(): CandidateRanking | null {
+    const declared = this.clarification.candidateRanking;
+    return declared ? structuredClone(declared) : null;
+  }
+
   /** The policy for one layer, or null when the registry does not declare it. */
   clarificationForLayer(layer: ClarificationLayerId, profileId?: string): MaterialClarificationLayer | null {
     const override = profileId ? this.profilesById.get(profileId)?.clarification?.[layer] : undefined;
@@ -313,7 +353,49 @@ function normalizeClarification(raw: unknown): MaterialClarificationPolicy {
     const normalized = layerId.trim() as ClarificationLayerId;
     layers[normalized] = normalizeClarificationLayer(layerId, entry);
   }
-  return { layers };
+  return {
+    layers,
+    ...(obj.candidate_ranking !== undefined
+      ? { candidateRanking: normalizeCandidateRanking(obj.candidate_ranking) }
+      : {}),
+  };
+}
+
+/**
+ * Normalize the `candidate_ranking` declaration (L2-CLARIFY-PICKER-1 P1).
+ * Mirrors the existing normalize-error discipline: a malformed rank
+ * (non-integer) or can_be_default (non-boolean) throws naming the offending
+ * path. ABSENT => the caller omits the key entirely (eOPT: never `undefined`).
+ * No policy is invented here — only the declared families are returned.
+ */
+function normalizeCandidateRanking(raw: unknown): CandidateRanking {
+  const obj = asObject(raw, 'clarification.candidate_ranking');
+  const containsSectionLabel = requiredString(
+    obj.contains_section_label,
+    'clarification.candidate_ranking.contains_section_label',
+  );
+  const familiesObj = asObject(obj.families, 'clarification.candidate_ranking.families');
+  const families: Record<string, CandidateRankingFamily> = {};
+  for (const [familyId, entry] of Object.entries(familiesObj)) {
+    const family = asObject(entry, `clarification.candidate_ranking.families.${familyId}`);
+    const rank = family.rank;
+    if (typeof rank !== 'number' || !Number.isInteger(rank)) {
+      throw new Error(
+        `clarification.candidate_ranking.families.${familyId}.rank must be an integer`,
+      );
+    }
+    const canBeDefault = family.can_be_default;
+    if (typeof canBeDefault !== 'boolean') {
+      throw new Error(
+        `clarification.candidate_ranking.families.${familyId}.can_be_default must be a boolean`,
+      );
+    }
+    families[familyId.trim()] = { rank, canBeDefault };
+  }
+  if (Object.keys(families).length === 0) {
+    throw new Error('clarification.candidate_ranking.families must declare at least one family');
+  }
+  return { containsSectionLabel, families };
 }
 
 export function loadMaterialProfileRegistry(path: string): MaterialProfileRegistry {

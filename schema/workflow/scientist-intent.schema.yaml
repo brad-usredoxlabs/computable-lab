@@ -111,6 +111,22 @@ properties:
               type: string
           - type: string
             minLength: 1
+        # WELLSET-RESOLVER-1: the declared CONTENTS-DERIVED wellset carrier.
+        # The action-level `wells` key carries a symbolic wellset token (a
+        # member of the vocabulary's wellsetValueTokens DATA list) OR, for
+        # verbs that name a plain well-address list, an address array. Ajv is
+        # structural authority only — it declares the KEY exists; the
+        # vocabulary-driven resolve_wellsets pass decides whether a carried
+        # value is a declared token (it reads the token list from the
+        # vocabulary object, never a string literal in the pass). Mirrors the
+        # sourceWells/targetWells oneOf shape (array or string).
+        wells:
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: string
+            minLength: 1
         labware:
           type: string
           minLength: 1

@@ -25,6 +25,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   defaultWorkspaceState,
   parseWorkspaceState,
+  stripDerivedTabs,
   type WorkspaceState,
 } from '../../workspace/types.js';
 
@@ -87,7 +88,7 @@ export function createWorkspaceHandlers(
         }
         // The on-disk file may have been written for a different studyId
         // (file moved by hand). Always trust the URL.
-        return { state: { ...state, studyId } };
+        return { state: stripDerivedTabs({ ...state, studyId }) };
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
           return { state: defaultWorkspaceState(studyId) };
@@ -128,6 +129,10 @@ export function createWorkspaceHandlers(
         return undefined;
       }
 
+      // Strip derived tabs before persisting — ruling
+      // .hermes/plans/decisions/FIXTURE-BOARD-firstpaint-flake-l2t3300-ruling.md
+      const persistState = stripDerivedTabs(state);
+
       const filePath = workspaceFilePath(studyId);
       try {
         await mkdir(dirname(filePath), { recursive: true });
@@ -135,10 +140,10 @@ export function createWorkspaceHandlers(
           dirname(filePath),
           `.workspace.yaml.${randomUUID()}.tmp`,
         );
-        const yaml = stringifyYaml(state, { indent: 2 });
+        const yaml = stringifyYaml(persistState, { indent: 2 });
         await writeFile(tmpPath, yaml, 'utf-8');
         await rename(tmpPath, filePath);
-        return { state };
+        return { state: persistState };
       } catch (err) {
         reply.status(500).send({
           error: 'WORKSPACE_WRITE_FAILED',

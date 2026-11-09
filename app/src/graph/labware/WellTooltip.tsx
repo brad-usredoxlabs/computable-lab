@@ -6,6 +6,7 @@
 import { useMemo } from 'react'
 import type { WellId } from '../../types/plate'
 import type { PlateEvent } from '../../types/events'
+import type { Labware } from '../../types/labware'
 import { EVENT_TYPE_ICONS, EVENT_TYPE_LABELS } from '../../types/events'
 import {
   type LabwareStates,
@@ -19,6 +20,10 @@ import {
   formatComputedCount,
   formatScientificStateSummary,
 } from '../../shared/lib/formHelpers'
+import {
+  formatLadderedConcentration,
+  loadConcentrationDisplayConvention,
+} from '../lib/mixtureShareFormat'
 
 interface WellTooltipProps {
   wellId: WellId
@@ -31,6 +36,12 @@ interface WellTooltipProps {
     readouts?: string[]
     results?: string[]
   }
+  /** L2-PROMPT1-GHOST-1: the bench's placed set. When provided, the event
+   *  history applies the SAME single-placed-vessel rule the fill
+   *  (computedStates) applies, so an attributed reference-less event shows
+   *  in history alongside its fill (history-vs-fill consistency). Absent:
+   *  legacy strict reference-matching (never guess at the boundary). */
+  labwares?: Map<string, Labware>
 }
 
 export function WellTooltip({
@@ -40,6 +51,7 @@ export function WellTooltip({
   computedStates,
   maxVolume = 300,
   semanticInfo,
+  labwares,
 }: WellTooltipProps) {
   const state = useMemo(
     () => getWellState(computedStates, labwareId, wellId),
@@ -47,8 +59,8 @@ export function WellTooltip({
   )
 
   const wellEvents = useMemo(
-    () => getWellEvents(events, labwareId, wellId),
-    [events, labwareId, wellId]
+    () => getWellEvents(events, labwareId, wellId, labwares),
+    [events, labwareId, wellId, labwares]
   )
 
   const hasSemanticInfo = Boolean(
@@ -101,7 +113,7 @@ export function WellTooltip({
               // must not repeat the mixture's volume — the header/summary above
               // is the single volume assertion. The row states its share of the
               // mixture plus count/density. Non-carrier rows render as before.
-              const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown) || 'no concentration'
+              const conc = formatLadderedConcentration(m.concentration, loadConcentrationDisplayConvention(), m.concentrationUnknown) || 'no concentration'
               const density = formatComputedConcentration(m.counterDensity)
               // CELLRATE-1: the per-well total is DISPLAY truth over the declared
               // data — derived ONLY from a declared rate x a declared volume and

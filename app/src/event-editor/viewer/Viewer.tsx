@@ -55,11 +55,13 @@ export function Viewer({ tab, onSendSelection }: ViewerProps) {
     case 'collection':
     case 'splash':
     case 'registry':
+    case 'protocol-review':
       // ProjectWorkspacePage's LeftPane renders these kinds directly
       // (FindTabPanel / RecordCreatePanel / RecordEditPanel / ExecutionTabShell)
       // and doesn't call Viewer; these arms exist so a future caller can't crash by
       // handing one in. The new entity-type tabs (project/run/claim/lab-entity)
       // also render their own workspace views, not the Viewer dispatcher.
+      // protocol-review is hosted by its own route (ProtocolReviewHostPage).
       return <EmptyViewerState />
     default: {
       const _exhaustive: never = tab

@@ -2,7 +2,6 @@ import { test, expect, type Page } from '@playwright/test'
 
 const EVG = 'EVG-SPK-VERIFY'
 const PROMPT = 'place two water baths onto the deck'
-const FREE_BENCH_LABEL = 'Manual Bench (freeform)'
 
 // The agent emits `agent_intent` → intent `event_graph` with two equipment
 // requirements. The deck machinery must place them as INSTRUMENT tiles on the
@@ -53,8 +52,31 @@ function stubAssistStream(page: Page) {
   }, sse)
 }
 
-async function deckVariantSelect(page: Page) {
-  return page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
+function deckVariantChip(page: Page) {
+  return page.locator('[data-testid="deck-setup-chip"]')
+}
+
+// LEG E (OQ-E3 test-port repair, measured red at claim): the legacy variant
+// <select> is the DeckSetupChip cascade now (a31c7201/2d25f934/31f5382c —
+// pre-existing trunk change, ancestor of the composer's recon tip d18f1c13);
+// the composer is ChatLog's 'Message' + 'Send' (chat-input died with
+// AiTabPanel, LEG D). Test-port to live controls, no product change.
+async function driveChipToFreeform(page: Page) {
+  const chip = deckVariantChip(page)
+  await expect(chip).toBeVisible({ timeout: 20_000 })
+  if (await chip.innerText().then((t) => /freeform/i.test(t))) {
+    return
+  }
+  await page.locator('[data-testid="deck-setup-trigger"]').click()
+  await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  const switchBtn = page.locator('[data-testid="deck-setup-switch"]')
+  if (await switchBtn.count()) {
+    await switchBtn.click()
+    await expect(page.locator('[data-testid="deck-setup-panel"]')).toBeVisible({ timeout: 5_000 })
+  }
+  await page.locator('[data-testid="deck-setup-row-variant"]').first().click()
+  await page.locator('[data-testid="deck-setup-option-manual_freeform"]').first().click()
+  await expect(chip).toContainText('freeform', { timeout: 10_000 })
 }
 
 test('agent equipment intent places two water-bath instruments on the freeform bench (not tube racks)', async ({ page, request }) => {
@@ -79,18 +101,19 @@ test('agent equipment intent places two water-bath instruments on the freeform b
   await page.goto(`/deck/${EVG}`)
 
   // Switch the deck to the freeform bench so a lawn surface is available.
-  const variantSelect = await deckVariantSelect(page)
-  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
-  await variantSelect.selectOption({ label: FREE_BENCH_LABEL })
+  // LEG E re-pin: the DeckSetupChip (the legacy <select> died with the
+  // cascade refactor a31c7201/2d25f934/31f5382c).
+  await driveChipToFreeform(page)
   await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
 
   // Open the AI tab and ask for water baths.
   await page.locator('[data-testid="right-pane-tab-ai"]').click()
-  const input = page.locator('[data-testid="chat-input"] .chat-input__editor')
+  // LEG E composer re-pin (OQ-E3): chat-input died with AiTabPanel (LEG D);
+  // the universal pane's composer is ChatLog's 'Message' + 'Send'.
+  const input = page.getByLabel('Message', { exact: true })
   await expect(input).toBeVisible({ timeout: 20_000 })
-  await input.click()
-  await page.keyboard.type(PROMPT)
-  const sendBtn = page.locator('[data-testid="chat-input-send"]')
+  await input.fill(PROMPT)
+  const sendBtn = page.getByRole('button', { name: 'Send', exact: true })
   await expect(sendBtn).toBeEnabled()
   await sendBtn.click()
 

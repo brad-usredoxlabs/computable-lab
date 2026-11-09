@@ -199,3 +199,15 @@ export function useWellSelection(): WellSelectionContextValue {
   }
   return context
 }
+
+/**
+ * L2-CLARIFY-TARGET-1 (Change 4): the NULL-SAFE sibling of useWellSelection.
+ * Returns null when there is no provider (the run host has no plate selection
+ * surface — hosts.json) instead of throwing. The target slot's optional
+ * "use selected wells" affordance renders only when a non-empty selection is
+ * present; with no context the affordance simply does not render. No behavior
+ * change to the existing hook.
+ */
+export function useOptionalWellSelection(): WellSelectionContextValue | null {
+  return useContext(WellSelectionContext)
+}

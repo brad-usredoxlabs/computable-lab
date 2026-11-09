@@ -8,7 +8,8 @@
  * REAL parseScientistIntent singleton.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
@@ -16,6 +17,8 @@ import {
   defaultScientistIntentVocabulary,
   SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID,
   VOCABULARY_DATA_FILE,
+  VOCABULARY_SCHEMA_FILE,
+  VOCABULARY_LINT_FILE,
 } from './vocabulary.js';
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { loadAllLintSpecs } from '../../lint/LintSpecLoader.js';
@@ -163,6 +166,15 @@ describe('resolver-spec.validation', () => {
     ).toThrow(/not found/);
   });
 
+  it('contenderOrder off-state: fixture without the block loads with key ABSENCE', () => {
+    const off = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-contender-order-off', VOCABULARY_DATA_FILE),
+    });
+    expect('contenderOrder' in off.policies().ambiguity).toBe(false);
+    expect(off.policies().ambiguity.mode).toBe('clarify');
+    expect(off.policies().ambiguity.strategyRef).toBe('symbolic_label');
+  });
+
   it('fixture vocabularies cache per resolved path (bait 2: fixture injection gets its own instance)', () => {
     const a = loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE) });
     const b = loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE) });
@@ -205,6 +217,119 @@ describe('current-verb-parity', () => {
     const vocab = defaultScientistIntentVocabulary();
     for (const [alias, target] of Object.entries(ACTION_SYNONYMS)) {
       expect(vocab.has(target), `synonym ${alias} -> ${target}`).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-LABSTATE-CONTENTS-1 — the labwareIdentityResolution DATA section (§5.2):
+// the per-load frozen read + the fail-closed absent arm. The rung ids and
+// instance fields are DATA (the meta-schema validates the shape; this test
+// pins the per-load read so the data change cannot silently drift).
+// ---------------------------------------------------------------------------
+
+describe('L2-LABSTATE-CONTENTS-1 — labwareIdentityResolution DATA (per-load read)', () => {
+  it('the shipped vocabulary declares the never-guess ladder (order + tokenFields, declaration order pinned)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const lir = vocab.labwareIdentityResolution();
+    // Declaration order pinned (first-hit-wins: R1 raw instanceId, R2 declared
+    // identity tokens, R3 unique declared type — the OQ-3 live winner).
+    expect([...lir.order]).toEqual([
+      'instanceIdentity',
+      'declaredIdentityTokens',
+      'uniqueLabwareType',
+    ]);
+    // Index-aligned with `order` (R1->instanceId, R2->identityTokens,
+    // R3->labwareType) — the fold's generic field-identity evaluator reads
+    // these declared fields; the alignment is data, not a TS branch.
+    expect([...lir.tokenFields]).toEqual(['instanceId', 'identityTokens', 'labwareType']);
+    // Frozen per load (the fix2 idiom — the wellsetValueTokens /
+    // materialBearingEventTypes discipline): the same arrays across two reads.
+    const again = vocab.labwareIdentityResolution();
+    expect(again.order).toBe(lir.order);
+    expect(again.tokenFields).toBe(lir.tokenFields);
+    expect(Object.isFrozen(lir.order)).toBe(true);
+    expect(Object.isFrozen(lir.tokenFields)).toBe(true);
+  });
+
+  it('an ABSENT section fails CLOSED to the empty lists (rung R1 ONLY — the raw path keeps working)', () => {
+    // The fixture triplet carries no labwareIdentityResolution section (it
+    // predates this item) — the loader must NOT throw (the section is optional
+    // in the meta-schema) and must return the empty lists. D5 (advc fix-run
+    // 1): the fold treats an empty `order` EXACTLY as absent rules — rung R1
+    // ONLY (the raw instanceId path), so an absent section and a 2-arg fold
+    // call are identical (the pass-seam test pins the R1-default behavior).
+    const vocab = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
+    });
+    const lir = vocab.labwareIdentityResolution();
+    expect([...lir.order]).toEqual([]);
+    expect([...lir.tokenFields]).toEqual([]);
+  });
+
+  // D6 (advc fix-run 1): the CONTENT-BEARING event types on the WRITE side
+  // are DATA (the labStateContentBearingEventTypes list) — the fold-side
+  // twin of materialBearingEventTypes (the read half's taxonomy). Per-load
+  // frozen read + fail-closed absent arm (the same discipline as the two
+  // lists above): the lab_state pass threads THIS list into the fold's
+  // content-bearing test at the pass seam — the TS carries no second
+  // literal list of event types (the B3 boundary / no-double-vocabulary).
+  it('the shipped vocabulary declares the content-bearing event types (D6 — the fold-side DATA list, per-load frozen)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const cb = [...vocab.labStateContentBearingEventTypes()];
+    // The fold's §7 never-guess surface: add_material always; transfer when
+    // it carries a labware carrier (the carrier check stays a shape probe —
+    // the event-type taxonomy is DATA here).
+    expect(cb).toEqual(['add_material', 'transfer']);
+    // Frozen per load (the fix2 idiom): the SAME array across two reads.
+    expect(vocab.labStateContentBearingEventTypes()).toBe(vocab.labStateContentBearingEventTypes());
+    expect(Object.isFrozen(vocab.labStateContentBearingEventTypes())).toBe(true);
+  });
+
+  it('an ABSENT content-bearing section fails CLOSED to the empty list (D6 — no event is content-bearing, the pass surfaces no diagnostics)', () => {
+    // The fixture triplet predates this section — the loader must NOT throw
+    // and must return the empty list (fail-closed: over-conservative,
+    // never-guess-safe).
+    const vocab = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
+    });
+    expect([...vocab.labStateContentBearingEventTypes()]).toEqual([]);
+  });
+
+  // D7 (advc fix-run 1): DECLARATION-INTEGRITY pin — `order` and
+  // `tokenFields` must be INDEX-ALIGNED (equal length): the fold reads
+  // tokenFields[i] for the i-th rung of order, so a length mismatch
+  // silently disables the tail rungs (fail-closed, but a declaration
+  // integrity hole). The meta-schema cannot express a cross-key length
+  // EQUALITY (no such constraint in the DSL/Ajv shape the loader uses), so
+  // the consistency is pinned HERE (test authority) — and by the
+  // per-load read above, which pins the shipped lengths as equal.
+  it('order/tokenFields are index-aligned (equal length) — a length mismatch would silently disable tail rungs (D7)', () => {
+    const vocab = defaultScientistIntentVocabulary();
+    const lir = vocab.labwareIdentityResolution();
+    expect(lir.order.length).toBe(lir.tokenFields.length);
+    expect(lir.order.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('the PRE-CHANGE meta-schema REJECTS a data file carrying the section (the §5.2 RED pin — the meta-schema change is load-bearing)', () => {
+    // The vocab-minus-pellet schema is the pre-change meta-schema (it carries
+    // no labwareIdentityResolution declaration, and its root is
+    // additionalProperties:false + unevaluatedProperties:false). A data file
+    // that DOES carry the section must be REJECTED by it — proving the
+    // meta-schema change (not just the data) is what admits the section.
+    const dir = mkdtempSync(join(tmpdir(), 'vocab-lir-red-'));
+    try {
+      for (const f of [VOCABULARY_SCHEMA_FILE, VOCABULARY_LINT_FILE]) {
+        copyFileSync(join(FIXTURES, 'vocab-minus-pellet', f), join(dir, f));
+      }
+      // The shipped DATA (carries the labwareIdentityResolution section) under
+      // the PRE-CHANGE schema: the root additionalProperties:false rejects it.
+      copyFileSync(join(VOCAB_DIR, VOCABULARY_DATA_FILE), join(dir, VOCABULARY_DATA_FILE));
+      expect(() =>
+        loadScientistIntentVocabulary({ path: join(dir, VOCABULARY_DATA_FILE) }),
+      ).toThrow(/failed schema validation/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

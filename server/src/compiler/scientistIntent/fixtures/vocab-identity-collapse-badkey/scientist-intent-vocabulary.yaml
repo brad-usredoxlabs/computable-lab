@@ -1,0 +1,1007 @@
+# SPINE-2 authority document: the scientist-intent closed verb vocabulary +
+# per-argument contracts. TypeScript keeps NO hand-maintained verb list; the
+# parser (Ajv enum injection), tool schema, prompt, lifter and the normalizer
+# pattern-set all read this file. Verb order is the migration baseline order
+# (fixtures/verb-inventory.yaml) — do not alphabetize (parity is order-aware).
+# class: pattern marks the geometric macros (PATTERN_ACTIONS source).
+# domain/capability are DECLARATION SLOTS for SPINE-3 adapters; no knowledge-
+# layer term validation fires here (SPINE-1 5 ruling).
+# Structural rules: scientist-intent-vocabulary.schema.yaml.
+# Conditional policy (P1-P4): scientist-intent-vocabulary.lint.yaml.
+version: 1
+verbs:
+  - name: seed
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: composition
+        kind: resolvable
+        required: false
+        domain: material
+        cardinality: many
+        itemNounField: material
+  - name: incubate
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+  - name: mix
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: volume
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      # WELLSET-RESOLVER-1 (architect ruling SUITEA-P7-mix-wellset-scope-l2t0635
+      # Q2): the declared CONTENTS-DERIVED wellset carrier. A symbolic token
+      # (never a well list) that the server-side resolve_wellsets pass resolves
+      # to a concrete well set from the run's contents ledger. kind: wellset is
+      # its OWN argument kind (not a referent level, not a resolvable noun) —
+      # the membership + token set are DATA (the pass reads them from this
+      # vocabulary object, never a string literal). required: false so a mix
+      # with no wellset rides byte-identically.
+      #
+      # domain: labware is a DECLARATION SLOT (not a resolvable noun, not a
+      # strategyOrder noun, not a referent level): it names the ENTITY the
+      # wellset's AMBIGUITY clarification is about — the labware the contents
+      # sit on. The answerable-card builder (clarificationsFromUnresolvedFacts)
+      # maps domain:labware -> kind:'labware' (the OQ-3 ruling's kind:'labware'
+      # candidate-card shape); the never-guess arm raises ONE labware card on
+      # an ambiguous (two-plate) contents set.
+      - name: wells
+        kind: wellset
+        required: false
+        domain: labware
+        # L2-LABSTATE-CONTENTS-1 FIX RUN 2 (ruling LABSTATE-TOKENSITE-gate-
+        # l2t2355 Q1, Brad option A): the PRODUCER-SIDE teaching for the
+        # contents-derived carrier, rendered generically by contractBlock()
+        # into every live prompt site (forced-draft instruction, agent_intent
+        # tool def, repair prompt). The `teaching:` string states the
+        # phrase->token CONTRACT only; the token VALUE stays single-homed in
+        # wellsetValueTokens below (the renderer composes the token list from
+        # that DATA — this text must never re-list token literals).
+        teaching: >-
+          A contents-derived phrase ("all wells that have material") is the
+          DECLARED wellset token (the vocabulary's wellsetValueTokens list) —
+          never a literal well list or well range. Omit labware unless the
+          scientist names it: the token resolves its labware from the
+          contents ledger.
+  - name: resuspend
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: dilute
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: shake
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+  - name: count
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: mode
+        kind: scalar
+        required: false
+      - name: readout
+        kind: scalar
+        required: false
+  - name: read
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: instrument
+        kind: resolvable
+        required: false
+        domain: instrument
+      - name: mode
+        kind: scalar
+        required: false
+      - name: wavelength
+        kind: scalar
+        required: false
+      - name: readout
+        kind: scalar
+        required: false
+  - name: add_material
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+        # L2-LABSTATE-CONTENTS-1 FIX RUN 4 (ruling LABSTATE-DRIVEBAR-l2t1125
+        # "PRODUCT DEFECTS" item 1, covered by the 2026-11-02 standing
+        # approval): producer-side teaching for the container arg — without
+        # it the live sampler drafts add_material WITHOUT labware for
+        # scientist-named deck containers, and the fold's honest
+        # never-guess no-op leaves the contents ledger short (the 8-well
+        # mix-union shape). Same SHAPE as the mix.wells teaching above
+        # (fix-run-2, ruling LABSTATE-TOKENSITE-gate-l2t2355 Q1): rendered
+        # by the already-shipped generic contractBlock() renderer; the text
+        # states the carry/omit CONTRACT only and never re-lists any token.
+        teaching: >-
+          If the scientist names or implies a container the deck holds
+          (even "the plate"), carry it in the labware arg; omit it only
+          when the scientist names none.
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+        # MATRES-ELIG [memo Q1, RATIFIED 2026-10-20]: the ALLOWED referent
+        # levels for binding this argument + the time-phase default hint
+        # (preferred is a PANEL pre-selection hint — NEVER a filter, never
+        # suppression). The eligibility evaluator reads these DECLARED slots
+        # through the fact envelope; lint P6/P7 pin preferred ∈ levels and
+        # levels ⊆ referentLevels.
+        levels: [concept, formulation, vendor-product, instance]
+        preferred: concept
+      - name: source_name
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: volume
+        kind: quantity
+        required: false
+      - name: composition
+        kind: resolvable
+        required: false
+        domain: material
+        cardinality: many
+        itemNounField: material
+  - name: create_container
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: source_name
+        kind: scalar
+        required: false
+  - name: transfer
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: volume
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: stain
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: fix
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: permeabilize
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: block
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: quench
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: label
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+  - name: transfect
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: aliquot
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      # SPINE-7: an aliquot is defined by WHICH target wells it fills — the
+      # address argument is declared required (data), making the
+      # MISSING_REQUIRED_ARGUMENT_REASON sweep route-reachable on the 422 arm.
+      - name: targetWells
+        kind: wells
+        required: true
+  - name: wash
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+        # SPINE-8-LEVELFOR: a wash's material must land at the aliquot layer.
+        # This DECLARED level is the single source of the (verb,arg)->MaterialLevel
+        # mapping: the resolve_nouns pass reads it into deps.levelFor and the
+        # engine's levelFilter arm (resolutionEngine.ts:94-111) drops
+        # concept/unknown-level candidates. 'aliquot' is a well-ready layer, so
+        # the filter FIRES (spec §9.4: 'spec'/'concept'/'unknown' would be inert).
+        level: aliquot
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: elute
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: harvest
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+  - name: passage
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: freeze
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: thaw
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: spin
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+  - name: pellet
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+  - name: serial_dilution
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: factor
+        kind: quantity
+        required: true
+      - name: points
+        kind: quantity
+        required: true
+      - name: replicates
+        kind: quantity
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: media_swap_duplicate_columns
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: source_wells_to_duplicate_target_columns
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: repeat_rows
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: bead_beat
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+# MATRES-ELIG (spec §7.3, memo Q1 RATIFIED 2026-10-20): the canonical
+# referent-level list declared IN the vocabulary data as the lint authority for
+# every argument's `levels` value (lint P7 allIn against this list — no new
+# level nouns without a vocabulary amendment). The eligibility policy data
+# declares the same five in its own referentLevels slot; the eligibility data
+# test pins the two lists as a SET DIFF (never two local terms for one entity).
+# WELLSET-RESOLVER-1 (architect ruling SUITEA-P7-mix-wellset-scope-l2t0635 Q2):
+# the declared CONTENTS-DERIVED wellset token class — the DATA list of symbolic
+# token VALUES a `kind: wellset` argument may carry. The server-side
+# resolve_wellsets pass reads THIS list (vocabulary DATA) to decide which
+# argument values are declared tokens; it never string-literal-compares a token
+# in TS (no hardcoded well list, no token literal in the pass — the token
+# membership is DATA, the B3 boundary). `all-wells-containing-materials` means
+# "every well on the run's contents-bearing plate(s) that contains materials" —
+# the union of the run's contents ledger (Brad's approval-card worked example).
+# Optional so existing fixture copies (which declare no wellset tokens) stay
+# structurally valid.
+wellsetValueTokens:
+  - all-wells-containing-materials
+# WELLSET-RESOLVER-1 FIX RUN 1 (advc cycle-1 D8): the MATERIAL-BEARING EVENT
+# TYPES — the DATA list of primitive event types that ADD material to a well
+# and therefore contribute to the run's contents ledger. The resolve_wellsets
+# pass reads THIS list (vocabulary DATA) to build the pending-draft layer; the
+# TS never hardcodes the taxonomy (the same domain membership the harness gate
+# and forceMaterialClarifications declare — one DATA home here). Optional:
+# a vocabulary copy that declares no list contributes NO pending-draft wells
+# (the ledger stays the committed layer — fail-closed, never a guessed set).
+materialBearingEventTypes:
+  - add_material
+  - multi_dispense
+  - dispense
+# L2-LABSTATE-CONTENTS-1 FIX RUN 1 (advc D6): the CONTENT-BEARING EVENT TYPES
+# on the WRITE side — the DATA list of primitive event types whose no-op fold
+# is a never-guess surface the lab_state pass surfaces as a
+# `lab_state_unresolved_*` diagnostic (spec §7: the fold is pure, reporting
+# rides the pass). The fold-side twin of materialBearingEventTypes above (the
+# READ half's contents-ledger taxonomy): one DATA declaration of the
+# content-bearing concept, consumed by BOTH halves — the TypeScript carries no
+# second literal list of event types (the B3 boundary / no-double-vocabulary
+# discipline; the fold module stays pure and reads this list threaded at the
+# pass seam). transfer is declared: a transfer that carries a labware carrier
+# but cannot resolve a side is a never-guess failure the pass must surface
+# (a destination-only transfer with an unresolvable SOURCE side — the expander
+# sets the top-level labwareId to the TARGET — is exactly this class).
+# Optional: a vocabulary copy that declares no list contributes NO content-
+# bearing events to the fold (the pass surfaces no diagnostics — fail-closed,
+# over-conservative, never-guess-safe).
+labStateContentBearingEventTypes:
+  - add_material
+  - transfer
+# L2-LABSTATE-CONTENTS-1 (spec §5.2): the DATA-declared labware IDENTITY
+# RESOLUTION ladder the lab_state fold walks when a content-bearing event
+# carries a SYMBOLIC labwareId (the shipped expander's top-level labwareId /
+# details.source_labware|destination_labware — a HINT, never a pin) instead of
+# a resolved instance id. The fold is a GENERIC field-identity evaluator over
+# these declared rungs; it never branches on a rung id or a field name (the
+# PROTO-AI-3 doctrine, the B3 boundary). Order is FIRST-HIT-WINS with
+# never-guess: the first rung that yields EXACTLY ONE instance wins, zero
+# advances, a TIE at any rung is terminal => the fold no-ops + a pass
+# diagnostic (no pick, no substring/overlap — the findLabwareByHints anti-
+# pattern is the reviewer bait). Rung semantics (exact identity under a declared
+# normalization, the foldPendingKey / mint_materials labwareType-match twin):
+#   instanceIdentity         the hint IS a resolved instanceId (the raw path —
+#                            rung R1, always present even when this section is
+#                            absent)
+#   declaredIdentityTokens   the hint trim+casefold == one of the instance's
+#                            declared identityTokens (the create event's
+#                            details.labwareId/title/label, spec §6)
+#   uniqueLabwareType        the hint trim+casefold (non-alnum collapsed) ==
+#                            EXACTLY ONE instance's labwareType (the OQ-3 live
+#                            single-plate winner — the mint_materials
+#                            `labwareType === placementLabwareHint` twin).
+# tokenFields is index-aligned with `order`: the instance field each rung reads.
+# Optional so existing fixture copies stay valid: an ABSENT section fails
+# CLOSED to rung R1 ONLY (the raw labwareInstanceId path keeps working; every
+# symbolic resolution is a never-guess no-op). D5 (advc fix-run 1): the fold
+# treats an EMPTY `order` exactly as ABSENT rules — rung R1 ONLY — so the
+# fail-closed read and the 2-arg fold call are identical (code, this comment,
+# and the pass comment agree; the pre-fix code ran ZERO rungs for an empty
+# order, contradicting the R1-only claim).
+labwareIdentityResolution:
+  order:
+    - instanceIdentity
+    - declaredIdentityTokens
+    - uniqueLabwareType
+  tokenFields:
+    - instanceId
+    - identityTokens
+    - labwareType
+referentLevels: [concept, formulation, vendor-product, instance, aliquot]
+policies:
+  strategyOrder:
+    - explicit_wells
+    - hint_search
+    - symbolic_label
+    - ontology_resolution
+    - mint_local
+  ambiguity:
+    mode: clarify
+    confidenceAccept:
+      min: 0.7
+      max: 1
+    strategyRef: symbolic_label
+    identityCollapse:
+      key: [term, candidate_level]
+      survivor:
+        - declared_substance
+        - stable_order
+  hintAuthority:
+    mode: lab_hint_first
+    strategyRef: hint_search
+  ruleIds:
+    - hint-authority
+    - ambiguity-clarify

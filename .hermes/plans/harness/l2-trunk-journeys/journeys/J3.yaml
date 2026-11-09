@@ -1,0 +1,80 @@
+# J3 — protocol-edit via chat: draft -> ChangesPanel diff -> Accept -> the
+# expectedSha round trip LANDS THE WRITE (then teardown deletes the scratch
+# record; source record untouched — data-repo digest returns clean).
+# Surface: /ingestion/vendor-pdf/<VPDF> ReviewAiPanel (protocol-review,
+# assist/stream). The write target is a SCRATCH COPY of the w28 gate XDR —
+# never the shared fixture itself.
+id: J3
+title: "protocol-edit via chat: draft -> diff -> Accept -> expectedSha write lands"
+file: J3.yaml
+timeout_s: 300
+acting_user_id: USR-BRAD   # D11: the acting identity is DECLARED data, not driver code
+selection_affordance: >-
+  REAL UI: ReviewAiPanel's own composer (chat-input TipTap + chat-input-send)
+  is typed and sent; the ChangesPanel Accept button (changes-apply) is
+  clicked. NEVER a stubbed route. Review-surface affordances copied from the
+  merged e2e/w29-review-ai-panel.spec.mjs B6 leg.
+log_selector: '[data-testid="message-log"]'
+seed:
+  copy_record:
+    from: XDR-w28-gate0001
+    to: XDR-JOURNEYS-3
+    # D11: the copy's schema is declared here, not hardcoded in the driver.
+    schemaId: https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml
+    # Scratch-record test-data prep: the LIVE fixture drifted to status
+    # 'promoted' (measured 2026-10-31), which findSemanticDraft skips; the
+    # merged fixture was born 'pending_review' (e2e/fixtures/w28-said-meant/
+    # xdr.json). The COPY is reset to that birth state; the shared fixture is
+    # never touched.
+    set_status: pending_review
+    # The join stays on the REAL VPDF: findSemanticDraft picks the NEWEST
+    # draft per source_artifact.id, so the copy carries createdAt=now (the
+    # driver stamps it) and wins the join. Teardown deletes the copy and the
+    # shared fixture's join is byte-restored.
+    join_via_newer_createdAt: true
+teardown: { delete_record: XDR-JOURNEYS-3 }
+steps:
+  - step: set_user_id
+    user_id: USR-BRAD
+  - step: goto
+    path: /ingestion/vendor-pdf/VPDF-5256F3288E3C
+  - step: expect_visible
+    selector: '[data-testid="review-ai-panel"]'
+  # Pin the async draft JOIN before asking: the MEANT pane names the scratch
+  # record only once the extraction-draft discovery fetch landed (a bare
+  # panel-visible would race the panel's own useOpenDraft effect and ship
+  # attachedProtocol:null).
+  - step: wait_for_body_text
+    text: XDR-JOURNEYS-3
+  - step: ask
+    scope: review
+    text: 'reword the label of step-lyse to "Lyse the sample (journeys J3)"'
+  - step: expect_visible
+    selector: '[data-testid="changes-panel"]'
+  - step: screenshot
+    tag: proposal-diff
+  - step: click_accept_proposal
+  - step: expect_accept_note
+  - step: screenshot
+    tag: after-accept
+expected_wire:
+  # The review surface rides the ASSIST stream (aiClient fork: only
+  # event-editor rides draft-events).
+  endpoints: ["/api/ai/assist/stream"]
+assert:
+  request_body_channels:
+    - path: surface
+      equals: protocol-review
+    - path: context.attachedProtocol.recordId
+      equals: XDR-JOURNEYS-3
+    - path: context.attachedProtocol.sha
+      present: true
+  rendered:
+    - proposal_accepted: true
+    - text_contains: ["Lyse the sample (journeys J3)"]
+write_proof:
+  # The driver asserts the write LANDED on the scratch record: the accepted
+  # label is readable via GET /api/records/XDR-JOURNEYS-3 after Accept.
+  record: XDR-JOURNEYS-3
+  label_step: step-lyse
+  label_contains: "Lyse the sample (journeys J3)"

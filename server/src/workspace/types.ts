@@ -38,6 +38,8 @@ export type WorkspaceTab =
       eventGraphId: string;
       runId?: string;
       title: string;
+      /** Declared in data, not in TS — ruling FIXTURE-BOARD-firstpaint-flake-l2t3300-ruling.md. Derived tabs must not be persisted. */
+      derived?: true;
     }
   | {
       id: string;
@@ -177,6 +179,7 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
         kind: 'deck',
         eventGraphId: t.eventGraphId,
         ...(typeof t.runId === 'string' ? { runId: t.runId } : {}),
+        ...(t.derived === true ? { derived: true } : {}),
         title: t.title,
       });
     } else if (t.kind === 'pdf' && typeof t.artifactId === 'string') {
@@ -319,4 +322,22 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
     rightPaneCollapsed: collapsed,
     paneWidths: { left: w.left, right: w.right },
   };
+}
+
+/**
+ * Remove derived tabs and adjust activeTabId accordingly.
+ * Derived tabs are not durable state — ruling
+ * .hermes/plans/decisions/FIXTURE-BOARD-firstpaint-flake-l2t3300-ruling.md
+ *
+ * Returns a new WorkspaceState with derived tabs removed. If activeTabId
+ * pointed at a derived tab, it falls back to the first surviving tab id
+ * or null when all tabs were derived.
+ */
+export function stripDerivedTabs(state: WorkspaceState): WorkspaceState {
+  const surviving = state.tabs.filter((t) => t.kind !== 'deck' || t.derived !== true);
+  let activeTabId = state.activeTabId;
+  if (activeTabId && state.tabs.find((t) => t.id === activeTabId && t.kind === 'deck' && t.derived === true)) {
+    activeTabId = surviving.length > 0 ? surviving[0]!.id : null;
+  }
+  return { ...state, tabs: surviving, activeTabId };
 }

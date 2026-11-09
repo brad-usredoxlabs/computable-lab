@@ -1,0 +1,236 @@
+manifestVersion: "1.0.0"
+
+paneVocabulary:
+  - ai-chat
+  - event-editor
+  - deck
+  - project-tabs
+  - collection-list
+
+surfaces:
+  - id: run-workspace
+    route: "/runs/:runId"
+    panes:
+      - ai-chat
+      - event-editor
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for run-workspace surface still owed — J1 journey needs live probe evidence"
+    description: "Run workspace — executes a run against a revision, shows output artifacts and chat."
+
+  - id: event-editor
+    route: "/runs/:runId/event-editor"
+    panes:
+      - ai-chat
+      - event-editor
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for event-editor surface still owed — J1 journey needs live probe evidence"
+    description: "Event editor — standalone deck host for event graphs with chat and deck viewer."
+
+  - id: analysis
+    route: "/analysis"
+    panes:
+      - ai-chat
+      - project-tabs
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for analysis surface still owed — journey leg not yet implemented"
+    description: "Analysis surface — method authoring, run execution, and artifact viewing with AI assistance."
+
+  - id: project-deck-tab
+    route: "/project/:studyId"
+    panes:
+      - ai-chat
+      - deck
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for project-deck-tab surface still owed — no live probe evidence for this host yet"
+    description: "Project deck tab — study workspace door rendering the deck chat slice; also served at /project/:studyId/event-graph/:eventGraphId."
+
+  - id: record-host
+    route: "/record/:recordId"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for record-host surface still owed — no live probe evidence for this host yet"
+    description: "Record host — record-by-id editor with thread-scoped chat; also served at /record/new/:nodeType/:parentId?."
+
+  - id: artifact-host
+    route: "/artifact/:kind/:artifactId"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for artifact-host surface still owed — no live probe evidence for this host yet"
+    description: "Artifact host — artifact viewer with thread-scoped chat."
+
+  - id: registry-host
+    route: "/registry"
+    panes:
+      - ai-chat
+    context:
+      scope_source: loaded-record-id
+    gate:
+      leg: null
+      reason: "Browser gate for registry-host surface still owed — no live probe evidence for this host yet"
+    description: "Registry host — record registry with chat on the scratch thread scope."
+
+  - id: claims-collection
+    route: "/claims"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for claims-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Claim collection — lists claim records grouped into active and retracted operational status views."
+
+  - id: graph-search
+    route: "/find"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for graph-search surface still owed — no live probe evidence for this surface yet"
+    description: "Graph search — natural-language master search over the knowledge graph with plate and table results."
+
+  - id: lab-collection
+    route: "/lab"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for lab-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Lab collection — category-navigated inventory of protocols, materials, labware, equipment, people and documents."
+
+  - id: literature-list
+    route: "/literature"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for literature-list surface still owed — no live probe evidence for this surface yet"
+    description: "Literature page — literature intake funnel rendered inside the app shell with its chat panel slot."
+
+  - id: projects-collection
+    route: "/projects"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for projects-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Project collection — single-column searchable, sortable chip list of all study records."
+
+  - id: runs-collection
+    route: "/runs"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for runs-collection surface still owed — no live probe evidence for this surface yet"
+    description: "Run collection — two-column grid of runs across studies with status tabs, filtering and sorting."
+
+  - id: sequences-list
+    route: "/sequences"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for sequences-list surface still owed — no live probe evidence for this surface yet"
+    description: "Sequences page — editor, assay, analysis, setup and import tabs over sequence records."
+
+  - id: settings
+    route: "/settings"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for settings surface still owed — no live probe evidence for this surface yet"
+    description: "Settings — off-nav settings form rendered inside the app shell."
+
+  - id: splash
+    route: "/splash"
+    panes:
+      - collection-list
+    context:
+      scope_source: none
+    gate:
+      leg: null
+      reason: "Browser gate for splash surface still owed — no live probe evidence for this surface yet"
+    description: "Splash — new-tab landing surface hosting the splash search page in the left pane."
+
+  - id: deck-host
+    route: "/deck/:eventGraphId/:runId?"
+    panes:
+      - ai-chat
+      - deck
+    requires:
+      providers: [deck]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for deck-host surface still owed — no live probe evidence for this host yet"
+    description: "Deck host — standalone top-level tab rendering an event-graph deck with the deck chat slice in the right pane."
+
+  - id: project-event-graph
+    route: "/project/:studyId/event-graph/:eventGraphId"
+    panes:
+      - ai-chat
+      - deck
+    requires:
+      providers: [deck, workspace]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for project-event-graph surface still owed — no live probe evidence for this host yet"
+    description: "Project event graph — project workspace opening a deck tab for the named graph with chat in the right pane."
+
+  - id: record-create
+    route: "/record/new/:nodeType/:parentId?"
+    panes:
+      - ai-chat
+    requires:
+      providers: [workspace]
+    context:
+      scope_source: route-param
+    gate:
+      leg: null
+      reason: "Browser gate for record-create surface still owed — no live probe evidence for this host yet"
+    description: "Record create — record creation panel in its own tab inside the workspace shell with thread-scoped chat."

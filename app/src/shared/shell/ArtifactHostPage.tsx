@@ -7,7 +7,7 @@
  * for the blob URL).
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { WorkspaceTabStrip } from './WorkspaceTabStrip'
@@ -22,6 +22,32 @@ import { ViewerToolbar } from '../../event-editor/viewer/ViewerToolbar'
 import { apiClient } from '../../shared/api/client'
 import type { Artifact } from '../../types/artifact'
 import type { WorkspaceTab } from '../../event-editor/workspace/types'
+import { SurfaceChatBridge } from './SurfaceChatBridge'
+import type { AiContext } from '../../types/aiContext'
+
+/**
+ * L2-CHAT-UI-1 LEG C3: the artifact host's universal chat. Renders nothing
+ * (SurfaceChatBridge); RightPane's panelSlot?.chat arm shows
+ * HarnessChatPane. Thread-scoped on the artifactId — one conversation per
+ * artifact, so switching /artifact/<kind>/<id> re-keys the chat.
+ */
+function ArtifactSurfaceChat({ artifact, kind, artifactId }: {
+  artifact: Artifact
+  kind: string
+  artifactId: string
+}) {
+  const aiContext = useMemo<AiContext>(() => ({
+    surface: 'analysis',
+    summary: `${kind === 'pdf' ? 'PDF' : 'Document'} artifact — ${artifact.title ?? artifactId} (study ${artifact.studyId})`,
+    surfaceContext: {
+      studyId: artifact.studyId,
+      artifactId,
+      artifactKind: kind,
+      mode: kind === 'pdf' ? 'pdf-viewer' : 'document-editor',
+    },
+  }), [artifact, kind, artifactId])
+  return <SurfaceChatBridge host="artifact-host" base={{ context: aiContext, scope: artifactId }} />
+}
 
 export function ArtifactHostPage() {
   const { kind, artifactId } = useParams<{ kind: string; artifactId: string }>()
@@ -111,6 +137,10 @@ export function ArtifactHostPage() {
 
   return (
     <WorkspaceProvider studyId={studyId}>
+      {/* L2-CHAT-UI-1 LEG C3: universal chat registrar (renders nothing).
+          Mounted only on the loaded branch — the missing-param / error /
+          loading early-returns render no RightPane at all. */}
+      <ArtifactSurfaceChat artifact={artifact} kind={kind} artifactId={artifactId} />
       <AppShell
         brand={title}
         layout="workspace"

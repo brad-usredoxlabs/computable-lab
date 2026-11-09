@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { clarificationsFromUnresolvedFacts } from './shorthandChat.js';
+import { canonicalLabelKey } from '../materials/termId.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
@@ -53,11 +54,16 @@ describe('SH-QA-3 P1 PAYLOAD BAR: no card offers a prose sentence as a mintable 
       }
     }
     for (const sentence of sentences) {
-      const card = requests.find((r) => r.query === sentence)!;
+      // D3 (ruling l2t1430 §3 read path (i)): `query` rides the canonical
+      // display string (STAGE B identity form) — match the card on the
+      // identity form, and assert the prompt names that SAME token (not the
+      // raw sentence). The raw label survives on `unresolvedFact.label`.
+      const card = requests.find((r) => r.query === canonicalLabelKey(sentence))!;
       expect(card.allowCreateLocal, `sentence card must refuse mint: ${sentence}`).toBe(false);
       expect(card.prompt, `prompt clause dropped: ${sentence}`).not.toContain('or create a local term');
       // The QUESTION survives — the card still names the label and its reason.
-      expect(card.prompt).toContain(sentence);
+      expect(card.prompt).toContain(canonicalLabelKey(sentence));
+      expect(card.unresolvedFact!.label).toBe(sentence);
       expect(card.unresolvedFact!.reason).toBe('unknown-noun');
     }
   });
@@ -82,7 +88,11 @@ describe('SH-QA-3 P1 PAYLOAD BAR: no card offers a prose sentence as a mintable 
     expect(request.allowCreateLocal, 'canonical sentence card must refuse mint').toBe(false);
     expect(request.prompt).not.toContain('or create a local term');
     // The QUESTION survives — refusal is the affordance, never the ask.
-    expect(request.prompt).toContain(canonical);
+    // D3 (ruling l2t1430 §3 read path (i)): the prompt names the label in its
+    // IDENTITY FORM (STAGE B, `canonicalLabelKey`) — the raw sentence survives
+    // on `unresolvedFact.label`.
+    expect(request.prompt).toContain(canonicalLabelKey(canonical));
+    expect(request.unresolvedFact!.label).toBe(canonical);
     expect(request.unresolvedFact!.reason).toBe('unknown-noun');
   });
 

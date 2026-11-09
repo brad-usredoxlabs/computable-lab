@@ -291,7 +291,7 @@ export function ProposedGraphModal({
 
           {readOnly.length > 0 ? (
             <section className="proposed-graph__section" data-testid="term-context-section">
-              <h4 className="proposed-graph__heading">Ontology terms (already local)</h4>
+              <h4 className="proposed-graph__heading">Local terms already created</h4>
               <ul className="proposed-graph__terms proposed-graph__terms--readonly">
                 {readOnly.map((b) => (
                   <li key={b.curie} className="proposed-graph__term">

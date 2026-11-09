@@ -1,0 +1,12 @@
+npm notice run npx
+npm notice run 'vitest' run src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-DATADUP-l2t2245/server
+
+ ✓ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts  (5 tests) 254ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  00:41:55
+   Duration  1.03s (transform 94ms, setup 0ms, collect 170ms, tests 254ms, environment 0ms, prepare 74ms)
+

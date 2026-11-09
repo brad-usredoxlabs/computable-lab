@@ -126,7 +126,10 @@ describe('ChangesPanel styling hooks (PROTO-AI-14 F1)', () => {
 // 215px. The shorthand stays VISIBLE (spec'd affordance: the verbatim document
 // above the proposal) — capped and internally scrollable, never hidden.
 describe('Shorthand containment on the clarification pane (CHANGES-UI-1 DEFECT 1)', () => {
-  const aiCssSource = readFileSync(resolve(surfaceDir, 'ai.css'), 'utf8')
+  // LEG D: the dead-chrome pins in this describe (the questions-section scroll
+  // + the QuestionsPanel source check) were pruned — those selectors/components
+  // died with AiTabPanel and are removed by the §3-step-8 dead-CSS sweep. The
+  // ALIVE pins (the ChangesPanel.css shorthand bounding) remain below.
 
   /** Pull one rule's declaration block out of a CSS source by selector. */
   function ruleBlock(css: string, selector: string): string {
@@ -157,36 +160,13 @@ describe('Shorthand containment on the clarification pane (CHANGES-UI-1 DEFECT 1
     expect(block).not.toMatch(/overflow:\s*hidden/)
   })
 
-  it('the questions flow has exactly ONE scroll region — the section owns it (merge-reconciled)', () => {
-    // Two branches fixed the same sliver defect differently. CHANGES-UI-1
-    // (lane 1, cd9cb57b) pinned an INNER list scroll (list flex:1 1 auto +
-    // overflow-y:auto, section not scrolling). The :5174 universal-pane fix
-    // (f0bb0cd3, "questions section owns the scroll") moved the scroll UP to
-    // .ai-tab__section--questions and made the list content-sized — one
-    // scroll, the section's, never nested. The unified tree keeps the
-    // f0bb0cd3 doctrine; CHANGES-UI-1's actual DEFECT-1 remedy (the BOUNDED
-    // shorthand above) is asserted by the two rules before this one and is
-    // unchanged. Pin BOTH halves of the merged contract: the section scrolls,
-    // the list renders in full inside it.
-    const sectionBlock = ruleBlock(aiCssSource, '.ai-tab__section--questions')
-    expect(sectionBlock, 'section must own the scroll').toMatch(/overflow-y:\s*auto/)
-    expect(sectionBlock).toMatch(/overscroll-behavior:\s*contain/)
-    const block = ruleBlock(aiCssSource, '.questions-panel__list')
-    expect(block).toMatch(/flex:\s*0\s*0\s*auto/)
-    expect(block).toMatch(/min-height:\s*0/)
-    // Content-sized: never an inner scroll competing with the section's.
-    expect(block).not.toMatch(/overflow-y:\s*auto/)
-  })
-
-  it('the clarification view renders the SAME bounded shorthand component (one rendering home)', () => {
-    // DEFECT 1 lives in the shared block, so the fix must land on the shared
-    // component — QuestionsPanel renders ChangesPanel's ShorthandView, it does
-    // not grow a second shorthand grammar with its own sizing.
-    const questionsSource = readFileSync(resolve(surfaceDir, 'QuestionsPanel.tsx'), 'utf8')
-    expect(questionsSource).toContain('ShorthandView')
-    expect(questionsSource).toContain("from './ChangesPanel'")
-    expect(questionsSource).not.toMatch(/questions-panel__shorthand/)
-  })
+  // LEG D: two dead-chrome pins pruned from this describe — 'the questions flow
+  // has exactly ONE scroll region' (pinned .ai-tab__section--questions +
+  // .questions-panel__list, both dead AiTabPanel/QuestionsPanel chrome,
+  // zero-consumer, removed by the §3-step-8 dead-CSS sweep) and 'the
+  // clarification view renders the SAME bounded shorthand component' (read the
+  // now-deleted QuestionsPanel.tsx source). The alive shorthand-bounding pins
+  // above remain.
 })
 
 // ── CHANGES-UI-1 (D): the changes list must scroll INSIDE the pane ──────────
@@ -199,7 +179,10 @@ describe('Shorthand containment on the clarification pane (CHANGES-UI-1 DEFECT 1
 // `.changes-panel__diff` is the single scrolling region with the actions bar
 // pinned outside it.
 describe('ChangesPanel scroll containment (CHANGES-UI-1 D)', () => {
-  const aiCssSource = readFileSync(resolve(surfaceDir, 'ai.css'), 'utf8')
+  // LEG D: the dead-chrome pin 'ai.css gives the changes section the
+  // --questions flex treatment' (pinned .ai-tab__section--changes — dead
+  // AiTabPanel chrome, zero-consumer, removed by the §3-step-8 dead-CSS sweep)
+  // was pruned. The alive ChangesPanel.css scroll pins remain below.
 
   /** Pull one rule's declaration block out of a CSS source by selector. */
   function ruleBlock(css: string, selector: string): string {
@@ -209,14 +192,6 @@ describe('ChangesPanel scroll containment (CHANGES-UI-1 D)', () => {
     const close = css.indexOf('}', open)
     return css.slice(open + 1, close)
   }
-
-  it('ai.css gives the changes section the --questions flex treatment (flex:1, min-height:0)', () => {
-    const block = ruleBlock(aiCssSource, '.ai-tab__section--changes')
-    expect(block).toMatch(/flex:\s*1/)
-    expect(block).toMatch(/min-height:\s*0/)
-    expect(block).toMatch(/display:\s*flex/)
-    expect(block).toMatch(/flex-direction:\s*column/)
-  })
 
   it('.changes-panel fills its section as a flex column (mirrors .questions-panel)', () => {
     const block = ruleBlock(cssSource, '.changes-panel')

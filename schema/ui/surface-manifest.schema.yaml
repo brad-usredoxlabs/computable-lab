@@ -1,0 +1,95 @@
+# Surface Manifest Schema v1.0
+# Defines the structure for the UI surface manifest (config/ui/surfaces.yaml)
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/ui/surface-manifest.schema.yaml"
+title: "Surface Manifest Schema"
+description: "Schema for the surface manifest — declares pane vocabulary and routed surfaces."
+type: "object"
+
+required:
+- manifestVersion
+- paneVocabulary
+- surfaces
+
+additionalProperties: false
+
+properties:
+  manifestVersion:
+    type: "string"
+    description: "Semantic version of the manifest format."
+
+  paneVocabulary:
+    type: "array"
+    description: "Closed vocabulary of pane identifiers used across surfaces."
+    items:
+      type: "string"
+    uniqueItems: true
+    minItems: 1
+
+  surfaces:
+    type: "array"
+    uniqueItems: true
+    description: "Routed surfaces, each with its pane composition and context."
+    items:
+      type: "object"
+      required:
+      - id
+      - route
+      - panes
+      additionalProperties: false
+      properties:
+        id:
+          type: "string"
+          description: "Machine surface id (must match AiSurface union)."
+        route:
+          type: "string"
+          description: "Primary route pattern (from App.tsx)."
+        panes:
+          type: "array"
+          description: "Pane ids from the paneVocabulary mounted in this surface."
+          items:
+            type: "string"
+          minItems: 1
+        requires:
+          type: "object"
+          additionalProperties: false
+          properties:
+            providers:
+              type: "array"
+              items:
+                type: "string"
+                enum: [deck, workspace, protocol-selection]
+            records:
+              type: "array"
+              items:
+                type: "string"
+            endpoints:
+              type: "array"
+              items:
+                type: "string"
+        context:
+          type: "object"
+          additionalProperties: false
+          properties:
+            scope_source:
+              type: "string"
+              enum: [loaded-record-id, route-param, none]
+              description: "How the surface scopes its context."
+            settles_within_ms:
+              type: "integer"
+              minimum: 0
+              description: "Expected ms for context to settle."
+        gate:
+          type: "object"
+          additionalProperties: false
+          properties:
+            leg:
+              type: ["string", "null"]
+              description: "Lane journey leg id, or null when not yet available."
+            reason:
+              type: "string"
+              description: "Prose reason for the gate state."
+        description:
+          type: "string"
+          description: "Prose description of the surface — not read by any rule."

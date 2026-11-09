@@ -253,6 +253,28 @@ function argumentPresent(raw: unknown): boolean {
   if (typeof raw === 'string') return raw.trim().length > 0;
   if (Array.isArray(raw)) return raw.length > 0;
   if (typeof raw === 'number') return Number.isFinite(raw);
+  // L2-CLARIFY-TARGET-1 Change 4a (architect ruling l2t2230, RULING (a)): one
+  // SHAPE arm (not a name arm) — a plain OBJECT is PRESENT iff it carries a
+  // finite numeric `value` AND a non-empty-string `unit`. Generic quantity-object
+  // recognition (e.g. a stated `volume: { value, unit }`); `volume: {}` stays
+  // ABSENT. A bare number already passes the number arm above (consistent with
+  // the bare-numeric-volume-as-uL lowering at simpleVerbs.ts). NO unit
+  // validation, NO conversion here — unit honesty stays in the lowering (which
+  // derives volumeUl only for a literal 'uL'); a stated non-uL object still
+  // counts as STATED. Zero arg/verb NAME literals.
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    !Array.isArray(raw)
+  ) {
+    const obj = raw as Record<string, unknown>;
+    return (
+      typeof obj.value === 'number' &&
+      Number.isFinite(obj.value) &&
+      typeof obj.unit === 'string' &&
+      obj.unit.trim().length > 0
+    );
+  }
   return false;
 }
 
@@ -268,7 +290,16 @@ export function requiredArgumentClarifications(
       // field decides eligibility (data), never a per-verb table.
       if (contract.kind === 'scalar') continue;
       if (contract.required !== true) continue;
-      if (argumentPresent(fields[contract.name])) continue;
+      // L2-CLARIFY-TARGET-1 Change 4a (ruling l2t2230 (a)): a contract is
+      // PRESENT when its own field passes argumentPresent OR any name in the
+      // DECLARED satisfiedBy alias list (DATA) passes argumentPresent. Zero name
+      // literals — the alias names come from the contract, never from TS.
+      const present =
+        argumentPresent(fields[contract.name]) ||
+        (contract.satisfiedBy ?? []).some((alias) =>
+          argumentPresent(fields[alias]),
+        );
+      if (present) continue;
       out.push({
         label: contract.name,
         reason: MISSING_REQUIRED_ARGUMENT_REASON,
@@ -512,22 +543,27 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       );
 
       // SH-QA-1 resolution-aware firing gate: a gated producer fact is MOOT
-      // exactly when the engine bound its slot (resolve-vs-mint is known
-      // HERE, post-resolve — normalize could not know it at raise time).
+      // exactly when the engine bound its slot TO A RECORD DECLARING A
+      // TESTABLE FORMULATION (resolve-vs-mint is known HERE, post-resolve —
+      // normalize could not know it at raise time).
+      // D5-1: binding alone is not enough — a bind to a bare concept/record
+      // with no formulation leaves the blob fact UNRESOLVED, so the fact
+      // survives (the pre-D5-1 "bound key => drop" arm silently un-fired it).
       // The join is the §5.1 machinery verbatim: a binding occupies its slot
-      // key; a gated fact is dropped iff its identityKey is a bound SLOT key.
+      // key; a gated fact is dropped iff its identityKey is a bound SLOT key
+      // whose binding carries formulationDeclared === true.
       // A gated fact WITHOUT slot identity (no actionLocation) is KEPT —
       // never silently dropped. Zero verb/arg/domain/reason NAME literals:
       // this switches on engine output + identity keys only.
-      const boundSlotKeys = new Set<string>();
+      const boundSlotKeys = new Map<string, BoundNoun>();
       for (const binding of bindings) {
-        if (binding.actionIndex !== undefined) boundSlotKeys.add(identityKey(binding));
+        if (binding.actionIndex !== undefined) boundSlotKeys.set(identityKey(binding), binding);
       }
       const gatedSurvivors = (deps.resolutionGatedClarifications ?? [])
         .filter((fact) => {
           const loc = fact.actionLocation;
           if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
-          return !boundSlotKeys.has(identityKey(fact));
+          return boundSlotKeys.get(identityKey(fact))?.formulationDeclared !== true;
         })
         .map((fact) => ({ ...fact }));
 

@@ -156,6 +156,9 @@ export interface WorkspaceActionCompilerDeps {
   resolveSpine: ActionSpineLike;
   /** Reuse the declarative surfaces registry (server/src/surfaces/surfaces.ts). */
   surfaces: SurfacesRegistry;
+  /** SEQ-ANSWER-CONTRACT-1 u2r2 ruling: the requesting turn's surface.
+   *  ABSENT means "caller has no turn surface" → no MISSING_TARGET diagnostic. */
+  requestingSurface?: string;
   /** Existence checks for record targets + protocol steps. Read-only use. */
   store: RecordStore;
   /**
@@ -648,6 +651,25 @@ export async function compileWorkspaceAction(
       diagnostics: [{
         code: 'UNSUPPORTED_SURFACE',
         message: 'An open-surface action requires a `surface` naming a registered surface id.',
+      }],
+    };
+  }
+
+  // SEQ-ANSWER-CONTRACT-1 u2r2: same-surface target-less open-surface is
+  // MISSING_TARGET — the user is already there, so a target is required.
+  // Only fires when NO target is supplied; a target makes it a valid nav.
+  if (verb === 'open-surface'
+      && proposalObj.target === undefined
+      && deps.requestingSurface !== undefined
+      && surface === deps.requestingSurface) {
+    const entry = deps.surfaces.get(surface);
+    const declared = entry?.tabs ?? [];
+    return {
+      ok: false,
+      diagnostics: [{
+        code: 'MISSING_TARGET',
+        message: `The surface "${surface}" is the one you are already viewing (${declared.length > 0 ? `it declares tabs: ${declared.join(', ')}` : 'it declares no tabs'}). Include a target to navigate within it.`,
+        term: surface,
       }],
     };
   }

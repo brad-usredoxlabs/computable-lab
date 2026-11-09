@@ -24,6 +24,7 @@ import { evaluateCandidateEligibility, type CandidateEligibility } from './eligi
 import type { MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
+import { isWellAddressLiteral } from '../scientistIntent/normalizeScientistIntent.js';
 import type {
   BoundNoun,
   Clarification,
@@ -58,6 +59,15 @@ function dedupeByCurie(candidates: readonly RankedCandidate[]): RankedCandidate[
 function mintAffordances(candidates: readonly RankedCandidate[]): RankedCandidate[] {
   return candidates.filter((c) => c.tier === 5 || !c.curie);
 }
+
+/** The engine's OWN stable unknown-noun reason code — the single shared
+ *  source (advc-c1 D3, fix1). Emitted in resolveNoun's fall-through arm
+ *  below (`clarificationFor(req, UNKNOWN_NOUN_REASON, mints)`) and named in
+ *  the REASON_SPECIFICITY_ORDER precedence table (clarificationDedupe.ts);
+ *  the A2 slot-coverage gate (nounCoverage.ts) re-exports it as
+ *  UNBOUND_SLOT_REASON rather than declaring a third literal. The code's
+ *  BYTES are unchanged (`'unknown-noun'`). */
+export const UNKNOWN_NOUN_REASON = 'unknown-noun' as const;
 
 /** MINT-FLOOR-UI-1 — keyed collapse of IDENTICAL mint affordances. The two
  *  spine-gathering strategies (symbolic_label + ontology_resolution) each
@@ -175,6 +185,7 @@ function bindingFor(req: ResolutionRequest, candidate: RankedCandidate): BoundNo
     confidence: confidenceOf(candidate),
     source: candidate.source,
     ...(req.actionIndex !== undefined ? { actionIndex: req.actionIndex } : {}),
+    ...(candidate.formulationDeclared ? { formulationDeclared: candidate.formulationDeclared } : {}),
   };
 }
 
@@ -399,7 +410,7 @@ export async function resolveNoun(
   } else if (req.declared.kind === 'wells') {
     clarifications.push(clarificationFor(req, 'unknown-address', []));
   } else {
-    const clarification = clarificationFor(req, 'unknown-noun', mints);
+    const clarification = clarificationFor(req, UNKNOWN_NOUN_REASON, mints);
     if (deps.termsForSuggestions) {
       const suggestions = nearMissSuggestions(req.label, await deps.termsForSuggestions());
       if (suggestions.length > 0) {
@@ -505,6 +516,21 @@ export async function resolveScientistIntentNouns(
       // Scalar arm (byte-identical behavior to pre-Stage-B): non-string values
       // of a non-many arg stay invisible to the door.
       if (typeof raw !== 'string' || raw.trim().length === 0) continue;
+
+      // TARGET-1 WELLS DOOR (ruling l2t2310, option (i) SHAPE-GATED): a
+      // kind:'wells' scalar that IS a well-ADDRESS literal is not a noun to be
+      // resolved — the address rides verbatim to the lowering, which expands it
+      // through the ONE parser (expandWellTokens) into per-well events. Spine-
+      // routing it would bar a real address as `unknown-address`: a false bar
+      // with no fix the user can give, and NOT a silent drop (the value still
+      // reaches the lowering). The gate is shape-based only
+      // (isWellAddressLiteral = expandWellTokens + WELL_ADDRESS_SHAPE_RE, the
+      // SAME test the (b) arm uses): SYMBOLIC labels (control_well, bogus_role)
+      // still ride the door's role-address arm and still bar `unknown-address`
+      // on a miss; a BOGUS address (A1:ZZ99) is not address-shaped, so it still
+      // enters the door and bars — the bar for genuinely bogus addresses
+      // survives. Zero field names, zero verb names, zero new policy literals.
+      if (contract.kind === 'wells' && isWellAddressLiteral(raw.trim())) continue;
 
       const outcome = await resolveNoun(requestFor(verb, index, contract, fields, raw.trim(), deps), vocab, deps);
       bindings.push(...outcome.bindings);

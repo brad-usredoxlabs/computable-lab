@@ -1,0 +1,494 @@
+[
+  {
+    "turn": "T1-unobtainium",
+    "SYNTH": false,
+    "noun": "unobtainium",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => clean",
+      "armB add_material.material => clean"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T2-phlogiston",
+    "SYNTH": false,
+    "noun": "phlogiston",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => clean",
+      "armB add_material.material => clean"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T4-canonical-four-term",
+    "SYNTH": false,
+    "noun": "Trypsin-EDTA",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 12 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 12 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv) | RANKING (ambiguous-noun; 9 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T4-canonical-four-term",
+    "SYNTH": false,
+    "noun": "DMEM",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 10 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 10 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-dmem-ykg0, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 10 candidates, 2 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-dmem-ykg0, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T4-canonical-four-term",
+    "SYNTH": false,
+    "noun": "FBS",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-fbs-3776, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 11 candidates, 2 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-fbs-3776, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T4-canonical-four-term",
+    "SYNTH": false,
+    "noun": "HepG2 cells",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 12 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T4-canonical-four-term",
+    "SYNTH": false,
+    "noun": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+    "spine_candidates": 9,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 9 candidates, 1 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 9 candidates, 1 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-dmem-fbs-he-1om4) | RANKING (ambiguous-noun; 8 candidates, 1 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-dmem-fbs-he-1om4)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T5-vendor-spelled-four-term",
+    "SYNTH": false,
+    "noun": "Thermo trypsin-EDTA",
+    "spine_candidates": 8,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 8 candidates, 4 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 8 candidates, 4 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv) | RANKING (ambiguous-noun; 4 candidates, 1 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T5-vendor-spelled-four-term",
+    "SYNTH": false,
+    "noun": "Thermo DMEM",
+    "spine_candidates": 17,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 17 candidates, 5 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 17 candidates, 5 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 12 candidates, 2 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T5-vendor-spelled-four-term",
+    "SYNTH": false,
+    "noun": "Thermo FBS",
+    "spine_candidates": 7,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 7 candidates, 3 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 7 candidates, 3 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv) | RANKING (ambiguous-noun; 4 candidates, 1 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T5-vendor-spelled-four-term",
+    "SYNTH": false,
+    "noun": "HepG2 cells",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 12 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T5-vendor-spelled-four-term",
+    "SYNTH": false,
+    "noun": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+    "spine_candidates": 5,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 5 candidates, 1 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 5 candidates, 1 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-thermo-trypsin-edta-ther-1tuz) | RANKING (ambiguous-noun; 4 candidates, 1 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-thermo-trypsin-edta-ther-1tuz)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T6-ratio-blob",
+    "SYNTH": false,
+    "noun": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul",
+    "spine_candidates": 1,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => WRONG-BIND (composition shape ratio-fraction in \"50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul\" bound as ONE material record local:MAT-50-50-trypsin-edta-dmem--vkwl level=concept — a composition is never a single material)",
+      "armB add_material.material => WRONG-BIND (composition shape ratio-fraction in \"50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul\" bound as ONE material record local:MAT-50-50-trypsin-edta-dmem--vkwl level=concept — a composition is never a single material)"
+    ],
+    "bound_A": [
+      "local:MAT-50-50-trypsin-edta-dmem--vkwl"
+    ],
+    "bound_B": [
+      "local:MAT-50-50-trypsin-edta-dmem--vkwl"
+    ]
+  },
+  {
+    "turn": "T6-ratio-blob",
+    "SYNTH": false,
+    "noun": "50/50 Trypsin-EDTA/DMEM",
+    "spine_candidates": 1,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => WRONG-BIND (bound local:MAT-50-50-trypsin-edta-dmem--vkwl level=concept label \"50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul\" != spoken noun \"50/50 Trypsin-EDTA/DMEM\")",
+      "armB add_material.material => WRONG-BIND (bound local:MAT-50-50-trypsin-edta-dmem--vkwl level=concept label \"50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul\" != spoken noun \"50/50 Trypsin-EDTA/DMEM\")"
+    ],
+    "bound_A": [
+      "local:MAT-50-50-trypsin-edta-dmem--vkwl"
+    ],
+    "bound_B": [
+      "local:MAT-50-50-trypsin-edta-dmem--vkwl"
+    ]
+  },
+  {
+    "turn": "T7-expanded-names",
+    "SYNTH": false,
+    "noun": "Dulbecco's Modified Eagle's Medium",
+    "spine_candidates": 2,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 2 candidates, 2 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 2 candidates, 2 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-XCO-0000988) | WRONG-BIND (bound local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3 level=spec label \"Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells\" != spoken noun \"Dulbecco's Modified Eagle's Medium\") | ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-XCO-0000988) | LOCAL-SUPPRESSION (other arm bound; this arm clarified instead — bind verdict not PASS)"
+    ],
+    "bound_A": [
+      "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+    ],
+    "bound_B": []
+  },
+  {
+    "turn": "T7-expanded-names",
+    "SYNTH": false,
+    "noun": "Fetal bovine serum",
+    "spine_candidates": 2,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 2 candidates, 2 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 2 candidates, 2 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-fetal-bovine-serum-1s1s) | WRONG-BIND (bound local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3 level=spec label \"Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells\" != spoken noun \"Fetal bovine serum\") | ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-fetal-bovine-serum-1s1s) | LOCAL-SUPPRESSION (other arm bound; this arm clarified instead — bind verdict not PASS)"
+    ],
+    "bound_A": [
+      "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+    ],
+    "bound_B": []
+  },
+  {
+    "turn": "T7-expanded-names",
+    "SYNTH": false,
+    "noun": "HepG2 cells",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 12 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T7-expanded-names",
+    "SYNTH": false,
+    "noun": "Trypsin-EDTA",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 12 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 12 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv) | RANKING (ambiguous-noun; 9 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T7-expanded-names",
+    "SYNTH": false,
+    "noun": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+    "spine_candidates": 1,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => clean",
+      "armB add_material.material => clean",
+      "armA wash.material => ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)",
+      "armB wash.material => LOCAL-SUPPRESSION (other arm bound; this arm clarified instead — bind verdict not PASS)"
+    ],
+    "bound_A": [
+      "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3",
+      "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+    ],
+    "bound_B": [
+      "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+    ]
+  },
+  {
+    "turn": "T8-level-mismatch-probe",
+    "SYNTH": false,
+    "noun": "Trypsin-EDTA",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv) | RANKING (ambiguous-noun; 9 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-trypsin-edta-100w, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-XCO-QA-TRYPSIN, local:MAT-thermo-trypsin-edta-1fqu, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T8-level-mismatch-probe",
+    "SYNTH": false,
+    "noun": "DMEM",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA wash.material => LEVEL-FILTERING (local:MAT-dmem-ykg0, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 10 candidates, 2 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-dmem-ykg0, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-dmem-1vq1, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-50-50-12i0, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T8-level-mismatch-probe",
+    "SYNTH": false,
+    "noun": "FBS",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA wash.material => LEVEL-FILTERING (local:MAT-fbs-3776, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 11 candidates, 2 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-fbs-3776, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-fbs-1qbj, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T8-level-mismatch-probe",
+    "SYNTH": false,
+    "noun": "HepG2 cells",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 12 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "T9-known-vendor-product",
+    "SYNTH": false,
+    "noun": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+    "spine_candidates": 2,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 2 candidates, 1 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 2 candidates, 1 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl) | ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl) | LOCAL-SUPPRESSION (other arm bound; this arm clarified instead — bind verdict not PASS) | NO-GATE (shape token(s) vendor-display-suffix in \"Hep G2 [HEPG2] - HB-8065 | ATCC\"; unknown-noun + mint offered, no shipped declared gate matched)"
+    ],
+    "bound_A": [
+      "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB"
+    ],
+    "bound_B": []
+  },
+  {
+    "turn": "T9-known-vendor-product",
+    "SYNTH": false,
+    "noun": "HB-8065",
+    "spine_candidates": 2,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 2 candidates, 1 distinct labels)",
+      "armB add_material.material => LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl) | WRONG-BIND (bound local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB level=vendor-product label \"Hep G2 [HEPG2] - HB-8065 | ATCC\" != spoken noun \"HB-8065\") | ELIG-UNSUPPRESSION (this arm bound where the other arm clarified — bind PASS on a level the other arm rejected)",
+      "armB wash.material => LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)"
+    ],
+    "bound_A": [
+      "local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB"
+    ],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case2-prime",
+    "SYNTH": true,
+    "noun": "Hep G2 [HEPG2] - HB-9999 | ATCC",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => NO-GATE (shape token(s) vendor-display-suffix in \"Hep G2 [HEPG2] - HB-9999 | ATCC\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armB add_material.material => NO-GATE (shape token(s) vendor-display-suffix in \"Hep G2 [HEPG2] - HB-9999 | ATCC\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armA wash.material => NO-GATE (shape token(s) vendor-display-suffix in \"Hep G2 [HEPG2] - HB-9999 | ATCC\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armB wash.material => NO-GATE (shape token(s) vendor-display-suffix in \"Hep G2 [HEPG2] - HB-9999 | ATCC\"; unknown-noun + mint offered, no shipped declared gate matched)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case2-prime",
+    "SYNTH": true,
+    "noun": "HB-9999",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => clean",
+      "armB add_material.material => LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)",
+      "armA wash.material => clean",
+      "armB wash.material => LOCAL-SUPPRESSION (AC-3 catalog-scope gate: shape matched, ALL gathering skipped, zero candidates carried)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case3-bottle",
+    "SYNTH": true,
+    "noun": "HepG2 bottle, lot LOT-20261103",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => NO-GATE (shape token(s) bottle-lot in \"HepG2 bottle, lot LOT-20261103\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armB add_material.material => NO-GATE (shape token(s) bottle-lot in \"HepG2 bottle, lot LOT-20261103\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armA wash.material => NO-GATE (shape token(s) bottle-lot in \"HepG2 bottle, lot LOT-20261103\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armB wash.material => NO-GATE (shape token(s) bottle-lot in \"HepG2 bottle, lot LOT-20261103\"; unknown-noun + mint offered, no shipped declared gate matched)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case3-bottle",
+    "SYNTH": true,
+    "noun": "HepG2",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 11 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 11 distinct labels)",
+      "armA wash.material => LEVEL-FILTERING (local:MAT-MESH-D056945, local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru) | RANKING (ambiguous-noun; 10 candidates, 3 distinct labels)",
+      "armB wash.material => LEVEL-FILTERING (local:MAT-MESH-D056945, local:MAT-hepg2-cells-4oys, local:MAT-50-50-trypsin-edta-dmem--vkwl, local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl, local:MAT-thermo-trypsin-edta-ther-1lj9, local:MAT-thermo-trypsin-edta-ther-1tuz, local:MAT-thermo-trypsin-edta-ther-apdv, local:MAT-trypsin-edta-dmem-10-fbs-v511, local:MAT-trypsin-edta-dmem-fbs-he-1om4, local:MAT-trypsin-edta-thermo-dmem-tnru)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case6-make-1mL",
+    "SYNTH": true,
+    "noun": "10% FBS in DMEM",
+    "spine_candidates": 0,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => NO-GATE (shape token(s) recipe-composition in \"10% FBS in DMEM\"; unknown-noun + mint offered, no shipped declared gate matched)",
+      "armB add_material.material => NO-GATE (shape token(s) recipe-composition in \"10% FBS in DMEM\"; unknown-noun + mint offered, no shipped declared gate matched)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case6-make-1mL",
+    "SYNTH": true,
+    "noun": "FBS",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 9 distinct labels)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case6-make-1mL",
+    "SYNTH": true,
+    "noun": "DMEM",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 10 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 10 distinct labels)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  },
+  {
+    "turn": "SYNTH-case6-make-1mL",
+    "SYNTH": true,
+    "noun": "HepG2",
+    "spine_candidates": 20,
+    "suppressed": 0,
+    "arms": [
+      "armA add_material.material => RANKING (ambiguous-noun; 20 candidates, 11 distinct labels)",
+      "armB add_material.material => RANKING (ambiguous-noun; 20 candidates, 11 distinct labels)"
+    ],
+    "bound_A": [],
+    "bound_B": []
+  }
+]

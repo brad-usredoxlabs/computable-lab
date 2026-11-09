@@ -381,6 +381,24 @@ export interface MaterialProfile {
   quick_add: string[]
 }
 
+/**
+ * L2-CLARIFY-PICKER-1 P1 — the declared candidate-ranking policy for the
+ * material clarification picker (app-side mirror of the server's
+ * `CandidateRanking`). DATA: family rank integers + can-be-default flags + the
+ * contains-section label template, served on GET /materials/profiles. Absent
+ * from the response when the registry declares none (never synthesized) — the
+ * comparator then keeps its resolver-emitted order (no fallback table).
+ */
+export interface CandidateRankingFamily {
+  rank: number
+  canBeDefault: boolean
+}
+
+export interface CandidateRanking {
+  containsSectionLabel: string
+  families: Record<string, CandidateRankingFamily>
+}
+
 export interface MaterialSearchItem {
   recordId: string
   kind: string
@@ -2988,7 +3006,17 @@ export const apiClient = {
   },
 
 
-  async listMaterialProfiles(): Promise<{ version: number; profiles: MaterialProfile[] }> {
+  /**
+   * L2-CLARIFY-PICKER-1 OQ1: the response carries the declared
+   * `candidateRanking` policy when the registry declares it — ABSENT
+   * (never synthesized, never undefined) when it does not. The app-side
+   * comparator (slashMenu/policy.ts) reads it from this one cached GET.
+   */
+  async listMaterialProfiles(): Promise<{
+    version: number
+    profiles: MaterialProfile[]
+    candidateRanking?: CandidateRanking
+  }> {
     return request('/materials/profiles')
   },
 
@@ -3619,7 +3647,9 @@ export const apiClient = {
     })
   },
 
-  async runIngestionJob(id: string, body: { source?: CreateIngestionJobRequest['source']; enableThinking?: boolean }): Promise<IngestionJobDetail> {
+  // The server reads every field as optional (`request.body?.source`), so the
+  // body is optional here too — the job runs with its record's own defaults.
+  async runIngestionJob(id: string, body: { source?: CreateIngestionJobRequest['source']; enableThinking?: boolean } = {}): Promise<IngestionJobDetail> {
     return request<IngestionJobDetail>(`/ingestion/jobs/${encodeURIComponent(id)}/run`, {
       method: 'POST',
       body: JSON.stringify(body),

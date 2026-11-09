@@ -285,6 +285,37 @@ export interface AiClarificationRequest {
    * to it (see SlashResolverContext.materialLayer). Set by the server's gate.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+  /**
+   * L2-CLARIFY-TARGET-1 (Change 2) — the assumed-value control the CARD /
+   * preview bar renders for a declared quantity/wells slot, mirrored from the
+   * server's AgentClarificationRequest. The app holds NO policy: it renders
+   * the DATA-sourced value and the approved number the scientist enters.
+   * Absent when the server stamps none (no declaration).
+   */
+  clarifyControl?:
+    | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
+    | { kind: 'wells'; question: string }
+  /**
+   * L2-CLARIFY-CARD-1 (defect 5, ruling l2t1951 Q1) — the VERBATIM
+   * ScientistIntentUnresolvedFact this card maps, mirrored from the server's
+   * AgentClarificationRequest.unresolvedFact (set unconditionally on the
+   * shorthand path, shorthandChat.ts:1013). `label` is REQUIRED on the server
+   * type (scientistIntent/types.ts:117), so whenever the fact is present its
+   * label is present. This is the RAW provenance label (human case) — the
+   * mint input seeds from it, NOT from `query` (the canonical DISPLAY form the
+   * D3 fold produced; feeding the fold back as the durable title is what
+   * ruling §2 rule 3 forbids). Optional: absent when the server stamps no
+   * fact (non-shorthand requests) — key ABSENT via a conditional spread, never
+   * `undefined` (eopt discipline). A PURE structural mirror (label/reason/
+   * candidates/actionLocation ride through untouched); the client SELECTS the
+   * raw field, it never transforms case.
+   */
+  unresolvedFact?: {
+    label: string
+    reason: string
+    candidates?: Array<{ label: string; confidence?: number; ref?: string }>
+    actionLocation?: { actionIndex?: number; action?: string; argument?: string }
+  }
 }
 
 export interface AiClarificationAnswer {
@@ -544,6 +575,15 @@ export interface AiAgentResult {
   recordCreations?: AiRecordCreation[]
   /** Place the created record on the bench in the same turn (explicit, never implied). */
   alsoPlace?: AiAlsoPlace
+  /**
+   * L2-CHAT-1: resolved placement offers — labware hints the deterministic
+   * pipeline bound against REAL inventory records (REVISE-GHOST-1 fix3,
+   * AssistDraftResult's resolved arm). The universal ghost mount ghosts a
+   * PLACEMENT of the existing record (keyed by recordId, never a
+   * re-creation). Absent on payloads that carried no offers (key ABSENT,
+   * never undefined).
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   ontologyBindings?: DraftOntologyBinding[]
@@ -556,6 +596,17 @@ export interface AiAgentResult {
     turns?: number
     toolCalls?: number
   }
+  /**
+   * SHORTHAND-CHAT (intent: event_shorthand): the scientist-intent shorthand
+   * document the model emitted, carried VERBATIM — byte-identical to what the
+   * deterministic compiler parsed. The universal chat pane renders it
+   * verbatim in the assistant turn's intent card (L2-CHAT-UI-1 LEG A).
+   * Mirror of server/src/ai/types.ts AgentResult.shorthand (the same POST
+   * /ai/assist/stream done payload). exactOptionalPropertyTypes: every
+   * emission/ride site uses the conditional-spread idiom — key ABSENT when
+   * the turn carried no shorthand, never `undefined`.
+   */
+  shorthand?: string
 }
 
 export interface AiAssuranceFinding {
@@ -615,6 +666,23 @@ export interface ChatMessage {
   clarification?: AiClarification
   /** Typed clarification cards that can be answered with menu-backed refs. */
   clarificationRequests?: AiClarificationRequest[]
+  /**
+   * L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice): set ONLY
+   * by the thread hydrate (useAiChat's getThread restore) on a message that
+   * came back from a RELOAD, not produced live in this session. ChatLog uses
+   * it to render NEITHER the picker NOR the option buttons for a historical
+   * card turn — the answer inputs belong to live staged cards only. A restored
+   * menu-backed clarifier (options: [], menuProvider '/l'/'/m') otherwise
+   * falls into ChatLog's legacy block arm and mounts the real
+   * ClarificationPicker, whose search input ALWAYS renders (only the popover
+   * is open-gated) — the gate's 8 bare <input placeholder="Search labware…">
+   * boxes with no question. Live turns carry no `restored` flag and render
+   * byte-unchanged. Keying on this explicit marker (not `streamEvents`
+   * presence, not an id prefix) suppresses ONLY thread-restored turns: a live
+   * legacy-only turn that never populates `clarificationRequests` still
+   * renders its answerable inputs.
+   */
+  restored?: boolean
   /** Proposed concrete labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
   /** Proposed generic/constrained labware requirements from the AI */
@@ -634,6 +702,29 @@ export interface ChatMessage {
    * without this field is an incomplete (prompt, step, graph) training pair.
    */
   consumedContext?: Record<string, unknown>
+  /**
+   * L2-CHAT-UI-1 LEG A (A2/A3): the scientist-intent shorthand document the
+   * done payload carried for this assistant turn (server AgentResult.shorthand,
+   * the same POST /ai/assist/stream), ridden verbatim — key ABSENT when the
+   * turn carried no shorthand, never `undefined` (the conditional-spread
+   * idiom the server uses at every emission site). The universal chat pane
+   * renders it in the intent card; the thread persist/hydrate pair forwards
+   * it through `metadata.shorthand` so the card survives a reload.
+   */
+  shorthand?: string
+  /**
+   * L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2): the requestId-keyed
+   * structured answers this USER message recorded — the SAME
+   * `AiClarificationAnswer[]` shape that rides the wire (`aiClient.ts:45`,
+   * `:142`). Persisted as `metadata.clarificationAnswers` so a cold reload can
+   * (a) render the compact Answered row and (b) RE-SEND the answered requestIds
+   * on subsequent sends of the same thread, letting the shipped server drop
+   * (`AgentOrchestrator.ts:3085-3098`, P9a-pinned) close the re-open leg with
+   * ZERO server change. Keyed on requestId ONLY — never prose, never a regex
+   * over the question. Conditional-spread idiom: key ABSENT when the turn
+   * carried no structured answers, never `undefined`.
+   */
+  clarificationAnswers?: AiClarificationAnswer[]
 }
 
 export interface AiConversationMessage {

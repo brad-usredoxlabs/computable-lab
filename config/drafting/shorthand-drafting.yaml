@@ -9,7 +9,22 @@
 # workstate-composition.yaml precedent — presence-checked, never process-
 # cached); the orchestrator never branches on a surface-name literal (repo
 # rule #1).
-surfaces: [workspace.deck]
+# ANSWER-CHANNEL FIX: this list named `workspace.deck`, a surface id NO client
+# sends (the app's AiSurface union has `run-workspace` / `event-editor`; the
+# deck bridge posts `event-editor`). Consequence: surfaceDraftsShorthand() was
+# false for every live surface, which silently disabled the deterministic
+# clarification-answer fold, the repeat-ask ledger, the event_graph->shorthand
+# refusal and the no-model wall. The run chat (where the DMEM answer loop was
+# measured) posts `run-workspace`.
+#
+# BOTH event-drafting chat surfaces, because both are the same universal pane
+# over the same compiler and both were dead: `run-workspace` (the run workspace
+# chat) and `event-editor` (the /deck/:id deck chat — the surface this whole
+# SHORTHAND-CHAT campaign was authored for; its own test fixture called it "the
+# run chat (surface workspace.deck)" while no client ever sent that id).
+# Anything NOT listed here is told to draft RAW event JSON instead, and a model
+# that emits shorthand anyway raises a clarification that can never fold.
+surfaces: [run-workspace, event-editor]
 
 # SH-QA-3 (OQ1 ruling): the NOUN-SHAPE policy — what counts as a CURIE-worthy
 # lab term vs a prose sentence is DECLARED DATA, never a TypeScript branch and
@@ -71,3 +86,22 @@ nounShape:
   blobDetectPatterns:
     - "\\d+\\s*%|\\d+\\s*[:/xX×]\\s*\\d+"
     - "\\s(?:with|containing|including)\\s"
+
+# L2-CLARIFY-TARGET-1: the ASSUMED-VALUE policy. When the scientist's prompt states no quantity for
+# a declared quantity argument, the card offers THIS value as a visible assumption the scientist
+# approves or edits. Nothing is staged on an assumption. `source` is shown on the chip (title/
+# aria) — the value is never bare. `question` is the slot's wording (wording is data too, the
+# material-profile registration's own doctrine); placeholders: {label} {value} {unit} {verb}.
+assumedValues:
+  quantities:
+    - verb: add_material
+      argument: volumeUl
+      label: volume
+      value: 100
+      unit: uL
+      source: 'declared assumed-values policy (config/drafting/shorthand-drafting.yaml)'
+      question: 'How much {label}? The prompt states none — {value} {unit} is assumed; approve it or enter the amount.'
+  wells:
+    - verb: add_material
+      argument: targetWells
+      question: 'Which wells? Name a range (A2:B3) or pick wells on the deck.'

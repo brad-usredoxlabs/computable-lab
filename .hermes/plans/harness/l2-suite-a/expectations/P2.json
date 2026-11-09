@@ -1,0 +1,8 @@
+{
+  "prompt": 2,
+  "prompt_text": "Place a 96-well plate on the deck.",
+  "expectation_source": "spec per-prompt criteria P2: events>0 with a bound placement (events-bound arm) OR a card naming the plate candidate; a raw-label labwareId does NOT count (H1 post-merge contract). First targeted check: the verdict must be one of the trichotomy — the silent shape (success+zero+zero+no wall) is a FAIL (REVISE-GHOST-1).",
+  "verdict_in": ["events-bound", "cards"],
+  "outcome": "plate-placement",
+  "deterministic": false
+}

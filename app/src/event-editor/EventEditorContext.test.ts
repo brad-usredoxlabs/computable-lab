@@ -172,7 +172,7 @@ describe('preview context lifecycle across the cancel/re-prompt cycle (SH-QC-1 T
       type: 'set_preview',
       preview: { ...ghostPreview('lbw-cycle2', 'pl-preview-cycle2', boundEvents('LBW-96-1')), previewLabwares: {}, previewPlacements: [] },
     })
-    const index = buildPreviewWellIndex(cycle2.preview)
+    const index = buildPreviewWellIndex(cycle2.preview, [])
     expect([...(index.byLabware.get('LBW-96-1') ?? [])].length).toBe(96)
     expect(index.eventsByLabware.get('LBW-96-1')!.length).toBe(96)
   })

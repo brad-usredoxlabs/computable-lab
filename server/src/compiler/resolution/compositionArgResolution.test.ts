@@ -35,7 +35,7 @@ import { parseScientistIntent, ScientistIntentValidationError } from '../scienti
 import { compileScientistIntent } from '../scientistIntent/compileScientistIntent.js';
 import { normalizeScientistIntent, MIXTURE_BLOB_MATERIAL_REASON } from '../scientistIntent/normalizeScientistIntent.js';
 import { liftScientistIntent } from '../scientistIntent/liftScientistIntent.js';
-import { loadScientistIntentVocabulary, defaultScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
+import { loadScientistIntentVocabulary, defaultScientistIntentVocabulary, formatArgDomain } from '../scientistIntent/vocabulary.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 import { resolveScientistIntentNouns } from './resolutionEngine.js';
@@ -492,7 +492,7 @@ describe('comp4.t7-vocabulary-declaration', () => {
     const block = vocab.contractBlock();
     for (const verb of vocab.verbs()) {
       const expectedArgs = vocab.argContracts(verb)
-        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${formatArgDomain(a.domain)})` : ''}`)
         .join(', ');
       const line = block.split('\n').find((l) => l.startsWith(`- ${verb}`))!;
       expect(line).toBe(expectedArgs ? `- ${verb} — ${expectedArgs}` : `- ${verb}`);

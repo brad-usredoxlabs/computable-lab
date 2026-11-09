@@ -1,0 +1,133 @@
+npm notice run npx
+npm notice run 'vitest' run src/ai/AgentOrchestrator.readingCardAnswer.test.ts
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/L2-INTENTID-REDRAFT-1-lane2/server
+
+ ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts  (6 tests | 3 failed) 403ms
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > RED (wire gap): the reading answer reaches the §14.2 RECORD leg via scientistAnswers — the fraction bar settles, ZERO model calls on the answer turn
+     → expected the fold leg to consume the turn; logs:
+[agent fj6eje] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent fj6eje] skipping compiler preflight for forced draft tool mode
+[agent fj6eje] tools=1 docDiscussion=false maxTurns=2
+[agent fj6eje] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent fj6eje] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"fj6eje","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":124,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent fj6eje] done event_shorthand success=true events=0 clarifications=2 elapsedMs=124
+[agent 8wb148] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=378 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=2
+[agent 8wb148] skipping compiler preflight for forced draft tool mode
+[agent 8wb148] tools=1 docDiscussion=false maxTurns=2
+[agent 8wb148] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent 8wb148] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"8wb148","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":63,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 8wb148] done event_shorthand success=true events=0 clarifications=2 elapsedMs=63: expected 2 to be 1 // Object.is equality
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > advc-c1 D2 (log honesty): a READING-ONLY batch logs the distinct recompile line — the folded line fires only when a real splice ran
+     → expected the recompile leg to consume the turn; logs:
+[agent evgrfm] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent evgrfm] skipping compiler preflight for forced draft tool mode
+[agent evgrfm] tools=1 docDiscussion=false maxTurns=2
+[agent evgrfm] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent evgrfm] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"evgrfm","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":54,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent evgrfm] done event_shorthand success=true events=0 clarifications=2 elapsedMs=54
+[agent fglrk5] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=242 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent fglrk5] skipping compiler preflight for forced draft tool mode
+[agent fglrk5] tools=1 docDiscussion=false maxTurns=2
+[agent fglrk5] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent fglrk5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"fglrk5","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":51,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent fglrk5] done event_shorthand success=true events=0 clarifications=2 elapsedMs=51: expected 2 to be 1 // Object.is equality
+   ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > honest-survivor characterization: a free-text role-gap answer splices the noun (the fold’s shipped carrier) and the bars re-derive honestly — zero model calls, no crash, no silent swallow
+     → expected 2 to be 1 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > RED (wire gap): the reading answer reaches the §14.2 RECORD leg via scientistAnswers — the fraction bar settles, ZERO model calls on the answer turn
+AssertionError: expected the fold leg to consume the turn; logs:
+[agent fj6eje] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent fj6eje] skipping compiler preflight for forced draft tool mode
+[agent fj6eje] tools=1 docDiscussion=false maxTurns=2
+[agent fj6eje] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent fj6eje] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"fj6eje","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":124,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent fj6eje] done event_shorthand success=true events=0 clarifications=2 elapsedMs=124
+[agent 8wb148] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=378 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=2
+[agent 8wb148] skipping compiler preflight for forced draft tool mode
+[agent 8wb148] tools=1 docDiscussion=false maxTurns=2
+[agent 8wb148] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent 8wb148] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"8wb148","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":63,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 8wb148] done event_shorthand success=true events=0 clarifications=2 elapsedMs=63: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts:247:103
+    245|     // (slot-not-string — its label names no entry) and the whole batc…
+    246|     // back to an extraction re-ask (callCount 2).
+    247|     expect(model.callCount(), `expected the fold leg to consume the tu…
+       |                                                                                                       ^
+    248| 
+    249|     // The fold succeeded on the REMAINING answers (the reading answer…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > advc-c1 D2 (log honesty): a READING-ONLY batch logs the distinct recompile line — the folded line fires only when a real splice ran
+AssertionError: expected the recompile leg to consume the turn; logs:
+[agent evgrfm] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent evgrfm] skipping compiler preflight for forced draft tool mode
+[agent evgrfm] tools=1 docDiscussion=false maxTurns=2
+[agent evgrfm] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent evgrfm] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"evgrfm","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":54,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent evgrfm] done event_shorthand success=true events=0 clarifications=2 elapsedMs=54
+[agent fglrk5] start surface=workspace.deck model=test-model promptLen=110 effectivePromptLen=242 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent fglrk5] skipping compiler preflight for forced draft tool mode
+[agent fglrk5] tools=1 docDiscussion=false maxTurns=2
+[agent fglrk5] turn 1 starting, promptChars=39153, docDiscussion=false
+[agent fglrk5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"fglrk5","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":51,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent fglrk5] done event_shorthand success=true events=0 clarifications=2 elapsedMs=51: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts:323:108
+    321| 
+    322|     // Deterministic leg consumed the turn: ZERO model calls.
+    323|     expect(model.callCount(), `expected the recompile leg to consume t…
+       |                                                                                                            ^
+    324|     expect(second.success).toBe(true);
+    325| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/ai/AgentOrchestrator.readingCardAnswer.test.ts > READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg > honest-survivor characterization: a free-text role-gap answer splices the noun (the fold’s shipped carrier) and the bars re-derive honestly — zero model calls, no crash, no silent swallow
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/ai/AgentOrchestrator.readingCardAnswer.test.ts:379:31
+    377|     // The reading answer is still excluded and the fold still consume…
+    378|     // turn deterministically (zero model calls).
+    379|     expect(model.callCount()).toBe(1);
+       |                               ^
+    380|     expect(second.success).toBe(true);
+    381|     // Honest visible state: the batch produced a deterministic re-com…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed (6)
+   Start at  11:45:57
+   Duration  4.14s (transform 820ms, setup 0ms, collect 1.35s, tests 403ms, environment 0ms, prepare 74ms)
+

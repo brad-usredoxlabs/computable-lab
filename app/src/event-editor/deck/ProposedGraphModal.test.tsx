@@ -33,7 +33,7 @@ describe('ProposedGraphModal ontology term review', () => {
     expect(screen.getByTestId('term-review-section')).toBeTruthy()
     expect(screen.getByTestId('term-row-CHEBI:5001')).toBeTruthy()
     expect(screen.getByTestId('term-row-NCIT:8765')).toBeTruthy()
-    // trusted binding grouped under the read-only "already local" section
+    // trusted binding grouped under the read-only "Local terms already created" section
     expect(screen.getByTestId('term-context-section')).toBeTruthy()
     expect(screen.getByText('CHEBI:16236')).toBeTruthy()
   })

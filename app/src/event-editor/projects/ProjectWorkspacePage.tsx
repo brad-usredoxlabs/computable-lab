@@ -22,7 +22,7 @@
  *   - 'document'        → <DocumentEditor /> + DocumentStateProvider
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from '../../shared/shell'
 import {
@@ -42,6 +42,9 @@ import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
+import { SurfaceChatBridge } from '../../shared/shell/SurfaceChatBridge'
+import { DeckChatSlice } from '../deck/DeckChatSlice'
+import type { AiContext } from '../../types/aiContext'
 import { ProjectCollectionView } from '../../collections/ProjectCollectionView'
 import { RunCollectionView } from '../../collections/RunCollectionView'
 import { LabCollectionView } from '../../collections/LabCollectionView'
@@ -74,12 +77,80 @@ export function ProjectWorkspacePage() {
   }
 
   return (
-    <WorkspaceProvider studyId={studyId}>
+    <WorkspaceProvider
+      studyId={studyId}
+      {...(eventGraphId ? { routeActivation: { tab: { id: `tab-deck-${eventGraphId}`, kind: 'deck', eventGraphId, title: eventGraphId, derived: true }, activate: true } } : {})}
+    >
+      {/* L2-CHAT-UI-1 LEG C4 (CHATHOST-CONSOLIDATE-1): the ONE registrar
+          (host="project-deck-tab"), page-level — renders nothing. */}
+      <ProjectWorkspaceDoor studyId={studyId} />
       <WorkspaceShellHost
         studyId={studyId}
         autoOpenEventGraphId={eventGraphId ?? null}
       />
     </WorkspaceProvider>
+  )
+}
+
+/**
+ * L2-CHAT-UI-1 LEG C4 (CHATHOST-CONSOLIDATE-1 retarget): the project
+ * workspace's universal chat — the ONE registrar (host="project-deck-tab").
+ * Reads the active workspace tab through the SAME WorkspaceContext the shell
+ * uses so the page-local context names what the user is looking at
+ * (homepage / deck / pdf / record editor …) and the thread scope is the
+ * studyId — one conversation per study. The deck slice (published by
+ * DeckChatSlice, INSIDE the page's EventEditorProvider) is OPTIONAL for this
+ * host (required_providers: [] in config/chat/chat-hosts.yaml): the
+ * page-level door registers on every tab, and the collector merges the deck
+ * slice in when it is published (a deck tab). Renders nothing; RightPane's
+ * panelSlot?.chat arm shows HarnessChatPane.
+ */
+function ProjectWorkspaceDoor({ studyId }: { studyId: string }) {
+  const ws = useWorkspace()
+  // L2-THREADSCOPE-FLIP-1 §3a scopePending hint: the route param is read in
+  // the parent (:61); re-read it here (same route) so this door can narrow
+  // the settle window without touching the collector.
+  const { eventGraphId } = useParams<{ eventGraphId?: string }>()
+  const activeTab = ws.state.activeTabId
+    ? ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
+    : null
+  const aiContext = useMemo<AiContext>(() => ({
+    surface: 'analysis',
+    summary: `Project workspace — study ${studyId}${activeTab ? `, active tab: ${activeTab.kind}` : ' (no tab open)'}`,
+    surfaceContext: {
+      studyId,
+      activeTabKind: activeTab?.kind ?? null,
+      ...(activeTab?.kind === 'pdf' || activeTab?.kind === 'document'
+        ? { activeArtifactId: activeTab.artifactId }
+        : {}),
+      ...(activeTab?.kind === 'deck' && activeTab.eventGraphId
+        ? { activeEventGraphId: activeTab.eventGraphId }
+        : {}),
+    },
+  }), [studyId, activeTab])
+  // CHATHOST-CONSOLIDATE-1: the door names itself (host="project-deck-tab")
+  // and the page-local context + thread scope (the studyId) go on `base`.
+  // The deck slice is OPTIONAL for this host — the page-level door registers
+  // even when no deck slice is published (a non-deck tab), and the collector
+  // merges the deck slice in when it is (a deck tab). The deck tab's
+  // DeckChatSlice (inside the EventEditorProvider) publishes into the SAME
+  // app-level slice store, so the page-level registrar — mounted ABOVE the
+  // provider — still sees it (the store, not a context: §9 bait #3).
+  // L2-THREADSCOPE-FLIP-1 §3a: `scopePending` narrows the settle window so
+  // this OPTIONAL-deck door does NOT hold hydration for the full 5 s deadline
+  // on a non-deck tab or a fresh (eventGraphId-less) canvas. Pending only
+  // while a deck record is named and not yet loaded:
+  //   !ws.ready                     — workspace state not loaded yet
+  //   eventGraphId != null          — route names a deck graph not yet loaded
+  //   deck tab + tab.eventGraphId   — the active deck tab names its graph
+  // (The route param is re-read in this door; the parent (:61) reads the same
+  //  route value. `ws` is the workspace context; `activeTab` its active tab.)
+  return (
+    <SurfaceChatBridge
+      host="project-deck-tab"
+      base={{ context: aiContext, scope: studyId }}
+      scopePending={!ws.ready || eventGraphId != null || (activeTab?.kind === 'deck' && activeTab.eventGraphId != null)}
+    />
   )
 }
 
@@ -146,7 +217,8 @@ function WorkspaceShellHost({
       kind: 'deck',
       eventGraphId: autoOpenEventGraphId,
       title: autoOpenEventGraphId,
-    })
+      derived: true,
+    }, true)
   })
 
   // Phase R: a bare /project/:id lands on the project homepage (project-details
@@ -225,6 +297,17 @@ function WorkspaceShellHost({
         {...(activeTab.runId ? { runId: activeTab.runId } : {})}
       >
         <FocusModalsProvider>
+          {/* CHATHOST-CONSOLIDATE-1: the project host has ONE registrar — the
+              page-level door (host="project-deck-tab") above.
+              The deck slice is PUBLISHED here (inside EventEditorProvider, where
+              it can read the real editor state) and the page-level registrar
+              collects it through the store (position-independent). On a deck tab
+              the deck slice is OPTIONAL for this host (config/chat/chat-hosts.yaml
+              optional_providers: [deck]) — the page-level door registers even on
+              a non-deck tab and the collector merges the deck slice in when the
+              active tab is a deck (the LEG-F fix: the page-level door no longer
+              stands down, it just gets the deck slice when there is one). */}
+          <DeckChatSlice />
           {shellContent}
           <ProtocolPreviewBridge />
         </FocusModalsProvider>

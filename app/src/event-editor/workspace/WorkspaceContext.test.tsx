@@ -20,8 +20,10 @@ import {
 import {
   defaultWorkspaceState,
   type WorkspaceState,
+  type WorkspaceTab,
 } from './types'
 import { useWorkspace, WorkspaceProvider } from './WorkspaceContext'
+import { useRef, useEffect } from 'react'
 
 afterEach(() => {
   cleanup()
@@ -202,5 +204,61 @@ describe('WorkspaceProvider', () => {
     )
     await waitFor(() => expect(screen.getByTestId('study').textContent).toBe('STU-000002'))
     expect(loadFn).toHaveBeenCalledWith('STU-000002')
+  })
+
+  /** RED pin for FIXTURE-BOARD ruling §Ruling 1-2:
+   * The first frame where ready === true must show the route-named tab,
+   * never the stale sidecar activeTabId. This test proves the flake
+   * (or validates the fix once the routeActivation prop is wired). */
+  it('routeActivation overrides stale sidecar activeTabId before first ready frame', async () => {
+    // Record every render frame where ready flips to true
+    const observedFrames: Array<{ ready: boolean; activeTabId: string | null }> = []
+    function FrameRecorder() {
+      const ws = useWorkspace()
+      const ref = useRef(observedFrames)
+      useEffect(() => {
+        ref.current.push({ ready: ws.ready, activeTabId: ws.state.activeTabId })
+      })
+      return null
+    }
+
+    // Sidecar returns a stale activeTabId (legacy tab)
+    const staleState: WorkspaceState = {
+      ...defaultWorkspaceState('STU-000001'),
+      tabs: [
+        { id: 'tab-deck-EVG-legacy', kind: 'deck', eventGraphId: 'EVG-legacy', title: 'EVG-legacy' },
+        { id: 'tab-deck-EVG-fixture', kind: 'deck', eventGraphId: 'EVG-fixture', title: 'EVG-fixture' },
+      ],
+      activeTabId: 'tab-deck-EVG-legacy', // stale — should NOT win first paint
+    }
+    const routeTab: WorkspaceTab = {
+      id: 'tab-deck-EVG-fixture',
+      kind: 'deck',
+      eventGraphId: 'EVG-fixture',
+      title: 'EVG-fixture',
+    }
+    const loadFn = vi.fn(async () => ({ state: staleState }))
+    const saveFn = vi.fn(async (_studyId: string, s: WorkspaceState) => ({ state: s }))
+
+    render(
+      <WorkspaceProvider
+        studyId="STU-000001"
+        loadFn={loadFn}
+        saveFn={saveFn}
+        saveDebounceMs={0}
+        routeActivation={{ tab: routeTab, activate: true }}
+      >
+        <FrameRecorder />
+      </WorkspaceProvider>,
+    )
+
+    await waitFor(() => {
+      const readyFrames = observedFrames.filter((f) => f.ready)
+      expect(readyFrames.length).toBeGreaterThan(0)
+      // The FIRST ready frame must NOT show the stale tab
+      expect(readyFrames[0].activeTabId).toBe('tab-deck-EVG-fixture')
+      // No ready frame should ever show the stale id
+      expect(readyFrames.some((f) => f.activeTabId === 'tab-deck-EVG-legacy')).toBe(false)
+    })
   })
 })

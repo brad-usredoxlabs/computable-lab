@@ -41,12 +41,13 @@ import {
   parseAlsoPlace,
   parseRecordCreations,
 } from './submitSuggestionTool.js';
-import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import { createMaterialLabeler, enrichAddMaterialRefs, enrichDraftResultEvents } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
-import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
+import { DRAFT_ARG_KEYS, draftArgDiagnostics, draftProducedNothingOnServer, emptyDraftMessage } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
+import { clarificationAskCount } from './clarificationLoopAsk.js';
 import { followUpForLayer } from './materialFollowUp.js';
 import { repairMintedLabelsAgainstUserWords } from './mintLabelFidelity.js';
 import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.js';
@@ -54,6 +55,7 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS, SHORTHAND_ARG_KEYS } from './coerceAgentIntent.js';
+import { deckLayoutChoiceWall, resolveDeckVariantFromText } from './deckLayoutResolution.js';
 import { ledgerAnswerText } from '../workspace-session/ledgerQuery.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import {
@@ -74,24 +76,41 @@ import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
+  carryShorthandIdentity,
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
   foldNullArm,
   dropSatisfiedFacts,
+  dropAnsweredRequestIds,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
+  emptyShorthandRepairPrompt,
   parseShorthandForChat,
+  factRequestId,
   shorthandResultFromCompile,
+  canonicalLabelsForFacts,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
   partitionReadingAnswers,
+  applySoleDeckPlacement,
   scientistAnswersFromReadingAnswers,
   answeredClarificationLabelsFromBatch,
   type AcceptedShorthandBinding,
   type AnsweredSlot,
+  type ShorthandCompileDeps,
 } from './shorthandChat.js';
+// L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the pre-compile EMISSION demotion
+// (AI path, upstream of the compile). Strips a present declared-quantity slot
+// the scientist's OWN turn never stated, so the existing declared machinery
+// (missing-required-argument sweep + assumed-value stamp) raises it
+// deterministically.
+import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
+// Canonical shorthand re-serialization (the carryShorthandIdentity /
+// foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
+import { stringify as stringifyShorthandYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
@@ -1017,6 +1036,16 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
   /**
+   * L2-SUITE-A-uifix2 FIX2 (D1) — the platform manifest registry
+   * (config/platforms/*.yaml via loadPlatformRegistry). The deck_layout
+   * model-output gap resolves a MISSING variantId against the platform's
+   * DECLARED variant TITLES (data, never a TS vocabulary list) and degrades
+   * a naming-miss to a plain-language choice wall built from those titles.
+   * Optional — omitted ⇒ a variantId-less deck_layout is an honest plain
+   * refusal (no jargon, no raw validator string).
+   */
+  platformRegistry?: import('../platform-registry/PlatformRegistry.js').PlatformRegistry;
+  /**
    * PB-CH-1 — the declarative work-surface registry
    * (schema/registry/surfaces/surfaces.yaml via loadDefaultSurfacesRegistry).
    * The workspace-action compiler checks surface MEMBERSHIP through it — never
@@ -1066,6 +1095,61 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   shadowRouter?: ShadowRouterConfig;
   /** fetch override (tests inject a spy); defaults to globalThis.fetch. */
   fetch?: typeof fetch;
+}
+
+
+/**
+ * GHOSTPAINT-1 Leg 2B: exported helper that wraps the fold-seam compile.
+ * Applies applySoleDeckPlacement to inject the sole deck placement's labwareId
+ * into well-bearing actions, then compiles deterministically.
+ * Shared by production (run() fold path) and tests.
+ * The optional deck parameter enables resolving the placement id to a deck
+ * name before injection so the compile's name-only lookup resolves it back
+ * to the record id — parity with the unfolded path (gp-fix4).
+ */
+export async function compileFoldedShorthand(
+  doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
+  placementLabwareIds: readonly string[],
+  deps: ShorthandCompileDeps,
+  deckLabwares?: readonly import('../ai/shorthandChat.js').DeckLabwareSummary[],
+): Promise<ScientistIntentCompileResult | null> {
+  const docForCompile = applySoleDeckPlacement(doc, placementLabwareIds, deckLabwares);
+  return compileShorthandDeterministically(docForCompile, deps);
+}
+
+/**
+ * L2-PROMPT2-SCIENCE-CHAIN-1: bind the fold-path's clarification answers onto
+ * the compile's events BEFORE shorthandResultFromCompile builds the result.
+ *
+ * The model path calls bindMaterialAnswersToEvents at :4388; the fold path
+ * had no such call — card picks were available (the client sends ref) but
+ * never written into composition_snapshot. This helper extracts the events,
+ * runs the production binder, and returns the events-wrapped compile result
+ * so the caller can feed it directly into shorthandResultFromCompile.
+ *
+ * On the fold path the held-fact requestIds are unresolved-c-* (not
+ * material-<n>), so the binder falls through to singleton or label-match
+ * resolution. That is correct — there is one add_material event per fold,
+ * and the snapshot entries carry labels that match the answer's label.
+ */
+export function bindFoldPicksOntoCompile(
+  compiled: import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult,
+  answers: readonly import('./types.js').AgentClarificationAnswer[] | undefined,
+): {
+  boundCompiled: import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult;
+  bound: import('./materialBinding.js').MaterialBinding[];
+  unbound: import('./types.js').AgentClarificationAnswer[];
+} {
+  const events = compiled.terminalArtifacts.events as unknown as Record<string, unknown>[];
+  const binding = bindMaterialAnswersToEvents(events, answers);
+  const boundCompiled = {
+    ...compiled,
+    terminalArtifacts: {
+      ...compiled.terminalArtifacts,
+      events: binding.events as unknown as typeof compiled.terminalArtifacts.events,
+    },
+  };
+  return { boundCompiled, bound: binding.bound, unbound: binding.unbound };
 }
 
 export function createAgentOrchestrator(
@@ -1285,7 +1369,49 @@ export function createAgentOrchestrator(
       const compliancePolicy = loadForcedToolCompliancePolicy(forcedToolCompliancePolicyPath ?? defaultForcedToolCompliancePolicyPath);
       let eventGraphRefusalAsked = false;
       let shorthandRepairAsked = false;
+      // L2-SUITE-A-uifix2 FIX2 (D4): the EMPTY-shorthand re-ask (distinct from
+      // shorthandRepairAsked, which is the schema-REJECTION re-ask). The on-box
+      // model sometimes emits intent=event_shorthand with NO shorthand YAML at
+      // all (junk envelope keys or a bare clarification). That model-output
+      // gap degrades honestly: a model-carried clarification becomes the
+      // answerable card (the model chose to ask), and otherwise ONE contract-
+      // quoting repair re-ask, then the honest last-resort failure.
+      let emptyShorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
+      // L2-INTENTID-REDRAFT-1 (spec §2): the ANSWER turn's identity-stability
+      // capture. The fold arm consumes the held intent (takeHeldShorthandIntent)
+      // and the fold-null arm re-holds it (one-shot) — so by the time the
+      // model re-extract returns (the event_shorthand handler below) the hold
+      // is ALREADY taken a SECOND time by the message builder and gone. The
+      // carried identity + the answered labels are captured ONCE at the
+      // fold-null else arm (before the consume) and read here by the model
+      // turn's result — a REUSE of held identity, never a second take() (which
+      // returns null and silently skips the carry). Absent (undefined) on
+      // every turn that is not the fold-null fallback: a FRESH ask and the
+      // fold-SUCCESS arm never set them, so the carry is answer-turn-only and
+      // never leaks onto a fresh mint.
+      let fallbackCarryIntentId: string | undefined;
+      let fallbackAnsweredLabels: readonly string[] = [];
+      // L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
+      // ledger seed for the mapper seams — the LIVE held-intent count
+      // (the fold seam; it outranks the wire channel because the re-hold
+      // below advances it in place) or the previous done result's ledger
+      // (context.loopAskCounts — the fold-free re-extraction seam: a
+      // non-1:1 answer drop consumes the hold and re-extracts, and without
+      // the wire channel the occurrence count would reset there and a
+      // paraphrase loop could never flip). Seeded on shorthand-surface
+      // turns only (the surface membership is the DATA
+      // surfaceDraftsShorthand reads — no surface-name literal here).
+      function h4AskCountSeed(): Record<string, number> | undefined {
+        if (!shorthandSurface) return undefined;
+        const heldSeed = takeHeldShorthandIntent(conversationKey);
+        if (heldSeed) {
+          const seed = heldSeed.loopAskCounts;
+          holdShorthandIntent(conversationKey, heldSeed); // peek: the fold arm takes it below
+          return seed;
+        }
+        return context?.loopAskCounts ? { ...context.loopAskCounts } : undefined;
+      }
 
       /**
        * SHORTHAND deck-context threading: the labware-hint lookup the frozen
@@ -1296,6 +1422,15 @@ export function createAgentOrchestrator(
        * everything else falls through to the store lookup byte-identically.
        */
       const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      // GHOSTPAINT-1 Leg 2B: extract distinct non-empty labware ids from
+      // deck placements (the request's carrier, NOT shorthandDeckLabwares) so
+      // the fold arm can inject the sole id into a well-bearing action before
+      // compile. Zero or multiple placements write nothing.
+      // gp-fix4: shorthandDeckLabwares also flows to compileFoldedShorthand so
+      // applySoleDeckPlacement resolves the placement id to the deck name.
+      const placementLabwareIds = Array.isArray(context?.deckPlacements)
+        ? context.deckPlacements.map(p => p?.labwareId).filter((v): v is string => typeof v === 'string' && v.length > 0)
+        : [];
       // REVISE-GHOST-1 (OQ-1 ruling): the conversation's accepted {label, ref}
       // bindings ride the NEXT compile as an EXACT-MATCH reuse hint (applied
       // at the ai/ seam inside compileShorthandDeterministically, BEFORE
@@ -1381,10 +1516,26 @@ export function createAgentOrchestrator(
             // the answer fold is where a binding becomes ACCEPTED.
             const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
             rememberAcceptedShorthandBindings(conversationKey, foldBindings);
-            const compiledFold = await compileShorthandDeterministically(folded.doc, {
+            // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
+            // placement's labwareId into well-bearing actions that carry no
+            // identity. The expander emits a top-level labwareId from
+            // params.labware, which the binder copies down into details.labwareId.
+            // gp-fix4: forward the deck so applySoleDeckPlacement can resolve
+            // the raw placement id to the deck name before injection.
+            const compiledFold = await compileFoldedShorthand(folded.doc, placementLabwareIds, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // WELLSET-RESOLVER-1 (report 3a/4d): the conversation's committed
+              // contents layer rides the recompile as priorLabState (the same
+              // cache the FIRST compile read — a recompile of the held intent
+              // must see the SAME ledger the original turn saw, plus this
+              // turn's document via the pending-draft layer). Conditional
+              // spread: the key is ABSENT, never undefined.
+              ...(() => {
+                const cached = getDefaultLabStateCache().get(conversationKey);
+                return cached ? { priorLabState: cached } : {};
+              })(),
               // READING-CARD-ANSWER-1: the reading answers ride the §14.2
               // RECORD leg as DATA (the IntentCompileFromPromptHandlers.ts
               // precedent — conditional spread, absent when the batch carries
@@ -1396,8 +1547,16 @@ export function createAgentOrchestrator(
                 const answeredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
                 return answeredLabels.length > 0 ? { answeredClarificationLabels: answeredLabels } : {};
               })(),
-            });
+            }, shorthandDeckLabwares);
             if (compiledFold) {
+              // WELLSET-RESOLVER-1 (the writer leg, fold arm): persist the
+              // recompile's snapshotAfter back to the cache (the same
+              // conversationKey the read above used) so a later turn sees the
+              // advanced contents ledger.
+              const foldSnapshotAfter = compiledFold.terminalArtifacts.labStateDelta?.snapshotAfter;
+              if (foldSnapshotAfter) {
+                getDefaultLabStateCache().put(conversationKey, foldSnapshotAfter);
+              }
               // advc-c1 D2 (log honesty): the folded line fires ONLY when a
               // real splice ran through `foldAnswersIntoShorthand`; the
               // reading-only batch took the deterministic RECOMPILE path
@@ -1434,21 +1593,80 @@ export function createAgentOrchestrator(
                 folded.doc,
               );
               if (survivingFacts.length > 0) {
+                // L2-FREEFORM-1 H4: the re-hold carries the ADVANCED ledger
+                // (the fold re-asked the surviving slots). The fold mapper
+                // below is seeded with the PRE-ask ledger (held.loopAskCounts
+                // — the value the held carried BEFORE this re-hold advanced
+                // it; the draft arm's h4Seed precedent) and advances it by
+                // this turn's surviving asks: the mapper's result ledger and
+                // this re-hold's ledger are the SAME prior+this-turn advance,
+                // so they agree. A slot that STILL bars after an answer is the
+                // 2nd occurrence of its requestId and escalates IN THE SAME
+                // TURN (OQ4, N=1). Byte-identical when nothing asked (the seed
+                // is absent, never undefined — the `answeredSlots`
+                // conditional-spread precedent on the hold).
                 holdShorthandIntent(conversationKey, {
                   yaml: folded.yaml,
                   doc: folded.doc,
                   clarifications: survivingFacts,
                   ...(ledger.length > 0 ? { answeredSlots: ledger } : {}),
+                  ...(survivingFacts.length > 0
+                    ? {
+                        loopAskCounts: clarificationAskCount(
+                          held.loopAskCounts,
+                          survivingFacts.map((fact) => factRequestId(fact)),
+                        ),
+                      }
+                    : {}),
                 });
               }
               // The result mapper sees the LEDGER-FILTERED facts: a closed
               // slot emits no card. The compile itself is untouched (the
               // frozen pipeline's output rides verbatim otherwise).
+              // L2-FREEFORM-1 H4: seed the fold mapper with the PRE-ask
+              // ledger (held.loopAskCounts — the value the held carried
+              // BEFORE the re-hold above advanced it; the draft arm's
+              // h4Seed precedent). The mapper advances it by this turn's
+              // surviving asks, so a slot that STILL bars (the 2nd
+              // occurrence of its requestId) escalates IN THE SAME TURN and
+              // the result's ledger matches the re-hold's (both advance the
+              // same prior by the same asks). Absent when the held carried
+              // no ledger (conditional spread — exactOptionalPropertyTypes:
+              // absent, never undefined).
+              const foldH4Seed = held.loopAskCounts;
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — the surviving facts' local-term record
+              // titles (STAGE A) via the store, built per call (never
+              // process-cached); absent store ⇒ empty map ⇒ STAGE B identity
+              // form for every surviving card.
+              const foldCanonicalLabels = await canonicalLabelsForFacts(survivingFacts, deps.store);
+              // L2-PROMPT2-SCIENCE-CHAIN-1: bind the clarification answers onto
+              // the compile's events so card picks land in composition_snapshot
+              // as record refs — the model path does this at :4388.
+              const foldBinding = bindFoldPicksOntoCompile(compiledFold, clarificationAnswers);
+              if (foldBinding.bound.length > 0) {
+                console.log(
+                  `[agent ${tid}] fold-path bound ${foldBinding.bound.length} material pick(s): ` +
+                    foldBinding.bound
+                      .map((b) => `event[${b.eventIndex}].${b.field}=${String((b.ref as Record<string, unknown>).id)} (${b.source})`)
+                      .join(', '),
+                );
+              }
+              if (foldBinding.unbound.length > 0) {
+                console.warn(
+                  `[agent ${tid}] fold-path ${foldBinding.unbound.length} clarification answer(s) could not be bound to an event: ` +
+                    foldBinding.unbound.map((a) => a.requestId).join(', '),
+                );
+              }
               const foldResult = shorthandResultFromCompile(
-                { ...compiledFold, clarifications: survivingFacts },
+                { ...foldBinding.boundCompiled, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
+                {
+                  ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}),
+                  canonicalLabels: foldCanonicalLabels,
+                },
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {
@@ -1466,6 +1684,17 @@ export function createAgentOrchestrator(
             // No 1:1 mapping — re-hold and let the loop re-extract with the
             // held document + answers as grounded context (extraction-only).
             holdShorthandIntent(conversationKey, held);
+            // L2-INTENTID-REDRAFT-1 (spec §2(b)): capture the HELD identity +
+            // the answered labels for the model re-extract's result, BEFORE
+            // the message builder re-takes (and consumes) the re-held intent.
+            // The carry re-arms the held identity at the answer turn's result
+            // (a REUSE — never a mint, never a guess); the labels ride the
+            // fallback recompile as DATA so the ANSWERED prompt is not
+            // re-offered (rider R1, the 422 / fold-arm precedent). Read here —
+            // the hold is one-shot and the model turn's result site has no
+            // hold left to take.
+            fallbackCarryIntentId = held.doc.intentId;
+            fallbackAnsweredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
             // ANSWER-FOLD-NULL-1 (Leg 1, additive-only): name WHICH null arm
             // tripped. The arm is RE-DERIVED by the pure mirror `foldNullArm`
             // (shorthandChat.ts, byte-mirror of the fold's guards) — the fold
@@ -1479,7 +1708,7 @@ export function createAgentOrchestrator(
               ? ` slotType=${armReport.slotType}`
               : '';
             console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${foldAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
-            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
+            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask (the held intentId is carried onto the answer turn's result; the answered labels ride the recompile so the answered prompt is not re-offered)`);
           }
         }
       }
@@ -1641,6 +1870,11 @@ export function createAgentOrchestrator(
       const compileResult = await awaitWithHeartbeat(
         runChatbotCompile({
           prompt: effectivePrompt,
+          // WELLSET-RESOLVER-1 / OQ-2 fold: bind the cache read/write to THIS
+          // conversation (the same deriveContextCacheKey derivation the held
+          // shorthand uses — one derivation, threaded verbatim). Without it
+          // the LabStateCache never fires on this surface.
+          conversationId: conversationKey,
           ...(attachments ? { attachments } : {}),
           ...(ctxMentions ? { mentions: ctxMentions } : {}),
           ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
@@ -1774,7 +2008,7 @@ export function createAgentOrchestrator(
 
         const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
 
-        const result: AgentResult = {
+        let result: AgentResult = {
           success: true,
           // Hold events on CONFIRM — never auto-return a draft needing confirmation.
           ...(shouldConfirm ? {} : { events }),
@@ -1795,6 +2029,20 @@ export function createAgentOrchestrator(
             toolCalls: 0,
           },
         };
+        // L2-FREEFORM-1 H5 (b): the CONFIRM arm never reached the draft-tool
+        // arm's empty guard — a CONFIRM hold whose blockers + gaps derived
+        // ZERO clarification requests used to exit success:true with every
+        // deliverable channel empty (server-silent). The extracted ONE
+        // server helper (the draft-tool arm's 7 channels, byte-identical)
+        // closes the bypass: the draft stays HELD (the guard never un-holds
+        // a proposal) and the empty shape carries the honest failure.
+        if (shouldConfirm && draftProducedNothingOnServer(result)) {
+          result = {
+            ...result,
+            error: emptyDraftMessage({ truncated: false, hadArguments: true }),
+          };
+          console.warn(`[agent ${tid}] ${result.error}`);
+        }
         return result;
       } else {
         // Pipeline produced no events and no gaps (or outcome is 'error') —
@@ -1928,6 +2176,15 @@ export function createAgentOrchestrator(
       // SH-QC-1S R1: renamed from `sequenceRepairAttempts` — the counter now
       // serves every DATA-listed forced-tool surface, not one surface.
       let forcedToolComplianceAttempts = 0;
+      // L2-DEGEN-RETRY-1 — the per-run ONE-retry budget for the mechanical
+      // degenerate signature (loop guard, NOT domain policy — the OQ3
+      // ruling: a code constant, exactly like `turn + 1 < effectiveMaxTurns`;
+      // moving it to YAML would make silent-off surfaces unconfigurable and
+      // invite a loop). Separate budget, separate class: the degenerate
+      // retry does NOT increment forcedToolComplianceAttempts (the nudge arm
+      // targets non-empty prose non-compliance — a different class).
+      let degenerateRetryConsumed = false;
+      let degenerateRecoveryLogged = false;
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -2180,6 +2437,149 @@ export function createAgentOrchestrator(
         }
 
         const assistantMsg = choice.message;
+
+        // L2-DEGEN-RETRY-1 — the mechanical degenerate signature, checked at
+        // the pre-coercion face: a forced-tool draft turn that ends
+        // finish=stop (the NORMALIZED value — a stream that ended with no
+        // finish_reason chunk reassembled to 'stop' above IS the degenerate
+        // shape) with EMPTY content and ZERO tool calls. Inline coercion of
+        // empty content is null by construction, so the four-part signature
+        // (stop + empty + no tool_calls + null coercion) already holds here.
+        // Keyed on ALL four quantities — NOT on finish=stop alone (the
+        // protocolEditRecovery stub is a stop turn with NON-EMPTY content and
+        // must not fire the signature) and NOT on contentLen>0 prose (the
+        // compliance nudge arm targets non-empty non-compliance — a different
+        // class; this signature PREEMPTS it on empty content, OQ1).
+        //
+        // Upstream degeneration is stochastic (the x6 regate-4 trail: the
+        // identical prompt returned a valid tool call seconds later), so the
+        // harness re-issues the SAME request exactly once. The dead attempt
+        // is NEVER pushed to `messages` (an empty assistant turn riding back
+        // is the pattern-completion fuel the echo guards fight) — the retry
+        // re-enters the loop top and rebuilds completionReq byte-identical
+        // from the same unmutated inputs. Temperature is deliberately
+        // unchanged (the task's own evidence: the identical prompt worked
+        // seconds later; forcing temp 0 would fight that).
+        //
+        // No provider/surface/model literal near this hook: the signature is
+        // mechanical, and provider identity resolves OFFLINE from the
+        // orproxy calls.log via the tid that already rides every
+        // `[agent ${tid}]` line (the task's correlation ruling — no new
+        // plumbing).
+        if (
+          !assistantMsg.tool_calls?.length
+          && forceDraftTool
+          && !isDocDiscussionTurn
+          && choice.finish_reason === 'stop'
+          && !(typeof assistantMsg.content === 'string' && assistantMsg.content.trim().length > 0)
+        ) {
+          if (degenerateRetryConsumed) {
+            // Second degeneracy: the one-retry budget is spent. Return the
+            // honest class text DIRECTLY and skip the slow coercion call
+            // entirely (leg 2 pins total call count 2 — a coercion `complete`
+            // would make it 3 and buys nothing on a double-degenerate). The
+            // class is the provider's, not the wording's — the text says so.
+            const degenerateError = emptyDraftMessage({
+              truncated: false,
+              hadArguments: false,
+              degenerateEmptyResponse: true,
+            });
+            console.warn(`[agent ${tid}] degenerate forced-tool response TWICE (stop + empty content + no tool calls) — the one-retry budget is spent; surfacing the honest class text and skipping the slow coercion call`);
+            onEvent?.({ type: 'error', message: degenerateError });
+            const elapsed = Date.now() - t0;
+            // Dead-attempt observability: the second (this) attempt's stats
+            // ride turnStats — the `turns` count reflects both attempts,
+            // log-traceable honesty (leg assertions are on client spy
+            // counts, not turn counts).
+            turnStats.push({
+              turn: turn + 1,
+              durationMs: Date.now() - turnStart,
+              finishReason: choice.finish_reason,
+              promptTokens: response.usage?.prompt_tokens ?? 0,
+              completionTokens: response.usage?.completion_tokens ?? 0,
+              tools: turnToolStats,
+            });
+            const summary: AgentSummary = {
+              traceId: tid,
+              surface: surfaceName,
+              model,
+              success: false,
+              elapsedMs: elapsed,
+              turns: turnStats,
+              totals: {
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+                promptTokens: totalUsage.promptTokens,
+                completionTokens: totalUsage.completionTokens,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+              },
+              resolvedMentions: resolvedMentionsCount,
+              bypass: null,
+              error: degenerateError,
+            };
+            logAgentSummary(tid, summary);
+            return {
+              success: false,
+              error: degenerateError,
+              usage: {
+                ...totalUsage,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+              },
+            };
+          }
+          if (turn + 1 < effectiveMaxTurns) {
+            // First degeneracy WITH a turn to spare: consume the budget,
+            // log, and re-issue the SAME request by continuing the loop
+            // WITHOUT pushing the dead assistant message. (Streamed events
+            // for the dead attempt — the transient status lines only, since
+            // forced-tool mode suppresses text_delta — are NOT retracted;
+            // the retry's own "AI request sent" status is self-explanatory
+            // in the pipe. Spec ruling: no new event kind.)
+            degenerateRetryConsumed = true;
+            turnStats.push({
+              turn: turn + 1,
+              durationMs: Date.now() - turnStart,
+              finishReason: choice.finish_reason,
+              promptTokens: response.usage?.prompt_tokens ?? 0,
+              completionTokens: response.usage?.completion_tokens ?? 0,
+              tools: turnToolStats,
+            });
+            console.log(`[agent ${tid}] degenerate forced-tool turn (stop + empty content + no tool calls) — re-issuing the request once`);
+            continue;
+          }
+          // Turn budget exhausted at the first signature (no retry possible
+          // — the loop would end on this turn anyway): fall through to the
+          // CURRENT path unchanged. Do NOT consume or block anything.
+        }
+
+        // L2-DEGEN-RETRY-1 recovery log (fix1): the signature fired earlier
+        // this run (the one-retry budget was consumed) AND this attempt is
+        // actually recoverable — it produced tool_calls OR non-blank content
+        // (the same quantities the four-part signature negates). The gate is
+        // on recoverability at this point, NOT on "did not reproduce the
+        // stop-empty signature": an empty non-stop attempt (finish=length +
+        // empty content + zero tool calls) is still a dead turn — it falls
+        // through to the slow coercion and the hard error below, and a
+        // FAILED run must not claim a recovery (DEFECT 2, fix1; OBS-4: the
+        // signature itself is NOT widened — this gates the log line only).
+        // The normal flow owns the outcome; this line names the recovery
+        // for the trace. The tid rides the prefix — provider identity
+        // resolves OFFLINE from the orproxy calls.log, never a provider
+        // literal in code.
+        if (
+          degenerateRetryConsumed
+          && !degenerateRecoveryLogged
+          && (
+            assistantMsg.tool_calls?.length
+            || (typeof assistantMsg.content === 'string' && assistantMsg.content.trim().length > 0)
+          )
+        ) {
+          degenerateRecoveryLogged = true;
+          console.log(`[agent ${tid}] degenerate-response recovered on retry`);
+        }
+
         messages.push(assistantMsg);
 
         const contentLen = typeof assistantMsg.content === 'string' ? assistantMsg.content.length : 0;
@@ -2459,7 +2859,15 @@ export function createAgentOrchestrator(
           };
           const result: AgentResult = isDocDiscussionTurn
             ? docDiscussionContent.trim().length > 0
-              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage }
+              // L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable
+              // marker — a doc-discussion prose answer is a deliverable, and
+              // without the marker the result (success, zero events, zero
+              // cards) is indistinguishable from a silent empty draft at the
+              // wire. The marker rides ONLY the success arm (the empty
+              // answer keeps its honest error and never rides it); the
+              // client's draftEmptiness predicate counts it (the ONE-term
+              // superset addition, drift pin updated the same commit).
+              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage, proseDeliverable: true }
               : {
                   success: false,
                   error: `Model returned an empty response (finish_reason=${choice.finish_reason ?? 'unknown'}). Try shortening the document or asking a more specific question.`,
@@ -2587,7 +2995,7 @@ export function createAgentOrchestrator(
             // VERBATIM on the chat clarification channel; well binding and
             // material grounding already live inside the frozen compile.
             if (agentIntent.intent === 'event_shorthand') {
-              const shorthandYaml = agentIntent.shorthand ?? '';
+              let shorthandYaml = agentIntent.shorthand ?? '';
               const elapsedSh = () => Date.now() - t0;
               const shorthandSummary = (res: AgentResult): void => {
                 const elapsed = elapsedSh();
@@ -2615,6 +3023,42 @@ export function createAgentOrchestrator(
               };
 
               if (!shorthandYaml.trim()) {
+                // L2-SUITE-A-uifix2 FIX2 (D4): the empty-shorthand model-output
+                // gap. The on-box model sometimes emits intent=event_shorthand
+                // with NO shorthand YAML (junk envelope keys, or a bare
+                // clarification). The generic "no usable draft arguments"
+                // sentence was the ONLY outcome — it threw away any
+                // clarification the model DID carry and never re-asked.
+                // Honest degradation, in order:
+                //   (a) model-carried clarification(s) → the answerable card
+                //       channel (the model chose to ask; the card is the
+                //       turn's deliverable — same shape as the
+                //       needs-clarification hold: success, zero events, cards);
+                //   (b) otherwise ONE contract-quoting repair re-ask (the
+                //       empty-document analogue of the schema-repair re-ask —
+                //       origin-based, same discipline);
+                //   (c) otherwise the honest last-resort failure.
+                const modelClarifications = parseClarificationRequests(submitArgs.clarificationRequests);
+                if (modelClarifications.length > 0) {
+                  onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+                  const cardRequests = modelClarifications.map((r) => ({ ...r, origin: 'model' as const }));
+                  const cardResult: AgentResult = {
+                    success: true,
+                    events: [],
+                    clarificationRequests: cardRequests,
+                  };
+                  const legacyCard = legacyClarificationFromRequests(cardRequests);
+                  if (legacyCard) cardResult.clarification = legacyCard;
+                  console.log(`[agent ${tid}] empty shorthand; model carried ${cardRequests.length} clarification(s) -> card channel (ids: ${cardRequests.map((r) => r.id).join(', ')})`);
+                  shorthandSummary(cardResult);
+                  return cardResult;
+                }
+                if (!emptyShorthandRepairAsked && turn + 1 < effectiveMaxTurns) {
+                  emptyShorthandRepairAsked = true;
+                  onEvent?.({ type: 'status', message: 'The draft document came back empty; asking the AI to re-emit it…' });
+                  messages.push({ role: 'user', content: emptyShorthandRepairPrompt(effectivePrompt) });
+                  continue;
+                }
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 const emptySh: AgentResult = {
                   success: false,
@@ -2649,6 +3093,76 @@ export function createAgentOrchestrator(
                 return malformedResult;
               }
 
+              // L2-INTENTID-REDRAFT-1 (spec §2(b)): the ANSWER turn's
+              // identity-carry, applied AFTER the model document is parsed
+              // (Ajv sole authority) and BEFORE the fallback recompile — so
+              // the recompile AND the result shorthand BOTH carry the held
+              // identity. ONLY on the fallback answer turn: the capture var is
+              // set exclusively by the fold-null else arm, so a FRESH ask (no
+              // hold) and the fold-SUCCESS arm (which re-serializes the held
+              // intentId verbatim) never reach this and the carry is a no-op.
+              // The held identity wins over the fresh id the sampler minted on
+              // the re-extracted blob (a REUSE — never a mint, never a guess);
+              // actions/unresolved are untouched (the sampler's re-extraction
+              // is otherwise authoritative). Identity field only — no
+              // event-shape / card-content change.
+              const carried = carryShorthandIdentity(shorthandDoc, fallbackCarryIntentId);
+              if (carried) {
+                shorthandDoc = carried.doc;
+                shorthandYaml = carried.yaml;
+                console.log(`[agent ${tid}] shorthand answer-turn identity carried: the fallback re-extract re-emitted a fresh intentId; the held identity ${JSON.stringify(fallbackCarryIntentId)} wins (reuse, not a mint) — the answer turn's result keeps the pre-answer card's identity`);
+              }
+
+              // L2-CLARIFY-TARGET-1 (RULING l2t1200 R1.2): the ONE seam.
+              // Between parseShorthandForChat (Ajv sole authority) and
+              // shorthandResultFromCompile: a present declared `kind:
+              // quantity` slot whose amount the scientist's OWN turn never
+              // stated is DEMOTED to absence (stripped from the parsed doc,
+              // re-serialized to the yaml the result rides), so the existing
+              // declared machinery — the missing-required-argument sweep +
+              // clarificationsFromUnresolvedFacts' assumed-value stamp —
+              // raises it DETERMINISTICALLY. The 6/10 "smuggled volumeUl: 100
+              // from the frozen few-shot" path: the model copied the number
+              // into the document, the sweep's presence test saw "present"
+              // and stayed silent, the chip never fired. Demote-then-strip
+              // makes the behaviour independent of the model omitting
+              // anything.
+              //
+              // ONE extractor (extractQuantity, reconcileDraftQuantities)
+              // adjudicates "stated" — this seam does not re-parse prose or
+              // write a second quantity grammar. The words are the request's
+              // OWN turn (prompt + appended clarification answers — the same
+              // string the draft was asked from), so a STATED volume
+              // ("Add 200 uL of DMEM to A1") is never stripped and the
+              // stated-volume control fires NO chip (R1.2: "never strip a
+              // volume the scientist actually stated").
+              //
+              // Disclosure rides the EXISTING reconcile-notes channel
+              // (extraSubmissionNotes — the :2830 / :3141 pattern). Compiler
+              // + goldens stay byte-identical BY CONSTRUCTION (R1.7): this
+              // is the AI path upstream of the compile; no MANIFEST treeState
+              // pin is touched.
+              // Skip demotion on the fallback answer-turn: the model re-extracted
+              // quantities in response to a clarification re-ask — trust them.
+              const demotion = fallbackCarryIntentId
+                ? { doc: shorthandDoc, demoted: [], notes: [] }
+                : demoteUnstatedQuantities(shorthandDoc, effectivePrompt);
+              if (demotion.demoted.length > 0) {
+                shorthandDoc = demotion.doc;
+                shorthandYaml = stringifyShorthandYaml({
+                  intentId: shorthandDoc.intentId,
+                  ...(typeof shorthandDoc.sourcePrompt === 'string'
+                    ? { sourcePrompt: shorthandDoc.sourcePrompt }
+                    : {}),
+                  actions: shorthandDoc.actions,
+                  unresolved: shorthandDoc.unresolved,
+                });
+                for (const note of demotion.notes) {
+                  extraSubmissionNotes.push(note);
+                  console.log(`[agent ${tid}] ${note}`);
+                }
+              }
+
               const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
                 ...(deps.store ? { store: deps.store } : {}),
                 ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
@@ -2657,7 +3171,44 @@ export function createAgentOrchestrator(
                 // ai/ seam, BEFORE resolution — bait 5: the chosen ref binds,
                 // nothing is minted for an already-bound label).
                 ...(shorthandReuseBindings.length > 0 ? { reuseBindings: shorthandReuseBindings } : {}),
+                // WELLSET-RESOLVER-1 (report 3a/4d): on the LIVE shorthand path
+                // the LabStateCache is otherwise dead in BOTH directions
+                // (runChatbotCompile — its only reader/writer — never runs in
+                // forced-tool mode). Read the conversation's committed contents
+                // layer with the SAME conversationKey the cache is keyed by
+                // (OQ-2 identity: one deriveContextCacheKey derivation, threaded
+                // verbatim) and hand it to the compile as priorLabState — the
+                // resolve_wellsets pass's committed ledger. Conditional spread:
+                // the key is ABSENT, never undefined.
+                ...(() => {
+                  const cached = getDefaultLabStateCache().get(conversationKey);
+                  return cached ? { priorLabState: cached } : {};
+                })(),
+                // L2-INTENTID-REDRAFT-1 (rider R1, OQ-1): on the extraction-only
+                // FALLBACK answer turn ONLY, the answered clarification LABELS
+                // ride the recompile as DATA (the 422 route + fold-arm precedent)
+                // so the ANSWERED prompt is not re-offered (the answered
+                // role-gap bar does not re-fire). Conditional spread: absent on
+                // a fresh turn and the fold-success arm (both leave
+                // fallbackAnsweredLabels empty), so every other caller is
+                // byte-identically unchanged. Labels-only per OQ-1: the
+                // reading bar re-settle needs scientistAnswers, which the
+                // re-extract answers do not structurally carry (they arrive as
+                // prose in the prompt) — flagged honestly in the report.
+                ...(fallbackAnsweredLabels.length > 0
+                  ? { answeredClarificationLabels: fallbackAnsweredLabels }
+                  : {}),
               });
+              // WELLSET-RESOLVER-1 (the writer leg): persist the compile's
+              // snapshotAfter back to the cache so the NEXT turn sees this
+              // turn's committed contents (the runChatbotCompile.ts:596-599
+              // writer equivalent, on the path that actually fires). Absent
+              // labStateDelta ⇒ nothing written (byte-unchanged for compiles
+              // that never fold lab state).
+              const shSnapshotAfter = compiledSh?.terminalArtifacts.labStateDelta?.snapshotAfter;
+              if (shSnapshotAfter) {
+                getDefaultLabStateCache().put(conversationKey, shSnapshotAfter);
+              }
               if (!compiledSh) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 const unwired = 'event_shorthand cannot compile: this orchestrator has no record store wired for the deterministic compiler spine.';
@@ -2667,21 +3218,97 @@ export function createAgentOrchestrator(
                 return unwiredResult;
               }
 
+              // CARD1-D2 (fix5 U2): the re-extract ANSWER turn's answered-fact
+              // drop. When the fold key flipped (eventGraphId null→real), the
+              // held intent is gone and the model re-extracted the SAME fact —
+              // re-derived here. Post-D3 its id is canonical-stable, so it
+              // matches the requestId the client already posted back in
+              // clarificationAnswers (on the wire). Drop it so the follow-up
+              // does not re-open a card for a fact this thread already
+              // answered. Gated on the answer turn (clarificationAnswers
+              // present) so a FRESH ask is byte-identically unchanged (free to
+              // ask); keyed ONLY on the on-wire requestId set — never prose,
+              // never a regex over the question. A fact the thread did NOT
+              // answer keeps its id out of the set and survives. Applied
+              // BEFORE the hold / canonical-labels / result sites so all three
+              // see the same surviving facts.
+              if (Array.isArray(clarificationAnswers) && clarificationAnswers.length > 0) {
+                const answeredIds = new Set(
+                  clarificationAnswers
+                    .map((a) => (typeof a.requestId === 'string' ? a.requestId : ''))
+                    .filter((id) => id.length > 0),
+                );
+                const survivors = dropAnsweredRequestIds(compiledSh.clarifications, answeredIds);
+                if (survivors.length !== compiledSh.clarifications.length) {
+                  const dropped = compiledSh.clarifications.length - survivors.length;
+                  console.log(`[agent ${tid}] D2 re-extract drop: dropped ${dropped} re-derived fact(s) the same thread already answered (requestId on the wire; canonical-stable post-D3) — the follow-up will not re-open their card(s)`);
+                  compiledSh.clarifications = survivors;
+                }
+              }
+
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
+              // L2-FREEFORM-1 H4 (OQ4 ruling): seed the requestId-identity
+              // loop detector BEFORE the hold — the held intent's live count
+              // or the previous done result's wire ledger. On a
+              // needs-clarification hold the ADVANCED ledger (prior + this
+              // turn's content-keyed fact ids) rides the hold (the fold
+              // re-hold's live seed) and the same count rides the result
+              // (the wire seam); both advance identically.
+              const h4Seed = h4AskCountSeed();
               if (compiledSh.outcome === 'needs-clarification') {
                 // Hold the VALIDATED intent per conversation (the held localMacro
                 // precedent) so an answer folds deterministically next turn.
-                holdShorthandIntent(conversationKey, { yaml: shorthandYaml, doc: shorthandDoc, clarifications: compiledSh.clarifications });
+                const h4HoldCounts = clarificationAskCount(
+                  h4Seed,
+                  compiledSh.clarifications.map((fact) => factRequestId(fact)),
+                );
+                holdShorthandIntent(conversationKey, {
+                  yaml: shorthandYaml,
+                  doc: shorthandDoc,
+                  clarifications: compiledSh.clarifications,
+                  ...(Object.keys(h4HoldCounts).length > 0 ? { loopAskCounts: h4HoldCounts } : {}),
+                });
               }
-              const shResult = shorthandResultFromCompile(
+              // D3 (CARD1-D3 ruling l2t1430 §3 read path (i)): the READ-ONLY
+              // canonical-label seam — this compile's unresolved facts'
+              // local-term record titles (STAGE A) via the store, built per
+              // call (never process-cached); absent store ⇒ empty map ⇒ STAGE
+              // B identity form for every card.
+              const shCanonicalLabels = await canonicalLabelsForFacts(compiledSh.clarifications ?? [], deps.store);
+              let shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
                 shorthandDeckLabwares,
+                // L2-FREEFORM-1 H4: the loop detector's seed (conditional
+                // spread — exactOptionalPropertyTypes: absent on every turn
+                // with no seed).
+                {
+                  ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}),
+                  canonicalLabels: shCanonicalLabels,
+                },
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
               }
+              // L2-FREEFORM-1 H5 (b): the ONE server guard at the shorthand
+              // return — the H1/H4 mapper already turns its only empty shape
+              // (needs-clarification with ZERO generated requests) into an
+              // escalation, so this backstop only fires on a mapper shape
+              // that can no longer happen; without it the arm could still
+              // exit success:true with every deliverable channel empty.
+              if (shResult.success && !shResult.error && draftProducedNothingOnServer(shResult)) {
+                shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
+                console.warn(`[agent ${tid}] ${shResult.error}`);
+              }
+              // Enrich compiler-draft events: material_spec_ref expansion +
+              // composition_snapshot so deterministic drafts carry bound refs.
+              // No mint-fallback — the compiled graph must stay byte-identical
+              // to the deterministic compiler's output.
+              shResult = await enrichDraftResultEvents(shResult, {
+                labeler: createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
+                store: deps.store,
+              });
               shorthandSummary(shResult);
               return shResult;
             }
@@ -2785,12 +3412,39 @@ export function createAgentOrchestrator(
             if (agentIntent.intent === 'deck_layout') {
               const variantId = agentIntent.variantId;
               const platformId = agentIntent.platformId ?? context.activeDeckScope?.platformId ?? 'manual';
-              const ok = typeof variantId === 'string' && variantId.length > 0;
+              const registry = deps.platformRegistry;
+              // L2-SUITE-A-uifix2 FIX2 (D1): the model sometimes emits a
+              // deck_layout intent WITHOUT the variantId (gate re-gate-3 P1).
+              // Handle the model-output gap honestly, against the platform
+              // manifest (DATA — config/platforms/*.yaml):
+              //   1. a missing variantId is RESOLVED from the request text
+              //      against the declared variant TITLES (the freeform bench
+              //      is mounted, not refused);
+              //   2. a declared variantId is delivered verbatim; an
+              //      undeclared one is refused with the plain-language wall;
+              //   3. the wall NEVER leaks implementation vocabulary — the
+              //      raw validator string is retired.
+              let resolvedVariantId = typeof variantId === 'string' && variantId.length > 0
+                ? variantId
+                : registry
+                  ? (resolveDeckVariantFromText(registry, platformId, prompt) ?? undefined)
+                  : undefined;
+              let declared = true;
+              if (registry && typeof resolvedVariantId === 'string') {
+                declared = registry.getVariant(platformId, resolvedVariantId) !== null;
+              }
+              const ok = declared && typeof resolvedVariantId === 'string' && resolvedVariantId.length > 0;
+              const deckError = !ok
+                ? (registry
+                    ? deckLayoutChoiceWall(registry, platformId)
+                      ?? `I could not switch the deck layout from that request. Tell me which layout you want and I will switch to it.`
+                    : 'I could not switch the deck layout from that request. Tell me which layout you want and I will switch to it.')
+                : undefined;
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: ok, durationMs: 0 });
               const elapsed = Date.now() - t0;
               const deckResult: AgentResult = ok
-                ? { success: true, deckLayout: { platformId, variantId: variantId as string } }
-                : { success: false, error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).' };
+                ? { success: true, deckLayout: { platformId, variantId: resolvedVariantId as string } }
+                : { success: false, error: deckError as string };
               const summary: AgentSummary = {
                 traceId: tid,
                 surface: surfaceName,
@@ -2963,6 +3617,7 @@ export function createAgentOrchestrator(
                     resolveSpine: deps.resolveSpine,
                     surfaces: deps.surfaces,
                     store: deps.store,
+                    ...(surface !== undefined ? { requestingSurface: surface } : {}),
                     // HARNESS-SEQ-2 (OQ2 ruling): the visibility door for
                     // navigation targets — the SAME door the ordinary read
                     // routes use (AuthorizationService.canAccess(actor,'read',
@@ -3502,6 +4157,38 @@ export function createAgentOrchestrator(
               return chainProposalResult;
             }
 
+            // intent=answer (SEQ-ANSWER-CONTRACT-1): emit the model's answer text
+            // as a text_delta on the visible chat channel. NO compiler call, NO
+            // proposal, NO write, NO second inference call. One text_delta,
+            // byte-equal to the payload, is the entire turn.
+            if (agentIntent.intent === 'answer') {
+              const durationMs = Date.now() - t0;
+              // Parser contract: text is only present when non-empty.
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs });
+              onEvent?.({ type: 'text_delta', delta: agentIntent.text! });
+              const answerResult: AgentResult = { success: true };
+              const answerSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: durationMs,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, answerSummary);
+              console.log(`[agent ${tid}] done answer emitted text_delta elapsedMs=${durationMs}`);
+              return answerResult;
+            }
+
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding
             // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
             // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the
@@ -3991,6 +4678,10 @@ export function createAgentOrchestrator(
             const compiledDraft = await awaitWithHeartbeat(
               runChatbotCompile({
                 prompt: compilerPrompt,
+                // WELLSET-RESOLVER-1 / OQ-2 fold: same conversation-key
+                // identity as the preflight site (the cache fires on this
+                // surface too).
+                conversationId: conversationKey,
                 ...(ctxMentions ? { mentions: ctxMentions } : {}),
                 ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
                 ...(context.activeDeckScope ? { activeDeckScope: context.activeDeckScope } : {}),
@@ -4060,15 +4751,12 @@ export function createAgentOrchestrator(
             // with a cause, never a silent success. The coerced/compile path
             // could end `success=true` with zero events and no explanation
             // (observed live 2026-09-20), the same silence the draft path was
-            // fixed for.
-            const emptyResult =
-              !(result.events?.length ?? 0) &&
-              !(result.clarificationRequests?.length ?? 0) &&
-              !result.error &&
-              !(result.labwareAdditions?.length ?? 0) &&
-              !(result.labwareRequirements?.length ?? 0) &&
-              !(result.recordCreations?.length ?? 0) &&
-              !result.deckLayout;
+            // fixed for. L2-FREEFORM-1 H5: the 7-channel check is the ONE
+            // server helper (draftArgDiagnostics.draftProducedNothingOnServer
+            // — extracted from this inline expression, behavior byte-
+            // identical), applied here AND at the CONFIRM bypass arm AND the
+            // shorthand return (CLIENT ⊇ SERVER — the honestWall drift pin).
+            const emptyResult = draftProducedNothingOnServer(result);
             if (emptyResult) {
               result = {
                 ...result,
