@@ -330,6 +330,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New PDF
             </button>
           )}
+          {activeCategory === 'materials' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-material"
+              onClick={() => navigate('/lab/materials/new')}
+            >
+              + New material
+            </button>
+          )}
         </nav>
 
         {error ? (
