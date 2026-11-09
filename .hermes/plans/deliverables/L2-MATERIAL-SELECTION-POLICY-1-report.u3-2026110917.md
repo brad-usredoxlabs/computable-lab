@@ -76,4 +76,4 @@ Clean — only untracked node_modules symlinks.
 - Browser gate for end-to-end join (with client u2) stays with the item
 - Client branch u2 (9b28231f) already declares the fields; merge u2+u3 to complete the MATSEL policy chain
 
-L2-MATERIAL-SELECTION-POLICY-1 UNIT u3 DONE d24d71db805d2dd57797cd37b52f21449ffb1fd5
+L2-MATERIAL-SELECTION-POLICY-1 UNIT u3 DONE 9b3d9a1fb266365b5368dddf7193f4ed0fb64161
