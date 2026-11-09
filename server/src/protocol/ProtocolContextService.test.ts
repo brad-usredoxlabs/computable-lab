@@ -190,8 +190,9 @@ describe('ProtocolContextService', () => {
   it('resolves the lead protocol from localProtocolRefs list', async () => {
     const store = new MemoryRecordStore([
       env('PRT-qPCR', { kind: 'protocol', recordId: 'PRT-qPCR', title: 'Generic qPCR', links: { studyId: 'STU-1' }, steps: [] }),
+      env('PRT-alt', { kind: 'protocol', recordId: 'PRT-alt', title: 'Alternative Protocol', links: { studyId: 'STU-1' }, steps: [] }),
       env('LPR-A', { kind: 'local-protocol', recordId: 'LPR-A', title: 'Protocol A', inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
-      env('LPR-B', { kind: 'local-protocol', recordId: 'LPR-B', title: 'Protocol B', inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
+      env('LPR-B', { kind: 'local-protocol', recordId: 'LPR-B', title: 'Protocol B', inherits_from: { kind: 'record', id: 'PRT-alt', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
       env('PLR-run', { kind: 'planned-run', recordId: 'PLR-run', title: 'Planned', sourceType: 'local-protocol', localProtocolRefs: [{ kind: 'record', id: 'LPR-A', type: 'local-protocol' }, { kind: 'record', id: 'LPR-B', type: 'local-protocol' }], state: 'draft', links: { studyId: 'STU-1', runId: 'RUN-1' }, methodEventGraphId: 'EVG-run' }),
       env('RUN-1', { kind: 'run', recordId: 'RUN-1', title: 'Multi-protocol run', studyId: 'STU-1', status: 'planned', plannedRunRef: { kind: 'record', id: 'PLR-run', type: 'planned-run' }, methodEventGraphId: 'EVG-run' }),
       env('EVG-run', { kind: 'event-graph', id: 'EVG-run', events: [], labwares: [], links: { studyId: 'STU-1', runId: 'RUN-1' } }),
@@ -199,6 +200,24 @@ describe('ProtocolContextService', () => {
 
     const record = await new ProtocolContextService(store).promoteRunMethod({ runId: 'RUN-1' });
     // The lead (LPR-A) should be resolved, not LPR-B.
+    expect(record.payload).toMatchObject({
+      kind: 'local-protocol',
+      inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' },
+    });
+  });
+
+  it('falls back to run-level localProtocolRefs when planned-run has none', async () => {
+    const store = new MemoryRecordStore([
+      env('PRT-qPCR', { kind: 'protocol', recordId: 'PRT-qPCR', title: 'Generic qPCR', links: { studyId: 'STU-1' }, steps: [] }),
+      env('LPR-A', { kind: 'local-protocol', recordId: 'LPR-A', title: 'Protocol A', inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
+      env('LPR-B', { kind: 'local-protocol', recordId: 'LPR-B', title: 'Protocol B', inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' }, status: 'draft', links: { studyId: 'STU-1' } }),
+      env('PLR-run', { kind: 'planned-run', recordId: 'PLR-run', title: 'Planned', state: 'draft', links: { studyId: 'STU-1', runId: 'RUN-1' }, methodEventGraphId: 'EVG-run' }),
+      env('RUN-1', { kind: 'run', recordId: 'RUN-1', title: 'Run with refs', studyId: 'STU-1', status: 'planned', plannedRunRef: { kind: 'record', id: 'PLR-run', type: 'planned-run' }, localProtocolRefs: [{ kind: 'record', id: 'LPR-A', type: 'local-protocol' }, { kind: 'record', id: 'LPR-B', type: 'local-protocol' }], methodEventGraphId: 'EVG-run' }),
+      env('EVG-run', { kind: 'event-graph', id: 'EVG-run', events: [], labwares: [], links: { studyId: 'STU-1', runId: 'RUN-1' } }),
+    ]);
+
+    const record = await new ProtocolContextService(store).promoteRunMethod({ runId: 'RUN-1' });
+    // Planned-run has no localProtocolRefs or localProtocolRef, so fallback to run payload resolves LPR-A.
     expect(record.payload).toMatchObject({
       kind: 'local-protocol',
       inherits_from: { kind: 'record', id: 'PRT-qPCR', type: 'protocol' },
