@@ -11,7 +11,7 @@ import { AppShell } from '../shared/shell'
 
 export function LabMaterialNewPage() {
   return (
-    <AppShell>
+    <AppShell brand="Add a material">
       <div style={{ padding: '1rem' }}>
         <h2>Add a material</h2>
         {/* TODO: Unit 2 — data-declared authoring profile for materials */}

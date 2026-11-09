@@ -74,4 +74,30 @@ describe('LabCollectionView', () => {
     fireEvent.click(btn)
     expect(screen.getByTestId('ingestion-target')).toBeDefined()
   })
+
+  it('shows "+ New material" on the materials category only, routing to the material creation page', () => {
+    render(
+      <MemoryRouter initialEntries={['/lab/materials']}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+          <Route path="/lab/materials/new" element={<div data-testid="material-new-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    // Button is present on the materials tab.
+    const btn = screen.getByTestId('lab-category-new-material')
+    expect(btn).toBeDefined()
+    // Clicking routes to the material creation page.
+    fireEvent.click(btn)
+    expect(screen.getByTestId('material-new-target')).toBeDefined()
+  })
 })
