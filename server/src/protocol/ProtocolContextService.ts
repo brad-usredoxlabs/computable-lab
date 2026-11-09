@@ -442,7 +442,8 @@ export class ProtocolContextService {
 
     let inheritedRef: Record<string, unknown> | undefined;
     const plannedPayload = asObject(plannedRun?.payload);
-    const localProtocolId = protocolIdsOf({ ...asObject(run?.payload), ...(plannedPayload.localProtocolRefs ? { localProtocolRefs: plannedPayload.localProtocolRefs } : plannedPayload.localProtocolRef ? { localProtocolRef: plannedPayload.localProtocolRef } : {}) })[0];
+    const localProtocolSource = (plannedPayload.localProtocolRefs || plannedPayload.localProtocolRef) ? plannedPayload : asObject(run?.payload);
+    const localProtocolId = protocolIdsOf(localProtocolSource)[0];
     if (localProtocolId) {
       const localProtocol = await this.store.get(localProtocolId);
       inheritedRef = asObject(asObject(localProtocol?.payload).inherits_from);
