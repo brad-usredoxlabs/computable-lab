@@ -90,6 +90,6 @@ workspace:
       eventGraphId: EVG-corpus2-prompt1-dmem-baseline
       title: EVG-corpus2-prompt1-dmem-baseline
   activeTabId: tab-deck-EVG-corpus2-prompt1-dmem-baseline
-  rightPaneMode: find
+  rightPaneMode: ai
   rightPaneCollapsed: false
   paneWidths: { left: 0.6, right: 0.4 }
