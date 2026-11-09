@@ -33,3 +33,5 @@ Implemented ordered protocol list on the planned-run write path. The draft creat
 - Error messages for 404/400 now name the specific id (e.g., "local-protocol not found: LPR-nonexistent") — updated the existing test expectation accordingly.
 - The `sourceRef` still points at the first/lead protocol's ref entry with its revisionRef.
 - Links are merged from all protocols in the list, with options overriding.
+
+L2-RUNPROTO-u2 UNIT unit DONE 2f22ee371e189fa95d9bc08d2f1205ec4902bb63
