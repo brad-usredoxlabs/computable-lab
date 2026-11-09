@@ -117,6 +117,13 @@ properties:
                 type: string
                 description: "Optional transformation to apply."
                 enum: [ none, lowercase, uppercase, trim, normalize_chemical, parse_concentration, parse_volume, parse_duration ]
+              unit:
+                type: string
+                description: "The unit the sheet states or the record field expects (e.g., 'mL', '%', 'mm'); NOT a conversion instruction."
+              required:
+                type: boolean
+                default: false
+                description: "The sheet must state this for the proposal to be considered complete."
         defaults:
           type: object
           description: "Default values for fields not in the source."
