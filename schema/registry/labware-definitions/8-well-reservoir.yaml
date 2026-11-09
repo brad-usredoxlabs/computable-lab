@@ -28,5 +28,5 @@ render_hints:
 
 physical_geometry:
   overall_dimensions_mm:
-    length: 85
+    length: 127
     width: 85

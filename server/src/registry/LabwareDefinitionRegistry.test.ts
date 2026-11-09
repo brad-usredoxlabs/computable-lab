@@ -49,6 +49,8 @@ describe('LabwareDefinitionRegistry', () => {
     const aliased = registry.getByAlias('reservoir_8');
     expect(aliased).toBeDefined();
     expect(aliased!.id).toBe('8-well-reservoir');
+    const geom = entry!.physical_geometry as { overall_dimensions_mm: { length: number; width: number } };
+    expect(geom.overall_dimensions_mm).toEqual({ length: 127, width: 85 });
   });
 
   it('includes generic beaker definitions for protocol labware search', () => {
