@@ -46,6 +46,7 @@ async function loadFieldMaps(): Promise<Map<string, SpecSheetFieldMap>> {
 
     if (!doc.targets || doc.targets.length === 0) continue;
     const target = doc.targets[0];
+    if (!target) continue;
     if (!target.recordKind) continue;
 
     results.set(target.recordKind, {

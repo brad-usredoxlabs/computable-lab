@@ -117,10 +117,22 @@ describe('SpecSheetFieldMaps — targetField conformance', () => {
     }
   });
 
-  it('reload() re-reads the cache', async () => {
+  it('reload() re-reads the cache from disk', async () => {
+    const { readFile, writeFile } = await import('node:fs/promises');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const fixture = join(dirname(fileURLToPath(import.meta.url)), '../../../schema/ingestion/spec-sheet.vendor-product.yaml');
+    const original = await readFile(fixture, 'utf-8');
     const before = await getSpecSheetFieldMap('vendor-product');
-    await reload();
-    const after = await getSpecSheetFieldMap('vendor-product');
-    expect(after.fieldMappings.length).toBe(before.fieldMappings.length);
+    const beforeCount = before.fieldMappings.length;
+    try {
+      await writeFile(fixture, original + '\n      - targetField: vendor\n        source: "TEST injected field"\n');
+      await reload();
+      const afterReload = await getSpecSheetFieldMap('vendor-product');
+      expect(afterReload.fieldMappings.length).toBeGreaterThan(beforeCount);
+    } finally {
+      await writeFile(fixture, original);
+      await reload();
+    }
   });
 });
