@@ -46,3 +46,5 @@ it would return the old (smaller) count. Cleanup restores the original YAML in a
 
 **tsc delta:** -4 TS18048 (4 -> 0 for this file; whole-server TS18048 count = 0).
 **Ajv/createSchemaRegistry:** validated against schema/core/extraction-spec.schema.yaml with ajv 8.18 — both `kind: extraction-spec` documents `valid: true`, 5 negative controls red. (Environmental note: ajv resolved from the umbrella store because the tree's ajv pnpm symlink is broken.)
+
+L2-SPEC-SHEET-INGEST-1 UNIT u1fix2pw DONE ceab5158188bf9a76acebf0a4dcb6a7337590ed6
