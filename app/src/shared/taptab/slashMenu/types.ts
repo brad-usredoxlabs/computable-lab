@@ -101,6 +101,13 @@ export interface SlashSuggestion {
    * band; a row in the equality band or the below-contains band carries none.
    */
   sectionLabel?: string
+  /**
+   * L2-MATERIAL-SELECTION-POLICY-1: a selection policy (`only` or `default`)
+   * selected this row as the designated pick. `only` collapses to exactly one
+   * row with `preselected: true`; `default` marks the single designated row
+   * while leaving all candidates visible.
+   */
+  preselected?: boolean
 }
 
 /**

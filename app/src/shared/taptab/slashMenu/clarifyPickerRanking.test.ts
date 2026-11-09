@@ -757,3 +757,80 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — firstDefaultFocusIndex with presele
     expect(firstDefaultFocusIndex(rows)).toBe(0)
   })
 })
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only guard on load path', () => {
+  /**
+   * D2: Two `only` policies for the same material concept must throw loudly
+   * with BOTH record ids. Mirrors the server-side
+   * normalizeMaterialSelectionPolicies contract (MaterialSelectionPolicy.ts:51-60).
+   * The load-path guard is the sanctioned carrier because LintEngine
+   * supports record scope only (LintEngine.ts:143).
+   */
+  it('__setMaterialSelectionPolicies throws when two only policies claim the same concept', () => {
+    const duplicateOnly: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow()
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-1/)
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-2/)
+  })
+
+  it('single only policy does not throw', () => {
+    const singleOnly: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(singleOnly)).not.toThrow()
+  })
+
+  it('two only policies for DIFFERENT concepts do not throw', () => {
+    const differentConcepts: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C999999' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(differentConcepts)).not.toThrow()
+  })
+
+  it('only + default for the same concept does not throw', () => {
+    const mixed: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'default',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(mixed)).not.toThrow()
+  })
+})

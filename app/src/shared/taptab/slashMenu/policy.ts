@@ -87,9 +87,42 @@ export function __setCandidateRankingPolicy(policy: CandidateRankingPolicy | nul
  *
  * Fetch failure => empty array: the picker keeps all candidates and focuses by
  * canBeDefault alone (never fabricates a policy).
+ *
+ * Duplicate `only` guard: throws when two records claim `selection: only` for
+ * the same material concept — mirrors the server-side contract from
+ * normalizeMaterialSelectionPolicies (MaterialSelectionPolicy.ts:51-60). The
+ * load-path guard carries this obligation because LintEngine supports record
+ * scope only (LintEngine.ts:143); a cross-record lint rule cannot express it.
  */
 type SelectionKind = 'only' | 'default' | 'alternative'
 type RefKind = 'ontology' | 'record'
+
+/**
+ * Guard: throw when two `only` policies claim the same material concept.
+ * Mirrors normalizeMaterialSelectionPolicies (MaterialSelectionPolicy.ts:51-60)
+ * — same concept key `kind:id`, error names BOTH recordIds.
+ */
+function guardDuplicateOnlyPolicies(policies: SelectionPolicy[]): void {
+  const conceptToOnlyIds = new Map<string, string[]>()
+  for (const p of policies) {
+    if (p.selection !== 'only') continue
+    const key = `${p.material_ref.kind}:${p.material_ref.id}`
+    const existing = conceptToOnlyIds.get(key)
+    if (existing === undefined) {
+      conceptToOnlyIds.set(key, [p.recordId])
+    } else {
+      existing.push(p.recordId)
+    }
+  }
+  for (const [conceptKey, ids] of conceptToOnlyIds) {
+    if (ids.length > 1) {
+      throw new Error(
+        `Duplicate 'only' selection for material concept ${conceptKey}: ` +
+          `${ids[0]} and ${ids[1]}`,
+      )
+    }
+  }
+}
 
 let selCache: SelectionPolicy[] | null = null
 let selInflight: Promise<SelectionPolicy[]> | null = null
@@ -121,6 +154,7 @@ function fetchSelectionPolicies(): Promise<SelectionPolicy[]> {
             selection: sel as SelectionKind,
           })
         }
+        guardDuplicateOnlyPolicies(policies)
         selCache = policies
         return policies
       })
@@ -153,6 +187,7 @@ export function __resetMaterialSelectionPolicies(): void {
 
 /** Test-only: seed deterministic policies without a fetch. */
 export function __setMaterialSelectionPolicies(policies: SelectionPolicy[]): void {
+  guardDuplicateOnlyPolicies(policies)
   selCache = policies
   selInflight = null
 }
