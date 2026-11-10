@@ -79,4 +79,22 @@ describe('RoleBindingProposalsPanel bound state', () => {
     await waitFor(() => expect(screen.getByText('No matching labware record found')).toBeTruthy())
     expect(screen.queryByText('Reservoir A')).toBeNull()
   })
+
+  it('P4: bound state without bound payload renders fallback "bound" text', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [{
+          roleId: 'probe',
+          roleKind: 'labware' as const,
+          state: 'bound' as const,
+          candidates: [],
+        }],
+      }],
+    })
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('bound')).toBeTruthy())
+    expect(screen.queryByText('no candidate')).toBeNull()
+  })
 })
