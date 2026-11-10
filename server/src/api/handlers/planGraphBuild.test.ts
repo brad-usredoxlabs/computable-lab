@@ -67,6 +67,36 @@ function makeSchemaRegistryNoEnum() {
   };
 }
 
+function makeSchemaRegistryEnumMismatch() {
+  return {
+    getById(id: string) {
+      if (id === EG_SCHEMA) return {
+        id: EG_SCHEMA, path: 'workflow/event-graph.schema.yaml', dependencies: [],
+        schema: { $defs: { PlateEvent: { properties: { event_type: { type: 'string', enum: ['other'] } } } } },
+      };
+      if (id === RUN_SCHEMA) return {
+        id: RUN_SCHEMA, path: 'workflow/planned-run.schema.yaml', dependencies: [], schema: {},
+      };
+      return undefined;
+    },
+  };
+}
+
+function makeSchemaRegistryNoEnumKey() {
+  return {
+    getById(id: string) {
+      if (id === EG_SCHEMA) return {
+        id: EG_SCHEMA, path: 'workflow/event-graph.schema.yaml', dependencies: [],
+        schema: { $defs: { PlateEvent: { properties: { event_type: { type: 'string' } } } } },
+      };
+      if (id === RUN_SCHEMA) return {
+        id: RUN_SCHEMA, path: 'workflow/planned-run.schema.yaml', dependencies: [], schema: {},
+      };
+      return undefined;
+    },
+  };
+}
+
 const protoPayload = {
   kind: 'local-protocol' as const, recordId: 'LP-1',
   roles: { labware: [{ roleId: 'targetPlate' }] },
@@ -137,7 +167,7 @@ describe('buildPlanGraph', () => {
       { params: { id: 'RUN-1' } } as any,
       { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
     );
-    expect(result).toMatchObject({ error: 'UNBOUND_ROLE' });
+    expect(result).toMatchObject({ error: 'UNBOUND_ROLE', details: { roleId: 'targetPlate', stepId: 'step-1' } });
     expect(capturedStatus).toBe(409);
     expect(await store.list({ kind: 'event-graph' })).toHaveLength(0);
     expect(store.writeLog).toEqual([]);
@@ -166,6 +196,36 @@ describe('buildPlanGraph', () => {
       { recordId: 'LP-1', schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: protoPayload },
     ]);
     const handlers = createPlannedRunHandlers(makeCtx(store, undefined, makeSchemaRegistryNoEnum() as any));
+    const result = await handlers.buildPlanGraph(
+      { params: { id: 'RUN-1' } } as any,
+      { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
+    );
+    expect(result).toMatchObject({ error: 'SCHEMA_ENUM_MISSING' });
+    expect(capturedStatus).toBe(500);
+  });
+
+  it('returns 409 UNSUPPORTED_EVENT_TYPE when schema enum does not include protocol verb', async () => {
+    let capturedStatus: number | undefined;
+    const store = new TestStore([
+      { recordId: 'RUN-1', schemaId: RUN_SCHEMA, payload: makeRunPayload() },
+      { recordId: 'LP-1', schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: protoPayload },
+    ]);
+    const handlers = createPlannedRunHandlers(makeCtx(store, undefined, makeSchemaRegistryEnumMismatch() as any));
+    const result = await handlers.buildPlanGraph(
+      { params: { id: 'RUN-1' } } as any,
+      { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
+    );
+    expect(result).toMatchObject({ error: 'UNSUPPORTED_EVENT_TYPE' });
+    expect(capturedStatus).toBe(409);
+  });
+
+  it('returns 500 SCHEMA_ENUM_MISSING when event_type has no enum key', async () => {
+    let capturedStatus: number | undefined;
+    const store = new TestStore([
+      { recordId: 'RUN-1', schemaId: RUN_SCHEMA, payload: makeRunPayload() },
+      { recordId: 'LP-1', schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: protoPayload },
+    ]);
+    const handlers = createPlannedRunHandlers(makeCtx(store, undefined, makeSchemaRegistryNoEnumKey() as any));
     const result = await handlers.buildPlanGraph(
       { params: { id: 'RUN-1' } } as any,
       { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
