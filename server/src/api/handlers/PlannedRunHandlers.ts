@@ -6,7 +6,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import { PlannedRunFromLocalProtocolService } from '../../protocol/PlannedRunFromLocalProtocolService.js';
-import { protocolIdsOf, withAttachedProtocol } from '../../protocol/runProtocolList.js';
+import { protocolIdsOf, withAttachedProtocol, withDetachedProtocol } from '../../protocol/runProtocolList.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
 
 // ---------------------------------------------------------------------------
@@ -306,6 +306,50 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       await ctx.store.update({
         envelope: { ...record, payload: nextPayload },
         message: `Attach protocol to planned-run ${id}`,
+      });
+
+      reply.status(200);
+      return { success: true, protocolRefs: protocolIdsOf(nextPayload) };
+    },
+
+    /**
+     * DELETE /runs/:id/protocols/:protocolId
+     *
+     * Detach one protocol ref from a planned-run's ordered protocol list.
+     * Idempotent: an id not in the list is a 200 no-op. Returns the resulting
+     * ordered id list; 404 PLANNED_RUN_NOT_FOUND, 400 NOT_A_PLANNED_RUN.
+     */
+    async detachProtocol(
+      request: FastifyRequest<{
+        Params: { id: string; protocolId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; protocolRefs: string[] } | ApiError> {
+      const { id, protocolId } = request.params;
+
+      const record = await ctx.store.get(id);
+      if (!record) {
+        reply.status(404);
+        return {
+          error: 'PLANNED_RUN_NOT_FOUND',
+          message: `Planned-run '${id}' not found`,
+        };
+      }
+
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'planned-run') {
+        reply.status(400);
+        return {
+          error: 'NOT_A_PLANNED_RUN',
+          message: `Record '${id}' is not a planned-run`,
+        };
+      }
+
+      const nextPayload = withDetachedProtocol(payload, protocolId);
+
+      await ctx.store.update({
+        envelope: { ...record, payload: nextPayload },
+        message: `Detach protocol from planned-run ${id}`,
       });
 
       reply.status(200);

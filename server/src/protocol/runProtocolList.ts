@@ -108,3 +108,32 @@ export function withAttachedProtocol(
 
   return newPayload;
 }
+
+/**
+ * Detach a protocol ref (by id) from a run payload, returning a new payload.
+ *
+ * Inverse of withAttachedProtocol; idempotent and never mutates the input.
+ * Removes every matching list entry and deletes the legacy singular ref when
+ * it names the same id, so protocolRefsOf cannot re-surface the detached ref.
+ */
+export function withDetachedProtocol(
+  payload: Record<string, unknown>,
+  protocolId: string,
+): Record<string, unknown> {
+  const maybeList = payload.localProtocolRefs;
+  const list = Array.isArray(maybeList) ? maybeList : [];
+  const filtered = list.filter((entry) => refId(entry) !== protocolId);
+  const dropSingular = refId(payload.localProtocolRef) === protocolId;
+
+  if (filtered.length === list.length && !dropSingular) {
+    return { ...payload };
+  }
+
+  const newPayload: Record<string, unknown> = {
+    ...payload,
+    localProtocolRefs: filtered,
+  };
+  if (dropSingular) delete newPayload.localProtocolRef;
+
+  return newPayload;
+}
