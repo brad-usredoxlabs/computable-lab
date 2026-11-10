@@ -86,13 +86,13 @@ describe('writeRoleBindings', () => {
   });
 
   it('carries lotNumber where the target record schema keeps it, absent otherwise', async () => {
-    // material-instance/aliquot: payload.lot.lot_number; material-lot: payload.lot_number;
-    // vendor-product has no lot field at all.
+    // Fixtures are shaped to the schemas' required keys and declared lot paths,
+    // but are not Ajv-validated (env() injects payload.recordId which is not schema).
     const records = [
       run(),
       ...chainedProtocol(materialRole),
-      env('MI-1', 'material-instance', { lot: { lot_number: 'L-77' } }),
-      env('LOT-1', 'material-lot', { lot_number: 'L-88' }),
+      env('MI-1', 'material-instance', { name: 'Reagent A', material_ref: { kind: 'record', id: 'MAT-1', type: 'material' }, lot: { lot_number: 'L-77' } }),
+      env('LOT-1', 'material-lot', { material_ref: { kind: 'record', id: 'MAT-1', type: 'material' }, lot_number: 'L-88' }),
       env('VPR-1', 'vendor-product'),
     ];
     const bind = async (id: string) =>
@@ -111,6 +111,37 @@ describe('writeRoleBindings', () => {
     ]);
     const [material] = withoutLot.materials as Array<Record<string, unknown>>;
     expect(Object.keys(material!)).not.toContain('lotNumber');
+  });
+
+  it('prefers supplier.vendor_lot over lot_number for material-lot', async () => {
+    // vendor_lot takes precedence (mirrors shelfLookup.ts canonical reader).
+    const records = [
+      run(),
+      ...chainedProtocol(materialRole),
+      // Case A: only vendor_lot, no lot_number — must carry VL-9
+      env('LOT-2', 'material-lot', { material_ref: { kind: 'record', id: 'MAT-1', type: 'material' }, supplier: { name: 'Sigma', vendor_lot: 'VL-9' } }),
+      // Case B: both vendor_lot and lot_number — vendor_lot wins
+      env('LOT-3', 'material-lot', { material_ref: { kind: 'record', id: 'MAT-1', type: 'material' }, lot_number: 'L-88', supplier: { vendor_lot: 'VL-9' } }),
+      // Case C: aliquot with lot.lot_number — pins the arm advc could delete green
+      env('ALQ-1', 'aliquot', { lot: { lot_number: 'L-55' } }),
+    ];
+    const bind = async (id: string) =>
+      bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: id }] }));
+
+    // Case A: vendor_lot only
+    expect((await bind('LOT-2')).materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'LOT-2', type: 'material-lot' }, lotNumber: 'VL-9' },
+    ]);
+
+    // Case B: vendor_lot wins over lot_number
+    expect((await bind('LOT-3')).materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'LOT-3', type: 'material-lot' }, lotNumber: 'VL-9' },
+    ]);
+
+    // Case C: aliquot carries lot
+    expect((await bind('ALQ-1')).materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'ALQ-1', type: 'aliquot' }, lotNumber: 'L-55' },
+    ]);
   });
 
   it('rejects an unknown target id by name', async () => {
