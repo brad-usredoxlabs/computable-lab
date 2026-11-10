@@ -57,6 +57,6 @@ advc c4 FIX 1 was marker-only. The code (D1/D2/D3) was ACCEPTED and is
 unchanged. The marker below names a commit that contains this report,
 verified with `git cat-file -e`.
 
-superseded: `L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 8b1a4fe2`
+superseded: the prior marker was 8-hex/incorrect-token and is replaced below
 
 L2-SPEC-SHEET-INGEST-1 UNIT uE1hdrowfix-c4 DONE c7f4147d62ed2abd87d086561253e12871348a05
