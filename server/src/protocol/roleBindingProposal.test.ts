@@ -16,8 +16,11 @@ function fakeStore(records: RecordEnvelope[]) {
   };
 }
 
-const run = (protocolIds: string[]) =>
-  env('RUN-1', 'planned-run', { localProtocolRefs: protocolIds.map((id) => ({ kind: 'record', id, type: 'local-protocol' })) });
+const run = (protocolIds: string[], bindings?: Record<string, unknown>) =>
+  env('RUN-1', 'planned-run', {
+    localProtocolRefs: protocolIds.map((id) => ({ kind: 'record', id, type: 'local-protocol' })),
+    ...(bindings ? { bindings } : {}),
+  });
 
 // local-protocol carries no `roles` (schema: unevaluatedProperties false); the
 // declarations live on the universal protocol reached via inherits_from.
@@ -116,6 +119,75 @@ describe('proposeRoleBindings', () => {
     expect(role.reason).toMatch(/no .*declar/i);
     expect(face(store.list)).toBe(0);
     expect(face(store.get)).toBe(2);
+  });
+
+  it('reports bound when a labware binding target resolves and has one candidate', async () => {
+    const store = fakeStore([
+      run(['LPR-1'], {
+        labware: [{ roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'lbw-seed-plate-96-flat', type: 'labware' } }],
+      }),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], { labware: [{ roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'lbw-seed-plate-96-flat', type: 'labware' } }] }) });
+    const role = result.protocols[0].roles[0];
+    expect(role.state).toBe('bound');
+    expect(role.bound).toMatchObject({ recordId: 'lbw-seed-plate-96-flat' });
+  });
+
+  it('reports bound when a material binding beats ambiguity', async () => {
+    const recs = [
+      run(['LPR-1'], {
+        materials: [{ roleId: 'role_two', materialRef: { kind: 'record', id: 'VPR-A', type: 'vendor-product' } }],
+      }),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', { materialRoles: [{ roleId: 'role_two', allowedMaterialIds: ['MAT-002'] }] }),
+      env('VPR-B', 'vendor-product', { name: 'Item B', material_ref: { id: 'MAT-002' } }),
+      env('VPR-A', 'vendor-product', { name: 'Item A', material_ref: { id: 'MAT-002' } }),
+    ];
+    const store = fakeStore(recs);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], { materials: [{ roleId: 'role_two', materialRef: { kind: 'record', id: 'VPR-A', type: 'vendor-product' } }] }) });
+    const role = result.protocols[0].roles[0];
+    expect(role.state).toBe('bound');
+    expect(role.bound).toMatchObject({ recordId: 'VPR-A' });
+    expect(role.candidates.map(c => c.recordId)).toEqual(['VPR-A', 'VPR-B']);
+  });
+
+  it('falls back to candidate count when a binding target does not exist', async () => {
+    const store = fakeStore([
+      run(['LPR-1'], {
+        labware: [{ roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'lbw-gone', type: 'labware' } }],
+      }),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], { labware: [{ roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'lbw-gone', type: 'labware' } }] }) });
+    const role = result.protocols[0].roles[0];
+    expect(role.state).toBe('proposed');
+    expect(role.reason).toContain('lbw-gone');
+  });
+
+  it('does not change state when the binding is for a different role', async () => {
+    const store = fakeStore([
+      run(['LPR-1'], {
+        labware: [{ roleId: 'other-role', labwareInstanceRef: { kind: 'record', id: 'lbw-seed-plate-96-flat', type: 'labware' } }],
+      }),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], { labware: [{ roleId: 'other-role', labwareInstanceRef: { kind: 'record', id: 'lbw-seed-plate-96-flat', type: 'labware' } }] }) });
+    const role = result.protocols[0].roles[0];
+    expect(role.state).toBe('proposed');
+    expect(role).not.toHaveProperty('bound');
   });
 });
 

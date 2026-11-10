@@ -22,8 +22,9 @@ export interface BindingCandidate {
 export interface RoleProposal {
   roleId: string;
   roleKind: 'labware' | 'material';
-  state: 'proposed' | 'ambiguous' | 'unbound';
+  state: 'proposed' | 'ambiguous' | 'unbound' | 'bound';
   candidates: BindingCandidate[];
+  bound?: BindingCandidate;
   reason?: string;
 }
 
@@ -112,6 +113,29 @@ export async function proposeRoleBindings(
 ): Promise<RoleBindingProposals> {
   const { store, run } = deps;
   const runPayload = asObject(run.payload) ?? {};
+  const bindings = asObject(runPayload.bindings);
+
+  // Index labware bindings by roleId
+  const labwareBindingsByRole = new Map<string, string>();
+  for (const entry of Array.isArray(bindings?.labware) ? (bindings.labware as unknown[]) : []) {
+    const binding = asObject(entry);
+    const roleId = binding ? stringField(binding, 'roleId') : undefined;
+    if (!roleId) continue;
+    const ref = asObject(binding.labwareInstanceRef);
+    const refId = ref ? stringField(ref, 'id') : undefined;
+    if (refId) labwareBindingsByRole.set(roleId, refId);
+  }
+
+  // Index material bindings by roleId
+  const materialBindingsByRole = new Map<string, string>();
+  for (const entry of Array.isArray(bindings?.materials) ? (bindings.materials as unknown[]) : []) {
+    const binding = asObject(entry);
+    const roleId = binding ? stringField(binding, 'roleId') : undefined;
+    if (!roleId) continue;
+    const ref = asObject(binding.materialRef);
+    const refId = ref ? stringField(ref, 'id') : undefined;
+    if (refId) materialBindingsByRole.set(roleId, refId);
+  }
 
   const listCache = new Map<string, Promise<RecordEnvelope[]>>();
   const listKind = (kind: string): Promise<RecordEnvelope[]> => {
@@ -149,6 +173,34 @@ export async function proposeRoleBindings(
         }
       }
       candidates.sort(byRecordId);
+
+      // Check binding: does a binding exist for this role and does the target resolve?
+      const boundRefId = labwareBindingsByRole.get(roleId);
+      if (boundRefId) {
+        const boundEnvelope = await store.get(boundRefId);
+        if (boundEnvelope) {
+          const boundCandidate = candidateOf(boundEnvelope, 'labware');
+          roles.push({
+            ...base,
+            state: 'bound',
+            candidates,
+            bound: boundCandidate,
+          });
+          continue;
+        }
+        // Dangling binding: target doesn't exist
+        const fallbackState = stateOf(candidates);
+        roles.push({
+          ...base,
+          state: fallbackState,
+          candidates,
+          ...(candidates.length === 0
+            ? { reason: `binding target '${boundRefId}' does not exist; no labware record matches role '${roleId}' expectedLabwareKinds: ${kinds.join(', ')}` }
+            : { reason: `binding target '${boundRefId}' does not exist` }),
+        });
+        continue;
+      }
+
       roles.push({
         ...base,
         state: stateOf(candidates),
@@ -187,6 +239,34 @@ export async function proposeRoleBindings(
         }
       }
       const candidates = [...byId.values()].sort(byRecordId);
+
+      // Check binding: does a binding exist for this role and does the target resolve?
+      const boundRefId = materialBindingsByRole.get(roleId);
+      if (boundRefId) {
+        const boundEnvelope = await store.get(boundRefId);
+        if (boundEnvelope) {
+          const boundCandidate = candidateOf(boundEnvelope, 'material');
+          roles.push({
+            ...base,
+            state: 'bound',
+            candidates,
+            bound: boundCandidate,
+          });
+          continue;
+        }
+        // Dangling binding: target doesn't exist
+        const fallbackState = stateOf(candidates);
+        roles.push({
+          ...base,
+          state: fallbackState,
+          candidates,
+          ...(candidates.length === 0
+            ? { reason: `binding target '${boundRefId}' does not exist; no material or vendor-product record matches role '${roleId}' allowedMaterialIds: ${allowedIds.join(', ')}` }
+            : { reason: `binding target '${boundRefId}' does not exist` }),
+        });
+        continue;
+      }
+
       roles.push({
         ...base,
         state: stateOf(candidates),
