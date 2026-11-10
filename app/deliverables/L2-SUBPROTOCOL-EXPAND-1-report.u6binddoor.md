@@ -72,7 +72,7 @@ advc c2 demanded the bindings door read run/PLR records through `getRecordWithUI
 → Test Files 2 passed (2), Tests 7 passed (7)
 
 ### Coverage Gap
-No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at HEAD because this delta's own RunWorkspacePage.tsx calls apiClient.getRecordWithUI but the mock in src/run/RunWorkspacePage.surface.test.tsx only defined getRecord, so the suite fails with "apiClient.getRecordWithUI is not a function". That suite is PROHIBITED for this unit — the D-1 gate was pinned in u6binddoorsibfix1 instead.
+No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at HEAD because this delta's own RunWorkspacePage.tsx calls apiClient.getRecordWithUI but the mock in src/run/RunWorkspacePage.gc-section.test.tsx:87 only defined getRecord, so that suite fails with "apiClient.getRecordWithUI is not a function". The surface suite is GREEN — its mock at src/run/RunWorkspacePage.surface.test.tsx:27 does define getRecordWithUI. The D-1 gate was pinned in BindingModeEditor.test.tsx (asserts getRecordWithUI called AND getRecord not called), not in u6binddoorsibfix1 (which added mock entries only).
 
 L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE edb76724b4b783b0500c320ddbcebae184f0011f
 
