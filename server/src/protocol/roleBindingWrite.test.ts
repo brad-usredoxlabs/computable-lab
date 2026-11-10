@@ -1,0 +1,133 @@
+// @vitest-environment node
+import { describe, it, expect, vi } from 'vitest';
+import type { FastifyReply } from 'fastify';
+import type { AppContext } from '../../server.js';
+import type { RecordEnvelope, RecordStore } from '../store/types.js';
+import { writeRoleBindings, type BindingLists, type RoleBindingWriteResult } from './roleBindingWrite.js';
+import { createPlannedRunHandlers } from '../api/handlers/PlannedRunHandlers.js';
+
+function env(recordId: string, kind: string, body: Record<string, unknown> = {}): RecordEnvelope {
+  return { recordId, schemaId: 'test', payload: { kind, recordId, ...body }, meta: { kind } };
+}
+
+function fakeStore(records: RecordEnvelope[]) {
+  return {
+    get: vi.fn(async (id: string) => records.find((r) => r.recordId === id) ?? null),
+    update: vi.fn(async () => ({ success: true })),
+  };
+}
+
+const asStore = (store: unknown) => store as unknown as RecordStore;
+
+const protocol = (roles: Record<string, unknown>) => env('PRT-1', 'local-protocol', { roles });
+
+const run = (body: Record<string, unknown> = {}) =>
+  env('RUN-1', 'planned-run', {
+    localProtocolRefs: [{ kind: 'record', id: 'PRT-1', type: 'local-protocol' }],
+    ...body,
+  });
+
+const write = (records: RecordEnvelope[], bindings: BindingLists, body: Record<string, unknown> = {}) =>
+  writeRoleBindings({ store: asStore(fakeStore(records)), run: run(body), bindings });
+
+function bindingsOf(result: RoleBindingWriteResult): Record<string, unknown> {
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.message);
+  return result.bindings;
+}
+
+const labwareRole = { labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-x'] }] };
+const materialRole = { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['M-1'] }] };
+
+describe('writeRoleBindings', () => {
+  it('rejects a roleId no attached protocol declares and writes nothing', async () => {
+    const store = fakeStore([run(), protocol(labwareRole)]);
+    const result = await writeRoleBindings({
+      store: asStore(store),
+      run: run(),
+      bindings: { labware: [{ roleId: 'plat', labwareInstanceRef: 'LAB-1' }] },
+    });
+
+    expect(result).toMatchObject({ ok: false, code: 'NOT_A_DECLARED_ROLE' });
+    if (result.ok) throw new Error('expected rejection');
+    expect(result.message).toContain('plat');
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.get.mock.calls.map((c) => c[0])).toContain('PRT-1');
+  });
+
+  it('writes the ref type from the target record kind, not a literal', async () => {
+    const bindings = bindingsOf(await write(
+      [run(), protocol(labwareRole), env('LAB-1', 'labware', { name: 'Plate' })],
+      { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-1' }] },
+    ));
+
+    expect(bindings.labware).toEqual([
+      { roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'LAB-1', type: 'labware' } },
+    ]);
+  });
+
+  it('carries lotNumber from the vendor product, absent when the target has none', async () => {
+    const records = [run(), protocol(materialRole), env('VPR-1', 'vendor-product', { lotNumber: 'L-77' }), env('VPR-2', 'vendor-product')];
+    const withLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-1' }] }));
+    const withoutLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-2' }] }));
+
+    expect(withLot.materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'VPR-1', type: 'vendor-product' }, lotNumber: 'L-77' },
+    ]);
+    expect(withoutLot.materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'VPR-2', type: 'vendor-product' } },
+    ]);
+    const [material] = withoutLot.materials as Array<Record<string, unknown>>;
+    expect(Object.keys(material!)).not.toContain('lotNumber');
+  });
+
+  it('rejects an unknown target id by name', async () => {
+    const store = fakeStore([run(), protocol(labwareRole)]);
+    const result = await writeRoleBindings({
+      store: asStore(store),
+      run: run(),
+      bindings: { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-404' }] },
+    });
+
+    expect(result).toMatchObject({ ok: false, code: 'UNKNOWN_BINDING_TARGET' });
+    if (result.ok) throw new Error('expected rejection');
+    expect(result.message).toContain('LAB-404');
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('replaces only the posted roles and keeps bindings for other roles', async () => {
+    const other = { roleId: 'other', labwareInstanceRef: { kind: 'record', id: 'LAB-9', type: 'labware' } };
+    const bindings = bindingsOf(await write(
+      [run({ bindings: { labware: [other] } }), protocol(labwareRole), env('LAB-1', 'labware')],
+      { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-1' }] },
+      { bindings: { labware: [other] } },
+    ));
+
+    expect(bindings.labware).toEqual([
+      other,
+      { roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'LAB-1', type: 'labware' } },
+    ]);
+  });
+
+  it('handler saves only the run envelope and maps a rejected role to 400', async () => {
+    const records = [run(), protocol(labwareRole), env('LAB-1', 'labware')];
+    const store = fakeStore(records);
+    const handlers = createPlannedRunHandlers({ store: asStore(store) } as unknown as AppContext);
+    const reply = { status: vi.fn().mockReturnThis() } as unknown as FastifyReply;
+    const request = (roleId: string) =>
+      ({ params: { id: 'RUN-1' }, body: { labware: [{ roleId, labwareInstanceRef: 'LAB-1' }] } }) as any;
+
+    expect(await handlers.updateBindings(request('plate'), reply)).toEqual({ success: true });
+    expect(store.update).toHaveBeenCalledTimes(1);
+    const saved = store.update.mock.calls[0]![0] as { envelope: RecordEnvelope };
+    expect(saved.envelope.recordId).toBe('RUN-1');
+    expect(saved.envelope.payload.kind).toBe('planned-run');
+    expect(records.slice(1).map((r) => r.recordId)).not.toContain(saved.envelope.recordId);
+
+    const rejected = await handlers.updateBindings(request('plat'), reply);
+    expect(rejected).toMatchObject({ error: 'NOT_A_DECLARED_ROLE' });
+    if (!('error' in rejected)) throw new Error('expected ApiError');
+    expect(rejected.message).toContain('plat');
+    expect(store.update).toHaveBeenCalledTimes(1);
+  });
+});
