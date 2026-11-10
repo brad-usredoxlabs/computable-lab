@@ -27,6 +27,7 @@ import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
+import { RunProtocolList } from './RunProtocolList'
 import { GcRunSheetSection } from './gc/GcRunSheetSection'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
@@ -198,6 +199,7 @@ export function RunWorkspacePage() {
                 viewerToolbar={
                   <div className="run-workspace-toolbar">
                     <ModeToggle mode={mode} onChange={setMode} />
+                    <RunProtocolList runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
                   </div>
                 }
