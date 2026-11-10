@@ -53,7 +53,7 @@ export function LabMaterialNewPage() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') void searchOntology()
             }}
-            placeholder="DMEM, trypsin, fetal bovine serum..."
+            placeholder="Search ontology terms..."
             style={{ flex: 1, padding: '0.4rem 0.6rem' }}
           />
           <button

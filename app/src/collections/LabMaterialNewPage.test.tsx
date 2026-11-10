@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 /**
- * L2-LAB-MATERIAL-CREATE-1 u3 — /lab/materials/new is a working create surface:
- * ontology search (namespace + label shown), pick a term → the EXISTING
- * VendorProductBuilderModal hosts the authoring step, and its onSave navigates
- * back to /lab/materials.
+ * L2-LAB-MATERIAL-CREATE-1 u3 — /lab/materials/new: ontology search (namespace +
+ * label shown), explicit pick mounts the EXISTING VendorProductBuilderModal,
+ * and its onSave navigates back to /lab/materials.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -26,14 +25,13 @@ vi.mock('../shared/api/client', async (importOriginal) => {
   }
 })
 
-// The Exa layer must not probe the network in this unit's tests.
 vi.mock('../shared/lib/integrationFlags', () => ({
   exaVendorEnabled: () => Promise.resolve(false),
   noteExaUnavailable: () => undefined,
 }))
 
 // Stub the builder: this test owns the STITCHING contract (mount on pick +
-// navigate on onSave), not the modal's internals (which are read-only imports).
+// navigate on onSave), not the modal's internals (read-only import).
 vi.mock('../editor/material/VendorProductBuilderModal', () => ({
   VendorProductBuilderModal: ({ isOpen, ontologyRef, onClose, onSave }: any) =>
     isOpen ? (
@@ -71,23 +69,16 @@ function renderPage() {
   )
 }
 
-const DMEM_NCIT = {
-  curie: 'NCIT:I10518',
-  label: "Dulbecco's Modified Eagle Medium",
-  namespace: 'NCIT',
-  tier: 2 as const,
-  level: 'concept' as const,
-  score: 10,
-  source: 'ols4' as const,
-}
-const DMEM_F12_XCO = {
-  curie: 'XCO:0001366',
-  label: 'DMEM/F-12',
-  namespace: 'XCO',
-  tier: 2 as const,
-  level: 'concept' as const,
-  score: 11,
-  source: 'ols4' as const,
+const candidate = (curie: string, namespace: string, label: string) => ({
+  curie, label, namespace, tier: 2 as const, level: 'concept' as const, score: 10, source: 'ols4' as const,
+})
+const NCIT_DMEM = candidate('NCIT:I10518', 'NCIT', "Dulbecco's Modified Eagle Medium")
+const XCO_F12 = candidate('XCO:0001366', 'XCO', 'DMEM/F-12')
+
+async function searchDMEM() {
+  fireEvent.change(screen.getByTestId('lab-material-search-input'), { target: { value: 'DMEM' } })
+  fireEvent.click(screen.getByTestId('lab-material-search-button'))
+  return screen.findAllByTestId('lab-material-ontology-candidate')
 }
 
 describe('LabMaterialNewPage (L2-LAB-MATERIAL-CREATE-1 u3)', () => {
@@ -97,15 +88,11 @@ describe('LabMaterialNewPage (L2-LAB-MATERIAL-CREATE-1 u3)', () => {
     expect(screen.getByTestId('lab-material-search-input')).toBeDefined()
   })
 
-  it('(b) searching DMEM surfaces rows showing namespace AND label', async () => {
-    resolve.mockResolvedValue({ candidates: [DMEM_F12_XCO, DMEM_NCIT] })
+  it('(b) DMEM rows show namespace AND label; nothing is picked without a click', async () => {
+    resolve.mockResolvedValue({ candidates: [XCO_F12, NCIT_DMEM] })
     renderPage()
-    fireEvent.change(screen.getByTestId('lab-material-search-input'), { target: { value: 'DMEM' } })
-    fireEvent.click(screen.getByTestId('lab-material-search-button'))
-    const rows = await screen.findAllByTestId('lab-material-ontology-candidate')
+    const rows = await searchDMEM()
     expect(rows.length).toBe(2)
-    // Cross-namespace trap: both rows must show namespace + full label, and
-    // nothing may be picked without an explicit click.
     const ncitRow = rows.find((r) => r.textContent?.includes("Dulbecco's Modified Eagle Medium"))
     expect(ncitRow).toBeDefined()
     expect(ncitRow!.textContent).toContain('NCIT')
@@ -113,30 +100,24 @@ describe('LabMaterialNewPage (L2-LAB-MATERIAL-CREATE-1 u3)', () => {
     expect(screen.queryByTestId('vendor-builder-stub')).toBeNull()
   })
 
-  it('(c) clicking a candidate mounts the vendor-product builder with that ontologyRef', async () => {
-    resolve.mockResolvedValue({ candidates: [DMEM_F12_XCO, DMEM_NCIT] })
+  it('(c) clicking a candidate mounts the vendor builder with that ontologyRef; onClose clears it', async () => {
+    resolve.mockResolvedValue({ candidates: [XCO_F12, NCIT_DMEM] })
     renderPage()
-    fireEvent.change(screen.getByTestId('lab-material-search-input'), { target: { value: 'DMEM' } })
-    fireEvent.click(screen.getByTestId('lab-material-search-button'))
-    const rows = await screen.findAllByTestId('lab-material-ontology-candidate')
-    const ncitRow = rows.find((r) => r.textContent?.includes('NCIT'))!
-    fireEvent.click(ncitRow)
-    expect(screen.getByTestId('lab-material-vendor-builder')).toBeDefined()
+    const rows = await searchDMEM()
     // The stub prints `namespace:id`; id is the CURIE, so the pinned string is
-    // namespace-prefixed twice — proof the page passed the FULL candidate
-    // (namespace + curie), not a half-mapped ref.
+    // namespace-prefixed twice — proof the page passed namespace + curie, not a
+    // half-mapped ref.
+    fireEvent.click(rows.find((r) => r.textContent?.includes('NCIT'))!)
+    expect(screen.getByTestId('lab-material-vendor-builder')).toBeDefined()
     expect(screen.getByTestId('vendor-builder-ref').textContent).toBe('NCIT:NCIT:I10518')
-    // onClose clears the builder without navigating.
     fireEvent.click(screen.getByTestId('vendor-builder-close'))
     await waitFor(() => expect(screen.queryByTestId('vendor-builder-stub')).toBeNull())
   })
 
   it('(d) the builder onSave navigates back to /lab/materials', async () => {
-    resolve.mockResolvedValue({ candidates: [DMEM_NCIT] })
+    resolve.mockResolvedValue({ candidates: [NCIT_DMEM] })
     renderPage()
-    fireEvent.change(screen.getByTestId('lab-material-search-input'), { target: { value: 'DMEM' } })
-    fireEvent.click(screen.getByTestId('lab-material-search-button'))
-    const rows = await screen.findAllByTestId('lab-material-ontology-candidate')
+    const rows = await searchDMEM()
     fireEvent.click(rows[0]!)
     fireEvent.click(screen.getByTestId('vendor-builder-save'))
     await waitFor(() => expect(screen.getByTestId('materials-list-target')).toBeDefined())
