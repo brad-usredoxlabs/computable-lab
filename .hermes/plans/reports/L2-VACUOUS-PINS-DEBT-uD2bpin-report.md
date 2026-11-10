@@ -28,11 +28,10 @@ drift in the route prefix or suffix causes a test failure.
 
 ### AC2 — URL + GET semantics
 File: `client.ts`, line 5641.
-The method constructs the URL as `/api/runs/${encodeURIComponent(runId)}/role-binding-proposals`
-using `fetch(url)` with no second argument — HTTP GET is the default.
+The method builds `/runs/${encodeURIComponent(runId)}/role-binding-proposals`; `request()` at `client.ts:1612-1645` prepends `API_BASE` and calls `fetch(url, {...options, headers: {...}})` with no `method` in `options`, hence GET.
 AC2 is covered by:
-- Test 1 (line 48–65): verifies the method is GET (default, `init.method` is `undefined`)
-- Test 2 (line 67–76): verifies the URL includes proper percent-encoding via `encodeURIComponent`
+- Test 1 (line 47–61): verifies the method is GET (default, `init.method` is `undefined`)
+- Test 2 (line 63–71): verifies the URL includes proper percent-encoding via `encodeURIComponent`
 
 ### AC3 — No duplication of uD2pin
 Unit uD2pin (already on trunk) pins the same route in a different test file.
@@ -48,7 +47,7 @@ The test file contains 3 tests that form the mutation control set (M1/M2/M3):
 |-----|------|------|------------------------|
 | M1  | `client.roleBindingProposals.test.ts` | 57 | Full-string URL equality: any drift in prefix or suffix causes `toBe('/api/runs/run-1/role-binding-proposals')` to fail |
 | M2  | `client.roleBindingProposals.test.ts` | 70 | URL encoding: changing `encodeURIComponent(runId)` to identity or removing it breaks the `run%2F..%2F1` expectation |
-| M3  | `client.roleBindingProposals.test.ts` | 73-88 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
+| M3  | `client.roleBindingProposals.test.ts` | 73-87 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
 
 Adversarial review (advc c1, `reviews/L2-VACPINS-uD2bpin-advc-c1-l2t0832.md`)
 confirmed: 3 tests GREEN, 3 mutation controls M1/M2/M3 RED. Verdict: **ACCEPT
