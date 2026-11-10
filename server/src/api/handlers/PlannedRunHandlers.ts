@@ -7,6 +7,7 @@ import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import { PlannedRunFromLocalProtocolService } from '../../protocol/PlannedRunFromLocalProtocolService.js';
 import { protocolIdsOf, withAttachedProtocol, withDetachedProtocol } from '../../protocol/runProtocolList.js';
+import { proposeRoleBindings, type RoleBindingProposals } from '../../protocol/roleBindingProposal.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
 
 // ---------------------------------------------------------------------------
@@ -425,6 +426,40 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         message: 'mode must be implicit or csv',
       };
     },
+    /**
+     * GET /runs/:id/role-binding-proposals
+     * Read-only proposals from existing records; never writes.
+     * 404 when the run is absent, 400 when it is not a planned-run.
+     */
+    async getRoleBindingProposals(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<RoleBindingProposals | ApiError> {
+      const { id } = request.params;
+
+      const record = await ctx.store.get(id);
+      if (!record) {
+        reply.status(404);
+        return {
+          error: 'PLANNED_RUN_NOT_FOUND',
+          message: `Planned-run '${id}' not found`,
+        };
+      }
+
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'planned-run') {
+        reply.status(400);
+        return {
+          error: 'NOT_A_PLANNED_RUN',
+          message: `Record '${id}' is not a planned-run`,
+        };
+      }
+
+      const proposals = await proposeRoleBindings({ store: ctx.store, run: record });
+      reply.status(200);
+      return proposals;
+    },
+
     /**
      * POST /runs/:id/compile
      *
