@@ -7,6 +7,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
+import type { AppConfig } from '../../config/types.js';
 import { extractFromUrl, type SpecSheetExtractResult } from '../../ingestion/SpecSheetExtractor.js';
 
 export interface SpecSheetExtractRequest {
@@ -21,7 +22,11 @@ export interface SpecSheetHandlers {
   ): Promise<SpecSheetExtractResult | ApiError>;
 }
 
-export function createSpecSheetHandlers(): SpecSheetHandlers {
+export function createSpecSheetHandlers(deps: {
+  getAppConfig: () => AppConfig | undefined;
+}): SpecSheetHandlers {
+  const { getAppConfig } = deps;
+
   return {
     async extractSpecSheet(request, reply) {
       const body = request.body ?? {};
@@ -38,7 +43,7 @@ export function createSpecSheetHandlers(): SpecSheetHandlers {
       }
 
       try {
-        const result = await extractFromUrl(recordKind, url);
+        const result = await extractFromUrl(recordKind, url, getAppConfig());
         return result;
       } catch (err) {
         // Unmapped kinds throw from getSpecSheetFieldMap — pass through as 400

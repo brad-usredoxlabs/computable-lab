@@ -3,12 +3,13 @@
  * and extracts field proposals using a YAML field-map.
  *
  * Pure core: extractProposals(fieldMap, doc)
- * Orchestration: extractFromUrl(recordKind, url)
+ * Orchestration: extractFromUrl(recordKind, url, appConfig)
  *
  * No field names, vendor strings, or catalog numbers hardcoded here.
  * Everything drives from the YAML field map.
  */
 
+import type { AppConfig } from '../config/types.js';
 import type { SpecSheetFieldMap } from './SpecSheetFieldMaps.js';
 import { getSpecSheetFieldMap } from './SpecSheetFieldMaps.js';
 import { resolveExaConfig, exaGetContents } from '../integrations/exa.js';
@@ -149,12 +150,13 @@ export function extractProposals(
 export async function extractFromUrl(
   recordKind: string,
   url: string,
+  appConfig?: AppConfig,
 ): Promise<SpecSheetExtractResult> {
   // 1) Resolve field map — unmapped kind throws BEFORE any network call
   const fieldMap = await getSpecSheetFieldMap(recordKind);
 
   // 2) Resolve Exa config
-  const config = resolveExaConfig();
+  const config = resolveExaConfig(appConfig);
   if (!config) {
     return { configured: false, reason: 'not_configured', proposals: [] };
   }

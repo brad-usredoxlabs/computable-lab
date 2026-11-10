@@ -88,6 +88,7 @@ import {
 import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
+import { createSpecSheetHandlers } from './api/handlers/SpecSheetHandlers.js';
 import { createInventoryShelfHandlers } from './api/handlers/InventoryShelfHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
@@ -1686,6 +1687,9 @@ export async function createServer(
     routeOpts.identityHandlers = identityHandlers;
     routeOpts.authHandlers = authHandlers;
     routeOpts.labSyncHandlers = labSyncHandlers;
+    // Spec-sheet extraction: mounted unconditionally; Exa config is read live
+    // per request so a key added in config takes effect without a restart.
+    routeOpts.specSheetHandlers = createSpecSheetHandlers({ getAppConfig: () => ctx.appConfig });
     registerRoutes(instance, routeOpts);
     
     // Protocol Steps Routes (CRUD for protocol step sub-graphs, settings, etc.)

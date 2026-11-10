@@ -3,7 +3,7 @@
  *
  * The Extractor engine is already unit-tested; these tests cover the two
  * wiring defects from advc c1: (1) server.ts never mounted the handler, so
- * POST /ingestion/spec-sheet/extract 404'd, and (2) createSpecSheetHandlers
+ * POST /api/ingestion/spec-sheet/extract 404'd, and (2) createSpecSheetHandlers
  * ignored the live app config when resolving Exa credentials.
  */
 
@@ -55,13 +55,13 @@ describe('spec-sheet route mount (u2fix1)', () => {
     await rm(testRoot, { recursive: true, force: true });
   }, 30000);
 
-  it('mounts POST /ingestion/spec-sheet/extract (400-shaped, not 404)', async () => {
+  it('mounts POST /api/ingestion/spec-sheet/extract (400-shaped, not 404)', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/ingestion/spec-sheet/extract',
+      url: '/api/ingestion/spec-sheet/extract',
       payload: {},
     });
-    expect(res.statusCode).not.toBe(404);
+    expect(res.statusCode, res.payload).not.toBe(404);
     expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.payload) as { error?: string };
     expect(body.error).toBe('BAD_REQUEST');
