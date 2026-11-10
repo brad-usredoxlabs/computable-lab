@@ -2130,13 +2130,15 @@ export interface RoleProposal {
   reason?: string
 }
 
-/** `clarificationRequests` is an OPTIONAL add-on: absent until that leg publishes cards. */
+/** `clarificationRequests` is an OPTIONAL add-on: absent until that leg publishes cards.
+ *  Wire shape: a TOP-LEVEL sibling of `protocols` (server spreads it onto the
+ *  { protocols: [...] } projection), never nested per protocol. */
 export interface RoleBindingProposalsResponse {
   protocols: Array<{
     protocolId: string
     roles: RoleProposal[]
-    clarificationRequests?: Array<{ roleId?: string; prompt?: string }>
   }>
+  clarificationRequests?: Array<{ roleId?: string; prompt?: string }>
 }
 
 export const apiClient = {
