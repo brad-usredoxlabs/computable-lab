@@ -16,5 +16,5 @@ Fixed one failing test by adding `kind: 'planned-run'` to the mock PLR payload s
 - `npx vitest run src/graph/RunEditorRouter.test.tsx` → 2 passed (2) — GREEN
 - `npx tsc -p tsconfig.json --noEmit` → 13 pre-existing TS errors, 0 new errors
 
-L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE 01e4d871
-L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE b2b56c42
+L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE 01e4d871f03360f55f6c276b2e95e4a75178573d
+L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE 265d072bd1cabcb9b5f59a7302059adff6491724
