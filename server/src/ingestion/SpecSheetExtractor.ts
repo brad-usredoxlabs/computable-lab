@@ -121,7 +121,7 @@ function extractValue(line: string): string | null {
 // Segment a multi-field line into Label:Value pairs
 // ---------------------------------------------------------------------------
 // Spec-sheet lines often pack multiple fields using visual separators
-// (◉, |, •, ;). Each segment has "Label: Value" format.
+// (◉, |). Each segment has "Label: Value" format.
 // segmentLine returns [] for single-segment lines; for multi-segment lines
 // it returns [{label, value}, ...] so the extraction loop can match keywords
 // against segment labels instead of the whole line.
