@@ -41,3 +41,37 @@ run-toolbar link to role bindings (D1).
 - `git diff --stat 12c8fc55..HEAD` → 3 files changed, 71 insertions(+), 4 deletions(-)
 
 L2-SUBPROTO-u6binddoor-fix2 UNIT unit DONE eb677a035505122dac39b62721a0c02c740440d0
+
+## fix3 (advc c2 D-1 + D-2)
+
+### Summary
+advc c2 demanded the bindings door read run/PLR records through `getRecordWithUI` instead of `/api/records/:id`. Five commits replaced direct API calls with the UI-aware resolver across BindingModeEditor and RunWorkspacePage.
+
+### Commits (5)
+- 17438e32 — fix(lane2): BindingModeEditor loads the PLR through getRecordWithUI (u6binddoor-fix3 D-2)
+- 015bc868 — fix(lane2): BindingModeEditor loads its local protocol through getRecordWithUI (u6binddoor-fix3 D-2)
+- 3cb217e8 — fix(lane2): run toolbar gate reads the run envelope via getRecordWithUI (u6binddoor-fix3 D-1)
+- 3e5b217f — test(lane2): pin the bindings door to getRecordWithUI (u6binddoor-fix3)
+- b4857538 — test(lane2): fix mock types for getRecordWithUI (u6binddoor-fix3)
+
+### Changed Files (3)
+1. `app/src/graph/BindingMode/BindingModeEditor.tsx` — commits 17438e32 + 015bc868: replaced `/api/records/:id` with `getRecordWithUI` for PLR and protocol reads (D-2)
+2. `app/src/run/RunWorkspacePage.tsx` — commit 3cb217e8: toolbar gate reads run envelope via `getRecordWithUI` (D-1)
+3. `app/src/graph/BindingMode/BindingModeEditor.test.tsx` — commits 3e5b217f + b4857538: pins the bindings door to `getRecordWithUI`; these pins were mutation-proven in the unit that wrote them (3e5b217f), not here
+
+### Measured Diff
+```
+.../graph/BindingMode/BindingModeEditor.test.tsx   | 27 ++++++++++++++++++----
+ app/src/graph/BindingMode/BindingModeEditor.tsx    |  8 ++++---
+ app/src/run/RunWorkspacePage.tsx                   |  4 ++--
+ 3 files changed, 29 insertions(+), 10 deletions(-)
+```
+
+### Test Summary
+`npx vitest run src/graph/BindingMode/BindingModeEditor.test.tsx src/graph/RunEditorRouter.test.tsx`
+→ Test Files 2 passed (2), Tests 7 passed (7)
+
+### Coverage Gap
+No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at baseline in this tree, so D-1 remains unpinned.
+
+L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE PENDING_SHA
