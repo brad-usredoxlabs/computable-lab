@@ -129,6 +129,28 @@ describe('extractFromUrl — not-configured', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Arm (d) — Honest config is threaded through to resolveExaConfig    */
+/* ------------------------------------------------------------------ */
+
+describe('extractFromUrl — threads the caller app config to resolveExaConfig', () => {
+  it('passes the exact app config object into resolveExaConfig', async () => {
+    const exaMod = await import('../integrations/exa.js');
+    const spy = vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue(null);
+    const cfg = {
+      integrations: { exa: { apiKey: 'test-key', enabled: true } },
+    } as unknown as Parameters<typeof extractFromUrl>[2];
+
+    const result = await extractFromUrl('vendor-product', 'https://example.com/foo', cfg);
+
+    expect(spy).toHaveBeenCalledWith(cfg);
+    expect(result.configured).toBe(false);
+    expect(result.reason).toBe('not_configured');
+
+    vi.restoreAllMocks();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Block record on fetch failure                                      */
 /* ------------------------------------------------------------------ */
 
