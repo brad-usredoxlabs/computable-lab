@@ -468,7 +468,19 @@ describe('extractProposals — positional extraction scoped per table', () => {
     expect(catalogs[0].value).toBe('25200056');
   });
 
-  it('uses the last header layout for subsequent data rows (defect 2)', () => {
+  it('pins to the last header layout (D2 — two-table document shape)', () => {
+    // D2 reality: the per-field loop resets lastHeader per mapping, so each
+    // mapping independently walks all lines. With two headers in swapped order
+    // followed by one data row, the second header layout wins for BOTH fields.
+    //
+    // IN:  "Catalog Number | Volume"  (header1: Cat@0, Vol@1)
+    //       "Volume | Catalog Number"  (header2: Vol@0, Cat@1)
+    //       "10 mL | X9"               (data)
+    // OUT: catalog_number = 'X9'  (position 1 from header2)
+    //       package_size   = '10 mL' (position 0 from header2)
+    //
+    // Both fields are extractable because each mapping independently
+    // scans all lines and pins to the last header that defines its keyword.
     const fieldMap: SpecSheetFieldMap = {
       recordKind: 'vendor-product',
       fieldMappings: [
@@ -485,12 +497,12 @@ describe('extractProposals — positional extraction scoped per table', () => {
 
     const result = extractProposals(fieldMap, doc);
 
-    // catalog_number should be at position 1 (from the second header), not 0
+    // catalog_number at position 1 (from second header), not 0
     const catalogs = result.filter((p) => p.targetField === 'catalog_number');
     expect(catalogs).toHaveLength(1);
     expect(catalogs[0].value).toBe('X9');
 
-    // package_size should be at position 0 (from the second header)
+    // package_size at position 0 (from second header)
     const packages = result.filter((p) => p.targetField === 'package_size');
     expect(packages).toHaveLength(1);
     expect(packages[0].value).toBe('10 mL');
