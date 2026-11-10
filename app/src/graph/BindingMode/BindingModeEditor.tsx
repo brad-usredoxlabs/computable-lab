@@ -105,8 +105,10 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
     const loadData = async () => {
       try {
-        const pr = await apiClient.getRecord(id)
+        const prResp = await apiClient.getRecordWithUI(id)
         if (!active) return
+        const pr = prResp.record
+        if (!pr) throw new Error(`planned-run not found: ${id}`)
         setPlannedRun(pr)
 
         const prPayload = pr.payload as unknown as PlannedRunPayload
@@ -116,8 +118,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
         if (prPayload.localProtocolRef?.id) {
           try {
-            const lp = await apiClient.getRecord(prPayload.localProtocolRef.id)
-            if (active) setLocalProtocol(lp)
+            const lp = (await apiClient.getRecordWithUI(prPayload.localProtocolRef.id)).record
+            if (active && lp) setLocalProtocol(lp)
           } catch {
             // local-protocol not found — continue without it
           }

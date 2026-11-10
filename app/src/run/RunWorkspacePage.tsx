@@ -53,6 +53,7 @@ export function RunWorkspacePage() {
   // stays byte-identical (bait #2). No SECOND getRecord is fired here; this
   // reuses the page's single mount fetch.
   const [runKind, setRunKind] = useState<string | null>(null)
+  const [hasPlannedRunRef, setHasPlannedRunRef] = useState(false)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -66,9 +67,9 @@ export function RunWorkspacePage() {
     }
     if (!runId) return
     let cancelled = false
-    apiClient.getRecord(runId)
+    apiClient.getRecordWithUI(runId)
       .then((env) => {
-        const payload = env.payload as Record<string, unknown>
+        const payload = (env.record?.payload ?? {}) as Record<string, unknown>
         const sid = typeof payload.studyId === 'string' ? payload.studyId : null
         if (!cancelled) setResolvedStudyId(sid ?? SCRATCH_STUDY_ID)
         const egId = typeof payload.methodEventGraphId === 'string' ? payload.methodEventGraphId : undefined
@@ -77,9 +78,14 @@ export function RunWorkspacePage() {
         if (!cancelled) setRunTitle(t)
         const k = typeof payload.kind === 'string' ? payload.kind : null
         if (!cancelled) setRunKind(k)
+        const prr = payload.plannedRunRef as { id?: string } | undefined
+        if (!cancelled) setHasPlannedRunRef(typeof prr?.id === 'string')
       })
       .catch(() => {
-        if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
+        if (!cancelled) {
+          setResolvedStudyId(SCRATCH_STUDY_ID)
+          setHasPlannedRunRef(false)
+        }
       })
     return () => { cancelled = true }
   }, [urlStudyId, runId])
@@ -205,6 +211,7 @@ export function RunWorkspacePage() {
                     <RunProtocolList runId={runId} />
                     <RunPlanGraphBuild runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                    {hasPlannedRunRef ? <a className="run-bindings-link" href={`/runs/${runId}/bindings`}>Role bindings</a> : null}
                   </div>
                 }
               >

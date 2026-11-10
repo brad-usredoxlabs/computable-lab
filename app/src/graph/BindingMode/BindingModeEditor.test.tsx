@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { BindingModeEditor } from './BindingModeEditor'
 import { apiClient } from '../../shared/api/client'
+import { ApiError } from '../../shared/api/errors'
 import type { RecordEnvelope } from '../../types/kernel'
+import type { RecordWithUIResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
 
 // Mock the platform registry hook
@@ -28,6 +30,7 @@ vi.mock('../labware/DeckVisualizationPanel', () => ({
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
+    getRecordWithUI: vi.fn(),
     listRecordsByKind: vi.fn(),
     updatePlannedRunBindings: vi.fn(),
   },
@@ -102,14 +105,14 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('BindingModeEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(apiClient.getRecord).mockReset()
+    vi.mocked(apiClient.getRecordWithUI).mockReset()
     vi.mocked(apiClient.listRecordsByKind).mockReset()
     vi.mocked(apiClient.updatePlannedRunBindings).mockReset()
 
-    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return mockPlannedRun
-      if (id === 'LPR-000001') return mockLocalProtocol
-      throw new Error('Not found')
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
     })
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
@@ -192,5 +195,34 @@ describe('BindingModeEditor', () => {
       },
       { timeout: 1000 },
     )
+  })
+
+  it('loads the planned-run through getRecordWithUI, not the 404-ing records arm', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Labware roles')).toBeInTheDocument()
+    })
+
+    expect(apiClient.getRecordWithUI).toHaveBeenCalledWith('PLR-000001')
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
+  })
+
+  it('shows rejection message when planned-run is not found', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-404" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/record not found: PLR-404/)).toBeInTheDocument()
+    })
+
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
   })
 })
