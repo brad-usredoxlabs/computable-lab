@@ -3,10 +3,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { protocolRefsOf } from './runProtocolRefs'
 import { RunProtocolList } from './RunProtocolList'
 
-const mocks = vi.hoisted(() => ({ getRecord: vi.fn(), listRecordsByKind: vi.fn() }))
+const mocks = vi.hoisted(() => ({ getRecord: vi.fn(), getRecordWithUI: vi.fn(), listRecordsByKind: vi.fn() }))
 
 vi.mock('../shared/api/client', () => ({
-  apiClient: { getRecord: mocks.getRecord, listRecordsByKind: mocks.listRecordsByKind },
+  apiClient: {
+    getRecord: mocks.getRecord,
+    getRecordWithUI: mocks.getRecordWithUI,
+    listRecordsByKind: mocks.listRecordsByKind,
+  },
 }))
 
 afterEach(() => {
@@ -15,6 +19,7 @@ afterEach(() => {
 })
 beforeEach(() => {
   mocks.getRecord.mockReset()
+  mocks.getRecordWithUI.mockReset()
   mocks.listRecordsByKind.mockReset()
   mocks.listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
 })
@@ -108,6 +113,18 @@ describe('RunProtocolList', () => {
     const items = await screen.findAllByRole('listitem')
     expect(items).toHaveLength(1)
     expect(labelText(items[0]!)).toBe('Legacy (lead)')
+  })
+
+  it('reads the PLR via getRecordWithUI not getRecord', async () => {
+    // /api/records/:id 404s for tree-store records; only /ui/record/:id serves them.
+    mocks.getRecord.mockResolvedValueOnce(record('RUN-9', { plannedRunRef: { id: 'PLR-9' } }))
+    mocks.getRecordWithUI.mockResolvedValueOnce({ record: plr('PLR-9', [{ id: 'PRT-a', label: 'Alpha' }]) })
+    render(<RunProtocolList runId="RUN-9" />)
+    const items = await screen.findAllByRole('listitem')
+    expect(labelText(items[0]!)).toBe('Alpha (lead)')
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('PLR-9')
+    expect(mocks.getRecord).toHaveBeenCalledTimes(1)
+    expect(mocks.getRecord).not.toHaveBeenCalledWith('PLR-9')
   })
 
   it('renders nothing when the run has no plannedRunRef', async () => {
