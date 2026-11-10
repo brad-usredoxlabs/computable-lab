@@ -125,8 +125,9 @@ Diagnosis (evidence, not inference):
   replaces the module, so no product-side change can supply the missing export. The brief forbids
   editing `RunWorkspacePage.surface.test.tsx`.
 
-Full log retained outside git: /home/brad/.runproto-u5-scratch/surface.log (scratch dir removed at
-exit; the raw excerpt above is the complete failure summary).
+Full log was captured at /home/brad/.runproto-u5-scratch/surface.log during the run; the probe
+scratch directory is removed at exit per the brief (the raw excerpt above is the complete failure
+summary, and the mutation was reverted before commit).
 
 Resume condition / next action (owner: orchestrator): open a separate unit to add
 `useOptionalEventEditor` to the surface test's `EventEditorContext` mock (test-only, prohibited for
