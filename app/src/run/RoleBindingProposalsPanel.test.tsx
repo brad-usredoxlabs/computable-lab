@@ -55,10 +55,12 @@ const threeRoles = {
           reason: 'No labware record matches the declared kind',
         },
       ],
-      // Optional u3clarify card; absent-tolerant. When present its prompt wins.
-      clarificationRequests: [{ roleId: 'enzyme', prompt: 'Which enzyme should this run use?' }],
     },
   ],
+  // Optional u3clarify cards are TOP-LEVEL siblings of `protocols` on the wire
+  // (server: { ...proposals, ...{ clarificationRequests: cards } }). Absent-tolerant;
+  // when present the server prompt wins over the panel fallback.
+  clarificationRequests: [{ roleId: 'enzyme', prompt: 'Which enzyme should this run use?' }],
 }
 
 describe('RoleBindingProposalsPanel', () => {
