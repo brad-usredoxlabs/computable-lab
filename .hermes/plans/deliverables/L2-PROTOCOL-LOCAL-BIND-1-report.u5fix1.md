@@ -64,3 +64,5 @@ shared install and are untracked/ignored — tree is otherwise clean.
 - Orchestrator may reload the lane stack and let live verification (browser review)
   exercise the proposals panel against the real endpoint; no further code change
   identified here.
+
+L2-PROTOCOL-LOCAL-BIND-1-u5fix1 UNIT u5fix1 DONE 575379e964c6b5e93fff8d574a3653e65398f6c6
