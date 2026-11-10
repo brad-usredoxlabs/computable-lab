@@ -10,7 +10,8 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { apiClient, ApiError } from '../shared/api/client'
+import { apiClient } from '../shared/api/client'
+import { ApiError } from '../shared/api/errors'
 
 export interface RunPlanGraphBuildProps {
   runId: string
@@ -24,10 +25,6 @@ const controlStyle: CSSProperties = {
 const resultStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-text)', whiteSpace: 'nowrap' }
 const reusedStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-text-dim)', fontStyle: 'italic' }
 const errorStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-error)', whiteSpace: 'nowrap' }
-
-interface ResolveResult {
-  plannedRunId: string
-}
 
 /**
  * Resolve the planned-run id:
