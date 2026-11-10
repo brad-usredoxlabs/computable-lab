@@ -70,3 +70,5 @@ Commit (i) `b8d9dd8eca559245c80bf60459665baf2dd9ab6d` contains this report; comm
 Containment proof: `git cat-file -e b8d9dd8eca559245c80bf60459665baf2dd9ab6d:L2-SUBPROTOCOL-EXPAND-1-report.u6builddoorfix1.md` → rc=0.
 
 L2-SUBPROTOCOL-EXPAND-1-u6builddoorfix1pw UNIT u6builddoorfix1pw DONE b8d9dd8eca559245c80bf60459665baf2dd9ab6d
+
+CONTAINMENT (trunk-reachable): commit (ii) 3622025dc14ce12937b5df42d6dd4164391cae7e; supersedes b8d9dd8e containment line (not trunk-reachable).
