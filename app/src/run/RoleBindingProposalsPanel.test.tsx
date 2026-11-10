@@ -108,4 +108,23 @@ describe('RoleBindingProposalsPanel', () => {
     expect(container.firstChild).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
   })
+
+  it('treats a NOT_A_PLANNED_RUN refusal (400) as nothing to show — not a red alert', async () => {
+    mocks.getRoleBindingProposals.mockRejectedValue(
+      new ApiError({ status: 400, code: 'HTTP_400', message: "NOT_A_PLANNED_RUN: Record 'RUN-x' is not a planned-run" }),
+    )
+    const { container } = render(<RoleBindingProposalsPanel runId="run-1" />)
+    await settle()
+    expect(container.firstChild).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('still renders an alert for a 400 with a different error token (not silenced)', async () => {
+    mocks.getRoleBindingProposals.mockRejectedValue(
+      new ApiError({ status: 400, code: 'HTTP_400', message: 'NO_PROTOCOL_ATTACHED: no protocol' }),
+    )
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+    await settle()
+    expect(screen.queryByRole('alert')).not.toBeNull()
+  })
 })
