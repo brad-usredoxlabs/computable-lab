@@ -316,12 +316,8 @@ export function createPlannedRunHandlers(ctx: AppContext) {
      * DELETE /runs/:id/protocols/:protocolId
      *
      * Detach one protocol ref from a planned-run's ordered protocol list.
-     * Idempotent: detaching an id that is not in the list is a 200 no-op.
-     * Returns the resulting ordered id list.
-     *
-     * Returns { success: true, protocolRefs: string[] } on success (200).
-     * Returns 404 PLANNED_RUN_NOT_FOUND.
-     * Returns 400 NOT_A_PLANNED_RUN.
+     * Idempotent: an id not in the list is a 200 no-op. Returns the resulting
+     * ordered id list; 404 PLANNED_RUN_NOT_FOUND, 400 NOT_A_PLANNED_RUN.
      */
     async detachProtocol(
       request: FastifyRequest<{

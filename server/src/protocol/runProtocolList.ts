@@ -112,11 +112,9 @@ export function withAttachedProtocol(
 /**
  * Detach a protocol ref (by id) from a run payload, returning a new payload.
  *
- * Inverse of withAttachedProtocol. Idempotent: detaching an id that is not
- * present returns a copy unchanged, and the input payload is never mutated.
- * Every list entry whose id matches is removed; when the legacy singular ref
- * names the same id it is deleted too, otherwise protocolRefsOf would
- * re-surface it through the read-compat path.
+ * Inverse of withAttachedProtocol; idempotent and never mutates the input.
+ * Removes every matching list entry and deletes the legacy singular ref when
+ * it names the same id, so protocolRefsOf cannot re-surface the detached ref.
  */
 export function withDetachedProtocol(
   payload: Record<string, unknown>,

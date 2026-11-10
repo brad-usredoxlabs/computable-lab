@@ -241,13 +241,11 @@ describe('PlannedRunHandlers', () => {
         Params: { id: string; protocolId: string };
       }>;
     }
-
     it('returns 200 with the remaining ordered ids and updates the record', async () => {
       const store = makeMockStore();
       vi.mocked(store.get).mockResolvedValue(runEnvelope);
       const handlers = createPlannedRunHandlers(makeMockCtx(store));
       const reply = makeMockReply();
-
       const result = await handlers.detachProtocol(detachRequest('PLR-1', 'LPR-A'), reply);
 
       expect(reply.statusValue).toBe(200);
@@ -262,7 +260,6 @@ describe('PlannedRunHandlers', () => {
       vi.mocked(store.get).mockResolvedValue(runEnvelope);
       const handlers = createPlannedRunHandlers(makeMockCtx(store));
       const reply = makeMockReply();
-
       const result = await handlers.detachProtocol(detachRequest('PLR-1', 'LPR-Z'), reply);
 
       expect(reply.statusValue).toBe(200);
@@ -273,7 +270,6 @@ describe('PlannedRunHandlers', () => {
       const store = makeMockStore();
       const handlers = createPlannedRunHandlers(makeMockCtx(store));
       const reply = makeMockReply();
-
       const result = await handlers.detachProtocol(detachRequest('PLR-none', 'LPR-A'), reply);
 
       expect(reply.statusValue).toBe(404);
@@ -293,7 +289,6 @@ describe('PlannedRunHandlers', () => {
       } as unknown as RecordEnvelope);
       const handlers = createPlannedRunHandlers(makeMockCtx(store));
       const reply = makeMockReply();
-
       const result = await handlers.detachProtocol(detachRequest('PRT-1', 'LPR-A'), reply);
 
       expect(reply.statusValue).toBe(400);
