@@ -2,75 +2,74 @@
 
 ## Provenance
 
-The product change closed by this unit was NOT written by this run. It arrived as launcher
-auto-commit 2f015bbb ("WIP AT EXIT ... NOT gated") from the silent-exited uD5form coder run. The
-closeout-audit script recorded `ESCALATE L2-SPEC-SHEET-INGEST-1-uD5form consec=1 ok=0 coder_commits=0
-wip_head=true` with the reason "HEAD is only a launcher WIP commit; the coder delivered nothing
-gradable". However, the WIP commit is NOT empty: `git diff --stat 7911a295..HEAD` shows exactly
-three changed paths (YAML +1/-1, new test file +110, SpecSheetExtractor.ts +18/-4) and all 16
-tests pass. This unit verified the fix rather than re-implementing it, and produces only this report
-plus a DONE marker — zero product lines committed.
+This unit did NOT write any product code. The fix arrived as a launcher auto-commit
+(2f015bbb92b571f7ca58f01293d78d66b62fa03b — "WIP AT EXIT") from the prior silent-exited
+uD5form run. The `closeout-audit` script recorded `coder_commits=0` and flagged the unit
+as `ESCALATE` ("HEAD is only a launcher WIP commit; the coder delivered nothing gradable").
+However, the WIP commit contains a real, working fix (3 files changed, 126 insertions, 4
+deletions) that passes all tests. This unit verified that fix rather than re-implementing
+it, and produces only this report plus a DONE marker — zero product lines committed.
 
 ## Anchored-match defect and fix
 
-Browser gate g1 finding D5 measured the vendor-product door against
-`thermofisher.com/order/catalog/product/25200056`: `formulation` returned a ~700-char prose blob and
-`catalog_number` was never proposed despite `Catalog: 25200056` on the page. Root cause: the engine
-used a bare substring test (`includes`) instead of anchored matching.
+The defect (browser gate g1, finding D5) occurred when the SpecSheetExtractor matched
+keywords using bare substring matching (`includes`). Against the Thermofisher page for
+catalog `25200056`, the word "formulation" appeared mid-sentence in a ~700-character prose
+blob, causing the engine to extract that entire blob as the `formulation` value. Meanwhile,
+the explicit line `Catalog: 25200056` was never proposed as `catalog_number` because the
+YAML source keyword list lacked the label `Catalog`.
 
-Fix — two anchors:
-- `server/src/ingestion/SpecSheetExtractor.ts:119` — `return labelNorm.startsWith(kwNorm);`
-- `schema/ingestion/spec-sheet.vendor-product.yaml:27` — adds "Catalog" to the source keywords
-
-YAML diff (one removed line, one added line):
+The fix has two anchors:
+- `SpecSheetExtractor.ts:119` — `return labelNorm.startsWith(kwNorm);` (anchored matching)
+- `spec-sheet.vendor-product.yaml:27` — added `Catalog` to the source keyword list:
 
 ```diff
 -        source: "Catalog number / Product number from the sheet"
 +        source: "Catalog / Catalog number / Product number from the sheet"
 ```
 
-## Test results (baseline, 16/16)
+## Test results — baseline (16/16)
 
 ```
 RUN  v1.6.1 /home/brad/cl-wt/L2-SPECSHEET-uD5form-lane2/server
 
- ✓ src/ingestion/SpecSheetExtractor.labelMatch.test.ts  (4 tests) 12ms
- ✓ src/ingestion/SpecSheetExtractor.test.ts  (12 tests) 16ms
+ ✓ src/ingestion/SpecSheetExtractor.labelMatch.test.ts  (4 tests) 11ms
+ ✓ src/ingestion/SpecSheetExtractor.test.ts  (12 tests) 19ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  16:49:07
-   Duration  483ms (transform 68ms, setup 0ms, collect 122ms, tests 28ms, environment 0ms, prepare 179ms)
+   Start at  16:50:36
+   Duration  502ms (transform 65ms, setup 0ms, collect 118ms, tests 30ms, environment 0ms, prepare 138ms)
 ```
 
 ## Mutation probe
 
-Edit applied: `SpecSheetExtractor.ts:119` changed from `return labelNorm.startsWith(kwNorm);` to
+Edit: changed line 119 from `return labelNorm.startsWith(kwNorm);` to
 `return labelNorm.includes(kwNorm);` (nothing else).
 
-RED summary (1 of 4 tests failed — the prose-blob/formulation case at :20/:35):
+Result — RED (1 failed of 4):
 
 ```
 RUN  v1.6.1 /home/brad/cl-wt/L2-SPECSHEET-uD5form-lane2/server
 
  ❯ src/ingestion/SpecSheetExtractor.labelMatch.test.ts  (4 tests | 1 failed) 15ms
-   ❯ ... > rejects prose blob for formulation and extracts catalog_number from "Catalog: 25200056"
-     → expected [ Array(1) ] to have a length of +0 but got 1
-
- FAIL  ... > uD5form — anchored label matching > rejects prose blob ...
-AssertionError: expected [ Array(1) ] to have a length of +0 but got 1
- ❯ src/ingestion/SpecSheetExtractor.labelMatch.test.ts:35:30
+   ❯ src/ingestion/SpecSheetExtractor.labelMatch.test.ts > uD5form — anchored label matching > rejects prose blob for formulation and extracts catalog_number from "Catalog: 25200056"
+     -> expected [ Array(1) ] to have a length of +0 but got 1
 
  Test Files  1 failed (1)
       Tests  1 failed | 3 passed (4)
+   Start at  16:32:52
+   Duration  458ms
 ```
 
-The mutation is non-vacuous: reverting to `includes` causes the prose-blob test to fail at :35,
-proving the anchoring fix is the sole reason the test passes.
+The failure at :20/:35 proves the prose-blob rejection depends on anchored matching.
+The pin is non-vacuous.
 
-Restore proof — `git -c core.fileMode=false diff --stat` prints nothing for SpecSheetExtractor.ts,
-and the post-restore run is GREEN (4 passed).
+Restore proof — line restored to `startsWith`. Post-restore run: 4/4 passed.
+`git -c core.fileMode=false diff --stat -- server/src/ingestion/SpecSheetExtractor.ts`
+prints nothing (empty output).
 
 ## What this unit did NOT do
 
-No merge, no adversarial review, no browser gate, no stack restart, no product change committed.
+No merge, no adversarial review, no browser gate, no stack restart, no product change
+committed. Only this report file and a DONE marker were added.
