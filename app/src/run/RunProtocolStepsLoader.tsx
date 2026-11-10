@@ -74,27 +74,36 @@ function labwareBindingsFromPayload(pp: Record<string, unknown>): LabwareBinding
 /** Resolve run → plannedRunRef (PLR) → protocolRef → protocol record. */
 async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | null> {
   try {
-    const runEnv = await apiClient.getRecord(runId)
-    const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+    // Both the run envelope and the PLR are tree-store records: /api/records/:id 404s
+    // for them, only /ui/record/:id serves them (advc-c1 D2 — the read threw before
+    // the PLR arm ran, so the role surface never mounted).
+    const runResp = await apiClient.getRecordWithUI(runId)
+    const rp = (runResp.record?.payload ?? null) as Record<string, unknown> | null
     const plr = rp?.plannedRunRef as { id?: string } | undefined
-    if (!plr?.id) return null
-    const plrEnv = await apiClient.getRecord(plr.id)
-    const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+    if (typeof plr?.id !== 'string') return null
+    const plrResp = await apiClient.getRecordWithUI(plr.id)
+    const pp = (plrResp.record?.payload ?? null) as Record<string, unknown> | null
     // The PLR payload is in hand exactly here — its `bindings.labware` say
     // WHICH concrete plate this run bound to each declared role (PROTO-AI-10).
     const labwareBindings = pp ? labwareBindingsFromPayload(pp) : {}
-    const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string; kind?: string; label?: string } | undefined
+    // A specialized run's PLR names the LOCAL protocol it was specialized into under
+    // `localProtocolRef`; `protocolRef`/`sourceRef` are the universal arms.
+    const protoRef = (pp?.protocolRef ?? pp?.localProtocolRef ?? pp?.sourceRef) as
+      { id?: string; kind?: string; label?: string } | undefined
     if (typeof protoRef?.id !== 'string') return null
     const attachedId = protoRef.id
     const label = typeof protoRef.label === 'string' ? protoRef.label : null
-    const kind = typeof protoRef.kind === 'string' ? protoRef.kind : (pp?.kind as string | undefined)
+    // `localProtocolRef` may omit `kind` — the key itself says the protocol is local.
+    const kind = typeof protoRef.kind === 'string'
+      ? protoRef.kind
+      : (pp?.localProtocolRef === protoRef ? 'local-protocol' : pp?.kind as string | undefined)
     if (kind === 'local-protocol') {
       try {
-        const lpEnv = await apiClient.getRecord(attachedId)
-        const lp = (lpEnv?.payload ?? lpEnv) as Record<string, unknown> | null
+        const lpResp = await apiClient.getRecordWithUI(attachedId)
+        const lp = (lpResp.record?.payload ?? null) as Record<string, unknown> | null
         const inh = lp?.inherits_from as { id?: string } | undefined
-        const lpSha = (lpEnv as { meta?: { contentSha?: string; commitSha?: string } } | undefined)?.meta?.contentSha
-          ?? (lpEnv as { meta?: { commitSha?: string } } | undefined)?.meta?.commitSha
+        const lpMeta = lpResp.record?.meta as { contentSha?: string; commitSha?: string } | undefined
+        const lpSha = lpMeta?.contentSha ?? lpMeta?.commitSha
         if (typeof inh?.id === 'string') {
           return { attachedId, stepsId: inh.id, label, labwareBindings, ...(lpSha ? { sha: lpSha } : {}) }
         }
@@ -151,15 +160,16 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
         // steps so the rail's resource sections are filled on load too.
         void (async () => {
           try {
-            const env = await apiClient.getRecord(stepsId)
+            // The steps record is a tree-store record too — same /ui/record arm.
+            const env = await apiClient.getRecordWithUI(stepsId)
             if (cancelled) return
-            const payload = ((env as { payload?: unknown })?.payload ?? env) as Record<string, unknown>
+            const payload = (env.record?.payload ?? {}) as Record<string, unknown>
             sel?.setResources(protocolResourceSummaries(payload))
             // The attached record's content sha rides in the identity once the
             // record lands (protocol_edit staleness anchor, PROTO-AI-6). Only
             // when the STEPS record IS the attached record (universal attach);
             // the LPR branch captured its own sha in resolveRunProtocol.
-            const meta = (env as { meta?: { contentSha?: string; commitSha?: string } })?.meta
+            const meta = env.record?.meta as { contentSha?: string; commitSha?: string } | undefined
             const sha = resolved && stepsId === resolved.attachedId
               ? meta?.contentSha ?? meta?.commitSha
               : undefined
