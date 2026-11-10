@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { BindingModeEditor } from './BindingModeEditor'
 import { apiClient } from '../../shared/api/client'
 import type { RecordEnvelope } from '../../types/kernel'
+import type { RecordWithUIResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
 
 // Mock the platform registry hook
@@ -108,9 +109,9 @@ describe('BindingModeEditor', () => {
     vi.mocked(apiClient.updatePlannedRunBindings).mockReset()
 
     vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return { record: mockPlannedRun }
-      if (id === 'LPR-000001') return { record: mockLocalProtocol }
-      return { record: null }
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      return { record: null, uiSpec: null, schema: null } as unknown as RecordWithUIResponse
     })
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
