@@ -58,7 +58,7 @@ export function LabMaterialNewPage() {
               <button type="button" data-testid="lab-material-ontology-candidate"
                 onClick={() => setOntologyRef(candidateToOntologyRef(candidate))}
                 style={{ textAlign: 'left', width: '100%', padding: '0.5rem', margin: '0.25rem 0' }}>
-                <span style={{ fontWeight: 600 }}>{candidate.namespace}</span>
+                <span data-testid="lab-material-candidate-namespace" style={{ fontWeight: 600 }}>{candidate.namespace}</span>
                 {' · '}{candidate.curie}{' — '}{candidate.label}
               </button>
             </li>

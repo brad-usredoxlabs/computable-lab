@@ -5,7 +5,7 @@
  * and its onSave navigates back to /lab/materials.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 
@@ -89,8 +89,10 @@ describe('LabMaterialNewPage (L2-LAB-MATERIAL-CREATE-1 u3)', () => {
     expect(rows.length).toBe(2)
     const ncitRow = rows.find((r) => r.textContent?.includes("Dulbecco's Modified Eagle Medium"))
     expect(ncitRow).toBeDefined()
-    expect(ncitRow!.textContent).toContain('NCIT')
-    expect(rows.find((r) => r.textContent?.includes('DMEM/F-12'))!.textContent).toContain('XCO')
+    // Namespace must be its OWN element — a whole-row toContain('NCIT') is
+    // already satisfied by the rendered CURIE and witnesses nothing (advc c1 D1).
+    expect(within(ncitRow!).getAllByTestId('lab-material-candidate-namespace').map((n) => n.textContent)).toEqual(['NCIT'])
+    expect(within(rows.find((r) => r.textContent?.includes('DMEM/F-12'))!).getAllByTestId('lab-material-candidate-namespace').map((n) => n.textContent)).toEqual(['XCO'])
     expect(screen.queryByTestId('vendor-builder-stub')).toBeNull()
   })
 
