@@ -1471,6 +1471,40 @@ export interface VendorDocumentExtractionResponse {
   draft?: Record<string, unknown>
 }
 
+// Spec-sheet extraction types (mirrors server/src/ingestion/SpecSheetExtractor.ts)
+export interface SpecSheetProposal {
+  targetField: string
+  value: string
+  sourceUrl: string
+  passage: string
+  specId: string
+}
+
+export interface SpecSheetExtractSuccess {
+  configured: true
+  proposals: SpecSheetProposal[]
+}
+
+export interface SpecSheetExtractNotConfigured {
+  configured: false
+  reason: 'not_configured'
+  proposals: SpecSheetProposal[]
+}
+
+export interface SpecSheetExtractBlocked {
+  configured: true
+  proposals: SpecSheetProposal[]
+  blocked: {
+    url: string
+    reason: string
+  }
+}
+
+export type SpecSheetExtractResult =
+  | SpecSheetExtractSuccess
+  | SpecSheetExtractNotConfigured
+  | SpecSheetExtractBlocked
+
 export interface MolecularWeightResolutionResponse {
   resolved: boolean
   source: 'chebi' | 'pubchem' | 'formula' | 'unresolved'
@@ -3022,6 +3056,16 @@ export const apiClient = {
     return request<VendorDocumentExtractionResponse>(`/vendors/${encodeURIComponent(vendorProductId)}/documents/extract`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    })
+  },
+
+  async extractSpecSheetProposals(params: {
+    url: string
+    recordKind: string
+  }): Promise<SpecSheetExtractResult> {
+    return request<SpecSheetExtractResult>('/ingestion/spec-sheet/extract', {
+      method: 'POST',
+      body: JSON.stringify({ url: params.url, recordKind: params.recordKind }),
     })
   },
 
