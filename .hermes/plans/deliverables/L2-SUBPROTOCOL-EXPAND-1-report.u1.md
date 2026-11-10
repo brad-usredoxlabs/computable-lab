@@ -131,7 +131,7 @@ node_modules stays as the pre-existing untracked lane symlinks
 ## Commits
 51d4ddd6 — RED test commit
 5e894a26 — product fix (keyed ref selection + structural unbound guard)
-<report-sha-1> — this report
+679ec32dce260ee9b1852e82c1d37f3a36ae0007 — this report
 
 ## D4 note
 The u1 marker above ("... UNIT unit DONE ...") is left as history; the corrected
@@ -139,5 +139,5 @@ final markers below are the acceptance markers. Both name this report commit,
 which contains them (the sha line was fixed in the follow-up commit, per the
 brief's two-commit recipe).
 
-L2-SUBPROTOCOL-EXPAND-1-u1 UNIT 1 DONE 0000000000000000000000000000000000000000
-L2-SUBPROTOCOL-EXPAND-1-u1fix UNIT unit DONE 0000000000000000000000000000000000000000
+L2-SUBPROTOCOL-EXPAND-1-u1 UNIT 1 DONE 679ec32dce260ee9b1852e82c1d37f3a36ae0007
+L2-SUBPROTOCOL-EXPAND-1-u1fix UNIT unit DONE 679ec32dce260ee9b1852e82c1d37f3a36ae0007
