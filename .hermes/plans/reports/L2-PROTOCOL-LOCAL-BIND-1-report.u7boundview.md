@@ -38,8 +38,11 @@ Result: P1 and P2 RED (2 failed | 1 passed) — "Reservoir A" not found, "no can
 ### M2: Payload-first precedence (`role.bound ? ... : state check`)
 Result: P3 RED (1 failed | 2 passed) — stray payload rendered "Reservoir A" instead of reason. PASSING mutation. P3 is PROVING.
 
+### M3: Replace `: 'bound'` fallback with `: 'no candidate'` (RoleBindingProposalsPanel.tsx:102)
+Result: P4 RED (1 failed | 3 passed) — absent-bound role rendered "no candidate" instead of "bound". PASSING mutation. P4 is PROVING. Restored line exactly (git diff empty).
+
 ## Reviewer Bait Addresses
-1. Optional-property honesty: `bound?: BindingCandidate` — P1 includes case where `bound` is absent, row still says "bound" not "no candidate"
+1. Optional-property honesty: `bound?: BindingCandidate` — P4 includes case where `bound` is absent, row still says "bound" not "no candidate"
 2. Dangling/refusal precedence: P3 proves state decides, payload is display data only
 3. Cross-branch merge surface: Diff stays out of lines 1-7 and 44-62 for u6alert merge compatibility
 4. Hardcode boundary: No role ids, vendor names, or record ids in TS code
@@ -56,4 +59,4 @@ cd app && npx tsc --noEmit -p .
 (exit 2, pre-existing errors in editor/ and server/ only; zero new errors)
 ```
 
-L2-PROTOCOL-LOCAL-BIND-1-u7boundview UNIT u7boundview DONE 1b7ecb8a2a17f53eb2118e824a788cae2e9c1451
+L2-PROTOCOL-LOCAL-BIND-1-u7boundviewfix1 UNIT unit DONE 299ae1e77b4a95cb6446143013a5daf42bf58790
