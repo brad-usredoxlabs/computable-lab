@@ -27,7 +27,7 @@ Test file written with `state: 'bound'` and `bound` payload — TypeScript accep
 - P3 PASSED: unbound state correctly rendered reason
 
 ### GREEN (after adding bound render arm and union widening)
-- All 7 tests pass: 4 existing + 3 new
+- All 8 tests pass: 4 existing + 4 new (P4: absent-bound fallback)
 - Typecheck: no new errors (pre-existing errors in editor/ and server/ are unchanged)
 
 ## Mutation Probes
@@ -53,7 +53,7 @@ Result: P4 RED (1 failed | 3 passed) — absent-bound role rendered "no candidat
 ## Verification Commands and Results
 ```
 cd app && npx vitest run src/run/RoleBindingProposalsPanel.test.tsx src/run/RoleBindingProposalsPanel.bound.test.tsx
-Test Files  2 passed (2) | Tests  7 passed (7)
+Test Files  2 passed (2) | Tests  8 passed (8)
 
 cd app && npx tsc --noEmit -p .
 (exit 2, pre-existing errors in editor/ and server/ only; zero new errors)
