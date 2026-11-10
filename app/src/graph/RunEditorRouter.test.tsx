@@ -22,7 +22,7 @@ describe('u6binddoor — route and resolution pins', () => {
   it('resolves run → PLR and mounts BindingModeEditor', async () => {
     // Stub apiClient BEFORE importing RunEditorRouter
     const mockRunResp = { record: { id: 'RUN-1', payload: { plannedRunRef: { id: 'PLR-1' } } } }
-    const mockPlrResp = { record: { id: 'PLR-1', payload: { state: 'draft', title: 'Draft Plan' } } }
+    const mockPlrResp = { record: { id: 'PLR-1', payload: { kind: 'planned-run', state: 'draft', title: 'Draft Plan' } } }
 
     vi.doMock('../shared/api/client', () => ({
       apiClient: {
