@@ -18,3 +18,26 @@ Fixed one failing test by adding `kind: 'planned-run'` to the mock PLR payload s
 
 L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE 01e4d871f03360f55f6c276b2e95e4a75178573d
 L2-SUBPROTOCOL-EXPAND-1-u6binddoor-fix1 UNIT u6binddoor DONE 6b9acfbb674e6d61102ea618202d1e77231fcadc
+
+## fix2
+
+### Summary
+Thread the resolved PLR id through the router to BindingModeEditor (D3) and add the
+run-toolbar link to role bindings (D1).
+
+### Changed Files (3)
+1. `app/src/graph/RunEditorRouter.tsx` — added `plannedRunId` state, thread to BindingModeEditor
+2. `app/src/run/RunWorkspacePage.tsx` — added `hasPlannedRunRef` state + toolbar link
+3. `app/src/graph/RunEditorRouter.test.tsx` — added PLR-77 threading pin test
+
+### Code Commits
+- d9907b05 — fix(lane2): RunEditorRouter passes the resolved PLR id to BindingModeEditor (u6binddoor-fix2 D3)
+- afa58f3c — feat(lane2): run toolbar links to role bindings when the run has a planned-run (u6binddoor-fix2 D1)
+- eb677a035505122dac39b62721a0c02c740440d0 — test(lane2): PLR-id threading pin GREEN (u6binddoor-fix2)
+
+### Verification
+- `npx vitest run src/graph/RunEditorRouter.test.tsx` → 3 passed — GREEN
+- `npx tsc --noEmit` → 0 new errors (pre-existing only)
+- `git diff --stat 12c8fc55..HEAD` → 3 files changed, 71 insertions(+), 4 deletions(-)
+
+L2-SUBPROTO-u6binddoor-fix2 UNIT unit DONE eb677a035505122dac39b62721a0c02c740440d0
