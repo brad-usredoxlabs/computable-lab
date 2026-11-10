@@ -75,3 +75,32 @@ advc c2 demanded the bindings door read run/PLR records through `getRecordWithUI
 No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at baseline in this tree, so D-1 remains unpinned.
 
 L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE edb76724b4b783b0500c320ddbcebae184f0011f
+
+## sibfix1
+
+### Summary
+Two sibling test suites (compile.test.tsx and surface.test.tsx) fail because production code
+uses `apiClient.getRecordWithUI` but the mocks only defined `getRecord`. Added
+`getRecordWithUI` mock methods returning `{ record: ..., ui: undefined }` to both suites.
+
+### Raw GREEN output (combined suite)
+```
+Test Files  2 passed (2)
+      Tests  7 passed (7)
+```
+
+### Baseline GREEN (no regression)
+```
+Test Files  1 passed (1)
+      Tests  4 passed (4)
+```
+
+### Changed Files (2)
+1. `app/src/graph/BindingMode/BindingModeEditor.compile.test.tsx` — added `getRecordWithUI` to mock object + mockImplementation
+2. `app/src/run/RunWorkspacePage.surface.test.tsx` — added `getRecordWithUI` to mock object
+
+### Code Commits
+- ac2a2d1d — compile suite mock fix
+- efe4088a — surface suite mock fix
+
+L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoorsibfix1 DONE PENDING_SHA
