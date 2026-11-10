@@ -812,8 +812,11 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         // solution?" question must not offer a bare compound. Absent for the
         // general /m menu (there the biologist browses everything on purpose).
         ...(request.materialLayer ? { materialLayer: request.materialLayer } : {}),
+        // u2fix3: defensive — if the current list already carries a
+        // policyCollapsed row, the resolver's `only` policy narrowed to
+        // exactly one legal candidate. Never re-expand a closed list.
         onUpdate: (more) => {
-          if (active) setItems((prev) => merge(prev, more))
+          if (active) setItems((prev) => prev.some((r) => r.policyCollapsed === true) ? prev : merge(prev, more))
         },
       })
         .then((initial) => {

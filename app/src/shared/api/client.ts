@@ -411,6 +411,14 @@ export interface MaterialSearchItem {
   domain?: string
   /** ontology CURIE of the term (NCBITaxon:10090, CLO:0020273) — picks the rule. */
   curie?: string
+  /**
+   * The record's OWN `material_ref` discriminator (vendor products link to a
+   * material concept through the schema-required ref). ABSENT when the record
+   * carries no ref — never `undefined` (exactOptionalPropertyTypes).
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id`: a CURIE for `ontology`, a recordId for `record`. */
+  materialRefId?: string
 }
 
 /**

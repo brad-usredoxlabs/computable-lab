@@ -31,18 +31,28 @@
  * the live bug — this suite fails at trunk tip and passes the moment the
  * comparator + data land.
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   materialCandidates,
   consequenceFor,
   firstDefaultFocusIndex,
+  applySelectionPolicies,
   type CandidateRankingPolicy,
   type MaterialCandidateItem,
+  type RankedCandidateRow,
+  type SelectionPolicy,
 } from './clarifyPickerRanking'
 import {
+  __resetMaterialSelectionPolicies,
   __setCandidateRankingPolicy,
+  __setMaterialSelectionPolicies,
   getCandidateRankingPolicy,
+  getMaterialSelectionPolicies,
+  PolicyGuardError,
 } from './policy'
+import { resolveMaterial } from './resolvers'
+import type { MaterialSearchItem } from '../../api/client'
+import type { SlashSuggestion } from './types'
 
 /**
  * The declared candidate-ranking policy — byte-mirrors the
@@ -348,5 +358,536 @@ describe('L2-CLARIFY-PICKER-1 — policy cache seam (resolver path is determinis
     expect(first!.families.composition).toEqual({ rank: 4, canBeDefault: false })
     // Cache, not re-fetch: the second read returns the same object.
     expect(second).toBe(first)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — selection policy (only/default)', () => {
+  const CONCEPT_CURIE = 'NCIT:C185409'
+
+  /**
+   * PRODUCER-SHAPED rows: the vendor-product catalog row carries NO `curie`
+   * (classifyMaterialRecord never emits one for a vendor product). Its concept
+   * link is its own schema-required `material_ref`, threaded as
+   * `materialRefKind` + `materialRefId`. The term/concept row carries the
+   * concept CURIE. Attribution must join on the ref's OWN discriminator.
+   */
+  function buildConceptRows(): RankedCandidateRow[] {
+    return [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: CONCEPT_CURIE, canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: CONCEPT_CURIE, canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', curie: CONCEPT_CURIE, canBeDefault: true },
+    ]
+  }
+
+  /** Pin (a): `only` collapses to exactly one row with preselected: true */
+  it('only — collapses to exactly one row (the policy vendor product) with preselected: true', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(1)
+    expect(result[0].recordId).toBe('VP-A')
+    expect(result[0].preselected).toBe(true)
+  })
+
+  /** Pin (b): `default` keeps all rows, marks exactly one preselected, focus index matches */
+  it('default — all rows survive, exactly one is preselected, focus index matches', () => {
+    const rows = buildConceptRows()
+    // Target VP-B (index 1, NOT index 0 — avoids the vacuous pin bait)
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+      vendor_product_ref: { kind: 'record', id: 'VP-B' },
+      selection: 'default',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    // ALL rows survive in their ranked order
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // Exactly one row carries preselected: true
+    const preselectedRows = result.filter((r) => r.preselected === true)
+    expect(preselectedRows).toHaveLength(1)
+    expect(preselectedRows[0].recordId).toBe('VP-B')
+    // The other rows must NOT carry the key at all (exactOptionalPropertyTypes)
+    expect('preselected' in result[0]).toBe(false)
+    expect('preselected' in result[2]).toBe(false)
+    // firstDefaultFocusIndex returns the preselected row's index
+    const focus = firstDefaultFocusIndex(result)
+    expect(focus).toBe(1)
+  })
+
+  /** Pin (c1): fail-open — policy vendor product not in rows */
+  it('fail-open — policy vendor product NOT in rows leaves list unchanged', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+      vendor_product_ref: { kind: 'record', id: 'VP-DOES-NOT-EXIST' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // No row should carry preselected
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+  })
+
+  /** Pin (c2): fail-open — two `only` policies for the same concept */
+  it('fail-open — two only policies for the same concept leaves list unchanged', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [
+      {
+        recordId: 'POL-1',
+        material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'POL-2',
+        material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'VP-B', 'MAT-1'])
+    // No row should carry preselected
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+  })
+
+  /** Pin (d): no-policy byte-stability — empty policies return identical rows */
+  it('no-policy — empty policies returns rows deep-equal to input with no preselected key', () => {
+    const rows = buildConceptRows()
+    const result = applySelectionPolicies(rows, [])
+    // The rows are byte-identical to input — no preselected key on any row
+    expect(result).toHaveLength(3)
+    for (const row of result) {
+      expect('preselected' in row).toBe(false)
+    }
+    // Deep equality
+    expect(result.map((r) => ({ key: r.key, label: r.label, recordId: r.recordId, family: r.family })))
+      .toEqual(rows.map((r) => ({ key: r.key, label: r.label, recordId: r.recordId, family: r.family })))
+  })
+
+  /** `only` with material_ref kind 'record' matches by the ref-carried recordId */
+  it('only — material_ref kind=record matches the rows carrying that record ref', () => {
+    // A record-kind concept: the vendor rows' material_ref carries the CONCEPT
+    // record id (not the vendor recordId) — the producer-shaped link.
+    const rows: RankedCandidateRow[] = [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'record', materialRefId: 'MAT-1', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'record', materialRefId: 'MAT-1', canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', canBeDefault: true },
+    ]
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'record', id: 'MAT-1' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(1)
+    expect(result[0].recordId).toBe('VP-A')
+    expect(result[0].preselected).toBe(true)
+  })
+
+  /**
+   * Unscoped-collapse guard (D4 bait): an `only` collapse is scoped to the
+   * policy's OWN concept. Rows attributed to a DIFFERENT concept must survive
+   * — the whole-array `result.length = 0` wipe is the data-loss shape.
+   */
+  it('only — rows attributed to a DIFFERENT concept survive the collapse', () => {
+    const rows: RankedCandidateRow[] = [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C1', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C1', canBeDefault: true },
+      { key: 'material:MAT-B', label: 'Other Concept', mentionKind: 'material', recordId: 'MAT-B', family: 'concept-only', curie: 'NCIT:C2', canBeDefault: true },
+      { key: 'vendor-product:VP-C', label: 'Other Vendor', mentionKind: 'vendor-product', recordId: 'VP-C', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C2', canBeDefault: true },
+    ]
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C1' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result.map((r) => r.recordId)).toEqual(['VP-A', 'MAT-B', 'VP-C'])
+    expect(result[0].preselected).toBe(true)
+    // The other concept's rows are untouched (no preselected key attached).
+    expect('preselected' in result[1]).toBe(false)
+    expect('preselected' in result[2]).toBe(false)
+  })
+
+  /** `alternative` policy has no picker effect */
+  it('alternative — no effect on the picker', () => {
+    const rows = buildConceptRows()
+    const policies: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: CONCEPT_CURIE },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'alternative',
+    }]
+    const result = applySelectionPolicies(rows, policies)
+    expect(result).toHaveLength(3)
+    expect(result).toBe(rows)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — resolver scoping (D4: picker-only collapse)', () => {
+  // Producer-shaped search page: vendor rows carry their own record's
+  // material_ref (no CURIE); the concept row carries the CURIE; the FBS row
+  // belongs to a DIFFERENT concept and must never be wiped by an `only`.
+  const PAGE_ITEMS: MaterialSearchItem[] = [
+    { recordId: 'VP-A', kind: 'vendor-product', title: 'Vendor Product A', category: 'vendor-reagent', subtitle: 'Sigma · A123', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'VP-B', kind: 'vendor-product', title: 'Vendor Product B', category: 'vendor-reagent', subtitle: 'Sigma · B456', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'MAT-1', kind: 'material', title: 'Material 1', category: 'concept-only', curie: 'NCIT:C185409' },
+    { recordId: 'MAT-FBS', kind: 'material', title: 'FBS', category: 'concept-only', curie: 'NCIT:C999999' },
+  ]
+
+  const ONLY_POLICY: SelectionPolicy[] = [{
+    recordId: 'POL-1',
+    material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+    vendor_product_ref: { kind: 'record', id: 'VP-A' },
+    selection: 'only',
+  }]
+
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockImplementation(async (url: string) => {
+      const href = String(url)
+      if (href.includes('/materials/formulations/summary')) {
+        return { ok: true, json: async () => ({ items: [] }) }
+      }
+      return { ok: true, json: async () => ({ items: PAGE_ITEMS }) }
+    })
+    __setCandidateRankingPolicy(DECLARED)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    __resetMaterialSelectionPolicies()
+  })
+
+  /** JSON is the byte shape: functions (mint's resolveMention) drop out. */
+  const bytes = (rows: SlashSuggestion[]): string => JSON.stringify(rows)
+
+  /** `preselected` is a declared picker contract field (D7, open) — read structurally. */
+  const isPreselected = (row: SlashSuggestion): boolean =>
+    (row as { preselected?: boolean }).preselected === true
+
+  /** The mention id when the union arm carries one. */
+  const mentionId = (row: SlashSuggestion): string | undefined =>
+    'id' in row.mention ? row.mention.id : undefined
+
+  function editorCtx(): Parameters<typeof resolveMaterial>[1] {
+    return { selection: null, signal: new AbortController().signal }
+  }
+
+  function pickerCtx(): Parameters<typeof resolveMaterial>[1] {
+    return { selection: null, signal: new AbortController().signal, pickerRows: true }
+  }
+
+  it('pickerRows=false (doc-editor /m): an only policy leaves the list byte-identical to the no-policy list', async () => {
+    __setMaterialSelectionPolicies([])
+    const noPolicy = await resolveMaterial('dmem', editorCtx())
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const withPolicy = await resolveMaterial('dmem', editorCtx())
+    expect(bytes(withPolicy)).toBe(bytes(noPolicy))
+    // The unrelated row is present in the same input and survives.
+    expect(withPolicy.some((row) => mentionId(row) === 'MAT-FBS')).toBe(true)
+    // No row carries preselected chrome on the editor path.
+    expect(withPolicy.some((row) => isPreselected(row))).toBe(false)
+  })
+
+  it('pickerRows=true: the same only policy collapses the picker rows of that concept', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const picked = await resolveMaterial('dmem', pickerCtx())
+    const workspace = picked.filter((row) => !row.pinBottom)
+    // The concept's own rows collapse to the policy vendor product...
+    expect(workspace.some((row) => mentionId(row) === 'VP-B')).toBe(false)
+    expect(workspace.some((row) => mentionId(row) === 'MAT-1')).toBe(false)
+    const chosen = workspace.find((row) => mentionId(row) === 'VP-A')
+    expect(chosen).toBeTruthy()
+    expect(isPreselected(chosen!)).toBe(true)
+    // ...while the different-concept row is untouched.
+    expect(workspace.some((row) => mentionId(row) === 'MAT-FBS')).toBe(true)
+  })
+})
+
+/**
+ * u2fix3: post-collapse suppression — when an `only` policy collapses to
+ * exactly one row, the resolver must NOT append the mint floor or stream
+ * ontology/vendor tiers. The collapse flag (`policyCollapsed`) is the
+ * signal; the picker must never re-expand a closed list.
+ */
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix3 post-collapse suppression', () => {
+  // All rows belong to the SAME concept so the `only` policy collapses to
+  // exactly one row (no other concept rows survive the collapse).
+  const SINGLE_CONCEPT_ITEMS: MaterialSearchItem[] = [
+    { recordId: 'VP-A', kind: 'vendor-product', title: 'Vendor Product A', category: 'vendor-reagent', subtitle: 'Sigma · A123', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'VP-B', kind: 'vendor-product', title: 'Vendor Product B', category: 'vendor-reagent', subtitle: 'Sigma · B456', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409' },
+    { recordId: 'MAT-1', kind: 'material', title: 'Material 1', category: 'concept-only', curie: 'NCIT:C185409' },
+  ]
+
+  const ONLY_POLICY: SelectionPolicy[] = [{
+    recordId: 'POL-1',
+    material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+    vendor_product_ref: { kind: 'record', id: 'VP-A' },
+    selection: 'only',
+  }]
+
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockImplementation(async (url: string) => {
+      const href = String(url)
+      if (href.includes('/materials/formulations/summary')) {
+        return { ok: true, json: async () => ({ items: [] }) }
+      }
+      return { ok: true, json: async () => ({ items: SINGLE_CONCEPT_ITEMS }) }
+    })
+    __setCandidateRankingPolicy(DECLARED)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    __resetMaterialSelectionPolicies()
+  })
+
+  /**
+   * RED test: with an `only` policy that collapses to exactly one row, the
+   * resolver should return exactly one row, carry `policyCollapsed: true`,
+   * and never call `onUpdate` (no streaming, no mint floor).
+   */
+  it('only — exactly one row with policyCollapsed, no mint row, onUpdate never called', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const onUpdateSpy = vi.fn()
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      pickerRows: true,
+      onUpdate: onUpdateSpy,
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // (a) Exactly ONE row — no mint floor, no extra rows
+    expect(rows).toHaveLength(1)
+
+    // (b) That row carries the collapse signal
+    expect(rows[0].policyCollapsed).toBe(true)
+    expect(rows[0].key).toBe('vendor-product:VP-A')
+
+    // (c) onUpdate was NEVER called (no streaming)
+    expect(onUpdateSpy).not.toHaveBeenCalled()
+  })
+
+  /** The doc-editor /m path (pickerRows absent) still gets the mint row and streams — byte-identical to no-policy. */
+  it('doc-editor /m path (no pickerRows): only policy does NOT suppress mint row or streaming', async () => {
+    __setMaterialSelectionPolicies(ONLY_POLICY)
+    const onUpdateSpy = vi.fn()
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      onUpdate: onUpdateSpy,
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // The doc-editor path is byte-identical to no-policy: mint row present
+    const mintRow = rows.find((r) => r.pinBottom === true)
+    expect(mintRow).toBeTruthy()
+  })
+
+  /** A `default` policy (not `only`) does NOT collapse — all rows + mint + streaming survive. */
+  it('default policy — no collapse, all rows + mint row present', async () => {
+    const DEFAULT_POLICY: SelectionPolicy[] = [{
+      recordId: 'POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'default',
+    }]
+    __setMaterialSelectionPolicies(DEFAULT_POLICY)
+    const ctx = {
+      selection: null,
+      signal: new AbortController().signal,
+      pickerRows: true,
+      onUpdate: vi.fn(),
+    }
+    const rows = await resolveMaterial('dmem', ctx as Parameters<typeof resolveMaterial>[1])
+
+    // All 3 workspace rows + mint floor
+    expect(rows).toHaveLength(4)
+    const mintRow = rows.find((r) => r.pinBottom === true)
+    expect(mintRow).toBeTruthy()
+    // No collapse flag on any row
+    expect(rows.some((r) => r.policyCollapsed === true)).toBe(false)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — firstDefaultFocusIndex with preselected', () => {
+  it('prefers preselected row over canBeDefault row', () => {
+    const rows = [
+      { canBeDefault: true },
+      { canBeDefault: true, preselected: true },
+      { canBeDefault: true },
+    ]
+    expect(firstDefaultFocusIndex(rows)).toBe(1)
+  })
+
+  it('falls back to canBeDefault when no preselected row exists', () => {
+    const rows = [
+      { canBeDefault: false },
+      { canBeDefault: true },
+      { canBeDefault: true },
+    ]
+    expect(firstDefaultFocusIndex(rows)).toBe(1)
+  })
+
+  it('returns 0 when no row is defaultable and none is preselected', () => {
+    const rows = [{ canBeDefault: false }, { canBeDefault: false }]
+    expect(firstDefaultFocusIndex(rows)).toBe(0)
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only guard on load path', () => {
+  /**
+   * D2: Two `only` policies for the same material concept must throw loudly
+   * with BOTH record ids. Mirrors the server-side
+   * normalizeMaterialSelectionPolicies contract (MaterialSelectionPolicy.ts:51-60).
+   * The load-path guard is the sanctioned carrier because LintEngine
+   * supports record scope only (LintEngine.ts:143).
+   */
+  it('__setMaterialSelectionPolicies throws when two only policies claim the same concept', () => {
+    const duplicateOnly: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow()
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-1/)
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-2/)
+  })
+
+  it('single only policy does not throw', () => {
+    const singleOnly: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(singleOnly)).not.toThrow()
+  })
+
+  it('two only policies for DIFFERENT concepts do not throw', () => {
+    const differentConcepts: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C999999' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'only',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(differentConcepts)).not.toThrow()
+  })
+
+  it('only + default for the same concept does not throw', () => {
+    const mixed: SelectionPolicy[] = [
+      {
+        recordId: 'MSP-POL-1',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-A' },
+        selection: 'only',
+      },
+      {
+        recordId: 'MSP-POL-2',
+        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+        vendor_product_ref: { kind: 'record', id: 'VP-B' },
+        selection: 'default',
+      },
+    ]
+    expect(() => __setMaterialSelectionPolicies(mixed)).not.toThrow()
+  })
+})
+
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw propagates on fetch path', () => {
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    fetchSpy.mockReset()
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockImplementation(async (url: string) => {
+      if (String(url).includes('material-selection-policy')) {
+        return {
+          ok: true,
+          json: async () => ({
+            records: [
+              {
+                recordId: 'POL-DUP-1',
+                payload: {
+                  material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+                  vendor_product_ref: { kind: 'record', id: 'VP-A' },
+                  selection: 'only',
+                },
+              },
+              {
+                recordId: 'POL-DUP-2',
+                payload: {
+                  material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+                  vendor_product_ref: { kind: 'record', id: 'VP-B' },
+                  selection: 'only',
+                },
+              },
+            ],
+            total: 2,
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({ records: [], total: 0 }) }
+    })
+    __resetMaterialSelectionPolicies()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fetch path with duplicate only policies rejects with PolicyGuardError, not fail-open []', async () => {
+    let caught: unknown
+    try {
+      await getMaterialSelectionPolicies()
+      expect.fail('should have thrown')
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(PolicyGuardError)
+    expect((caught as Error).message).toMatch(/POL-DUP-1.*POL-DUP-2/)
   })
 })

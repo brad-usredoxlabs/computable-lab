@@ -60,6 +60,16 @@ export interface MaterialCandidateItem {
   category: string
   /** Optional subtitle (the layer word). */
   subtitle?: string
+  /** ontology CURIE of the item — threaded through for policy attribution. */
+  curie?: string
+  /**
+   * The record's OWN `material_ref` discriminator (`record` | `ontology`) —
+   * the producer-shaped concept link a vendor product carries. ABSENT when the
+   * record has no ref (never `undefined`, eOPT).
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id`: a CURIE for `ontology`, a recordId for `record`. */
+  materialRefId?: string
 }
 
 /** The material mention kind a candidate row binds. */
@@ -84,6 +94,27 @@ export interface CandidateRankingPolicy {
   families: Record<string, CandidateRankingFamily>
 }
 
+/**
+ * A material selection policy record (CLIENT-SIDE view).
+ *
+ * Maps to the server-side `MaterialSelectionPolicyRecord` but carries only
+ * the fields the picker needs: `recordId` (the record envelope's id),
+ * `material_ref` (the concept being constrained),
+ * `vendor_product_ref` (the chosen vendor product), and `selection`
+ * (`only` | `default` | `alternative`). The client never imports server
+ * types — it reads raw record envelopes and drops malformed entries.
+ */
+export interface SelectionPolicy {
+  /** The record envelope's recordId (the policy record itself). */
+  recordId: string
+  /** The material concept this policy targets. */
+  material_ref: { kind: 'ontology' | 'record'; id: string }
+  /** The vendor product to select. */
+  vendor_product_ref: { kind: 'ontology' | 'record'; id: string }
+  /** The selection mode: `only` collapses to one row, `default` pre-selects. */
+  selection: 'only' | 'default' | 'alternative'
+}
+
 /** The comparator's output row (a rankable, renderable candidate). */
 export interface RankedCandidateRow {
   key: string
@@ -94,6 +125,16 @@ export interface RankedCandidateRow {
   recordId: string
   /** The row's resolved family key (category, or `composition` when aggregate). */
   family: string
+  /** The source item's ontology CURIE (threaded through for policy attribution). */
+  curie?: string
+  /**
+   * The source record's OWN `material_ref` discriminator. This is the
+   * producer-shaped concept link: a vendor product carries no CURIE, it
+   * carries a ref whose `kind` decides whether `id` is a CURIE or a recordId.
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id` (CURIE for `ontology`, recordId for `record`). */
+  materialRefId?: string
   /**
    * Whether the row may hold the focused default (the DATA flag). ABSENT when
    * no ranking is declared (byte-stability: the row carries no new fields at
@@ -113,6 +154,14 @@ export interface RankedCandidateRow {
    * data-declared template filled in). Absent for all other rows.
    */
   sectionLabel?: string
+  /**
+   * Whether this row is pre-selected by a material-selection-policy
+   * `default` or `only` record. ABSENT when no such policy applies;
+   * `true` marks the row for keyboard focus. Never `false` — use
+   * conditional spread (`...(cond ? {preselected: true} : {})`) to
+   * respect `exactOptionalPropertyTypes`.
+   */
+  preselected?: boolean
 }
 
 /**
@@ -204,13 +253,17 @@ export function materialCandidates(
     return items.map((item) => {
       const kind = mentionKindOf(item.kind)
       const family = familyOf(item)
-      return {
+      const row: RankedCandidateRow = {
         key: `${kind}:${item.recordId}`,
         label: item.title,
         mentionKind: kind,
         recordId: item.recordId,
         family,
       }
+      if (item.curie) row.curie = item.curie
+      if (item.materialRefKind) row.materialRefKind = item.materialRefKind
+      if (item.materialRefId) row.materialRefId = item.materialRefId
+      return row
     })
   }
 
@@ -249,6 +302,9 @@ export function materialCandidates(
       recordId: item.recordId,
       family,
     }
+    if (item.curie) row.curie = item.curie
+    if (item.materialRefKind) row.materialRefKind = item.materialRefKind
+    if (item.materialRefId) row.materialRefId = item.materialRefId
     // P2 fields are always DERIVED here (the row's own bind). The resolver
     // decides whether they ATTACH to the rendered suggestion (pickerRows —
     // advc-c1 DEFECT 8); the eOPT conditional spread lives there.
@@ -347,22 +403,147 @@ export function materialCandidates(
 
 /**
  * P1 focus-default rule: the FIRST row index that may hold the focused
- * (keyboard) default — the first row whose `canBeDefault !== false`. The flag
- * is DATA (the registry's `can_be_default` for the row's family; absent
- * declaration => defaultable), so a composition row is skipped exactly when
- * the data says so — never by a label-shape backstop. When every row is
- * defaultable (the slash editor, no ranking, or no composition), this is 0 —
- * byte-stable. THIS is the single live rule: `SlashSuggestionList` calls it
- * (advc-c1 DEFECT 6 killed the duplicated closure).
+ * (keyboard) default — the first row whose `preselected === true`, then
+ * the first row whose `canBeDefault !== false`. The `preselected` flag is
+ * set by `applySelectionPolicies` when a `default` or `only` policy marks
+ * a vendor product. When no row is preselected, falls back to the existing
+ * `canBeDefault` scan (byte-stable). THIS is the single live rule:
+ * `SlashSuggestionList` calls it (advc-c1 DEFECT 6 killed the duplicated
+ * closure).
  *
  * Returns 0 when no row is defaultable (a safe no-op; the list stays empty of
  * a default rather than auto-selecting a composition).
  */
 export function firstDefaultFocusIndex(
-  rows: ReadonlyArray<{ canBeDefault?: boolean }>,
+  rows: ReadonlyArray<{ canBeDefault?: boolean; preselected?: boolean }>,
 ): number {
+  // PREFER a row marked preselected by selection policy
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i]!.preselected === true) return i
+  }
+  // Fallback: the first row whose canBeDefault !== false (existing behavior)
   for (let i = 0; i < rows.length; i++) {
     if (rows[i]!.canBeDefault !== false) return i
   }
   return 0
+}
+
+/**
+ * Apply material-selection policies to ranked candidate rows.
+ *
+ * Attribution rule (row-to-concept):
+ *   - `material_ref.kind === 'ontology'` && the row's item carries
+ *     `curie === material_ref.id`, OR
+ *   - `material_ref.kind === 'record'` && `row.recordId === material_ref.id`.
+ *
+ * Attribution rule (row-to-vendor-product):
+ *   - `row.recordId === vendor_product_ref.id`.
+ *
+ * Behavior:
+ *   - `only`: collapse the list to exactly the one matching vendor-product
+ *     row, with `preselected: true`. If no matching vendor-product row exists
+ *     among the candidates, leave the list unchanged (fail-open).
+ *   - `default`: mark the matching vendor-product row with `preselected: true`;
+ *     all other rows survive in their ranked order.
+ *   - `alternative`: no effect on the picker (server-side lint owns this).
+ *
+ * SILent tie-break protection: if two `only` policies target the same concept,
+ * the list is left UNCHANGED — the server loader rejects that state (the lint
+ * rule fires), the picker must not crash or guess.
+ *
+ * Returns a new array (input rows are never mutated).
+ */
+export function applySelectionPolicies(
+  rows: RankedCandidateRow[],
+  policies: SelectionPolicy[],
+): RankedCandidateRow[] {
+  if (policies.length === 0) return rows
+
+  // Group policies by concept key (kind:id)
+  const byConcept = new Map<string, SelectionPolicy[]>()
+  for (const policy of policies) {
+    const conceptKey = `${policy.material_ref.kind}:${policy.material_ref.id}`
+    const existing = byConcept.get(conceptKey)
+    if (existing) existing.push(policy)
+    else byConcept.set(conceptKey, [policy])
+  }
+
+  // Check for duplicate 'only' policies — fail open, never guess
+  for (const [, group] of byConcept) {
+    const onlyCount = group.filter((p) => p.selection === 'only').length
+    if (onlyCount > 1) {
+      // Server loader should reject; picker fails open
+      return rows
+    }
+  }
+
+  // Match rows to concepts and apply policies
+  const conceptRows = new Map<string, RankedCandidateRow[]>()
+  for (const row of rows) {
+    // Attribution rule: row belongs to a concept when
+    // - material_ref.kind === 'ontology' && row.curie === material_ref.id, OR
+    // - material_ref.kind === 'record' && row.recordId === material_ref.id
+    const rowConceptKeys: string[] = []
+    if (row.curie) {
+      rowConceptKeys.push(`ontology:${row.curie}`)
+    }
+    rowConceptKeys.push(`record:${row.recordId}`)
+    // D1: the record's OWN `material_ref` is the producer-shaped concept link
+    // (a vendor product carries no CURIE, only this ref). The ref's own
+    // discriminator decides the namespace — an `ontology` id is a CURIE and is
+    // never rewritten into a recordId, nor vice versa (CLAUDE.md rule 8).
+    if (row.materialRefKind && row.materialRefId) {
+      rowConceptKeys.push(`${row.materialRefKind}:${row.materialRefId}`)
+    }
+
+    for (const key of rowConceptKeys) {
+      const existing = conceptRows.get(key)
+      if (existing) existing.push(row)
+      else conceptRows.set(key, [row])
+    }
+  }
+
+  const result = [...rows]
+  let modified = false
+
+  for (const [conceptKey, group] of byConcept) {
+    // Skip if duplicate 'only' (already checked above)
+    const onlyPolicies = group.filter((p) => p.selection === 'only')
+    if (onlyPolicies.length > 1) continue
+
+    const rowsForConcept = conceptRows.get(conceptKey) ?? []
+
+    for (const policy of group) {
+      const vendorId = policy.vendor_product_ref.id
+      const match = rowsForConcept.find((r) => r.recordId === vendorId)
+
+      if (!match) continue // Vendor product not in rows — fail open
+
+      if (policy.selection === 'only') {
+        // Collapse ONLY this concept's rows. Rows attributed to OTHER concepts
+        // keep their ranked order in the shared list: `result.length = 0`
+        // across the whole array is the D4 data-loss shape (it wiped the
+        // unrelated FBS row on the editor /m menu).
+        const conceptSet = new Set(rowsForConcept)
+        const firstIndex = result.findIndex((r) => conceptSet.has(r))
+        const kept = result.filter((r) => !conceptSet.has(r))
+        const insertAt = firstIndex < 0 ? kept.length : Math.min(firstIndex, kept.length)
+        kept.splice(insertAt, 0, { ...match, preselected: true })
+        result.length = 0
+        for (const keptRow of kept) result.push(keptRow)
+        modified = true
+        break // Only one 'only' policy per concept (guaranteed above)
+      } else if (policy.selection === 'default') {
+        // Mark this row as preselected
+        const idx = result.indexOf(match)
+        if (idx !== -1) {
+          result[idx] = { ...result[idx], preselected: true }
+          modified = true
+        }
+      }
+      // 'alternative' — no picker effect
+    }
+  }
+
+  return modified ? result : rows
 }
