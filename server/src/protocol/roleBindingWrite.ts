@@ -52,11 +52,15 @@ function declaredRoleIds(roles: Obj, key: string): string[] {
 /**
  * The lot identifier each target kind actually carries in its record schema:
  * material-instance/aliquot nest it at `payload.lot.lot_number`, material-lot
- * keeps `payload.lot_number`, and vendor-product has no lot field at all.
- * Mirrors the canonical reader in MaterialPrepHandlers.
+ * prefers `supplier.vendor_lot` then falls back to `payload.lot_number`, and
+ * vendor-product has no lot field at all.
+ * Mirrors the canonical reader in shelfLookup (supplier.vendor_lot first).
  */
 function lotOfPayload(kind: string, payload: Obj): string | undefined {
-  if (kind === 'material-lot') return stringField(payload, 'lot_number');
+  if (kind === 'material-lot') {
+    const vendorLot = asObject(payload.supplier) ? stringField(asObject(payload.supplier)!, 'vendor_lot') : undefined;
+    return vendorLot || stringField(payload, 'lot_number');
+  }
   if (kind === 'material-instance' || kind === 'aliquot') {
     const lot = asObject(payload.lot);
     return lot ? stringField(lot, 'lot_number') : undefined;
