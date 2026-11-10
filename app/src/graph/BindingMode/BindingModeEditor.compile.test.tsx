@@ -43,6 +43,7 @@ vi.mock('./SampleBindingPanel', () => ({
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
+    getRecordWithUI: vi.fn(),
     listRecordsByKind: vi.fn(),
     updatePlannedRunBindings: vi.fn(),
     compileRunPlan: vi.fn(),
@@ -124,6 +125,12 @@ describe('BindingModeEditor compile integration', () => {
     vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
       if (id === 'PLR-000001') return mockPlannedRun
       if (id === 'LPR-000001') return mockLocalProtocol
+      throw new Error('Not found')
+    })
+
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, ui: undefined }
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, ui: undefined }
       throw new Error('Not found')
     })
 
