@@ -56,11 +56,12 @@ function toCandidate(env: { recordId: string; payload: Record<string, unknown> }
 
 /** Resolve run → plannedRunRef → PLR and read its ordered protocol refs. */
 async function readRunProtocols(runId: string): Promise<{ plannedRunId: string; refs: ReadProtocolRef[] } | null> {
-  const runEnv = await apiClient.getRecord(runId)
-  const run = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+  // Both the run envelope and the PLR are tree-store records: /api/records/:id 404s for them,
+  // only /ui/record/:id serves them (advc-c1 D1 — the read threw before the PLR arm ran).
+  const runResp = await apiClient.getRecordWithUI(runId)
+  const run = (runResp.record?.payload ?? null) as Record<string, unknown> | null
   const plr = run?.plannedRunRef as { id?: string } | undefined
   if (typeof plr?.id !== 'string') return null
-  // /api/records/:id 404s for tree-store records; only /ui/record/:id serves the PLR.
   const plrResp = await apiClient.getRecordWithUI(plr.id)
   const payload = (plrResp.record?.payload ?? null) as Record<string, unknown> | null
   return { plannedRunId: plr.id, refs: protocolRefsOf(payload) }

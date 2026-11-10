@@ -48,6 +48,22 @@ function plr(id: string, refs: Array<{ id: string; label?: string }>) {
   return record(id, { localProtocolRefs: refs })
 }
 
+/**
+ * Serve every read from the /ui/record arm, keyed by record id. RUN and PLR envelopes are both
+ * tree-store records: /api/records/:id 404s for them (advc-c1 D1), so no leg may mock getRecord
+ * for a run. A repeated id re-serves its last envelope (post-mutation re-reads).
+ */
+function serveUiReads(byId: Record<string, Array<ReturnType<typeof record>>>) {
+  const calls = new Map<string, number>()
+  mocks.getRecordWithUI.mockImplementation(async (id: string) => {
+    const queue = byId[id]
+    if (!queue || queue.length === 0) throw new Error(`no /ui/record fixture for ${id}`)
+    const n = calls.get(id) ?? 0
+    calls.set(id, n + 1)
+    return { record: queue[Math.min(n, queue.length - 1)] }
+  })
+}
+
 describe('protocolRefsOf (pure reader)', () => {
   it('returns localProtocolRefs in order, normalising objects and bare ids; the list wins', () => {
     const refs = protocolRefsOf({
@@ -88,15 +104,17 @@ describe('protocolRefsOf (pure reader)', () => {
 
 describe('RunProtocolList', () => {
   it('renders three attached protocols in order with the first marked lead', async () => {
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-    mocks.getRecordWithUI.mockResolvedValueOnce({
-      record: record('PLR-1', {
-        localProtocolRefs: [
-          { id: 'PRT-a', label: 'Alpha' },
-          { id: 'PRT-b', label: 'Beta' },
-          { id: 'PRT-c' },
-        ],
-      }),
+    serveUiReads({
+      'RUN-1': [record('RUN-1', { plannedRunRef: { id: 'PLR-1' } })],
+      'PLR-1': [
+        record('PLR-1', {
+          localProtocolRefs: [
+            { id: 'PRT-a', label: 'Alpha' },
+            { id: 'PRT-b', label: 'Beta' },
+            { id: 'PRT-c' },
+          ],
+        }),
+      ],
     })
     render(<RunProtocolList runId="RUN-1" />)
     const items = await screen.findAllByRole('listitem')
@@ -107,9 +125,9 @@ describe('RunProtocolList', () => {
   })
 
   it('renders exactly one item for a legacy single protocolRef', async () => {
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-2', { plannedRunRef: { id: 'PLR-2' } }))
-    mocks.getRecordWithUI.mockResolvedValueOnce({
-      record: record('PLR-2', { protocolRef: { id: 'PRT-legacy', label: 'Legacy' } }),
+    serveUiReads({
+      'RUN-2': [record('RUN-2', { plannedRunRef: { id: 'PLR-2' } })],
+      'PLR-2': [record('PLR-2', { protocolRef: { id: 'PRT-legacy', label: 'Legacy' } })],
     })
     render(<RunProtocolList runId="RUN-2" />)
     const items = await screen.findAllByRole('listitem')
@@ -117,43 +135,44 @@ describe('RunProtocolList', () => {
     expect(labelText(items[0]!)).toBe('Legacy (lead)')
   })
 
-  it('reads the PLR via getRecordWithUI not getRecord', async () => {
+  it('reads the run and the PLR via getRecordWithUI, never getRecord', async () => {
     // /api/records/:id 404s for tree-store records; only /ui/record/:id serves them.
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-9', { plannedRunRef: { id: 'PLR-9' } }))
-    mocks.getRecordWithUI.mockResolvedValueOnce({ record: plr('PLR-9', [{ id: 'PRT-a', label: 'Alpha' }]) })
+    serveUiReads({
+      'RUN-9': [record('RUN-9', { plannedRunRef: { id: 'PLR-9' } })],
+      'PLR-9': [plr('PLR-9', [{ id: 'PRT-a', label: 'Alpha' }])],
+    })
     render(<RunProtocolList runId="RUN-9" />)
     const items = await screen.findAllByRole('listitem')
     expect(labelText(items[0]!)).toBe('Alpha (lead)')
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-9')
     expect(mocks.getRecordWithUI).toHaveBeenCalledWith('PLR-9')
-    expect(mocks.getRecord).toHaveBeenCalledTimes(1)
-    expect(mocks.getRecord).not.toHaveBeenCalledWith('PLR-9')
+    expect(mocks.getRecord).not.toHaveBeenCalled()
   })
 
   it('renders nothing when the run has no plannedRunRef', async () => {
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-3', { title: 'No protocol yet' }))
+    serveUiReads({ 'RUN-3': [record('RUN-3', { title: 'No protocol yet' })] })
     const { container } = render(<RunProtocolList runId="RUN-3" />)
-    await waitFor(() => expect(mocks.getRecord).toHaveBeenCalledWith('RUN-3'))
+    await waitFor(() => expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-3'))
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders nothing and does not throw when getRecord rejects', async () => {
-    mocks.getRecord.mockRejectedValue(new Error('boom'))
+  it('renders nothing and does not throw when the run read rejects', async () => {
+    mocks.getRecordWithUI.mockRejectedValue(new Error('boom'))
     const { container } = render(<RunProtocolList runId="RUN-4" />)
-    await waitFor(() => expect(mocks.getRecord).toHaveBeenCalledWith('RUN-4'))
+    await waitFor(() => expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-4'))
     await Promise.resolve()
     expect(container.innerHTML).toBe('')
   })
 
   it('attaches to the PLANNED RUN and re-reads the list from the server', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-5', { plannedRunRef: { id: 'PLR-5' } }))
+    serveUiReads({
+      'RUN-5': [record('RUN-5', { plannedRunRef: { id: 'PLR-5' } })],
       // Post-mutation re-read: the server's ordered list, labels from the record.
-      .mockResolvedValueOnce(record('RUN-5', { plannedRunRef: { id: 'PLR-5' } }))
-    mocks.getRecordWithUI
-      .mockResolvedValueOnce({ record: plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }]) })
-      .mockResolvedValueOnce({
-        record: plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
-      })
+      'PLR-5': [
+        plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }]),
+        plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
+      ],
+    })
     // Picker label differs from the record label: the row must show the RECORD's label.
     mocks.listRecordsByKind.mockResolvedValue({ records: [record('PRT-b', { label: 'Picker Beta' })], total: 1 })
     const seen: SeenRequest[] = []
@@ -175,28 +194,31 @@ describe('RunProtocolList', () => {
     expect(seen[0]?.url).toBe('/api/runs/PLR-5/protocols')
     expect(seen[0]?.init?.method).toBe('POST')
     expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({ protocolId: 'PRT-b' })
+    // Each read-path leg (initial + post-mutation re-read) hits /ui/record for the run and the PLR.
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-5')
     expect(mocks.getRecordWithUI).toHaveBeenCalledWith('PLR-5')
-    expect(mocks.getRecordWithUI).toHaveBeenCalledTimes(2)
-    expect(mocks.getRecord).toHaveBeenCalledTimes(2)
+    expect(mocks.getRecordWithUI).toHaveBeenCalledTimes(4)
+    expect(mocks.getRecord).not.toHaveBeenCalled()
   })
 
   it('renders the attach control for a run with no protocols yet', async () => {
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-6', { plannedRunRef: { id: 'PLR-6' } }))
-    mocks.getRecordWithUI.mockResolvedValueOnce({ record: record('PLR-6', {}) })
+    serveUiReads({
+      'RUN-6': [record('RUN-6', { plannedRunRef: { id: 'PLR-6' } })],
+      'PLR-6': [record('PLR-6', {})],
+    })
     render(<RunProtocolList runId="RUN-6" />)
     expect(await screen.findByRole('button', { name: 'Attach a method' })).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
   })
 
   it('detaches from the PLANNED RUN and re-reads the list from the server', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-7', { plannedRunRef: { id: 'PLR-7' } }))
-      .mockResolvedValueOnce(record('RUN-7', { plannedRunRef: { id: 'PLR-7' } }))
-    mocks.getRecordWithUI
-      .mockResolvedValueOnce({
-        record: plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
-      })
-      .mockResolvedValueOnce({ record: plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }]) })
+    serveUiReads({
+      'RUN-7': [record('RUN-7', { plannedRunRef: { id: 'PLR-7' } })],
+      'PLR-7': [
+        plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
+        plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }]),
+      ],
+    })
     const seen: SeenRequest[] = []
     stubMutation(200, { success: true, protocolRefs: ['PRT-a'] }, seen)
 
@@ -209,8 +231,10 @@ describe('RunProtocolList', () => {
   })
 
   it('keeps the rendered list when the mutation fails', async () => {
-    mocks.getRecord.mockResolvedValueOnce(record('RUN-8', { plannedRunRef: { id: 'PLR-8' } }))
-    mocks.getRecordWithUI.mockResolvedValueOnce({ record: plr('PLR-8', [{ id: 'PRT-a', label: 'Alpha' }]) })
+    serveUiReads({
+      'RUN-8': [record('RUN-8', { plannedRunRef: { id: 'PLR-8' } })],
+      'PLR-8': [plr('PLR-8', [{ id: 'PRT-a', label: 'Alpha' }])],
+    })
     const seen: SeenRequest[] = []
     stubMutation(500, { error: 'BOOM' }, seen)
 
