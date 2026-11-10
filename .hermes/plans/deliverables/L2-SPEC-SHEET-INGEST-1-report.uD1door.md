@@ -26,7 +26,7 @@ Skipped — not required for this unit (rendered behaviour from rendered test).
 ```
 ✓ src/editor/material/VendorProductBuilderModal.idempotence.test.tsx  (2 tests) 187ms
 ✓ src/editor/material/VendorProductBuilderModal.defaultPolicy.test.tsx  (4 tests) 200ms
-✓ src/vendor/material/VendorProductBuilderModal.specSheetDoor.test.tsx  (4 tests) 217ms
+✓ src/editor/material/VendorProductBuilderModal.specSheetDoor.test.tsx  (4 tests) 217ms
 
 Test Files  3 passed (3)
      Tests  10 passed (10)
@@ -38,4 +38,4 @@ cd app && npx tsc --noEmit -p . → exit 0, zero output lines
 ## Next Actions
 None — unit complete.
 
-L2-SPEC-SHEET-INGEST-1 UNIT uD1door DONE
+L2-SPEC-SHEET-INGEST-1 UNIT uD1door DONE 461a29e9b1aed7485cc12a751ee57c020bdf1da2
