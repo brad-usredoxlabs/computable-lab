@@ -88,27 +88,29 @@ describe('protocolRefsOf (pure reader)', () => {
 
 describe('RunProtocolList', () => {
   it('renders three attached protocols in order with the first marked lead', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(record('PLR-1', {
+    mocks.getRecord.mockResolvedValueOnce(record('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+    mocks.getRecordWithUI.mockResolvedValueOnce({
+      record: record('PLR-1', {
         localProtocolRefs: [
           { id: 'PRT-a', label: 'Alpha' },
           { id: 'PRT-b', label: 'Beta' },
           { id: 'PRT-c' },
         ],
-      }))
+      }),
+    })
     render(<RunProtocolList runId="RUN-1" />)
     const items = await screen.findAllByRole('listitem')
     expect(items.map(labelText)).toEqual(['Alpha (lead)', 'Beta', 'PRT-c'])
     expect(items[0]!.getAttribute('data-lead')).toBe('true')
     expect(items[1]!.getAttribute('data-lead')).toBeNull()
-    expect(screen.getByText('3 protocols')).toBeTruthy()
+    expect(screen.getByText('3 methods')).toBeTruthy()
   })
 
   it('renders exactly one item for a legacy single protocolRef', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-2', { plannedRunRef: { id: 'PLR-2' } }))
-      .mockResolvedValueOnce(record('PLR-2', { protocolRef: { id: 'PRT-legacy', label: 'Legacy' } }))
+    mocks.getRecord.mockResolvedValueOnce(record('RUN-2', { plannedRunRef: { id: 'PLR-2' } }))
+    mocks.getRecordWithUI.mockResolvedValueOnce({
+      record: record('PLR-2', { protocolRef: { id: 'PRT-legacy', label: 'Legacy' } }),
+    })
     render(<RunProtocolList runId="RUN-2" />)
     const items = await screen.findAllByRole('listitem')
     expect(items).toHaveLength(1)
@@ -145,10 +147,13 @@ describe('RunProtocolList', () => {
   it('attaches to the PLANNED RUN and re-reads the list from the server', async () => {
     mocks.getRecord
       .mockResolvedValueOnce(record('RUN-5', { plannedRunRef: { id: 'PLR-5' } }))
-      .mockResolvedValueOnce(plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }]))
       // Post-mutation re-read: the server's ordered list, labels from the record.
       .mockResolvedValueOnce(record('RUN-5', { plannedRunRef: { id: 'PLR-5' } }))
-      .mockResolvedValueOnce(plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce({ record: plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }]) })
+      .mockResolvedValueOnce({
+        record: plr('PLR-5', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
+      })
     // Picker label differs from the record label: the row must show the RECORD's label.
     mocks.listRecordsByKind.mockResolvedValue({ records: [record('PRT-b', { label: 'Picker Beta' })], total: 1 })
     const seen: SeenRequest[] = []
@@ -156,8 +161,8 @@ describe('RunProtocolList', () => {
 
     render(<RunProtocolList runId="RUN-5" />)
     await screen.findAllByRole('listitem')
-    fireEvent.click(screen.getByRole('button', { name: 'Add protocol' }))
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Protocol to attach' }), {
+    fireEvent.click(screen.getByRole('button', { name: 'Attach a method' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Method to attach' }), {
       target: { value: 'PRT-b' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
@@ -170,46 +175,48 @@ describe('RunProtocolList', () => {
     expect(seen[0]?.url).toBe('/api/runs/PLR-5/protocols')
     expect(seen[0]?.init?.method).toBe('POST')
     expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({ protocolId: 'PRT-b' })
-    expect(mocks.getRecord).toHaveBeenCalledWith('PLR-5')
-    expect(mocks.getRecord).toHaveBeenCalledTimes(4)
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('PLR-5')
+    expect(mocks.getRecordWithUI).toHaveBeenCalledTimes(2)
+    expect(mocks.getRecord).toHaveBeenCalledTimes(2)
   })
 
   it('renders the attach control for a run with no protocols yet', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-6', { plannedRunRef: { id: 'PLR-6' } }))
-      .mockResolvedValueOnce(record('PLR-6', {}))
+    mocks.getRecord.mockResolvedValueOnce(record('RUN-6', { plannedRunRef: { id: 'PLR-6' } }))
+    mocks.getRecordWithUI.mockResolvedValueOnce({ record: record('PLR-6', {}) })
     render(<RunProtocolList runId="RUN-6" />)
-    expect(await screen.findByRole('button', { name: 'Add protocol' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Attach a method' })).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
   })
 
   it('detaches from the PLANNED RUN and re-reads the list from the server', async () => {
     mocks.getRecord
       .mockResolvedValueOnce(record('RUN-7', { plannedRunRef: { id: 'PLR-7' } }))
-      .mockResolvedValueOnce(plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]))
       .mockResolvedValueOnce(record('RUN-7', { plannedRunRef: { id: 'PLR-7' } }))
-      .mockResolvedValueOnce(plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }]))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce({
+        record: plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }, { id: 'PRT-b', label: 'Beta' }]),
+      })
+      .mockResolvedValueOnce({ record: plr('PLR-7', [{ id: 'PRT-a', label: 'Alpha' }]) })
     const seen: SeenRequest[] = []
     stubMutation(200, { success: true, protocolRefs: ['PRT-a'] }, seen)
 
     render(<RunProtocolList runId="RUN-7" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove Beta' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove Beta' })).toBeNull())
-    expect(screen.getByRole('button', { name: 'Remove Alpha' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Detach Beta' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Detach Beta' })).toBeNull())
+    expect(screen.getByRole('button', { name: 'Detach Alpha' })).toBeTruthy()
     expect(seen[0]?.url).toBe('/api/runs/PLR-7/protocols/PRT-b')
     expect(seen[0]?.init?.method).toBe('DELETE')
   })
 
   it('keeps the rendered list when the mutation fails', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(record('RUN-8', { plannedRunRef: { id: 'PLR-8' } }))
-      .mockResolvedValueOnce(plr('PLR-8', [{ id: 'PRT-a', label: 'Alpha' }]))
+    mocks.getRecord.mockResolvedValueOnce(record('RUN-8', { plannedRunRef: { id: 'PLR-8' } }))
+    mocks.getRecordWithUI.mockResolvedValueOnce({ record: plr('PLR-8', [{ id: 'PRT-a', label: 'Alpha' }]) })
     const seen: SeenRequest[] = []
     stubMutation(500, { error: 'BOOM' }, seen)
 
     render(<RunProtocolList runId="RUN-8" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove Alpha' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Detach Alpha' }))
     await waitFor(() => expect(seen).toHaveLength(1))
-    expect(screen.getByRole('button', { name: 'Remove Alpha' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Detach Alpha' })).toBeTruthy()
   })
 })
