@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, waitFor, cleanup } from '@testing-library/react'
 import { useEffect } from 'react'
-import { ProtocolSelectionProvider, useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
+import { ProtocolSelectionProvider, useProtocolSelection, type ProtocolResources } from '../event-editor/protocol/ProtocolSelectionContext'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
 
 afterEach(() => {
@@ -11,10 +11,11 @@ afterEach(() => {
 
 const mocks = vi.hoisted(() => ({
   getRecord: vi.fn(),
+  getRecordWithUI: vi.fn(),
 }))
 
 vi.mock('../shared/api/client', () => ({
-  apiClient: { getRecord: mocks.getRecord },
+  apiClient: { getRecord: mocks.getRecord, getRecordWithUI: mocks.getRecordWithUI },
 }))
 
 type StepSummary = { stepId: string; label: string; ordinal: number }
@@ -38,8 +39,22 @@ function BindingsReader({ onBindings }: { onBindings: (b: BindingMap) => void })
   return null
 }
 
+/** Read the current declared-resource sections, via an effect. */
+function ResourcesReader({ onResources }: { onResources: (r: ProtocolResources) => void }) {
+  const sel = useProtocolSelection()
+  useEffect(() => {
+    onResources(sel?.resources ?? { labwares: [], equipment: [] })
+  })
+  return null
+}
+
 function seedRecord(id: string, payload: Record<string, unknown>): Record<string, unknown> {
   return { recordId: id, payload }
+}
+
+/** One GET /ui/record/:id response — the record plus the (unused here) spec/schema. */
+function uiRecord(id: string, payload: Record<string, unknown>): Record<string, unknown> {
+  return { record: seedRecord(id, payload), uiSpec: null, schema: null }
 }
 
 describe('RunProtocolStepsLoader', () => {
@@ -259,6 +274,54 @@ describe('RunProtocolStepsLoader', () => {
     await waitFor(() => {
       expect(readBindings).toEqual({})
     })
+    fetchMock.mockRestore()
+  })
+
+  // ---- Served box: tree-store reads via /ui/record + PLR localProtocolRef (D2) ----
+
+  it('reads run + PLR via /ui/record and follows a PLR localProtocolRef to the inherited steps', async () => {
+    // Served box (advc-c1 D2): the run envelope and its PLR are tree-store records —
+    // /api/records/:id 404s for them, so the loader must read the /ui/record arm.
+    mocks.getRecord.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      // A specialized run's PLR names the LOCAL protocol only — no protocolRef/sourceRef,
+      // and its ref carries no `kind` (the key itself says it is local).
+      .mockResolvedValueOnce(uiRecord('PLR-1', {
+        localProtocolRef: { id: 'LPR-9' },
+        bindings: {
+          labware: [{ roleId: 'deep-well-block', labwareInstanceRef: { kind: 'record', type: 'labware-instance', id: 'LABI-96A' } }],
+        },
+      }))
+      .mockResolvedValueOnce(uiRecord('LPR-9', { kind: 'local-protocol', inherits_from: { id: 'PRT-universal' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-universal', stepsProtocolPayload))
+    const fetchMock = mockStepsEndpoint('/api/protocols/PRT-universal/steps')
+
+    let readSteps: StepSummary[] = []
+    let readResources: ProtocolResources | null = null
+    let readBindings: BindingMap = {}
+    render(
+      <ProtocolSelectionProvider>
+        <RunProtocolStepsLoader runId="RUN-1" />
+        <StepsReader onSteps={(s) => (readSteps = s)} />
+        <ResourcesReader onResources={(r) => (readResources = r)} />
+        <BindingsReader onBindings={(b) => (readBindings = b)} />
+      </ProtocolSelectionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(readSteps.map((s) => s.stepId)).toEqual(['s1'])
+    })
+    expect(readSteps[0]?.label).toBe('Lyse')
+    await waitFor(() => {
+      expect(readResources?.labwares.map((r) => r.roleId)).toEqual(['deep-well-block', 'lysis-rack'])
+    })
+    const res: ProtocolResources = readResources ?? { labwares: [], equipment: [] }
+    expect(res.equipment.map((r) => r.roleId)).toEqual(['bead-beater'])
+    expect(readBindings['deep-well-block']?.instanceRef.id).toBe('LABI-96A')
+    // Both tree-store arms went through /ui/record; /api/records was never trusted.
+    expect(mocks.getRecordWithUI.mock.calls.map((c) => c[0])).toEqual(['RUN-1', 'PLR-1', 'LPR-9', 'PRT-universal'])
+    expect(mocks.getRecord).not.toHaveBeenCalled()
     fetchMock.mockRestore()
   })
 })
