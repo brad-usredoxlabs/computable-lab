@@ -74,4 +74,4 @@ advc c2 demanded the bindings door read run/PLR records through `getRecordWithUI
 ### Coverage Gap
 No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at baseline in this tree, so D-1 remains unpinned.
 
-L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE PENDING_SHA
+L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE edb76724b4b783b0500c320ddbcebae184f0011f
