@@ -45,3 +45,6 @@ the universal record PRT-U1 is consulted, so it cannot pass by not resolving the
 - Files changed: 3, diff 14 insertions(+), 12 deletions(-).
 
 VERIFY (re-run): cd server && npx vitest run src/protocol/roleBindingProposal.test.ts src/protocol/roleBindingWrite.test.ts && npx tsc --noEmit
+
+L2-PROTOCOL-LOCAL-BIND-1 UNIT u2fix DONE ee3cdaee0e804bdb9eee6c52f54a72fee0f5475a
+L2-PROTOCOL-LOCAL-BIND-1-u2fix UNIT unit DONE ee3cdaee0e804bdb9eee6c52f54a72fee0f5475a
