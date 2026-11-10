@@ -63,3 +63,81 @@ was already present from the launcher and is untouched.
 0985eeadae4f0ae02e5190723a90c13cd357ba83 — "L2-SUBPROTOCOL-EXPAND-1 u1: report"
 
 L2-SUBPROTOCOL-EXPAND-1-u1 UNIT unit DONE 0985eeadae4f0ae02e5190723a90c13cd357ba83
+
+---
+
+# u1fix — advc c1 fixes (D1-D4), branch cl/lane2-subprotocol-expand-1-u1-l2t0045 at 86a39318
+
+## D1 (MAJOR) — ref selection is keyed, not positional
+`concreteRef` now checks `CANONICAL_REF_KEYS = [labwareInstanceRef, materialRef,
+instrumentRef, contextRef, templateRef, libraryRef]` (schema order) and picks the
+one kind-bearing object under those keys. Position/Object.values no longer decides.
+- Entry with `labwareGeometryRef` + `labwareInstanceRef` -> `labwareInstanceRef`
+  (geometry is NOT the instance; schema/workflow/planned-run.schema.yaml:300-312
+  permits both on one LabwareBinding).
+- Two kind-bearing canonical keys on one entry -> `{ ambiguous: true }`, surfaced
+  as the new named error `AMBIGUOUS_BINDING` with roleId + stepId, same ok:false
+  shape, no events. (No positional guess, no partial graph.)
+- Generic first-kind-value fallback only when no canonical key carries a ref.
+
+## D2 — structural unbound guard
+`bindRoleReferences(value, resolve)` takes a resolver instead of the map and does
+`bound[key] = resolve(child)` — there is no `?? child` path, so an abstract role
+string can no longer leak. `resolve` throws a local `RoleBindingFailure(code,
+roleId)`; the step loop catches it and converts to the existing named
+`UNBOUND_ROLE` (or `AMBIGUOUS_BINDING`) result. The declared-role pre-check stays;
+the refs.has pre-check was removed so the binding pass itself is the authority for
+boundness.
+
+## D3 — vacuous pin replaced
+Deleted `expect(emittedStrings).not.toContain(String(50))` (50 is a number;
+stringValuesDeep can never yield "50"). Replaced the two `toMatchObject` calls with
+`toEqual(substituteRoles(step))`: details must deep-equal the declared step with
+ONLY `*Role` strings replaced, pinning every key and every numeric at its original
+path (no invented values, no invented keys). Tests: 8 now (5 kept + 3 added).
+
+## Tests added (RED at HEAD 86a39318, GREEN after)
+(a) geometry+instance entry -> emits labwareRef (was geometry at HEAD);
+(b) only-geometry entry, no canonical key -> geometry selected (fallback documented);
+(c) two canonical keys -> AMBIGUOUS_BINDING, roleId plate, stepId read-plate, no events.
+
+## Verification (raw, this worktree)
+RED before the product fix (test commit 51d4ddd6, module untouched):
+$ cd server && npx vitest run src/protocol/localPlanGraph.test.ts 2>&1 | tail -n 6
+Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+  Start at  01:24:45
+  Duration  945ms (transform 41ms, setup 1ms, collect 41ms, tests 10ms, environment 0ms, prepare 492ms)
+  FAIL ... > prefers the canonical instance ref when the entry also carries a geometry ref
+  FAIL ... > refuses an entry whose canonical keys disagree, naming AMBIGUOUS_BINDING
+
+GREEN after 5e894a26:
+$ cd server && npx vitest run src/protocol/localPlanGraph.test.ts 2>&1 | tail -n 6
+Test Files  1 passed (1)
+      Tests  8 passed (8)
+  Start at  01:25:22
+  Duration  929ms (transform 44ms, setup 0ms, collect 41ms, tests 6ms, environment 0ms, prepare 472ms)
+
+$ cd server && npx tsc --noEmit; echo EXIT=$?
+EXIT=0
+
+## Files (u1fix)
+- server/src/protocol/localPlanGraph.ts (77 insertions / 26 deletions vs 86a39318)
+- server/src/protocol/localPlanGraph.test.ts (+40/-7 lines; 8 tests)
+- this report. No schema/roleBindingWrite change; no other file touched.
+node_modules stays as the pre-existing untracked lane symlinks
+(server/node_modules -> cl-integration-2/server/node_modules); not committed.
+
+## Commits
+51d4ddd6 — RED test commit
+5e894a26 — product fix (keyed ref selection + structural unbound guard)
+<report-sha-1> — this report
+
+## D4 note
+The u1 marker above ("... UNIT unit DONE ...") is left as history; the corrected
+final markers below are the acceptance markers. Both name this report commit,
+which contains them (the sha line was fixed in the follow-up commit, per the
+brief's two-commit recipe).
+
+L2-SUBPROTOCOL-EXPAND-1-u1 UNIT 1 DONE 0000000000000000000000000000000000000000
+L2-SUBPROTOCOL-EXPAND-1-u1fix UNIT unit DONE 0000000000000000000000000000000000000000
