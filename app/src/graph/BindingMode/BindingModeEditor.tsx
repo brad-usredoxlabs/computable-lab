@@ -105,8 +105,10 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
     const loadData = async () => {
       try {
-        const pr = await apiClient.getRecord(id)
+        const prResp = await apiClient.getRecordWithUI(id)
         if (!active) return
+        const pr = prResp.record
+        if (!pr) throw new Error(`planned-run not found: ${id}`)
         setPlannedRun(pr)
 
         const prPayload = pr.payload as unknown as PlannedRunPayload
