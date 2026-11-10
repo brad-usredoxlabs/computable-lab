@@ -5632,6 +5632,17 @@ export const apiClient = {
   },
 
   /**
+   * Build a plan graph from the planned-run's attached protocol + bindings.
+   * Calls POST /runs/:id/plan-graph
+   * @returns { success: true, graphId, reused? } — throws ApiError on non-2xx.
+   */
+  async buildPlanGraph(plannedRunId: string): Promise<{ success: true; graphId: string; reused?: boolean }> {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/plan-graph`, {
+      method: 'POST',
+    })
+  },
+
+  /**
    * Read-only role-binding proposals for a planned-run: one entry per declared
    * role with its candidate(s). Never writes — a single candidate is PROPOSED,
    * not bound. 404 when the run is absent or has no attached protocol.
