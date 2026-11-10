@@ -3,7 +3,7 @@
 Worktree: /home/brad/cl-wt/L2-SEEDLAB-d2alias-lane2
 Branch: cl/lane2-seedlab-d2alias-2205 (base b854c18c6bf60224ad92713c44f24b7c9fa085dd)
 Item: L2-SEED-LABLOCAL-1-d2alias (unit d2alias, D2 leg of
-.hhermes/plans/decisions/RESERVOIR-SHAPE-AND-SPEC-SHEET-INGEST-l2-20261109.md — path is
+.hermes/plans/decisions/RESERVOIR-SHAPE-AND-SPEC-SHEET-INGEST-l2-20261109.md — path is
 `.hermes/plans/decisions/RESERVOIR-SHAPE-AND-SPEC-SHEET-INGEST-l2-20261109.md`)
 
 ## Decisions
