@@ -227,14 +227,14 @@ Catalog: 25200056`,
     // Values with punctuation should not be truncated
     const doc = {
       url: 'https://example.com/product',
-      text: `Vendor: Acme·Corp
+      text: `Vendor: Acme·Corp•Build 2
 Display Name: Model A; Model B`,
     };
 
     const result = extractProposals(fieldMap, doc);
     const vendors = result.filter((p) => p.targetField === 'vendor');
     expect(vendors).toHaveLength(1);
-    expect(vendors[0].value).toBe('Acme·Corp');
+    expect(vendors[0].value).toBe('Acme·Corp•Build 2');
 
     const names = result.filter((p) => p.targetField === 'display_name');
     expect(names).toHaveLength(1);
