@@ -169,3 +169,57 @@ $ python3 -c "import sys;sys.path.insert(0,'/home/brad/.hermes/cl/scripts');impo
 ```
 
 L2-SUBPROTOCOL-EXPAND-1-u6binddoorpinfix1pw UNIT u6binddoorpinfix1pw DONE 7ce108112de03539f5336cadc9d416e66e091e49
+
+## fix3b
+
+### Summary
+fix3 moved `BindingModeEditor.tsx:108/:121` and `RunWorkspacePage.tsx:69` onto
+`apiClient.getRecordWithUI`. The sibling suites' `apiClient` mock factories had no such key, so
+both collapsed on `TypeError: apiClient.getRecordWithUI is not a function`. The production read
+arms are correct (advc c4 D-1) and were left untouched. At this unit's start HEAD f38cb217 the
+suites ran green, but ONLY because sibfix1 had added the key with a contract-wrong body
+(`{ record, ui: undefined }`): that shape omits the `uiSpec`/`schema` members of
+`RecordWithUIResponse` (types/uiSpec.ts:150-159) and raised
+`TS2345 ... missing the following properties from type 'RecordWithUIResponse': uiSpec, schema`
+at BindingModeEditor.compile.test.tsx:131. This unit replaces both mock bodies with the real
+envelope shape, keeping the suites' existing fixtures (mockPlannedRun, mockLocalProtocol, and the
+surface suite's RUN-1 payload) and adding only envelope metadata.
+
+### Changed Files (2 code + this report)
+1. `app/src/graph/BindingMode/BindingModeEditor.compile.test.tsx` — `getRecordWithUI`
+   mockImplementation now returns `{ record: mockPlannedRun, uiSpec: null, schema: null }` /
+   `{ record: mockLocalProtocol, uiSpec: null, schema: null }` (was `ui: undefined`).
+2. `app/src/run/RunWorkspacePage.surface.test.tsx` — `getRecordWithUI` mock now returns
+   `{ record: { recordId: 'RUN-1', schemaId: 'run', payload: <same payload getRecord already
+   returns> }, uiSpec: null, schema: null }` (was `{ record: { payload }, ui: undefined }`).
+No production file, shared client/type, or other test file was modified.
+
+### Raw RED (M1 mutation — key deleted from RunWorkspacePage.surface.test.tsx)
+```
+TypeError: __vite_ssr_import_22__.apiClient.getRecordWithUI is not a function
+     -> apiClient.getRecordWithUI is not a function
+ Failed Tests 1
+TypeError: apiClient.getRecordWithUI is not a function
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+```
+Restore proof: sha256 `8d34160f3dfff9609c7a69a1ea3be62f479e859a26fd6328f135fcb4d275ab93` before and
+after the mutation (byte-identical restore).
+
+### Raw GREEN (targeted; cwd app)
+```
+ ✓ src/run/RunWorkspacePage.surface.test.tsx  (1 test) 247ms
+ ✓ src/graph/BindingMode/BindingModeEditor.compile.test.tsx  (6 tests) 8102ms
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+```
+
+### tsc
+`node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` -> 13 error lines (environmental
+baseline: prosemirror-view / ajv / yaml / @types/node), zero lines naming an owned file. The
+pre-fix owned-file `TS2345` at compile.test.tsx:131 is gone.
+
+### Commits
+- 08841eeb — u6binddoor-fix3b code (both mock bodies)
+
+L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoor-fix3b DONE PENDING_SHA
