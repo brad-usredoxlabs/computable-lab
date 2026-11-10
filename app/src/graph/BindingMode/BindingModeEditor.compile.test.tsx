@@ -129,8 +129,8 @@ describe('BindingModeEditor compile integration', () => {
     })
 
     vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return { record: mockPlannedRun, ui: undefined }
-      if (id === 'LPR-000001') return { record: mockLocalProtocol, ui: undefined }
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null }
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null }
       throw new Error('Not found')
     })
 

@@ -25,8 +25,9 @@ vi.mock('../shared/api/client', () => ({
       payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' },
     })),
     getRecordWithUI: vi.fn(async () => ({
-      record: { payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' } },
-      ui: undefined,
+      record: { recordId: 'RUN-1', schemaId: 'run', payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' } },
+      uiSpec: null,
+      schema: null,
     })),
     workspace: { get: vi.fn(async () => null) },
     ai: { health: vi.fn(async () => ({ ok: false })) },
