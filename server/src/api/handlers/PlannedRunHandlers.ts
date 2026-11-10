@@ -8,6 +8,7 @@ import type { ApiError } from '../types.js';
 import { PlannedRunFromLocalProtocolService } from '../../protocol/PlannedRunFromLocalProtocolService.js';
 import { protocolIdsOf, withAttachedProtocol, withDetachedProtocol } from '../../protocol/runProtocolList.js';
 import { proposeRoleBindings, type RoleBindingProposals } from '../../protocol/roleBindingProposal.js';
+import { writeRoleBindings } from '../../protocol/roleBindingWrite.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
 
 // ---------------------------------------------------------------------------
@@ -187,42 +188,22 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         };
       }
 
-      // Update bindings
-      const existingBindings = (payload.bindings as Record<string, unknown>) ?? {};
-      const updatedBindings: Record<string, unknown> = { ...existingBindings };
-
-      if (labware && labware.length > 0) {
-        const existingLabware = (updatedBindings.labware as Array<Record<string, unknown>>) ?? [];
-        // Replace bindings for the given roleIds
-        const labwareRoleIds = new Set(labware.map((b) => b.roleId));
-        const filteredLabware = existingLabware.filter(
-          (b: Record<string, unknown>) => typeof b.roleId !== 'string' || !labwareRoleIds.has(b.roleId),
-        );
-        for (const binding of labware) {
-          filteredLabware.push({
-            roleId: binding.roleId,
-            labwareInstanceRef: { kind: 'record', id: binding.labwareInstanceRef, type: 'labware-instance' },
-          });
-        }
-        updatedBindings.labware = filteredLabware;
+      // Update bindings: every roleId must be declared on an attached protocol
+      // and every ref's type comes from the target record itself.
+      const written = await writeRoleBindings({
+        store: ctx.store,
+        run: record,
+        bindings: {
+          ...(labware ? { labware } : {}),
+          ...(materials ? { materials } : {}),
+        },
+      });
+      if (!written.ok) {
+        reply.status(400);
+        return { error: written.code, message: written.message };
       }
 
-      if (materials && materials.length > 0) {
-        const existingMaterials = (updatedBindings.materials as Array<Record<string, unknown>>) ?? [];
-        const materialRoleIds = new Set(materials.map((b) => b.roleId));
-        const filteredMaterials = existingMaterials.filter(
-          (b: Record<string, unknown>) => typeof b.roleId !== 'string' || !materialRoleIds.has(b.roleId),
-        );
-        for (const binding of materials) {
-          filteredMaterials.push({
-            roleId: binding.roleId,
-            materialRef: { kind: 'record', id: binding.materialInstanceRef, type: 'material-instance' },
-          });
-        }
-        updatedBindings.materials = filteredMaterials;
-      }
-
-      payload.bindings = updatedBindings;
+      payload.bindings = written.bindings;
 
       // Update deckPlatformId if provided
       if (deckPlatformId !== undefined) {
