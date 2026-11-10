@@ -24,6 +24,10 @@ vi.mock('../shared/api/client', () => ({
     getRecord: vi.fn(async () => ({
       payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' },
     })),
+    getRecordWithUI: vi.fn(async () => ({
+      record: { payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' } },
+      ui: undefined,
+    })),
     workspace: { get: vi.fn(async () => null) },
     ai: { health: vi.fn(async () => ({ ok: false })) },
     getSurfaces: vi.fn(async () => []),
