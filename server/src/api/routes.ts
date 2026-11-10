@@ -1013,6 +1013,7 @@ export function registerRoutes(
     fastify.get('/runs/:id/role-binding-proposals', plannedRunHandlers.getRoleBindingProposals.bind(plannedRunHandlers));
     fastify.post('/runs/:id/sample-map', plannedRunHandlers.setSampleMap.bind(plannedRunHandlers));
     fastify.post('/runs/:id/compile', plannedRunHandlers.compileRunPlan.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/plan-graph', plannedRunHandlers.buildPlanGraph.bind(plannedRunHandlers));
   }
 
   // ============================================================================
