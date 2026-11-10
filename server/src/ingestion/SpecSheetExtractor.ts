@@ -147,6 +147,29 @@ function segmentLine(line: string): Array<{ label: string; value: string }> {
 }
 
 // ---------------------------------------------------------------------------
+// Header-row detector — skip lines where every segment is a keyword label
+// ---------------------------------------------------------------------------
+
+function isHeaderRow(
+  segments: Array<{ label: string; value: string }>,
+  allKeywords: string[],
+): boolean {
+  if (segments.length < 2) return false;
+  // Every segment must be colon-less (label === value)
+  for (const seg of segments) {
+    if (seg.label !== seg.value) return false;
+  }
+  // Every segment label must match at least one keyword
+  const allKwLower = allKeywords.map((k) => k.toLowerCase());
+  for (const seg of segments) {
+    const labelLower = seg.label.toLowerCase();
+    const anyMatch = allKwLower.some((kw) => labelLower.includes(kw));
+    if (!anyMatch) return false;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Pure extraction engine
 // ---------------------------------------------------------------------------
 
@@ -158,6 +181,13 @@ export function extractProposals(
   const lines = doc.text.split('\n').filter((l) => l.trim().length > 0);
   const proposals: SpecSheetProposal[] = [];
 
+  // Collect ALL keywords across every mapping for header detection
+  const allKeywords: string[] = [];
+  for (const mapping of fieldMap.fieldMappings) {
+    const kw = parseSourceKeywords(mapping.source);
+    if (kw.length > 0) allKeywords.push(...kw);
+  }
+
   for (const mapping of fieldMap.fieldMappings) {
     const keywords = parseSourceKeywords(mapping.source);
     if (keywords.length === 0) continue;
@@ -167,6 +197,9 @@ export function extractProposals(
 
       // Check if this line has multiple segments (◉, |)
       const segments = segmentLine(trimmed);
+
+      // Skip header rows: lines where every segment is a keyword label
+      if (segments.length >= 2 && isHeaderRow(segments, allKeywords)) continue;
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
