@@ -30,7 +30,7 @@
 - Test went RED: "expected AssertionError to be an instance of PolicyGuardError"
 - Restored policy.ts via `git checkout --`
 
-L2-MATERIAL-SELECTION-POLICY-1 UNIT u2fix6 DONE b2f2d8b3cc29eb9228319aa3d25f0228b34207a8
+L2-MATERIAL-SELECTION-POLICY-1 UNIT u2fix6 DONE 9d5236e47cb552a9a7bc6e2259275da7b183b8e7
 
 ## Paperwork Fix (u2fix6 — cycle 5)
 
