@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { OntologyRef, RecordRef } from '../../shared/ref'
-import { apiClient, type VendorSearchResult, type VendorName } from '../../shared/api/client'
+import { apiClient, type VendorSearchResult, type VendorName, type SpecSheetExtractResult, type SpecSheetProposal } from '../../shared/api/client'
 import {
   CONCENTRATION_UNITS,
   MATERIAL_SCHEMA_ID,
@@ -117,6 +117,8 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
   const [selectedDraftId, setSelectedDraftId] = useState('')
   const [isExtractingDocument, setIsExtractingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
+  const [specSheetResult, setSpecSheetResult] = useState<SpecSheetExtractResult | null>(null)
+  const [isSpecSheetLoading, setIsSpecSheetLoading] = useState(false)
   const [makeDefault, setMakeDefault] = useState(false)
   const [defaultReason, setDefaultReason] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -148,6 +150,8 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
     setSelectedDraftId('')
     setIsExtractingDocument(false)
     setDocumentError(null)
+    setSpecSheetResult(null)
+    setIsSpecSheetLoading(false)
     setMakeDefault(false)
     setDefaultReason('')
     setError(null)
@@ -596,8 +600,60 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                     {isExtractingDocument ? 'Extracting…' : 'Fetch + Extract'}
                   </button>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={!htmlSourceUrl.trim() || isSpecSheetLoading}
+                    onClick={async () => {
+                      const trimmedUrl = htmlSourceUrl.trim()
+                      if (!trimmedUrl) return
+                      setSpecSheetResult(null)
+                      setIsSpecSheetLoading(true)
+                      try {
+                        setSpecSheetResult(await apiClient.extractSpecSheetProposals({ url: trimmedUrl, recordKind: 'vendor-product' }))
+                      } catch (err) {
+                        setSpecSheetResult(null)
+                        setDocumentError(err instanceof Error ? err.message : 'Failed to extract spec sheet')
+                      } finally {
+                        setIsSpecSheetLoading(false)
+                      }
+                    }}
+                  >
+                    {isSpecSheetLoading ? 'Extracting…' : 'Extract Spec Sheet'}
+                  </button>
+                </div>
               </div>
               {documentError && <div className="text-xs text-red-700">{documentError}</div>}
+              {specSheetResult && !specSheetResult.configured && (
+                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  Spec-sheet extraction is not configured.
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && 'blocked' in specSheetResult && specSheetResult.blocked && (
+                <div className="rounded border border-red-200 bg-red-50 p-3 space-y-1">
+                  <div className="text-xs font-medium text-red-800">Extraction blocked</div>
+                  <div className="text-xs text-red-700">URL: {specSheetResult.blocked.url}</div>
+                  <div className="text-xs text-red-700">Reason: {specSheetResult.blocked.reason}</div>
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && specSheetResult.proposals.length > 0 && (
+                <div className="rounded border border-blue-200 bg-blue-50 p-3 space-y-2">
+                  <div className="text-sm font-medium text-blue-900">Spec-sheet proposals</div>
+                  {specSheetResult.proposals.map((proposal: SpecSheetProposal, index: number) => (
+                    <div key={`${proposal.targetField}-${index}`} className="rounded border border-blue-100 bg-white p-2 text-xs space-y-1">
+                      <div className="font-medium text-gray-900">{proposal.targetField}: {proposal.value}</div>
+                      <div className="text-gray-600">passage: {proposal.passage}</div>
+                      <div className="text-gray-500">sourceUrl: {proposal.sourceUrl}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && specSheetResult.proposals.length === 0 && !('blocked' in specSheetResult && specSheetResult.blocked) && (
+                <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                  No spec-sheet proposals found.
+                </div>
+              )}
               {selectedDraft && (
                 <div className="rounded border border-amber-200 bg-amber-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
