@@ -51,4 +51,4 @@ VERIFICATION
     bb3dfb3b D1 regex fix (16/16 GREEN)
     df072a1c D2 fixture pinned with IN/OUT documented
 
-L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 15f65115
+L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 8b1a4fe2
