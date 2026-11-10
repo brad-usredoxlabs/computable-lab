@@ -54,7 +54,7 @@ describe('apiClient.getRoleBindingProposals', () => {
     expect(String(url)).toMatch(/\/runs\/run-1\/role-binding-proposals$/)
     expect(init.method).toBeUndefined()
     // Pin the full URL string so the prefix cannot drift unnoticed
-    expect(String(url)).toContain('/runs/run-1/role-binding-proposals')
+    expect(String(url)).toBe('/api/runs/run-1/role-binding-proposals')
 
     expect(result.protocols).toHaveLength(1)
     expect(result.protocols[0].protocolId).toBe('lp-1')
