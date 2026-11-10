@@ -197,7 +197,7 @@ Catalog: 25200056`,
     // Real receipt line: colon-less segments separated by pipe
     const doc = {
       url: 'https://example.com/reservoir',
-      text: `Manufacturer | OEM/ODM Supplier | Polypropylene (PP), 25 mL | Reservoir Capacity: 195 mL, 185 mL`,
+      text: `Manufacturer | OEM/ODM Supplier | Wholesale Factory Price ◉ Reservoir Material: Polypropylene (PP) ◉ Reservoir Format: Single well ◉ Reservoir Capacity: 195 mL, 185 mL ◉ Reservoir Color: Clear ◉ Reservoir Surface: Hydrophobic, low-retention ◉ Bottom Type: 96/384 diamond bottom troughs ◉ Dimensions (L x W x H): 127.8 x 85.5 x 31.5 mm ◉ Sterility: Sterile / Non-sterile ◉ Autoclavable: Yes ◉ Packaging: 5 pcs/bag, 10 bags/case ◉ Purity Grade: RNase/DNase free, non-pyrogenic ◉ Free Sample: 1-5pcs ◉ Compatibility: Multichannel pipettes & automated pipetting systems`,
     };
 
     const result = extractProposals(fieldMap, doc);

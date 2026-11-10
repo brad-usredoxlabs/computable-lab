@@ -51,6 +51,10 @@ Fix: Changed to exact match: expect(capacities[0].value).toBe('195 mL, 185 mL').
 1. server/src/ingestion/SpecSheetExtractor.ts (lines 113-127, 150)
 2. server/src/ingestion/SpecSheetExtractor.test.ts (lines 158-276)
 
-DONE 4e96dc19b765a246427152b4f246486e6e2a970a
+DONE PLACEHOLDER
 
-L2-SPECSHEET-ud4capacityfix UNIT DONE 4e96dc19b765a246427152b4f246486e6e2a970a
+L2-SPECSHEET-ud4capacityfix UNIT DONE PLACEHOLDER
+
+## Follow-up debt
+
+- L2-VACUOUS-PINS-DEBT: SpecSheetExtractor.test.ts:217 title claims a U+2022 bullet arm that no fixture witnesses (fixture carries `·` and `;` but not `•`). Filed per advc c1 D2 / handoff l2t1530.
