@@ -6,6 +6,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import { PlannedRunFromLocalProtocolService } from '../../protocol/PlannedRunFromLocalProtocolService.js';
+import { protocolIdsOf, withAttachedProtocol } from '../../protocol/runProtocolList.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
 
 // ---------------------------------------------------------------------------
@@ -235,6 +236,80 @@ export function createPlannedRunHandlers(ctx: AppContext) {
 
       reply.status(200);
       return { success: true };
+    },
+
+    /**
+     * POST /runs/:id/protocols
+     *
+     * Attach one local-protocol ref to a planned-run's ordered protocol list.
+     * Idempotent: re-attaching an id already present neither duplicates nor
+     * reorders it. Returns the resulting ordered id list.
+     *
+     * Body: { protocolId?: string }
+     *
+     * Returns { success: true, protocolRefs: string[] } on success (200).
+     * Returns 404 PLANNED_RUN_NOT_FOUND / LOCAL_PROTOCOL_NOT_FOUND.
+     * Returns 400 NOT_A_PLANNED_RUN / NOT_A_LOCAL_PROTOCOL.
+     */
+    async attachProtocol(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: { protocolId?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; protocolRefs: string[] } | ApiError> {
+      const { id } = request.params;
+      const protocolId = (request.body ?? {}).protocolId;
+
+      const record = await ctx.store.get(id);
+      if (!record) {
+        reply.status(404);
+        return {
+          error: 'PLANNED_RUN_NOT_FOUND',
+          message: `Planned-run '${id}' not found`,
+        };
+      }
+
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'planned-run') {
+        reply.status(400);
+        return {
+          error: 'NOT_A_PLANNED_RUN',
+          message: `Record '${id}' is not a planned-run`,
+        };
+      }
+
+      const protocolRecord = protocolId ? await ctx.store.get(protocolId) : null;
+      if (!protocolRecord) {
+        reply.status(404);
+        return {
+          error: 'LOCAL_PROTOCOL_NOT_FOUND',
+          message: `Local-protocol '${protocolId ?? ''}' not found`,
+        };
+      }
+
+      const protocolPayload = protocolRecord.payload as Record<string, unknown>;
+      if (protocolPayload.kind !== 'local-protocol') {
+        reply.status(400);
+        return {
+          error: 'NOT_A_LOCAL_PROTOCOL',
+          message: `Record '${protocolId}' is not a local-protocol`,
+        };
+      }
+
+      const nextPayload = withAttachedProtocol(payload, {
+        kind: 'record',
+        id: protocolRecord.recordId,
+        type: 'local-protocol',
+      });
+
+      await ctx.store.update({
+        envelope: { ...record, payload: nextPayload },
+        message: `Attach protocol to planned-run ${id}`,
+      });
+
+      reply.status(200);
+      return { success: true, protocolRefs: protocolIdsOf(nextPayload) };
     },
 
     /**

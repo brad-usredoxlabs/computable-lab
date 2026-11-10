@@ -1000,6 +1000,7 @@ export function registerRoutes(
   if (plannedRunHandlers) {
     fastify.post('/runs/from-local-protocol', plannedRunHandlers.createFromLocalProtocol.bind(plannedRunHandlers));
     fastify.post('/runs/:id/bindings', plannedRunHandlers.updateBindings.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/protocols', plannedRunHandlers.attachProtocol.bind(plannedRunHandlers));
     fastify.post('/runs/:id/sample-map', plannedRunHandlers.setSampleMap.bind(plannedRunHandlers));
     fastify.post('/runs/:id/compile', plannedRunHandlers.compileRunPlan.bind(plannedRunHandlers));
   }
