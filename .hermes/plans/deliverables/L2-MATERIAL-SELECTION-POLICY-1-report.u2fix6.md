@@ -30,10 +30,17 @@
 - Test went RED: "expected AssertionError to be an instance of PolicyGuardError"
 - Restored policy.ts via `git checkout --`
 
-L2-MATERIAL-SELECTION-POLICY-1 UNIT u2fix6 DONE 9d5236e47cb552a9a7bc6e2259275da7b183b8e7
+L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e47cb552a9a7bc6e2259275da7b183b8e7
 
 ## Paperwork Fix (u2fix6 — cycle 5)
 
 - **Defect:** DONE marker cited orphaned pre-amend commit `21cfc862` (`git branch --contains` returned empty).
 - **Fix:** Amended marker to cite reachable commit containing the content lineage.
 - **Verification:** `git merge-base --is-ancestor <named sha> HEAD` returned 0.
+
+## Marker Token Fix (u2fix6b — RUN u2fix6b)
+- **Defect:** marker line named only the canonical id, so `cl_marker_scan.marker_verdict()` for dispatch token `L2-MATSEL-u2fix6` returned `('missing', '')` (strict needs the item literally; loose needs family `MATSEL`).
+- **RED:** `find_marker(worktree, 'L2-MATSEL-u2fix6')` -> `('missing', '')`.
+- **Fix:** line 33 now names both ids, canonical first: `L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e4...`. Sha unchanged, reachable, no product/test/policy edits.
+- **GREEN:** dispatch token -> `('found', '...report.u2fix6.md: L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e4...')`; canonical `L2-MATERIAL-SELECTION-POLICY-1-u2fix6` -> `found-loose`.
+- **Cause:** token mismatch in paperwork only, not a code defect.
