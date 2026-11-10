@@ -59,4 +59,4 @@ verified with `git cat-file -e`.
 
 superseded: `L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 8b1a4fe2`
 
-L2-SPEC-SHEET-INGEST-1 UNIT uE1hdrowfix-c4 DONE PENDING_SHA
+L2-SPEC-SHEET-INGEST-1 UNIT uE1hdrowfix-c4 DONE c7f4147d62ed2abd87d086561253e12871348a05
