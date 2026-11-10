@@ -41,7 +41,7 @@ tsc: pre-existing errors only (missing @types/node, npm deps in unrelated files)
 
 ## Note (out of scope)
 
-roleBindingProposal.ts:66 has the same asymmetry (reads only `payload.lot_number` for material-lot), but the read half's lot read is pre-existing, advc marked it so, and it needs an architect ruling. Not touched here.
+roleBindingProposal.ts:66 reads a camelCase payload.lotNumber for all kinds (no kind branch), so its asymmetry versus the write half is a different defect and still needs an architect ruling. Not touched here.
 
 ## Commits
 

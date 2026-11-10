@@ -86,8 +86,8 @@ describe('writeRoleBindings', () => {
   });
 
   it('carries lotNumber where the target record schema keeps it, absent otherwise', async () => {
-    // Fixtures are shaped to the schemas' required keys and declared lot paths,
-    // but are not Ajv-validated (env() injects payload.recordId which is not schema).
+    // The lot paths are the schemas' declared paths; the fixtures also omit the
+    // required `id` and carry an injected payload.recordId, so they are not Ajv-valid.
     const records = [
       run(),
       ...chainedProtocol(materialRole),
