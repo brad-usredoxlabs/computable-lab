@@ -188,43 +188,37 @@ export function extractProposals(
     if (kw.length > 0) allKeywords.push(...kw);
   }
 
-  // --- Header-to-column-position mapping ---
-  // When a header row is detected, record which column positions contain
-  // each mapping's keywords. Subsequent data rows with the same segment
-  // count can then extract by position instead of requiring keywords.
-  const headerPositions = new Map<string, Set<number>>();
-  let positionalSegmentCount: number | undefined;
+  // --- Per-line extraction with positional header context ---
+  // Walk lines in document order. When a header row is encountered, record
+  // its column positions for each mapping. Data rows (same arity, not
+  // punctuation-only) use the most recent header's layout. A new header
+  // replaces the previous layout (last header wins, no cross-table merge).
+  const punctOnlyRe = /^[\s\-\:\|]*$/;
+  let lastHeader: { positions: Map<string, number>; count: number } | null = null;
 
-  for (const line of lines) {
-    const segments = segmentLine(line.trim());
-    if (segments.length < 2 || !isHeaderRow(segments, allKeywords)) continue;
-    for (const mapping of fieldMap.fieldMappings) {
-      const keywords = parseSourceKeywords(mapping.source);
-      if (keywords.length === 0) continue;
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (seg && keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
-          if (!headerPositions.has(mapping.targetField)) {
-            headerPositions.set(mapping.targetField, new Set());
-          }
-          headerPositions.get(mapping.targetField)!.add(i);
-        }
-      }
-    }
-    positionalSegmentCount = segments.length;
-  }
-
-  // --- Extract proposals per mapping ---
   for (const mapping of fieldMap.fieldMappings) {
     const keywords = parseSourceKeywords(mapping.source);
     if (keywords.length === 0) continue;
+    // Reset per-mapping so each field scans independently
+    lastHeader = null;
 
     for (const line of lines) {
       const trimmed = line.trim();
       const segments = segmentLine(trimmed);
 
-      // Skip header rows
-      if (segments.length >= 2 && isHeaderRow(segments, allKeywords)) continue;
+      // A header row: record its column layout (replaces any previous)
+      if (segments.length >= 2 && isHeaderRow(segments, allKeywords)) {
+        const positions = new Map<string, number>();
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          if (seg && keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
+            positions.set(mapping.targetField, i);
+          }
+        }
+        lastHeader = { positions, count: segments.length };
+        continue; // skip header as data
+      }
+
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
@@ -235,14 +229,17 @@ export function extractProposals(
             break;
           }
         }
-        // Positional extraction: if header was found, extract by column position
+        // Positional extraction: use the most recent header's layout
         if (rawValue === null &&
-            positionalSegmentCount !== undefined &&
-            segments.length === positionalSegmentCount) {
-          const positions = headerPositions.get(mapping.targetField);
-          if (positions && positions.size > 0) {
-            const idx = [...positions][0];
-            if (idx !== undefined) rawValue = segments[idx]?.value ?? null;
+            lastHeader !== null &&
+            segments.length === lastHeader.count) {
+          const idx = lastHeader.positions.get(mapping.targetField);
+          if (idx !== undefined) {
+            const candidate = segments[idx]?.value ?? null;
+            // Skip punctuation-only separator values (e.g. "---", ":---:")
+            if (candidate !== null && !punctOnlyRe.test(candidate)) {
+              rawValue = candidate;
+            }
           }
         }
         // Fallback: whole-line keyword match + colon extraction
