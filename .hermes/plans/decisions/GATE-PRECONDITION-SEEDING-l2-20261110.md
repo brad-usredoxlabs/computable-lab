@@ -35,6 +35,16 @@ routes and asked whether a seeding unit was architect-approved.
    result is a FAIL or BLOCKED verdict naming the empty candidate list, which is exactly what g1
    returned. That is the gate working, not the gate failing.
 
+## Brad's approval of the inventory leg (2026-11-10, verbatim)
+
+> "i 100 agree wuth your decision: build the UI to add inventory."
+
+So step 2(b) above is authorized product work, not a stopgap. Queued as
+`L2-LAB-INVENTORY-CREATE-1` in `~/.hermes/cl/lanes/2/task-list.md`, inserted directly after
+`L2-LAB-MATERIAL-CREATE-1` because it is the next step of the same driver journey: concept ->
+vendor product -> received lot -> physical vessel -> role binding. The seeded route stays legal but
+must be labelled in the verdict; it is no longer the preferred path.
+
 ## Consequence for sequencing
 
 The shortest honest path to a green EXPAND gate is: door B labware create (in flight) → inventory-create
