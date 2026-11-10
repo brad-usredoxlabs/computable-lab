@@ -58,3 +58,5 @@ L2-SPEC-SHEET-INGEST-1 UNIT uD4cappw DONE 4a1ac3f19e82debd732ceb61335c0b339e186b
 ## Follow-up debt
 
 - L2-VACUOUS-PINS-DEBT: SpecSheetExtractor.test.ts:217 title claims a U+2022 bullet arm that no fixture witnesses (fixture carries `·` and `;` but not `•`). Filed per advc c1 D2 / handoff l2t1530.
+
+L2-SPEC-SHEET-INGEST-1-uD4cappw UNIT unit DONE 4a1ac3f19e82debd732ceb61335c0b339e186be2
