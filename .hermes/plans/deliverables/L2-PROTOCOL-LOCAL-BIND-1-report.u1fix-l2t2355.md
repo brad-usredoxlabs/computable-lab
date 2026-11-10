@@ -146,3 +146,6 @@ fixtures only.
 - Tree clean at exit (see status receipt in the marker commit).
 - No blockers. Next: advc re-review of the cumulative u1+u2 branch; the
   clarify/UI legs remain separate units.
+
+L2-PROTOCOL-LOCAL-BIND-1 UNIT u1fix DONE f20cc71aa2bb7c3792dd44cf1168ed696069185c
+L2-PROTOCOL-LOCAL-BIND-1-u1fix UNIT unit DONE f20cc71aa2bb7c3792dd44cf1168ed696069185c
