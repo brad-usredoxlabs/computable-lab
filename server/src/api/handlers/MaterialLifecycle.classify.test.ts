@@ -115,6 +115,36 @@ describe('classifyMaterialRecord — vendor-product material_ref', () => {
     expect(paddedId?.materialRefId).toBe('MAT-9');
   });
 
+  it('omits materialRefKind when kind is not record or ontology (enum guard)', () => {
+    const item = classifyMaterialRecord(
+      vendorProduct('VPR-T-ENUM', {
+        kind: 'vendor-product',
+        id: 'VPR-T-ENUM',
+        name: 'Test enum guard',
+        vendor: 'Sigma',
+        catalog_number: 'X9999',
+        material_ref: { kind: 'concept', id: 'X-1' },
+      }),
+    );
+    expect(item).not.toBeNull();
+    expect(Object.keys(item)).not.toContain('materialRefKind');
+  });
+
+  it('omits materialRefId when id is not a string (numeric id)', () => {
+    const item = classifyMaterialRecord(
+      vendorProduct('VPR-T-NUM', {
+        kind: 'vendor-product',
+        id: 'VPR-T-NUM',
+        name: 'Test numeric id',
+        vendor: 'Sigma',
+        catalog_number: 'X8888',
+        material_ref: { kind: 'record', id: 123 },
+      }),
+    );
+    expect(item).not.toBeNull();
+    expect(Object.keys(item)).not.toContain('materialRefId');
+  });
+
   it('does not emit materialRef keys on a material-spec row even when the payload carries one', () => {
     const item = classifyMaterialRecord(
       spec('MSP-T-3', {
