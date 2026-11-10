@@ -4,7 +4,13 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadSchemasFromContent } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
-import { protocolRefsOf, protocolIdsOf, leadProtocolId, withAttachedProtocol } from './runProtocolList.js';
+import {
+  protocolRefsOf,
+  protocolIdsOf,
+  leadProtocolId,
+  withAttachedProtocol,
+  withDetachedProtocol,
+} from './runProtocolList.js';
 
 function runSchemaId() {
   return 'https://computable-lab.com/schema/computable-lab/run.schema.yaml';
@@ -84,6 +90,45 @@ describe('withAttachedProtocol — idempotency and legacy compat', () => {
     expect(Array.isArray(result.localProtocolRefs)).toBe(true);
     expect((result.localProtocolRefs as any[]).length).toBe(2);
     expect(protocolIdsOf(result)).toEqual(['LPR-A', 'LPR-B']);
+  });
+});
+
+describe('withDetachedProtocol — inverse of attach', () => {
+  const refA = { kind: 'record', id: 'LPR-A', type: 'local-protocol' };
+  const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+
+  it('removes the named ref and keeps the order of the rest', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect(protocolIdsOf(next)).toEqual(['LPR-B']);
+    expect((next.localProtocolRefs as unknown[]).length).toBe(1);
+  });
+
+  it('drops the legacy singular when it names the detached id', () => {
+    const payload = { kind: 'run' as const, localProtocolRef: refA, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect('localProtocolRef' in next).toBe(false);
+    expect(protocolIdsOf(next)).toEqual(['LPR-B']);
+  });
+
+  it('detaching the last ref yields an empty list that reads as empty', () => {
+    const payload = { kind: 'run' as const, localProtocolRef: refA, localProtocolRefs: [refA] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect(next.localProtocolRefs).toEqual([]);
+    expect(protocolIdsOf(next)).toEqual([]);
+  });
+
+  it('removes every duplicate entry of the detached id', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB, refA] };
+    expect(protocolIdsOf(withDetachedProtocol(payload, 'LPR-A'))).toEqual(['LPR-B']);
+  });
+
+  it('is idempotent and never mutates the input payload', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-MISSING');
+    expect(next).toEqual(payload);
+    expect(next).not.toBe(payload);
+    expect(payload.localProtocolRefs).toEqual([refA, refB]);
   });
 });
 
