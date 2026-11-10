@@ -33,7 +33,7 @@ targets:
       - targetField: vendor
         source: "Vendor / Manufacturer from the spec sheet"
       - targetField: capacity.max_well_volume_uL
-        source: "Max well volume as stated on the sheet"
+        source: "Max well volume / Reservoir capacity as stated on the sheet"
         unit: "uL"
         required: true
       - targetField: physical_geometry.well_length_mm

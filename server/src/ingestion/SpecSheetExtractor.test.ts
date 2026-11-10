@@ -151,6 +151,125 @@ describe('extractFromUrl — threads the caller app config to resolveExaConfig',
   });
 });
 
+
+/* ------------------------------------------------------------------ */
+/* Arm (e) — Multi-segment line segmentation (D4)                    */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — multi-segment line segmentation', () => {
+  it('segments vendor at next label boundary and extracts capacity separately', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'vendor', source: 'Vendor / Manufacturer from the spec sheet' },
+        { targetField: 'capacity.max_well_volume_uL', source: 'Max well volume / Reservoir capacity as stated on the sheet', transform: 'parse_volume', unit: 'uL' },
+      ],
+    };
+
+    const doc = {
+      url: 'https://example.com/reservoir',
+      text: `Vendor: Polypropylene (PP) ◉ Reservoir Format: Single well ◉ Reservoir Capacity: 195 mL, 185 mL
+Catalog: 25200056`,
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // Vendor must stop at the next label boundary
+    const vendors = result.filter((p) => p.targetField === 'vendor');
+    expect(vendors).toHaveLength(1);
+    expect(vendors[0].value).toBe('Polypropylene (PP)');
+    expect(vendors[0].value).not.toContain('Reservoir');
+
+    // Capacity must be a separate proposal with the actual value
+    const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
+    expect(capacities).toHaveLength(1);
+    expect(capacities[0].value).toBe('195 mL, 185 mL');
+  });
+
+  it('extracts vendor from pipe-separated colon-less segment (real receipt pattern)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'vendor', source: 'Vendor / Manufacturer from the spec sheet' },
+        { targetField: 'capacity.max_well_volume_uL', source: 'Max well volume / Reservoir capacity as stated on the sheet', transform: 'parse_volume', unit: 'uL' },
+      ],
+    };
+
+    // Real receipt line: colon-less segments separated by pipe
+    const doc = {
+      url: 'https://example.com/reservoir',
+      text: `Manufacturer | OEM/ODM Supplier | Polypropylene (PP), 25 mL | Reservoir Capacity: 195 mL, 185 mL`,
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // Vendor should match "Manufacturer" keyword against colon-less segment
+    const vendors = result.filter((p) => p.targetField === 'vendor');
+    expect(vendors).toHaveLength(1);
+    expect(vendors[0].value).toBe('Manufacturer');
+    expect(vendors[0].value).not.toContain('OEM');
+
+    // Capacity from colon segment
+    const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
+    expect(capacities).toHaveLength(1);
+    expect(capacities[0].value).toBe('195 mL, 185 mL');
+  });
+
+  it('does not truncate values containing middle-dot, bullet, or semicolon', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'vendor', source: 'Vendor / Manufacturer from the spec sheet' },
+        { targetField: 'display_name', source: 'Display name / Product name from the spec sheet' },
+      ],
+    };
+
+    // Values with punctuation should not be truncated
+    const doc = {
+      url: 'https://example.com/product',
+      text: `Vendor: Acme·Corp
+Display Name: Model A; Model B`,
+    };
+
+    const result = extractProposals(fieldMap, doc);
+    const vendors = result.filter((p) => p.targetField === 'vendor');
+    expect(vendors).toHaveLength(1);
+    expect(vendors[0].value).toBe('Acme·Corp');
+
+    const names = result.filter((p) => p.targetField === 'display_name');
+    expect(names).toHaveLength(1);
+    expect(names[0].value).toBe('Model A; Model B');
+  });
+
+  it('splits pipe-separated multi-field line (mutation check for pipe separator)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'vendor', source: 'Vendor / Manufacturer from the spec sheet' },
+        { targetField: 'capacity.max_well_volume_uL', source: 'Max well volume / Reservoir capacity as stated on the sheet', transform: 'parse_volume', unit: 'uL' },
+      ],
+    };
+
+    const doc = {
+      url: 'https://example.com/reservoir',
+      text: `Vendor: Acme | Reservoir Capacity: 25 mL`,
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // Vendor and capacity should be separate, not the whole blob
+    const vendors = result.filter((p) => p.targetField === 'vendor');
+    expect(vendors).toHaveLength(1);
+    expect(vendors[0].value).toBe('Acme');
+    expect(vendors[0].value).not.toContain('Reservoir');
+
+    const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
+    expect(capacities).toHaveLength(1);
+    expect(capacities[0].value).toBe('25 mL');
+    expect(capacities[0].value).not.toContain('Acme');
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Block record on fetch failure                                      */
 /* ------------------------------------------------------------------ */

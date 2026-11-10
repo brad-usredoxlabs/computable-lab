@@ -118,6 +118,35 @@ function extractValue(line: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Segment a multi-field line into Label:Value pairs
+// ---------------------------------------------------------------------------
+// Spec-sheet lines often pack multiple fields using visual separators
+// (◉, |, •, ;). Each segment has "Label: Value" format.
+// segmentLine returns [] for single-segment lines; for multi-segment lines
+// it returns [{label, value}, ...] so the extraction loop can match keywords
+// against segment labels instead of the whole line.
+
+function segmentLine(line: string): Array<{ label: string; value: string }> {
+  // Separators: ◉ |
+  // Only these two are reliable field boundaries on real receipts.
+  // ·, •, ; are punctuation inside values — do not split on them.
+  const sepRe = /\s*(?:◉|\|)\s*/;
+  const parts = line.split(sepRe).map((s) => s.trim()).filter((s) => s.length > 0);
+  if (parts.length <= 1) return [];
+  const results: Array<{ label: string; value: string }> = [];
+  for (const seg of parts) {
+    const m = seg.match(/^(.+?):\s*(.+)$/);
+    if (m && typeof m[1] === 'string' && typeof m[2] === 'string') {
+      results.push({ label: m[1].trim(), value: m[2].trim() });
+    } else {
+      // Colon-less segment: treat the segment text as both label and value
+      results.push({ label: seg, value: seg });
+    }
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Pure extraction engine
 // ---------------------------------------------------------------------------
 
@@ -135,13 +164,36 @@ export function extractProposals(
 
     for (const line of lines) {
       const trimmed = line.trim();
-      // Case-insensitive keyword match
-      const matched = keywords.some((kw) =>
-        trimmed.toLowerCase().includes(kw.toLowerCase()),
-      );
-      if (!matched) continue;
 
-      const rawValue = extractValue(trimmed);
+      // Check if this line has multiple segments (◉, |)
+      const segments = segmentLine(trimmed);
+      let rawValue: string | null = null;
+
+      if (segments.length > 0) {
+        // Multi-segment line: match keywords against segment labels,
+        // not the whole line. Return only the matching segment's value.
+        for (const seg of segments) {
+          if (keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
+            rawValue = seg.value;
+            break; // first matching segment wins
+          }
+        }
+        // If no segment label matched, fall back to whole-line match
+        if (rawValue === null) {
+          const matched = keywords.some((kw) =>
+            trimmed.toLowerCase().includes(kw.toLowerCase()),
+          );
+          if (matched) rawValue = extractValue(trimmed);
+        }
+      } else {
+        // Single-segment line: existing behaviour
+        const matched = keywords.some((kw) =>
+          trimmed.toLowerCase().includes(kw.toLowerCase()),
+        );
+        if (!matched) continue;
+        rawValue = extractValue(trimmed);
+      }
+
       if (!rawValue) continue;
 
       const value = applyTransform(rawValue, mapping.transform);
