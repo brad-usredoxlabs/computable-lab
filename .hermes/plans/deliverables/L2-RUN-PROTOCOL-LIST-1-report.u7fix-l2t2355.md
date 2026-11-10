@@ -51,8 +51,10 @@ Branch: cl/lane2-runproto-readpath2-l2t2355, base 1e0ca662 (u7 tip)
 - 6d6ff889 test(u7fix): RED — run envelope must come from /ui/record, not /api/records
 - 95bcc2c4 fix(u7fix): run envelope via /ui/record; tests serve all reads from /ui/record
 - (report) docs(u7fix): report
-- (marker) chore(u7fix): DONE marker
+- (marker) chore(u7fix): DONE marker -> report sha 05469ab2
 
 ## Next
 - Orchestrator: reload lane stack (YAML untouched, but stack reload before live check), re-run the
   browser check on the run surface; independent browser reviewer owns acceptance.
+
+L2-RUN-PROTOCOL-LIST-1-u7fix UNIT unit DONE 05469ab20dffa32876a863f627fe5cb093a02704
