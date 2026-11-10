@@ -28,6 +28,7 @@ vi.mock('../labware/DeckVisualizationPanel', () => ({
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
+    getRecordWithUI: vi.fn(),
     listRecordsByKind: vi.fn(),
     updatePlannedRunBindings: vi.fn(),
   },
@@ -102,14 +103,14 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('BindingModeEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(apiClient.getRecord).mockReset()
+    vi.mocked(apiClient.getRecordWithUI).mockReset()
     vi.mocked(apiClient.listRecordsByKind).mockReset()
     vi.mocked(apiClient.updatePlannedRunBindings).mockReset()
 
-    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return mockPlannedRun
-      if (id === 'LPR-000001') return mockLocalProtocol
-      throw new Error('Not found')
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun }
+      if (id === 'LPR-000001') return { record: mockLocalProtocol }
+      return { record: null }
     })
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
@@ -192,5 +193,20 @@ describe('BindingModeEditor', () => {
       },
       { timeout: 1000 },
     )
+  })
+
+  it('loads the planned-run through getRecordWithUI, not the 404-ing records arm', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-1" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Loading planned-run/)).toBeInTheDocument()
+    })
+
+    expect(apiClient.getRecordWithUI).toHaveBeenCalledWith('PLR-1')
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
   })
 })
