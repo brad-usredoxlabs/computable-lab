@@ -147,6 +147,29 @@ function segmentLine(line: string): Array<{ label: string; value: string }> {
 }
 
 // ---------------------------------------------------------------------------
+// Header-row detector — skip lines where every segment is a keyword label
+// ---------------------------------------------------------------------------
+
+function isHeaderRow(
+  segments: Array<{ label: string; value: string }>,
+  allKeywords: string[],
+): boolean {
+  if (segments.length < 2) return false;
+  // Every segment must be colon-less (label === value)
+  for (const seg of segments) {
+    if (seg.label !== seg.value) return false;
+  }
+  // Every segment label must match at least one keyword
+  const allKwLower = allKeywords.map((k) => k.toLowerCase());
+  for (const seg of segments) {
+    const labelLower = seg.label.toLowerCase();
+    const anyMatch = allKwLower.some((kw) => labelLower.includes(kw));
+    if (!anyMatch) return false;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Pure extraction engine
 // ---------------------------------------------------------------------------
 
@@ -158,27 +181,68 @@ export function extractProposals(
   const lines = doc.text.split('\n').filter((l) => l.trim().length > 0);
   const proposals: SpecSheetProposal[] = [];
 
+  // Collect ALL keywords across every mapping for header detection
+  const allKeywords: string[] = [];
+  for (const mapping of fieldMap.fieldMappings) {
+    const kw = parseSourceKeywords(mapping.source);
+    if (kw.length > 0) allKeywords.push(...kw);
+  }
+
+  // --- Per-line extraction with positional header context ---
+  // Walk lines in document order. When a header row is encountered, record
+  // its column positions for each mapping. Data rows (same arity, not
+  // punctuation-only) use the most recent header's layout. A new header
+  // replaces the previous layout (last header wins, no cross-table merge).
+  const punctOnlyRe = /^[\s\-\u2013\u2014\u00b7_:\|]*$/;
+  let lastHeader: { positions: Map<string, number>; count: number } | null = null;
+
   for (const mapping of fieldMap.fieldMappings) {
     const keywords = parseSourceKeywords(mapping.source);
     if (keywords.length === 0) continue;
+    // Reset per-mapping so each field scans independently
+    lastHeader = null;
 
     for (const line of lines) {
       const trimmed = line.trim();
-
-      // Check if this line has multiple segments (◉, |)
       const segments = segmentLine(trimmed);
+
+      // A header row: record its column layout (replaces any previous)
+      if (segments.length >= 2 && isHeaderRow(segments, allKeywords)) {
+        const positions = new Map<string, number>();
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          if (seg && keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
+            positions.set(mapping.targetField, i);
+          }
+        }
+        lastHeader = { positions, count: segments.length };
+        continue; // skip header as data
+      }
+
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
-        // Multi-segment line: match keywords against segment labels,
-        // not the whole line. Return only the matching segment's value.
+        // Multi-segment line: match keywords against segment labels
         for (const seg of segments) {
           if (keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
             rawValue = seg.value;
-            break; // first matching segment wins
+            break;
           }
         }
-        // If no segment label matched, fall back to whole-line match
+        // Positional extraction: use the most recent header's layout
+        if (rawValue === null &&
+            lastHeader !== null &&
+            segments.length === lastHeader.count) {
+          const idx = lastHeader.positions.get(mapping.targetField);
+          if (idx !== undefined) {
+            const candidate = segments[idx]?.value ?? null;
+            // Skip punctuation-only separator values (e.g. "---", ":---:")
+            if (candidate !== null && !punctOnlyRe.test(candidate)) {
+              rawValue = candidate;
+            }
+          }
+        }
+        // Fallback: whole-line keyword match + colon extraction
         if (rawValue === null) {
           const matched = keywords.some((kw) =>
             trimmed.toLowerCase().includes(kw.toLowerCase()),

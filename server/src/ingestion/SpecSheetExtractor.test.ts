@@ -271,6 +271,45 @@ Display Name: Model A; Model B`,
 });
 
 /* ------------------------------------------------------------------ */
+/* Arm (f) — Table header rows must not produce label-as-value        */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — table header rows', () => {
+  it('does not propose label text as value from header-only pipe-separated line', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Quantity' },
+      ],
+    };
+
+    // A table header row followed by a data row — the header should be skipped
+    const doc = {
+      url: 'https://example.com/product',
+      text: 'Catalog Number | Quantity\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should use the header label text as a value
+    for (const p of result) {
+      expect(p.value).not.toBe('Catalog Number');
+      expect(p.value).not.toBe('Quantity');
+    }
+
+    // The data row should still produce valid proposals
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+
+    const packages = result.filter((p) => p.targetField === 'package_size');
+    expect(packages).toHaveLength(1);
+    expect(packages[0].value).toBe('100 mL');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Block record on fetch failure                                      */
 /* ------------------------------------------------------------------ */
 
@@ -365,5 +404,107 @@ describe('extractFromUrl — zero proposals returns typed no-proposals', () => {
     expect((result as any).noProposals).toBeDefined();
     expect((result as any).noProposals.url).toBe('https://example.com/empty-page');
     expect((result as any).noProposals.reason).toBe('empty_document');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* uE1hdrowfix-c2 — Per-table positional extraction (defects 1 & 2)   */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — positional extraction scoped per table', () => {
+  it('does not fabricate values from a markdown separator row (defect 1)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Header + markdown separator row + actual data
+    const doc = {
+      url: 'https://example.com/sep',
+      text: 'Catalog Number | Volume\n--- | ---\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should have a separator value like "---"
+    for (const p of result) {
+      expect(p.value).not.toBe('---');
+    }
+
+    // Exactly one catalog_number proposal with the real value
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+  });
+
+  it('does not fabricate values from an em-dash separator row (D1 — unicode)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Header + em-dash separator row (PDF/HTML rule rows) + actual data
+    const doc = {
+      url: 'https://example.com/ems',
+      text: 'Catalog Number | Volume\n\u2014 | \u2014\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should have an em-dash separator value
+    for (const p of result) {
+      expect(p.value).not.toBe('\u2014');
+    }
+
+    // Exactly one catalog_number proposal with the real value
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+  });
+
+  it('pins to the last header layout (D2 — two-table document shape)', () => {
+    // D2 reality: the per-field loop resets lastHeader per mapping, so each
+    // mapping independently walks all lines. With two headers in swapped order
+    // followed by one data row, the second header layout wins for BOTH fields.
+    //
+    // IN:  "Catalog Number | Volume"  (header1: Cat@0, Vol@1)
+    //       "Volume | Catalog Number"  (header2: Vol@0, Cat@1)
+    //       "10 mL | X9"               (data)
+    // OUT: catalog_number = 'X9'  (position 1 from header2)
+    //       package_size   = '10 mL' (position 0 from header2)
+    //
+    // Both fields are extractable because each mapping independently
+    // scans all lines and pins to the last header that defines its keyword.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Two headers with swapped column order, data after the last header
+    const doc = {
+      url: 'https://example.com/swap',
+      text: 'Catalog Number | Volume\nVolume | Catalog Number\n10 mL | X9',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // catalog_number at position 1 (from second header), not 0
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('X9');
+
+    // package_size at position 0 (from second header)
+    const packages = result.filter((p) => p.targetField === 'package_size');
+    expect(packages).toHaveLength(1);
+    expect(packages[0].value).toBe('10 mL');
   });
 });
