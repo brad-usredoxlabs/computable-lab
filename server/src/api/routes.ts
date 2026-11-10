@@ -1009,6 +1009,7 @@ export function registerRoutes(
     fastify.post('/runs/from-local-protocol', plannedRunHandlers.createFromLocalProtocol.bind(plannedRunHandlers));
     fastify.post('/runs/:id/bindings', plannedRunHandlers.updateBindings.bind(plannedRunHandlers));
     fastify.post('/runs/:id/protocols', plannedRunHandlers.attachProtocol.bind(plannedRunHandlers));
+    fastify.delete('/runs/:id/protocols/:protocolId', plannedRunHandlers.detachProtocol.bind(plannedRunHandlers));
     fastify.post('/runs/:id/sample-map', plannedRunHandlers.setSampleMap.bind(plannedRunHandlers));
     fastify.post('/runs/:id/compile', plannedRunHandlers.compileRunPlan.bind(plannedRunHandlers));
   }
