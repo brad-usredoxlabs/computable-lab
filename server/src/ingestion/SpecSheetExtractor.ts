@@ -188,30 +188,64 @@ export function extractProposals(
     if (kw.length > 0) allKeywords.push(...kw);
   }
 
+  // --- Header-to-column-position mapping ---
+  // When a header row is detected, record which column positions contain
+  // each mapping's keywords. Subsequent data rows with the same segment
+  // count can then extract by position instead of requiring keywords.
+  const headerPositions = new Map<string, Set<number>>();
+  let positionalSegmentCount: number | undefined;
+
+  for (const line of lines) {
+    const segments = segmentLine(line.trim());
+    if (segments.length < 2 || !isHeaderRow(segments, allKeywords)) continue;
+    for (const mapping of fieldMap.fieldMappings) {
+      const keywords = parseSourceKeywords(mapping.source);
+      if (keywords.length === 0) continue;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg && keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
+          if (!headerPositions.has(mapping.targetField)) {
+            headerPositions.set(mapping.targetField, new Set());
+          }
+          headerPositions.get(mapping.targetField)!.add(i);
+        }
+      }
+    }
+    positionalSegmentCount = segments.length;
+  }
+
+  // --- Extract proposals per mapping ---
   for (const mapping of fieldMap.fieldMappings) {
     const keywords = parseSourceKeywords(mapping.source);
     if (keywords.length === 0) continue;
 
     for (const line of lines) {
       const trimmed = line.trim();
-
-      // Check if this line has multiple segments (◉, |)
       const segments = segmentLine(trimmed);
 
-      // Skip header rows: lines where every segment is a keyword label
+      // Skip header rows
       if (segments.length >= 2 && isHeaderRow(segments, allKeywords)) continue;
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
-        // Multi-segment line: match keywords against segment labels,
-        // not the whole line. Return only the matching segment's value.
+        // Multi-segment line: match keywords against segment labels
         for (const seg of segments) {
           if (keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
             rawValue = seg.value;
-            break; // first matching segment wins
+            break;
           }
         }
-        // If no segment label matched, fall back to whole-line match
+        // Positional extraction: if header was found, extract by column position
+        if (rawValue === null &&
+            positionalSegmentCount !== undefined &&
+            segments.length === positionalSegmentCount) {
+          const positions = headerPositions.get(mapping.targetField);
+          if (positions && positions.size > 0) {
+            const idx = [...positions][0];
+            if (idx !== undefined) rawValue = segments[idx]?.value ?? null;
+          }
+        }
+        // Fallback: whole-line keyword match + colon extraction
         if (rawValue === null) {
           const matched = keywords.some((kw) =>
             trimmed.toLowerCase().includes(kw.toLowerCase()),
