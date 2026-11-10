@@ -7,6 +7,7 @@
 
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { protocolIdsOf } from './runProtocolList.js';
+import { declaredRolesOf } from './roleBindingProposal.js';
 
 export interface BindingLists {
   labware?: Array<{ roleId: string; labwareInstanceRef: string }>;
@@ -61,9 +62,11 @@ export async function writeRoleBindings(
 
   const declared = new Set<string>();
   for (const protocolId of protocolIdsOf(runPayload)) {
-    const roles = asObject(asObject((await store.get(protocolId))?.payload)?.roles);
+    // Same resolution as the read half: declarations live on the universal
+    // protocol reached via inherits_from.id, never on the local-protocol.
+    const roles = await declaredRolesOf(store, protocolId);
     for (const key of ['labwareRoles', 'materialRoles']) {
-      for (const roleId of roles ? declaredRoleIds(roles, key) : []) declared.add(roleId);
+      for (const roleId of declaredRoleIds(roles, key)) declared.add(roleId);
     }
   }
 

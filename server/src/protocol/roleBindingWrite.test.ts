@@ -19,8 +19,6 @@ function fakeStore(records: RecordEnvelope[]) {
 
 const asStore = (store: unknown) => store as unknown as RecordStore;
 
-const protocol = (roles: Record<string, unknown>) => env('PRT-1', 'local-protocol', { roles });
-
 // Schema-valid chain: local-protocol carries no `roles` (unevaluatedProperties:
 // false); the declarations live on the universal protocol via inherits_from.id.
 const universalProtocol = (roles: Record<string, unknown>) => env('PRT-U1', 'protocol', { roles });
@@ -61,7 +59,7 @@ describe('writeRoleBindings', () => {
   });
 
   it('rejects a roleId no attached protocol declares and writes nothing', async () => {
-    const store = fakeStore([run(), protocol(labwareRole)]);
+    const store = fakeStore([run(), ...chainedProtocol(labwareRole)]);
     const result = await writeRoleBindings({
       store: asStore(store),
       run: run(),
@@ -73,11 +71,12 @@ describe('writeRoleBindings', () => {
     expect(result.message).toContain('plat');
     expect(store.update).not.toHaveBeenCalled();
     expect(store.get.mock.calls.map((c) => c[0])).toContain('PRT-1');
+    expect(store.get.mock.calls.map((c) => c[0])).toContain('PRT-U1');
   });
 
   it('writes the ref type from the target record kind, not a literal', async () => {
     const bindings = bindingsOf(await write(
-      [run(), protocol(labwareRole), env('LAB-1', 'labware', { name: 'Plate' })],
+      [run(), ...chainedProtocol(labwareRole), env('LAB-1', 'labware', { name: 'Plate' })],
       { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-1' }] },
     ));
 
@@ -87,7 +86,7 @@ describe('writeRoleBindings', () => {
   });
 
   it('carries lotNumber from the vendor product, absent when the target has none', async () => {
-    const records = [run(), protocol(materialRole), env('VPR-1', 'vendor-product', { lotNumber: 'L-77' }), env('VPR-2', 'vendor-product')];
+    const records = [run(), ...chainedProtocol(materialRole), env('VPR-1', 'vendor-product', { lotNumber: 'L-77' }), env('VPR-2', 'vendor-product')];
     const withLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-1' }] }));
     const withoutLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-2' }] }));
 
@@ -102,7 +101,7 @@ describe('writeRoleBindings', () => {
   });
 
   it('rejects an unknown target id by name', async () => {
-    const store = fakeStore([run(), protocol(labwareRole)]);
+    const store = fakeStore([run(), ...chainedProtocol(labwareRole)]);
     const result = await writeRoleBindings({
       store: asStore(store),
       run: run(),
@@ -118,7 +117,7 @@ describe('writeRoleBindings', () => {
   it('replaces only the posted roles and keeps bindings for other roles', async () => {
     const other = { roleId: 'other', labwareInstanceRef: { kind: 'record', id: 'LAB-9', type: 'labware' } };
     const bindings = bindingsOf(await write(
-      [run({ bindings: { labware: [other] } }), protocol(labwareRole), env('LAB-1', 'labware')],
+      [run({ bindings: { labware: [other] } }), ...chainedProtocol(labwareRole), env('LAB-1', 'labware')],
       { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-1' }] },
       { bindings: { labware: [other] } },
     ));
@@ -130,7 +129,7 @@ describe('writeRoleBindings', () => {
   });
 
   it('handler saves only the run envelope and maps a rejected role to 400', async () => {
-    const records = [run(), protocol(labwareRole), env('LAB-1', 'labware')];
+    const records = [run(), ...chainedProtocol(labwareRole), env('LAB-1', 'labware')];
     const store = fakeStore(records);
     const handlers = createPlannedRunHandlers({ store: asStore(store) } as unknown as AppContext);
     const reply = { status: vi.fn().mockReturnThis() } as unknown as FastifyReply;

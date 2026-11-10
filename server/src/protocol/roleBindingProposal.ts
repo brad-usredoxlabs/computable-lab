@@ -91,8 +91,8 @@ function stateOf(candidates: BindingCandidate[]): RoleProposal['state'] {
  * protocol). A local-protocol that declares its own `roles` wins defensively.
  * No declarations anywhere -> no roles: never invent one.
  */
-async function declaredRolesOf(
-  store: ProposeRoleBindingsDeps['store'],
+export async function declaredRolesOf(
+  store: Pick<RecordStore, 'get'>,
   protocolId: string,
 ): Promise<Obj> {
   const localPayload = asObject((await store.get(protocolId))?.payload) ?? {};
