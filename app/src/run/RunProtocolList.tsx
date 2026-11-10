@@ -56,12 +56,14 @@ function toCandidate(env: { recordId: string; payload: Record<string, unknown> }
 
 /** Resolve run → plannedRunRef → PLR and read its ordered protocol refs. */
 async function readRunProtocols(runId: string): Promise<{ plannedRunId: string; refs: ReadProtocolRef[] } | null> {
-  const runEnv = await apiClient.getRecord(runId)
-  const run = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+  // Both the run envelope and the PLR are tree-store records: /api/records/:id 404s for them,
+  // only /ui/record/:id serves them (advc-c1 D1 — the read threw before the PLR arm ran).
+  const runResp = await apiClient.getRecordWithUI(runId)
+  const run = (runResp.record?.payload ?? null) as Record<string, unknown> | null
   const plr = run?.plannedRunRef as { id?: string } | undefined
   if (typeof plr?.id !== 'string') return null
-  const plrEnv = await apiClient.getRecord(plr.id)
-  const payload = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+  const plrResp = await apiClient.getRecordWithUI(plr.id)
+  const payload = (plrResp.record?.payload ?? null) as Record<string, unknown> | null
   return { plannedRunId: plr.id, refs: protocolRefsOf(payload) }
 }
 
@@ -139,21 +141,21 @@ export function RunProtocolList({ runId }: RunProtocolListProps) {
   // A run with no planned run has no protocol surface at all (unchanged).
   if (!plannedRunId) return null
 
-  const heading = refs.length === 0 ? 'No protocols' : refs.length === 1 ? '1 protocol' : `${refs.length} protocols`
+  const heading = refs.length === 0 ? 'No methods' : refs.length === 1 ? '1 method' : `${refs.length} methods`
 
   return (
     <div style={wrapStyle}>
       <h4 style={headingStyle}>{heading}</h4>
       {refs.length > 0 && (
-        <ol style={listStyle} aria-label="Protocols followed">
+        <ol style={listStyle} aria-label="Methods followed">
           {refs.map((ref, i) => (
             <li key={ref.id} style={rowStyle} data-lead={i === 0 ? 'true' : undefined}>
               <span>{ref.label ?? ref.id}{i === 0 ? ' (lead)' : ''}</span>
               <button
-                type="button" style={controlStyle} aria-label={`Remove ${ref.label ?? ref.id}`}
+                type="button" style={controlStyle} aria-label={`Detach ${ref.label ?? ref.id}`}
                 disabled={busy} onClick={() => detach(ref.id)}
               >
-                Remove
+                Detach
               </button>
             </li>
           ))}
@@ -161,8 +163,8 @@ export function RunProtocolList({ runId }: RunProtocolListProps) {
       )}
       {picking ? (
         <span style={pickerStyle}>
-          <select aria-label="Protocol to attach" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-            <option value="">Select protocol…</option>
+          <select aria-label="Method to attach" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+            <option value="">Select method…</option>
             {(candidates ?? []).map((candidate) => (
               <option key={candidate.id} value={candidate.id}>{candidate.label ?? candidate.id}</option>
             ))}
@@ -171,7 +173,7 @@ export function RunProtocolList({ runId }: RunProtocolListProps) {
           <button type="button" style={controlStyle} onClick={() => setPicking(false)}>Cancel</button>
         </span>
       ) : (
-        <button type="button" style={controlStyle} disabled={busy} onClick={openPicker}>Add protocol</button>
+        <button type="button" style={controlStyle} disabled={busy} onClick={openPicker}>Attach a method</button>
       )}
     </div>
   )
