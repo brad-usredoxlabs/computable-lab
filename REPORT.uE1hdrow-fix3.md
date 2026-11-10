@@ -51,4 +51,12 @@ VERIFICATION
     bb3dfb3b D1 regex fix (16/16 GREEN)
     df072a1c D2 fixture pinned with IN/OUT documented
 
-L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 8b1a4fe2
+## cycle-4 marker correction
+
+advc c4 FIX 1 was marker-only. The code (D1/D2/D3) was ACCEPTED and is
+unchanged. The marker below names a commit that contains this report,
+verified with `git cat-file -e`.
+
+superseded: `L2-SPEC-SHEET-INGEST-1-uE1hdrowfix-c3 UNIT unit DONE 8b1a4fe2`
+
+L2-SPEC-SHEET-INGEST-1 UNIT uE1hdrowfix-c4 DONE PENDING_SHA
