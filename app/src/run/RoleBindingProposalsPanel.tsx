@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { apiClient, type RoleBindingProposalsResponse } from '../shared/api/client'
-import { ApiError } from '../shared/api/errors'
+import { ApiError, isPlannedRunKindRefusal } from '../shared/api/errors'
 
 export interface RoleBindingProposalsPanelProps {
   runId: string
@@ -49,8 +49,9 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
       } catch (err) {
         if (cancelled) return
         // A run with no attached protocol has no proposals to show: 404 is
-        // indistinguishable from an empty projection, never a broken panel.
-        if (ApiError.isApiError(err) && err.status === 404) {
+        // indistinguishable from an empty projection. A record that is not a
+        // planned-run also has no proposals — neither renders an error.
+        if (ApiError.isApiError(err) && (err.status === 404 || isPlannedRunKindRefusal(err))) {
           setData(null)
           return
         }
