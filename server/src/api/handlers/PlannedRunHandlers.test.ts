@@ -222,4 +222,86 @@ describe('PlannedRunHandlers', () => {
       );
     });
   });
+
+  describe('detachProtocol', () => {
+    const runEnvelope = {
+      recordId: 'PLR-1',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/run.schema.yaml',
+      payload: {
+        kind: 'planned-run',
+        localProtocolRefs: [
+          { kind: 'record', id: 'LPR-A', type: 'local-protocol' },
+          { kind: 'record', id: 'LPR-B', type: 'local-protocol' },
+        ],
+      },
+    } as unknown as RecordEnvelope;
+
+    function detachRequest(id: string, protocolId: string) {
+      return { params: { id, protocolId } } as unknown as FastifyRequest<{
+        Params: { id: string; protocolId: string };
+      }>;
+    }
+
+    it('returns 200 with the remaining ordered ids and updates the record', async () => {
+      const store = makeMockStore();
+      vi.mocked(store.get).mockResolvedValue(runEnvelope);
+      const handlers = createPlannedRunHandlers(makeMockCtx(store));
+      const reply = makeMockReply();
+
+      const result = await handlers.detachProtocol(detachRequest('PLR-1', 'LPR-A'), reply);
+
+      expect(reply.statusValue).toBe(200);
+      expect(result).toEqual({ success: true, protocolRefs: ['LPR-B'] });
+      expect(store.update).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Detach protocol from planned-run PLR-1' }),
+      );
+    });
+
+    it('is idempotent: detaching an absent id is a 200 no-op', async () => {
+      const store = makeMockStore();
+      vi.mocked(store.get).mockResolvedValue(runEnvelope);
+      const handlers = createPlannedRunHandlers(makeMockCtx(store));
+      const reply = makeMockReply();
+
+      const result = await handlers.detachProtocol(detachRequest('PLR-1', 'LPR-Z'), reply);
+
+      expect(reply.statusValue).toBe(200);
+      expect(result).toEqual({ success: true, protocolRefs: ['LPR-A', 'LPR-B'] });
+    });
+
+    it('returns 404 when the planned-run is absent', async () => {
+      const store = makeMockStore();
+      const handlers = createPlannedRunHandlers(makeMockCtx(store));
+      const reply = makeMockReply();
+
+      const result = await handlers.detachProtocol(detachRequest('PLR-none', 'LPR-A'), reply);
+
+      expect(reply.statusValue).toBe(404);
+      expect(result).toEqual({
+        error: 'PLANNED_RUN_NOT_FOUND',
+        message: "Planned-run 'PLR-none' not found",
+      });
+      expect(store.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when the record is not a planned-run', async () => {
+      const store = makeMockStore();
+      vi.mocked(store.get).mockResolvedValue({
+        recordId: 'PRT-1',
+        schemaId: 'x',
+        payload: { kind: 'protocol' },
+      } as unknown as RecordEnvelope);
+      const handlers = createPlannedRunHandlers(makeMockCtx(store));
+      const reply = makeMockReply();
+
+      const result = await handlers.detachProtocol(detachRequest('PRT-1', 'LPR-A'), reply);
+
+      expect(reply.statusValue).toBe(400);
+      expect(result).toEqual({
+        error: 'NOT_A_PLANNED_RUN',
+        message: "Record 'PRT-1' is not a planned-run",
+      });
+      expect(store.update).not.toHaveBeenCalled();
+    });
+  });
 });
