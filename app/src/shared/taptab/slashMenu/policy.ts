@@ -88,47 +88,12 @@ export function __setCandidateRankingPolicy(policy: CandidateRankingPolicy | nul
  * Fetch failure => empty array: the picker keeps all candidates and focuses by
  * canBeDefault alone (never fabricates a policy).
  *
- * Duplicate `only` guard: throws when two records claim `selection: only` for
- * the same material concept — mirrors the server-side contract from
- * normalizeMaterialSelectionPolicies (MaterialSelectionPolicy.ts:51-60). The
- * load-path guard carries this obligation because LintEngine supports record
- * scope only (LintEngine.ts:143); a cross-record lint rule cannot express it.
+ * Duplicate `only` records for one material concept are LEGAL and unenforced
+ * here (D2 cross-record ONLY-uniqueness is descoped, task-list.md:18442). They
+ * load and are served as-is; the picker fails open on them.
  */
 type SelectionKind = 'only' | 'default' | 'alternative'
 type RefKind = 'ontology' | 'record'
-
-/**
- * Discriminates a guard error from a fetch failure so the loader's .catch
- * can re-throw the guard but still fail-open on genuine network errors.
- */
-export class PolicyGuardError extends Error {}
-
-/**
- * Guard: throw when two `only` policies claim the same material concept.
- * Mirrors normalizeMaterialSelectionPolicies (MaterialSelectionPolicy.ts:51-60)
- * — same concept key `kind:id`, error names BOTH recordIds.
- */
-function guardDuplicateOnlyPolicies(policies: SelectionPolicy[]): void {
-  const conceptToOnlyIds = new Map<string, string[]>()
-  for (const p of policies) {
-    if (p.selection !== 'only') continue
-    const key = `${p.material_ref.kind}:${p.material_ref.id}`
-    const existing = conceptToOnlyIds.get(key)
-    if (existing === undefined) {
-      conceptToOnlyIds.set(key, [p.recordId])
-    } else {
-      existing.push(p.recordId)
-    }
-  }
-  for (const [conceptKey, ids] of conceptToOnlyIds) {
-    if (ids.length > 1) {
-      throw new PolicyGuardError(
-        `Duplicate 'only' selection for material concept ${conceptKey}: ` +
-          `${ids[0]} and ${ids[1]}`,
-      )
-    }
-  }
-}
 
 let selCache: SelectionPolicy[] | null = null
 let selInflight: Promise<SelectionPolicy[]> | null = null
@@ -160,14 +125,10 @@ function fetchSelectionPolicies(): Promise<SelectionPolicy[]> {
             selection: sel as SelectionKind,
           })
         }
-        guardDuplicateOnlyPolicies(policies)
         selCache = policies
         return policies
       })
-      .catch((err) => {
-        // PolicyGuardError (duplicate-only) must propagate to the caller;
-        // a genuine fetch failure stays fail-open.
-        if (err instanceof PolicyGuardError) throw err
+      .catch(() => {
         // Fetch failure => no policies (fail-open, never fabricate)
         selCache = []
         return []
@@ -196,7 +157,6 @@ export function __resetMaterialSelectionPolicies(): void {
 
 /** Test-only: seed deterministic policies without a fetch. */
 export function __setMaterialSelectionPolicies(policies: SelectionPolicy[]): void {
-  guardDuplicateOnlyPolicies(policies)
   selCache = policies
   selInflight = null
 }

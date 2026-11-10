@@ -448,8 +448,8 @@ export function firstDefaultFocusIndex(
  *   - `alternative`: no effect on the picker (server-side lint owns this).
  *
  * SILent tie-break protection: if two `only` policies target the same concept,
- * the list is left UNCHANGED — the server loader rejects that state (the lint
- * rule fires), the picker must not crash or guess.
+ * the list is left UNCHANGED. Such a pair is legal (cross-record `only`
+ * uniqueness is not enforced) and the picker must neither crash nor guess.
  *
  * Returns a new array (input rows are never mutated).
  */
@@ -472,7 +472,7 @@ export function applySelectionPolicies(
   for (const [, group] of byConcept) {
     const onlyCount = group.filter((p) => p.selection === 'only').length
     if (onlyCount > 1) {
-      // Server loader should reject; picker fails open
+      // Duplicate `only` is legal; picker fails open
       return rows
     }
   }
