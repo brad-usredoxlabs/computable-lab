@@ -51,9 +51,9 @@ Fix: Changed to exact match: expect(capacities[0].value).toBe('195 mL, 185 mL').
 1. server/src/ingestion/SpecSheetExtractor.ts (lines 113-127, 150)
 2. server/src/ingestion/SpecSheetExtractor.test.ts (lines 158-276)
 
-DONE PLACEHOLDER
+DONE 4a1ac3f19e82debd732ceb61335c0b339e186be2
 
-L2-SPECSHEET-ud4capacityfix UNIT DONE PLACEHOLDER
+L2-SPEC-SHEET-INGEST-1 UNIT uD4cappw DONE 4a1ac3f19e82debd732ceb61335c0b339e186be2
 
 ## Follow-up debt
 
