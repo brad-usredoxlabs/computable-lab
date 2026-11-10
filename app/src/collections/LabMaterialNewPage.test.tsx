@@ -4,7 +4,6 @@
  * label shown), explicit pick mounts the EXISTING VendorProductBuilderModal,
  * and its onSave navigates back to /lab/materials.
  */
-
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -12,6 +11,8 @@ import { ThemeProvider } from '../shared/shell'
 
 const resolve = vi.fn()
 
+// Only the resolve spine + the local-DB reads that useMaterialSearch fires on
+// every keystroke are stubbed; the real client otherwise.
 vi.mock('../shared/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../shared/api/client')>()
   return {
@@ -24,7 +25,6 @@ vi.mock('../shared/api/client', async (importOriginal) => {
     },
   }
 })
-
 vi.mock('../shared/lib/integrationFlags', () => ({
   exaVendorEnabled: () => Promise.resolve(false),
   noteExaUnavailable: () => undefined,
@@ -38,11 +38,8 @@ vi.mock('../editor/material/VendorProductBuilderModal', () => ({
       <div data-testid="vendor-builder-stub">
         <span data-testid="vendor-builder-ref">{`${ontologyRef?.namespace}:${ontologyRef?.id}`}</span>
         <button type="button" data-testid="vendor-builder-close" onClick={onClose}>stub close</button>
-        <button
-          type="button"
-          data-testid="vendor-builder-save"
-          onClick={() => onSave({ kind: 'record', id: 'VP-TEST-1', type: 'vendor-product', label: ontologyRef?.label ?? '' })}
-        >
+        <button type="button" data-testid="vendor-builder-save"
+          onClick={() => onSave({ kind: 'record', id: 'VP-TEST-1', type: 'vendor-product', label: ontologyRef?.label ?? '' })}>
           stub save
         </button>
       </div>
@@ -69,12 +66,9 @@ function renderPage() {
   )
 }
 
-const candidate = (curie: string, namespace: string, label: string) => ({
-  curie, label, namespace, tier: 2 as const, level: 'concept' as const, score: 10, source: 'ols4' as const,
-})
+const candidate = (curie: string, namespace: string, label: string) => ({ curie, label, namespace, tier: 2 as const, level: 'concept' as const, score: 10, source: 'ols4' as const })
 const NCIT_DMEM = candidate('NCIT:I10518', 'NCIT', "Dulbecco's Modified Eagle Medium")
 const XCO_F12 = candidate('XCO:0001366', 'XCO', 'DMEM/F-12')
-
 async function searchDMEM() {
   fireEvent.change(screen.getByTestId('lab-material-search-input'), { target: { value: 'DMEM' } })
   fireEvent.click(screen.getByTestId('lab-material-search-button'))
