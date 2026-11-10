@@ -59,9 +59,9 @@ w/ paperwork fix only, 0 code defects**.
 ## Test Run (advc sha256-verified)
 3 tests, all green:
 ```
-✓ apiClient.getRoleBindingProposals — route literal pin > GETs /runs/:id/role-binding-proposals and resolves the response
-✓ apiClient.getRoleBindingProposals — route literal pin > percent-encodes the runId (run/../1 → run%2F..%2F1)
-✓ apiClient.getRoleBindingProposals — route literal pin > surfaces 404 (absent run) as an ApiError
+✓ apiClient.getRoleBindingProposals > GETs /runs/:id/role-binding-proposals and resolves the response
+✓ apiClient.getRoleBindingProposals > percent-encodes the runId in the URL path
+✓ apiClient.getRoleBindingProposals > surfaces a 404 as an ApiError when the run is absent
 ```
 Mutation controls M1, M2, M3: all RED (as expected — they are controlled breakages
 proving the pins are real, not vacuous).
@@ -82,8 +82,8 @@ proving the pins are real, not vacuous).
 
 ## Per-File Diff Stat (HEAD~1)
 ```
-.../shared/api/client.roleBindingProposals.test.ts | 94 ++++++++++++++++++++++
-1 file changed, 94 insertions(+)
+.../shared/api/client.roleBindingProposals.test.ts | 89 ++++++++++++++++++++
+1 file changed, 89 insertions(+)
 ```
 
 ## fix2 (advc c2)
@@ -141,3 +141,5 @@ UNIT uD2bpin DONE 0758acb97b9c143d3b7b60aa650226e35c155295
 L2-VACPINS-ud2bpin-fix2 UNIT unit DONE 1661fb73480eb29983ffee05ec64087b19a93b62
 
 UNIT uD2bpin-paperwork-fix4 DONE 6ba46e289b840852b7e6ff4e0718fb86335bbd0d
+
+L2-VACUOUS-PINS-DEBT-uD2bpinpw2 UNIT uD2bpinpw2 DONE PENDING_SHA
