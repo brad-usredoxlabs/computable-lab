@@ -108,6 +108,18 @@ function parseSourceKeywords(source: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Anchored label matching — keyword must start the label, not appear mid-text
+// ---------------------------------------------------------------------------
+
+function labelMatches(label: string, keyword: string): boolean {
+  const parts = label.split(':');
+  const labelPart = (parts[0] ?? label).trim();
+  const labelNorm = labelPart.toLowerCase();
+  const kwNorm = keyword.toLowerCase();
+  return labelNorm.startsWith(kwNorm);
+}
+
+// ---------------------------------------------------------------------------
 // Value extraction — handle "Key: Value" format
 // ---------------------------------------------------------------------------
 
@@ -224,7 +236,7 @@ export function extractProposals(
       if (segments.length > 0) {
         // Multi-segment line: match keywords against segment labels
         for (const seg of segments) {
-          if (keywords.some((kw) => seg.label.toLowerCase().includes(kw.toLowerCase()))) {
+          if (keywords.some((kw) => labelMatches(seg.label, kw))) {
             rawValue = seg.value;
             break;
           }
@@ -245,14 +257,14 @@ export function extractProposals(
         // Fallback: whole-line keyword match + colon extraction
         if (rawValue === null) {
           const matched = keywords.some((kw) =>
-            trimmed.toLowerCase().includes(kw.toLowerCase()),
+            labelMatches(trimmed, kw),
           );
           if (matched) rawValue = extractValue(trimmed);
         }
       } else {
         // Single-segment line: existing behaviour
         const matched = keywords.some((kw) =>
-          trimmed.toLowerCase().includes(kw.toLowerCase()),
+          labelMatches(trimmed, kw),
         );
         if (!matched) continue;
         rawValue = extractValue(trimmed);
