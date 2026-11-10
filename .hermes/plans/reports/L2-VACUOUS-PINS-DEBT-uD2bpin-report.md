@@ -18,7 +18,7 @@ the module.
 ## Acceptance Criteria
 
 ### AC1 — Route literal pinned
-File: `app/src/shared/api/client.roleBindingProposals.test.ts`, line 58.
+File: `app/src/shared/api/client.roleBindingProposals.test.ts`, line 57.
 The test asserts the exact expected URL string:
 ```ts
 expect(String(url)).toBe('/api/runs/run-1/role-binding-proposals')
@@ -46,9 +46,9 @@ The test file contains 3 tests that form the mutation control set (M1/M2/M3):
 
 | Pin | File | Line | What breaks on mutation |
 |-----|------|------|------------------------|
-| M1  | `client.roleBindingProposals.test.ts` | 57 | Route suffix regex: removing or altering `role-binding-proposals` in the literal causes `toMatch(/\/runs\/run-1\/role-binding-proposals$/)` to fail |
-| M2  | `client.roleBindingProposals.test.ts` | 74 | URL encoding: changing `encodeURIComponent(runId)` to identity or removing it breaks the `run%2F..%2F1` expectation |
-| M3  | `client.roleBindingProposals.test.ts` | 78–92 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
+| M1  | `client.roleBindingProposals.test.ts` | 57 | Full-string URL equality: any drift in prefix or suffix causes `toBe('/api/runs/run-1/role-binding-proposals')` to fail |
+| M2  | `client.roleBindingProposals.test.ts` | 70 | URL encoding: changing `encodeURIComponent(runId)` to identity or removing it breaks the `run%2F..%2F1` expectation |
+| M3  | `client.roleBindingProposals.test.ts` | 73-88 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
 
 Adversarial review (advc c1, `reviews/L2-VACPINS-uD2bpin-advc-c1-l2t0832.md`)
 confirmed: 3 tests GREEN, 3 mutation controls M1/M2/M3 RED. Verdict: **ACCEPT
@@ -86,5 +86,55 @@ proving the pins are real, not vacuous).
 .../shared/api/client.roleBindingProposals.test.ts | 94 ++++++++++++++++++++++
 1 file changed, 94 insertions(+)
 ```
+
+## fix2 (advc c2)
+
+### D1 — Test fix
+Replaced `toContain` with `toBe` on line 57 of `client.roleBindingProposals.test.ts` to restore full-string URL pin.
+
+Baseline (3/3 GREEN):
+```
+ RUN  v1.6.1 /home/brad/cl-wt/L2-VACPINS-uD2bpin-lane2/app
+
+ ✓ src/shared/api/client.roleBindingProposals.test.ts  (3 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+```
+
+### Mutation proof (client.ts:5641 `/runs/` → `/v9/runs/`)
+1 failed:
+```
+ FAIL  src/shared/api/client.roleBindingProposals.test.ts > apiClient.getRoleBindingProposals > GETs /runs/:id/role-binding-proposals and resolves the response
+AssertionError: expected '/api/v9/runs/run-1/role-binding-propo…' to be '/api/runs/run-1/role-binding-proposals' // Object.is equality
+
+- Expected
++ Received
+
+- /api/runs/run-1/role-binding-proposals
++ /api/v9/runs/run-1/role-binding-proposals
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+```
+
+After revert (`git checkout -- client.ts`), `git status --short` shows only `?? app/node_modules` (untracked, not product code).
+
+Re-verified 3/3 GREEN after revert:
+```
+ ✓ src/shared/api/client.roleBindingProposals.test.ts  (3 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+```
+
+### D2 — Report refresh
+- AC1 line reference corrected: line 58 → line 57
+- M1 description updated: "Route suffix regex" → "Full-string URL equality" with `toBe` reference
+- M2 line: 74 → 70
+- M3 line: 78–92 → 73-88
+
+### D3 — DONE marker
+See marker below.
 
 UNIT uD2bpin DONE a5e0d188794f78bcee70c9f9ad098c223286b415
