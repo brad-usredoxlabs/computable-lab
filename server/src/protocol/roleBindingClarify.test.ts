@@ -73,7 +73,8 @@ describe('clarificationRequestsFor', () => {
     expect(cards).toHaveLength(1);
     const card = cards[0]!;
     expect(card.roleId).toBe('enzyme');
-    expect(card.id).toBe('role-binding-PRT-uni-enzyme');
+    // proposals are keyed by the run's local-protocol id (the universal only supplies roles)
+    expect(card.id).toBe('role-binding-LPR-1-enzyme');
     expect(card.kind).toBe('material');
     expect(card.menuProvider).toBe('choice');
     expect(card.origin).toBe('harness');
@@ -135,7 +136,7 @@ describe('GET /runs/:id/role-binding-proposals wiring', () => {
 
     const body = await handlers.getRoleBindingProposals(requestStub('RUN-1'), replyStub());
 
-    expect(body).toMatchObject({ protocols: [{ protocolId: 'PRT-uni' }] });
+    expect(body).toMatchObject({ protocols: [{ protocolId: 'LPR-1' }] });
     const cards = (body as unknown as { clarificationRequests?: unknown[] }).clarificationRequests;
     expect(cards).toHaveLength(1);
     expect(store.create).not.toHaveBeenCalled();
