@@ -45,17 +45,20 @@ export function RunPlanGraphBuild({ runId }: RunPlanGraphBuildProps) {
   const [plannedRunId, setPlannedRunId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ graphId: string; reused: boolean } | null>(null)
-  const [failure, setFailure] = useState<{ code: string; message: string } | null>(null)
+  const [failure, setFailure] = useState<{ message: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    // Reset state synchronously on runId change — button disappears immediately
+    setPlannedRunId(null)
+    setResult(null)
+    setFailure(null)
     const load = async () => {
       try {
         const id = await resolvePlannedRunId(runId)
         if (cancelled) return
-        if (id) setPlannedRunId(id)
+        setPlannedRunId(id)
       } catch {
-        // Best-effort read: nothing renderable
         if (!cancelled) setPlannedRunId(null)
       }
     }
@@ -69,11 +72,13 @@ export function RunPlanGraphBuild({ runId }: RunPlanGraphBuildProps) {
     try {
       const body = await apiClient.buildPlanGraph(plannedRunId)
       setResult({ graphId: body.graphId, reused: body.reused === true })
+      setFailure(null)
     } catch (error) {
+      setResult(null)
       if (ApiError.isApiError(error)) {
-        setFailure({ code: error.code, message: error.message })
+        setFailure({ message: error.message })
       } else {
-        setFailure({ code: 'NETWORK', message: String(error) })
+        setFailure({ message: `NETWORK: ${String(error)}` })
       }
     } finally {
       setBusy(false)
@@ -102,7 +107,7 @@ export function RunPlanGraphBuild({ runId }: RunPlanGraphBuildProps) {
       )}
       {failure && (
         <span style={errorStyle} role="alert">
-          {failure.code}: {failure.message}
+          {failure.message}
         </span>
       )}
     </div>

@@ -1,33 +1,25 @@
 /**
  * RunPlanGraphBuild — tests for the build-plan-graph door.
  *
- * Four legs:
+ * Eight legs:
  *   (a) run with plannedRunRef → renders button, POSTs, shows graphId
  *   (b) reused:true → shows distinct "already built" marker
  *   (c) 409 UNBOUND_ROLE → shows code + message, control re-enabled
  *   (d) no plannedRunRef and kind !== 'planned-run' → renders nothing
+ *   (e) self-PLR arm: record kind is 'planned-run' → uses runId as PLR
+ *   (f) navigation reset: changing runId clears stale state
+ *   (g) real ApiError fromResponse — message contains UNBOUND_ROLE without HTTP_409
+ *   (h) stale banner: success clears failure, and failure clears success
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RunPlanGraphBuild } from './RunPlanGraphBuild'
+import { ApiError } from '../shared/api/errors'
 
 const mocks = vi.hoisted(() => ({
   getRecordWithUI: vi.fn(),
   buildPlanGraph: vi.fn(),
-  ApiError: class ApiError extends Error {
-    public readonly status: number
-    public readonly code: string
-    constructor(status: number, code: string, message: string) {
-      super(message)
-      this.name = 'ApiError'
-      this.status = status
-      this.code = code
-    }
-    static isApiError(error: unknown): error is ApiError {
-      return error instanceof ApiError
-    }
-  },
 }))
 
 vi.mock('../shared/api/client', () => ({
@@ -35,10 +27,6 @@ vi.mock('../shared/api/client', () => ({
     getRecordWithUI: mocks.getRecordWithUI,
     buildPlanGraph: mocks.buildPlanGraph,
   },
-}))
-
-vi.mock('../shared/api/errors', () => ({
-  ApiError: mocks.ApiError,
 }))
 
 afterEach(() => {
@@ -53,7 +41,6 @@ beforeEach(() => {
 
 describe('RunPlanGraphBuild', () => {
   it('(a) renders button when run has plannedRunRef; click POSTs and shows graphId', async () => {
-    // Run envelope with plannedRunRef
     mocks.getRecordWithUI.mockResolvedValueOnce({
       record: {
         recordId: 'RUN-1',
@@ -64,19 +51,15 @@ describe('RunPlanGraphBuild', () => {
 
     render(<RunPlanGraphBuild runId="RUN-1" />)
 
-    // Button should be visible
     const btn = await screen.findByRole('button', { name: 'Build plan graph' })
     expect(btn).toBeTruthy()
 
-    // Click it
     fireEvent.click(btn)
 
-    // Should call buildPlanGraph with the PLR id
     await waitFor(() => {
       expect(mocks.buildPlanGraph).toHaveBeenCalledWith('PLR-1')
     })
 
-    // Should show the graphId
     expect(await screen.findByText('EVG-abc123')).toBeTruthy()
   })
 
@@ -98,7 +81,6 @@ describe('RunPlanGraphBuild', () => {
     const btn = await screen.findByRole('button', { name: 'Build plan graph' })
     fireEvent.click(btn)
 
-    // Should show graphId and a reused marker (not "fresh build")
     expect(await screen.findByText('EVG-abc123')).toBeTruthy()
     expect(await screen.findByText('reused')).toBeTruthy()
   })
@@ -110,7 +92,11 @@ describe('RunPlanGraphBuild', () => {
         payload: { kind: 'run', plannedRunRef: { id: 'PLR-3' } },
       },
     })
-    const apiError = new mocks.ApiError(409, 'UNBOUND_ROLE', "Role 'source' has no binding")
+    const apiError = new ApiError({
+      status: 409,
+      code: 'UNBOUND_ROLE',
+      message: "Role 'source' has no binding",
+    })
     mocks.buildPlanGraph.mockRejectedValueOnce(apiError)
 
     render(<RunPlanGraphBuild runId="RUN-3" />)
@@ -118,19 +104,14 @@ describe('RunPlanGraphBuild', () => {
     const btn = await screen.findByRole('button', { name: 'Build plan graph' })
     fireEvent.click(btn)
 
-    // Should show error code in alert role
     const alert = await screen.findByRole('alert')
     expect(alert).toBeTruthy()
-    // The alert text contains "code: message" — match the code as part of the text
-    expect(alert.textContent).toContain('UNBOUND_ROLE')
     expect(alert.textContent).toContain("Role 'source' has no binding")
 
-    // Button should be re-enabled (not stuck in spinner)
     expect(btn).not.toBeDisabled()
   })
 
   it('(d) no plannedRunRef and kind !== "planned-run" → renders nothing', async () => {
-    // Run envelope with no plannedRunRef
     mocks.getRecordWithUI.mockResolvedValueOnce({
       record: {
         recordId: 'RUN-4',
@@ -144,7 +125,118 @@ describe('RunPlanGraphBuild', () => {
       expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-4')
     })
 
-    // Nothing rendered
     expect(container.innerHTML).toBe('')
+  })
+
+  it('(e) self-PLR arm: record kind is "planned-run" → uses runId as PLR', async () => {
+    mocks.getRecordWithUI.mockResolvedValueOnce({
+      record: { recordId: 'PLR-9', payload: { kind: 'planned-run' } },
+    })
+    mocks.buildPlanGraph.mockResolvedValueOnce({ success: true, graphId: 'EVG-xyz789' })
+
+    render(<RunPlanGraphBuild runId="PLR-9" />)
+
+    const btn = await screen.findByRole('button', { name: 'Build plan graph' })
+    expect(btn).toBeTruthy()
+
+    fireEvent.click(btn)
+
+    await waitFor(() => {
+      expect(mocks.buildPlanGraph).toHaveBeenCalledWith('PLR-9')
+    })
+
+    expect(await screen.findByText('EVG-xyz789')).toBeTruthy()
+  })
+
+  it('(f) navigation reset: changing runId clears stale state', async () => {
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce({
+        record: {
+          recordId: 'RUN-A',
+          payload: { kind: 'run', plannedRunRef: { id: 'PLR-A' } },
+        },
+      })
+      .mockResolvedValueOnce({
+        record: {
+          recordId: 'RUN-B',
+          payload: { kind: 'run', title: 'no PLR' },
+        },
+      })
+
+    const { rerender } = render(<RunPlanGraphBuild runId="RUN-A" />)
+
+    const btn = await screen.findByRole('button', { name: 'Build plan graph' })
+    expect(btn).toBeTruthy()
+
+    rerender(<RunPlanGraphBuild runId="RUN-B" />)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Build plan graph' })).toBeNull()
+    })
+
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-B')
+    expect(mocks.buildPlanGraph).not.toHaveBeenCalled()
+  })
+
+  it('(g) real ApiError fromResponse — message contains UNBOUND_ROLE without HTTP_409', async () => {
+    mocks.getRecordWithUI.mockResolvedValueOnce({
+      record: {
+        recordId: 'RUN-G',
+        payload: { kind: 'run', plannedRunRef: { id: 'PLR-G' } },
+      },
+    })
+
+    const apiError = await ApiError.fromResponse(
+      new Response(
+        JSON.stringify({ error: 'UNBOUND_ROLE', message: "Role 'source' has no binding" }),
+        { status: 409 },
+      ),
+    )
+    mocks.buildPlanGraph.mockRejectedValueOnce(apiError)
+
+    render(<RunPlanGraphBuild runId="RUN-G" />)
+
+    const btn = await screen.findByRole('button', { name: 'Build plan graph' })
+    fireEvent.click(btn)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toBeTruthy()
+    expect(alert.textContent).toContain('UNBOUND_ROLE')
+    expect(alert.textContent).toContain("Role 'source' has no binding")
+    expect(alert.textContent).not.toContain('HTTP_409')
+  })
+
+  it('(h) stale banner: success clears failure, and failure clears success', async () => {
+    mocks.getRecordWithUI.mockResolvedValueOnce({
+      record: {
+        recordId: 'RUN-H',
+        payload: { kind: 'run', plannedRunRef: { id: 'PLR-H' } },
+      },
+    })
+
+    const apiError = new ApiError({
+      status: 409,
+      code: 'UNBOUND_ROLE',
+      message: "Role 'source' has no binding",
+    })
+    mocks.buildPlanGraph
+      .mockRejectedValueOnce(apiError)
+      .mockResolvedValueOnce({ success: true, graphId: 'EVG-abc123' })
+
+    render(<RunPlanGraphBuild runId="RUN-H" />)
+
+    const btn = await screen.findByRole('button', { name: 'Build plan graph' })
+
+    // First click → error
+    fireEvent.click(btn)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toBeTruthy()
+
+    // Second click → success clears error
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+    expect(await screen.findByText('EVG-abc123')).toBeTruthy()
   })
 })

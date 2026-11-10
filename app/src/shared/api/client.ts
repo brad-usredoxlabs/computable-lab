@@ -5637,7 +5637,7 @@ export const apiClient = {
    * @returns { success: true, graphId, reused? } — throws ApiError on non-2xx.
    */
   async buildPlanGraph(plannedRunId: string): Promise<{ success: true; graphId: string; reused?: boolean }> {
-    return request(`/runs/${encodeURIComponent(plannedRunId)}/plan-graph`, {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/bindings`, {
       method: 'POST',
     })
   },
