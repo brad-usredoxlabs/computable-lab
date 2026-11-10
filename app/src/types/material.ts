@@ -525,6 +525,22 @@ export function generateMaterialId(name: string): string {
   return `MAT-${slug}-${rand}`
 }
 
+/**
+ * Stable policy id for a material-selection-policy record: slug of the material
+ * concept label plus a 4-char random suffix. The slug may be empty (labels with
+ * no alphanumerics); the schema pattern still matches `MSPOL-<RANDOM>`.
+ */
+export function generateMaterialSelectionPolicyId(materialLabel: string): string {
+  const slug = materialLabel
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 24)
+    .toUpperCase()
+  const rand = Math.random().toString(36).substring(2, 6).padEnd(4, '0').toUpperCase()
+  return slug ? `MSPOL-${slug}-${rand}` : `MSPOL-${rand}`
+}
+
 export function generateVendorProductId(vendor: string, catalogNumber: string): string {
   const slug = `${vendor}-${catalogNumber}`
     .toLowerCase()
