@@ -25,6 +25,6 @@ L2-SPEC-SHEET-INGEST-1 (L2-SPECSHEET-u3empty) UNIT u3empty DONE 0e6c8e7b94bcda2b
 ## Marker Repair
 - Old malformed line: `L2-SPECSHEET-u3empty-pw UNIT unit DONE ff5e7bd5`
 - Reason it failed advc check #9: wrong unit token (literal `unit` instead of `u3empty`), wrong item id (`-pw` paperwork label), and truncated 8-char sha instead of 40
-- Paperwork commit: c59ad6a0ab091e1b82b78cf85b1f999c24c1607c
+- Paperwork commit: 30fd415e17f966a82739d8c9236c3ccc52b2a10e
 
-L2-SPECSHEET-u3empty-marker UNIT unit DONE c59ad6a0ab091e1b82b78cf85b1f999c24c1607c
+L2-SPECSHEET-u3empty-marker UNIT unit DONE 30fd415e17f966a82739d8c9236c3ccc52b2a10e
