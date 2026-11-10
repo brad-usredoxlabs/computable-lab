@@ -29,6 +29,7 @@ import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
 import { RoleBindingProposalsPanel } from './RoleBindingProposalsPanel'
 import { RunProtocolList } from './RunProtocolList'
+import { RunPlanGraphBuild } from './RunPlanGraphBuild'
 import { GcRunSheetSection } from './gc/GcRunSheetSection'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
@@ -202,6 +203,7 @@ export function RunWorkspacePage() {
                   <div className="run-workspace-toolbar">
                     <ModeToggle mode={mode} onChange={setMode} />
                     <RunProtocolList runId={runId} />
+                    <RunPlanGraphBuild runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
                   </div>
                 }
