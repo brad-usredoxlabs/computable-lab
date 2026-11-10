@@ -118,8 +118,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
         if (prPayload.localProtocolRef?.id) {
           try {
-            const lp = await apiClient.getRecord(prPayload.localProtocolRef.id)
-            if (active) setLocalProtocol(lp)
+            const lp = (await apiClient.getRecordWithUI(prPayload.localProtocolRef.id)).record
+            if (active && lp) setLocalProtocol(lp)
           } catch {
             // local-protocol not found — continue without it
           }
