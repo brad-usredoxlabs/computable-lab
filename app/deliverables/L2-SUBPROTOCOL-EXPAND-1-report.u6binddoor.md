@@ -155,3 +155,15 @@ Test Files  1 passed (1)
    Start at  15:06:43
    Duration  11.40s (transform 140ms, setup 955ms, collect 324ms, tests 580ms, environment 7.45s, prepare 530ms)
 ```
+
+### Closeout — u6binddoorpinfix1 exit marker
+The pinfix1 run ended `exit_marker: missing` with the report left dirty (launcher log
+coder-u6bdpinfix1-l2t1450.log:5, returncode 0, dirty file = this report), so the launcher
+auto-committed it as WIP 3b9aa17e. Code and section unchanged by this unit; marker added below.
+Re-verified at 3b9aa17e: 3 suites / 12 tests PASSED.
+
+Scanner BEFORE this unit, from the worktree root:
+```
+$ python3 -c "import sys;sys.path.insert(0,'/home/brad/.hermes/cl/scripts');import cl_marker_scan as s;print(s.find_marker('.','L2-SUBPROTOCOL-EXPAND-1-u6binddoorpinfix1pw'))"
+('missing', '')
+```
