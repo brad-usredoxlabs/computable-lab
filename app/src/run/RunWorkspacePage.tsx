@@ -52,6 +52,7 @@ export function RunWorkspacePage() {
   // stays byte-identical (bait #2). No SECOND getRecord is fired here; this
   // reuses the page's single mount fetch.
   const [runKind, setRunKind] = useState<string | null>(null)
+  const [hasPlannedRunRef, setHasPlannedRunRef] = useState(false)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -76,9 +77,14 @@ export function RunWorkspacePage() {
         if (!cancelled) setRunTitle(t)
         const k = typeof payload.kind === 'string' ? payload.kind : null
         if (!cancelled) setRunKind(k)
+        const prr = payload.plannedRunRef as { id?: string } | undefined
+        if (!cancelled) setHasPlannedRunRef(typeof prr?.id === 'string')
       })
       .catch(() => {
-        if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
+        if (!cancelled) {
+          setResolvedStudyId(SCRATCH_STUDY_ID)
+          setHasPlannedRunRef(false)
+        }
       })
     return () => { cancelled = true }
   }, [urlStudyId, runId])
@@ -203,6 +209,7 @@ export function RunWorkspacePage() {
                     <ModeToggle mode={mode} onChange={setMode} />
                     <RunProtocolList runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                    {hasPlannedRunRef ? <a className="run-bindings-link" href={`/runs/${runId}/bindings`}>Role bindings</a> : null}
                   </div>
                 }
               >
