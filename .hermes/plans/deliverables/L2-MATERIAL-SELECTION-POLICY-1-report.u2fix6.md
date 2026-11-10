@@ -44,3 +44,5 @@ L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e47cb55
 - **Fix:** line 33 now names both ids, canonical first: `L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e4...`. Sha unchanged, reachable, no product/test/policy edits.
 - **GREEN:** dispatch token -> `('found', '...report.u2fix6.md: L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u2fix6) UNIT u2fix6 DONE 9d5236e4...')`; canonical `L2-MATERIAL-SELECTION-POLICY-1-u2fix6` -> `found-loose`.
 - **Cause:** token mismatch in paperwork only, not a code defect.
+
+L2-MATSEL-u2fix6 UNIT u2fix6b DONE e13536f0b219b37ed0766fbedcf1d48d0959071b
