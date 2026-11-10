@@ -5,6 +5,8 @@ import { buildLocalPlanGraph } from './localPlanGraph.js';
 const labwareRef = { kind: 'record', id: 'LBW-1', type: 'labware-instance' };
 const materialRef = { kind: 'record', id: 'MAT-1', type: 'material-instance' };
 const instrumentRef = { kind: 'record', id: 'EQ-1', type: 'equipment' };
+const geometryRef = { kind: 'record', id: 'GEO-1', type: 'labware-geometry' };
+const roleRefs: Record<string, unknown> = { plate: labwareRef, reagent: materialRef, reader: instrumentRef };
 
 const twoStepProtocol = {
   roles: {
@@ -44,6 +46,24 @@ function keysDeep(value: unknown): string[] {
   return Object.entries(value).flatMap(([key, child]) => [key, ...keysDeep(child)]);
 }
 
+function roleStrings(category: string, roleId: string) {
+  return {
+    roles: { [category]: [{ roleId }] },
+    steps: [{ stepId: 'read-plate', kind: 'read', target: { labwareRole: roleId } }],
+  };
+}
+
+/** The step with every Role string replaced by the ref the plan must emit. */
+function substituteRoles(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(substituteRoles);
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    out[key] = key.endsWith('Role') && typeof child === 'string' ? (roleRefs[child] ?? child) : substituteRoles(child);
+  }
+  return out;
+}
+
 describe('buildLocalPlanGraph', () => {
   it('binds every step role reference to its concrete ref, in step order', () => {
     const result = buildLocalPlanGraph({ protocolId: 'PRT-1', protocol: twoStepProtocol, bindings: fullBindings });
@@ -54,10 +74,10 @@ describe('buildLocalPlanGraph', () => {
     expect(result.events.map((e) => e.event_type)).toEqual(['add_material', 'read']);
 
     const [add, read] = result.events;
-    expect(add.details).toMatchObject({
-      target: { labwareRole: labwareRef }, material: { materialRole: materialRef }, volume_uL: 50,
-    });
-    expect(read.details).toMatchObject({ target: { labwareRole: labwareRef }, instrumentRole: instrumentRef });
+    // D8.4: details are the declared step with ONLY role refs substituted —
+    // every key and every numeric survives at its original path, nothing added.
+    expect(add.details).toEqual(substituteRoles(twoStepProtocol.steps[0]));
+    expect(read.details).toEqual(substituteRoles(twoStepProtocol.steps[1]));
 
     // No abstract role string survives anywhere in the emitted plan.
     const emittedStrings = stringValuesDeep(result.events);
@@ -66,7 +86,6 @@ describe('buildLocalPlanGraph', () => {
     // D8.4: no measured value invented; only values the step already carried.
     const emittedKeys = keysDeep(result.events);
     for (const invented of ['cells', 'density', 'cellCount']) expect(emittedKeys).not.toContain(invented);
-    expect(emittedStrings).not.toContain(String(50));
   });
 
   it('is deterministic: identical input yields byte-identical events', () => {
@@ -118,6 +137,39 @@ describe('buildLocalPlanGraph', () => {
       },
     });
     expect(result).toEqual({ ok: false, code: 'UNDECLARED_ROLE', roleId: 'vessel', stepId: 'add-compound' });
+    expect(result).not.toHaveProperty('events');
+  });
+
+  it('prefers the canonical instance ref when the entry also carries a geometry ref', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: {
+        labware: [{ roleId: 'plate', labwareGeometryRef: geometryRef, labwareInstanceRef: labwareRef }],
+      },
+    });
+    if (!result.ok) throw new Error(`unexpected failure: ${JSON.stringify(result)}`);
+    // Geometry is NOT the labware instance: the category's canonical ref key wins.
+    expect(result.events[0].details).toEqual({ stepId: 'read-plate', kind: 'read', target: { labwareRole: labwareRef } });
+  });
+
+  it('falls back to the only kind-bearing ref when no canonical ref key is present', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: { labware: [{ roleId: 'plate', labwareGeometryRef: geometryRef }] },
+    });
+    if (!result.ok) throw new Error(`unexpected failure: ${JSON.stringify(result)}`);
+    expect(result.events[0].details).toEqual({ stepId: 'read-plate', kind: 'read', target: { labwareRole: geometryRef } });
+  });
+
+  it('refuses an entry whose canonical keys disagree, naming AMBIGUOUS_BINDING', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: { labware: [{ roleId: 'plate', labwareInstanceRef: labwareRef, materialRef }] },
+    });
+    expect(result).toEqual({ ok: false, code: 'AMBIGUOUS_BINDING', roleId: 'plate', stepId: 'read-plate' });
     expect(result).not.toHaveProperty('events');
   });
 });
