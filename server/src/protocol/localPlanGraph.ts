@@ -30,11 +30,11 @@ export interface LocalPlanEvent {
   details: Obj;
 }
 
-export type LocalPlanGraphErrorCode = 'UNBOUND_ROLE' | 'UNDECLARED_ROLE' | 'MALFORMED_PROTOCOL';
+export type LocalPlanGraphErrorCode = 'UNBOUND_ROLE' | 'UNDECLARED_ROLE' | 'AMBIGUOUS_BINDING' | 'MALFORMED_PROTOCOL';
 
 export type LocalPlanGraphResult =
   | { ok: true; protocolId: string; events: LocalPlanEvent[] }
-  | { ok: false; code: 'UNBOUND_ROLE' | 'UNDECLARED_ROLE'; roleId: string; stepId: string }
+  | { ok: false; code: 'UNBOUND_ROLE' | 'UNDECLARED_ROLE' | 'AMBIGUOUS_BINDING'; roleId: string; stepId: string }
   | { ok: false; code: 'MALFORMED_PROTOCOL'; message: string };
 
 function asObject(value: unknown): Obj | undefined {
@@ -64,18 +64,47 @@ function declaredRoleIds(protocol: Obj): Set<string> {
   return declared;
 }
 
-/** The concrete ref of a binding entry: its one object value (refs carry `kind`). */
-function concreteRef(entry: Obj): Obj | undefined {
-  for (const value of Object.values(entry)) {
-    const ref = asObject(value);
-    if (ref && asString(ref.kind)) return ref;
-  }
-  return undefined;
+/**
+ * The canonical ref key of each binding category, in schema order. Selection is
+ * keyed, never positional: a LabwareBinding may also carry `labwareGeometryRef`,
+ * and geometry is not the labware instance.
+ */
+const CANONICAL_REF_KEYS = [
+  'labwareInstanceRef', 'materialRef', 'instrumentRef', 'contextRef', 'templateRef', 'libraryRef',
+] as const;
+
+/** A concrete ref is an object carrying a non-empty `kind`. */
+function asRef(value: unknown): Obj | undefined {
+  const obj = asObject(value);
+  return obj && asString(obj.kind) ? obj : undefined;
 }
 
-/** Flatten `bindings.<category>[].roleId` -> concrete ref, whatever the category. */
-function bindingRefs(bindings: unknown): Map<string, Obj> {
-  const index = new Map<string, Obj>();
+interface RefResolution {
+  ref: Obj;
+}
+
+/** undefined = the entry has no concrete ref; `ambiguous` = canonical keys disagree. */
+type ConcreteRef = RefResolution | { ambiguous: true } | undefined;
+
+/** The concrete ref of a binding entry, chosen by category key. */
+function concreteRef(entry: Obj): ConcreteRef {
+  const canonical = CANONICAL_REF_KEYS.map((key) => asRef(entry[key])).filter((ref): ref is Obj => ref !== undefined);
+  const [canonicalRef] = canonical;
+  // Two kind-bearing canonical keys on one binding: refuse rather than pick.
+  if (canonicalRef) return canonical.length === 1 ? { ref: canonicalRef } : { ambiguous: true };
+  // No canonical key present: the generic first-kind-value fallback applies.
+  const generic = Object.entries(entry)
+    .filter(([key]) => key !== 'roleId')
+    .map(([, value]) => asRef(value))
+    .filter((ref): ref is Obj => ref !== undefined);
+  const [genericRef] = generic;
+  if (!genericRef) return undefined;
+  return generic.length === 1 ? { ref: genericRef } : { ambiguous: true };
+}
+
+/** Flatten `bindings.<category>[].roleId` -> resolution, whatever the category. */
+function bindingRefs(bindings: unknown): Map<string, ConcreteRef> {
+  const index = new Map<string, ConcreteRef>();
   const root = asObject(bindings);
   if (!root) return index;
   for (const entries of Object.values(root)) {
@@ -83,8 +112,8 @@ function bindingRefs(bindings: unknown): Map<string, Obj> {
     for (const entry of entries) {
       const binding = asObject(entry);
       const roleId = binding ? asString(binding.roleId) : undefined;
-      const ref = binding ? concreteRef(binding) : undefined;
-      if (roleId && ref) index.set(roleId, ref);
+      const resolution = binding ? concreteRef(binding) : undefined;
+      if (roleId && resolution) index.set(roleId, resolution);
     }
   }
   return index;
@@ -104,17 +133,28 @@ function roleReferences(value: unknown, out: string[]): void {
   }
 }
 
-/** Same walk, replacing each role-reference string with its concrete ref. */
-function bindRoleReferences(value: unknown, refs: Map<string, Obj>): unknown {
-  if (Array.isArray(value)) return value.map((child) => bindRoleReferences(child, refs));
+/** Raised when the binding pass cannot resolve a role; converted to a named error. */
+class RoleBindingFailure extends Error {
+  constructor(readonly code: 'UNBOUND_ROLE' | 'AMBIGUOUS_BINDING', readonly roleId: string) {
+    super(`${code}: ${roleId}`);
+  }
+}
+
+/**
+ * Same walk, replacing each role-reference string with its concrete ref. There
+ * is NO fallback to the role string: a missing ref throws, so an abstract role
+ * can never leak into the emitted plan.
+ */
+function bindRoleReferences(value: unknown, resolve: (roleId: string) => Obj): unknown {
+  if (Array.isArray(value)) return value.map((child) => bindRoleReferences(child, resolve));
   const obj = asObject(value);
   if (!obj) return value;
   const bound: Obj = {};
   for (const [key, child] of Object.entries(obj)) {
     if (key.endsWith('Role') && typeof child === 'string') {
-      bound[key] = refs.get(child) ?? child;
+      bound[key] = resolve(child);
     } else {
-      bound[key] = bindRoleReferences(child, refs);
+      bound[key] = bindRoleReferences(child, resolve);
     }
   }
   return bound;
@@ -141,15 +181,26 @@ export function buildLocalPlanGraph(input: BuildLocalPlanGraphInput): LocalPlanG
     roleReferences(step, referenced);
     for (const roleId of referenced) {
       if (!declared.has(roleId)) return { ok: false, code: 'UNDECLARED_ROLE', roleId, stepId };
-      if (!refs.has(roleId)) return { ok: false, code: 'UNBOUND_ROLE', roleId, stepId };
     }
 
-    events.push({
-      eventId: `${index}-${stepId}`,
-      stepId,
-      event_type: eventType,
-      details: asObject(bindRoleReferences(step, refs)) ?? {},
-    });
+    // The binding pass is the only source of a concrete ref; `resolve` throws
+    // rather than substituting the role string, so absence cannot pass silently.
+    const resolve = (roleId: string): Obj => {
+      const resolution = refs.get(roleId);
+      if (!resolution) throw new RoleBindingFailure('UNBOUND_ROLE', roleId);
+      if ('ambiguous' in resolution) throw new RoleBindingFailure('AMBIGUOUS_BINDING', roleId);
+      return resolution.ref;
+    };
+
+    let details: Obj;
+    try {
+      details = asObject(bindRoleReferences(step, resolve)) ?? {};
+    } catch (error) {
+      if (error instanceof RoleBindingFailure) return { ok: false, code: error.code, roleId: error.roleId, stepId };
+      throw error;
+    }
+
+    events.push({ eventId: `${index}-${stepId}`, stepId, event_type: eventType, details });
   }
 
   return { ok: true, protocolId: input.protocolId, events };
