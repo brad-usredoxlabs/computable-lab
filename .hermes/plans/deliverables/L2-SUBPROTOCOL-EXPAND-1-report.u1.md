@@ -142,5 +142,4 @@ which contains them (the sha line was fixed in the follow-up commit, per the
 brief's two-commit recipe).
 
 L2-SUBPROTOCOL-EXPAND-1-u1 UNIT 1 DONE 679ec32dce260ee9b1852e82c1d37f3a36ae0007
-L2-SUBPROTOCOL-EXPAND-1-u1fix UNIT unit DONE 679ec32dce260ee9b1852e82c1d37f3a36ae0007
 L2-SUBPROTOCOL-EXPAND-1-u1fixpaper UNIT u1fixpaper DONE 1aa618bc238af8ae5cf8fe4aaa800573f54d0c34
