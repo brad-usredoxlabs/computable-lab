@@ -563,7 +563,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         if (planResult.code === 'MALFORMED_PROTOCOL') {
           return { error: planResult.code, message: planResult.message };
         }
-        return { error: planResult.code, message: `Plan build failed: ${planResult.roleId} at step ${planResult.stepId}` };
+        return { error: planResult.code, message: `Plan build failed: ${planResult.roleId} at step ${planResult.stepId}`, details: { roleId: planResult.roleId, stepId: planResult.stepId } };
       }
 
       // (d) Resolve allowedEventTypes from schema registry (no hand-coded verb list)
