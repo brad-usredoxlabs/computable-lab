@@ -24,7 +24,7 @@ targets:
         source: "Vendor / Manufacturer name from the sheet header or product listing"
         required: true
       - targetField: catalog_number
-        source: "Catalog number / Product number from the sheet"
+        source: "Catalog / Catalog number / Product number from the sheet"
         required: true
       - targetField: name
         source: "Product name / Chemical name from the sheet"
