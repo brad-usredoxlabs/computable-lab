@@ -66,7 +66,7 @@ describe('RoleBindingProposalsPanel', () => {
     mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
     render(<RoleBindingProposalsPanel runId="run-1" />)
 
-    await waitFor(() => expect(screen.getByText('DMEM High Glucose')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/DMEM High Glucose/)).toBeTruthy())
     expect(screen.getByText('PROTO-1')).toBeTruthy()
     expect(screen.getByText('medium')).toBeTruthy()
     expect(screen.getByText('Trypsin')).toBeTruthy()
@@ -80,7 +80,7 @@ describe('RoleBindingProposalsPanel', () => {
     mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
     const { container } = render(<RoleBindingProposalsPanel runId="run-1" />)
 
-    await waitFor(() => expect(screen.getByText('DMEM High Glucose')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/DMEM High Glucose/)).toBeTruthy())
     const proposed = container.querySelector('[data-proposal-state="proposed"]')
     expect(proposed).not.toBeNull()
     expect(proposed?.textContent).toContain('DMEM High Glucose')
