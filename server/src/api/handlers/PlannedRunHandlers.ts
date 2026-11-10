@@ -8,6 +8,8 @@ import type { ApiError } from '../types.js';
 import { PlannedRunFromLocalProtocolService } from '../../protocol/PlannedRunFromLocalProtocolService.js';
 import { protocolIdsOf, withAttachedProtocol, withDetachedProtocol } from '../../protocol/runProtocolList.js';
 import { proposeRoleBindings, type RoleBindingProposals } from '../../protocol/roleBindingProposal.js';
+import { clarificationRequestsFor } from '../../protocol/roleBindingClarify.js';
+import type { AgentClarificationRequest } from '../../ai/types.js';
 import { writeRoleBindings } from '../../protocol/roleBindingWrite.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
 
@@ -411,11 +413,17 @@ export function createPlannedRunHandlers(ctx: AppContext) {
      * GET /runs/:id/role-binding-proposals
      * Read-only proposals from existing records; never writes.
      * 404 when the run is absent, 400 when it is not a planned-run.
+     *
+     * A role that matched more than one record (`ambiguous`) gets ONE
+     * clarification card naming every candidate; when no role is ambiguous the
+     * key is absent, so the payload shape for the simple case is unchanged.
      */
     async getRoleBindingProposals(
       request: FastifyRequest<{ Params: { id: string } }>,
       reply: FastifyReply,
-    ): Promise<RoleBindingProposals | ApiError> {
+    ): Promise<
+      (RoleBindingProposals & { clarificationRequests?: AgentClarificationRequest[] }) | ApiError
+    > {
       const { id } = request.params;
 
       const record = await ctx.store.get(id);
@@ -437,8 +445,9 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       }
 
       const proposals = await proposeRoleBindings({ store: ctx.store, run: record });
+      const cards = clarificationRequestsFor(proposals);
       reply.status(200);
-      return proposals;
+      return { ...proposals, ...(cards.length > 0 ? { clarificationRequests: cards } : {}) };
     },
 
     /**
