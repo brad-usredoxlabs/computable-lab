@@ -49,6 +49,21 @@ function declaredRoleIds(roles: Obj, key: string): string[] {
   });
 }
 
+/**
+ * The lot identifier each target kind actually carries in its record schema:
+ * material-instance/aliquot nest it at `payload.lot.lot_number`, material-lot
+ * keeps `payload.lot_number`, and vendor-product has no lot field at all.
+ * Mirrors the canonical reader in MaterialPrepHandlers.
+ */
+function lotOfPayload(kind: string, payload: Obj): string | undefined {
+  if (kind === 'material-lot') return stringField(payload, 'lot_number');
+  if (kind === 'material-instance' || kind === 'aliquot') {
+    const lot = asObject(payload.lot);
+    return lot ? stringField(lot, 'lot_number') : undefined;
+  }
+  return undefined;
+}
+
 function fail(code: RoleBindingWriteErrorCode, message: string): RoleBindingWriteResult {
   return { ok: false, code, message };
 }
@@ -119,7 +134,10 @@ export async function writeRoleBindings(
     for (const binding of request.materials) {
       const resolved = await kindOf('material', binding.materialInstanceRef);
       if ('failure' in resolved) return resolved.failure;
-      const lotNumber = stringField(asObject((await load(binding.materialInstanceRef))?.payload) ?? {}, 'lotNumber');
+      const lotNumber = lotOfPayload(
+        resolved.kind,
+        asObject((await load(binding.materialInstanceRef))?.payload) ?? {},
+      );
       kept.push({
         roleId: binding.roleId,
         materialRef: { kind: 'record', id: binding.materialInstanceRef, type: resolved.kind },
