@@ -12,7 +12,7 @@ Owned files: server/src/protocol/roleBindingWrite.ts, server/src/protocol/roleBi
 
 1. material-lot lot read only checked `payload.lot_number`, ignoring `supplier.vendor_lot`. The canonical reader at shelfLookup.ts:251 uses `supplier.vendor_lot` first, falling back to `lot_number`. A lot carrying only `supplier.vendor_lot` silently wrote NO lotNumber.
 2. The `aliquot` arm at roleBindingWrite.ts:60 was unpinned — deleting it left 7/7 GREEN, so a regression ships invisibly.
-3. The test comment claimed fixtures were "schema-valid" when they were not (material-instance missing `name` + required ref, material-lot missing `material_ref`). The correction: fixtures are shaped to the schemas' required keys and declared lot paths, but are not Ajv-validated (env() injects `payload.recordId` which is not in any schema).
+3. The test comment claimed fixtures were "schema-valid" when they were not (material-instance missing `name` + required ref, material-lot missing `material_ref`). The correction: fixtures follow the declared lot paths, add `name`/`material_ref`, but omit the required `id` (`env()` injects `recordId`, not `id`; `recordId` is not a schema key).
 
 ## Changes
 
@@ -22,7 +22,7 @@ Owned files: server/src/protocol/roleBindingWrite.ts, server/src/protocol/roleBi
 - The `material-instance || aliquot` arm unchanged. The labware path unchanged. The `...(lotNumber ? { lotNumber } : {})` spread unchanged.
 
 ### roleBindingWrite.test.ts
-- Existing lot test: added missing required keys (`name` + `material_ref` for material-instance; `material_ref` for material-lot) so "shaped to the schema" is accurate. Comment replaced with honest wording.
+- Existing lot test: added missing required keys (`name` + `material_ref` for material-instance; `material_ref` for material-lot). Fixtures follow the declared lot paths, add name/material_ref, and omit the required `id` (env() injects recordId, not id). Comment replaced with honest wording.
 - New test: `prefers supplier.vendor_lot over lot_number for material-lot` — three cases:
   (a) vendor_lot only -> VL-9, (b) vendor_lot + lot_number -> vendor_lot wins (VL-9), (c) aliquot with lot.lot_number -> L-55 (pins the arm advc could delete green).
 - Existing LOT-1 case (no supplier, expects L-88) preserved as fallback pin.
