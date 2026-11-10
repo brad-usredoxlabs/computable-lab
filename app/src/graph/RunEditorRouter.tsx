@@ -11,9 +11,10 @@ const LabwareEventEditor = lazy(
 interface RunEditorRouterProps {
   record: { kind: string; state: string } | null
   loading: boolean
+  plannedRunId: string | null
 }
 
-function RunEditorRouterContent({ record, loading }: RunEditorRouterProps) {
+function RunEditorRouterContent({ record, loading, plannedRunId }: RunEditorRouterProps) {
   const { runId } = useParams<{ runId: string }>()
 
   if (loading) return <div className="run-editor-router">Loading...</div>
@@ -22,7 +23,7 @@ function RunEditorRouterContent({ record, loading }: RunEditorRouterProps) {
   if (record.kind === 'planned-run' && record.state === 'draft') {
     return (
       <Suspense fallback={<div className="run-editor-router">Loading editor...</div>}>
-        <BindingModeEditor plannedRunId={runId!} />
+        <BindingModeEditor plannedRunId={plannedRunId ?? runId!} />
       </Suspense>
     )
   }
@@ -37,6 +38,7 @@ function RunEditorRouterContent({ record, loading }: RunEditorRouterProps) {
 export function RunEditorRouter() {
   const { runId } = useParams<{ runId: string }>()
   const [record, setRecord] = useState<{ kind: string; state: string } | null>(null)
+  const [plrId, setPlrId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export function RunEditorRouter() {
         if (typeof plr?.id !== 'string') {
           // No plannedRunRef → fall through to LabwareEventEditor
           setRecord(null)
+          setPlrId(null)
           setLoading(false)
           return
         }
@@ -62,10 +65,12 @@ export function RunEditorRouter() {
         const kind = typeof plrPayload?.kind === 'string' ? plrPayload.kind : ''
         const state = typeof plrPayload?.state === 'string' ? plrPayload.state : ''
         setRecord({ kind, state })
+        setPlrId(plr.id)
         setLoading(false)
       } catch {
         if (active) {
           setRecord(null)
+          setPlrId(null)
           setLoading(false)
         }
       }
@@ -73,5 +78,5 @@ export function RunEditorRouter() {
     return () => { active = false }
   }, [runId])
 
-  return <RunEditorRouterContent record={record} loading={loading} />
+  return <RunEditorRouterContent record={record} loading={loading} plannedRunId={plrId} />
 }
