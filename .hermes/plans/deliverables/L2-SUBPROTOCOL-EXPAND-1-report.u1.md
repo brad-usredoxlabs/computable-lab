@@ -125,8 +125,10 @@ EXIT=0
 - server/src/protocol/localPlanGraph.ts (77 insertions / 26 deletions vs 86a39318)
 - server/src/protocol/localPlanGraph.test.ts (+40/-7 lines; 8 tests)
 - this report. No schema/roleBindingWrite change; no other file touched.
-node_modules stays as the pre-existing untracked lane symlinks
-(server/node_modules -> cl-integration-2/server/node_modules); not committed.
+The lane dependency symlink used for verification was removed before exit so the
+tree carries no untracked dependency entry; recreate it to re-run:
+  ln -s /mnt/vast/home/brad/git/cl-integration-2/server/node_modules server/node_modules
+`?? app/node_modules` is the launcher's own lane plumbing, untouched.
 
 ## Commits
 51d4ddd6 — RED test commit
