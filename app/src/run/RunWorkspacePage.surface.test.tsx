@@ -242,6 +242,7 @@ vi.mock('../event-editor/EventEditorContext', () => ({
     <>{children}</>
   ),
   useEventEditor: () => eventEditorContextValue,
+  useOptionalEventEditor: () => null,
   isDeckSetupLocked: (state: { placements?: unknown[]; events?: unknown[]; runDeck?: unknown }) =>
     state.runDeck !== null || (state.placements?.length ?? 0) > 0 || (state.events?.length ?? 0) > 0,
 }))
