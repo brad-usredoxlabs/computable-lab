@@ -223,3 +223,4 @@ pre-fix owned-file `TS2345` at compile.test.tsx:131 is gone.
 - 08841eeb — u6binddoor-fix3b code (both mock bodies)
 
 L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoor-fix3b DONE 0d9cf642b483b99e4b03444b799d9a740f53df1b
+L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoorpw DONE 25e0e7b41bc5e7e899f66799a38f23095310be0f
