@@ -440,6 +440,34 @@ describe('extractProposals — positional extraction scoped per table', () => {
     expect(catalogs[0].value).toBe('25200056');
   });
 
+  it('does not fabricate values from an em-dash separator row (D1 — unicode)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Header + em-dash separator row (PDF/HTML rule rows) + actual data
+    const doc = {
+      url: 'https://example.com/ems',
+      text: 'Catalog Number | Volume\n\u2014 | \u2014\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should have an em-dash separator value
+    for (const p of result) {
+      expect(p.value).not.toBe('\u2014');
+    }
+
+    // Exactly one catalog_number proposal with the real value
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+  });
+
   it('uses the last header layout for subsequent data rows (defect 2)', () => {
     const fieldMap: SpecSheetFieldMap = {
       recordKind: 'vendor-product',
