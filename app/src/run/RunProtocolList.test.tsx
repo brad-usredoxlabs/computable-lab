@@ -219,4 +219,19 @@ describe('RunProtocolList', () => {
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(screen.getByRole('button', { name: 'Detach Alpha' })).toBeTruthy()
   })
+
+  it('renders the row when only /ui/record serves the run envelope', async () => {
+    // Live stack: GET /api/records/:id 404s for tree-store records; /ui/record/:id serves both.
+    mocks.getRecord.mockRejectedValue(new Error('404 Not Found'))
+    mocks.getRecordWithUI.mockImplementation(async (id: string) =>
+      id === 'RUN-10'
+        ? { record: record('RUN-10', { plannedRunRef: { id: 'PLR-10' } }) }
+        : { record: plr('PLR-10', [{ id: 'PRT-a', label: 'Alpha' }]) },
+    )
+    render(<RunProtocolList runId="RUN-10" />)
+    const items = await screen.findAllByRole('listitem')
+    expect(labelText(items[0]!)).toBe('Alpha (lead)')
+    expect(mocks.getRecordWithUI).toHaveBeenCalledWith('RUN-10')
+    expect(mocks.getRecord).not.toHaveBeenCalledWith('RUN-10')
+  })
 })
