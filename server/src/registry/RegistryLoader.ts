@@ -38,12 +38,69 @@ export interface RegistryLoader<Spec extends { id: string }> {
   /** Look up a single entry by its `id`. */
   get(id: string): Spec | undefined;
   /**
-   * Look up a single entry by a platform alias.
-   * Searches `platform_aliases[].alias` (if the Spec has that field).
+   * Look up a single entry by a declared alias, by EXACT string equality.
+   * Searches `platform_aliases[].alias` and `legacy_labware_types[]` (both
+   * optional on the Spec). Returns `undefined` when nothing claims the key and
+   * THROWS when more than one entry claims it — the resolver refuses to guess.
    */
   getByAlias(alias: string): Spec | undefined;
   /** Discard the in-memory cache so the next `list()`/`get()` re-reads disk. */
   reload(): void;
+}
+
+// ---------------------------------------------------------------------------
+// Alias resolution (shared by both factories)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alias keys declared by a spec: `platform_aliases[].alias` plus
+ * `legacy_labware_types[]`. Both fields are optional, so they are read
+ * defensively rather than assumed present.
+ */
+function declaredAliasKeys(spec: unknown): string[] {
+  if (!spec || typeof spec !== 'object') return [];
+  const record = spec as Record<string, unknown>;
+  const keys: string[] = [];
+
+  const platformAliases = record.platform_aliases;
+  if (Array.isArray(platformAliases)) {
+    for (const entry of platformAliases) {
+      if (!entry || typeof entry !== 'object') continue;
+      const alias = (entry as Record<string, unknown>).alias;
+      if (typeof alias === 'string') keys.push(alias);
+    }
+  }
+
+  const legacyKeys = record.legacy_labware_types;
+  if (Array.isArray(legacyKeys)) {
+    for (const key of legacyKeys) {
+      if (typeof key === 'string') keys.push(key);
+    }
+  }
+
+  return keys;
+}
+
+/**
+ * Exact-match alias resolution over both declared key sources. Refuses
+ * ambiguity: if more than one entry claims the key, throw an error naming the
+ * alias and every competing entry id instead of returning the first hit.
+ */
+function resolveByAlias<Spec extends { id: string }>(
+  specs: Spec[],
+  alias: string,
+  kind: string,
+): Spec | undefined {
+  const matches = specs.filter((spec) =>
+    declaredAliasKeys(spec).some((key) => key === alias),
+  );
+  if (matches.length > 1) {
+    const ids = matches.map((spec) => spec.id).sort();
+    throw new Error(
+      `[registry:${kind}] ambiguous alias "${alias}" claimed by ${ids.length} entries: ${ids.join(', ')}`,
+    );
+  }
+  return matches[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -141,15 +198,7 @@ export function createAggregateRegistryLoader<Spec extends { id: string }>(
     list: () => ensureLoaded().slice(),
     get: (id: string) => ensureLoaded().find((s) => s.id === id),
     getByAlias: (alias: string) =>
-      ensureLoaded().find(
-        (s) =>
-          (s as Record<string, unknown>).platform_aliases &&
-          (s as Record<string, unknown>).platform_aliases !== undefined &&
-          (
-            (s as Record<string, unknown>)
-              .platform_aliases as Array<{ alias: string }>
-          ).some((a) => a.alias === alias),
-      ),
+      resolveByAlias(ensureLoaded(), alias, opts.kind),
     reload: () => {
       cache = null;
     },
@@ -210,15 +259,7 @@ export function createRegistryLoader<Spec extends { id: string }>(
     list: () => ensureLoaded().slice(),
     get: (id: string) => ensureLoaded().find((s) => s.id === id),
     getByAlias: (alias: string) =>
-      ensureLoaded().find(
-        (s) =>
-          (s as Record<string, unknown>).platform_aliases &&
-          (s as Record<string, unknown>).platform_aliases !== undefined &&
-          (
-            (s as Record<string, unknown>)
-              .platform_aliases as Array<{ alias: string }>
-          ).some((a) => a.alias === alias),
-      ),
+      resolveByAlias(ensureLoaded(), alias, opts.kind),
     reload: () => {
       cache = null;
     },

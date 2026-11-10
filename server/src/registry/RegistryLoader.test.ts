@@ -12,11 +12,17 @@ import { createRegistryLoader } from './RegistryLoader.js';
 interface TestSpec {
   id: string;
   name: string;
+  platform_aliases?: Array<{ platform: string; alias: string }>;
+  legacy_labware_types?: string[];
 }
 
 const testSchema = z.object({
   id: z.string(),
   name: z.string(),
+  platform_aliases: z
+    .array(z.object({ platform: z.string(), alias: z.string() }))
+    .optional(),
+  legacy_labware_types: z.array(z.string()).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -150,6 +156,56 @@ describe('RegistryLoader', () => {
   });
 
   // -- fileFilter -----------------------------------------------------------
+
+  // -- getByAlias: exact match across both declared key sources -------------
+
+  it('getByAlias throws a named ambiguity error when two entries claim the same alias', () => {
+    writeYamlFile(
+      tmpDir,
+      'first.yaml',
+      'id: shared_a\nname: A\nplatform_aliases:\n  - platform: generic\n    alias: shared_key\n',
+    );
+    writeYamlFile(
+      tmpDir,
+      'second.yaml',
+      'id: shared_b\nname: B\nplatform_aliases:\n  - platform: generic\n    alias: shared_key\n',
+    );
+
+    const loader = createRegistryLoader<TestSpec>({
+      kind: 'test',
+      directory: tmpDir,
+      schema: testSchema,
+    });
+
+    let caught: unknown;
+    try {
+      loader.getByAlias('shared_key');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toContain('shared_key');
+    expect(message).toContain('shared_a');
+    expect(message).toContain('shared_b');
+  });
+
+  it('getByAlias finds keys declared only in legacy_labware_types (exact match)', () => {
+    writeYamlFile(
+      tmpDir,
+      'legacy.yaml',
+      'id: legacy_entry\nname: Legacy\nlegacy_labware_types:\n  - old_plate_name\n',
+    );
+
+    const loader = createRegistryLoader<TestSpec>({
+      kind: 'test',
+      directory: tmpDir,
+      schema: testSchema,
+    });
+
+    expect(loader.getByAlias('old_plate_name')?.id).toBe('legacy_entry');
+    expect(loader.getByAlias('old_plate')).toBeUndefined();
+  });
 
   it('respects a custom fileFilter', () => {
     writeYamlFile(tmpDir, 'keep.yaml', 'id: keep\nname: Keep\n');

@@ -124,4 +124,9 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry).toBeDefined();
     expect(entry!.id).toBe('reservoir_25ml_single');
   });
+
+  it('getByAlias is exact-match: the family word "reservoir" does not resolve', () => {
+    const registry = getLabwareDefinitionRegistry();
+    expect(registry.getByAlias('reservoir')).toBeUndefined();
+  });
 });
