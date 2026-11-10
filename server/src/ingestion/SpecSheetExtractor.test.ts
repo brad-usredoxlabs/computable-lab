@@ -271,6 +271,45 @@ Display Name: Model A; Model B`,
 });
 
 /* ------------------------------------------------------------------ */
+/* Arm (f) — Table header rows must not produce label-as-value        */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — table header rows', () => {
+  it('does not propose label text as value from header-only pipe-separated line', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Quantity' },
+      ],
+    };
+
+    // A table header row followed by a data row — the header should be skipped
+    const doc = {
+      url: 'https://example.com/product',
+      text: 'Catalog Number | Quantity\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should use the header label text as a value
+    for (const p of result) {
+      expect(p.value).not.toBe('Catalog Number');
+      expect(p.value).not.toBe('Quantity');
+    }
+
+    // The data row should still produce valid proposals
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+
+    const packages = result.filter((p) => p.targetField === 'package_size');
+    expect(packages).toHaveLength(1);
+    expect(packages[0].value).toBe('100 mL');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Block record on fetch failure                                      */
 /* ------------------------------------------------------------------ */
 
