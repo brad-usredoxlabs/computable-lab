@@ -61,3 +61,6 @@ D3 proposals UI, D1 fixtures/records, server/*, any component/UI file, RunProtoc
 Re-run the browser gate on the served rev and re-check D2 (role surface mounts, steps + resource
 sections + bound labware visible). No YAML changed, so no lane-stack reload is required for this
 unit; the app bundle must be rebuilt/served before live verification.
+
+L2-PROTOCOL-LOCAL-BIND-1-u4 UNIT DONE bede5071f5e7ae585608b5d5499f9dec8ddb1ddb
+L2-PROTOCOL-LOCAL-BIND-1-u4 UNIT unit DONE bede5071f5e7ae585608b5d5499f9dec8ddb1ddb
