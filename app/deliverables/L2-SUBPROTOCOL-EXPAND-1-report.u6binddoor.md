@@ -167,3 +167,5 @@ Scanner BEFORE this unit, from the worktree root:
 $ python3 -c "import sys;sys.path.insert(0,'/home/brad/.hermes/cl/scripts');import cl_marker_scan as s;print(s.find_marker('.','L2-SUBPROTOCOL-EXPAND-1-u6binddoorpinfix1pw'))"
 ('missing', '')
 ```
+
+L2-SUBPROTOCOL-EXPAND-1-u6binddoorpinfix1pw UNIT u6binddoorpinfix1pw DONE 7ce108112de03539f5336cadc9d416e66e091e49
