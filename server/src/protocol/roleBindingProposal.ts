@@ -119,7 +119,8 @@ export async function proposeRoleBindings(
   const labwareBindingsByRole = new Map<string, string>();
   for (const entry of Array.isArray(bindings?.labware) ? (bindings.labware as unknown[]) : []) {
     const binding = asObject(entry);
-    const roleId = binding ? stringField(binding, 'roleId') : undefined;
+    if (!binding) continue;
+    const roleId = stringField(binding, 'roleId');
     if (!roleId) continue;
     const ref = asObject(binding.labwareInstanceRef);
     const refId = ref ? stringField(ref, 'id') : undefined;
@@ -130,7 +131,8 @@ export async function proposeRoleBindings(
   const materialBindingsByRole = new Map<string, string>();
   for (const entry of Array.isArray(bindings?.materials) ? (bindings.materials as unknown[]) : []) {
     const binding = asObject(entry);
-    const roleId = binding ? stringField(binding, 'roleId') : undefined;
+    if (!binding) continue;
+    const roleId = stringField(binding, 'roleId');
     if (!roleId) continue;
     const ref = asObject(binding.materialRef);
     const refId = ref ? stringField(ref, 'id') : undefined;
