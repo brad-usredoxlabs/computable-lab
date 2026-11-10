@@ -49,3 +49,5 @@ roleBindingProposal.ts:66 reads a camelCase payload.lotNumber for all kinds (no 
 96f48f87 fix(protocol): u2fixBdebt — material-lot lot read prefers supplier.vendor_lot
 
 L2-PROTOCOL-LOCAL-BIND-1 (L2-LOCALBIND-u2fixBdebt) UNIT u2fixBdebt DONE 9c16dad1fa298a00a11c3293a49990b9e59ef13b
+
+L2-LOCALBIND-u2fixBdebt-pw2 UNIT unit DONE 02b415a387177c28f080735a31a9a3e961948aae
