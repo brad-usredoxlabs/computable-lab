@@ -28,10 +28,6 @@ adding graceful handling for planned-run-kind refusals alongside 404 responses.
 - `app/src/shared/api/errors.ts` — isPlannedRunKindRefusal predicate
 - `app/src/shared/api/errors.plannedRunRefusal.test.ts` — 6 tests
 
-## Superseded Marker
-Previous line 27: `L2-SUBPROTOCOL-EXPAND-1-u6alert-pw UNIT unit DONE 4bdf6a1c`
-Wrong item token, wrong unit token, 8-hex sha, commit did not contain this report.
-
 ## Mutation Receipts (M1 — Panel Adoption)
 
 Edit: RoleBindingProposalsPanel.tsx:54, remove `|| isPlannedRunKindRefusal(err)`
@@ -69,4 +65,4 @@ Post-revert runs:
   ✓ src/run/RoleBindingProposalsPanel.test.tsx  (6 tests) 101ms
   git status --short: ?? app/node_modules
 
-L2-SUBPROTOCOL-EXPAND-1 UNIT u6alert DONE 922a709517fc99c759d899ff0853d191a8107d1d
+L2-SUBPROTOCOL-EXPAND-1 UNIT u6alert DONE 06a56df7be024f345167e6f7ef239b5d88ee37a6
