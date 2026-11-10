@@ -47,7 +47,7 @@ The test file contains 3 tests that form the mutation control set (M1/M2/M3):
 |-----|------|------|------------------------|
 | M1  | `client.roleBindingProposals.test.ts` | 57 | Full-string URL equality: any drift in prefix or suffix causes `toBe('/api/runs/run-1/role-binding-proposals')` to fail |
 | M2  | `client.roleBindingProposals.test.ts` | 70 | URL encoding: changing `encodeURIComponent(runId)` to identity or removing it breaks the `run%2F..%2F1` expectation |
-| M3  | `client.roleBindingProposals.test.ts` | 73-87 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
+| M3  | `client.roleBindingProposals.test.ts` | 73-88 | Error surface: removing the error-propagation path or changing the status code check (404) makes the `ApiError` assertion fail |
 
 Adversarial review (advc c1, `reviews/L2-VACPINS-uD2bpin-advc-c1-l2t0832.md`)
 confirmed: 3 tests GREEN, 3 mutation controls M1/M2/M3 RED. Verdict: **ACCEPT
