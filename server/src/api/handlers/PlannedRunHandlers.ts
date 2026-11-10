@@ -544,7 +544,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         reply.status(400);
         return { error: 'NO_PROTOCOL_ATTACHED', message: 'Run has no attached protocol' };
       }
-      const protocolId = protoIds[0];
+      const protocolId = protoIds[0]!;
       const protocolRecord = await ctx.store.get(protocolId);
       if (!protocolRecord) {
         reply.status(404);
@@ -563,7 +563,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         if (planResult.code === 'MALFORMED_PROTOCOL') {
           return { error: planResult.code, message: planResult.message };
         }
-        return { error: planResult.code, roleId: planResult.roleId, stepId: planResult.stepId };
+        return { error: planResult.code, message: `Plan build failed: ${planResult.roleId} at step ${planResult.stepId}` };
       }
 
       // (d) Resolve allowedEventTypes from schema registry (no hand-coded verb list)
@@ -595,7 +595,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       }
 
       // (e) Project into event-graph document
-      const graphId = `EG-${randomUUID()}`;
+      const graphId = `EVG-${randomUUID()}`;
       const docResult = toLocalPlanEventGraphDocument({
         id: graphId,
         events: planResult.events,
@@ -604,7 +604,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       if (!docResult.ok) {
         reply.status(409);
         return {
-          error: docResult.code, eventType: docResult.eventType, stepId: docResult.stepId,
+          error: docResult.code, message: `Unsupported event type '${docResult.eventType}' at step ${docResult.stepId}`,
         };
       }
 
@@ -629,7 +629,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       if (!persistResult.ok) {
         if (persistResult.code === 'UNSUPPORTED_EVENT_TYPE') {
           reply.status(409);
-          return { error: persistResult.code, eventType: persistResult.eventType, stepId: persistResult.stepId };
+          return { error: persistResult.code, message: `Unsupported event type '${persistResult.eventType}' at step ${persistResult.stepId}` };
         }
         reply.status(500);
         return { error: persistResult.code, message: persistResult.error };
