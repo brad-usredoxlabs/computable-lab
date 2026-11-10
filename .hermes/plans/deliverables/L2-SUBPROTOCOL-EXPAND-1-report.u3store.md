@@ -22,4 +22,4 @@ Implemented `persistLocalPlanEventGraph()` — the store persistence layer that 
 ## Next Actions
 - u4 (NO_EXPANDER refusal leg) — separate brief
 
-L2-SUBPROTOCOL-EXPAND-1-u3store UNIT unit DONE 2388c80ac67e1f0819df0984c85a5c931ea4c0cb
+L2-SUBPROTOCOL-EXPAND-1-u3store UNIT unit DONE d486d70e9f79af93879b59611c5ebdce3c9990f1
