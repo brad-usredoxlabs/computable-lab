@@ -193,7 +193,7 @@ export function extractProposals(
   // its column positions for each mapping. Data rows (same arity, not
   // punctuation-only) use the most recent header's layout. A new header
   // replaces the previous layout (last header wins, no cross-table merge).
-  const punctOnlyRe = /^[\s\-\:\|]*$/;
+  const punctOnlyRe = /^[\s\-\u2013\u2014\u00b7_:\|]*$/;
   let lastHeader: { positions: Map<string, number>; count: number } | null = null;
 
   for (const mapping of fieldMap.fieldMappings) {
