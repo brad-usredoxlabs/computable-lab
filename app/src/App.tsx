@@ -78,6 +78,8 @@ const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
 const LabMaterialNewPage = lazy(async () => import('./collections/LabMaterialNewPage').then((m) => ({ default: m.LabMaterialNewPage })))
+// u6binddoor: role binding surface — mounts RunEditorRouter on /runs/:runId/bindings
+const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((m) => ({ default: m.RunEditorRouter })))
 // QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
 // now imported by RegistryHostPage (the shell host), not routed directly.
 
@@ -191,6 +193,10 @@ export function App() {
               <Route path="/event-editor/fixit" element={<DeferredRoute><Slot name="event-editor.fix-it-route" /></DeferredRoute>} />
               <Route path="/event-editor/:eventGraphId" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
+              {/* u6binddoor: role binding surface — mounts RunEditorRouter on
+                  /runs/:runId/bindings (BindingModeEditor for planned-run,
+                  LabwareEventEditor as fallback). */}
+              <Route path="/runs/:runId/bindings" element={<DeferredRoute><RunEditorRouter /></DeferredRoute>} />
 
               {/* Phase 11: legacy global endpoints redirect into the workspace's
                   mode dispatcher. Each preserves its query string so deep-links
