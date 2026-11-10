@@ -222,4 +222,4 @@ pre-fix owned-file `TS2345` at compile.test.tsx:131 is gone.
 ### Commits
 - 08841eeb — u6binddoor-fix3b code (both mock bodies)
 
-L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoor-fix3b DONE PENDING_SHA
+L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoor-fix3b DONE 0d9cf642b483b99e4b03444b799d9a740f53df1b
