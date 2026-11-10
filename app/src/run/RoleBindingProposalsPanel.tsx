@@ -98,6 +98,10 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                       ))}
                     </ul>
                   </div>
+                ) : role.state === 'bound' ? (
+                  <span style={metaStyle}>
+                    {role.bound ? `${role.bound.label}${role.bound.lotNumber ? ` · lot ${role.bound.lotNumber}` : ''}` : 'bound'}
+                  </span>
                 ) : (
                   <span style={metaStyle}>{role.reason ?? 'no candidate'}</span>
                 )}

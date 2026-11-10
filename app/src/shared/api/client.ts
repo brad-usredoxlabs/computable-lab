@@ -2159,8 +2159,9 @@ export interface BindingCandidate {
 export interface RoleProposal {
   roleId: string
   roleKind: 'labware' | 'material'
-  state: 'proposed' | 'ambiguous' | 'unbound'
+  state: 'proposed' | 'ambiguous' | 'unbound' | 'bound'
   candidates: BindingCandidate[]
+  bound?: BindingCandidate
   reason?: string
 }
 
