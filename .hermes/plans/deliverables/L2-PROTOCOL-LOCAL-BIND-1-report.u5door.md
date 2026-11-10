@@ -97,3 +97,6 @@ to run vitest/tsc and both untracked links were removed before the final
 Independent review + browser review own acceptance. A run with an attached
 protocol and declared roles exercises the panel; no YAML reload needed (the
 panel is not schema-driven).
+
+L2-PROTOCOL-LOCAL-BIND-1 UNIT u5door DONE ce327084f96d525937107448e97cf788b6406471
+L2-PROTOCOL-LOCAL-BIND-1-u5door UNIT unit DONE ce327084f96d525937107448e97cf788b6406471
