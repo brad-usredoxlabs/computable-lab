@@ -319,9 +319,17 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
       throw new Error('Vendor, catalog number, and product name are required')
     }
     const materialRef = await ensureMaterialRecord()
-    const resolvedVendorProductId = vendorProductId || generateVendorProductId(vendor, catalogNumber)
+    // Idempotent on (vendor, catalog_number): reuse the existing record before
+    // minting a new random id, so re-adding the same product updates it.
+    const matchedRecord = vendorProductId
+      ? null
+      : await apiClient.findVendorProductByCatalog(vendor, catalogNumber).catch(() => null)
+    const resolvedVendorProductId = vendorProductId
+      || matchedRecord?.recordId
+      || generateVendorProductId(vendor, catalogNumber)
     if (!vendorProductId) setVendorProductId(resolvedVendorProductId)
-    const existingRecord = await apiClient.getRecord(resolvedVendorProductId).catch(() => null)
+    const existingRecord = matchedRecord
+      || await apiClient.getRecord(resolvedVendorProductId).catch(() => null)
     const existingPayload = existingRecord?.payload as Record<string, unknown> | undefined
     const payload = buildVendorProductPayload(resolvedVendorProductId, materialRef, existingPayload)
     if (existingRecord) {

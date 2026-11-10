@@ -2310,6 +2310,28 @@ export const apiClient = {
   },
 
   /**
+   * Find an existing vendor-product record matching vendor + catalog number.
+   * Vendor comparison is case-insensitive and trimmed; catalog number must
+   * match exactly after trimming. Used to keep the vendor-product write
+   * idempotent per (vendor, catalog_number) instead of minting a new id.
+   */
+  async findVendorProductByCatalog(
+    vendor: string,
+    catalogNumber: string
+  ): Promise<RecordEnvelope | null> {
+    const targetVendor = vendor.trim().toLowerCase()
+    const targetCatalog = catalogNumber.trim()
+    if (!targetVendor || !targetCatalog) return null
+    const { records } = await this.listRecordsByKind('vendor-product', 200)
+    return records.find((record) => {
+      const payload = record.payload as Record<string, unknown> | undefined
+      const recordVendor = typeof payload?.vendor === 'string' ? payload.vendor.trim().toLowerCase() : ''
+      const recordCatalog = typeof payload?.catalog_number === 'string' ? payload.catalog_number.trim() : ''
+      return recordVendor === targetVendor && recordCatalog === targetCatalog
+    }) ?? null
+  },
+
+  /**
    * List claim records with optional status filtering.
    * Calls GET /claims with optional status, limit, offset query params.
    */
