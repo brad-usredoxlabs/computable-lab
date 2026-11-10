@@ -35,6 +35,9 @@ vi.mock('../shared/api/client', () => ({
     getRecordWithUI: mocks.getRecordWithUI,
     buildPlanGraph: mocks.buildPlanGraph,
   },
+}))
+
+vi.mock('../shared/api/errors', () => ({
   ApiError: mocks.ApiError,
 }))
 
