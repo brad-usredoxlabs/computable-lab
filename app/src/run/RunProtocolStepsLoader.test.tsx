@@ -60,9 +60,10 @@ function uiRecord(id: string, payload: Record<string, unknown>): Record<string, 
 describe('RunProtocolStepsLoader', () => {
   it('publishes the run protocol steps to the shared context (run → PLR → protocol)', async () => {
     // run -> plannedRunRef -> protocol
-    mocks.getRecord
-      .mockResolvedValueOnce(seedRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-1', { protocolRef: { id: 'PRT-cellrox', kind: 'protocol' } }))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', { protocolRef: { id: 'PRT-cellrox', kind: 'protocol' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-cellrox', stepsProtocolPayload))
     const origFetch = globalThis.fetch
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -92,10 +93,11 @@ describe('RunProtocolStepsLoader', () => {
   })
 
   it('follows local-protocol inherits_from to the universal steps', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(seedRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-1', { protocolRef: { id: 'LPR-9', kind: 'local-protocol' } }))
-      .mockResolvedValueOnce(seedRecord('LPR-9', { kind: 'local-protocol', inherits_from: { id: 'PRT-universal' } }))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', { protocolRef: { id: 'LPR-9', kind: 'local-protocol' } }))
+      .mockResolvedValueOnce(uiRecord('LPR-9', { kind: 'local-protocol', inherits_from: { id: 'PRT-universal' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-universal', { kind: 'protocol', steps: [] }))
     const origFetch = globalThis.fetch
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -142,9 +144,9 @@ describe('RunProtocolStepsLoader', () => {
   }
 
   it('publishes roleId → bound instance from the PLR bindings (geometryRef rides, unbound roles absent)', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(seedRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-1', {
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', {
         protocolRef: { id: 'PRT-zymo', kind: 'protocol' },
         bindings: {
           labware: [
@@ -158,7 +160,7 @@ describe('RunProtocolStepsLoader', () => {
           ],
         },
       }))
-      .mockResolvedValueOnce(seedRecord('PRT-zymo', stepsProtocolPayload))
+      .mockResolvedValueOnce(uiRecord('PRT-zymo', stepsProtocolPayload))
     const fetchMock = mockStepsEndpoint('/api/protocols/PRT-zymo/steps')
 
     let readBindings: BindingMap = { stale: 'sentinel' as unknown as BindingMap[string] }
@@ -182,10 +184,10 @@ describe('RunProtocolStepsLoader', () => {
   })
 
   it('publishes an empty map when the run binds nothing (PLR without bindings)', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(seedRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-1', { protocolRef: { id: 'PRT-zymo', kind: 'protocol' } }))
-      .mockResolvedValueOnce(seedRecord('PRT-zymo', stepsProtocolPayload))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', { protocolRef: { id: 'PRT-zymo', kind: 'protocol' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-zymo', stepsProtocolPayload))
     const fetchMock = mockStepsEndpoint('/api/protocols/PRT-zymo/steps')
 
     let readBindings: BindingMap | null = null
@@ -204,9 +206,9 @@ describe('RunProtocolStepsLoader', () => {
   })
 
   it('keeps two roles bound to DIFFERENT instances of the same design distinguishable', async () => {
-    mocks.getRecord
-      .mockResolvedValueOnce(seedRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-1', {
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', {
         protocolRef: { id: 'PRT-zymo', kind: 'protocol' },
         bindings: {
           labware: [
@@ -216,7 +218,7 @@ describe('RunProtocolStepsLoader', () => {
           ],
         },
       }))
-      .mockResolvedValueOnce(seedRecord('PRT-zymo', stepsProtocolPayload))
+      .mockResolvedValueOnce(uiRecord('PRT-zymo', stepsProtocolPayload))
     const fetchMock = mockStepsEndpoint('/api/protocols/PRT-zymo/steps')
 
     let readBindings: BindingMap = {}
@@ -238,18 +240,18 @@ describe('RunProtocolStepsLoader', () => {
 
   it('clears stale bindings when runId switches to a run whose PLR binds nothing', async () => {
     // Run A binds deep-well-block; Run B's PLR has no bindings at all.
-    mocks.getRecord
+    mocks.getRecordWithUI
       // RUN-A chain
-      .mockResolvedValueOnce(seedRecord('RUN-A', { plannedRunRef: { id: 'PLR-A' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-A', {
+      .mockResolvedValueOnce(uiRecord('RUN-A', { plannedRunRef: { id: 'PLR-A' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-A', {
         protocolRef: { id: 'PRT-zymo', kind: 'protocol' },
         bindings: { labware: [{ roleId: 'deep-well-block', labwareInstanceRef: { kind: 'record', type: 'labware-instance', id: 'LABI-96A' } }] },
       }))
-      .mockResolvedValueOnce(seedRecord('PRT-zymo', stepsProtocolPayload))
+      .mockResolvedValueOnce(uiRecord('PRT-zymo', stepsProtocolPayload))
       // RUN-B chain
-      .mockResolvedValueOnce(seedRecord('RUN-B', { plannedRunRef: { id: 'PLR-B' } }))
-      .mockResolvedValueOnce(seedRecord('PLR-B', { protocolRef: { id: 'PRT-zymo', kind: 'protocol' } }))
-      .mockResolvedValueOnce(seedRecord('PRT-zymo', stepsProtocolPayload))
+      .mockResolvedValueOnce(uiRecord('RUN-B', { plannedRunRef: { id: 'PLR-B' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-B', { protocolRef: { id: 'PRT-zymo', kind: 'protocol' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-zymo', stepsProtocolPayload))
     const fetchMock = mockStepsEndpoint('/api/protocols/PRT-zymo/steps')
 
     let readBindings: BindingMap = {}
