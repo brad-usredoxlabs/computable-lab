@@ -27,6 +27,7 @@ import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
+import { RoleBindingProposalsPanel } from './RoleBindingProposalsPanel'
 import { RunProtocolList } from './RunProtocolList'
 import { GcRunSheetSection } from './gc/GcRunSheetSection'
 import { apiClient } from '../shared/api/client'
@@ -162,6 +163,7 @@ export function RunWorkspacePage() {
   return (
     <ProtocolSelectionProvider>
       <RunProtocolStepsLoader runId={runId} />
+      <RoleBindingProposalsPanel runId={runId} />
       <WorkspaceProvider studyId={resolvedStudyId}>
         <EventEditorProvider
           runId={runId}

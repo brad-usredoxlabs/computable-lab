@@ -2113,6 +2113,34 @@ export interface AccessPolicyResponse {
   inherited: boolean
 }
 
+// ---- Role-binding proposals (read-only projection; GET /runs/:id/role-binding-proposals) ----
+
+export interface BindingCandidate {
+  recordId: string
+  recordKind: string
+  label: string
+  lotNumber?: string
+}
+
+export interface RoleProposal {
+  roleId: string
+  roleKind: 'labware' | 'material'
+  state: 'proposed' | 'ambiguous' | 'unbound'
+  candidates: BindingCandidate[]
+  reason?: string
+}
+
+/** `clarificationRequests` is an OPTIONAL add-on: absent until that leg publishes cards.
+ *  Wire shape: a TOP-LEVEL sibling of `protocols` (server spreads it onto the
+ *  { protocols: [...] } projection), never nested per protocol. */
+export interface RoleBindingProposalsResponse {
+  protocols: Array<{
+    protocolId: string
+    roles: RoleProposal[]
+  }>
+  clarificationRequests?: Array<{ roleId?: string; prompt?: string }>
+}
+
 export const apiClient = {
   // ---- Identity / groups / sharing ----
   async getMe(): Promise<MeResponse> {
@@ -5535,6 +5563,17 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(bindings),
     })
+  },
+
+  /**
+   * Read-only role-binding proposals for a planned-run: one entry per declared
+   * role with its candidate(s). Never writes — a single candidate is PROPOSED,
+   * not bound. 404 when the run is absent or has no attached protocol.
+   */
+  async getRoleBindingProposals(runId: string): Promise<RoleBindingProposalsResponse> {
+    return request<RoleBindingProposalsResponse>(
+      `/runs/${encodeURIComponent(runId)}/role-binding-proposals`,
+    )
   },
 
   // === Sample Map API ===
