@@ -51,13 +51,29 @@ export interface SpecSheetExtractBlocked {
   };
 }
 
+export interface SpecSheetExtractNoProposals {
+  configured: true;
+  proposals: [];
+  noProposals: {
+    url: string;
+    reason: SpecSheetNoProposalReason;
+  };
+}
+
+export type SpecSheetNoProposalReason = 'empty_document' | 'no_field_match';
+
 export type SpecSheetExtractResult =
   | SpecSheetExtractSuccess
   | SpecSheetExtractNotConfigured
-  | SpecSheetExtractBlocked;
+  | SpecSheetExtractBlocked
+  | SpecSheetExtractNoProposals;
 
 /** Server-authored constant for fetch-blocked reason. */
 export const EXA_FETCH_BLOCKED = 'exa_fetch_blocked';
+
+/** Server-authored reasons for zero-proposal outcomes. */
+export const EXA_EMPTY_DOCUMENT = 'empty_document';
+export const EXA_NO_FIELD_MATCH = 'no_field_match';
 
 // ---------------------------------------------------------------------------
 // Transform dispatch table — declarative, keyed by YAML transform string
@@ -171,9 +187,20 @@ export async function extractFromUrl(
     const results = (response as { results?: Array<{ text?: string }> })?.results;
     const text = Array.isArray(results) && results[0]?.text ? results[0].text : '';
 
+    const proposals = extractProposals(fieldMap, { url, text });
+    if (proposals.length === 0) {
+      return {
+        configured: true,
+        proposals: [],
+        noProposals: {
+          url,
+          reason: text.length === 0 ? EXA_EMPTY_DOCUMENT : EXA_NO_FIELD_MATCH,
+        },
+      };
+    }
     return {
       configured: true,
-      proposals: extractProposals(fieldMap, { url, text }),
+      proposals,
     };
   } catch (_err) {
     // Typed block record on fetch failure — never synthesise a value

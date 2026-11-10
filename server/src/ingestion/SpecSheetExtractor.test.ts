@@ -3,7 +3,8 @@
  * L2-SPEC-SHEET-INGEST-1 unit 2 — SpecSheetExtractor tests.
  *
  * Tests the extraction engine: pure extractProposals, typed not-configured
- * degradation, fetch-blocked records, and loud throws for unmapped kinds.
+ * degradation, fetch-blocked records, loud throws for unmapped kinds,
+ * and typed no-proposals outcomes when zero fields match.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -137,7 +138,7 @@ describe('extractFromUrl — threads the caller app config to resolveExaConfig',
     const exaMod = await import('../integrations/exa.js');
     const spy = vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue(null);
     const cfg = {
-      integrations: { exa: { apiKey: 'test-key', enabled: true } },
+      integrations: { exa: { apiKey: 'mock-key', enabled: true } },
     } as unknown as Parameters<typeof extractFromUrl>[2];
 
     const result = await extractFromUrl('vendor-product', 'https://example.com/foo', cfg);
@@ -183,5 +184,67 @@ describe('extractFromUrl — fetch-blocked', () => {
     expect(result.blocked.url).toBe('https://example.com/foo');
     expect(result.blocked.reason).toBe(EXA_FETCH_BLOCKED);
     expect(result.proposals).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* No-proposals arm — zero matches after successful fetch             */
+/* ------------------------------------------------------------------ */
+
+describe('extractFromUrl — zero proposals returns typed no-proposals', () => {
+  let exaMod: typeof import('../integrations/exa.js');
+
+  beforeEach(async () => {
+    exaMod = await import('../integrations/exa.js');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns noProposals with reason no_field_match when text has no matching Key:Value lines', async () => {
+    vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.exa.ai',
+      defaultSearchType: 'auto',
+      defaultContentMode: 'highlights',
+      defaultMaxCharacters: 4000,
+      timeoutMs: 20000,
+    });
+    vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({
+      results: [{
+        text: 'Polypropylene reagent reservoir. Single well format, sterile, individually wrapped. Designed for high-throughput applications with reliable liquid delivery.',
+      }],
+    });
+
+    const result = await extractFromUrl('labware', 'https://example.com/reservoir-abc');
+
+    expect(result.configured).toBe(true);
+    expect(result.proposals).toEqual([]);
+    expect((result as any).noProposals).toBeDefined();
+    expect((result as any).noProposals.url).toBe('https://example.com/reservoir-abc');
+    expect((result as any).noProposals.reason).toBe('no_field_match');
+  });
+
+  it('returns noProposals with reason empty_document when fetched text is empty', async () => {
+    vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.exa.ai',
+      defaultSearchType: 'auto',
+      defaultContentMode: 'highlights',
+      defaultMaxCharacters: 4000,
+      timeoutMs: 20000,
+    });
+    vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({
+      results: [{ text: '' }],
+    });
+
+    const result = await extractFromUrl('labware', 'https://example.com/empty-page');
+
+    expect(result.configured).toBe(true);
+    expect(result.proposals).toEqual([]);
+    expect((result as any).noProposals).toBeDefined();
+    expect((result as any).noProposals.url).toBe('https://example.com/empty-page');
+    expect((result as any).noProposals.reason).toBe('empty_document');
   });
 });
