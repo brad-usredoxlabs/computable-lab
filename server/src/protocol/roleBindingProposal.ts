@@ -1,8 +1,10 @@
 /**
  * Role binding proposals — the READ half of the universal->local binding seam.
  * Derives each declared role's candidates from existing records: no writes,
- * no guesses, no fuzzy text matching. Selectors are ONLY the declarations:
- *  - expectedLabwareKinds[] -> `labware` records by `labwareType`/`definitionRef.id`
+ * no guesses, no fuzzy text matching. Role declarations live on the UNIVERSAL
+ * protocol a local-protocol inherits from (`inherits_from.id`). Selectors are
+ * ONLY the declarations:
+ *  - expectedLabwareKinds[] -> `labware` records by recordId
  *  - allowedMaterialIds[]   -> `material` records by recordId, plus `vendor-product`
  *    records whose `material_ref.id` matches
  */
@@ -82,6 +84,29 @@ function stateOf(candidates: BindingCandidate[]): RoleProposal['state'] {
   return candidates.length === 0 ? 'unbound' : candidates.length === 1 ? 'proposed' : 'ambiguous';
 }
 
+/**
+ * Declared roles of a run's local-protocol: the declarations live on the
+ * universal protocol reached via `inherits_from.id` (see
+ * RunPlanBindingPasses: resolve inherits_from, then load the canonical
+ * protocol). A local-protocol that declares its own `roles` wins defensively.
+ * No declarations anywhere -> no roles: never invent one.
+ */
+async function declaredRolesOf(
+  store: ProposeRoleBindingsDeps['store'],
+  protocolId: string,
+): Promise<Obj> {
+  const localPayload = asObject((await store.get(protocolId))?.payload) ?? {};
+  const ownRoles = asObject(localPayload.roles);
+  if (ownRoles) return ownRoles;
+
+  const inheritsFrom = asObject(localPayload.inherits_from);
+  const universalId = inheritsFrom ? stringField(inheritsFrom, 'id') : undefined;
+  if (!universalId) return {};
+
+  const universalPayload = asObject((await store.get(universalId))?.payload) ?? {};
+  return asObject(universalPayload.roles) ?? {};
+}
+
 export async function proposeRoleBindings(
   deps: ProposeRoleBindingsDeps,
 ): Promise<RoleBindingProposals> {
@@ -101,9 +126,7 @@ export async function proposeRoleBindings(
   const protocols: RoleBindingProposals['protocols'] = [];
 
   for (const protocolId of protocolIdsOf(runPayload)) {
-    const protocolRecord = await store.get(protocolId);
-    const protocolPayload = asObject(protocolRecord?.payload) ?? {};
-    const rolesObj = asObject(protocolPayload.roles) ?? {};
+    const rolesObj = await declaredRolesOf(store, protocolId);
     const roles: RoleProposal[] = [];
 
     for (const entry of Array.isArray(rolesObj.labwareRoles) ? rolesObj.labwareRoles : []) {
@@ -121,11 +144,7 @@ export async function proposeRoleBindings(
       const declared = new Set(kinds);
       const candidates: BindingCandidate[] = [];
       for (const envelope of await listKind('labware')) {
-        const payload = asObject(envelope.payload) ?? {};
-        const definitionRef = asObject(payload.definitionRef);
-        const type = stringField(payload, 'labwareType');
-        const defId = definitionRef ? stringField(definitionRef, 'id') : undefined;
-        if ((type && declared.has(type)) || (defId && declared.has(defId))) {
+        if (declared.has(envelope.recordId)) {
           candidates.push(candidateOf(envelope, 'labware'));
         }
       }
