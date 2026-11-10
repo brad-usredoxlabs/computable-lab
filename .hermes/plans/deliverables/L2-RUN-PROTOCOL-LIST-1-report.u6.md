@@ -96,4 +96,5 @@ suites; it is untracked and was untracked at start.
 - Reviewer checks: POST/DELETE target the PLR id; empty run shows Add; list
   state from server refs; no hardcoded protocol ids; failed mutation keeps list.
 
+L2-RUN-PROTOCOL-LIST-1 UNIT u6 DONE 728a4b48223a7804a22c0a37f984febe9ece3899
 L2-RUN-PROTOCOL-LIST-1-u6 UNIT unit DONE 728a4b48223a7804a22c0a37f984febe9ece3899
