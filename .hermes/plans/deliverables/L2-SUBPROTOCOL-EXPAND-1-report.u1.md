@@ -123,7 +123,7 @@ EXIT=0
 
 ## Files (u1fix)
 - server/src/protocol/localPlanGraph.ts (77 insertions / 26 deletions vs 86a39318)
-- server/src/protocol/localPlanGraph.test.ts (+40/-7 lines; 8 tests)
+- server/src/protocol/localPlanGraph.test.ts (+57/-5 lines; 8 tests)
 - this report. No schema/roleBindingWrite change; no other file touched.
 The lane dependency symlink used for verification was removed before exit so the
 tree carries no untracked dependency entry; recreate it to re-run:
