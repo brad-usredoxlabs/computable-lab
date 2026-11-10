@@ -124,3 +124,12 @@ all three write spies have zero calls; the pure module has no store parameter at
 Reviewer: check the card shape against `AgentClarificationRequest` and confirm the
 absent-key rule. Follow-on unit: render these `clarificationRequests` on the run surface
 picker (app/**) and gate the bind write on the answer.
+
+## Exit
+
+Commits: `78869123` (RED test) then `b82e0b5cf61d70d5354f95c3498f044f1728c318` (unit:
+emitter + wiring + report body). The marker below cites the unit commit; the commit that
+carries this final marker line is a report-only follow-up.
+
+L2-PROTOCOL-LOCAL-BIND-1-u3clarify UNIT unit DONE b82e0b5cf61d70d5354f95c3498f044f1728c318
+
