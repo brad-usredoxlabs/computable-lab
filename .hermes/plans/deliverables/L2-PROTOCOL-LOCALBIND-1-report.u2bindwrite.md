@@ -113,4 +113,4 @@ ac0ddb72 test(u2bindwrite): RED - declared-role and target-kind binding contract
 - advc review of the 11c6bd5b..HEAD delta, then browser gate on the branch
   (later legs: clarify-on-ambiguity, run-surface preselect render).
 
-L2-PROTOCOL-LOCAL-BIND-1 UNIT 2 DONE PENDING_REPORT_COMMIT_SHA
+L2-PROTOCOL-LOCAL-BIND-1 UNIT 2 DONE 55c0559f56b8e616d3eb5e66cbd9ffe31ef56c0d
