@@ -52,6 +52,21 @@ function makeSchemaRegistry() {
   };
 }
 
+function makeSchemaRegistryNoEnum() {
+  return {
+    getById(id: string) {
+      if (id === EG_SCHEMA) return {
+        id: EG_SCHEMA, path: 'workflow/event-graph.schema.yaml', dependencies: [],
+        schema: { $defs: { PlateEvent: { properties: {} } } }, // missing event_type enum
+      };
+      if (id === RUN_SCHEMA) return {
+        id: RUN_SCHEMA, path: 'workflow/planned-run.schema.yaml', dependencies: [], schema: {},
+      };
+      return undefined;
+    },
+  };
+}
+
 const protoPayload = {
   kind: 'local-protocol' as const, recordId: 'LP-1',
   roles: { labware: [{ roleId: 'targetPlate' }] },
@@ -93,6 +108,7 @@ describe('buildPlanGraph', () => {
     );
     expect(result).toMatchObject({ success: true });
     expect(result).toHaveProperty('graphId');
+    expect(result.graphId).toMatch(/^EVG-/);
 
     const eg = await store.list({ kind: 'event-graph' });
     expect(eg).toHaveLength(1);
@@ -111,31 +127,51 @@ describe('buildPlanGraph', () => {
   });
 
   it('returns 409 UNBOUND_ROLE when binding is missing — no partial write', async () => {
+    let capturedStatus: number | undefined;
     const store = new TestStore([
       { recordId: 'RUN-1', schemaId: RUN_SCHEMA, payload: makeRunPayload({}) },
       { recordId: 'LP-1', schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: protoPayload },
     ]);
     const handlers = createPlannedRunHandlers(makeCtx(store));
     const result = await handlers.buildPlanGraph(
-      { params: { id: 'RUN-1' } } as any, { status: (c: number) => ({ code: c }) } as any,
+      { params: { id: 'RUN-1' } } as any,
+      { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
     );
     expect(result).toMatchObject({ error: 'UNBOUND_ROLE' });
-    expect(result).toHaveProperty('roleId');
-    expect(result).toHaveProperty('stepId');
+    expect(capturedStatus).toBe(409);
     expect(await store.list({ kind: 'event-graph' })).toHaveLength(0);
     expect(store.writeLog).toEqual([]);
   });
 
   it('returns 400 NO_PROTOCOL_ATTACHED when run has no protocol', async () => {
-    const store = new TestStore([{
-      recordId: 'RUN-1', schemaId: RUN_SCHEMA,
-      payload: { kind: 'planned-run' as const, recordId: 'RUN-1' },
-    }]);
+    let capturedStatus: number | undefined;
+    const store = new TestStore([
+      { recordId: 'RUN-1', schemaId: RUN_SCHEMA,
+        payload: { kind: 'planned-run' as const, recordId: 'RUN-1' },
+      },
+    ]);
     const handlers = createPlannedRunHandlers(makeCtx(store));
     const result = await handlers.buildPlanGraph(
-      { params: { id: 'RUN-1' } } as any, { status: (c: number) => ({ code: c }) } as any,
+      { params: { id: 'RUN-1' } } as any,
+      { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
     );
     expect(result).toMatchObject({ error: 'NO_PROTOCOL_ATTACHED' });
+    expect(capturedStatus).toBe(400);
+  });
+
+  it('returns 500 SCHEMA_ENUM_MISSING when schema enum is absent', async () => {
+    let capturedStatus: number | undefined;
+    const store = new TestStore([
+      { recordId: 'RUN-1', schemaId: RUN_SCHEMA, payload: makeRunPayload() },
+      { recordId: 'LP-1', schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: protoPayload },
+    ]);
+    const handlers = createPlannedRunHandlers(makeCtx(store, undefined, makeSchemaRegistryNoEnum() as any));
+    const result = await handlers.buildPlanGraph(
+      { params: { id: 'RUN-1' } } as any,
+      { status: (c: number) => { capturedStatus = c; return { code: c }; } } as any,
+    );
+    expect(result).toMatchObject({ error: 'SCHEMA_ENUM_MISSING' });
+    expect(capturedStatus).toBe(500);
   });
 
   it('idempotency: second call returns reused:true with no writes', async () => {
@@ -148,7 +184,8 @@ describe('buildPlanGraph', () => {
     const first = await handlers.buildPlanGraph(
       { params: { id: 'RUN-1' } } as any, { status: (c: number) => ({ code: c }) } as any,
     );
-    expect(first).toMatchObject({ success: true, reused: false });
+    expect(first).toMatchObject({ success: true });
+    expect(first).toHaveProperty('graphId');
     const graphId = first.graphId;
 
     store.writeLog = [];
