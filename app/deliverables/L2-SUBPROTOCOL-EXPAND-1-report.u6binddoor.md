@@ -72,7 +72,7 @@ advc c2 demanded the bindings door read run/PLR records through `getRecordWithUI
 → Test Files 2 passed (2), Tests 7 passed (7)
 
 ### Coverage Gap
-No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at baseline in this tree, so D-1 remains unpinned.
+No test pin exists for the RunWorkspacePage toolbar gate; the gc-section test is RED at HEAD because this delta's own RunWorkspacePage.tsx calls apiClient.getRecordWithUI but the mock in src/run/RunWorkspacePage.surface.test.tsx only defined getRecord, so the suite fails with "apiClient.getRecordWithUI is not a function". That suite is PROHIBITED for this unit — the D-1 gate was pinned in u6binddoorsibfix1 instead.
 
 L2-SUBPROTOCOL-EXPAND-1-u6binddoorfix3pw UNIT u6binddoorfix3pw DONE edb76724b4b783b0500c320ddbcebae184f0011f
 
@@ -104,3 +104,54 @@ Test Files  1 passed (1)
 - efe4088a — surface suite mock fix
 
 L2-SUBPROTOCOL-EXPAND-1 UNIT u6binddoorsibfix1 DONE e6e3b2ee003a70966422a89f280995519fdd2470
+
+## pinfix1
+
+### Summary
+The fix3 pin mounted `plannedRunId="PLR-1"`, which the mock did not recognise, so it drove a
+`record: null` fallback — a shape `RecordWithUIResponse` cannot legally carry. The pin passed
+only because its `waitFor` read the first-paint loading text before the rejection settled.
+Fixed the mock to `throw new ApiError(...)` for unrecognised IDs, changed the pin to use the
+recognised `"PLR-000001"` with a real post-load assertion (`Labware roles`), and added a new
+rejection-arm test (`PLR-404`).
+
+### Changed Files (1)
+1. `app/src/graph/BindingMode/BindingModeEditor.test.tsx` — mock throws `ApiError` instead of
+   returning `{ record: null }`; pin uses `PLR-000001` with `Labware roles` assertion; added
+   `shows rejection message when planned-run is not found` test.
+
+### Mutation Probes
+- Probe A (vacuity): reverted mock to `record: null` cast → test "shows rejection message when planned-run is not found" RED (Unable to find an element with the text: /record not found: PLR-404/)
+- Probe B (pin): reverted `toHaveBeenCalledWith` back to `'PLR-1'` → test "loads the planned-run through getRecordWithUI" RED (expected spy to be called with ['PLR-1'])
+
+### Raw RED output (Probe A — vacuity proof)
+```
+ RUN  v1.6.1 /home/brad/cl-wt/L2-SUBPROTO-u6binddoor-lane2/app
+
+ ❯ src/graph/BindingMode/BindingModeEditor.test.tsx  (5 tests | 1 failed) 1577ms
+   ❯ src/graph/BindingMode/BindingModeEditor.test.tsx > BindingModeEditor > shows rejection message when planned-run is not found
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Duration  14.57s (transform 146ms, setup 830ms, collect 1.95s, tests 1.58s, environment 7.76s, prepare 615ms)
+```
+
+### Raw RED output (Probe B — pin specificity)
+```
+ RUN  v1.6.1 /home/brad/cl-wt/L2-SUBPROTO-u6binddoor-lane2/app
+
+ ❯ src/graph/BindingMode/BindingModeEditor.test.tsx  (5 tests | 1 failed) 586ms
+   ❯ src/graph/BindingMode/BindingModeEditor.test.tsx > BindingModeEditor > loads the planned-run through getRecordWithUI, not the 404-ing records arm
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Duration  2.23s (transform 105ms, setup 67ms, collect 207ms, tests 586ms, environment 619ms, prepare 243ms)
+```
+
+### Raw GREEN output (final)
+```
+Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:06:43
+   Duration  11.40s (transform 140ms, setup 955ms, collect 324ms, tests 580ms, environment 7.45s, prepare 530ms)
+```
