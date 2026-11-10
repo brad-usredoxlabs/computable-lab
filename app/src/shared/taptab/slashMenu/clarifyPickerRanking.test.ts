@@ -48,7 +48,6 @@ import {
   __setMaterialSelectionPolicies,
   getCandidateRankingPolicy,
   getMaterialSelectionPolicies,
-  PolicyGuardError,
 } from './policy'
 import { resolveMaterial } from './resolvers'
 import type { MaterialSearchItem } from '../../api/client'
@@ -760,32 +759,48 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — firstDefaultFocusIndex with presele
   })
 })
 
-describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only guard on load path', () => {
+describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix4 D2: duplicate-only records load unenforced', () => {
   /**
-   * D2: Two `only` policies for the same material concept must throw loudly
-   * with BOTH record ids. Mirrors the server-side
-   * normalizeMaterialSelectionPolicies contract (MaterialSelectionPolicy.ts:51-60).
-   * The load-path guard is the sanctioned carrier because LintEngine
-   * supports record scope only (LintEngine.ts:143).
+   * D2 cross-record ONLY-uniqueness is DESCOPED (task-list.md:18442): two
+   * `only` records for one material concept are legal. They load, they are
+   * served, and the picker leaves every candidate row visible. No load-path
+   * guard, no lint rule, no warning.
    */
-  it('__setMaterialSelectionPolicies throws when two only policies claim the same concept', () => {
-    const duplicateOnly: SelectionPolicy[] = [
-      {
-        recordId: 'MSP-POL-1',
-        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
-        vendor_product_ref: { kind: 'record', id: 'VP-A' },
-        selection: 'only',
-      },
-      {
-        recordId: 'MSP-POL-2',
-        material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
-        vendor_product_ref: { kind: 'record', id: 'VP-B' },
-        selection: 'only',
-      },
+  const duplicateOnly: SelectionPolicy[] = [
+    {
+      recordId: 'MSP-POL-1',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-A' },
+      selection: 'only',
+    },
+    {
+      recordId: 'MSP-POL-2',
+      material_ref: { kind: 'ontology', id: 'NCIT:C185409' },
+      vendor_product_ref: { kind: 'record', id: 'VP-B' },
+      selection: 'only',
+    },
+  ]
+
+  afterEach(() => {
+    __resetMaterialSelectionPolicies()
+  })
+
+  it('__setMaterialSelectionPolicies accepts two only policies for the same concept and serves both', async () => {
+    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).not.toThrow()
+    const served = await getMaterialSelectionPolicies()
+    expect(served).toHaveLength(2)
+    expect(served.map((p) => p.recordId)).toEqual(['MSP-POL-1', 'MSP-POL-2'])
+  })
+
+  it('applySelectionPolicies fails open: every row survives and none is preselected', () => {
+    const rows: RankedCandidateRow[] = [
+      { key: 'vendor-product:VP-A', label: 'Vendor Product A', mentionKind: 'vendor-product', recordId: 'VP-A', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409', canBeDefault: true },
+      { key: 'vendor-product:VP-B', label: 'Vendor Product B', mentionKind: 'vendor-product', recordId: 'VP-B', family: 'vendor-reagent', materialRefKind: 'ontology', materialRefId: 'NCIT:C185409', canBeDefault: true },
+      { key: 'material:MAT-1', label: 'Material 1', mentionKind: 'material', recordId: 'MAT-1', family: 'concept-only', curie: 'NCIT:C185409', canBeDefault: true },
     ]
-    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow()
-    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-1/)
-    expect(() => __setMaterialSelectionPolicies(duplicateOnly)).toThrow(/MSP-POL-2/)
+    const result = applySelectionPolicies(rows, duplicateOnly)
+    expect(result).toHaveLength(rows.length)
+    expect(result.some((r) => r.preselected === true)).toBe(false)
   })
 
   it('single only policy does not throw', () => {
@@ -879,15 +894,9 @@ describe('L2-MATERIAL-SELECTION-POLICY-1 — u2fix5: duplicate-only guard throw 
     vi.unstubAllGlobals()
   })
 
-  it('fetch path with duplicate only policies rejects with PolicyGuardError, not fail-open []', async () => {
-    let caught: unknown
-    try {
-      await getMaterialSelectionPolicies()
-      expect.fail('should have thrown')
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(PolicyGuardError)
-    expect((caught as Error).message).toMatch(/POL-DUP-1.*POL-DUP-2/)
+  it('fetch path with duplicate only policies RESOLVES with both records, not a rejection', async () => {
+    await expect(getMaterialSelectionPolicies()).resolves.toHaveLength(2)
+    const served = await getMaterialSelectionPolicies()
+    expect(served.map((p) => p.recordId).sort()).toEqual(['POL-DUP-1', 'POL-DUP-2'])
   })
 })
