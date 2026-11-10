@@ -2,7 +2,7 @@
 
 Worktree: /home/brad/cl-wt/L2-SUBPROTO-u2doc-r2-lane2
 Branch: cl/lane2-subprotocol-expand-1-u2doc-r2-0327 (base 5635fc8e = cl/integration-2 tip)
-Owned files (only these changed; `git diff --stat 5635fc8e..HEAD`):
+Owned files (only these changed; `git diff --stat 5635fc8e..48a4ae17` measured at the product commit; this report commits after it):
 - server/src/protocol/localPlanEventGraph.ts (new, 60 lines)
 - server/src/protocol/localPlanEventGraph.test.ts (new, 101 lines)
 No edits to localPlanGraph.ts, ProtocolContextService.ts, schema/** or app/src/**.
@@ -84,12 +84,24 @@ $ cd server && npx vitest run src/protocol/localPlanGraph.test.ts
 $ cd server && npx tsc --noEmit   -> no output, TSC_EXIT=0
 
 $ git -c core.fileMode=false status --short   -> (empty; clean tree)
-$ git diff --stat 5635fc8e..HEAD
+$ git diff --stat 5635fc8e..48a4ae17   (product commit; 2 files, 161 insertions)
  server/src/protocol/localPlanEventGraph.test.ts | 101 ++++++++++++++++++++++++
  server/src/protocol/localPlanEventGraph.ts      |  60 +++++++++++++++++++++
 
 Commits: 56abf34a (RED test), 48a4ae172ba365794db9a67f5763b557452f13b8 (GREEN product). This report is
 committed after that sha; both markers below name the commit holding the product, not the report.
+
+## Paperwork pass (u2docpw)
+Advc c1 returned VERDICT FIX with 3 MINORs, all in this report file. Product commits 56abf34a and
+48a4ae17 are accepted-in-substance and were not touched.
+1. FIXED — line 5 and the stat block now name `5635fc8e..48a4ae17` (the product commit where the
+   2-file / 161-insertion stat is true) instead of the self-referential `..HEAD`.
+2. FIXED — same substitution in the verification block; output below it is the 48a4ae17 stat verbatim.
+3. REJECTED as reviewer factual error — the Ajv-drop rationale on line 42 stands. `git ls-tree -r
+   --name-only HEAD schema` lists no `revision-ref.schema.yaml` (only governance/record-revision and
+   knowledge/analysis-revision); `schema/workflow/datatypes/` does not exist at all, so the
+   `$ref: "./datatypes/revision-ref.schema.yaml"` at schema/workflow/event-graph.schema.yaml:17 is a
+   genuine pre-existing dangling reference, as the report says. Wording unchanged.
 
 L2-SUBPROTOCOL-EXPAND-1 UNIT u2doc DONE 48a4ae172ba365794db9a67f5763b557452f13b8
 L2-SUBPROTOCOL-EXPAND-1-u2doc UNIT unit DONE 48a4ae172ba365794db9a67f5763b557452f13b8
