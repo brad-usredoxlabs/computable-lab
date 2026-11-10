@@ -85,16 +85,29 @@ describe('writeRoleBindings', () => {
     ]);
   });
 
-  it('carries lotNumber from the vendor product, absent when the target has none', async () => {
-    const records = [run(), ...chainedProtocol(materialRole), env('VPR-1', 'vendor-product', { lotNumber: 'L-77' }), env('VPR-2', 'vendor-product')];
-    const withLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-1' }] }));
-    const withoutLot = bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: 'VPR-2' }] }));
+  it('carries lotNumber where the target record schema keeps it, absent otherwise', async () => {
+    // material-instance/aliquot: payload.lot.lot_number; material-lot: payload.lot_number;
+    // vendor-product has no lot field at all.
+    const records = [
+      run(),
+      ...chainedProtocol(materialRole),
+      env('MI-1', 'material-instance', { lot: { lot_number: 'L-77' } }),
+      env('LOT-1', 'material-lot', { lot_number: 'L-88' }),
+      env('VPR-1', 'vendor-product'),
+    ];
+    const bind = async (id: string) =>
+      bindingsOf(await write(records, { materials: [{ roleId: 'reagent', materialInstanceRef: id }] }));
 
-    expect(withLot.materials).toEqual([
-      { roleId: 'reagent', materialRef: { kind: 'record', id: 'VPR-1', type: 'vendor-product' }, lotNumber: 'L-77' },
+    expect((await bind('MI-1')).materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'MI-1', type: 'material-instance' }, lotNumber: 'L-77' },
     ]);
+    expect((await bind('LOT-1')).materials).toEqual([
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'LOT-1', type: 'material-lot' }, lotNumber: 'L-88' },
+    ]);
+
+    const withoutLot = await bind('VPR-1');
     expect(withoutLot.materials).toEqual([
-      { roleId: 'reagent', materialRef: { kind: 'record', id: 'VPR-2', type: 'vendor-product' } },
+      { roleId: 'reagent', materialRef: { kind: 'record', id: 'VPR-1', type: 'vendor-product' } },
     ]);
     const [material] = withoutLot.materials as Array<Record<string, unknown>>;
     expect(Object.keys(material!)).not.toContain('lotNumber');
