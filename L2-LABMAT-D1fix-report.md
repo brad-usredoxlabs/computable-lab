@@ -59,3 +59,5 @@ are recorded in .git/info/exclude so the tracked tree stays clean.
 
 ## Blocker
 None. Independent browser review still owns live acceptance of D1.
+
+L2-LAB-MATERIAL-CREATE-1-u5fixD1 UNIT unit DONE e078a628846bce4ad5ca33eb92a9557bd1228dec
