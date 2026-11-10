@@ -76,4 +76,44 @@ Clean — only untracked node_modules symlinks.
 - Browser gate for end-to-end join (with client u2) stays with the item
 - Client branch u2 (9b28231f) already declares the fields; merge u2+u3 to complete the MATSEL policy chain
 
-L2-MATERIAL-SELECTION-POLICY-1 UNIT u3 DONE 737e82bc379f45e36623a7db3eab71f71759a7df
+## u3fix1 — advc c1 D1/D2 closeout
+
+Product code unchanged; `MaterialLifecycleHandlers.ts` was mutated only as a transient probe and is
+byte-identical at exit.
+
+Tests added (`MaterialLifecycle.classify.test.ts`, +45 lines, 5 -> 7):
+- T1: whitespace-only `material_ref.id` emits NO `materialRefId` key (via `Object.keys`); `'  MAT-9  '` emits `'MAT-9'`.
+- T2: a material-spec row whose payload carries `material_ref` has neither `materialRefKind` nor `materialRefId`.
+
+Raw vitest (post-change, commit 71654930):
+```
+ ✓ src/api/handlers/MaterialLifecycle.classify.test.ts  (7 tests) 21ms
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+```
+
+Raw M1 (`stringValue` loses trim + whitespace guard, :151):
+```
+ ❯ ... > omits materialRefId for a whitespace-only id and trims a padded id
+AssertionError: expected [ 'recordId', 'kind', 'title', …(4) ] to not include 'materialRefId'
+ ❯ src/api/handlers/MaterialLifecycle.classify.test.ts:101:38
+      Tests  1 failed | 6 passed (7)
+```
+Reverted with `git checkout -- server/src/api/handlers/MaterialLifecycleHandlers.ts`.
+
+Raw M2 (material-spec early return leaks ref keys):
+```
+ ❯ ... > does not emit materialRef keys on a material-spec row even when the payload carries one
+AssertionError: expected [ 'recordId', 'kind', 'title', …(4) ] to not include 'materialRefKind'
+ ❯ src/api/handlers/MaterialLifecycle.classify.test.ts:128:35
+      Tests  1 failed | 6 passed (7)
+```
+Reverted identically; `git diff --stat -- server/src/api/handlers/MaterialLifecycleHandlers.ts` empty.
+
+Typecheck: `cd server && npx tsc --noEmit -p .` -> exit 0, no output (0 diagnostics).
+Status: `?? app/node_modules`, `?? node_modules` — environment symlinks only (gitignore's `node_modules/`
+does not cover a symlink); no source path dirty.
+
+L2-MATSEL-u3fix1 UNIT unit DONE 71654930c7a56a0deecfee0c1cce3bf1e961617e
+L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u3fix1) UNIT u3fix1 DONE 71654930c7a56a0deecfee0c1cce3bf1e961617e
+
