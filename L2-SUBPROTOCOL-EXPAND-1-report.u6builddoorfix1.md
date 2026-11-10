@@ -66,7 +66,7 @@ AssertionError: expected '/api/runs/PLR%201/bindings' to match /\/runs\/PLR%201\
 YAML-reload trap: not applicable — no schema/YAML edit, no lane-stack restart.
 
 ## Marker (two-commit PENDING_SHA scheme)
-Commit (i) `PENDING_SHA` contains this report; commit (ii) replaces the placeholder with that sha.
-Containment proof: `git cat-file -e PENDING_SHA:L2-SUBPROTOCOL-EXPAND-1-report.u6builddoorfix1.md` → rc=0.
+Commit (i) `b8d9dd8eca559245c80bf60459665baf2dd9ab6d` contains this report; commit (ii) replaced the placeholder with that sha.
+Containment proof: `git cat-file -e b8d9dd8eca559245c80bf60459665baf2dd9ab6d:L2-SUBPROTOCOL-EXPAND-1-report.u6builddoorfix1.md` → rc=0.
 
-L2-SUBPROTOCOL-EXPAND-1-u6builddoorfix1pw UNIT u6builddoorfix1pw DONE PENDING_SHA
+L2-SUBPROTOCOL-EXPAND-1-u6builddoorfix1pw UNIT u6builddoorfix1pw DONE b8d9dd8eca559245c80bf60459665baf2dd9ab6d
