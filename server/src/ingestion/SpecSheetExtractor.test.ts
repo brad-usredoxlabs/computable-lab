@@ -406,3 +406,65 @@ describe('extractFromUrl — zero proposals returns typed no-proposals', () => {
     expect((result as any).noProposals.reason).toBe('empty_document');
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* uE1hdrowfix-c2 — Per-table positional extraction (defects 1 & 2)   */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — positional extraction scoped per table', () => {
+  it('does not fabricate values from a markdown separator row (defect 1)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Header + markdown separator row + actual data
+    const doc = {
+      url: 'https://example.com/sep',
+      text: 'Catalog Number | Volume\n--- | ---\n25200056 | 100 mL',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // No proposal should have a separator value like "---"
+    for (const p of result) {
+      expect(p.value).not.toBe('---');
+    }
+
+    // Exactly one catalog_number proposal with the real value
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('25200056');
+  });
+
+  it('uses the last header layout for subsequent data rows (defect 2)', () => {
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'vendor-product',
+      fieldMappings: [
+        { targetField: 'catalog_number', source: 'Catalog Number / Cat No' },
+        { targetField: 'package_size', source: 'Package Size / Volume' },
+      ],
+    };
+
+    // Two headers with swapped column order, data after the last header
+    const doc = {
+      url: 'https://example.com/swap',
+      text: 'Catalog Number | Volume\nVolume | Catalog Number\n10 mL | X9',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    // catalog_number should be at position 1 (from the second header), not 0
+    const catalogs = result.filter((p) => p.targetField === 'catalog_number');
+    expect(catalogs).toHaveLength(1);
+    expect(catalogs[0].value).toBe('X9');
+
+    // package_size should be at position 0 (from the second header)
+    const packages = result.filter((p) => p.targetField === 'package_size');
+    expect(packages).toHaveLength(1);
+    expect(packages[0].value).toBe('10 mL');
+  });
+});
