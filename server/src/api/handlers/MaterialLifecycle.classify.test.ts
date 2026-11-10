@@ -85,4 +85,49 @@ describe('classifyMaterialRecord — vendor-product material_ref', () => {
     expect(Object.keys(item)).not.toContain('materialRefKind');
     expect(Object.keys(item)).not.toContain('materialRefId');
   });
+
+  it('omits materialRefId for a whitespace-only id and trims a padded id', () => {
+    const blankId = classifyMaterialRecord(
+      vendorProduct('VPR-004', {
+        kind: 'vendor-product',
+        id: 'VPR-004',
+        name: 'Phenol Red',
+        vendor: 'Sigma',
+        catalog_number: 'P0364',
+        material_ref: { kind: 'record', id: '   ' },
+      }),
+    );
+    expect(blankId).not.toBeNull();
+    expect(Object.keys(blankId)).not.toContain('materialRefId');
+    expect(blankId?.materialRefId).toBeUndefined();
+
+    const paddedId = classifyMaterialRecord(
+      vendorProduct('VPR-005', {
+        kind: 'vendor-product',
+        id: 'VPR-005',
+        name: 'Phenol Red',
+        vendor: 'Sigma',
+        catalog_number: 'P0364',
+        material_ref: { kind: 'record', id: '  MAT-9  ' },
+      }),
+    );
+    expect(paddedId).not.toBeNull();
+    expect(paddedId?.materialRefId).toBe('MAT-9');
+  });
+
+  it('does not emit materialRef keys on a material-spec row even when the payload carries one', () => {
+    const item = classifyMaterialRecord(
+      spec('MSP-T-3', {
+        kind: 'material-spec',
+        id: 'MSP-T-3',
+        name: 'Clofibrate in DMSO',
+        material_ref: { kind: 'record', id: 'MAT-X' },
+      }),
+    );
+    expect(item).not.toBeNull();
+    expect(Object.keys(item)).not.toContain('materialRefKind');
+    expect(Object.keys(item)).not.toContain('materialRefId');
+    expect(item?.materialRefKind).toBeUndefined();
+    expect(item?.materialRefId).toBeUndefined();
+  });
 });
