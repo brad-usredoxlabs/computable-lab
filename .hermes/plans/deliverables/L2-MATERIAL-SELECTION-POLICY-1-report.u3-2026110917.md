@@ -114,6 +114,44 @@ Typecheck: `cd server && npx tsc --noEmit -p .` -> exit 0, no output (0 diagnost
 Status: `?? app/node_modules`, `?? node_modules` — environment symlinks only (gitignore's `node_modules/`
 does not cover a symlink); no source path dirty.
 
-L2-MATSEL-u3fix1 UNIT unit DONE 71654930c7a56a0deecfee0c1cce3bf1e961617e
-L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u3fix1) UNIT u3fix1 DONE 71654930c7a56a0deecfee0c1cce3bf1e961617e
+## u3fix1b — advc c1 D3 closeout (FIX 3 MINOR)
+
+Product code unchanged; `MaterialLifecycleHandlers.ts` is byte-identical at exit
+(hash 459d26a38f36a4b13d521a89e57ceaf06192da3d).
+
+Tests added (`MaterialLifecycle.classify.test.ts`, +30 lines, 7 -> 9):
+- T3 (enum-guard pin): `material_ref: {kind:'concept', id:'X-1'}` — asserts
+  `Object.keys(item)` does NOT contain `materialRefKind`.
+- T4 (string-id pin): `material_ref: {kind:'record', id:123}` — asserts
+  `Object.keys(item)` does NOT contain `materialRefId`.
+
+Raw vitest (post-change, commit e16ff8af):
+```
+ ✓ src/api/handlers/MaterialLifecycle.classify.test.ts  (9 tests) 24ms
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+```
+
+Raw M6 (enum guard :281-282 -> `refKindRaw` without guard):
+```
+ ❯ ... > omits materialRefKind when kind is not record or ontology (enum guard)
+AssertionError: expected [ 'recordId', 'kind', 'title', …(4) ] to not include 'materialRefKind'
+ ❯ src/api/handlers/MaterialLifecycle.classify.test.ts:130:35
+      Tests  1 failed | 8 passed (9)
+```
+Reverted with `git checkout -- server/src/api/handlers/MaterialLifecycleHandlers.ts`.
+
+Raw M-string (`stringValue` :151 -> `value != null ? String(value).trim() : undefined`):
+```
+ ❯ ... > omits materialRefId when id is not a string (numeric id)
+AssertionError: expected [ 'recordId', 'kind', 'title', …(4) ] to not include 'materialRefId'
+ ❯ src/api/handlers/MaterialLifecycle.classify.test.ts:145:35
+      Tests  1 failed | 8 passed (9)
+```
+Reverted identically; `git diff --stat -- server/src/api/handlers/MaterialLifecycleHandlers.ts` empty.
+
+Typecheck: `cd server && npx tsc --noEmit -p .` -> exit 0, no output.
+Status: `?? app/node_modules`, `?? node_modules`, `?? server/node_modules` — environment symlinks only.
+
+L2-MATERIAL-SELECTION-POLICY-1 (L2-MATSEL-u3fix1b) UNIT u3fix1b DONE e16ff8af126168b3e5a7029a693350836792a706
 
