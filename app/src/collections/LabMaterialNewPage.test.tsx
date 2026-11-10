@@ -89,8 +89,7 @@ describe('LabMaterialNewPage (L2-LAB-MATERIAL-CREATE-1 u3)', () => {
     expect(rows.length).toBe(2)
     const ncitRow = rows.find((r) => r.textContent?.includes("Dulbecco's Modified Eagle Medium"))
     expect(ncitRow).toBeDefined()
-    // Namespace must be its OWN element — a whole-row toContain('NCIT') is
-    // already satisfied by the rendered CURIE and witnesses nothing (advc c1 D1).
+    // A whole-row toContain('NCIT') is satisfied by the rendered CURIE itself (advc c1 D1).
     expect(within(ncitRow!).getAllByTestId('lab-material-candidate-namespace').map((n) => n.textContent)).toEqual(['NCIT'])
     expect(within(rows.find((r) => r.textContent?.includes('DMEM/F-12'))!).getAllByTestId('lab-material-candidate-namespace').map((n) => n.textContent)).toEqual(['XCO'])
     expect(screen.queryByTestId('vendor-builder-stub')).toBeNull()

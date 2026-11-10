@@ -83,3 +83,51 @@ L2-LAB-MATERIAL-CREATE-1-u3closeout UNIT u3closeout DONE 75013117b0beab93b7054a1
 L2-LAB-MATERIAL-CREATE-1 UNIT u3 DONE 75013117b0beab93b7054a102bf7f1075c458fed
 
 L2-LAB-MATERIAL-CREATE-1-u3fix1 UNIT unit DONE 3794d84405267d0f7f4175ed400b82491d9004b1
+
+## u3fix4 — advc c2 (MINOR): restore the u3 brief's lines<=200 gate
+
+Single defect from advc c2: the c1 D1 fix (3794d844) made the two owned deliverables 121+80=201
+lines, one over the u3 brief's hard `lines <= 200` gate. Fix is comment-only: the two-line WHY at
+test.tsx:92-93 folded into one line that keeps the whole reason (whole-row `toContain('NCIT')` is
+already satisfied by the rendered CURIE itself). No product logic, testid or assertion changed.
+Baseline verified before editing: `wc -l` = 121 + 80 = 201 at b8ff2fb1. After: 120 + 80 = 200.
+
+1. `wc -l app/src/collections/LabMaterialNewPage.test.tsx app/src/collections/LabMaterialNewPage.tsx`:
+```
+  120 app/src/collections/LabMaterialNewPage.test.tsx
+   80 app/src/collections/LabMaterialNewPage.tsx
+  200 total
+```
+   Diff size: `1 file changed, 1 insertion(+), 2 deletions(-)`.
+
+2. `cd app && npx vitest run src/collections/LabMaterialNewPage.test.tsx 2>&1 | tail -n 6`:
+```
+Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  01:13:03
+   Duration  16.46s (transform 277ms, setup 2.04s, collect 2.19s, tests 66ms, environment 10.43s, prepare 934ms)
+```
+   Matches baseline 4/4 at b8ff2fb1; the anchor at test.tsx:94
+   (`getAllByTestId('lab-material-candidate-namespace')`) is untouched and green.
+
+3. `cd app && npx tsc --noEmit; echo EXIT=$?`:
+```
+EXIT=0
+```
+   Environment note (not a product change): this worktree had no repo-root `node_modules`, so the
+   hoisted deps (`ajv`, `yaml`, `prosemirror-view`, `ajv-formats`) resolved to nothing and tsc
+   emitted the same 13 pre-existing module-resolution/`any` errors recorded in the u3 section above
+   (none in `LabMaterialNewPage*`). After adding the lane-standard root link
+   `ln -s /mnt/vast/home/brad/git/cl-integration-2/node_modules node_modules`
+   tsc is clean: `EXIT=0`, 0 errors. The same link reproduces the check; the symlink is untracked
+   infra (`.git/info/exclude`, local only — no tracked file touched).
+
+4. `git log -n1 --oneline`:
+```
+74dfeb09 L2-LAB-MATERIAL-CREATE-1 u3fix4: fold D1 comment to meet 200-line gate
+```
+
+Output budget: files touched = 1 owned test file (+ this report); diff = 3 lines (-2/+1).
+
+
+L2-LAB-MATERIAL-CREATE-1-u3fix4 UNIT unit DONE 74dfeb09045a2a6154d0bdca3982aadc400c42fa
