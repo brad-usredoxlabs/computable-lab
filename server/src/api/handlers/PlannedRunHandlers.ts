@@ -12,6 +12,11 @@ import { clarificationRequestsFor } from '../../protocol/roleBindingClarify.js';
 import type { AgentClarificationRequest } from '../../ai/types.js';
 import { writeRoleBindings } from '../../protocol/roleBindingWrite.js';
 import { runRunPlanCompile } from '../../compiler/pipeline/runRunPlanCompile.js';
+import { buildLocalPlanGraph } from '../../protocol/localPlanGraph.js';
+import { toLocalPlanEventGraphDocument } from '../../protocol/localPlanEventGraph.js';
+import { persistLocalPlanEventGraph } from '../../protocol/localPlanEventGraphStore.js';
+import { EVENT_GRAPH_SCHEMA_ID } from '../../chain/chainIdentity.js';
+import { randomUUID } from 'node:crypto';
 
 // ---------------------------------------------------------------------------
 // Well-ID validation patterns per plate kind
@@ -498,6 +503,141 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         diagnostics: result.runPlanCompileResult.diagnostics,
         ...(result.eventGraphRef ? { eventGraphRef: result.eventGraphRef } : {}),
       };
+    },
+
+    /**
+     * POST /runs/:id/plan-graph
+     *
+     * Build a local plan graph from the run's attached protocol + bindings,
+     * project it into ONE event-graph document, persist it, and link it to
+     * the run via `methodEventGraphId`. Idempotent: if the graph already exists
+     * and is linked, returns `reused: true` without writing.
+     *
+     * Returns { success: true, graphId, reused?: boolean } on success (200).
+     * Returns 404 PLANNED_RUN_NOT_FOUND / LOCAL_PROTOCOL_NOT_FOUND.
+     * Returns 400 NO_PROTOCOL_ATTACHED / NOT_A_PLANNED_RUN.
+     * Returns 409 UNBOUND_ROLE / UNDECLARED_ROLE / AMBIGUOUS_BINDING / UNSUPPORTED_EVENT_TYPE.
+     * Returns 500 SCHEMA_ENUM_MISSING / STORE_ERROR.
+     */
+    async buildPlanGraph(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; graphId: string; reused?: boolean } | ApiError> {
+      const { id } = request.params;
+      const PLANNED_RUN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml';
+
+      // (a) Fetch run record
+      const record = await ctx.store.get(id);
+      if (!record) {
+        reply.status(404);
+        return { error: 'PLANNED_RUN_NOT_FOUND', message: `Planned-run '${id}' not found` };
+      }
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'planned-run') {
+        reply.status(400);
+        return { error: 'NOT_A_PLANNED_RUN', message: `Record '${id}' is not a planned-run` };
+      }
+
+      // (b) Protocol from the ordered list
+      const protoIds = protocolIdsOf(payload);
+      if (protoIds.length === 0) {
+        reply.status(400);
+        return { error: 'NO_PROTOCOL_ATTACHED', message: 'Run has no attached protocol' };
+      }
+      const protocolId = protoIds[0]!;
+      const protocolRecord = await ctx.store.get(protocolId);
+      if (!protocolRecord) {
+        reply.status(404);
+        return { error: 'LOCAL_PROTOCOL_NOT_FOUND', message: `Local-protocol '${protocolId}' not found` };
+      }
+      const protocolPayload = protocolRecord.payload as Record<string, unknown>;
+
+      // (c) Build local plan graph
+      const planResult = buildLocalPlanGraph({
+        protocolId,
+        protocol: protocolPayload,
+        bindings: payload.bindings,
+      });
+      if (!planResult.ok) {
+        reply.status(409);
+        if (planResult.code === 'MALFORMED_PROTOCOL') {
+          return { error: planResult.code, message: planResult.message };
+        }
+        return { error: planResult.code, message: `Plan build failed: ${planResult.roleId} at step ${planResult.stepId}`, details: { roleId: planResult.roleId, stepId: planResult.stepId } };
+      }
+
+      // (d) Resolve allowedEventTypes from schema registry (no hand-coded verb list)
+      const egSchemaEntry = ctx.schemaRegistry.getById(EVENT_GRAPH_SCHEMA_ID);
+      if (!egSchemaEntry) {
+        reply.status(500);
+        return { error: 'SCHEMA_ENUM_MISSING', message: `Event-graph schema ${EVENT_GRAPH_SCHEMA_ID} not found` };
+      }
+      const plateEventDef = (egSchemaEntry.schema.$defs ?? {});
+      const plateEventProps = (plateEventDef as Record<string, unknown>).PlateEvent;
+      if (!plateEventProps || typeof plateEventProps !== 'object') {
+        reply.status(500);
+        return { error: 'SCHEMA_ENUM_MISSING', message: '$defs.PlateEvent not found in event-graph schema' };
+      }
+      const plateEventProperties = (plateEventProps as Record<string, unknown>).properties;
+      if (!plateEventProperties || typeof plateEventProperties !== 'object') {
+        reply.status(500);
+        return { error: 'SCHEMA_ENUM_MISSING', message: 'PlateEvent.properties not found' };
+      }
+      const eventTypeDef = (plateEventProperties as Record<string, unknown>).event_type;
+      if (!eventTypeDef || typeof eventTypeDef !== 'object') {
+        reply.status(500);
+        return { error: 'SCHEMA_ENUM_MISSING', message: 'event_type definition not found in PlateEvent' };
+      }
+      const allowedEventTypes = (eventTypeDef as Record<string, unknown>).enum;
+      if (!Array.isArray(allowedEventTypes) || allowedEventTypes.length === 0) {
+        reply.status(500);
+        return { error: 'SCHEMA_ENUM_MISSING', message: 'event_type enum is empty or missing' };
+      }
+
+      // (e) Project into event-graph document
+      const graphId = `EVG-${randomUUID()}`;
+      const docResult = toLocalPlanEventGraphDocument({
+        id: graphId,
+        events: planResult.events,
+        allowedEventTypes: allowedEventTypes as readonly string[],
+      });
+      if (!docResult.ok) {
+        reply.status(409);
+        return {
+          error: docResult.code, message: `Unsupported event type '${docResult.eventType}' at step ${docResult.stepId}`,
+        };
+      }
+
+      // (f) Idempotency: if already linked, reuse without writing
+      if (payload.methodEventGraphId) {
+        const existing = await ctx.store.get(payload.methodEventGraphId as string);
+        if (existing) {
+          reply.status(200);
+          return { success: true, graphId: payload.methodEventGraphId as string, reused: true };
+        }
+      }
+
+      // (g) Persist
+      const persistResult = await persistLocalPlanEventGraph({
+        store: ctx.store,
+        runId: id,
+        runPayload: payload,
+        documentResult: docResult,
+        eventGraphSchemaId: EVENT_GRAPH_SCHEMA_ID,
+        runSchemaId: PLANNED_RUN_SCHEMA_ID,
+      });
+      if (!persistResult.ok) {
+        if (persistResult.code === 'UNSUPPORTED_EVENT_TYPE') {
+          reply.status(409);
+          return { error: persistResult.code, message: `Unsupported event type '${persistResult.eventType}' at step ${persistResult.stepId}` };
+        }
+        reply.status(500);
+        return { error: persistResult.code, message: persistResult.error };
+      }
+
+      // (h) Success
+      reply.status(200);
+      return { success: true, graphId: persistResult.graphId };
     },
   };
 }
