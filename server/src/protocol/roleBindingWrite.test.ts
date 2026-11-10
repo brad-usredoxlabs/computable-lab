@@ -21,6 +21,14 @@ const asStore = (store: unknown) => store as unknown as RecordStore;
 
 const protocol = (roles: Record<string, unknown>) => env('PRT-1', 'local-protocol', { roles });
 
+// Schema-valid chain: local-protocol carries no `roles` (unevaluatedProperties:
+// false); the declarations live on the universal protocol via inherits_from.id.
+const universalProtocol = (roles: Record<string, unknown>) => env('PRT-U1', 'protocol', { roles });
+const chainedProtocol = (roles: Record<string, unknown>) => [
+  universalProtocol(roles),
+  env('PRT-1', 'local-protocol', { inherits_from: { kind: 'record', id: 'PRT-U1', type: 'protocol' } }),
+];
+
 const run = (body: Record<string, unknown> = {}) =>
   env('RUN-1', 'planned-run', {
     localProtocolRefs: [{ kind: 'record', id: 'PRT-1', type: 'local-protocol' }],
@@ -40,6 +48,18 @@ const labwareRole = { labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['
 const materialRole = { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['M-1'] }] };
 
 describe('writeRoleBindings', () => {
+  it('resolves declared roles through inherits_from on the universal protocol', async () => {
+    const result = await write(
+      [run(), ...chainedProtocol(labwareRole), env('LAB-1', 'labware', { name: 'Plate' })],
+      { labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-1' }] },
+    );
+    if (!result.ok) throw new Error(`${result.code}: ${result.message}`);
+
+    expect(result.bindings.labware).toEqual([
+      { roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'LAB-1', type: 'labware' } },
+    ]);
+  });
+
   it('rejects a roleId no attached protocol declares and writes nothing', async () => {
     const store = fakeStore([run(), protocol(labwareRole)]);
     const result = await writeRoleBindings({
