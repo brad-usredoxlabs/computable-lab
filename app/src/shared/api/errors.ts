@@ -128,3 +128,22 @@ export class NetworkError extends Error {
     return error instanceof NetworkError
   }
 }
+
+/**
+ * Classify the server's 400 refusal for non-planned-run records.
+ * Server source: PlannedRunHandlers.ts 400 arm (payload.kind !== 'planned-run')
+ * returns `{ error: 'NOT_A_PLANNED_RUN', message: "Record '…' is not a planned-run" }`.
+ *
+ * Honours two shapes (mirroring the isReauthFailure pattern):
+ *  1. `code === 'NOT_A_PLANNED_RUN'` — if the server ever emits the token as code.
+ *  2. `message.includes('NOT_A_PLANNED_RUN')` — the actual wire shape: code degrades
+ *     to `HTTP_400` (fromResponse builds it from the absent body.code), so the
+ *     token lands in message.
+ */
+export function isPlannedRunKindRefusal(error: unknown): boolean {
+  return (
+    ApiError.isApiError(error) &&
+    error.status === 400 &&
+    (error.code === 'NOT_A_PLANNED_RUN' || error.message.includes('NOT_A_PLANNED_RUN'))
+  )
+}
