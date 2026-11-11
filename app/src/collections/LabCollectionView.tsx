@@ -142,6 +142,19 @@ function extractHelperTokens(
       break
     }
 
+    case 'material-instance': {
+      const lot = p.lot as { lot_number?: string; vendor?: string } | undefined
+      if (lot?.lot_number) {
+        const lotText = lot.vendor ? `${lot.lot_number} (${lot.vendor})` : lot.lot_number
+        tokens.push({ text: lotText })
+      }
+      const vpRef = p.vendor_product_ref as { id?: string } | undefined
+      if (vpRef?.id) tokens.push({ text: vpRef.id })
+      const storage = p.storage as { location?: string } | undefined
+      if (storage?.location) tokens.push({ text: `📍 ${storage.location}` })
+      break
+    }
+
     case 'equipment': {
       // QMS8-C (D3/D8): the domain status token is retired with the field —
       // the record's lifecycle state is shown by the control bar's state pill.
