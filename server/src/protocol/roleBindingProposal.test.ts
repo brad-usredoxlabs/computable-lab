@@ -315,6 +315,101 @@ describe('proposeRoleBindings', () => {
     expect(role.candidates).toHaveLength(1);
     expect(role.candidates[0].recordId).toBe('LBI-1');
   });
+
+  // u5matinst — material-instance candidate tests
+
+  it('proposes a material-instance whose material_ref matches a declared allowedMaterialId', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['MAT-001'] }] }),
+      env('MAT-001', 'material', { name: 'Generic Reagent' }),
+      env('VPR-1', 'vendor-product', { name: 'Vendored Reagent', material_ref: { kind: 'record', id: 'MAT-001', type: 'material' } }),
+      env('MINST-1', 'material-instance', {
+        name: 'Bottle of Reagent',
+        material_ref: { kind: 'record', id: 'MAT-001', type: 'material' },
+        lot: { lot_number: 'L42' },
+      }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.candidates).toHaveLength(3);
+    const minst = role.candidates.find((c) => c.recordId === 'MINST-1');
+    expect(minst).toBeDefined();
+    expect(minst!.recordKind).toBe('material-instance');
+    expect(minst!.lotNumber).toBe('L42');
+  });
+
+  it('excludes a free-standing material-instance that references no declared material', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['MAT-001'] }] }),
+      env('MAT-001', 'material', { name: 'Generic Reagent' }),
+      // This instance points to MAT-002 which is NOT declared
+      env('MINST-orphan', 'material-instance', {
+        name: 'Orphan Bottle',
+        material_ref: { kind: 'record', id: 'MAT-002', type: 'material' },
+        lot: { lot_number: 'L99' },
+      }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    // Only MAT-001 qualifies; the orphan instance should NOT appear
+    expect(role.candidates.map((c) => c.recordId)).not.toContain('MINST-orphan');
+    expect(role.candidates).toHaveLength(1);
+    expect(role.candidates[0].recordId).toBe('MAT-001');
+  });
+
+  it('resolves a material-instance via vendor_product_ref -> material_ref (one-hop)', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['MAT-001'] }] }),
+      env('MAT-001', 'material', { name: 'Generic Reagent' }),
+      env('VPR-1', 'vendor-product', {
+        name: 'Vendored Reagent',
+        material_ref: { kind: 'record', id: 'MAT-001', type: 'material' },
+      }),
+      // Instance links to the vendor-product, which links to MAT-001
+      env('MINST-vpr', 'material-instance', {
+        name: 'Bottle via VPR',
+        vendor_product_ref: { kind: 'record', id: 'VPR-1', type: 'vendor-product' },
+        lot: { lot_number: 'LOT-VPR-01' },
+      }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.candidates.map((c) => c.recordId)).toContain('MINST-vpr');
+    const minst = role.candidates.find((c) => c.recordId === 'MINST-vpr');
+    expect(minst!.lotNumber).toBe('LOT-VPR-01');
+  });
+
+  it('deduplicates a material-instance that matches both material_ref and vendor_product_ref', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', { materialRoles: [{ roleId: 'reagent', allowedMaterialIds: ['MAT-001'] }] }),
+      env('MAT-001', 'material', { name: 'Generic Reagent' }),
+      env('VPR-1', 'vendor-product', {
+        name: 'Vendored Reagent',
+        material_ref: { kind: 'record', id: 'MAT-001', type: 'material' },
+      }),
+      // Instance has BOTH material_ref and vendor_product_ref pointing to the same declared material
+      env('MINST-dup', 'material-instance', {
+        name: 'Dual-ref Bottle',
+        material_ref: { kind: 'record', id: 'MAT-001', type: 'material' },
+        vendor_product_ref: { kind: 'record', id: 'VPR-1', type: 'vendor-product' },
+        lot: { lot_number: 'L-DUP' },
+      }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    // MINST-dup should appear exactly once
+    const dupCandidates = role.candidates.filter((c) => c.recordId === 'MINST-dup');
+    expect(dupCandidates).toHaveLength(1);
+    expect(dupCandidates[0].lotNumber).toBe('L-DUP');
+  });
 });
 
 function face(fn: unknown): number {
