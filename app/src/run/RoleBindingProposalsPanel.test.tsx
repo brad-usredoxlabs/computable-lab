@@ -327,6 +327,46 @@ describe('RoleBindingProposalsPanel', () => {
     expect(mocks.updatePlannedRunBindings).not.toHaveBeenCalled()
   })
 
+  it('DEFECT-2: definition candidate renders no Bind button; instance candidate does', async () => {
+    // A projection with an ambiguous role listing both a definition ('material')
+    // and an instance ('material-instance'). Only the instance should offer Bind.
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [{
+          roleId: 'reagent',
+          roleKind: 'material' as const,
+          state: 'ambiguous' as const,
+          candidates: [
+            { recordId: 'DEF-MAT-1', recordKind: 'material', label: 'PBTG' },
+            { recordId: 'INST-MAT-1', recordKind: 'material-instance', label: 'PBTG · Lot 42', lotNumber: '42' },
+          ],
+        }],
+      }],
+    })
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText(/PBTG/)).toBeTruthy())
+
+    // Both labels visible
+    expect(screen.getByText('PBTG')).toBeTruthy()
+    expect(screen.getByText('PBTG · Lot 42')).toBeTruthy()
+
+    // The instance candidate must have a Bind button
+    const instanceBindBtn = screen.queryByTestId('bind-candidate')
+    expect(instanceBindBtn).not.toBeNull()
+    expect(instanceBindBtn?.dataset.candidateId).toBe('INST-MAT-1')
+
+    // Only ONE bind button (the instance), not for the definition
+    expect(screen.getAllByTestId('bind-candidate').length).toBe(1)
+
+    // Clicking Bind posts the instance ref
+    await act(async () => { instanceBindBtn!.click() })
+    expect(mocks.updatePlannedRunBindings).toHaveBeenCalledWith('run-1', {
+      materials: [{ roleId: 'reagent', materialInstanceRef: 'INST-MAT-1' }],
+    })
+  })
+
   it('disables ALL Bind buttons while any bind is in-flight (in-flight guard)', async () => {
     const twoAmbiguousRoles = {
       protocols: [{
