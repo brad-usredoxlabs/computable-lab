@@ -1,0 +1,574 @@
+/**
+ * Tests for LabLabwareNewPage — the "+ New labware" spec-sheet ingest page.
+ *
+ * Four arms: success proposals, not-configured, blocked, no-proposals.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { ThemeProvider } from '../shared/shell'
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
+import { LabLabwareNewPage } from './LabLabwareNewPage'
+import * as clientModule from '../shared/api/client'
+
+afterEach(() => {
+  cleanup()
+})
+
+const mockExtract = vi.fn()
+const mockCreateRecord = vi.fn()
+const mockGetSchema = vi.fn()
+
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.spyOn(clientModule, 'apiClient', 'get').mockReturnValue({
+    ...clientModule.apiClient,
+    extractSpecSheetProposals: mockExtract,
+    getSchema: mockGetSchema,
+    createRecord: mockCreateRecord,
+  } as any)
+})
+
+describe('LabLabwareNewPage', () => {
+  function renderPage() {
+    return render(
+      <MemoryRouter initialEntries={['/lab/labware/new']}>
+        <Routes>
+          <Route
+            path="/lab/labware/new"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabLabwareNewPage />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+          <Route path="/lab/labware" element={<div data-testid="labware-category" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  it('renders name input, URL input, and propose fields button', () => {
+    renderPage()
+    expect(screen.getByTestId('lab-labware-new-page')).toBeDefined()
+    expect(screen.getByTestId('lab-labware-name-input')).toBeDefined()
+    expect(screen.getByTestId('lab-labware-url-input')).toBeDefined()
+    expect(screen.getByTestId('lab-labware-propose-button')).toBeDefined()
+  })
+
+  it('shows "not configured" state when extraction is not configured', async () => {
+    mockExtract.mockResolvedValueOnce({ configured: false, reason: 'not_configured', proposals: [] })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-not-configured')).toBeDefined()
+    })
+    expect(screen.queryByTestId('lab-labware-save-button')).toBeNull()
+  })
+
+  it('shows blocked state when the fetch is blocked', async () => {
+    mockExtract.mockResolvedValueOnce({
+      configured: true,
+      proposals: [],
+      blocked: { url: 'https://example.com/sheet', reason: 'exa_fetch_blocked' },
+    })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-blocked')).toBeDefined()
+    })
+  })
+
+  it('shows no-proposals state when the document is empty', async () => {
+    mockExtract.mockResolvedValueOnce({
+      configured: true,
+      proposals: [],
+      noProposals: { url: 'https://example.com/sheet', reason: 'empty_document' },
+    })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-no-proposals')).toBeDefined()
+    })
+  })
+
+  it('renders proposals and enables save when required fields are covered', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
+    })
+    // Save button should be enabled (not disabled) when all required fields covered
+    expect(screen.getByTestId('lab-labware-save-button')).toBeDefined()
+  })
+
+  it('enables save even when only optional fields are proposed (server validates)', async () => {
+    const proposals = [
+      { targetField: 'vendor', value: 'Example', sourceUrl: 'https://example.com/sheet', passage: 'Example Corp', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: 'Test plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
+    })
+    // Save button should NOT be disabled — Ajv on the server is the sole validator
+    expect(screen.getByTestId('lab-labware-save-button')).not.toHaveAttribute('disabled')
+    // No client-side "missing required" banner
+    expect(screen.queryByTestId('lab-labware-missing-required')).toBeNull()
+  })
+
+  it('displays error message when the API throws', async () => {
+    mockExtract.mockRejectedValueOnce(new Error('Server error'))
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-error')).toBeDefined()
+    })
+  })
+
+  it('surfaces Ajv 422 validation error in the error banner (no client-side gate)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    // Server returns 422 validation error
+    mockCreateRecord.mockImplementationOnce(() => {
+      const err = new Error('Validation failed: Missing required properties: display_name, topology')
+      return Promise.reject(err)
+    })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Save button is enabled — no client-side required-field gate
+    expect(screen.getByTestId('lab-labware-save-button')).not.toHaveAttribute('disabled')
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    const errorEl = screen.getByTestId('lab-labware-error')
+    expect(errorEl.textContent).toContain('Validation failed')
+  })
+
+  it('uses a single identity (recordId === id) in the payload (D6 fix)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D6: one identity, one mint — recordId and id must match
+    expect(payload.recordId).toBe(payload.id)
+    expect(typeof payload.recordId).toBe('string')
+    expect(payload.recordId).toMatch(/^LW-[0-9A-F]{8}$/)
+  })
+
+  it('does not coerce when schema is absent', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    // SchemaInfo.schema is undefined — no coercion should happen
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: undefined })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // Without schema, values stay as strings — let Ajv decide
+    expect(payload.topology.rows).toBe('8')
+  })
+
+  it('includes source.url and source.kind in the save payload (D3 provenance)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D3: source provenance must be retained on save
+    expect(payload.source).toBeDefined()
+    expect(payload.source.kind).toBe('imported')
+    expect(payload.source.url).toBe('https://example.com/sheet')
+  })
+
+  it('preserves frozen provenance even when URL input is cleared after extract (D3 freeze)', async () => {
+    // Proposals without sourceUrl force the fallback to frozen extraction URL
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', passage: 'Grid format', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Fill URL to extract proposals
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Clear the URL input after extracting — D3 freeze means provenance stays
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: '' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D3 freeze: source is preserved from the frozen URL, not the cleared input
+    expect(payload.source).toBeDefined()
+    expect(payload.source.url).toBe('https://example.com/sheet')
+  })
+
+  it('freezes provenance URL at extraction time — URL changed after propose (D3 freeze)', async () => {
+    // Proposals without sourceUrl force the fallback to frozen extraction URL
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Extract from sheet-a
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-a' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Change URL to sheet-b AFTER proposals rendered
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-b' },
+    })
+    // Save — provenance must be frozen at sheet-a, not the live sheet-b
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D3 freeze: source.url must reflect the URL at extraction time
+    expect(payload.source.url).toBe('https://example.com/sheet-a')
+  })
+
+  it('derives kind, type, read_only and source.kind from schema (D4 vocabulary)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+    ]
+    // Schema declares vocabulary — this is what the real schema says
+    const schemaWithVocab = {
+      properties: {
+        kind: { const: 'labware-definition-schema' },
+        type: { const: 'labware_definition_schema' },
+        read_only: { type: 'boolean' },
+        source: {
+          properties: {
+            kind: { enum: ['curated', 'user'] },
+          },
+        },
+      },
+    }
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: schemaWithVocab })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D4: kind and type derived from schema const values (not fallback literals)
+    expect(payload.kind).toBe('labware-definition-schema')
+    expect(payload.type).toBe('labware_definition_schema')
+    // D4: read_only set true because schema declares read_only as boolean
+    expect(payload.read_only).toBe(true)
+    // D4: source.kind from schema enum — 'imported' not in enum, so first value (DEFECT 4)
+    expect(payload.source.kind).toBe('curated')
+  })
+
+  it('omits read_only when schema does not declare it (D4 negative)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+    ]
+    // Schema without read_only property
+    const schemaWithoutReadOnly = {
+      properties: {
+        kind: { const: 'labware-definition' },
+        type: { const: 'labware_definition' },
+        source: {
+          properties: {
+            kind: { enum: ['imported', 'curated', 'user'] },
+          },
+        },
+      },
+    }
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: schemaWithoutReadOnly })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // read_only must be absent (not undefined) when schema does not declare it
+    expect('read_only' in payload).toBe(false)
+  })
+
+  it('coerces proposal string values to schema-declared types in the save payload', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
+    ]
+    // Mock schema with integer and number types
+    const mockSchema = {
+      properties: {
+        topology: {
+          properties: {
+            addressing: { type: 'string' },
+            rows: { type: 'integer' },
+            columns: { type: 'integer' },
+          },
+        },
+        capacity: {
+          properties: {
+            max_well_volume_uL: { type: 'number' },
+          },
+        },
+      },
+    }
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: mockSchema })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D1: values coerced to schema-declared types
+    expect(typeof payload.topology.rows).toBe('number')
+    expect(payload.topology.rows).toBe(8)
+    expect(typeof payload.topology.columns).toBe('number')
+    expect(payload.topology.columns).toBe(12)
+    expect(typeof payload.capacity.max_well_volume_uL).toBe('number')
+    expect(payload.capacity.max_well_volume_uL).toBe(200)
+    // String fields remain strings
+    expect(typeof payload.topology.addressing).toBe('string')
+    expect(payload.topology.addressing).toBe('grid')
+  })
+
+  // DEFECT 2 — D3 "prefer first proposal.sourceUrl" over both frozen and live URL
+  it('prefers first proposal.sourceUrl over frozen and live URLs (D3 prefer)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/redirected-b', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/redirected-b', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Extract from sheet-a
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-a' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Change URL to sheet-b AFTER proposals rendered
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-b' },
+    })
+    // Save — provenance must prefer the first proposal's sourceUrl
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D3 prefer: source.url is the proposal's sourceUrl, not frozen or live URL
+    expect(payload.source.url).toBe('https://example.com/redirected-b')
+  })
+
+  // DEFECT 3 — empty-string sourceUrl falls back to frozen URL
+  it('falls back to frozen URL when proposal sourceUrl is empty (D3 empty-string)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: '', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: '', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Extract from sheet-a
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-a' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Change URL to sheet-b AFTER proposals rendered
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-b' },
+    })
+    // Save — provenance must fall back to the frozen extraction URL, not use '' or sheet-b
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // Empty-string sourceUrl falls back to frozen URL
+    expect(payload.source.url).toBe('https://example.com/sheet-a')
+  })
+})

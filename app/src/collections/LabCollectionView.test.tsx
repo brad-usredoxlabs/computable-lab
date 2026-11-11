@@ -194,4 +194,52 @@ describe('LabCollectionView', () => {
     expect(card.textContent).toContain('VP-FAKE-001')
     expect(card.textContent).toContain('Shelf A-3')
   })
+
+  it('shows "+ New labware" on the labware category only, routing to the labware creation page', () => {
+    render(
+      <MemoryRouter initialEntries={['/lab/labware']}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+          <Route path="/lab/labware/new" element={<div data-testid="labware-new-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    // Button is present on the labware tab.
+    const btn = screen.getByTestId('lab-category-new-labware')
+    expect(btn).toBeDefined()
+    // Clicking routes to the labware creation page.
+    fireEvent.click(btn)
+    expect(screen.getByTestId('labware-new-target')).toBeDefined()
+  })
+
+  it('does NOT show "+ New labware" on non-labware categories', () => {
+    render(
+      <MemoryRouter initialEntries={['/lab/materials']}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+          <Route path="/lab/labware/new" element={<div data-testid="labware-new-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    // Button must be absent on the materials category.
+    expect(screen.queryByTestId('lab-category-new-labware')).toBeNull()
+  })
 })
