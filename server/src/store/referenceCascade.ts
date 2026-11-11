@@ -71,18 +71,24 @@ export interface DanglingRef {
 /**
  * Load the cascade policy from a YAML file.
  *
- * Throws on missing file, parse error, or missing `rules` key —
- * fail-closed so a bad deploy does not silently accept all deletes.
+ * Returns an empty (default-refuse) policy when the file is absent (ENOENT),
+ * so workspaces without the cascade YAML file still boot — an empty Map
+ * already implements fail-closed behavior (everything refuses).
+ *
+ * Throws on parse error, shape mismatch, or any I/O error other than ENOENT
+ * — malformed content must still fail loudly.
  *
  * @param yamlPath — Absolute path to the YAML declaration file
  * @returns CascadePolicy map keyed by (referrerKind, pointer)
  */
 export function loadCascadePolicy(yamlPath: string): CascadePolicy {
-  // Read file — throw on missing/unreadable
+  // Read file — return empty policy on ENOENT; re-throw other errors
   let content: string;
   try {
     content = readFileSync(yamlPath, 'utf-8');
   } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return new Map();
     throw new Error(
       `Cascade policy file not found or unreadable: ${yamlPath} (${err instanceof Error ? err.message : String(err)})`
     );

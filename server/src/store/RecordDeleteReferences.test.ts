@@ -285,4 +285,23 @@ describe('L2-RECORD-DELETE-DEPENDENTS-1 — reference-aware deletion', () => {
     expect(shaResult.success).toBe(false);
     expect(shaResult.error).toContain('SHA mismatch');
   });
+
+  // ---------------------------------------------------------------------------
+  // c3-defect1: loadCascadePolicy ENOENT → empty Map, malformed → throws
+  // ---------------------------------------------------------------------------
+  describe('loadCascadePolicy — absent vs malformed', () => {
+    it('absent path returns empty Map (default-refuse)', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const policy = loadCascadePolicy('/nonexistent/cascade-policy.yaml');
+      expect(policy).toBeInstanceOf(Map);
+      expect(policy.size).toBe(0);
+    });
+
+    it('malformed YAML file throws', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const tmpPath = join(testDir, 'malformed.yaml');
+      await writeFile(tmpPath, 'hello: [unclosed');
+      expect(() => loadCascadePolicy(tmpPath)).toThrow('YAML parse error');
+    });
+  });
 });
