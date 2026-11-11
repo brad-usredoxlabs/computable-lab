@@ -168,10 +168,30 @@ export async function proposeRoleBindings(
       }
 
       const declared = new Set(kinds);
+
+      // List labware-instances once (cached by listKind); group by labwareId (definition id).
+      const labwareInstances = await listKind('labware-instance');
+      const instancesByDef = new Map<string, RecordEnvelope[]>();
+      for (const inst of labwareInstances) {
+        const defId = stringField(asObject(inst.payload) ?? {}, 'labwareId');
+        if (defId && declared.has(defId)) {
+          const group = instancesByDef.get(defId) ?? [];
+          group.push(inst);
+          instancesByDef.set(defId, group);
+        }
+      }
+
       const candidates: BindingCandidate[] = [];
       for (const envelope of await listKind('labware')) {
         if (declared.has(envelope.recordId)) {
-          candidates.push(candidateOf(envelope, 'labware'));
+          const grouped = instancesByDef.get(envelope.recordId);
+          if (grouped && grouped.length > 0) {
+            for (const inst of grouped) {
+              candidates.push(candidateOf(inst, 'labware-instance'));
+            }
+          } else {
+            candidates.push(candidateOf(envelope, 'labware'));
+          }
         }
       }
       candidates.sort(byRecordId);
