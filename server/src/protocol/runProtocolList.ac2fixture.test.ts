@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
-import { loadSchemasFromContent } from '../schema/SchemaLoader.js';
+import { loadSchemasFromContent, loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { AjvValidator } from '../validation/AjvValidator.js';
 import { LintEngine } from '../lint/LintEngine.js';
@@ -24,22 +24,26 @@ const PLANNED_RUN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/
 const RECORD_ID = 'PLR-SEEDLOCALBIND';
 const PROTOCOL_ID = 'prt-seed-biological-transfer';
 
-// Load the planned-run schema plus its dependencies for the pure leg
+// Load all schemas from the repo schema directory for the pure leg
+// Provide a stub for revision-ref which event-graph depends on but is absent on disk
 async function loadPlannedRunSchema() {
-  const schemaRoot = join(process.cwd(), 'schema');
-  const contents = new Map<string, string>();
-  for (const p of [
-    'core/common.schema.yaml',
-    'core/datatypes/ref.schema.yaml',
-    'workflow/planned-run.schema.yaml',
-  ]) {
-    contents.set(p, await readFile(join(schemaRoot, p), 'utf8'));
-  }
-  const result = loadSchemasFromContent(contents);
+  const schemaRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'schema');
+  const result = await loadAllSchemas({ basePath: schemaRoot });
   if (result.errors.length > 0) {
     throw new Error(`Schema load errors: ${JSON.stringify(result.errors)}`);
   }
   const validator = createValidator({ strict: false });
+  // Inject a minimal revision-ref stub so event-graph compiles
+  validator.addSchema({
+    $id: 'https://computable-lab.com/schema/computable-lab/datatypes/revision-ref.schema.yaml',
+    type: 'object',
+    required: ['kind', 'type', 'id'],
+    properties: {
+      kind: { const: 'record' },
+      type: { const: 'record-revision' },
+      id: { type: 'string' },
+    },
+  });
   for (const entry of result.entries) {
     validator.addSchema(entry.schema, entry.id);
   }
