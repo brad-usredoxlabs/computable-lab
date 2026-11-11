@@ -20,5 +20,11 @@ VERDICT: FIX — 2 MAJOR (DEFECT 1, DEFECT 2), 2 MINOR (DEFECT 3, DEFECT 4)
 - app/src/collections/LabLabwareNewPage.test.tsx — new tests + de-vacuumed D4 fixture
 - docs/d3d4prov-fix1-report.md — this report
 
-## Progress
-[In progress — test patches applied]
+## d3d4fix1b — one-line restore
+Line 85 restored: `proposals[0]?.sourceUrl || extractedUrl`
+
+### Vitest output
+Test Files  1 passed (1)
+Tests  18 passed (18)
+
+L2-SPEC-SHEET-INGEST-1-d3d4fix1b UNIT d3d4fix1b DONE 2dce8d405472f33c8506ce586f6f2932de412c53
