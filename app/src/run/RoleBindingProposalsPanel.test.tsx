@@ -3,10 +3,16 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ApiError } from '../shared/api/errors'
 import { RoleBindingProposalsPanel } from './RoleBindingProposalsPanel'
 
-const mocks = vi.hoisted(() => ({ getRoleBindingProposals: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  getRoleBindingProposals: vi.fn(),
+  updatePlannedRunBindings: vi.fn(),
+}))
 
 vi.mock('../shared/api/client', () => ({
-  apiClient: { getRoleBindingProposals: mocks.getRoleBindingProposals },
+  apiClient: {
+    getRoleBindingProposals: mocks.getRoleBindingProposals,
+    updatePlannedRunBindings: mocks.updatePlannedRunBindings,
+  },
 }))
 
 afterEach(() => {
@@ -15,6 +21,7 @@ afterEach(() => {
 })
 beforeEach(() => {
   mocks.getRoleBindingProposals.mockReset()
+  mocks.updatePlannedRunBindings.mockReset()
 })
 
 /** Flush the effect's promise chain without asserting on the (initially empty) DOM. */
@@ -164,6 +171,110 @@ describe('RoleBindingProposalsPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('PROTO-WITH-REASON')).toBeTruthy()
       expect(screen.getByText('custom reason for this protocol')).toBeTruthy()
+    })
+  })
+
+  it('clicking Bind for an ambiguous material candidate posts materials binding', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('Collagenase')).toBeTruthy())
+    const bindBtns = screen.getAllByTestId('bind-candidate')
+    const bindBtn = bindBtns.find(btn => btn.dataset.candidateId === 'MAT-3')
+    expect(bindBtn).toBeTruthy()
+    await act(async () => { bindBtn!.click() })
+
+    expect(mocks.updatePlannedRunBindings).toHaveBeenCalledWith('run-1', {
+      materials: [{ roleId: 'enzyme', materialInstanceRef: 'MAT-3' }],
+    })
+  })
+
+  it('clicking Bind for a labware candidate posts labware binding', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [{
+          roleId: 'plate',
+          roleKind: 'labware' as const,
+          state: 'ambiguous' as const,
+          candidates: [
+            { recordId: 'LAB-1', recordKind: 'labware-instance', label: 'Plate A' },
+            { recordId: 'LAB-2', recordKind: 'labware-instance', label: 'Plate B' },
+          ],
+        }],
+      }],
+    })
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('Plate B')).toBeTruthy())
+    const bindBtns = screen.getAllByTestId('bind-candidate')
+    const bindBtn = bindBtns.find(btn => btn.dataset.candidateId === 'LAB-2')
+    expect(bindBtn).toBeTruthy()
+    await act(async () => { bindBtn!.click() })
+
+    expect(mocks.updatePlannedRunBindings).toHaveBeenCalledWith('run-1', {
+      labware: [{ roleId: 'plate', labwareInstanceRef: 'LAB-2' }],
+    })
+  })
+
+  it('after a successful bind the panel re-reads proposals', async () => {
+    const boundResponse = {
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [{
+          roleId: 'enzyme',
+          roleKind: 'material' as const,
+          state: 'bound' as const,
+          bound: { recordId: 'MAT-3', recordKind: 'material', label: 'Collagenase' },
+          candidates: [],
+        }, {
+          roleId: 'medium',
+          roleKind: 'material' as const,
+          state: 'proposed' as const,
+          candidates: [{ recordId: 'MAT-1', recordKind: 'vendor-product', label: 'DMEM High Glucose' }],
+        }, {
+          roleId: 'plate',
+          roleKind: 'labware' as const,
+          state: 'unbound' as const,
+          candidates: [],
+          reason: 'No labware record matches the declared kind',
+        }],
+      }],
+      clarificationRequests: [],
+    }
+    mocks.getRoleBindingProposals
+      .mockResolvedValueOnce(threeRoles)
+      .mockResolvedValueOnce(boundResponse)
+    mocks.updatePlannedRunBindings.mockResolvedValueOnce({ success: true })
+
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('Collagenase')).toBeTruthy())
+    const bindBtns = screen.getAllByTestId('bind-candidate')
+    const bindBtn = bindBtns.find(btn => btn.dataset.candidateId === 'MAT-3')
+    expect(bindBtn).toBeTruthy()
+    await act(async () => { bindBtn!.click() })
+
+    await waitFor(() => expect(mocks.getRoleBindingProposals).toHaveBeenCalledTimes(2))
+  })
+
+  it('on a rejected bind the panel shows the error in an alert and does not claim bound', async () => {
+    const err = new ApiError({ status: 400, code: 'HTTP_400', message: 'Role already bound' })
+    mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
+    mocks.updatePlannedRunBindings.mockRejectedValueOnce(err)
+
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('Collagenase')).toBeTruthy())
+    const bindBtns = screen.getAllByTestId('bind-candidate')
+    const bindBtn = bindBtns.find(btn => btn.dataset.candidateId === 'MAT-2')
+    expect(bindBtn).toBeTruthy()
+    await act(async () => { bindBtn!.click() })
+
+    await waitFor(() => {
+      const alert = screen.queryByRole('alert')
+      expect(alert).not.toBeNull()
+      expect(alert?.textContent).toContain('Role already bound')
     })
   })
 })
