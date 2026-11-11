@@ -1656,7 +1656,19 @@ export function createRecordHandlers(
 
       const records = await store.list();
       const dangling = findDanglingReferences(records);
-      return { dangling, count: dangling.length };
+
+      // Filter through the same request-scoped ACL snapshot as listRecords
+      const aclSnapshot = security?.authorizationService
+        ? await security.authorizationService.buildAclSnapshot()
+        : undefined;
+
+      const byId = new Map(records.map((r) => [r.recordId, r]));
+      const visible: typeof dangling = [];
+      for (const ref of dangling) {
+        const owner = byId.get(ref.recordId) ?? null;
+        if (await canAccess(user, 'read', owner, aclSnapshot)) visible.push(ref);
+      }
+      return { dangling: visible, count: visible.length };
     },
   };
 }
