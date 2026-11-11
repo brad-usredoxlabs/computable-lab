@@ -235,7 +235,7 @@ export function LabLabwareNewPage() {
     setSaving(true)
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
-      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, sheetUrl)
+      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {
