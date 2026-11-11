@@ -21,7 +21,7 @@ import { homedir } from 'node:os';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
 import { loadAllSchemas } from './schema/SchemaLoader.js';
-import { getComposedProperties } from './schema/composedProperties.js';
+import { makeGetSchemaProperties } from './schema/composedProperties.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
 import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
@@ -801,28 +801,7 @@ export async function createServer(
       getKindLifecycleCoverage: () => ctx.kindLifecycleRegistry,
       // f3server: schema-driven provenance check — consult the schema registry
       // to decide which provenance fields to inject. Absent → kind-based fallback.
-      getSchemaProperties: (schemaId) => {
-        const entry = ctx.schemaRegistry.getById(schemaId);
-        if (!entry) return undefined;
-        // f3fix2: walk the composed schema (allOf + local $ref) for property names
-        const lookup = (ref: string) => {
-          if (ref.startsWith('#')) {
-            const pointer = ref.substring(1);
-            if (pointer === '') return entry.schema as Record<string, unknown>;
-            const path = pointer.split('/').map(s => s.replace(/~1/g, '/').replace(/~0/g, '~'));
-            let current: unknown = entry.schema;
-            for (const segment of path) {
-              if (current == null) return undefined;
-              current = (current as Record<string, unknown>)[segment];
-            }
-            return typeof current === 'object' && current !== null
-              ? current as Record<string, unknown>
-              : undefined;
-          }
-          return ctx.schemaRegistry.getById(ref)?.schema as Record<string, unknown> | undefined;
-        };
-        return getComposedProperties(entry.schema as Record<string, unknown>, lookup);
-      },
+      getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
