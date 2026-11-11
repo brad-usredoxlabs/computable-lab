@@ -6,7 +6,8 @@
  * ONLY the declarations:
  *  - expectedLabwareKinds[] -> `labware` records by recordId
  *  - allowedMaterialIds[]   -> `material` records by recordId, plus `vendor-product`
- *    records whose `material_ref.id` matches
+ *    records whose `material_ref.id` matches, plus `material-instance` records
+ *    provenance-chained to a declared id (via material_ref or vendor_product_ref)
  */
 
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
@@ -258,6 +259,47 @@ export async function proposeRoleBindings(
         const materialId = materialRef ? stringField(materialRef, 'id') : undefined;
         if (materialId && declared.has(materialId)) {
           byId.set(envelope.recordId, candidateOf(envelope, 'vendor-product'));
+        }
+      }
+      // material-instance: provenance-chained to a declared id via material_ref (direct)
+      // or vendor_product_ref -> material_ref (one-hop). Uses byId map for dedup.
+      for (const envelope of await listKind('material-instance')) {
+        const payload = asObject(envelope.payload) ?? {};
+        const materialRef = asObject(payload.material_ref);
+        const materialId = materialRef ? stringField(materialRef, 'id') : undefined;
+        if (materialId && declared.has(materialId)) {
+          const lotObj = asObject(payload.lot);
+          const lotNumber = lotObj ? stringField(lotObj, 'lot_number') : undefined;
+          byId.set(envelope.recordId, {
+            recordId: envelope.recordId,
+            recordKind: envelope.meta?.kind ?? stringField(payload, 'kind') ?? 'material-instance',
+            label: labelOf(payload, envelope.recordId),
+            ...(lotNumber ? { lotNumber } : {}),
+          });
+          continue;
+        }
+        // One-hop via vendor_product_ref
+        const vendorProductRef = asObject(payload.vendor_product_ref);
+        if (vendorProductRef) {
+          const vprId = stringField(vendorProductRef, 'id');
+          if (vprId) {
+            const vprEnvelope = await store.get(vprId);
+            if (vprEnvelope) {
+              const vprPayload = asObject(vprEnvelope.payload) ?? {};
+              const vprMaterialRef = asObject(vprPayload.material_ref);
+              const vprMaterialId = vprMaterialRef ? stringField(vprMaterialRef, 'id') : undefined;
+              if (vprMaterialId && declared.has(vprMaterialId)) {
+                const lotObj = asObject(payload.lot);
+                const lotNumber = lotObj ? stringField(lotObj, 'lot_number') : undefined;
+                byId.set(envelope.recordId, {
+                  recordId: envelope.recordId,
+                  recordKind: envelope.meta?.kind ?? stringField(payload, 'kind') ?? 'material-instance',
+                  label: labelOf(payload, envelope.recordId),
+                  ...(lotNumber ? { lotNumber } : {}),
+                });
+              }
+            }
+          }
         }
       }
       const candidates = [...byId.values()].sort(byRecordId);
