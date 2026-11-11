@@ -31,18 +31,16 @@ VERIFICATION
 - npx tsc --noEmit -> exit 0, no output.
 - vitest run (2 files) -> Test Files 2 passed (2), Tests 11 passed (11).
 - grep cascadePolicyPath in server/src: only in types.ts, RecordStoreImpl.ts,
-  server.ts:532, and the test — no orphaned intersection types remain.
+  server.ts:532, and the test -- no orphaned intersection types remain.
 
 CHANGED FILES (2)
 -----------------
-1. server/src/store/types.ts  — added cascadePolicyPath field to RecordStoreConfig
-2. server/src/store/RecordStoreImpl.ts — removed intersection, added DEFAULT_CONFIG entry
+1. server/src/store/types.ts  -- added cascadePolicyPath field to RecordStoreConfig
+2. server/src/store/RecordStoreImpl.ts -- removed intersection, added DEFAULT_CONFIG entry
 
 CHANGED PATHS
 -------------
 server/src/store/types.ts
 server/src/store/RecordStoreImpl.ts
 
-SHA: a963d97ff028c9d064a37f4b000a61de263e4741
-
-L2-RECORD-DELETE-DEPENDENCIES-c3d2 UNIT unit DONE a963d97ff028c9d064a37f4b000a61de263e4741
+L2-RECORD-DELETE-DEPENDENCIES-c3d2 UNIT unit DONE 000a4ece210b2e0ee50b90031a647dc2a194d748
