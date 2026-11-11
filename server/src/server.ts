@@ -151,7 +151,7 @@ import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js'
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
-import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
+import { ArtifactBlobStore, createArtifactBlobStoreRecorder } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
@@ -1011,9 +1011,15 @@ export async function createServer(
     : undefined;
   const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 
+  const ingestionBlobStore = new ArtifactBlobStore(
+    ctx.storageService.getProvider(ctx.storageService.defaultDeviceId()),
+    ctx.storageService.defaultDeviceId(),
+    'ingestion-artifacts',
+    createArtifactBlobStoreRecorder(ctx.store),
+  );
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,
-    new ArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
+    ingestionBlobStore,
     runner,
   );
 
