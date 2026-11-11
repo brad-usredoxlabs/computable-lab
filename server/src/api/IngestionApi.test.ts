@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
@@ -13,9 +13,20 @@ describe('Ingestion API', () => {
   const originalConfigPath = process.env.CONFIG_PATH;
 
   beforeAll(async () => {
-    process.env.CONFIG_PATH = resolve(testRoot, 'missing-config.yaml');
     await rm(testRoot, { recursive: true, force: true });
     await mkdir(resolve(testRoot, 'records'), { recursive: true });
+    const storeDir = resolve(testRoot, 'store');
+    await mkdir(storeDir, { recursive: true });
+    const configPath = resolve(testRoot, 'config.yaml');
+    await writeFile(configPath, [
+      'storageDevices:',
+      '  - id: test-device',
+      "    label: 'Test device'",
+      "    kind: 'local-mount'",
+      '    default: true',
+      `    mountPath: '${storeDir}'`,
+    ].join('\n'));
+    process.env.CONFIG_PATH = configPath;
 
     ctx = await initializeApp(repoRoot, {
       recordsDir: 'tmp/ingestion-api-test/records',
@@ -429,6 +440,7 @@ describe('Ingestion API', () => {
     if (runResponse.statusCode !== 200) {
       throw new Error(runResponse.payload);
     }
+    expect(runResponse.statusCode).toBe(200);
     const reviewed = JSON.parse(runResponse.payload) as {
       job: { payload: { status: string; stage: string; metrics?: Record<string, number>; progress?: { phase?: string; current?: number; total?: number; unit?: string } } };
       bundles: Array<{ recordId: string; payload: { bundle_type: string; metrics?: Record<string, number>; candidate_refs?: unknown[] } }>;
