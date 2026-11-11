@@ -277,4 +277,59 @@ describe('RoleBindingProposalsPanel', () => {
       expect(alert?.textContent).toContain('Role already bound')
     })
   })
+
+  it('disables ALL Bind buttons while any bind is in-flight (in-flight guard)', async () => {
+    const twoAmbiguousRoles = {
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [
+          {
+            roleId: 'enzyme',
+            roleKind: 'material' as const,
+            state: 'ambiguous' as const,
+            candidates: [
+              { recordId: 'MAT-2', recordKind: 'material', label: 'Trypsin' },
+              { recordId: 'MAT-3', recordKind: 'material', label: 'Collagenase' },
+            ],
+          },
+          {
+            roleId: 'medium',
+            roleKind: 'material' as const,
+            state: 'ambiguous' as const,
+            candidates: [
+              { recordId: 'MAT-1', recordKind: 'vendor-product', label: 'DMEM' },
+            ],
+          },
+        ],
+      }],
+    }
+
+    let resolveBind: () => void
+    const bindPromise = new Promise<void>(resolve => { resolveBind = resolve })
+
+    mocks.getRoleBindingProposals.mockResolvedValue(twoAmbiguousRoles)
+    mocks.updatePlannedRunBindings.mockReturnValue(bindPromise)
+
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('Trypsin')).toBeTruthy())
+
+    const allBindBtns = screen.getAllByTestId('bind-candidate')
+    const buttonA = allBindBtns.find(btn => btn.dataset.candidateId === 'MAT-2')!
+    const buttonB = allBindBtns.find(btn => btn.dataset.candidateId === 'MAT-1')!
+
+    // Click Bind on role A
+    await act(async () => { buttonA.click() })
+
+    // While the API call is pending, ALL bind buttons must be disabled
+    expect(buttonA).toBeDisabled()
+    expect(buttonB).toBeDisabled()
+
+    // Resolve the pending bind
+    await act(async () => { resolveBind() })
+
+    // After resolution, buttons are re-enabled
+    expect(buttonA).not.toBeDisabled()
+    expect(buttonB).not.toBeDisabled()
+  })
 })
