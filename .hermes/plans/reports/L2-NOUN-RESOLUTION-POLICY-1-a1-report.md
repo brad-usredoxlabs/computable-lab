@@ -95,3 +95,13 @@ Result: Clean tree at exit.
 - resolveNounsPass.ts untouched
 
 L2-NOUN-RESOLUTION-POLICY-1-a1audit UNIT unit DONE ba960fd6340ef02df4329ffb3b959edc5f18c22c
+
+## Unit a1fix Test Statistics (Orchestrator-Verified)
+
+Command: npx vitest run server/src/ai/AgentOrchestrator.foldanswerbind.test.ts
+Result: 3 passed (3)
+Run: 04:18 EST, tree clean
+SHA: b5f51297025e7d51dddf009433c4383290fed979
+Verdict: PASS — All 3 tests green. Symmetric CURIE unwrap in composeSpineWithReuseBindings (shorthandChat.ts:523 recordIdFromCurie(b.ref.trim())) plus hardened AgentOrchestrator.foldanswerbind.test.ts.
+
+L2-NOUN-RESOLUTION-POLICY-1 UNIT a1fix DONE b5f51297025e7d51dddf009433c4383290fed979
