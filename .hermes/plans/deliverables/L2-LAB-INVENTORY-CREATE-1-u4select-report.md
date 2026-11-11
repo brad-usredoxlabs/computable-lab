@@ -25,7 +25,7 @@ as candidates. When no instances exist, the definition itself is proposed as fal
 ## Verification
 - grep: listKind('labware') at line 185; listKind('labware-instance') at line 173
 - Tests: 16 passed in roleBindingProposal.test.ts (10 existing + 5 new + 1 D1 pin)
-- 31 total tests passed across 3 test files (roleBindingWrite: 8, localPlanGraph: 8)
+- 32 total tests passed across 3 test files (roleBindingProposal: 16, roleBindingWrite: 8, localPlanGraph: 8)
 - runProtocolList.test.ts fails with pre-existing ajv module resolution error
 - tsc: 2511 error lines across ~431 files (pre-existing @types/node missing); zero new errors (base-vs-HEAD comm: 0 difference). No roleBindingProposal.ts errors.
 
@@ -34,4 +34,4 @@ as candidates. When no instances exist, the definition itself is proposed as fal
 - u3shelf: term/labware shelf visibility (different seam)
 
 ## Fix Commit
-3a8c38d3 (implementation commit; tests at 3ce7f773)
+L2-LAB-INVENTORY-CREATE-1 UNIT u4select DONE 3a8c38d3ed9dcbcb11804c3793942fa47c84e66f
