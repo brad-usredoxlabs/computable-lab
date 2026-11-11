@@ -705,6 +705,13 @@ export function createMaterialLifecycleHandlers(
       reply: FastifyReply,
     ): Promise<{ success: true; materialInstanceId: string } | ApiError> {
       const body = request.body ?? {};
+      if (isObject(body.lot)) {
+        const sourceRef = refValue(body.vendorProductRef) ?? refValue(body.materialSpecRef) ?? refValue(body.materialRef);
+        if (!sourceRef) {
+          reply.status(400);
+          return { error: 'LOT_WITHOUT_SOURCE', message: 'A lot requires a source material ref (vendorProductRef, materialSpecRef, or materialRef)' };
+        }
+      }
       const recordId = token('MINST');
       const fallbackName = refValue(body.materialSpecRef)?.label
         ?? refValue(body.vendorProductRef)?.label
