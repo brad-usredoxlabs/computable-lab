@@ -37,6 +37,7 @@ $defs:
         type: string
         description: "Unique slug identifying this source (lowercase-hyphenated)."
         minLength: 1
+        pattern: "^[a-z0-9][a-z0-9-]*$"
       prefix:
         type: string
         description: "CURIE prefix (uppercase, e.g. LWO)."
@@ -44,8 +45,9 @@ $defs:
         minLength: 1
       namespace_iri:
         type: string
-        description: "Absolute IRI for the namespace; must end with prefix + '/' or '#'."
+        description: "Absolute IRI for the namespace (http/https URL). The cross-field constraint that it ends with prefix + '/' or '#' is enforced by validation logic, not schema pattern."
         minLength: 1
+        pattern: "^https?://\\S+$"
       display_name:
         type: string
         description: "Human-readable name for this ontology."
@@ -62,9 +64,11 @@ $defs:
       path:
         type: string
         description: "Absolute path to the .obo file (required for local-obo loaders)."
+        pattern: "^/"
       root:
         type: string
         description: "Root term CURIE (required for local-obo loaders)."
+        pattern: "^[A-Za-z][A-Za-z0-9._-]*:[A-Za-z0-9_.-]+$"
       ols_key:
         type: string
         description: "OLS4 ontology key (required for ols4 loaders)."
