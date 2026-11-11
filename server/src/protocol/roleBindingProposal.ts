@@ -29,7 +29,12 @@ export interface RoleProposal {
 }
 
 export interface RoleBindingProposals {
-  protocols: Array<{ protocolId: string; roles: RoleProposal[] }>;
+  protocols: Array<{
+    protocolId: string;
+    roles: RoleProposal[];
+    protocolNotFound?: boolean;
+    reason?: string;
+  }>;
 }
 
 export interface ProposeRoleBindingsDeps {
@@ -152,6 +157,19 @@ export async function proposeRoleBindings(
   const protocols: RoleBindingProposals['protocols'] = [];
 
   for (const protocolId of protocolIdsOf(runPayload)) {
+    // Check existence before processing — a missing protocol must still
+    // appear in the protocols array with a marker, not as a silent empty entry.
+    const protocolEnvelope = await store.get(protocolId);
+    if (!protocolEnvelope) {
+      protocols.push({
+        protocolId,
+        roles: [],
+        protocolNotFound: true,
+        reason: `protocol '${protocolId}' referenced by this run does not exist in the store`,
+      });
+      continue;
+    }
+
     const rolesObj = await declaredRolesOf(store, protocolId);
     const roles: RoleProposal[] = [];
 
@@ -299,7 +317,15 @@ export async function proposeRoleBindings(
       });
     }
 
-    protocols.push({ protocolId, roles });
+    if (roles.length === 0) {
+      protocols.push({
+        protocolId,
+        roles,
+        reason: 'declares no labware/material roles',
+      });
+    } else {
+      protocols.push({ protocolId, roles });
+    }
   }
 
   return { protocols };

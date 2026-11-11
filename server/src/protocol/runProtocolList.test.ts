@@ -132,6 +132,45 @@ describe('withDetachedProtocol — inverse of attach', () => {
   });
 });
 
+describe('protocolRefsOf — lab-layer fallback to protocolRef', () => {
+  it('resolves protocolRef when local fields are absent', () => {
+    const payload = {
+      kind: 'run',
+      protocolRef: { kind: 'record', id: 'PRT-1', type: 'protocol' },
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRT-1', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['PRT-1']);
+  });
+
+  it('dedupes localProtocolRefs and protocolRef when they share the same id', () => {
+    const payload = {
+      kind: 'run',
+      localProtocolRefs: [{ kind: 'record', id: 'A', type: 'local-protocol' }],
+      protocolRef: { kind: 'record', id: 'A', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['A']);
+  });
+
+  it('ignores sourceRef when sourceType is event-graph', () => {
+    const payload = {
+      kind: 'run',
+      sourceType: 'event-graph',
+      sourceRef: { kind: 'record', id: 'EG-1', type: 'event-graph' },
+    };
+    expect(protocolIdsOf(payload)).toEqual([]);
+  });
+
+  it('respects precedence: localProtocolRef > protocolRef', () => {
+    const payload = {
+      kind: 'run',
+      localProtocolRef: { kind: 'record', id: 'L', type: 'local-protocol' },
+      protocolRef: { kind: 'record', id: 'P', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['L', 'P']);
+  });
+});
+
 describe('run schema — localProtocolRefs validation', () => {
   it('validates a run with localProtocolRefs', async () => {
     const result = await loadRunSchemas();

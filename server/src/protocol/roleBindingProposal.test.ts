@@ -118,7 +118,7 @@ describe('proposeRoleBindings', () => {
     expect(role.state).toBe('unbound');
     expect(role.reason).toMatch(/no .*declar/i);
     expect(face(store.list)).toBe(0);
-    expect(face(store.get)).toBe(2);
+    expect(face(store.get)).toBe(3); // existence check + declaredRolesOf (local + universal)
   });
 
   it('reports bound when a labware binding target resolves and has one candidate', async () => {
@@ -314,6 +314,35 @@ describe('proposeRoleBindings', () => {
     // Candidates should still be the instance (not the definition)
     expect(role.candidates).toHaveLength(1);
     expect(role.candidates[0].recordId).toBe('LBI-1');
+  });
+  it('reports protocolNotFound when protocolRef id is absent from the store', async () => {
+    const runPayload = env('RUN-1', 'planned-run', {
+      protocolRef: { kind: 'record', id: 'PRT-MISSING', type: 'protocol' },
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRT-MISSING', type: 'protocol' },
+    });
+    const store = fakeStore([runPayload]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: runPayload });
+    expect(result.protocols).toHaveLength(1);
+    const entry = result.protocols[0]!;
+    expect(entry.protocolId).toBe('PRT-MISSING');
+    expect(entry.roles).toEqual([]);
+    expect(entry.protocolNotFound).toBe(true);
+    expect(entry.reason).toContain('PRT-MISSING');
+  });
+
+  it('reports reason when protocol exists but declares no roles', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      env('LPR-1', 'local-protocol', {}),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    expect(result.protocols).toHaveLength(1);
+    const entry = result.protocols[0]!;
+    expect(entry.protocolId).toBe('LPR-1');
+    expect(entry.roles).toEqual([]);
+    expect(entry.protocolNotFound).toBeUndefined();
+    expect(entry.reason).toContain('declares no labware/material roles');
   });
 });
 

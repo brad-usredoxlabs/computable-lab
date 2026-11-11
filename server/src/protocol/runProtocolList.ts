@@ -29,44 +29,48 @@ function refId(value: unknown): string | undefined {
 /**
  * Return the ordered protocol refs carried by a run payload.
  *
- * Precedence: localProtocolRefs (list) > localProtocolRef (singular).
- * When both are present, dedupe by id — the list entries keep their
- * positions and the singular ref is dropped if its id already appears.
+ * Precedence: localProtocolRefs > localProtocolRef > protocolRef > sourceRef.
+ * sourceRef is consulted only when sourceType === 'protocol' (an event-graph
+ * sourceRef names an event graph, not a protocol).
+ * Dedupe by id — first occurrence keeps its position.
  */
 export function protocolRefsOf(payload: Record<string, unknown>): ProtocolRef[] {
+  const refs: ProtocolRef[] = [];
+  const seen = new Set<string>();
+
+  const push = (value: unknown) => {
+    if (value !== null && typeof value === 'object') {
+      const id = refId(value);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        refs.push(value as ProtocolRef);
+      }
+    }
+  };
+
+  // 1. localProtocolRefs (ordered list — highest precedence)
   const maybeList = payload.localProtocolRefs;
-  if (Array.isArray(maybeList) && maybeList.length > 0) {
-    const refs: ProtocolRef[] = [];
-    const seen = new Set<string>();
+  if (Array.isArray(maybeList)) {
     for (const entry of maybeList) {
-      if (entry !== null && typeof entry === 'object') {
-        const id = refId(entry);
-        if (id && !seen.has(id)) {
-          seen.add(id);
-          refs.push(entry as ProtocolRef);
-        }
-      }
+      push(entry);
     }
-    // If both list and singular are present, check singular for dedupe
-    const singular = payload.localProtocolRef;
-    const singularId = refId(singular);
-    if (singularId && !seen.has(singularId)) {
-      seen.add(singularId);
-      if (singular !== null && typeof singular === 'object') {
-        refs.push(singular as ProtocolRef);
-      }
-    }
-    return refs;
   }
 
-  // Legacy singular path
+  // 2. localProtocolRef (legacy singular)
   const singular = payload.localProtocolRef;
-  if (singular !== null && typeof singular === 'object') {
-    const id = refId(singular);
-    if (id) return [singular as ProtocolRef];
+  push(singular);
+
+  // 3. protocolRef (lab-layer reference)
+  const protocolRef = payload.protocolRef;
+  push(protocolRef);
+
+  // 4. sourceRef — only when sourceType is 'protocol'
+  if (payload.sourceType === 'protocol') {
+    const sourceRef = payload.sourceRef;
+    push(sourceRef);
   }
 
-  return [];
+  return refs;
 }
 
 /** Return the ids of the protocol refs in order. */
