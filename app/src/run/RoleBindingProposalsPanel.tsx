@@ -111,7 +111,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                       data-testid="bind-candidate"
                       data-candidate-id={role.candidates[0]?.recordId}
                       onClick={() => role.candidates[0] && handleBind(role.candidates[0], role)}
-                      disabled={bindingCandidate === role.candidates[0]?.recordId}
+                      disabled={bindingCandidate !== null}
                     >
                       Bind
                     </button>
@@ -128,7 +128,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                             data-testid="bind-candidate"
                             data-candidate-id={candidate.recordId}
                             onClick={() => handleBind(candidate, role)}
-                            disabled={bindingCandidate === candidate.recordId}
+                            disabled={bindingCandidate !== null}
                           >
                             Bind
                           </button>
