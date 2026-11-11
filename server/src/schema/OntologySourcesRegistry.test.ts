@@ -166,6 +166,25 @@ describe('Ontology Sources Registry', () => {
     };
     const negResultLocal = validator.validate(negFixtureLocalWithoutPath, schemaId);
     expect(negResultLocal.valid, 'local-obo-without-path-root fixture must be rejected').toBe(false);
+
+    // Negative fixture 3: local-obo entry with invalid root value (not a CURIE) must be rejected
+    const negFixtureInvalidRoot = {
+      version: '1.0',
+      sources: [
+        {
+          id: 'neg-fixture-3',
+          prefix: 'NEG',
+          namespace_iri: 'http://example.org/neg/',
+          display_name: 'Negative Fixture 3',
+          loader: 'local-obo',
+          enabled: true,
+          path: '/some/path.obo',
+          root: 'banana',
+        },
+      ],
+    };
+    const negResultInvalidRoot = validator.validate(negFixtureInvalidRoot, schemaId);
+    expect(negResultInvalidRoot.valid, 'invalid-root-value fixture must be rejected').toBe(false);
   });
 
   it('(v) at least one enabled source and at least one local source', () => {
