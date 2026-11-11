@@ -48,4 +48,4 @@ cd /home/brad/cl-wt/L2-ONTO-SRC-o1r-lane2/server && node node_modules/vitest/vit
 cd /home/brad/cl-wt/L2-ONTO-SRC-o1r-lane2/server && ./node_modules/.bin/tsc --noEmit -p .
 cd /home/brad/cl-wt/L2-ONTO-SRC-o1r-lane2 && git -c core.fileMode=false status --short
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-o1r UNIT o1r DONE 5005d6de7704aefbc62704a335b163e833e60c33
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o1r UNIT o1r DONE b0258a5e1aa2307e6d9c78b1e12c4bd1ec22222b
