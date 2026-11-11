@@ -8,9 +8,26 @@ Added guard in createMaterialInstance to refuse POST /materials/instances when l
 2. server/src/api/handlers/MaterialLifecycle.lotref.test.ts (NEW, 90 lines, 3 tests)
 
 ## Test Results
-- Unit tests: 3 passed (400+empty-store, zero records, 201 with valid ref)
-- Regression: 9 passed (9)
-- Mutation probe: `if (false && !sourceRef)` → 2 failed | 1 passed (expected 201 to be 400, expected 1 to be +0); guard byte-restored, `git status --short` clean
-- Typecheck: clean
 
-L2-LAB-INVENTORY-CREATE-1-u2pw UNIT unit DONE fdd7def7d5a7efd0e1ee76f33b2cac2eed4798e0
+Combined unit + regression run:
+```
+$ node node_modules/vitest/vitest.mjs run --root server src/api/handlers/MaterialLifecycle.lotref.test.ts src/api/handlers/MaterialLifecycle.classify.test.ts
+
+RUN  v1.6.1 /home/brad/cl-wt/L2-LAB-INVENTORY-CREATE-1-u2-lane2/server
+
+ ✓ src/api/handlers/MaterialLifecycle.lotref.test.ts  (3 tests) 6ms
+ ✓ src/api/handlers/MaterialLifecycle.classify.test.ts  (9 tests) 41ms
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+```
+
+Mutation probe: `if (false && !sourceRef)` → 2 failed | 1 passed; guard byte-restored, `git status --short` clean
+
+Typecheck:
+```
+$ npx tsc --noEmit
+TSC_EXIT=0
+```
+
+L2-LABINV-u2pw2 UNIT unit DONE PLACEHOLDER_SHA
