@@ -31,6 +31,22 @@ properties:
     type: string
   vendor:
     type: string
+  ontology_ref:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    description: >-
+      Optional ontology anchor (LWO CURIE) linking this labware definition to the
+      Labware Ontology. Presence is required by the create flow, not by the schema.
+      An unanchored record must record the absence explicitly rather than carry a
+      lookalike term from another vocabulary.
+    properties:
+      kind:
+        const: ontology
+      id:
+        type: string
+        pattern: "^[A-Z][A-Za-z0-9]*:[0-9A-Za-z_.-]+$"
+        description: "CURIE of the anchored LWO term (e.g., LWO:0000100)."
   platform_aliases:
     type: array
     items:
