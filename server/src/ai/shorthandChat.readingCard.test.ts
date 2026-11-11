@@ -9,8 +9,8 @@
  *
  * The fix shape is STRUCTURAL, never a reason literal (Amendment 1): the map's
  * new arm fires on the fact CARRYING readings, routes it to menuProvider
- * 'choice' (mint suppression falls out of the existing
- * `menuProvider !== 'choice' && mintable` expression — zero new policy), and
+ * 'choice'. The allowCreateLocal flag follows the mintability gate (DATA) —
+ * a mintable reading card offers both exits, and
  * the prompt is the fact's OWN `message` (already data-derived). kind stays
  * from the vocabulary's declared domain. A fact WITHOUT readings renders
  * byte-identically to today (pinned by hash comparison).
@@ -122,13 +122,12 @@ describe('READING-CARD-ANSWER-1 — the map arm: a readings-bearing fact becomes
     expect(request!.prompt).not.toContain('Choose what it is');
   });
 
-  it('mint suppression falls out of the existing expression: a reading card has allowCreateLocal false', () => {
+  it('a mintable reading card offers both exits: allowCreateLocal is true', () => {
     const [request] = clarificationsFromUnresolvedFacts([READING_FACT]);
     // The label is a plain noun-phrase (mintable by the nounShape DATA) —
-    // the suppression comes from menuProvider === 'choice' ALONE (the
-    // existing `menuProvider !== 'choice' && mintable` expression). Zero new
-    // policy expressions.
-    expect(request!.allowCreateLocal).toBe(false);
+    // allowCreateLocal follows the mintability gate alone. The control at
+    // :191-198 (prose label) proves the mintability gate still bites.
+    expect(request!.allowCreateLocal).toBe(true);
   });
 
   it('the join id is unchanged: requestId = factRequestId(fact) (no new wire shape)', () => {
@@ -183,7 +182,7 @@ describe('READING-CARD-ANSWER-1 — the map arm: a readings-bearing fact becomes
     };
     const [request] = clarificationsFromUnresolvedFacts([otherReason]);
     expect(request!.menuProvider).toBe('choice');
-    expect(request!.allowCreateLocal).toBe(false);
+    expect(request!.allowCreateLocal).toBe(true);
     expect(request!.prompt).toBe(otherReason.message);
     expect(request!.options.length).toBe(3);
   });

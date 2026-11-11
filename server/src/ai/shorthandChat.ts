@@ -938,8 +938,9 @@ export function answeredClarificationLabelsFromBatch(
  * readings (the data the bar itself attached) maps to menuProvider 'choice'
  * with its readings as the option set (id = reading id, label = the reading's
  * own label, snippet = the computed final fractions + note; ARRAY order — the
- * server never pre-picks). Mint suppression falls out of the EXISTING
- * `menuProvider !== 'choice' && mintable` expression — zero new policy. The
+ * server never pre-picks). The allowCreateLocal flag follows the mintability
+ * gate (nounShape DATA via isMintableLabel) — a mintable reading card offers
+ * both exits. The
  * prompt is the fact's OWN `message` (already data-derived), not the noun
  * template. kind stays from the domain map. A fact WITHOUT readings renders
  * byte-identically to today.
@@ -1012,7 +1013,7 @@ export function clarificationsFromUnresolvedFacts(
     // For plain strings, humanLabel is the original label.
     const displayLabelSource = humanLabel ?? fact.reason;
     const mintable = isMintableLabel(displayLabelSource, nounShape);
-    const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    const allowCreateLocal = mintable;
     // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i)): the DISPLAYED
     // label token is the canonical label — the record TITLE when a local-term
     // record for this identity is GROUNDED (STAGE A, resolved by the store-GET
