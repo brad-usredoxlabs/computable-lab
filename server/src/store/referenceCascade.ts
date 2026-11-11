@@ -57,37 +57,56 @@ export interface ReferrerInfo {
 /**
  * Load the cascade policy from a YAML file.
  *
+ * Throws on missing file, parse error, or missing `rules` key —
+ * fail-closed so a bad deploy does not silently accept all deletes.
+ *
  * @param yamlPath — Absolute path to the YAML declaration file
- * @returns CascadePolicy map, or empty map if the file is missing/invalid
+ * @returns CascadePolicy map keyed by (referrerKind, pointer)
  */
 export function loadCascadePolicy(yamlPath: string): CascadePolicy {
-  const policy = new Map<string, Map<string, 'cascade' | 'refuse'>>();
-
+  // Read file — throw on missing/unreadable
+  let content: string;
   try {
-    const content = readFileSync(yamlPath, 'utf-8');
-    const data = yaml.load(content) as Record<string, unknown> | null;
-    if (!data || typeof data !== 'object' || !data.rules) return policy;
+    content = readFileSync(yamlPath, 'utf-8');
+  } catch (err) {
+    throw new Error(
+      `Cascade policy file not found or unreadable: ${yamlPath} (${err instanceof Error ? err.message : String(err)})`
+    );
+  }
 
-    const rules = Array.isArray(data.rules) ? data.rules : [];
-    for (const rule of rules) {
-      if (!rule || typeof rule !== 'object') continue;
-      const referrerKind = (rule as Record<string, unknown>).referrerKind as string;
-      if (typeof referrerKind !== 'string') continue;
-      const pointers = (rule as Record<string, unknown>).pointers as Record<string, string> | undefined;
-      if (!pointers || typeof pointers !== 'object') continue;
+  // Parse YAML — throw on malformed content
+  let data: unknown;
+  try {
+    data = yaml.load(content);
+  } catch (err) {
+    throw new Error(
+      `Cascade policy YAML parse error in ${yamlPath}: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
-      const pointerMap = new Map<string, 'cascade' | 'refuse'>();
-      for (const [pointer, value] of Object.entries(pointers)) {
-        if (value === 'cascade' || value === 'refuse') {
-          pointerMap.set(pointer, value);
-        }
-      }
-      if (pointerMap.size > 0) {
-        policy.set(referrerKind, pointerMap);
+  if (!data || typeof data !== 'object' || !(data as Record<string, unknown>).rules) {
+    throw new Error(`Cascade policy file missing 'rules' key: ${yamlPath}`);
+  }
+
+  const obj = data as Record<string, unknown>;
+  const policy = new Map<string, Map<string, 'cascade' | 'refuse'>>();
+  const rules: unknown[] = Array.isArray(obj.rules) ? obj.rules : [];
+  for (const rule of rules) {
+    if (!rule || typeof rule !== 'object') continue;
+    const referrerKind = (rule as Record<string, unknown>).referrerKind as string;
+    if (typeof referrerKind !== 'string') continue;
+    const pointers = (rule as Record<string, unknown>).pointers as Record<string, string> | undefined;
+    if (!pointers || typeof pointers !== 'object') continue;
+
+    const pointerMap = new Map<string, 'cascade' | 'refuse'>();
+    for (const [pointer, value] of Object.entries(pointers)) {
+      if (value === 'cascade' || value === 'refuse') {
+        pointerMap.set(pointer, value);
       }
     }
-  } catch {
-    // File missing or invalid — empty policy (all refuse)
+    if (pointerMap.size > 0) {
+      policy.set(referrerKind, pointerMap);
+    }
   }
 
   return policy;
@@ -181,10 +200,8 @@ export function findReferrers(
  * cascades or refuses.
  *
  * Default: refuse (anything not explicitly declared as cascade).
- *
- * Special rule: access-policy records whose resourceRef points to the target
- * are ALWAYS cascade — this is criterion (a). The policy file declares this,
- * but the code also enforces it as a fallback for robustness.
+ * The YAML declaration file is the sole authority — no kind names
+ * are hardcoded in TypeScript.
  */
 export function resolveDeleteAction(
   policy: CascadePolicy,
@@ -194,11 +211,6 @@ export function resolveDeleteAction(
   if (kindRules) {
     const pointerAction = kindRules.get(referrer.pointer);
     if (pointerAction) return pointerAction;
-  }
-
-  // Fallback: access-policy with resourceRef always cascade (criterion a)
-  if (referrer.kind === 'access-policy' && referrer.pointer === 'resourceRef') {
-    return 'cascade';
   }
 
   return 'refuse';
