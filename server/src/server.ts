@@ -798,6 +798,20 @@ export async function createServer(
       // QMS7-3: registry-kind lifecycle coverage (loaded in initializeApp;
       // absent when the load failed → no stamp-at-create, degraded loudly).
       getKindLifecycleCoverage: () => ctx.kindLifecycleRegistry,
+      // f3server: schema-driven provenance check — consult the schema registry
+      // to decide which provenance fields to inject. Absent → kind-based fallback.
+      getSchemaProperties: (schemaId) => {
+        const entry = ctx.schemaRegistry.getById(schemaId);
+        if (!entry) return undefined;
+        const props = (entry.schema.properties ?? {}) as Record<string, unknown>;
+        const addl = entry.schema.additionalProperties;
+        return {
+          hasCreatedAt: Object.prototype.hasOwnProperty.call(props, 'createdAt'),
+          hasUpdatedAt: Object.prototype.hasOwnProperty.call(props, 'updatedAt'),
+          hasCreatedBy: Object.prototype.hasOwnProperty.call(props, 'createdBy'),
+          allowsAny: addl !== false,
+        };
+      },
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);

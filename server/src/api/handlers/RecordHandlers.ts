@@ -71,6 +71,12 @@ interface RecordHandlerSecurityOptions {
    */
   getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
   /**
+   * Schema-driven provenance check: which fields the target schema accepts.
+   * Absent accessor → kind-based fallback (backward compat; system works with
+   * the wiring ripped out). NO kind names in TS — the schema shape decides.
+   */
+  getSchemaProperties?: (schemaId: string) => SchemaProvenanceCheck | undefined;
+  /**
    * QMS7-3: registry-kind lifecycle coverage, loaded from
    * schema/registry/registry-kinds.registry.yaml via KindLifecycleRegistry.
    * Absent accessor → no stamp-at-create (every existing path is unchanged;
