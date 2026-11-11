@@ -82,7 +82,7 @@ function buildPayloadFromProposals(
   }
 
   // D3: freeze provenance — use proposal.sourceUrl first, then extractedUrl
-  const provenanceUrl = extractedUrl
+  const provenanceUrl = proposals[0]?.sourceUrl || extractedUrl
   if (provenanceUrl) {
     // D4: source.kind from schema enum (prefer 'imported'), fallback to literal
     const sourceNode = props?.source
