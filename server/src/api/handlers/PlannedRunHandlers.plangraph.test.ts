@@ -71,12 +71,12 @@ describe('buildPlanGraph', () => {
 
   it('resolves inherits_from steps and roles from the universal protocol', async () => {
     const universalSteps = [
-      { stepId: 'step-1', kind: 'incubate', reagentRole: 'sample', plateRole: 'plate' },
-      { stepId: 'step-2', kind: 'read', plateRole: 'plate' },
+      { stepId: 'step-1', kind: 'incubate', target: { labwareRole: 'plate' }, sampleRole: 'sample' },
+      { stepId: 'step-2', kind: 'read', target: { labwareRole: 'plate' } },
     ];
     const universalRoles = {
-      sampleRole: { expectedLabwareKinds: ['tube'], allowedMaterialIds: [] },
-      plateRole: { expectedLabwareKinds: ['96-well-plate'], allowedMaterialIds: [] },
+      labwareRoles: [{ roleId: 'plate' }],
+      materialRoles: [{ roleId: 'sample' }],
     };
 
     // Local protocol: no steps, has inherits_from
@@ -98,8 +98,10 @@ describe('buildPlanGraph', () => {
       localProtocolRefs: [{ kind: 'record', id: 'LPR-local-1', type: 'local-protocol' }],
       bindings: {
         labware: [
-          { roleId: 'sampleRole', labwareInstanceRef: { kind: 'record', id: 'LAB-tube-1', type: 'labware-instance' } },
-          { roleId: 'plateRole', labwareInstanceRef: { kind: 'record', id: 'LAB-plate-1', type: 'labware-instance' } },
+          { roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'LAB-plate-1', type: 'labware-instance' } },
+        ],
+        materials: [
+          { roleId: 'sample', materialRef: { kind: 'record', id: 'MAT-sample-1', type: 'material-instance' } },
         ],
       },
     };
