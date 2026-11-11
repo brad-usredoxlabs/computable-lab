@@ -255,10 +255,52 @@ describe('BindingModeEditor', () => {
       expect(screen.getByTestId('role-binding-reservoir')).toBeInTheDocument()
       expect(screen.getByTestId('role-binding-wash_buffer')).toBeInTheDocument()
       // Should NOT show the "No roles" empty state
-      expect(screen.queryByText('No roles defined in the local protocol')).not.toBeInTheDocument()
+      expect(screen.queryByText(/No roles defined/)).not.toBeInTheDocument()
     }, { timeout: 3000 })
 
     // Verify the universal protocol was fetched
     expect(apiClient.getRecordWithUI).toHaveBeenCalledWith('PRT-UNIVERSAL')
+  })
+
+  it('prefers local protocol roles over universal protocol roles (local-first)', async () => {
+    // Override the mock for this test only: LPR-000001 carries its own roles
+    const originalImpl = vi.mocked(apiClient.getRecordWithUI).getMockImplementation()
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'LPR-000001') return {
+        record: {
+          recordId: 'LPR-000001',
+          schemaId: 'local-protocol',
+          meta: { kind: 'local-protocol' },
+          payload: {
+            kind: 'local-protocol',
+            roles: { labwareRoles: [{ roleId: 'local_plate' }] },
+            inherits_from: { kind: 'record', id: 'PRT-UNIVERSAL' },
+          },
+        },
+        uiSpec: null,
+        schema: null,
+      } as RecordWithUIResponse
+      if (id === 'PRT-UNIVERSAL') return { record: mockUniversalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
+    })
+
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    // Should show the local role, not the universal roles
+    await waitFor(() => {
+      expect(screen.getByTestId('role-binding-local_plate')).toBeInTheDocument()
+      expect(screen.queryByTestId('role-binding-plate')).not.toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Must NOT have fetched the universal protocol because local roles are sufficient
+    expect(apiClient.getRecordWithUI).not.toHaveBeenCalledWith('PRT-UNIVERSAL')
+
+    // Restore original implementation
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(originalImpl as () => Promise<RecordWithUIResponse>)
   })
 })
