@@ -37,3 +37,5 @@ Per brief instructions: "If the Sigma leg still fails, STOP with BLOCKED naming 
 - Clean tree at exit
 
 L2-DOC-INTAKE-1-u2fix1b UNIT unit BLOCKED IngestionWorker.ts has no extraction branch for vendor_formulation_html — falls to else fallback at line 451 returning empty metrics, a product code gap in a PROHIBITED file
+
+Exit sha: e22922e95e15221b070350218181f55ffa6c5586
