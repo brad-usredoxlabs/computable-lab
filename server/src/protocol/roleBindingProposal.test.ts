@@ -189,6 +189,109 @@ describe('proposeRoleBindings', () => {
     expect(role.state).toBe('proposed');
     expect(role).not.toHaveProperty('bound');
   });
+
+  // u4select — labware-instance projection tests
+
+  it('proposes the labware-instance (not the definition) when one instance exists for a declared definition', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+      env('LBI-1', 'labware-instance', { name: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.state).toBe('proposed');
+    expect(role.candidates).toHaveLength(1);
+    expect(role.candidates[0]).toMatchObject({
+      recordId: 'LBI-1',
+      recordKind: 'labware-instance',
+      label: 'Plate Alpha',
+    });
+  });
+
+  it('is ambiguous with three labware-instances for a declared definition', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+      env('LBI-A', 'labware-instance', { name: 'Plate A', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-B', 'labware-instance', { name: 'Plate B', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-C', 'labware-instance', { name: 'Plate C', labwareId: 'lbw-seed-plate-96-flat' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.state).toBe('ambiguous');
+    expect(role.candidates).toHaveLength(3);
+    expect(role.candidates.map((c) => c.recordId)).toEqual(['LBI-A', 'LBI-B', 'LBI-C']);
+    expect(role.candidates[0]).toMatchObject({ recordKind: 'labware-instance' });
+  });
+
+  it('falls back to the definition when a declared labware has no instances', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.state).toBe('proposed');
+    expect(role.candidates).toHaveLength(1);
+    expect(role.candidates[0]).toMatchObject({
+      recordId: 'lbw-seed-plate-96-flat',
+      recordKind: 'labware',
+    });
+  });
+
+  it('does not propose an instance whose labwareId names an undeclared definition', async () => {
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+      env('lbw-tube-rack', 'labware', { name: 'Tube Rack', labwareType: 'rack' }),
+      env('LBI-1', 'labware-instance', { name: 'Tube Rack Alpha', labwareId: 'lbw-tube-rack' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role = result.protocols[0]!.roles[0]!;
+    expect(role.state).toBe('proposed');
+    expect(role.candidates).toHaveLength(1);
+    // The instance points to lbw-tube-rack, which is NOT declared — so only the definition is proposed
+    expect(role.candidates[0]).toMatchObject({ recordId: 'lbw-seed-plate-96-flat' });
+  });
+
+  it('reports bound when the binding points at a definition id even with instances present', async () => {
+    const bindings = {
+      labware: [{ roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'lbw-seed-plate-96-flat', type: 'labware' } }],
+    };
+    const store = fakeStore([
+      run(['LPR-1'], bindings),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+      env('LBI-1', 'labware-instance', { name: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
+    ]);
+    const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], bindings) });
+    const role = result.protocols[0].roles[0];
+    expect(role.state).toBe('bound');
+    expect(role.bound).toMatchObject({ recordId: 'lbw-seed-plate-96-flat' });
+    // Candidates should still be the instance (not the definition)
+    expect(role.candidates).toHaveLength(1);
+    expect(role.candidates[0].recordId).toBe('LBI-1');
+  });
 });
 
 function face(fn: unknown): number {
