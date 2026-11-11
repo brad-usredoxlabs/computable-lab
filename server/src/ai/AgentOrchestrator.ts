@@ -898,6 +898,29 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
   return null;
 }
 
+/** Recovery drivers — closed set; extension point for YAML shorthand (C1). */
+export type RecoveredDraftDriver = 'tool-envelope' | 'fenced-json';
+// Extension: C1 adds 'yaml-shorthand' when the YAML arm of shorthand recovery lands.
+export interface RecoveredDraft { driver: RecoveredDraftDriver }
+
+/**
+ * Wrapper around {@link coerceDraftArgsFromContent} that declares HOW the
+ * content was recovered. Returns `{ args, recoveredFrom }` where `args` is
+ * the parsed argument object (or null) and `recoveredFrom` carries the
+ * driver classification (or null when args is null).
+ *
+ * Single source of truth: `args` comes from coerceDraftArgsFromContent.
+ * Driver classification reads the same text to distinguish envelope shapes.
+ */
+export function recoverDraftArgsFromContent(content: unknown):
+  { args: Record<string, unknown> | null; recoveredFrom: RecoveredDraft | null } {
+  const args = coerceDraftArgsFromContent(content);
+  if (args === null) return { args: null, recoveredFrom: null };
+  if (typeof content === 'string' && content.includes('<tool_call>'))
+    return { args, recoveredFrom: { driver: 'tool-envelope' } };
+  return { args, recoveredFrom: { driver: 'fenced-json' } };
+}
+
 function buildForcedDraftJsonPrompt(originalPrompt: string, antiEchoClause?: string): string {
   return [
     `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
