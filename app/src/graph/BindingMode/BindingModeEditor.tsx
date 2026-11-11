@@ -34,8 +34,11 @@ interface PlannedRunPayload {
 
 interface LocalProtocolPayload {
   kind: 'local-protocol'
-  labwareRoles?: Array<{ roleId: string; roleType?: string }>
-  materialRoles?: Array<{ roleId: string; roleType?: string }>
+  roles?: {
+    labwareRoles?: Array<{ roleId: string }>
+    materialRoles?: Array<{ roleId: string }>
+  }
+  inherits_from?: { id?: string }
   notes?: string
 }
 
@@ -170,15 +173,65 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
     return bindings
   }, [plannedRun])
 
-  // Roles from local-protocol
-  const labwareRoles = useMemo(
-    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.labwareRoles ?? []),
-    [localProtocol],
-  )
-  const materialRoles = useMemo(
-    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.materialRoles ?? []),
-    [localProtocol],
-  )
+  // Roles resolved from local protocol (prefers local roles, falls back to universal via inherits_from)
+  const [labwareRoles, setLabwareRoles] = useState<Array<{ roleId: string; roleType: string }>>([])
+  const [materialRoles, setMaterialRoles] = useState<Array<{ roleId: string; roleType: string }>>([])
+
+  // Resolve roles: local payload.roles first, else fetch universal via inherits_from.id
+  useEffect(() => {
+    if (!localProtocol) {
+      setLabwareRoles([])
+      setMaterialRoles([])
+      return
+    }
+    let active = true
+
+    const resolveRoles = async () => {
+      const lpPayload = localProtocol.payload as unknown as LocalProtocolPayload
+      const localRoles = lpPayload.roles
+
+      if (localRoles && ((localRoles.labwareRoles ?? []).length > 0 || (localRoles.materialRoles ?? []).length > 0)) {
+        if (active) {
+          setLabwareRoles((localRoles.labwareRoles ?? []).map(r => ({ roleId: r.roleId, roleType: 'labware' })))
+          setMaterialRoles((localRoles.materialRoles ?? []).map(r => ({ roleId: r.roleId, roleType: 'material' })))
+        }
+        return
+      }
+
+      // No local roles — fetch universal protocol via inherits_from
+      const universalId = lpPayload.inherits_from?.id
+      if (!universalId) {
+        if (active) {
+          setLabwareRoles([])
+          setMaterialRoles([])
+        }
+        return
+      }
+
+      try {
+        const universalResp = await apiClient.getRecordWithUI(universalId)
+        if (!active) return
+        const universalPayload = universalResp.record?.payload as Record<string, unknown> | undefined
+        const universalRoles = universalPayload?.roles as Record<string, unknown> | undefined
+
+        if (active) {
+          const uLabwareRoles = Array.isArray(universalRoles?.labwareRoles) ? universalRoles.labwareRoles : []
+          const uMaterialRoles = Array.isArray(universalRoles?.materialRoles) ? universalRoles.materialRoles : []
+          setLabwareRoles(uLabwareRoles.map((r: Record<string, unknown>) => ({ roleId: String(r.roleId), roleType: 'labware' })))
+          setMaterialRoles(uMaterialRoles.map((r: Record<string, unknown>) => ({ roleId: String(r.roleId), roleType: 'material' })))
+        }
+      } catch {
+        // Universal protocol not found — degrade to empty roles
+        if (active) {
+          setLabwareRoles([])
+          setMaterialRoles([])
+        }
+      }
+    }
+
+    void resolveRoles()
+    return () => { active = false }
+  }, [localProtocol])
 
   // Debounced save
   const flushBindings = useCallback(
