@@ -23,7 +23,7 @@ import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'material-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
@@ -31,6 +31,7 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
   { id: 'labware-instances', label: 'Labware instances', kind: 'labware-instance' },
+  { id: 'material-instances', label: 'Material instances', kind: 'material-instance' },
   { id: 'equipment', label: 'Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'controlled-document' },
