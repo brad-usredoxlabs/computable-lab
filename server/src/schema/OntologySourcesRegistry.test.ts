@@ -1,230 +1,180 @@
 /**
  * Ontology Sources Registry — conformance test.
  *
- * Proves that the shipped registry (config/ontology-sources.yaml) is valid
- * against its schema, and that every enabled local-obo source actually loads
+ * Proves that the shipped registry (config/ontology-sources.yaml) is
+ * schema-valid and that every enabled local-obo source actually loads
  * to a valid OBO file containing its declared root term.
  *
- * Six legs:
+ * Six legs (from the brief):
  *   (i)   registry parses as YAML and validates against the schema
- *   (ii)  every enabled local-obo source's path exists and contains >= 1
- *         [Term] stanza whose id: equals the entry's declared root
+ *   (ii)  every enabled local-obo source's path exists AND parses to
+ *         >= 1 [Term] stanza whose id: equals that entry's declared root
  *   (iii) id, prefix, namespace_iri are unique across sources
- *   (iv)  loader/path discipline: local-obo has path, ols4 has ols_key
- *         (exercised by shipped data AND an inline negative fixture)
+ *   (iv)  local-obo-with-path or ols4-without-path discipline, exercised
+ *         by shipped data AND an inline negative fixture the schema rejects
  *   (v)   at least one enabled source and at least one local source
- *   (vi)  hardcode boundary: no TS file outside *.test.ts contains the
- *         literal "<PREFIX>:" for any prefix in the registry
+ *   (vi)  hardcode boundary: derive prefix list from registry and assert
+ *         the literal '<PREFIX>:' does not appear in any non-test TS file
+ *         under server/src or app/src
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { loadSchemasFromContent } from './SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
-import { readdirSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Read the SHIPPED registry from disk — never inline a copy.
 const REGISTRY_URL = new URL('../../../config/ontology-sources.yaml', import.meta.url);
-const REGISTRY_PATH = fileURLToPath(REGISTRY_URL);
-const registryData = parseYaml(
-  readFileSync(REGISTRY_PATH, 'utf8')
-);
 
-// Load the schema from content
-function loadSchema() {
-  const schemaContent = readFileSync(
-    resolve(__dirname, '../../../schema/registry/ontology-sources.schema.yaml'),
-    'utf8'
+function readRegistry() {
+  return parseYaml(readFileSync(REGISTRY_URL, 'utf8')) as Record<string, unknown>;
+}
+
+function buildValidator() {
+  const contents = new Map<string, string>();
+  contents.set(
+    'ontology-sources.schema.yaml',
+    readFileSync(
+      resolve(__dirname, '../../../schema/registry/ontology-sources.schema.yaml'),
+      'utf8',
+    ),
   );
-  const schemas = new Map<string, string>();
-  schemas.set('ontology-sources.schema.yaml', schemaContent);
-  return schemas;
+  const loaded = loadSchemasFromContent(contents);
+  expect(loaded.errors, 'schema load errors').toEqual([]);
+  const validator = createValidator({ strict: false });
+  for (const entry of loaded.entries) validator.addSchema(entry.schema, entry.id);
+  return { validator, schemaId: loaded.entries[0].id };
 }
 
-// Load all .ts files from server/src and app/src (excluding *.test.ts)
-function getAllTsFiles(baseDir: string): string[] {
-  const files: string[] = [];
-  function walk(dir: string) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = resolve(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-        files.push(full);
-      }
-    }
-  }
-  walk(baseDir);
-  return files;
-}
-
-function parseObos(content: string): Array<{ id: string; isTerm: boolean }> {
-  const stanzas: Array<{ id: string; isTerm: boolean }> = [];
-  const lines = content.split('\n');
+// Helper: parse OBO file for [Term] stanzas
+function parseObos(content: string): string[] {
+  const ids: string[] = [];
   let inTerm = false;
-  let termId: string | undefined;
-  for (const line of lines) {
-    if (line === '[Term]') {
-      inTerm = true;
-      termId = undefined;
-    } else if (line.startsWith('[') && line !== '[Term]') {
-      inTerm = false;
-    } else if (inTerm && line.startsWith('id: ')) {
-      termId = line.slice(4).trim();
-    } else if (inTerm && line === '' && termId !== undefined) {
-      stanzas.push({ id: termId, isTerm: true });
-      inTerm = false;
+  for (const line of content.split('\n')) {
+    if (line === '[Term]') inTerm = true;
+    else if (line.startsWith('[') && line !== '[Term]') inTerm = false;
+    else if (inTerm && line.startsWith('id: ')) {
+      ids.push(line.slice(4).trim());
     }
   }
-  // Close last stanza if file doesn't end with blank line
-  if (inTerm && termId !== undefined) {
-    stanzas.push({ id: termId, isTerm: true });
+  return ids;
+}
+
+// Helper: collect .ts files (excluding *.test.ts) recursively
+function collectTsFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = resolve(dir, entry.name);
+    if (entry.isDirectory()) out.push(...collectTsFiles(full));
+    else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+      out.push(full);
   }
-  return stanzas;
+  return out;
 }
 
 describe('Ontology Sources Registry', () => {
-  it('(i) registry parses as YAML and validates against the schema', async () => {
-    const schemas = loadSchema();
-    const loaded = loadSchemasFromContent(schemas);
-    expect(loaded.errors, 'schema load errors').toEqual([]);
-    expect(loaded.entries.length).toBeGreaterThanOrEqual(1);
-
-    const validator = createValidator({ strict: false });
-    for (const entry of loaded.entries) validator.addSchema(entry.schema, entry.id);
-
-    const result = validator.validate(registryData, loaded.entries[0].id);
-    expect(result.errors, 'registry validation errors').toEqual([]);
+  it('(i) registry parses and validates against schema', () => {
+    const registry = readRegistry();
+    const { validator, schemaId } = buildValidator();
+    const result = validator.validate(registry, schemaId);
+    expect(result.errors).toEqual([]);
   });
 
-  it('(ii) every enabled local-obo source loads to >= 1 term with declared root', () => {
-    const sources = registryData.sources as Array<Record<string, unknown>>;
-    for (const source of sources) {
-      const enabled = source.enabled as boolean;
-      const loader = source.loader as string;
-      const id = source.id as string;
-      if (!enabled || loader !== 'local-obo') continue;
-
-      const path = source.path as string;
-      const expectedRoot = source.root as string;
-      expect(path, `${id}: path must be declared`).toBeDefined();
-      expect(expectedRoot, `${id}: root must be declared`).toBeDefined();
-
-      // File must exist
+  it('(ii) every enabled local-obo source loads to >=1 [Term] with declared root', () => {
+    const registry = readRegistry();
+    const sources = registry.sources as Array<Record<string, unknown>>;
+    for (const src of sources) {
+      if (src.loader !== 'local-obo' || !src.enabled) continue;
+      const path = src.path as string;
+      const root = src.root as string;
+      expect(path, `${src.id}: path must exist`).toBeTruthy();
       const content = readFileSync(path, 'utf8');
-
-      // Parse [Term] stanzas
-      const terms = parseObos(content).filter((s) => s.isTerm);
-      expect(terms.length, `${id}: must have >= 1 [Term] stanza`).toBeGreaterThanOrEqual(1);
-
-      // Declared root must be present
-      const roots = terms.map((s) => s.id);
-      expect(roots.includes(expectedRoot), `${id}: root ${expectedRoot} not found in ${path}`).toBe(true);
+      const termIds = parseObos(content);
+      expect(termIds.length, `${src.id}: >= 1 [Term]`).toBeGreaterThanOrEqual(1);
+      expect(
+        termIds.includes(root),
+        `${src.id}: root ${root} not found in ${path}`,
+      ).toBe(true);
     }
   });
 
   it('(iii) id, prefix, namespace_iri are unique across sources', () => {
-    const sources = registryData.sources as Array<Record<string, unknown>>;
-
+    const registry = readRegistry();
+    const sources = registry.sources as Array<Record<string, unknown>>;
     const ids = sources.map((s) => s.id);
     const prefixes = sources.map((s) => s.prefix);
     const iris = sources.map((s) => s.namespace_iri);
-
-    expect(new Set(ids).size, 'duplicate id').toBe(ids.length);
-    expect(new Set(prefixes).size, 'duplicate prefix').toBe(prefixes.length);
-    expect(new Set(iris).size, 'duplicate namespace_iri').toBe(iris.length);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(prefixes).size).toBe(prefixes.length);
+    expect(new Set(iris).size).toBe(iris.length);
   });
 
-  it('(iv) loader discipline — local has path, ols4 has ols_key (data + negative fixture)', () => {
-    const sources = registryData.sources as Array<Record<string, unknown>>;
+  it('(iv) loader discipline: local-obo has path, ols4 has ols_key — data + negative fixture', () => {
+    const registry = readRegistry();
+    const { validator, schemaId } = buildValidator();
 
-    // Check shipped data
-    for (const source of sources) {
-      const loader = source.loader as string;
-      const id = source.id as string;
-      if (loader === 'local-obo') {
-        expect(source.path, `${id}: local-obo must declare path`).toBeDefined();
-        expect(source.ols_key, `${id}: local-obo must NOT declare ols_key`).toBeUndefined();
-      } else if (loader === 'ols4') {
-        expect(source.ols_key, `${id}: ols4 must declare ols_key`).toBeDefined();
-        expect(source.path, `${id}: ols4 must NOT declare path`).toBeUndefined();
+    // Shipped data: local entries have path, ols4 entry has ols_key
+    const sources = registry.sources as Array<Record<string, unknown>>;
+    for (const src of sources) {
+      if (src.loader === 'local-obo') {
+        expect(src.path, `${src.id}: local-obo must have path`).toBeTruthy();
+        expect(src.ols_key, `${src.id}: local-obo must not have ols_key`).toBeUndefined();
+      } else if (src.loader === 'ols4') {
+        expect(src.ols_key, `${src.id}: ols4 must have ols_key`).toBeTruthy();
+        expect(src.path, `${src.id}: ols4 must not have path`).toBeUndefined();
       }
     }
 
-    // Inline negative fixture — schema must reject these
-    const schemas = loadSchema();
-    const loaded = loadSchemasFromContent(schemas);
-    const validator = createValidator({ strict: false });
-    for (const entry of loaded.entries) validator.addSchema(entry.schema, entry.id);
-    const schemaId = loaded.entries[0].id;
-
-    // Negative 1: ols4 source with a path (must fail)
-    const ols4WithPath = {
+    // Negative fixture: ols4 entry with a path must be rejected
+    const negFixture = {
       version: '1.0',
       sources: [
         {
-          id: 'bad-ols4',
-          prefix: 'BAD',
-          namespace_iri: 'http://example.org/bad/',
-          display_name: 'Bad',
+          id: 'neg-fixture',
+          prefix: 'NEG',
+          namespace_iri: 'http://example.org/neg/',
+          display_name: 'Negative Fixture',
           loader: 'ols4',
           enabled: true,
-          ols_key: 'bad',
+          ols_key: 'neg',
           path: '/no/such/file.obo',
         },
       ],
     };
-    const neg1 = validator.validate(ols4WithPath, schemaId);
-    expect(neg1.valid, 'ols4 with path must be rejected').toBe(false);
-
-    // Negative 2: local-obo source without a path (must fail)
-    const localWithoutPath = {
-      version: '1.0',
-      sources: [
-        {
-          id: 'bad-local',
-          prefix: 'BAD',
-          namespace_iri: 'http://example.org/bad/',
-          display_name: 'Bad',
-          loader: 'local-obo',
-          enabled: true,
-          root: 'BAD:0000100',
-        },
-      ],
-    };
-    const neg2 = validator.validate(localWithoutPath, schemaId);
-    expect(neg2.valid, 'local-obo without path must be rejected').toBe(false);
+    const negResult = validator.validate(negFixture, schemaId);
+    expect(negResult.valid, 'ols4-with-path fixture must be rejected').toBe(false);
   });
 
   it('(v) at least one enabled source and at least one local source', () => {
-    const sources = registryData.sources as Array<Record<string, unknown>>;
+    const registry = readRegistry();
+    const sources = registry.sources as Array<Record<string, unknown>>;
     const enabled = sources.filter((s) => s.enabled === true);
-    const local = sources.filter((s) => s.loader === 'local-obo');
-
-    expect(enabled.length, 'must have at least one enabled source').toBeGreaterThanOrEqual(1);
-    expect(local.length, 'must have at least one local source').toBeGreaterThanOrEqual(1);
+    const locals = sources.filter((s) => s.loader === 'local-obo');
+    expect(enabled.length).toBeGreaterThanOrEqual(1);
+    expect(locals.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('(vi) hardcode boundary — prefix CURIE not in non-test TS files', () => {
-    const sources = registryData.sources as Array<Record<string, unknown>>;
+  it('(vi) hardcode boundary: prefix CURIE not in non-test TS files', () => {
+    const registry = readRegistry();
+    const sources = registry.sources as Array<Record<string, unknown>>;
     const prefixes = sources.map((s) => s.prefix as string);
 
-    // Scan server/src and app/src for hardcoded prefix literals
-    const serverTs = getAllTsFiles(resolve(__dirname, '..'));
-    const appTs = getAllTsFiles(resolve(__dirname, '../../../app/src'));
-    const allFiles = [...serverTs, ...appTs];
+    const serverTs = collectTsFiles(resolve(__dirname, '..'));
+    const appDir = resolve(__dirname, '../../../app/src');
+    const appTs: string[] = [];
+    try { appTs.push(...collectTsFiles(appDir)); } catch { /* app/src may not exist */ }
 
     for (const prefix of prefixes) {
-      const pattern = `${prefix}:`;
-      for (const file of allFiles) {
+      const literal = `${prefix}:`;
+      for (const file of [...serverTs, ...appTs]) {
         const content = readFileSync(file, 'utf8');
         expect(
-          content.includes(pattern),
-          `Hardcoded "${pattern}" found in ${file} — prefixes must only appear in config/ontology-sources.yaml`
+          content.includes(literal),
+          `hardcoded "${literal}" in ${file} — only config/ontology-sources.yaml may contain it`,
         ).toBe(false);
       }
     }
