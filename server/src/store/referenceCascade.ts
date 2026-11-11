@@ -50,6 +50,20 @@ export interface ReferrerInfo {
   pointer: string;
 }
 
+/**
+ * A dangling reference: a pointer to a record id that does not exist in the store.
+ */
+export interface DanglingRef {
+  /** The record holding the dangling reference */
+  recordId: string;
+  /** The payload kind of the referrer */
+  kind: string;
+  /** Dot-path to the field holding the ref */
+  pointer: string;
+  /** The target record id that is missing */
+  targetId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Policy loader
 // ---------------------------------------------------------------------------
@@ -113,22 +127,29 @@ export function loadCascadePolicy(yamlPath: string): CascadePolicy {
 }
 
 // ---------------------------------------------------------------------------
-// Walker — findReferrers
+// Walker — collectAllRecordRefs (generalised traversal)
 // ---------------------------------------------------------------------------
 
 /**
- * Recursively scan a payload for any object with { kind: 'record', id: <targetId> }.
- * Returns the dot-path(s) to those fields.
+ * A raw record-reference found by the walker: pointer path and the target id.
+ */
+interface RawRef {
+  pointer: string;
+  targetId: string;
+}
+
+/**
+ * Recursively scan a payload for every object with { kind: 'record', id }.
+ * Returns all matching { pointer, targetId } pairs.
  *
  * Does NOT follow revisionRef — a record's own revisions must not report as
- * referrers.
+ * referrers or dangling references.
  */
-function findRecordRefsInValue(
+function collectAllRecordRefs(
   value: unknown,
-  targetId: string,
-  currentPath: string
-): string[] {
-  const results: string[] = [];
+  currentPath: string,
+): RawRef[] {
+  const results: RawRef[] = [];
 
   if (value == null || typeof value !== 'object') return results;
 
@@ -138,22 +159,38 @@ function findRecordRefsInValue(
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
       const childPath = `${currentPath}[${i}]`;
-      results.push(...findRecordRefsInValue(value[i], targetId, childPath));
+      results.push(...collectAllRecordRefs(value[i], childPath));
     }
   } else {
     const obj = value as Record<string, unknown>;
-    // Check if this object is a record ref with the target id
-    if (obj.kind === 'record' && obj.id === targetId) {
-      results.push(currentPath);
+    // Check if this object is a record ref
+    if (obj.kind === 'record' && typeof obj.id === 'string') {
+      results.push({ pointer: currentPath, targetId: obj.id });
     } else {
       for (const [key, val] of Object.entries(obj)) {
         const childPath = currentPath ? `${currentPath}.${key}` : key;
-        results.push(...findRecordRefsInValue(val, targetId, childPath));
+        results.push(...collectAllRecordRefs(val, childPath));
       }
     }
   }
 
   return results;
+}
+
+/**
+ * Recursively scan a payload for any object with { kind: 'record', id: <targetId> }.
+ * Returns the dot-path(s) to those fields.
+ *
+ * Kept for backward compat — delegates to the generalised walker and filters.
+ * Does NOT follow revisionRef.
+ */
+function findRecordRefsInValue(
+  value: unknown,
+  targetId: string,
+  currentPath: string,
+): string[] {
+  const allRefs = collectAllRecordRefs(value, currentPath);
+  return allRefs.filter((r) => r.targetId === targetId).map((r) => r.pointer);
 }
 
 /**
@@ -189,6 +226,53 @@ export function findReferrers(
   }
 
   return referrers;
+}
+
+// ---------------------------------------------------------------------------
+// Dangling-reference sweep — criterion (d)
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan all records for references to target ids that do not exist.
+ *
+ * Builds an id set from the records, then reports every reference whose
+ * targetId is absent. Results are sorted by (recordId, pointer) for
+ * deterministic HTTP output.
+ *
+ * @param records — All records in the store
+ * @returns Array of DanglingRef sorted by (recordId, pointer)
+ */
+export function findDanglingReferences(
+  records: RecordEnvelope[],
+): DanglingRef[] {
+  const ids = new Set(
+    records.map((e) => e.recordId),
+  );
+  const dangling: DanglingRef[] = [];
+
+  for (const envelope of records) {
+    const payload = envelope.payload;
+    if (payload == null || typeof payload !== 'object') continue;
+
+    const rawRefs = collectAllRecordRefs(payload, '');
+    for (const ref of rawRefs) {
+      if (!ids.has(ref.targetId)) {
+        dangling.push({
+          recordId: envelope.recordId,
+          kind: (envelope.meta?.kind ?? String((payload as Record<string, unknown>).kind ?? 'unknown')) as string,
+          pointer: ref.pointer,
+          targetId: ref.targetId,
+        });
+      }
+    }
+  }
+
+  // Deterministic sort: by recordId, then pointer
+  dangling.sort((a, b) =>
+    a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : a.pointer < b.pointer ? -1 : a.pointer > b.pointer ? 1 : 0,
+  );
+
+  return dangling;
 }
 
 // ---------------------------------------------------------------------------
