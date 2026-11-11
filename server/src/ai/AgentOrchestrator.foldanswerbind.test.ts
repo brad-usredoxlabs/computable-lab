@@ -122,7 +122,10 @@ describe('L2-NOUN-RESOLUTION-POLICY-1 A1: fold arm answeredSlots binding', () =>
     );
 
     expect(compiledFold).not.toBeNull();
-    expect(compiledFold!.outcome).toBe('events');
+    // Outcome: the compiler resolves the noun via answeredSlots so it
+    // produces events (outcome 'complete' — the compileOutcome type has no
+    // 'events' variant). The 'events' assertion below confirms production.
+    expect(compiledFold!.outcome).toBe('complete');
 
     // The slot is RESOLVED — no clarification for the material argument
     const materialClarifications = compiledFold!.clarifications.filter(

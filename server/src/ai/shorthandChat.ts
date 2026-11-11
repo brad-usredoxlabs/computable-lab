@@ -1536,8 +1536,14 @@ export function foldAnswersIntoShorthand(
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
     const refId = refIdOf(answer);
     if (refId) {
-      bindings.push({ label: fact.label, ref: refId });
-      if (label !== fact.label) bindings.push({ label, ref: refId });
+      // REVISE-GHOST-1 / L2-NOUN-RESOLUTION-POLICY-1 A1: store the ref as a
+      // local CURIE. The bindingsToAnsweredSlots mapper calls recordIdFromCurie
+      // to unwrap it — bare ids are also accepted but the binding contract
+      // declares CURIE form (the spine's declared local CURIE, the interface
+      // doc at line 152).
+      const refCurie = refId.startsWith('local:') ? refId : `local:${refId}`;
+      bindings.push({ label: fact.label, ref: refCurie });
+      if (label !== fact.label) bindings.push({ label, ref: refCurie });
     }
   }
   if (answered.size === 0) return null;
