@@ -23,7 +23,7 @@ import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'material-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
@@ -31,6 +31,7 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
   { id: 'labware-instances', label: 'Labware instances', kind: 'labware-instance' },
+  { id: 'material-instances', label: 'Material instances', kind: 'material-instance' },
   { id: 'equipment', label: 'Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'controlled-document' },
@@ -138,6 +139,19 @@ function extractHelperTokens(
       const loc = p.location as { label?: string; kind?: string } | undefined
       if (loc?.kind) tokens.push({ text: `📍 ${loc.kind}${loc.label ? ` ${loc.label}` : ''}` })
       if (typeof p.state === 'string' && p.state) tokens.push({ text: p.state, tag: statusVariant(p.state) })
+      break
+    }
+
+    case 'material-instance': {
+      const lot = p.lot as { lot_number?: string; vendor?: string } | undefined
+      if (lot?.lot_number) {
+        const lotText = lot.vendor ? `${lot.lot_number} (${lot.vendor})` : lot.lot_number
+        tokens.push({ text: lotText })
+      }
+      const vpRef = p.vendor_product_ref as { id?: string } | undefined
+      if (vpRef?.id) tokens.push({ text: vpRef.id })
+      const storage = p.storage as { location?: string } | undefined
+      if (storage?.location) tokens.push({ text: `📍 ${storage.location}` })
       break
     }
 

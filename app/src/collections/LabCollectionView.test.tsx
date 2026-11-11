@@ -2,15 +2,35 @@
  * Tests for LabCollectionView.
  */
 
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
+
+// Mock apiClient — the rendered tree needs these methods at mount.
+// LabwareInstanceCreateModal (rendered inline) calls createRecord, listRecordsByKind,
+// getSchema, getSurfaces; useRecordVisibilities calls getAccessPolicy.
+const listRecordsSpy = vi.fn()
+vi.mock('../shared/api/client', () => ({
+  apiClient: {
+    createRecord: vi.fn().mockResolvedValue({ success: true }),
+    listRecordsByKind: (...args: unknown[]) => listRecordsSpy(...args),
+    getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }),
+    getAccessPolicy: vi.fn().mockResolvedValue({ visibility: 'private', grants: [] }),
+    getSchema: vi.fn().mockResolvedValue({ schema: {} }),
+  },
+}))
+
 import { LabCollectionView } from './LabCollectionView'
 
 afterEach(() => {
   cleanup()
+  vi.clearAllMocks()
+})
+
+beforeEach(() => {
+  listRecordsSpy.mockResolvedValue({ records: [] })
 })
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -121,5 +141,57 @@ describe('LabCollectionView', () => {
     )
     // Button must be absent on the labware category.
     expect(screen.queryByTestId('lab-category-new-material')).toBeNull()
+  })
+
+  // ── u6lots — material-instances category ──────────────────────────────
+
+  it('renders the material-instances category button', () => {
+    renderWithProviders(<LabCollectionView />)
+    expect(screen.getByTestId('lab-category-material-instances')).toBeDefined()
+  })
+
+  it('renders a material-instance card with lot number, vendor, vendor_product_ref, and storage location', async () => {
+    listRecordsSpy.mockResolvedValue({
+      records: [
+        {
+          recordId: 'MIN-FAKE-001',
+          schemaId: 'material-instance',
+          payload: {
+            kind: 'material-instance',
+            name: 'Test Reagent',
+            lot: { lot_number: 'LOT-FAKE123', vendor: 'FakeVendor' },
+            vendor_product_ref: { id: 'VP-FAKE-001' },
+            storage: { location: 'Shelf A-3' },
+          },
+        },
+      ],
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/lab/material-instances']}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-entity-MIN-FAKE-001')).not.toBeNull()
+    })
+
+    const card = screen.getByTestId('lab-entity-MIN-FAKE-001')
+    expect(card.textContent).toContain('LOT-FAKE123')
+    expect(card.textContent).toContain('FakeVendor')
+    expect(card.textContent).toContain('VP-FAKE-001')
+    expect(card.textContent).toContain('Shelf A-3')
   })
 })
