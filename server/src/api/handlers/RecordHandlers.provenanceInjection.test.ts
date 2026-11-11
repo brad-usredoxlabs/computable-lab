@@ -86,7 +86,7 @@ describe('createRecord — schema-driven payload provenance injection', () => {
 
     expect(reply.statusValue).toBe(201);
     expect((result as any).success).toBe(true);
-    const stored = records.get((result as any).recordId);
+    const stored = records.get((result as any).record?.recordId);
     const storedPayload = stored!.payload as Record<string, unknown>;
     expect(storedPayload.createdAt).toBeUndefined();
     expect(storedPayload.updatedAt).toBeUndefined();
@@ -123,7 +123,7 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     );
 
     expect(reply.statusValue).toBe(201);
-    const stored = records.get((result as any).recordId);
+    const stored = records.get((result as any).record?.recordId);
     const storedPayload = stored!.payload as Record<string, unknown>;
     expect(storedPayload.createdAt).toBeUndefined();
     expect(storedPayload.updatedAt).toBeUndefined();
@@ -160,7 +160,7 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     );
 
     expect(reply.statusValue).toBe(201);
-    const stored = records.get((result as any).recordId);
+    const stored = records.get((result as any).record?.recordId);
     const storedPayload = stored!.payload as Record<string, unknown>;
     expect(storedPayload.createdAt).toBeUndefined();
     expect(storedPayload.updatedAt).toBeUndefined();
@@ -193,7 +193,7 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     );
 
     expect(reply.statusValue).toBe(201);
-    const stored = records.get((result as any).recordId);
+    const stored = records.get((result as any).record?.recordId);
     const storedPayload = stored!.payload as Record<string, unknown>;
     expect(storedPayload.createdAt).toBeDefined();
     expect(storedPayload.updatedAt).toBeDefined();
@@ -225,7 +225,7 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     );
 
     expect(reply.statusValue).toBe(201);
-    const stored = records.get((result as any).recordId);
+    const stored = records.get((result as any).record?.recordId);
     const storedPayload = stored!.payload as Record<string, unknown>;
     expect(storedPayload.createdAt).toBeDefined();
     expect(storedPayload.updatedAt).toBeDefined();
