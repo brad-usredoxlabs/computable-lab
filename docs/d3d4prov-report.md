@@ -26,4 +26,4 @@ VERIFICATION:
 4. git status --short: empty (clean tree)
 5. Mutation probe: D3 freeze pin went RED with live sheetUrl
 
-L2-SPEC-SHEET-INGEST-1-d3d4prov UNIT d3d4prov DONE 6c90ef7816f005820d08e5022b45a5f6103c64bb
+L2-SPEC-SHEET-INGEST-1-d3d4prov UNIT d3d4prov DONE 3266067be0eda83dabbc7932cb17d02a6b059c97
