@@ -25,7 +25,6 @@ const RECORD_ID = 'PLR-SEEDLOCALBIND';
 const PROTOCOL_ID = 'prt-seed-biological-transfer';
 
 // Load all schemas from the repo schema directory for the pure leg
-// Provide a stub for revision-ref which event-graph depends on but is absent on disk
 async function loadPlannedRunSchema() {
   const schemaRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'schema');
   const result = await loadAllSchemas({ basePath: schemaRoot });
@@ -33,17 +32,6 @@ async function loadPlannedRunSchema() {
     throw new Error(`Schema load errors: ${JSON.stringify(result.errors)}`);
   }
   const validator = createValidator({ strict: false });
-  // Inject a minimal revision-ref stub so event-graph compiles
-  validator.addSchema({
-    $id: 'https://computable-lab.com/schema/computable-lab/datatypes/revision-ref.schema.yaml',
-    type: 'object',
-    required: ['kind', 'type', 'id'],
-    properties: {
-      kind: { const: 'record' },
-      type: { const: 'record-revision' },
-      id: { type: 'string' },
-    },
-  });
   for (const entry of result.entries) {
     validator.addSchema(entry.schema, entry.id);
   }
