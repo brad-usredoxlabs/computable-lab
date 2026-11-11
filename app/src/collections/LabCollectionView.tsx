@@ -39,10 +39,15 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Best-effort display name: title > name > recordId */
-function extractName(payload: Record<string, unknown>, fallback: string): string {
+/** Best-effort display name: title > name > (labware-instance label) > recordId */
+function extractName(kind: string, payload: Record<string, unknown>, fallback: string): string {
   if (typeof payload.title === 'string' && payload.title) return payload.title as string
   if (typeof payload.name === 'string' && payload.name) return payload.name as string
+  // A labware INSTANCE carries no title/name — its identity is `label`. Gated on
+  // kind: widening this arm to the other categories would silently retitle records.
+  if (kind === 'labware-instance' && typeof payload.label === 'string' && payload.label) {
+    return payload.label
+  }
   return fallback
 }
 
@@ -250,13 +255,20 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   const filteredRecords = query
     ? records.filter((record) => {
         const payload = record.payload as Record<string, unknown>
-        const name = extractName(payload, record.recordId).toLowerCase()
+        const name = extractName(activeKind, payload, record.recordId).toLowerCase()
         const cls = payload.class as Array<{ id?: string; label?: string }> | undefined
         const curies = cls?.map((c) => `${c.id ?? ''} ${c.label ?? ''}`.toLowerCase()).join(' ') ?? ''
         const def = (typeof payload.definition === 'string' ? payload.definition : '').toLowerCase()
         const desc = (typeof payload.description === 'string' ? payload.description : '').toLowerCase()
         const synonyms = Array.isArray(payload.synonyms) ? payload.synonyms.join(' ').toLowerCase() : ''
-        const searchable = `${name} ${curies} ${def} ${desc} ${synonyms}`
+        // Same per-kind extraction the cards render — one source, two consumers.
+        const tokenText = extractHelperTokens(activeKind, payload)
+          .map((t) => t.text)
+          .join(' ')
+          .toLowerCase()
+        // recordId is part of today's match set (it used to arrive via the name
+        // fallback) — keep it so search stays monotonic.
+        const searchable = `${name} ${record.recordId.toLowerCase()} ${tokenText} ${curies} ${def} ${desc} ${synonyms}`
         return searchable.includes(query)
       })
     : records
@@ -269,8 +281,8 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
     let comparison = 0
     switch (sortField) {
       case 'name': {
-        const nameA = extractName(payloadA, a.recordId).toLowerCase()
-        const nameB = extractName(payloadB, b.recordId).toLowerCase()
+        const nameA = extractName(activeKind, payloadA, a.recordId).toLowerCase()
+        const nameB = extractName(activeKind, payloadB, b.recordId).toLowerCase()
         comparison = nameA.localeCompare(nameB)
         break
       }
@@ -387,7 +399,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
           <ul className="lab-collection__list">
             {sortedRecords.map((record) => {
               const payload = record.payload as Record<string, unknown>
-              const displayName = extractName(payload, record.recordId)
+              const displayName = extractName(activeKind, payload, record.recordId)
               const helperTokens = extractHelperTokens(activeKind, payload)
 
               return (
