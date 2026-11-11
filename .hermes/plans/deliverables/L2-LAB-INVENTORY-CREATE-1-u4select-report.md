@@ -24,16 +24,14 @@ as candidates. When no instances exist, the definition itself is proposed as fal
 
 ## Verification
 - grep: listKind('labware') at line 185; listKind('labware-instance') at line 173
-- Tests: 15 passed in roleBindingProposal.test.ts (10 existing + 5 new)
+- Tests: 16 passed in roleBindingProposal.test.ts (10 existing + 5 new + 1 D1 pin)
 - 31 total tests passed across 3 test files (roleBindingWrite: 8, localPlanGraph: 8)
 - runProtocolList.test.ts fails with pre-existing ajv module resolution error
-- tsc: pre-existing errors in AiThreadStore.ts and AgentOrchestrator.ts; no new errors
+- tsc: 2511 error lines across ~431 files (pre-existing @types/node missing); zero new errors (base-vs-HEAD comm: 0 difference). No roleBindingProposal.ts errors.
 
 ## Remaining Legs
 - u5: material-instance projection (noted in WHY; deliberately out of scope)
 - u3shelf: term/labware shelf visibility (different seam)
 
 ## Fix Commit
-fb984ea6775bdee314ad399820b0f0f7fe878709
-
-L2-LAB-INVENTORY-CREATE-1-u4select UNIT unit DONE fb984ea6775bdee314ad399820b0f0f7fe878709
+3a8c38d3 (implementation commit; tests at 3ce7f773)

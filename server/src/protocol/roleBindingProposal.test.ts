@@ -200,7 +200,7 @@ describe('proposeRoleBindings', () => {
         labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
       }),
       env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
-      env('LBI-1', 'labware-instance', { name: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-1', 'labware-instance', { label: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
     ]);
     const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
     const role = result.protocols[0]!.roles[0]!;
@@ -213,7 +213,7 @@ describe('proposeRoleBindings', () => {
     });
   });
 
-  it('is ambiguous with three labware-instances for a declared definition', async () => {
+  it('is ambiguous with three labware-instances for a declared definition (order pinned)', async () => {
     const store = fakeStore([
       run(['LPR-1']),
       localProtocol('LPR-1', 'PRT-uni'),
@@ -221,9 +221,10 @@ describe('proposeRoleBindings', () => {
         labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
       }),
       env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
-      env('LBI-A', 'labware-instance', { name: 'Plate A', labwareId: 'lbw-seed-plate-96-flat' }),
-      env('LBI-B', 'labware-instance', { name: 'Plate B', labwareId: 'lbw-seed-plate-96-flat' }),
-      env('LBI-C', 'labware-instance', { name: 'Plate C', labwareId: 'lbw-seed-plate-96-flat' }),
+      // D1 pin: insert in reverse order so dropping sort would fail
+      env('LBI-C', 'labware-instance', { label: 'Plate C', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-A', 'labware-instance', { label: 'Plate A', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-B', 'labware-instance', { label: 'Plate B', labwareId: 'lbw-seed-plate-96-flat' }),
     ]);
     const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
     const role = result.protocols[0]!.roles[0]!;
@@ -231,6 +232,28 @@ describe('proposeRoleBindings', () => {
     expect(role.candidates).toHaveLength(3);
     expect(role.candidates.map((c) => c.recordId)).toEqual(['LBI-A', 'LBI-B', 'LBI-C']);
     expect(role.candidates[0]).toMatchObject({ recordKind: 'labware-instance' });
+  });
+
+  it('yields identical candidate order when instances arrive shuffled (D1 pin)', async () => {
+    // Insert in non-ascending order; a dropped sort would return ['LBI-C', 'LBI-A', 'LBI-B']
+    const store = fakeStore([
+      run(['LPR-1']),
+      localProtocol('LPR-1', 'PRT-uni'),
+      universalProtocol('PRT-uni', {
+        labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
+      }),
+      env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
+      env('LBI-C', 'labware-instance', { label: 'Plate C', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-A', 'labware-instance', { label: 'Plate A', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-B', 'labware-instance', { label: 'Plate B', labwareId: 'lbw-seed-plate-96-flat' }),
+    ]);
+    const first = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const second = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
+    const role1 = first.protocols[0]!.roles[0]!;
+    const role2 = second.protocols[0]!.roles[0]!;
+    // Both runs produce the same deterministic order regardless of fixture insertion order
+    expect(role1.candidates.map((c) => c.recordId)).toEqual(['LBI-A', 'LBI-B', 'LBI-C']);
+    expect(JSON.stringify(role1)).toBe(JSON.stringify(role2));
   });
 
   it('falls back to the definition when a declared labware has no instances', async () => {
@@ -261,7 +284,7 @@ describe('proposeRoleBindings', () => {
       }),
       env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
       env('lbw-tube-rack', 'labware', { name: 'Tube Rack', labwareType: 'rack' }),
-      env('LBI-1', 'labware-instance', { name: 'Tube Rack Alpha', labwareId: 'lbw-tube-rack' }),
+      env('LBI-1', 'labware-instance', { label: 'Tube Rack Alpha', labwareId: 'lbw-tube-rack' }),
     ]);
     const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1']) });
     const role = result.protocols[0]!.roles[0]!;
@@ -282,7 +305,7 @@ describe('proposeRoleBindings', () => {
         labwareRoles: [{ roleId: 'plate', expectedLabwareKinds: ['lbw-seed-plate-96-flat'] }],
       }),
       env('lbw-seed-plate-96-flat', 'labware', { name: 'Generic 96 Well Plate', labwareType: 'plate' }),
-      env('LBI-1', 'labware-instance', { name: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
+      env('LBI-1', 'labware-instance', { label: 'Plate Alpha', labwareId: 'lbw-seed-plate-96-flat' }),
     ]);
     const result = await proposeRoleBindings({ store: store as unknown as RecordStore, run: run(['LPR-1'], bindings) });
     const role = result.protocols[0].roles[0];
