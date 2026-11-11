@@ -162,3 +162,8 @@ change), or authorizes (d) explicitly — in that case the only edit is an
 - Local env shim, NOT committed (gitignored): `server/schema -> ../schema`
   symlink needed to run vitest with cwd=server in this worktree.
 - Scratch dir `/home/brad/.docintake-u2fix1-scratch/` removed at exit.
+
+report_commit: 7f08b7fe94eb6f5c0ad8c02ce33c809104f3ead1
+
+L2-DOC-INTAKE-1-u2fix1 UNIT unit BLOCKED IngestionApi.test.ts Sigma leg needs a device-less write (forbidden by brief) or a default storage device (config/**, out of scope); defects 1-3 fixed+verified, blob tests 14/14 green
+
