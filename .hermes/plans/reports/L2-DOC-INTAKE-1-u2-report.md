@@ -39,4 +39,4 @@ Both probes confirm the correct implementation catches the defects.
 - **No literal mount path**: `storedPath` is always device-relative (e.g., `ingestion-artifacts/ING-001/document.pdf`).
 
 L2-DOC-INTAKE-1-u2 UNIT 2 DONE 8ffe234e5c3aa5e9691571c351261e7e67ba9b59
-report_commit: 8ffe234e5c3aa5e9691571c351261e7e67ba9b59
+report_commit: f83fd82886dc94b13744277acddb7b8a3dd9fc48
