@@ -128,3 +128,5 @@ a1fix closeout 7cd10fbd naming b5f51297).
 ## Post-o1rfix Changed Files
 - `schema/registry/ontology-sources.schema.yaml` (+4 lines: 4 patterns, 1 description rewrite; 98 -> 102)
 - `server/src/schema/OntologySourcesRegistry.test.ts` (+47 lines: 1 new leg, 3 new fixtures, D5/D6 fixes; 182 -> 229)
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o1rfix UNIT o1rfix DONE 5dfe1ba061dd3ac9a8a80f2e3261cdd19efae949
