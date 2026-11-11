@@ -226,8 +226,7 @@ describe('RunWorkspacePage — role-binding proposals panel (f4plr)', () => {
 
   it('(4) navigating RUN-A → RUN-B with never-settling resolution clears panel synchronously', async () => {
     // RUN-B resolution never settles (no resolve callback captured)
-    let runBResolve: (() => void) | null = null
-    const runBPending = new Promise<void>((resolve) => { runBResolve = resolve })
+    const runBPending = new Promise<void>(() => { /* never resolves */ })
 
     mocks.getRecordWithUI.mockImplementation(async (id: string) => {
       if (id === 'RUN-A') {
