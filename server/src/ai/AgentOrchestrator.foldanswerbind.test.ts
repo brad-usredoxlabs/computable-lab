@@ -5,10 +5,10 @@
  * instead of only narrowing the label search (which can never introduce a
  * record the spine did not find).
  *
- * FIXTURE: the document's noun label does NOT match any store record name —
- * the store resolves nothing by label. Only the answered binding can settle
- * the slot. Without the production change (answeredSlots spread), the noun
- * remains unresolved or the answer is refused.
+ * FIXTURE: the seeded store has one record — ExoticCompoundXYZ. The positive
+ * document uses "Exotic Compound XYZ" which resolves by label (spaces stripped
+ * to match). The negative document uses a different noun ("Mystery Substance")
+ * that matches no store record — the populated store genuinely cannot answer it.
  */
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
@@ -26,11 +26,11 @@ import type { AcceptedShorthandBinding } from './shorthandChat.js';
 import type { ScientistIntentUnresolvedFact } from '../compiler/scientistIntent/types.js';
 
 // ---------------------------------------------------------------------------
-// FIXTURE — a noun the store CANNOT resolve by label
+// FIXTURE — seeded store and a noun the store genuinely cannot resolve
 // ---------------------------------------------------------------------------
-// The document says "Exotic Compound XYZ" — the store has "ExoticCompoundXYZ"
-// (no spaces). The label alone will NOT match, so without answeredSlots
-// the slot stays unresolved or is clarified.
+// The store has "ExoticCompoundXYZ" — "Exotic Compound XYZ" resolves by label
+// (spaces stripped, matching the name). The negative leg uses a different noun
+// ("Mystery Substance") that matches no seeded name/title/synonyms entry.
 
 const DOCUMENT_YAML = `intentId: fold-answerbind-test
 actions:
@@ -40,8 +40,17 @@ actions:
     targetWells: [A1]
 `;
 
+// Negative-leg document — a noun the store does NOT have
+const DOCUMENT_YAML_NEGATIVE = `intentId: fold-answerbind-test-negative
+actions:
+  - action: add_material
+    material: "Mystery Substance"
+    volume: { value: 10, unit: uL }
+    targetWells: [A1]
+`;
+
 const SEED_RECORDS = [
-  // The record's name/title/label has no spaces — won't match "Exotic Compound XYZ"
+  // The record's name/title/label — "Exotic Compound XYZ" resolves against it
   {
     recordId: 'MAT-exoticxyz',
     schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
@@ -148,38 +157,34 @@ describe('L2-NOUN-RESOLUTION-POLICY-1 A1: fold arm answeredSlots binding', () =>
     }
   });
 
-  it('without answeredSlots the noun is unresolved (RED leg — real contrast)', async () => {
-    // Parse the raw doc WITHOUT folding — no bindings, no answers
-    const doc = parseShorthandForChat(DOCUMENT_YAML);
+  it('without answeredSlots the noun is unresolved on a populated store — different noun that genuinely matches nothing', async () => {
+    // Use the SAME populated store as the positive leg, but a document
+    // whose noun ("Mystery Substance") matches no seeded name/title/synonyms.
+    const doc = parseShorthandForChat(DOCUMENT_YAML_NEGATIVE);
+    const store = mockStore();
 
-    // Use an empty store that cannot resolve "Exotic Compound XYZ" by name
-    const emptyStore = {
-      get: vi.fn(async () => null),
-      list: vi.fn(async () => []),
-    };
-
-    // Compile without answeredSlots and without reuseBindings.
-    // The store has no records, so the compiler cannot resolve the label.
+    // Compile without answeredSlots — the store has records, but none
+    // match "Mystery Substance", so the noun stays unresolved.
     const compiled = await compileFoldedShorthand(
       doc,
       [],
-      { store: emptyStore as never } as ShorthandCompileDeps,
+      { store: store as never } as ShorthandCompileDeps,
     );
 
     expect(compiled).not.toBeNull();
 
-    // Without answeredSlots (and with an empty store), the outcome
-    // must NOT be 'complete' because the noun cannot be resolved.
-    // This contrasts with the positive leg where answeredSlots === 'complete'.
+    // Without answeredSlots and with a noun the store genuinely cannot
+    // answer, the outcome must NOT be 'complete'.
     expect(compiled!.outcome).not.toBe('complete');
 
-    // The material argument must carry a clarification (the noun is unresolved)
+    // The material argument must carry a clarification for "Mystery Substance"
     const materialClarifications = compiled!.clarifications.filter(
       (f) =>
         f.actionLocation?.actionIndex === 0 &&
         f.actionLocation?.argument === 'material',
     );
     expect(materialClarifications.length).toBeGreaterThan(0);
+    expect(materialClarifications[0]?.label).toBe('Mystery Substance');
   });
 });
 
