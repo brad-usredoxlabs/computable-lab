@@ -29,7 +29,7 @@ import { createRecordProvider } from './providers/records.js';
 import type { ProviderHit } from './types.js';
 
 /** Referent level of a shelf line (inventory layer, never concept/spec). */
-export type ShelfReferentLevel = 'instance' | 'lot' | 'aliquot';
+export type ShelfReferentLevel = 'instance' | 'lot' | 'aliquot' | 'labware-instance';
 
 /** How the line joined to the resolved concept(s) — recorded as data. */
 export type ShelfJoinPath =
@@ -37,12 +37,15 @@ export type ShelfJoinPath =
   | 'direct-material-ref'
   | 'parent-instance'
   | 'source-lot'
+  | 'labware-definition'
   | 'unknown-provenance';
 
 /** A concept the term resolved to (tier-1 local material records). */
 export interface ShelfConcept {
   recordId: string;
   label: string;
+  /** Source kind: 'material' or 'labware-definition'. */
+  sourceKind?: 'material' | 'labware-definition';
 }
 
 /** One recorded-material line on the shelf. */
@@ -55,6 +58,8 @@ export interface ShelfEntry {
   vendor?: string;
   /** Lot string (vendor_lot / lot_number) when present. */
   lot?: string;
+  /** Location label from the instance (labware-instance only). */
+  location?: string;
   joinedVia: ShelfJoinPath;
 }
 
@@ -85,6 +90,7 @@ const KIND_LEVEL: Record<string, ShelfReferentLevel> = {
   'material-instance': 'instance',
   'material-lot': 'lot',
   aliquot: 'aliquot',
+  'labware-instance': 'labware-instance',
 };
 
 /** Cap on concept hits per query (mirrors the spine's default candidate limit). */
@@ -141,7 +147,7 @@ async function listKind(store: RecordStore, kind: string): Promise<RecordEnvelop
   }
 }
 
-const LEVEL_ORDER: Record<ShelfReferentLevel, number> = { instance: 0, lot: 1, aliquot: 2 };
+const LEVEL_ORDER: Record<ShelfReferentLevel, number> = { instance: 0, lot: 1, aliquot: 2, 'labware-instance': 3 };
 
 /**
  * Build a read-only shelf lookup over the given store. store.list ONLY —
@@ -165,8 +171,28 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
       const concepts: ShelfConcept[] = hits.map((hit) => ({
         recordId: hit.curie.startsWith('local:') ? hit.curie.slice('local:'.length) : hit.curie,
         label: hit.label,
+        sourceKind: 'material' as const,
       }));
       const conceptIds = new Set(concepts.map((c) => c.recordId));
+
+      // 1b. Labware definitions as concepts (separate provider, separate id set).
+      const lwProvider = createRecordProvider(store, ['labware-definition']);
+      let lwHits: ProviderHit[] = [];
+      try {
+        lwHits = await lwProvider(term, CONCEPT_LIMIT, controller.signal);
+      } catch {
+        lwHits = [];
+      }
+      const labwareDefIds = new Set<string>();
+      for (const hit of lwHits) {
+        const id = hit.curie.startsWith('local:') ? hit.curie.slice('local:'.length) : hit.curie;
+        labwareDefIds.add(id);
+        concepts.push({
+          recordId: id,
+          label: hit.label,
+          sourceKind: 'labware-definition' as const,
+        });
+      }
 
       // 2. Load inventory kinds (filter in code — no query index beyond kind).
       const vendorProducts = await listKind(store, 'vendor-product');
@@ -183,6 +209,7 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
         joinedVia: ShelfJoinPath,
         vendor?: string,
         lot?: string,
+        location?: string,
       ): ShelfEntry => {
         const payload = payloadOf(record);
         const level = KIND_LEVEL[String(payload.kind ?? '')] ?? 'instance';
@@ -193,6 +220,7 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
           level,
           ...(vendor ? { vendor } : {}),
           ...(lot ? { lot } : {}),
+          ...(location ? { location } : {}),
           joinedVia,
         };
       };
@@ -284,7 +312,27 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
         ));
       }
 
-      // 6. Group recorded material by vendor/lot (deterministic order).
+      // 6. Labware instances: join via labwareId -> labware-definition.
+      const labwareInstances = await listKind(store, 'labware-instance');
+      for (const record of labwareInstances) {
+        const payload = payloadOf(record);
+        const lwId = typeof payload.labwareId === 'string' ? payload.labwareId : undefined;
+        // Location label from instance's location block
+        const locBlock = payload.location;
+        const locLabel = locBlock && typeof locBlock === 'object'
+          ? firstString((locBlock as Record<string, unknown>).label)
+          : undefined;
+        if (lwId && labwareDefIds.has(lwId)) {
+          entries.push(makeEntry(record, 'labware-definition', undefined, undefined, locLabel));
+          continue;
+        }
+        // Missing link but lexically matched: visible, no provenance claim.
+        if (lexicallyMatches(payload, needle)) {
+          entries.push(makeEntry(record, 'unknown-provenance', undefined, undefined, locLabel));
+        }
+      }
+
+      // 7. Group recorded material by vendor/lot (deterministic order).
       const groupKey = (e: ShelfEntry): string => `${e.vendor ?? ''}\u0000${e.lot ?? ''}`;
       const groupsByVendorLot = new Map<string, ShelfGroup>();
       for (const entry of entries) {
