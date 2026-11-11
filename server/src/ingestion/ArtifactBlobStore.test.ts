@@ -309,6 +309,36 @@ describe('ArtifactBlobStore — storage-backed', () => {
 
       expect(result.storedPath).toBe('ingestion-artifacts/ING-001/ING-001.bin');
     });
+
+    it('sanitises artifactId segments (blocks ../ traversal)', async () => {
+      const { LocalMountStorageProvider } = await import('../storage/LocalMountStorageProvider.js');
+      const root = mkdtempSync(`${tmpdir()}/dref-path-safety-`);
+      const realProvider = new LocalMountStorageProvider(root);
+      const realStorage = new StorageService([{ id: 'tmp-device', label: 'tmp-device', kind: 'local-mount', default: true }], () => realProvider);
+
+      const fakeStore = makeFakeStore();
+      const recorder = createArtifactBlobStoreRecorder(fakeStore.store);
+      const blobStore = new ArtifactBlobStore(realStorage, 'ingestion-artifacts', recorder);
+
+      const result = await blobStore.save({
+        artifactId: '../../escape',
+        fileName: 'x.bin',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      // storedPath must not contain '..' segments
+      expect(result.storedPath).not.toContain('..');
+
+      // The resolved absolute path must stay inside the mount root
+      const { resolve, relative } = await import('node:path');
+      const absPath = resolve(root, result.storedPath);
+      const relPath = relative(root, absPath);
+      expect(relPath.startsWith('..')).toBe(false);
+      expect(relPath.startsWith('ingestion-artifacts/')).toBe(true);
+
+      // Clean up
+      rmSync(root, { recursive: true, force: true });
+    });
   });
 
   describe('LegacyArtifactBlobStore', () => {
@@ -328,7 +358,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
   });
 
   describe('createArtifactBlobStoreRecorder()', () => {
-    it('omits undefined optional fields (exactOptionalPropertyTypes safety)', async () => {
+    it('always emits format (falls back to "bin" for extensionless file name)', async () => {
       const fakeStore = makeFakeStore();
       const recorder = createArtifactBlobStoreRecorder(fakeStore.store);
 
@@ -342,9 +372,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
       });
 
       const dref = fakeStore.createdEnvelopes[0].payload;
-      // Optional fields should either be present with a value or absent entirely
-      // acquiredAt is always set, format is set from fileName
-      expect(dref.acquiredAt).toBeDefined();
+      // format is always present; formatForPath returns 'bin' as fallback
       expect(dref.format).toBe('bin');
     });
 

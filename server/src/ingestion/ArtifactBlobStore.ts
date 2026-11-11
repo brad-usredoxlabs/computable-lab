@@ -22,6 +22,20 @@ function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'artifact.bin';
 }
 
+/** Sanitise a single path segment: collapse `.` / `..` to safe equivalents. */
+function safeSegment(value: string): string {
+  if (value === '..') return 'dot-dot';
+  if (value === '.') return 'dot';
+  // Split on `/` in case the raw value carries embedded separators
+  return value.split('/').map((seg) => {
+    if (seg === '..') return 'dot-dot';
+    if (seg === '.') return 'dot';
+    // Fall back to safeName for any segment containing unsafe chars
+    const cleaned = seg.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    return cleaned || 'artifact';
+  }).join('/');
+}
+
 function formatForPath(path: string): string {
   const m = /\.([a-zA-Z0-9]+)$/.exec(path);
   return m ? m[1]!.toLowerCase() : 'bin';
@@ -75,8 +89,9 @@ export class ArtifactBlobStore {
     contentBase64: string;
   }): Promise<ArtifactBlobStoreResult> {
     const { provider, deviceId } = this.resolveDevice();
-    const fileName = safeName(args.fileName ?? `${args.artifactId}.bin`);
-    const storedPath = join(this.prefix, args.artifactId, fileName);
+    const artifactId = safeSegment(args.artifactId);
+    const fileName = safeName(args.fileName ?? `${artifactId}.bin`);
+    const storedPath = join(this.prefix, artifactId, fileName);
     const buffer = Buffer.from(args.contentBase64, 'base64');
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
@@ -185,7 +200,6 @@ export function createArtifactBlobStoreRecorder(store: RecordStore): ArtifactBlo
     }
     const drefId = `DREF-${String(max + 1).padStart(6, '0')}`;
 
-    // Build payload — conditionals for optional fields (exactOptionalPropertyTypes)
     const format = formatForPath(input.fileName);
     const drefPayload: Record<string, unknown> = {
       kind: 'data-reference',
@@ -196,7 +210,7 @@ export function createArtifactBlobStoreRecorder(store: RecordStore): ArtifactBlo
       contentHash: input.contentHash,
       sizeBytes: input.sizeBytes,
       dataKind: 'binary',
-      ...(format ? { format } : {}),
+      format,
       acquiredAt: new Date().toISOString(),
     };
 
