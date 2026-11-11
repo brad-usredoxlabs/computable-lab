@@ -7,13 +7,13 @@ Extracted the `resolvePlannedRunId` resolver from `RunPlanGraphBuild.tsx` into a
 - `app/src/run/plannedRunId.ts` (NEW, 16 lines) — extracted resolver verbatim from `RunPlanGraphBuild.tsx:35-43`
 - `app/src/run/RunPlanGraphBuild.tsx` — deleted local resolver, imported from `./plannedRunId`
 - `app/src/run/RunWorkspacePage.tsx` — added state + effect to resolve planned-run id, conditionally render panel with resolved id
-- `app/src/run/RunWorkspacePage.proposals.test.tsx` (NEW, 215 lines) — 3 tests pinning the fix
+- `app/src/run/RunWorkspacePage.proposals.test.tsx` (278 lines) — 4 tests pinning the fix
 
 ## Verification
 ### Targeted tests (unit f4plr)
 ```
 node node_modules/vitest/vitest.mjs run src/run/RunWorkspacePage.proposals.test.tsx
-→ Test Files  1 passed (1), Tests  3 passed (3)
+→ Test Files  1 passed (1), Tests  4 passed (4)
 ```
 
 ### Regression tests
@@ -25,7 +25,7 @@ node node_modules/vitest/vitest.mjs run src/run/RunWorkspacePage.surface.test.ts
 ### Typecheck
 ```
 npx tsc --noEmit -p .
-→ 0 errors in my files (11 pre-existing in server/editor modules, unchanged from baseline)
+→ 0 errors in my files (11 pre-existing in server/editor modules, 7 pre-existing in app modules, unchanged from baseline)
 ```
 
 ### Mutation Probes
@@ -40,4 +40,6 @@ git -c core.fileMode=false status --short
 ```
 
 ## Exit
-L2-SUBPROTO-EXPAND-1-f4plr UNIT f4plr DONE 2ecf1921c76ab03cf29b8a24a39be7b5d3dd7d66
+
+## Exit
+L2-SUBPROTO-EXPAND-1-f4plr-fix3 UNIT unit DONE a31337107f7745adf16fcd2598f773baa4816113
