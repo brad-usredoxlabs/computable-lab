@@ -78,6 +78,7 @@ const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
 const LabMaterialNewPage = lazy(async () => import('./collections/LabMaterialNewPage').then((m) => ({ default: m.LabMaterialNewPage })))
+const LabLabwareNewPage = lazy(async () => import('./collections/LabLabwareNewPage').then((m) => ({ default: m.LabLabwareNewPage })))
 // u6binddoor: role binding surface — mounts RunEditorRouter on /runs/:runId/bindings
 const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((m) => ({ default: m.RunEditorRouter })))
 // QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
@@ -163,6 +164,8 @@ export function App() {
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               {/* Unit 1: material creation entry point */}
               <Route path="/lab/materials/new" element={<DeferredRoute><LabMaterialNewPage /></DeferredRoute>} />
+              {/* L2-SPEC-SHEET-INGEST-1: labware creation entry point (spec-sheet ingest) */}
+              <Route path="/lab/labware/new" element={<DeferredRoute><LabLabwareNewPage /></DeferredRoute>} />
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />

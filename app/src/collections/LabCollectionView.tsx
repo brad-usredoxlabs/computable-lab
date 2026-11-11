@@ -363,6 +363,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New material
             </button>
           )}
+          {activeCategory === 'labware' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-labware"
+              onClick={() => navigate('/lab/labware/new')}
+            >
+              + New labware
+            </button>
+          )}
           {activeCategory === 'labware-instances' && (
             <button
               type="button"
