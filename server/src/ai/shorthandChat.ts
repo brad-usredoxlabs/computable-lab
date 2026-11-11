@@ -538,7 +538,7 @@ export function composeSpineWithReuseBindings(
 /** Unwrap the spine's declared local CURIE ('local:<recordId>',
  *  resolve/providers/records.ts:77) into the record identity. Generic CURIE
  *  plumbing, the resolveNounsPass precedent — not a local invention. */
-function recordIdFromCurie(curie: string): string {
+export function recordIdFromCurie(curie: string): string {
   const prefix = 'local:';
   return curie.startsWith(prefix) ? curie.slice(prefix.length) : curie;
 }
