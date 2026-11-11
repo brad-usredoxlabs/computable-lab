@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { flushSync } from 'react-dom'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ApiError } from '../shared/api/errors'
 import { AiPanelProvider } from '../shared/context/AiPanelContext'
@@ -12,10 +13,22 @@ import { ThemeProvider } from '../shared/shell/useTheme'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { RunWorkspacePage } from './RunWorkspacePage'
 
-const mocks = vi.hoisted(() => ({
-  getRecordWithUI: vi.fn(),
-  getRoleBindingProposals: vi.fn(),
+const { mocks, mockUseParams } = vi.hoisted(() => ({
+  mocks: {
+    getRecordWithUI: vi.fn(),
+    getRoleBindingProposals: vi.fn(),
+  },
+  mockUseParams: vi.fn(),
 }))
+
+// Partial mock: override useParams with a controllable mock, keep everything else real
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual: any = await importOriginal()
+  return {
+    ...actual,
+    useParams: mockUseParams,
+  }
+})
 
 vi.mock('../shared/api/client', () => ({
   apiClient: {
@@ -129,21 +142,20 @@ function notPlannedRunError() {
 }
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
-beforeEach(() => { mocks.getRecordWithUI.mockReset(); mocks.getRoleBindingProposals.mockReset() })
+beforeEach(() => { mocks.getRecordWithUI.mockReset(); mocks.getRoleBindingProposals.mockReset(); mockUseParams.mockReset() })
 
-function mountPage(runId: string) {
+function renderPage(runId: string) {
+  mockUseParams.mockReturnValue({ studyId: 'STU-1', runId })
   return render(
-    <MemoryRouter initialEntries={[`/runs/${runId}`]}>
+    <MemoryRouter>
       <OpenTabsProvider>
-        <Routes>
-          <Route path="/runs/:runId" element={
-            <ThemeProvider>
-              <AiPanelProvider>
-                <RunWorkspacePage />
-              </AiPanelProvider>
-            </ThemeProvider>
-          } />
-        </Routes>
+        <ThemeProvider>
+          <AiPanelProvider>
+            <Routes>
+              <Route path="*" element={<RunWorkspacePage />} />
+            </Routes>
+          </AiPanelProvider>
+        </ThemeProvider>
       </OpenTabsProvider>
     </MemoryRouter>,
   )
@@ -160,7 +172,7 @@ describe('RunWorkspacePage — role-binding proposals panel (f4plr)', () => {
       throw notPlannedRunError()
     })
 
-    mountPage('RUN-1')
+    renderPage('RUN-1')
 
     await waitFor(() => {
       expect(mocks.getRoleBindingProposals).toHaveBeenLastCalledWith('PLR-1')
@@ -183,7 +195,7 @@ describe('RunWorkspacePage — role-binding proposals panel (f4plr)', () => {
       throw notPlannedRunError()
     })
 
-    mountPage('PLR-9')
+    renderPage('PLR-9')
 
     await waitFor(() => {
       expect(mocks.getRoleBindingProposals).toHaveBeenLastCalledWith('PLR-9')
@@ -202,13 +214,65 @@ describe('RunWorkspacePage — role-binding proposals panel (f4plr)', () => {
       uiSpec: null, schema: null,
     })
 
-    const { container } = mountPage('RUN-NOPLR')
+    const { container } = renderPage('RUN-NOPLR')
 
     await waitFor(() => {
       expect(container.textContent).not.toContain('Loading run')
     }, { timeout: 3000 })
 
     expect(mocks.getRoleBindingProposals).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('role-binding-proposals')).toBeNull()
+  })
+
+  it('(4) navigating RUN-A → RUN-B with never-settling resolution clears panel synchronously', async () => {
+    // RUN-B resolution never settles (no resolve callback captured)
+    let runBResolve: (() => void) | null = null
+    const runBPending = new Promise<void>((resolve) => { runBResolve = resolve })
+
+    mocks.getRecordWithUI.mockImplementation(async (id: string) => {
+      if (id === 'RUN-A') {
+        return {
+          record: { recordId: 'RUN-A', schemaId: 'run', payload: { kind: 'run', studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run A', plannedRunRef: { id: 'PLR-A' } } },
+          uiSpec: null, schema: null,
+        }
+      }
+      // RUN-B never resolves
+      await runBPending
+      return { record: {}, uiSpec: null, schema: null }
+    })
+
+    mocks.getRoleBindingProposals.mockImplementation(async (id: string) => {
+      if (id === 'PLR-A') return fourRoleProjection
+      throw notPlannedRunError()
+    })
+
+    // Mount at RUN-A
+    const { rerender } = renderPage('RUN-A')
+
+    // Wait for panel to appear under RUN-A
+    await waitFor(() => {
+      expect(screen.queryByTestId('role-binding-proposals')).not.toBeNull()
+    }, { timeout: 3000 })
+
+    // Swap runId to RUN-B (simulates route change, same component instance)
+    mockUseParams.mockReturnValue({ studyId: 'STU-1', runId: 'RUN-B' })
+    flushSync(() => {
+      rerender(
+        <MemoryRouter>
+          <OpenTabsProvider>
+            <ThemeProvider>
+              <AiPanelProvider>
+                <Routes>
+                  <Route path="*" element={<RunWorkspacePage />} />
+                </Routes>
+              </AiPanelProvider>
+            </ThemeProvider>
+          </OpenTabsProvider>
+        </MemoryRouter>,
+      )
+    })
+
+    // Panel must be GONE synchronously (before any RUN-B resolution)
     expect(screen.queryByTestId('role-binding-proposals')).toBeNull()
   })
 })
