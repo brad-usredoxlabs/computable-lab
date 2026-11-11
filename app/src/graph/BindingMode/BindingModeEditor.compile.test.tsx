@@ -72,13 +72,15 @@ const mockLocalProtocol: RecordEnvelope = {
   meta: { kind: 'local-protocol' },
   payload: {
     kind: 'local-protocol',
-    labwareRoles: [
-      { roleId: 'plate', roleType: 'labware' },
-      { roleId: 'reservoir', roleType: 'labware' },
-    ],
-    materialRoles: [
-      { roleId: 'wash_buffer', roleType: 'material' },
-    ],
+    roles: {
+      labwareRoles: [
+        { roleId: 'plate' },
+        { roleId: 'reservoir' },
+      ],
+      materialRoles: [
+        { roleId: 'wash_buffer' },
+      ],
+    },
     notes: JSON.stringify({ labContext: { plateCount: 1, sampleCount: 96 } }),
   },
 }
