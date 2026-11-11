@@ -192,7 +192,6 @@ export function RunWorkspacePage() {
   return (
     <ProtocolSelectionProvider>
       <RunProtocolStepsLoader runId={runId} />
-      {plannedRunId ? <RoleBindingProposalsPanel runId={plannedRunId} /> : null}
       <WorkspaceProvider studyId={resolvedStudyId}>
         <EventEditorProvider
           runId={runId}
@@ -243,6 +242,7 @@ export function RunWorkspacePage() {
                     when no instrument-sequence links the run (the DNA case is
                     byte-identical — bait #2) and owns its own single probe. */}
                 {runKind === 'run' ? <GcRunSheetSection runId={runId} /> : null}
+                {plannedRunId ? <RoleBindingProposalsPanel runId={plannedRunId} /> : null}
                 <RunWorkspaceContent runId={runId} mode={mode} />
               </RunWorkspaceShell>
             </ChatFocusProvider>
