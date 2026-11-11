@@ -1,0 +1,102 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ontology-sources.schema.yaml"
+title: "Ontology Sources Registry"
+description: >
+  Registry declaring each servable ontology source.
+  Local OBO sources declare a path to the .obo file and a root term CURIE.
+  Remote OLS4 sources declare an ols_key (the EBI OLS ontology identifier).
+
+type: object
+unevaluatedProperties: false
+required:
+  - version
+  - sources
+properties:
+  version:
+    type: string
+    description: "Registry format version."
+  sources:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#/$defs/source"
+
+$defs:
+  source:
+    type: object
+    unevaluatedProperties: false
+    required:
+      - id
+      - prefix
+      - namespace_iri
+      - display_name
+      - loader
+      - enabled
+    properties:
+      id:
+        type: string
+        description: "Unique slug identifying this source (lowercase-hyphenated)."
+        minLength: 1
+        pattern: "^[a-z0-9][a-z0-9-]*$"
+      prefix:
+        type: string
+        description: "CURIE prefix (uppercase, e.g. LWO)."
+        pattern: "^[A-Z][A-Z0-9]*$"
+        minLength: 1
+      namespace_iri:
+        type: string
+        description: "Absolute IRI for the namespace (http/https URL). The cross-field constraint that it ends with prefix + '/' or '#' is enforced by validation logic, not schema pattern."
+        minLength: 1
+        pattern: "^https?://\\S+$"
+      display_name:
+        type: string
+        description: "Human-readable name for this ontology."
+        minLength: 1
+      loader:
+        type: string
+        enum:
+          - local-obo
+          - ols4
+        description: "How this source is loaded."
+      enabled:
+        type: boolean
+        description: "Whether this source is active."
+      path:
+        type: string
+        description: "Absolute path to the .obo file (required for local-obo loaders)."
+        pattern: "^/"
+      root:
+        type: string
+        description: "Root term CURIE (required for local-obo loaders)."
+        pattern: "^[A-Za-z][A-Za-z0-9._-]*:[A-Za-z0-9_.-]+$"
+      ols_key:
+        type: string
+        description: "OLS4 ontology key (required for ols4 loaders)."
+    allOf:
+      # If loader is local-obo: require path+root, forbid ols_key
+      - if:
+          properties:
+            loader:
+              const: "local-obo"
+          required:
+            - loader
+        then:
+          required:
+            - path
+            - root
+          not:
+            required:
+              - ols_key
+      # If loader is ols4: require ols_key, forbid path+root
+      - if:
+          properties:
+            loader:
+              const: "ols4"
+          required:
+            - loader
+        then:
+          required:
+            - ols_key
+          not:
+            required:
+              - path

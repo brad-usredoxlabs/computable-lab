@@ -1,0 +1,27 @@
+version: "1.0"
+sources:
+  - id: "lwo"
+    prefix: "LWO"
+    namespace_iri: "https://brad-usredoxlabs.github.io/lab-ontologies/lwo"
+    display_name: "Labware Ontology"
+    loader: "local-obo"
+    enabled: true
+    path: "/home/brad/git/lab-ontologies/dist/lwo-2026-08-15/lwo/lwo.base.obo"
+    root: "LWO:0000100"
+
+  - id: "leq"
+    prefix: "LEQ"
+    namespace_iri: "https://brad-usredoxlabs.github.io/lab-ontologies/leq"
+    display_name: "Lab Equipment Ontology"
+    loader: "local-obo"
+    enabled: true
+    path: "/home/brad/git/lab-ontologies/dist/leq-2026-08-15/leq/leq.base.obo"
+    root: "LEQ:0000100"
+
+  - id: "ols4"
+    prefix: "OLS4"
+    namespace_iri: "https://www.ebi.ac.uk/ols4"
+    display_name: "EBI OLS4"
+    loader: "ols4"
+    enabled: true
+    ols_key: "ols4"
