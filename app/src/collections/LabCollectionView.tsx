@@ -19,16 +19,18 @@ import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
 import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
+import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
   { id: 'sequences', label: 'Sequences & assays', kind: 'sequence' },
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
+  { id: 'labware-instances', label: 'Labware instances', kind: 'labware-instance' },
   { id: 'equipment', label: 'Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'controlled-document' },
@@ -124,6 +126,16 @@ function extractHelperTokens(
       break
     }
 
+    case 'labware-instance': {
+      if (typeof p.label === 'string' && p.label) tokens.push({ text: p.label })
+      if (typeof p.labwareId === 'string' && p.labwareId) tokens.push({ text: p.labwareId })
+      if (typeof p.barcode === 'string' && p.barcode) tokens.push({ text: `📊 ${p.barcode}` })
+      const loc = p.location as { label?: string; kind?: string } | undefined
+      if (loc?.kind) tokens.push({ text: `📍 ${loc.kind}${loc.label ? ` ${loc.label}` : ''}` })
+      if (typeof p.state === 'string' && p.state) tokens.push({ text: p.state, tag: statusVariant(p.state) })
+      break
+    }
+
     case 'equipment': {
       // QMS8-C (D3/D8): the domain status token is retired with the field —
       // the record's lifecycle state is shown by the control bar's state pill.
@@ -203,6 +215,10 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   const [searchQuery, setSearchQuery] = useState('')
   const openTabs = useOptionalOpenTabs()
 
+  // Labware-instance create modal state
+  const [showInstanceModal, setShowInstanceModal] = useState(false)
+  const [labwareDefinitions, setLabwareDefinitions] = useState<RecordEnvelope[]>([])
+
   const activeKind = CATEGORIES.find((c) => c.id === activeCategory)?.kind ?? 'protocol'
 
   const fetchRecords = useCallback(async (kind: string) => {
@@ -221,6 +237,13 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     void fetchRecords(activeKind)
   }, [activeKind, fetchRecords])
+
+  // Load labware definitions when the instance create modal opens
+  useEffect(() => {
+    if (showInstanceModal) {
+      void apiClient.listRecordsByKind('labware', 200).then((r) => setLabwareDefinitions(r.records))
+    }
+  }, [showInstanceModal])
 
   // Filter by search query, then sort
   const query = searchQuery.toLowerCase().trim()
@@ -340,6 +363,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New material
             </button>
           )}
+          {activeCategory === 'labware-instances' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-labware-instance"
+              onClick={() => setShowInstanceModal(true)}
+            >
+              + New instance
+            </button>
+          )}
         </nav>
 
         {error ? (
@@ -447,11 +480,19 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   if (embedded) return collectionContent
 
   return (
-    <AppShell
-      brand="Lab"
-      layout="workspace"
-      topbarTabs={<WorkspaceTabStrip />}
-      leftPane={collectionContent}
-    />
+    <>
+      <AppShell
+        brand="Lab"
+        layout="workspace"
+        topbarTabs={<WorkspaceTabStrip />}
+        leftPane={collectionContent}
+      />
+      <LabwareInstanceCreateModal
+        definitions={labwareDefinitions}
+        isOpen={showInstanceModal}
+        onClose={() => setShowInstanceModal(false)}
+        onSuccess={() => void fetchRecords('labware-instance')}
+      />
+    </>
   )
 }
