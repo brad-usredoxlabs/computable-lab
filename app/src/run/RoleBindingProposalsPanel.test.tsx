@@ -85,7 +85,7 @@ describe('RoleBindingProposalsPanel', () => {
     expect(mocks.getRoleBindingProposals).toHaveBeenCalledWith('run-1')
   })
 
-  it('marks a single candidate as proposed (read-only preselection, never bound)', async () => {
+  it('a proposed row renders the single candidate with a Bind affordance', async () => {
     mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
     const { container } = render(<RoleBindingProposalsPanel runId="run-1" />)
 
@@ -276,6 +276,55 @@ describe('RoleBindingProposalsPanel', () => {
       expect(alert).not.toBeNull()
       expect(alert?.textContent).toContain('Role already bound')
     })
+  })
+
+  it('clicking Bind on a proposed role posts the correct body', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue(threeRoles)
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText(/DMEM High Glucose/)).toBeTruthy())
+    // Find the Bind button for the proposed candidate MAT-1
+    const bindBtns = screen.getAllByTestId('bind-candidate')
+    const bindBtn = bindBtns.find(btn => btn.dataset.candidateId === 'MAT-1')
+    expect(bindBtn).toBeTruthy()
+
+    await act(async () => { bindBtn!.click() })
+
+    expect(mocks.updatePlannedRunBindings).toHaveBeenCalledWith('run-1', {
+      materials: [{ roleId: 'medium', materialInstanceRef: 'MAT-1' }],
+    })
+  })
+
+  it('bound and unbound states render no Bind button and issue no POST', async () => {
+    const boundUnbound = {
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [
+          {
+            roleId: 'enzyme',
+            roleKind: 'material' as const,
+            state: 'bound' as const,
+            bound: { recordId: 'MAT-B', recordKind: 'material', label: 'Bound Enzyme' },
+            candidates: [],
+          },
+          {
+            roleId: 'plate',
+            roleKind: 'labware' as const,
+            state: 'unbound' as const,
+            candidates: [],
+            reason: 'No labware record matches the declared kind',
+          },
+        ],
+      }],
+    }
+    mocks.getRoleBindingProposals.mockResolvedValue(boundUnbound)
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => expect(screen.getByText('enzyme')).toBeTruthy())
+    // No Bind buttons at all
+    expect(screen.queryByTestId('bind-candidate')).toBeNull()
+    // No POST was issued
+    expect(mocks.updatePlannedRunBindings).not.toHaveBeenCalled()
   })
 
   it('disables ALL Bind buttons while any bind is in-flight (in-flight guard)', async () => {

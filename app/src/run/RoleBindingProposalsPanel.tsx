@@ -1,9 +1,10 @@
 /**
- * Run-surface READ-ONLY door for GET /runs/:id/role-binding-proposals.
- * Renders the server's projection verbatim: one candidate is only PROPOSED
- * (nothing is written), ambiguous roles list every server candidate, unbound
- * roles state the server's reason. A 404 (run has no attached protocol) and an
- * empty projection both render nothing; any other failure is one visible line.
+ * Run-surface read+write door for role-binding proposals.
+ * GET /runs/:id/role-binding-proposals returns server projections; candidates
+ * are proposed by the server and a user click writes the binding via
+ * POST /runs/:id/bindings. Ambiguous roles list every server candidate, unbound
+ * roles state the server's reason. A 404 and an empty projection both render
+ * nothing; any other failure is one visible line.
  */
 
 import { useEffect, useState } from 'react'
@@ -37,7 +38,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
   const [data, setData] = useState<RoleBindingProposalsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [bindError, setBindError] = useState<string | null>(null)
-  const [bindingCandidate, setBindingCandidate] = useState<string | null>(null)
+  const [bindingInFlight, setBindingInFlight] = useState(false)
 
   const loadData = async () => {
     try {
@@ -53,13 +54,29 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
   }
 
   useEffect(() => {
+    let cancelled = false
+    setData(null)
     setError(null)
     setBindError(null)
-    void loadData()
+    ;(async () => {
+      try {
+        const response = await apiClient.getRoleBindingProposals(runId)
+        if (!cancelled) setData(response)
+      } catch (err) {
+        if (!cancelled) {
+          if (ApiError.isApiError(err) && (err.status === 404 || isPlannedRunKindRefusal(err))) {
+            setData(null)
+          } else {
+            setError(err instanceof Error ? err.message : 'unknown error')
+          }
+        }
+      }
+    })()
+    return () => { cancelled = true }
   }, [runId])
 
   const handleBind = async (candidate: { recordId: string; recordKind: string; label: string; lotNumber?: string }, role: { roleId: string; roleKind: 'material' | 'labware' }) => {
-    setBindingCandidate(candidate.recordId)
+    setBindingInFlight(true)
     setBindError(null)
     const body: { labware?: Array<{ roleId: string; labwareInstanceRef: string }>; materials?: Array<{ roleId: string; materialInstanceRef: string }> } = {}
     if (role.roleKind === 'labware') {
@@ -73,7 +90,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
     } catch (err) {
       setBindError(err instanceof Error ? err.message : 'unknown error')
     } finally {
-      setBindingCandidate(null)
+      setBindingInFlight(false)
     }
   }
 
@@ -87,7 +104,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
   if (!data || data.protocols.length === 0) return null
 
   return (
-    <section data-testid="role-binding-proposals" aria-label="Role binding proposals (read-only)" style={wrapStyle}>
+    <section data-testid="role-binding-proposals" aria-label="Role binding proposals" style={wrapStyle}>
       <h3 style={headingStyle}>Role bindings — select candidates to bind</h3>
       {bindError && <p role="alert" style={errorStyle}>Bind failed: {bindError}</p>}
       {data.protocols.map((protocol) => (
@@ -111,7 +128,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                       data-testid="bind-candidate"
                       data-candidate-id={role.candidates[0]?.recordId}
                       onClick={() => role.candidates[0] && handleBind(role.candidates[0], role)}
-                      disabled={bindingCandidate !== null}
+                      disabled={bindingInFlight}
                     >
                       Bind
                     </button>
@@ -128,7 +145,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                             data-testid="bind-candidate"
                             data-candidate-id={candidate.recordId}
                             onClick={() => handleBind(candidate, role)}
-                            disabled={bindingCandidate !== null}
+                            disabled={bindingInFlight}
                           >
                             Bind
                           </button>
