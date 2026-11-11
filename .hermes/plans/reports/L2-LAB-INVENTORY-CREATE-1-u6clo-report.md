@@ -34,4 +34,4 @@ Exit code: 0 — no errors.
 Both test suites pass (8 + 6 = 14 tests total). TypeScript type check clean.
 No product code edited — this is a paperwork-only closeout.
 
-L2-LAB-INVENTORY-CREATE-1-u6clo UNIT unit DONE df96c9ccb1b46f205be9ca88dd2af5a88bd5b926
+L2-LAB-INVENTORY-CREATE-1-u6clo UNIT unit DONE e0e83c7823ee133f421cbb3d0cf81291e75f7836
