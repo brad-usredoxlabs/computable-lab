@@ -34,6 +34,15 @@ const errorStyle: CSSProperties = {
   margin: 0, padding: '6px 12px', fontSize: '11px', color: 'var(--cl-danger, var(--cl-text))',
 }
 
+/** Instance kinds eligible for binding into instance-ref slots.
+ *  Single producer: server/src/protocol/roleBindingProposal.ts.
+ *  Authority: schema/lab/material-instance.schema.yaml,
+ *             schema/lab/labware-instance.schema.yaml,
+ *             schema/lab/aliquot.schema.yaml.
+ *  Definition kinds ('material', 'labware', 'vendor-product') must NOT be bound.
+ */
+const INSTANCE_KINDS = new Set(['material-instance', 'labware-instance', 'aliquot'])
+
 export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelProps) {
   const [data, setData] = useState<RoleBindingProposalsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -123,15 +132,19 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                     <span style={proposedStyle}>
                       {role.candidates[0]?.label} (proposed)
                     </span>
-                    <button
-                      type="button"
-                      data-testid="bind-candidate"
-                      data-candidate-id={role.candidates[0]?.recordId}
-                      onClick={() => role.candidates[0] && handleBind(role.candidates[0], role)}
-                      disabled={bindingInFlight}
-                    >
-                      Bind
-                    </button>
+                    {role.candidates[0] && INSTANCE_KINDS.has(role.candidates[0].recordKind) ? (
+                      <button
+                        type="button"
+                        data-testid="bind-candidate"
+                        data-candidate-id={role.candidates[0]?.recordId}
+                        onClick={() => handleBind(role.candidates[0], role)}
+                        disabled={bindingInFlight}
+                      >
+                        Bind
+                      </button>
+                    ) : (
+                      <span style={metaStyle}> — definition, bind an instance instead</span>
+                    )}
                   </>
                 ) : role.state === 'ambiguous' ? (
                   <div style={candidatesStyle}>
@@ -140,15 +153,19 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
                       {role.candidates.map((candidate) => (
                         <li key={candidate.recordId}>
                           <span>{candidate.label}{candidate.lotNumber ? ` · lot ${candidate.lotNumber}` : ''}</span>
-                          <button
-                            type="button"
-                            data-testid="bind-candidate"
-                            data-candidate-id={candidate.recordId}
-                            onClick={() => handleBind(candidate, role)}
-                            disabled={bindingInFlight}
-                          >
-                            Bind
-                          </button>
+                          {INSTANCE_KINDS.has(candidate.recordKind) ? (
+                            <button
+                              type="button"
+                              data-testid="bind-candidate"
+                              data-candidate-id={candidate.recordId}
+                              onClick={() => handleBind(candidate, role)}
+                              disabled={bindingInFlight}
+                            >
+                              Bind
+                            </button>
+                          ) : (
+                            <span style={metaStyle}> — definition, bind an instance instead</span>
+                          )}
                         </li>
                       ))}
                     </ul>

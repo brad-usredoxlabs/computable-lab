@@ -42,7 +42,7 @@ const threeRoles = {
           roleKind: 'material' as const,
           state: 'proposed' as const,
           candidates: [
-            { recordId: 'MAT-1', recordKind: 'vendor-product', label: 'DMEM High Glucose' },
+            { recordId: 'MAT-1', recordKind: 'material-instance', label: 'DMEM High Glucose' },
           ],
         },
         {
@@ -50,8 +50,8 @@ const threeRoles = {
           roleKind: 'material' as const,
           state: 'ambiguous' as const,
           candidates: [
-            { recordId: 'MAT-2', recordKind: 'material', label: 'Trypsin' },
-            { recordId: 'MAT-3', recordKind: 'material', label: 'Collagenase' },
+            { recordId: 'MAT-2', recordKind: 'material-instance', label: 'Trypsin' },
+            { recordId: 'MAT-3', recordKind: 'material-instance', label: 'Collagenase' },
           ],
         },
         {
@@ -231,7 +231,7 @@ describe('RoleBindingProposalsPanel', () => {
           roleId: 'medium',
           roleKind: 'material' as const,
           state: 'proposed' as const,
-          candidates: [{ recordId: 'MAT-1', recordKind: 'vendor-product', label: 'DMEM High Glucose' }],
+          candidates: [{ recordId: 'MAT-1', recordKind: 'material-instance', label: 'DMEM High Glucose' }],
         }, {
           roleId: 'plate',
           roleKind: 'labware' as const,
@@ -346,11 +346,11 @@ describe('RoleBindingProposalsPanel', () => {
     })
     render(<RoleBindingProposalsPanel runId="run-1" />)
 
-    await waitFor(() => expect(screen.getByText(/PBTG/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Lot 42/)).toBeTruthy())
 
     // Both labels visible
-    expect(screen.getByText('PBTG')).toBeTruthy()
-    expect(screen.getByText('PBTG · Lot 42')).toBeTruthy()
+    expect(screen.getAllByText(/PBTG/).length).toBe(2)
+    expect(screen.getByText(/PBTG · Lot 42/)).toBeTruthy()
 
     // The instance candidate must have a Bind button
     const instanceBindBtn = screen.queryByTestId('bind-candidate')
@@ -377,8 +377,8 @@ describe('RoleBindingProposalsPanel', () => {
             roleKind: 'material' as const,
             state: 'ambiguous' as const,
             candidates: [
-              { recordId: 'MAT-2', recordKind: 'material', label: 'Trypsin' },
-              { recordId: 'MAT-3', recordKind: 'material', label: 'Collagenase' },
+              { recordId: 'MAT-2', recordKind: 'material-instance', label: 'Trypsin' },
+              { recordId: 'MAT-3', recordKind: 'material-instance', label: 'Collagenase' },
             ],
           },
           {
@@ -386,7 +386,7 @@ describe('RoleBindingProposalsPanel', () => {
             roleKind: 'material' as const,
             state: 'ambiguous' as const,
             candidates: [
-              { recordId: 'MAT-1', recordKind: 'vendor-product', label: 'DMEM' },
+              { recordId: 'MAT-1', recordKind: 'material-instance', label: 'DMEM' },
             ],
           },
         ],
