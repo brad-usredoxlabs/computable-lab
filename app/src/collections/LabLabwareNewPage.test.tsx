@@ -365,12 +365,12 @@ describe('LabLabwareNewPage', () => {
     // Schema declares vocabulary — this is what the real schema says
     const schemaWithVocab = {
       properties: {
-        kind: { const: 'labware-definition' },
-        type: { const: 'labware_definition' },
+        kind: { const: 'labware-definition-schema' },
+        type: { const: 'labware_definition_schema' },
         read_only: { type: 'boolean' },
         source: {
           properties: {
-            kind: { enum: ['imported', 'curated', 'user'] },
+            kind: { enum: ['curated', 'user'] },
           },
         },
       },
@@ -395,13 +395,13 @@ describe('LabLabwareNewPage', () => {
       expect(mockCreateRecord).toHaveBeenCalled()
     })
     const payload = (mockCreateRecord.mock.calls[0] as any)[1]
-    // D4: kind and type derived from schema const values
-    expect(payload.kind).toBe('labware-definition')
-    expect(payload.type).toBe('labware_definition')
+    // D4: kind and type derived from schema const values (not fallback literals)
+    expect(payload.kind).toBe('labware-definition-schema')
+    expect(payload.type).toBe('labware_definition_schema')
     // D4: read_only set true because schema declares read_only as boolean
     expect(payload.read_only).toBe(true)
-    // D4: source.kind from schema enum (prefer 'imported')
-    expect(payload.source.kind).toBe('imported')
+    // D4: source.kind from schema enum — 'imported' not in enum, so first value (DEFECT 4)
+    expect(payload.source.kind).toBe('curated')
   })
 
   it('omits read_only when schema does not declare it (D4 negative)', async () => {
@@ -498,5 +498,77 @@ describe('LabLabwareNewPage', () => {
     // String fields remain strings
     expect(typeof payload.topology.addressing).toBe('string')
     expect(payload.topology.addressing).toBe('grid')
+  })
+
+  // DEFECT 2 — D3 "prefer first proposal.sourceUrl" over both frozen and live URL
+  it('prefers first proposal.sourceUrl over frozen and live URLs (D3 prefer)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/redirected-b', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/redirected-b', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Extract from sheet-a
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-a' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Change URL to sheet-b AFTER proposals rendered
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-b' },
+    })
+    // Save — provenance must prefer the first proposal's sourceUrl
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D3 prefer: source.url is the proposal's sourceUrl, not frozen or live URL
+    expect(payload.source.url).toBe('https://example.com/redirected-b')
+  })
+
+  // DEFECT 3 — empty-string sourceUrl falls back to frozen URL
+  it('falls back to frozen URL when proposal sourceUrl is empty (D3 empty-string)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: '', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: '', passage: '8 rows', specId: 's2' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    // Extract from sheet-a
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-a' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Change URL to sheet-b AFTER proposals rendered
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet-b' },
+    })
+    // Save — provenance must fall back to the frozen extraction URL, not use '' or sheet-b
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // Empty-string sourceUrl falls back to frozen URL
+    expect(payload.source.url).toBe('https://example.com/sheet-a')
   })
 })
