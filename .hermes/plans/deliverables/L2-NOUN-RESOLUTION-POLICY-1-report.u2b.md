@@ -41,4 +41,4 @@ Exactly 2 failed (the repointed pins at :130 and :185), 5 passed. The control te
 1. `51d7180d` L2-NOUNPOLICY-u2b: remove menuProvider suppression from allowCreateLocal
 2. `adba54a4` L2-NOUNPOLICY-u2b: fix stale comment referencing old suppression mechanism
 
-L2-NOUNPOLICY-u2b UNIT unit DONE adba54a4b9e5413d0d18ecf65e3443bfe1eb2c47
+L2-NOUNPOLICY-u2b UNIT unit DONE 901a63578ced1e3628ef8fab6bc3248249976523
