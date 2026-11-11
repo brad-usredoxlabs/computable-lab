@@ -49,7 +49,6 @@ import {
   resolveDeleteAction,
   type CascadePolicy,
 } from './referenceCascade.js';
-import type { FileChange } from '../repo/GitRepoAdapter.js';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -1127,7 +1126,9 @@ export class RecordStoreImpl implements RecordStore {
           message: commitMessage,
         });
         for (let i = 1; i < filesToDelete.length; i++) {
-          const depPath = filesToDelete[i].path;
+          const entry = filesToDelete[i];
+          if (!entry) throw new Error(`filesToDelete[${i}] is undefined`);
+          const depPath = entry.path;
           const depFile = await this.repo.getFile(depPath);
           await this.repo.deleteFile({
             path: depPath,

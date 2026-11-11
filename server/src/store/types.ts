@@ -65,6 +65,18 @@ export interface StoreResult {
    * never `false`: absence means a real write happened.
    */
   unchanged?: true;
+  /**
+   * L2-RECORD-DELETE-DEPENDENTS-1: referrer record IDs that blocked deletion
+   * (HAS_DEPENDENTS refusal). Present only on a failed delete result.
+   * Absent (not `undefined`) when there are no blocking referrers.
+   */
+  referrers?: string[];
+  /**
+   * L2-RECORD-DELETE-DEPENDENTS-1: record IDs cascade-deleted with this
+   * operation. Present only on a successful delete result when cascade
+   * occurred. Absent (not `undefined`) when no cascade happened.
+   */
+  cascaded?: string[];
 }
 
 /**

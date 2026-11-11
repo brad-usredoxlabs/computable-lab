@@ -1602,12 +1602,11 @@ export function createRecordHandlers(
           // L2-RECORD-DELETE-DEPENDENTS-1: HAS_DEPENDENTS refusal (409)
           if (result.error?.includes('HAS_DEPENDENTS')) {
             reply.status(409);
-            const anyResult = result as Record<string, unknown>;
             return {
               success: false,
               error: 'HAS_DEPENDENTS',
               message: result.error,
-              ...(Array.isArray(anyResult.referrers) ? { referrers: anyResult.referrers as string[] } : {}),
+              ...(result.referrers !== undefined ? { referrers: result.referrers } : {}),
             };
           }
 
@@ -1628,11 +1627,10 @@ export function createRecordHandlers(
         }
 
         // L2-RECORD-DELETE-DEPENDENTS-1: pass through cascaded array when present
-        const anyResult = result as Record<string, unknown>;
         return {
           success: true,
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
-          ...(Array.isArray(anyResult.cascaded) ? { cascaded: anyResult.cascaded as string[] } : {}),
+          ...(result.cascaded !== undefined ? { cascaded: result.cascaded } : {}),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
