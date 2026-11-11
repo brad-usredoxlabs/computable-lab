@@ -13,4 +13,4 @@ Added guard in createMaterialInstance to refuse POST /materials/instances when l
 - Mutation probe: `if (false && !sourceRef)` → 2 failed | 1 passed (expected 201 to be 400, expected 1 to be +0); guard byte-restored, `git status --short` clean
 - Typecheck: clean
 
-L2-LAB-INVENTORY-CREATE-1-u2 UNIT u2pw DONE PLACEHOLDER_SHA
+L2-LAB-INVENTORY-CREATE-1-u2 UNIT u2pw DONE fdd7def7d5a7efd0e1ee76f33b2cac2eed4798e0
