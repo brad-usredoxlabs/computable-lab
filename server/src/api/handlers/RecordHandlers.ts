@@ -40,6 +40,14 @@ import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
 
+/** Schema-driven provenance check: describes which fields the target schema accepts */
+interface SchemaProvenanceCheck {
+  hasCreatedAt: boolean;
+  hasUpdatedAt: boolean;
+  hasCreatedBy: boolean;
+  allowsAny: boolean;
+}
+
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
   authorizationService?: AuthorizationService;
