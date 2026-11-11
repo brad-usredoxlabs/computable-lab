@@ -43,4 +43,4 @@ adv c3 (advc-c3): The DONE marker named a dangling commit SHA
 (216ee7b79728e567ee2ee1467ac66174ef55fab0) that was amended away.
 Replaced with the actual code+tests commit a3c57169759df01b061dd29e982d08287bebea07.
 
-L2-LABINV-u4select-pw1 UNIT u4select-pw1 DONE e9a297f42ca9dddb526c07bc7a30659c2d482f12
+L2-LABINV-u4select-pw1 UNIT u4select-pw1 DONE 39770451928bac36b767dfd8cc551e3f40ee9dcf
