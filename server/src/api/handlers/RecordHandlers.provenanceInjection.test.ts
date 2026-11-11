@@ -262,4 +262,57 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     expect(storedPayload.updatedAt).toBeDefined();
     expect(storedPayload.createdBy).toBeDefined();
   });
+
+  // f3fix2: allowsAny decides injection when no provenance properties are declared
+  it('allowsAny:true with no declared provenance properties → injects all three', async () => {
+    const { store, records } = makeStore();
+    const handlers = createRecordHandlers(store, undefined, undefined, undefined, undefined, undefined, {
+      getSchemaProperties: () => ({
+        hasCreatedAt: false,
+        hasUpdatedAt: false,
+        hasCreatedBy: false,
+        allowsAny: true,
+      }),
+    });
+
+    const payload = { kind: 'composed-schema', id: 'CS-001', data: {} };
+    const reply = makeReply();
+    const result = await handlers.createRecord(
+      makeRequest({ schemaId: 'composed', payload }),
+      reply as unknown as FastifyReply,
+    );
+
+    expect(reply.statusValue).toBe(201);
+    const stored = records.get((result as any).record?.recordId);
+    const storedPayload = stored!.payload as Record<string, unknown>;
+    expect(storedPayload.createdAt).toBeDefined();
+    expect(storedPayload.updatedAt).toBeDefined();
+    expect(storedPayload.createdBy).toBeDefined();
+  });
+
+  it('allowsAny:false with no declared provenance properties → injects none', async () => {
+    const { store, records } = makeStore();
+    const handlers = createRecordHandlers(store, undefined, undefined, undefined, undefined, undefined, {
+      getSchemaProperties: () => ({
+        hasCreatedAt: false,
+        hasUpdatedAt: false,
+        hasCreatedBy: false,
+        allowsAny: false,
+      }),
+    });
+
+    const payload = { kind: 'strict-schema', id: 'ST-001', data: {} };
+    const reply = makeReply();
+    const result = await handlers.createRecord(
+      makeRequest({ schemaId: 'strict', payload }),
+      reply as unknown as FastifyReply,
+    );
+
+    expect(reply.statusValue).toBe(201);
+    const stored = records.get((result as any).record?.recordId);
+    const storedPayload = stored!.payload as Record<string, unknown>;
+    expect(storedPayload.createdAt).toBeUndefined();
+    expect(storedPayload.updatedAt).toBeUndefined();
+    expect(storedPayload.createdBy).toBeUndefined();
+  });
 });

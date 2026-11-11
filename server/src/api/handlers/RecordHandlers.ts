@@ -777,9 +777,9 @@ export function createRecordHandlers(
         const schemaProps = security?.getSchemaProperties?.(schemaId);
         let acceptsCreatedAt: boolean, acceptsUpdatedAt: boolean, acceptsCreatedBy: boolean;
         if (schemaProps) {
-          acceptsCreatedAt = schemaProps.hasCreatedAt ?? schemaProps.allowsAny ?? true;
-          acceptsUpdatedAt = schemaProps.hasUpdatedAt ?? schemaProps.allowsAny ?? true;
-          acceptsCreatedBy = schemaProps.hasCreatedBy ?? schemaProps.allowsAny ?? true;
+          acceptsCreatedAt = schemaProps.hasCreatedAt || schemaProps.allowsAny;
+          acceptsUpdatedAt = schemaProps.hasUpdatedAt || schemaProps.allowsAny;
+          acceptsCreatedBy = schemaProps.hasCreatedBy || schemaProps.allowsAny;
         } else {
           // Backward-compat fallback when getSchemaProperties is unavailable:
           // material-instance and aliquot schemas reject extra fields, event-graph
