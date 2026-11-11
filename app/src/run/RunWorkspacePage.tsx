@@ -124,6 +124,8 @@ export function RunWorkspacePage() {
   // resolver (kind === 'planned-run' → self, else plannedRunRef.id, else null).
   useEffect(() => {
     if (!runId) return
+    // Clear stale plannedRunId on run swap so the proposals panel disappears immediately
+    setPlannedRunId(null)
     let cancelled = false
     const load = async () => {
       try {
