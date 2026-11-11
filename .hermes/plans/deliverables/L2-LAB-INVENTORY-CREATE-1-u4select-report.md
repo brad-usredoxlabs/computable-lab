@@ -34,6 +34,6 @@ as candidates. When no instances exist, the definition itself is proposed as fal
 - u3shelf: term/labware shelf visibility (different seam)
 
 ## Fix Commit
-4a3ef2f50d3b8da9a72dbd49d720b6c24df376f1
+799c9658e606e3f5b3927dac54907d597705ebf5
 
-L2-LAB-INVENTORY-CREATE-1-u4select UNIT unit DONE 4a3ef2f50d3b8da9a72dbd49d720b6c24df376f1
+L2-LAB-INVENTORY-CREATE-1-u4select UNIT unit DONE 799c9658e606e3f5b3927dac54907d597705ebf5
