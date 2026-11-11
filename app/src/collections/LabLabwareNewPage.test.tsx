@@ -288,8 +288,9 @@ describe('LabLabwareNewPage', () => {
   })
 
   it('preserves frozen provenance even when URL input is cleared after extract (D3 freeze)', async () => {
+    // Proposals without sourceUrl force the fallback to frozen extraction URL
     const proposals = [
-      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
+      { targetField: 'topology.addressing', value: 'grid', passage: 'Grid format', specId: 's1' },
     ]
     mockExtract.mockResolvedValueOnce({ configured: true, proposals })
     mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
@@ -322,9 +323,10 @@ describe('LabLabwareNewPage', () => {
   })
 
   it('freezes provenance URL at extraction time — URL changed after propose (D3 freeze)', async () => {
+    // Proposals without sourceUrl force the fallback to frozen extraction URL
     const proposals = [
-      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet-a', passage: 'Grid', specId: 's1' },
-      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet-a', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.addressing', value: 'grid', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', passage: '8 rows', specId: 's2' },
     ]
     mockExtract.mockResolvedValueOnce({ configured: true, proposals })
     mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
