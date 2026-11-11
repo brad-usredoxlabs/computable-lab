@@ -10,8 +10,8 @@
  * via conditional spreads.
  */
 
-import { useState } from 'react'
-import type { RecordEnvelope } from '../types/kernel'
+import { useState, useEffect } from 'react'
+import type { RecordEnvelope, JsonSchema } from '../types/kernel'
 import { apiClient } from '../shared/api/client'
 
 const LABWARE_INSTANCE_SCHEMA =
@@ -44,8 +44,22 @@ export function LabwareInstanceCreateModal({
   const [label, setLabel] = useState('')
   const [barcode, setBarcode] = useState('')
   const [locationLabel, setLocationLabel] = useState('')
+  const [locationKind, setLocationKind] = useState('')
+  const [locationKinds, setLocationKinds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    apiClient.getSchema(LABWARE_INSTANCE_SCHEMA).then((info) => {
+      if (cancelled) return
+      const schema = info.schema as JsonSchema | undefined
+      const kindDef = schema?.properties?.location?.properties?.kind
+      const enumVals = Array.isArray(kindDef?.enum) ? kindDef.enum.filter((v) => typeof v === 'string') as string[] : []
+      setLocationKinds(enumVals)
+    }).catch(() => { /* schema not available — location kind stays empty */ })
+    return () => { cancelled = true }
+  }, [])
 
   if (!isOpen) return null
 
@@ -64,7 +78,7 @@ export function LabwareInstanceCreateModal({
         labwareId: selectedDefId,
         ...(label.trim() ? { label: label.trim() } : {}),
         ...(barcode.trim() ? { barcode: barcode.trim() } : {}),
-        ...(locationLabel.trim() ? { location: { kind: 'other', label: locationLabel.trim() } } : {}),
+        ...(locationKind ? { location: { kind: locationKind, ...(locationLabel.trim() ? { label: locationLabel.trim() } : {}) } } : {}),
       }
       await apiClient.createRecord(LABWARE_INSTANCE_SCHEMA, payload)
       onSuccess()
@@ -150,11 +164,28 @@ export function LabwareInstanceCreateModal({
           </div>
 
           <div className="lab-modal__row">
-            <label className="lab-modal__label" htmlFor="lbi-location">
+            <label className="lab-modal__label" htmlFor="lbi-location-kind">
+              Location kind
+            </label>
+            <select
+              id="lbi-location-kind"
+              value={locationKind}
+              onChange={(e) => setLocationKind(e.target.value)}
+              data-testid="labware-instance-location-kind"
+            >
+              <option value="">Select a kind…</option>
+              {locationKinds.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="lab-modal__row">
+            <label className="lab-modal__label" htmlFor="lbi-location-label">
               Location label
             </label>
             <input
-              id="lbi-location"
+              id="lbi-location-label"
               value={locationLabel}
               onChange={(e) => setLocationLabel(e.target.value)}
               placeholder="e.g. Bench 3, Incubator A"

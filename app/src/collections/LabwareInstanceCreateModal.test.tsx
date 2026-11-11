@@ -6,7 +6,7 @@
  * (ii) a valid submit calls createRecord with correct schemaId + payload.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 
 const createRecordSpy = vi.fn().mockResolvedValue({ success: true })
 const getSchemaSpy = vi.fn().mockResolvedValue({
@@ -117,9 +117,11 @@ describe('LabwareInstanceCreateModal', () => {
         onSuccess={vi.fn()}
       />
     )
-    // Wait for schema to load
-    await vi.waitFor(() => {
-      expect(screen.queryByTestId('labware-instance-location-kind')).toBeDefined()
+    // Wait for schema to load and options to populate
+    await waitFor(() => {
+      const kindSelect = screen.queryByTestId('labware-instance-location-kind')
+      expect(kindSelect).toBeDefined()
+      expect((kindSelect as HTMLSelectElement).options.length).toBeGreaterThan(1)
     }, { timeout: 3000 })
 
     // Select a definition
@@ -137,7 +139,7 @@ describe('LabwareInstanceCreateModal', () => {
     // Submit
     fireEvent.click(screen.getByTestId('labware-instance-create-submit'))
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(createRecordSpy).toHaveBeenCalledTimes(1)
     }, { timeout: 3000 })
 
@@ -160,8 +162,11 @@ describe('LabwareInstanceCreateModal', () => {
         onSuccess={vi.fn()}
       />
     )
-    await vi.waitFor(() => {
-      expect(screen.queryByTestId('labware-instance-location-kind')).toBeDefined()
+    // Wait for schema to load and options to populate
+    await waitFor(() => {
+      const kindSelect = screen.queryByTestId('labware-instance-location-kind')
+      expect(kindSelect).toBeDefined()
+      expect((kindSelect as HTMLSelectElement).options.length).toBeGreaterThan(1)
     }, { timeout: 3000 })
 
     fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
@@ -171,15 +176,16 @@ describe('LabwareInstanceCreateModal', () => {
       target: { value: 'Test plate' },
     })
     // Select a kind
-    const kindSelect = screen.getByTestId('labware-instance-location-kind')
-    fireEvent.change(kindSelect, { target: { value: 'bench' } })
+    fireEvent.change(screen.getByTestId('labware-instance-location-kind'), {
+      target: { value: 'bench' },
+    })
     // Type a label
     fireEvent.change(screen.getByTestId('labware-instance-location-input'), {
       target: { value: 'Bench 3' },
     })
     fireEvent.click(screen.getByTestId('labware-instance-create-submit'))
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(createRecordSpy).toHaveBeenCalledTimes(1)
     }, { timeout: 3000 })
 
