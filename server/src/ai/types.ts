@@ -119,6 +119,8 @@ export interface CompletionResponse {
   };
   /** Present on llama.cpp servers; absent elsewhere. */
   timings?: LlamaTimings;
+  /** Present when the inference client relaxed a forced tool_choice to 'auto' (Qwen thinking incompatibility or provider 400 rejection); absent otherwise. */
+  toolChoiceDowngraded?: { reason: 'qwen-thinking' | 'provider-400-tool-choice'; model: string };
 }
 
 export interface StreamChunk {
