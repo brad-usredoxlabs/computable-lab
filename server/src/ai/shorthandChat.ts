@@ -1012,7 +1012,7 @@ export function clarificationsFromUnresolvedFacts(
     // For plain strings, humanLabel is the original label.
     const displayLabelSource = humanLabel ?? fact.reason;
     const mintable = isMintableLabel(displayLabelSource, nounShape);
-    const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    const allowCreateLocal = mintable;
     // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i)): the DISPLAYED
     // label token is the canonical label — the record TITLE when a local-term
     // record for this identity is GROUNDED (STAGE A, resolved by the store-GET
