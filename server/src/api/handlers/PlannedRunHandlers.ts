@@ -552,10 +552,32 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       }
       const protocolPayload = protocolRecord.payload as Record<string, unknown>;
 
+      // (b2) Resolve steps and roles from the universal protocol via inherits_from
+      // when the local protocol lacks them. Same precedence as declaredRolesOf:
+      // local-own values win; fall back to the universal.
+      let resolvedProtocol = protocolPayload;
+      if (!Array.isArray(protocolPayload.steps)) {
+        const inheritsFrom = protocolPayload.inherits_from;
+        if (inheritsFrom && typeof inheritsFrom === 'object' && !Array.isArray(inheritsFrom)) {
+          const universalId = (inheritsFrom as Record<string, unknown>).id;
+          if (typeof universalId === 'string' && universalId.length > 0) {
+            const universalRecord = await ctx.store.get(universalId);
+            if (universalRecord) {
+              const universalPayload = universalRecord.payload as Record<string, unknown>;
+              resolvedProtocol = {
+                ...protocolPayload,
+                ...(Array.isArray(universalPayload.steps) ? { steps: universalPayload.steps } : {}),
+                ...(typeof universalPayload.roles === 'object' && universalPayload.roles !== null && !Array.isArray(universalPayload.roles) ? { roles: universalPayload.roles } : {}),
+              };
+            }
+          }
+        }
+      }
+
       // (c) Build local plan graph
       const planResult = buildLocalPlanGraph({
         protocolId,
-        protocol: protocolPayload,
+        protocol: resolvedProtocol,
         bindings: payload.bindings,
       });
       if (!planResult.ok) {
