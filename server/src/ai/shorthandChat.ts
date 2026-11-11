@@ -938,8 +938,9 @@ export function answeredClarificationLabelsFromBatch(
  * readings (the data the bar itself attached) maps to menuProvider 'choice'
  * with its readings as the option set (id = reading id, label = the reading's
  * own label, snippet = the computed final fractions + note; ARRAY order — the
- * server never pre-picks). Mint suppression falls out of the EXISTING
- * `menuProvider !== 'choice' && mintable` expression — zero new policy. The
+ * server never pre-picks). The allowCreateLocal flag follows the mintability
+ * gate (nounShape DATA via isMintableLabel) — a mintable reading card offers
+ * both exits. The
  * prompt is the fact's OWN `message` (already data-derived), not the noun
  * template. kind stays from the domain map. A fact WITHOUT readings renders
  * byte-identically to today.
