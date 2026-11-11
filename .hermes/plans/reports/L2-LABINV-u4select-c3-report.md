@@ -35,4 +35,4 @@ Close 2 MINOR defects from adversarial cycle 2 (advc-c2) by editing only
 - `git -C <worktree> -c core.fileMode=false diff d28c7b54 --name-only` lists only `app/src/run/RoleBindingProposalsPanel.test.tsx` and this report
 - `git -C <worktree> status --porcelain` is empty
 
-L2-LABINV-u4select-c3 UNIT u4select-c3 DONE 216ee7b79728e567ee2ee1467ac66174ef55fab0
+L2-LABINV-u4select-c3 UNIT u4select-c3 DONE a3c57169759df01b061dd29e982d08287bebea07
