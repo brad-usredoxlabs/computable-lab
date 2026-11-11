@@ -36,3 +36,9 @@ Close 2 MINOR defects from adversarial cycle 2 (advc-c2) by editing only
 - `git -C <worktree> status --porcelain` is empty
 
 L2-LABINV-u4select-c3 UNIT u4select-c3 DONE a3c57169759df01b061dd29e982d08287bebea07
+report_commit: fb35a975ad580f0b1ae9243861197d30470b9787
+
+## Amendment
+adv c3 (advc-c3): The DONE marker named a dangling commit SHA
+(216ee7b79728e567ee2ee1467ac66174ef55fab0) that was amended away.
+Replaced with the actual code+tests commit a3c57169759df01b061dd29e982d08287bebea07.
