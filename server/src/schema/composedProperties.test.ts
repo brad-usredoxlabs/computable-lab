@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { getComposedProperties, makeGetSchemaProperties } from './composedProperties';
 import { createSchemaRegistry } from './SchemaRegistry.js';
 import { loadAllSchemas } from './SchemaLoader.js';
+import { createRecordHandlers } from '../api/handlers/RecordHandlers.js';
 
 describe('getComposedProperties', () => {
   // Lookup resolves local $ref strings by extracting the last segment
@@ -221,3 +224,75 @@ describe('makeGetSchemaProperties — real registry', () => {
     expect(() => getComposedProperties(schema, lookup)).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// D3 wiring pins: the real registry must be consulted *through the factory the
+// handler is given*. The factory's own behaviour is pinned above; these cases
+// pin that server.ts hands the handler the factory (not a raw-$id/top-level
+// lookup) and that the handler consumes its output end-to-end.
+// ---------------------------------------------------------------------------
+
+describe('D3 wiring — server.ts → RecordHandlers', () => {
+  it('server.ts wires getSchemaProperties to makeGetSchemaProperties(ctx.schemaRegistry)', () => {
+    const serverSource = readFileSync(
+      fileURLToPath(new URL('../server.ts', import.meta.url)),
+      'utf8',
+    );
+    const wiring = serverSource.match(/^\s*getSchemaProperties:.*$/gm) ?? [];
+    expect(wiring).toHaveLength(1);
+    expect(wiring[0]!.trim()).toBe(
+      'getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),',
+    );
+  });
+
+  it('a handler wired to the real registry injects aliquot provenance', async () => {
+    const registry = createSchemaRegistry();
+    const loaded = await loadAllSchemas({ basePath: `${process.cwd()}/../schema`, recursive: true });
+    registry.addSchemas(loaded.entries);
+    const getSchemaProperties = makeGetSchemaProperties(registry);
+
+    const records = new Map<string, any>();
+    const store: any = {
+      async get(id: string) { return records.get(id) ?? null; },
+      async list() { return []; },
+      async create(opts: { envelope: any }) {
+        records.set(opts.envelope.recordId, opts.envelope);
+        return { success: true, envelope: opts.envelope };
+      },
+      async update() { return { success: true }; },
+      async delete() { return { success: true }; },
+      async validate() { return { valid: true }; },
+      async lint() { return { valid: true }; },
+      async exists() { return false; },
+    };
+    const handlers = createRecordHandlers(
+      store, undefined, undefined, undefined, undefined, undefined,
+      { getSchemaProperties },
+    );
+    const reply: any = {
+      status: () => reply,
+      code: () => reply,
+      send: () => reply,
+    };
+
+    const result = await handlers.createRecord(
+      {
+        body: {
+          schemaId: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
+          payload: { kind: 'aliquot', id: 'ALI-f3verify2-001', name: 'Probe aliquot' },
+        },
+        headers: {},
+      } as any,
+      reply,
+    );
+
+    const stored = records.get((result as any).record?.recordId);
+    const storedPayload = stored!.payload as Record<string, unknown>;
+    // aliquot declares createdAt/updatedAt/createdBy via FAIRCommon, and is
+    // strict — so provenance is injected as fields, never via allowsAny.
+    expect(storedPayload.createdAt).toBeDefined();
+    expect(storedPayload.updatedAt).toBeDefined();
+    expect(storedPayload.createdBy).toBeDefined();
+  });
+});
+
