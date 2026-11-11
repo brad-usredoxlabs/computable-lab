@@ -141,7 +141,7 @@ describe('L2-RECORD-DELETE-DEPENDENTS-1 — reference-aware deletion', () => {
     testDir = join(tmpdir(), `delrefs-test-${randomUUID()}`);
     await mkdir(testDir, { recursive: true });
     cascadeYamlPath = join(testDir, 'reference-cascade.yaml');
-    await writeFile(cascadeYamlPath, `rules:\n  - referrerKind: test-record\n    pointers:\n      materialRef: cascade\n`);
+    await writeFile(cascadeYamlPath, `rules:\n  - referrerKind: test-record\n    pointers:\n      materialRef: cascade\n  - referrerKind: access-policy\n    pointers:\n      resourceRef: cascade\n`);
   });
 
   afterEach(async () => {
