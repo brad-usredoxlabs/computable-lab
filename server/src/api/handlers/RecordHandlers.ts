@@ -39,6 +39,7 @@ import { authoringGateActive, authoringGuardFiresOnUpdate, authoringPolicyPasses
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
+import { findDanglingReferences } from '../../store/referenceCascade.js';
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
@@ -1642,6 +1643,22 @@ export function createRecordHandlers(
           message: `Failed to delete record: ${message}`,
         };
       }
+    },
+
+    /**
+     * GET /records/dangling-references
+     * L2-RECORD-DELETE-DEPENDENTS-1 criterion (d) — read-only dangling-reference sweep.
+     */
+    async listDanglingReferences(
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<{ dangling: Array<{ recordId: string; kind: string; pointer: string; targetId: string }>; count: number } | ApiError> {
+      const user = await resolveRequestUser(request, reply);
+      if (!user) return unauthenticatedError('A valid local user is required');
+
+      const records = await store.list();
+      const dangling = findDanglingReferences(records);
+      return { dangling, count: dangling.length };
     },
   };
 }

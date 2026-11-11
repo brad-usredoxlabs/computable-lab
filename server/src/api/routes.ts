@@ -233,6 +233,8 @@ export function registerRoutes(
   fastify.get('/records', recordHandlers.listRecords.bind(recordHandlers));
   
   // Get single record
+  // L2-RECORD-DELETE-DEPENDENTS-1 criterion (d): static path must be registered before :id param
+  fastify.get('/records/dangling-references', recordHandlers.listDanglingReferences.bind(recordHandlers));
   fastify.get('/records/:id/revisions', recordHandlers.listRevisions.bind(recordHandlers));
   fastify.post('/records/:id/draft-copy', recordHandlers.draftCopy.bind(recordHandlers));
   fastify.post('/records/:id/accept-graph', recordHandlers.acceptGraph.bind(recordHandlers));
