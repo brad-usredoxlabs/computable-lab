@@ -30,6 +30,7 @@ import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
 import { RoleBindingProposalsPanel } from './RoleBindingProposalsPanel'
 import { RunProtocolList } from './RunProtocolList'
 import { RunPlanGraphBuild } from './RunPlanGraphBuild'
+import { resolvePlannedRunId } from './plannedRunId'
 import { GcRunSheetSection } from './gc/GcRunSheetSection'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
@@ -54,6 +55,7 @@ export function RunWorkspacePage() {
   // reuses the page's single mount fetch.
   const [runKind, setRunKind] = useState<string | null>(null)
   const [hasPlannedRunRef, setHasPlannedRunRef] = useState(false)
+  const [plannedRunId, setPlannedRunId] = useState<string | null>(null)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -117,6 +119,24 @@ export function RunWorkspacePage() {
     return () => window.removeEventListener('cl:run-renamed', onRenamed)
   }, [runId])
 
+  // Resolve the planned-run id for the role-binding proposals panel.
+  // Same shape as RunPlanGraphBuild: fetch the record and apply the
+  // resolver (kind === 'planned-run' → self, else plannedRunRef.id, else null).
+  useEffect(() => {
+    if (!runId) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const id = await resolvePlannedRunId(runId)
+        if (!cancelled) setPlannedRunId(id)
+      } catch {
+        if (!cancelled) setPlannedRunId(null)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [runId])
+
   const aiContext = useMemo((): AiContext => ({
     surface: 'run-workspace',
     summary: `Run workspace: ${runId}${runTitle ? ` — ${runTitle}` : ''}`,
@@ -170,7 +190,7 @@ export function RunWorkspacePage() {
   return (
     <ProtocolSelectionProvider>
       <RunProtocolStepsLoader runId={runId} />
-      <RoleBindingProposalsPanel runId={runId} />
+      {plannedRunId ? <RoleBindingProposalsPanel runId={plannedRunId} /> : null}
       <WorkspaceProvider studyId={resolvedStudyId}>
         <EventEditorProvider
           runId={runId}

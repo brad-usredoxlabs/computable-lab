@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { apiClient } from '../shared/api/client'
 import { ApiError } from '../shared/api/errors'
+import { resolvePlannedRunId } from './plannedRunId'
 
 export interface RunPlanGraphBuildProps {
   runId: string
@@ -25,21 +26,6 @@ const controlStyle: CSSProperties = {
 const resultStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-text)', whiteSpace: 'nowrap' }
 const reusedStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-text-dim)', fontStyle: 'italic' }
 const errorStyle: CSSProperties = { fontSize: '11px', color: 'var(--cl-error)', whiteSpace: 'nowrap' }
-
-/**
- * Resolve the planned-run id:
- *   — if the record kind is 'planned-run', use the runId itself
- *   — otherwise use payload.plannedRunRef.id
- *   — return null when neither applies
- */
-async function resolvePlannedRunId(runId: string): Promise<string | null> {
-  const resp = await apiClient.getRecordWithUI(runId)
-  const payload = (resp.record?.payload ?? null) as Record<string, unknown> | null
-  if (payload?.kind === 'planned-run') return runId
-  const ref = payload?.plannedRunRef as { id?: string } | undefined
-  if (typeof ref?.id === 'string' && ref.id.length > 0) return ref.id
-  return null
-}
 
 export function RunPlanGraphBuild({ runId }: RunPlanGraphBuildProps) {
   const [plannedRunId, setPlannedRunId] = useState<string | null>(null)
