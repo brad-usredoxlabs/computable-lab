@@ -14,6 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { compileFoldedShorthand } from './AgentOrchestrator.js';
 import {
+  composeSpineWithReuseBindings,
   foldAnswersIntoShorthand,
   parseShorthandForChat,
   factRequestId,
@@ -147,50 +148,58 @@ describe('L2-NOUN-RESOLUTION-POLICY-1 A1: fold arm answeredSlots binding', () =>
     }
   });
 
-  it('without answeredSlots the noun is unresolved (RED leg — proves the defect)', async () => {
-    const held = makeHeld();
-    const store = mockStore();
+  it('without answeredSlots the noun is unresolved (RED leg — real contrast)', async () => {
+    // Parse the raw doc WITHOUT folding — no bindings, no answers
+    const doc = parseShorthandForChat(DOCUMENT_YAML);
 
-    const folded = foldAnswersIntoShorthand(held, [
-      {
-        requestId: factRequestId(held.clarifications[0]!),
-        label: 'Exotic Compound XYZ',
-        ref: { kind: 'record', id: 'MAT-exoticxyz', type: 'material', label: 'ExoticCompoundXYZ' },
-      },
-    ]);
-    expect(folded).not.toBeNull();
+    // Use an empty store that cannot resolve "Exotic Compound XYZ" by name
+    const emptyStore = {
+      get: vi.fn(async () => null),
+      list: vi.fn(async () => []),
+    };
 
-    // Compile WITHOUT answeredSlots — the old behaviour
-    const compiledFold = await compileFoldedShorthand(
-      folded!.doc,
+    // Compile without answeredSlots and without reuseBindings.
+    // The store has no records, so the compiler cannot resolve the label.
+    const compiled = await compileFoldedShorthand(
+      doc,
       [],
-      { store: store as never } as ShorthandCompileDeps,
+      { store: emptyStore as never } as ShorthandCompileDeps,
     );
 
-    expect(compiledFold).not.toBeNull();
+    expect(compiled).not.toBeNull();
 
-    // Without answeredSlots, the store CANNOT resolve "Exotic Compound XYZ"
-    // by label (no space match), so the noun stays unresolved or is clarified.
-    // The compile outcome should NOT be 'events' with a resolved material,
-    // or it should emit a clarification.
-    if (compiledFold!.outcome === 'events') {
-      const events = compiledFold!.terminalArtifacts.events as unknown[];
-      if (events.length > 0) {
-        const details = (events[0] as Record<string, unknown>).details as Record<string, unknown>;
-        const matRef = (details as Record<string, unknown>).material_ref as Record<string, unknown> | undefined;
-        // If it resolved by label, that would be vacuous — the label doesn't match.
-        // It should be draft/unknown, or the compilation should clarify.
-        if (matRef && matRef.kind === 'record') {
-          // This would mean reuseBindings resolved it by label — but "Exotic Compound XYZ"
-          // cannot match "ExoticCompoundXYZ" by label reuse (the reuse filter needs candidates
-          // from the spine, and the spine won't find it). So this should not happen.
-          // If we get here, the fixture is wrong.
-          throw new Error('UNEXPECTED: label-only resolution succeeded — fixture is wrong');
-        }
-      }
-    } else {
-      // The outcome is not 'events' — the noun was not resolved
-      expect(compiledFold!.outcome).not.toBe('events');
-    }
+    // Without answeredSlots (and with an empty store), the outcome
+    // must NOT be 'complete' because the noun cannot be resolved.
+    // This contrasts with the positive leg where answeredSlots === 'complete'.
+    expect(compiled!.outcome).not.toBe('complete');
+
+    // The material argument must carry a clarification (the noun is unresolved)
+    const materialClarifications = compiled!.clarifications.filter(
+      (f) =>
+        f.actionLocation?.actionIndex === 0 &&
+        f.actionLocation?.argument === 'material',
+    );
+    expect(materialClarifications.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TEST — composeSpineWithReuseBindings narrowing pin
+// ---------------------------------------------------------------------------
+
+describe('composeSpineWithReuseBindings narrowing', () => {
+  it('narrows to the chosen record when binding ref matches', async () => {
+    const candidates = [
+      { curie: 'local:MAT-exoticxyz', label: 'ExoticCompoundXYZ', namespace: 'local', tier: 1, level: 'unknown', score: 1, source: 'local-record' },
+      { curie: 'local:MAT-otherexotic', label: 'OtherExotic', namespace: 'local', tier: 1, level: 'unknown', score: 0.8, source: 'local-record' },
+    ];
+    const stubSpine = {
+      resolve: async () => candidates,
+    };
+    const bindings = [{ label: 'Exotic Compound XYZ', ref: 'local:MAT-exoticxyz' }];
+    const wrapped = composeSpineWithReuseBindings(stubSpine as any, bindings as any);
+    const results = await wrapped.resolve('Exotic Compound XYZ');
+    expect(results).toHaveLength(1);
+    expect(results[0].curie).toBe('local:MAT-exoticxyz');
   });
 });

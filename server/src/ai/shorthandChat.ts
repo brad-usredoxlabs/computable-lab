@@ -520,7 +520,7 @@ export function composeSpineWithReuseBindings(
     const key = b.label.trim().toLowerCase();
     if (!key || !b.ref.trim()) continue;
     const set = refsByLabel.get(key) ?? new Set<string>();
-    set.add(b.ref.trim());
+    set.add(recordIdFromCurie(b.ref.trim()));
     refsByLabel.set(key, set);
   }
   if (refsByLabel.size === 0) return spine;
