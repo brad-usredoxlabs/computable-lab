@@ -57,3 +57,5 @@ Exit code 0, zero errors.
 - Total lines: 29 (InferenceClient.ts diff) + 2 (types.ts diff) + 138 (new test) = 169 lines, within 180 budget
 - 3 files changed, within budget
 - Streaming caller cannot see the signal in chunks; only the blocking `complete()` response carries `toolChoiceDowngraded`
+
+L2-PROSE-SHORTHAND-SALVAGE-1-u3b UNIT unit DONE 735175872b54f383d44fd9d68fcc01e85f66267a
