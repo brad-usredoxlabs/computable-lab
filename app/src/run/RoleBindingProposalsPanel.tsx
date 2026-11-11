@@ -77,7 +77,7 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
       {data.protocols.map((protocol) => (
         <div key={protocol.protocolId} style={protocolStyle} {...(protocol.protocolNotFound ? { 'data-protocol-not-found': '' } : {})}>
           <p style={protocolTitleStyle}>
-            {protocol.protocolId}{protocol.reason ? <span style={metaStyle}> — {protocol.reason}</span> : ''}
+            <span>{protocol.protocolId}</span>{protocol.reason ? <> — <span style={metaStyle}>{protocol.reason}</span></> : ''}
           </p>
           {protocol.roles.map((role) => {
             const prompt = data.clarificationRequests?.find((card) => card.roleId === role.roleId)?.prompt
