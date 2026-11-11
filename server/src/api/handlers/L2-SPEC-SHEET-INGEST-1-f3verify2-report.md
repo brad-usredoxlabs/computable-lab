@@ -204,3 +204,6 @@ No `191/205` count claimed — only what these runs measured.
 P1's pin is structural at the wiring line (a schema unit test cannot boot
 `createServer` without a full app/records fixture) plus behavioral at the
 handler seam. The literal probe above is RED against it.
+
+report_commit: d30dc72d9c7f27a8875a9ae8aac6be349c2908bb
+L2-SPEC-SHEET-INGEST-1 UNIT f3verify2 DONE d30dc72d9c7f27a8875a9ae8aac6be349c2908bb
