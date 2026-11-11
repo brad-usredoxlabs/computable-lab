@@ -112,7 +112,6 @@ describe('LabLabwareNewPage', () => {
       { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
     ]
     mockExtract.mockResolvedValueOnce({ configured: true, proposals })
-    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition' })
     mockCreateRecord.mockResolvedValueOnce({ success: true })
 
     renderPage()
@@ -130,11 +129,12 @@ describe('LabLabwareNewPage', () => {
     expect(screen.getByTestId('lab-labware-save-button')).toBeDefined()
   })
 
-  it('disables save when required fields are missing', async () => {
+  it('enables save even when only optional fields are proposed (server validates)', async () => {
     const proposals = [
       { targetField: 'vendor', value: 'Example', sourceUrl: 'https://example.com/sheet', passage: 'Example Corp', specId: 's1' },
     ]
     mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
     renderPage()
     fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
       target: { value: 'Test plate' },
@@ -144,9 +144,12 @@ describe('LabLabwareNewPage', () => {
     })
     fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
     await waitFor(() => {
-      expect(screen.queryByTestId('lab-labware-missing-required')).toBeDefined()
+      expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
     })
-    expect(screen.getByTestId('lab-labware-save-button')).toHaveAttribute('disabled')
+    // Save button should NOT be disabled — Ajv on the server is the sole validator
+    expect(screen.getByTestId('lab-labware-save-button')).not.toHaveAttribute('disabled')
+    // No client-side "missing required" banner
+    expect(screen.queryByTestId('lab-labware-missing-required')).toBeNull()
   })
 
   it('displays error message when the API throws', async () => {
@@ -159,5 +162,64 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('lab-labware-error')).toBeDefined()
     })
+  })
+
+  it('coerces proposal string values to schema-declared types in the save payload', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
+    ]
+    // Mock schema with integer and number types
+    const mockSchema = {
+      properties: {
+        topology: {
+          properties: {
+            addressing: { type: 'string' },
+            rows: { type: 'integer' },
+            columns: { type: 'integer' },
+          },
+        },
+        capacity: {
+          properties: {
+            max_well_volume_uL: { type: 'number' },
+          },
+        },
+      },
+    }
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: mockSchema })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D1: values coerced to schema-declared types
+    console.log('DEBUG TEST: payload type of rows:', typeof payload.topology.rows, payload.topology.rows)
+    console.log('DEBUG TEST: payload type of columns:', typeof payload.topology.columns, payload.topology.columns)
+    console.log('DEBUG TEST: payload type of max_well_volume_uL:', typeof payload.capacity.max_well_volume_uL, payload.capacity.max_well_volume_uL)
+    expect(typeof payload.topology.rows).toBe('number')
+    expect(payload.topology.rows).toBe(8)
+    expect(typeof payload.topology.columns).toBe('number')
+    expect(payload.topology.columns).toBe(12)
+    expect(typeof payload.capacity.max_well_volume_uL).toBe('number')
+    expect(payload.capacity.max_well_volume_uL).toBe(200)
+    // String fields remain strings
+    expect(typeof payload.topology.addressing).toBe('string')
+    expect(payload.topology.addressing).toBe('grid')
   })
 })

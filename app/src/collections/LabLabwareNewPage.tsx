@@ -30,21 +30,22 @@ function mintRecordId(): string {
 }
 
 /**
- * Build a nested payload from flat proposal targetField paths.
+ * Build a nested payload from flat proposal targetField paths, coercing values
+ * to the schema-declared types (integer, number) when the schema is available.
  * e.g. "topology.rows" → { topology: { rows: value } }
- * e.g. "capacity.max_well_volume_uL" → { capacity: { max_well_volume_uL: value } }
- * e.g. "display_name" → { display_name: value }
  * Optional fields (citation, etc.) are OMITTED when absent — never undefined.
  */
 function buildPayloadFromProposals(
   proposals: SpecSheetProposal[],
-  displayName: string
+  displayName: string,
+  schema?: Record<string, unknown>
 ): Record<string, unknown> {
+  const recordId = mintRecordId()
   const payload: Record<string, unknown> = {
     kind: 'labware-definition',
-    recordId: mintRecordId(),
+    recordId,
     type: 'labware_definition',
-    id: mintRecordId(),
+    id: recordId,
     display_name: displayName,
   }
 
@@ -59,10 +60,52 @@ function buildPayloadFromProposals(
       }
       current = current[key] as Record<string, unknown>
     }
-    current[parts[parts.length - 1]] = p.value
+    const leafKey = parts[parts.length - 1]
+    // Coerce to schema-declared type when schema is available
+    let value: unknown = p.value
+    if (schema && typeof p.value === 'string' && p.value !== '') {
+      const declaredType = resolveSchemaType(schema, parts)
+      if (declaredType === 'integer' || declaredType === 'number') {
+        const num = Number(p.value)
+        if (!Number.isNaN(num)) {
+          if (declaredType === 'integer' && Number.isInteger(num)) {
+            value = num
+          } else if (declaredType === 'number') {
+            value = num
+          }
+        }
+      }
+    }
+    current[leafKey] = value
   }
 
   return payload
+}
+
+/** Walk the schema properties chain to find the declared type for a path */
+function resolveSchemaType(
+  schema: Record<string, unknown>,
+  path: string[]
+): string | undefined {
+  const props = schema.properties
+  if (typeof props !== 'object' || props === null) return undefined
+  let current: Record<string, unknown> | undefined = props as Record<string, unknown>
+  for (let i = 0; i < path.length; i++) {
+    const key = path[i]
+    if (!current || !(key in current)) return undefined
+    const node: unknown = current[key]
+    // For intermediate nodes, descend into properties
+    if (typeof node === 'object' && node !== null && 'properties' in node) {
+      current = (node as Record<string, unknown>).properties as Record<string, unknown>
+      continue
+    }
+    // Only return type for the final leaf node
+    if (i === path.length - 1 && typeof node === 'object' && node !== null && 'type' in node) {
+      return (node as Record<string, unknown>).type as string
+    }
+    return undefined
+  }
+  return undefined
 }
 
 export function LabLabwareNewPage() {
@@ -130,8 +173,10 @@ export function LabLabwareNewPage() {
     if (saving || !proposals || proposals.length === 0) return
     setSaving(true)
     try {
-      const payload = buildPayloadFromProposals(proposals, name.trim())
-      await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
+      const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
+      console.log('DEBUG: getSchema returned', JSON.stringify(info))
+      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema)
+      console.log('DEBUG: payload', JSON.stringify(payload, null, 2))
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {
@@ -140,21 +185,6 @@ export function LabLabwareNewPage() {
       setSaving(false)
     }
   }
-
-  /** Check which required fields have proposals */
-  const requiredFieldCoverage = (() => {
-    if (!proposals) return { display_name: false, topology: false, capacity: false }
-    const fields = new Set(proposals.map((p) => p.targetField.split('.')[0]))
-    return {
-      display_name: name.trim().length > 0,
-      topology: fields.has('topology'),
-      capacity: fields.has('capacity'),
-    }
-  })()
-
-  const missingRequired = Object.entries(requiredFieldCoverage)
-    .filter(([, has]) => !has)
-    .map(([field]) => field)
 
   return (
     <AppShell brand="Add a labware definition">
@@ -259,23 +289,11 @@ export function LabLabwareNewPage() {
               </tbody>
             </table>
 
-            {missingRequired.length > 0 && (
-              <div
-                data-testid="lab-labware-missing-required"
-                style={{ color: '#b00', marginTop: '0.75rem' }}
-              >
-                <p>
-                  The sheet does not state {missingRequired.join(', ')} — this definition cannot
-                  be saved from this sheet.
-                </p>
-              </div>
-            )}
-
             <button
               type="button"
               data-testid="lab-labware-save-button"
               onClick={() => void handleSave()}
-              disabled={saving || missingRequired.length > 0}
+              disabled={saving}
             >
               {saving ? 'Saving…' : 'Save labware definition'}
             </button>
