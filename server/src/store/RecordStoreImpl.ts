@@ -67,6 +67,8 @@ const DEFAULT_CONFIG: Required<Omit<RecordStoreConfig, 'writeHook'>> = {
   // Named here — and re-asserted in the constructor — so the field is never
   // `undefined` at runtime (no `undefined?.has()` accident; bait 14).
   contentLockedStates: defaultContentLockedStates,
+  // Absent path => empty policy (default-refuse, fail-closed).
+  cascadePolicyPath: '',
 };
 
 /**
@@ -105,7 +107,7 @@ export class RecordStoreImpl implements RecordStore {
     repo: RepoAdapter,
     validator: AjvValidator,
     lintEngine: LintEngine,
-    config: RecordStoreConfig & { cascadePolicyPath?: string } = {}
+    config: RecordStoreConfig = {}
   ) {
     this.repo = repo;
     this.validator = validator;

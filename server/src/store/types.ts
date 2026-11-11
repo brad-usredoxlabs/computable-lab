@@ -260,6 +260,13 @@ export interface RecordStoreConfig {
    * through this resolver (AM-7 bait 15).
    */
   contentLockedStates?: (lifecycleId: string) => ReadonlySet<string> | undefined;
+  /**
+   * Path to the reference-cascade policy YAML (L2-RECORD-DELETE-DEPENDENTS-1).
+   * When absent or undefined the store uses an empty policy (default-refuse,
+   * fail-closed). The path is caller-supplied — no default filename is
+   * hardcoded here.
+   */
+  cascadePolicyPath?: string;
 }
 
 /**
