@@ -9,10 +9,26 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 
 const createRecordSpy = vi.fn().mockResolvedValue({ success: true })
+const getSchemaSpy = vi.fn().mockResolvedValue({
+  id: 'https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml',
+  title: 'LabwareInstance',
+  schema: {
+    properties: {
+      location: {
+        properties: {
+          kind: {
+            enum: ['bench', 'incubator', 'freezer', 'instrument', 'rack', 'other'],
+          },
+        },
+      },
+    },
+  },
+})
 
 vi.mock('../shared/api/client', () => ({
   apiClient: {
     createRecord: (...args: unknown[]) => createRecordSpy(...args),
+    getSchema: (...args: unknown[]) => getSchemaSpy(...args),
   },
 }))
 
@@ -90,5 +106,87 @@ describe('LabwareInstanceCreateModal', () => {
 
     // Label carried through
     expect(payload.label).toBe('Plate A (RUN-000041)')
+  })
+
+  it('(iii) location is omitted when label is typed without a kind selection', async () => {
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+    // Wait for schema to load
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('labware-instance-location-kind')).toBeDefined()
+    }, { timeout: 3000 })
+
+    // Select a definition
+    fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
+      target: { value: 'LW-TROUGH-S' },
+    })
+    // Enter a label
+    fireEvent.change(screen.getByTestId('labware-instance-label-input'), {
+      target: { value: 'Test plate' },
+    })
+    // Type a location label WITHOUT selecting a kind
+    fireEvent.change(screen.getByTestId('labware-instance-location-input'), {
+      target: { value: 'Bench 3' },
+    })
+    // Submit
+    fireEvent.click(screen.getByTestId('labware-instance-create-submit'))
+
+    await vi.waitFor(() => {
+      expect(createRecordSpy).toHaveBeenCalledTimes(1)
+    }, { timeout: 3000 })
+
+    const [, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
+
+    // Location must NOT be present when no kind is chosen
+    expect(payload.location).toBeUndefined()
+    // Specifically, kind: 'other' must never be injected
+    if (payload.location) {
+      expect((payload.location as Record<string, unknown>).kind).not.toBe('other')
+    }
+  })
+
+  it('(iv) location carries the chosen kind when selected from the dropdown', async () => {
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('labware-instance-location-kind')).toBeDefined()
+    }, { timeout: 3000 })
+
+    fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
+      target: { value: 'LW-TROUGH-S' },
+    })
+    fireEvent.change(screen.getByTestId('labware-instance-label-input'), {
+      target: { value: 'Test plate' },
+    })
+    // Select a kind
+    const kindSelect = screen.getByTestId('labware-instance-location-kind')
+    fireEvent.change(kindSelect, { target: { value: 'bench' } })
+    // Type a label
+    fireEvent.change(screen.getByTestId('labware-instance-location-input'), {
+      target: { value: 'Bench 3' },
+    })
+    fireEvent.click(screen.getByTestId('labware-instance-create-submit'))
+
+    await vi.waitFor(() => {
+      expect(createRecordSpy).toHaveBeenCalledTimes(1)
+    }, { timeout: 3000 })
+
+    const [, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload.location).toBeDefined()
+    const loc = payload.location as Record<string, unknown>
+    expect(loc.kind).toBe('bench')
+    expect(loc.label).toBe('Bench 3')
   })
 })
