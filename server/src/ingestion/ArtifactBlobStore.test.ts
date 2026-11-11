@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { ArtifactBlobStore, LegacyArtifactBlobStore, createArtifactBlobStoreRecorder } from './ArtifactBlobStore.js';
 import type { StorageProvider } from '../storage/types.js';
 import { StorageError } from '../storage/types.js';
+import { StorageService } from '../storage/StorageService.js';
 import type { RecordStore, RecordEnvelope, StoreResult } from '../store/types.js';
 
 const DATA_REF_SCHEMA = 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml';
@@ -37,6 +38,11 @@ function makeFakeProvider(): { provider: StorageProvider; writeCalls: Array<{ pa
     async delete() {},
   };
   return { provider, writeCalls };
+}
+
+/** Production shape: the store holds the StorageService and resolves lazily. */
+function makeStorage(provider: StorageProvider, id = 'vast'): StorageService {
+  return new StorageService([{ id, label: id, kind: 'local-mount', default: true }], () => provider);
 }
 
 function makeFakeStore(): { store: RecordStore; createdEnvelopes: Array<{ recordId: string; payload: Record<string, unknown> }> } {
@@ -87,7 +93,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
   describe('save()', () => {
     it('writes to the provider and NOT to the filesystem', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       const content = Buffer.from('hello world');
       const result = await blobStore.save({
@@ -115,7 +121,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
 
     it('returns device-relative storedPath', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       const result = await blobStore.save({
         artifactId: 'ING-001',
@@ -131,7 +137,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
 
     it('creates a data-reference record with correct fields', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       const content = Buffer.from('test data');
       const result = await blobStore.save({
@@ -163,24 +169,25 @@ describe('ArtifactBlobStore — storage-backed', () => {
     });
 
     it('throws typed MISSING_CONFIG when no device is configured', async () => {
-      // Simulate missing config by making the provider throw MISSING_CONFIG
-      const failingProvider: StorageProvider = {
-        kind: 'local-mount',
-        async list() { return []; },
-        async stat() { return {}; },
-        async read() { throw new StorageError('MISSING_CONFIG', 'no storage device configured'); },
-        async write() { throw new StorageError('MISSING_CONFIG', 'no storage device configured'); },
-        async delete() {},
-      };
-
+      // Production shape: an EMPTY StorageService (DEFAULT_APP_CONFIG.storageDevices: []).
+      const storage = new StorageService([]);
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(failingProvider, 'nonexistent', 'ingestion-artifacts', recorder);
 
-      await expect(blobStore.save({
+      // Construction is lazy — it must not resolve the default device.
+      const blobStore = new ArtifactBlobStore(storage, 'ingestion-artifacts', recorder);
+
+      const failure = await blobStore.save({
         artifactId: 'ING-001',
         fileName: 'test.pdf',
         contentBase64: Buffer.from('abc').toString('base64'),
-      })).rejects.toThrow(StorageError);
+      }).then(() => null, (err: unknown) => err);
+
+      expect(failure).toBeInstanceOf(StorageError);
+      expect((failure as StorageError).code).toBe('MISSING_CONFIG');
+
+      // Hard-fail: no bytes written, no data-reference minted.
+      expect(writeCalls.length).toBe(0);
+      expect(createdEnvelopes.length).toBe(0);
     });
 
     it('throws on provider failure — no silent filesystem fallback', async () => {
@@ -194,7 +201,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
       };
 
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(failingProvider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(failingProvider), 'ingestion-artifacts', recorder);
 
       await expect(blobStore.save({
         artifactId: 'ING-001',
@@ -212,7 +219,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
     it('reads bytes from the provider and returns base64', async () => {
       const content = Buffer.from('readable content');
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       // First save to populate
       await blobStore.save({ artifactId: 'ING-001', fileName: 'file.bin', contentBase64: content.toString('base64') });
@@ -221,12 +228,63 @@ describe('ArtifactBlobStore — storage-backed', () => {
       const loaded = await blobStore.loadBase64('ingestion-artifacts/ING-001/file.bin');
       expect(loaded).toBe(content.toString('base64'));
     });
+
+    it('falls through to the legacy on-disk reader when the device has no such blob', async () => {
+      const legacy = new LegacyArtifactBlobStore(workspaceDir, '.ingestion-artifacts');
+      const content = Buffer.from('pre-existing legacy bytes');
+      await legacy.save({ artifactId: 'LEG-001', fileName: 'old.bin', contentBase64: content.toString('base64') });
+
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder, legacy);
+
+      // Provider throws StorageError NOT_FOUND for this path -> legacy read.
+      const loaded = await blobStore.loadBase64('.ingestion-artifacts/LEG-001/old.bin');
+      expect(loaded).toBe(content.toString('base64'));
+
+      // READ ONLY: no write, no data-reference, no on-disk write side effect.
+      expect(writeCalls.length).toBe(0);
+      expect(createdEnvelopes.length).toBe(0);
+    });
+
+    it('finds legacy blobs recorded relative to the records root', async () => {
+      // Pre-migration records carry 'records/.ingestion-artifacts/<id>/<file>'
+      // while some tooling recorded '.ingestion-artifacts/<id>/<file>'.
+      const legacy = new LegacyArtifactBlobStore(workspaceDir, 'records/.ingestion-artifacts');
+      const content = Buffer.from('records-rooted legacy bytes');
+      await legacy.save({ artifactId: 'LEG-002', fileName: 'old2.bin', contentBase64: content.toString('base64') });
+
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder, legacy);
+
+      const loaded = await blobStore.loadBase64('.ingestion-artifacts/LEG-002/old2.bin');
+      expect(loaded).toBe(content.toString('base64'));
+    });
+
+    it('does not fall back to disk when the failing read is not NOT_FOUND', async () => {
+      const legacy = new LegacyArtifactBlobStore(workspaceDir, '.ingestion-artifacts');
+      await legacy.save({ artifactId: 'LEG-003', fileName: 'x.bin', contentBase64: Buffer.from('x').toString('base64') });
+
+      const denied: StorageProvider = {
+        kind: 'local-mount',
+        async list() { return []; },
+        async stat() { return {}; },
+        async read() { throw new StorageError('ACCESS_DENIED', 'denied'); },
+        async write() { throw new StorageError('ACCESS_DENIED', 'denied'); },
+        async delete() {},
+      };
+      const blobStore = new ArtifactBlobStore(
+        makeStorage(denied), 'ingestion-artifacts', createArtifactBlobStoreRecorder(store), legacy,
+      );
+
+      await expect(blobStore.loadBase64('.ingestion-artifacts/LEG-003/x.bin'))
+        .rejects.toMatchObject({ code: 'ACCESS_DENIED' });
+    });
   });
 
   describe('safeName()', () => {
     it('sanitizes artifact filenames', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       const result = await blobStore.save({
         artifactId: 'ING-001',
@@ -242,7 +300,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
 
     it('defaults to artifactId.bin when no fileName', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
-      const blobStore = new ArtifactBlobStore(provider, 'vast', 'ingestion-artifacts', recorder);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
 
       const result = await blobStore.save({
         artifactId: 'ING-001',
