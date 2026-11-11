@@ -21,7 +21,7 @@ const mockCreateRecord = vi.fn()
 const mockGetSchema = vi.fn()
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   vi.spyOn(clientModule, 'apiClient', 'get').mockReturnValue({
     ...clientModule.apiClient,
     extractSpecSheetProposals: mockExtract,
@@ -164,6 +164,98 @@ describe('LabLabwareNewPage', () => {
     })
   })
 
+  it('surfaces Ajv 422 validation error in the error banner (no client-side gate)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    // Server returns 422 validation error
+    mockCreateRecord.mockImplementationOnce(() => {
+      const err = new Error('Validation failed: Missing required properties: display_name, topology')
+      return Promise.reject(err)
+    })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    // Save button is enabled — no client-side required-field gate
+    expect(screen.getByTestId('lab-labware-save-button')).not.toHaveAttribute('disabled')
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    const errorEl = screen.getByTestId('lab-labware-error')
+    expect(errorEl.textContent).toContain('Validation failed')
+  })
+
+  it('uses a single identity (recordId === id) in the payload (D6 fix)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: {} })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // D6: one identity, one mint — recordId and id must match
+    expect(payload.recordId).toBe(payload.id)
+    expect(typeof payload.recordId).toBe('string')
+    expect(payload.recordId).toMatch(/^LW-[0-9A-F]{8}$/)
+  })
+
+  it('does not coerce when schema is absent', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    // SchemaInfo.schema is undefined — no coercion should happen
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: undefined })
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), {
+      target: { value: '96-well plate' },
+    })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalled()
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    // Without schema, values stay as strings — let Ajv decide
+    expect(payload.topology.rows).toBe('8')
+  })
+
   it('coerces proposal string values to schema-declared types in the save payload', async () => {
     const proposals = [
       { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
@@ -209,9 +301,6 @@ describe('LabLabwareNewPage', () => {
     })
     const payload = (mockCreateRecord.mock.calls[0] as any)[1]
     // D1: values coerced to schema-declared types
-    console.log('DEBUG TEST: payload type of rows:', typeof payload.topology.rows, payload.topology.rows)
-    console.log('DEBUG TEST: payload type of columns:', typeof payload.topology.columns, payload.topology.columns)
-    console.log('DEBUG TEST: payload type of max_well_volume_uL:', typeof payload.capacity.max_well_volume_uL, payload.capacity.max_well_volume_uL)
     expect(typeof payload.topology.rows).toBe('number')
     expect(payload.topology.rows).toBe(8)
     expect(typeof payload.topology.columns).toBe('number')
