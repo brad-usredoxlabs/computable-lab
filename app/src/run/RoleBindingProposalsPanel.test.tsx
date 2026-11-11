@@ -96,6 +96,36 @@ describe('RoleBindingProposalsPanel', () => {
     expect(proposed?.textContent?.toLowerCase()).toContain('proposed')
     expect(proposed?.textContent?.toLowerCase()).not.toContain('bound')
     expect(proposed?.textContent?.toLowerCase()).not.toContain('applied')
+    // DEFECT-2 fix: the fixture candidate is material-instance, so assert the Bind button
+    expect(proposed?.querySelector('[data-testid="bind-candidate"]')).not.toBeNull()
+  })
+
+  it('a proposed definition candidate renders no Bind button and shows the hint', async () => {
+    // DEFECT-1: a single-candidate proposed role whose recordKind is 'material' (definition)
+    // must render the hint text and no bind button
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [{
+        protocolId: 'PROTO-1',
+        roles: [{
+          roleId: 'medium',
+          roleKind: 'material' as const,
+          state: 'proposed' as const,
+          candidates: [
+            { recordId: 'MAT-DEF-1', recordKind: 'material', label: 'DMEM' },
+          ],
+        }],
+      }],
+    })
+    const { container } = render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => {
+      const proposed = container.querySelector('[data-proposal-state="proposed"]')
+      expect(proposed).not.toBeNull()
+      // No bind button for a definition candidate
+      expect(proposed?.querySelector('[data-testid="bind-candidate"]')).toBeNull()
+      // Hint text is present
+      expect(proposed?.textContent).toContain('definition, bind an instance instead')
+    })
   })
 
   it('renders nothing for an empty projection — no empty-state card', async () => {
