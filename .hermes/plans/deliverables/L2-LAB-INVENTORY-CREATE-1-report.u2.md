@@ -13,4 +13,4 @@ Added guard in createMaterialInstance to refuse POST /materials/instances when l
 - Mutation probe: guard confirmed effective
 - Typecheck: clean
 
-L2-LAB-INVENTORY-CREATE-1-u2 UNIT u2 DONE 8338bc90ee6c961dd61d668e35e266904e6754f1
+L2-LAB-INVENTORY-CREATE-1-u2 UNIT u2 DONE 4df3bca0ae3f53c2ce29d061fce97d93229fcbe3
