@@ -231,4 +231,35 @@ describe('createRecord — schema-driven payload provenance injection', () => {
     expect(storedPayload.updatedAt).toBeDefined();
     expect(storedPayload.createdBy).toBeDefined();
   });
+
+  it('undefined getSchemaProperties falls back to kind-based logic', async () => {
+    // When server.ts cannot find the schema in the registry,
+    // getSchemaProperties returns undefined → fallback uses kind names.
+    // The fallback injects createdAt/updatedAt for non-excluded kinds.
+    const { store, records } = makeStore();
+    const handlers = createRecordHandlers(store, undefined, undefined, undefined, undefined, undefined, {
+      // Return undefined to force the fallback path
+      getSchemaProperties: () => undefined,
+    });
+
+    const payload = {
+      kind: 'protocol',
+      id: 'PRT-fallback-001',
+      title: 'Fallback Protocol',
+    };
+
+    const reply = makeReply();
+    const result = await handlers.createRecord(
+      makeRequest({ schemaId: 'unknown-schema', payload }),
+      reply as unknown as FastifyReply,
+    );
+
+    expect(reply.statusValue).toBe(201);
+    const stored = records.get((result as any).record?.recordId);
+    const storedPayload = stored!.payload as Record<string, unknown>;
+    // Fallback: 'protocol' is not in the exclusion list → full injection
+    expect(storedPayload.createdAt).toBeDefined();
+    expect(storedPayload.updatedAt).toBeDefined();
+    expect(storedPayload.createdBy).toBeDefined();
+  });
 });
