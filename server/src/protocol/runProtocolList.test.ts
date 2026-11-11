@@ -169,6 +169,15 @@ describe('protocolRefsOf — lab-layer fallback to protocolRef', () => {
     };
     expect(protocolIdsOf(payload)).toEqual(['L', 'P']);
   });
+
+  it('resolves sourceRef when sourceType is protocol and no other refs exist', () => {
+    const payload = {
+      kind: 'run',
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRT-9', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['PRT-9']);
+  });
 });
 
 describe('run schema — localProtocolRefs validation', () => {
