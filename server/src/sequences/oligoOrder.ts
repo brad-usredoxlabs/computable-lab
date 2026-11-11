@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { AppContext } from '../server.js';
 import { extractPdfLayoutText } from '../extract/PdfTextAdapter.js';
-import { ArtifactBlobStore, createArtifactBlobStoreRecorder } from '../ingestion/ArtifactBlobStore.js';
+import { ArtifactBlobStore, LegacyArtifactBlobStore, createArtifactBlobStoreRecorder } from '../ingestion/ArtifactBlobStore.js';
 import { buildIngestionJobEnvelope, buildIngestionArtifactEnvelope, buildIngestionBundleEnvelope, buildIngestionCandidateEnvelope, createRecordRef, createSourceRef } from '../ingestion/records.js';
 import { SequenceService, SequenceError } from './SequenceService.js';
 import { normalizeSequence, type AlphabetSpec } from './sequenceEngine.js';
@@ -97,7 +97,7 @@ export async function ingestOligoOrder(ctx: AppContext, actor:string, fileName:s
   if(fallbackPolicy.enabled && fallbackPolicy.mode==='manual' && fired.length)extraction.diagnostics.push({severity:'warning',code:'OLIGO_AI_READ_OFFERED',message:`The deterministic read could not account for the document (${fired.join(', ')}). An AI read can be offered.`});
   const job=buildIngestionJobEnvelope({sourceKind:'other',adapterKind:'oligo-order',name:fileName,submittedBy:actor});
   const artifact=buildIngestionArtifactEnvelope(job.payload,{fileName,mediaType:fileName.endsWith('.pdf')?'application/pdf':'text/plain',sha256});
-  const blob=await new ArtifactBlobStore(ctx.storageService.getProvider(ctx.storageService.defaultDeviceId()),ctx.storageService.defaultDeviceId(),'ingestion-artifacts',createArtifactBlobStoreRecorder(ctx.store)).save({artifactId:artifact.recordId,fileName,contentBase64:bytes.toString('base64')});
+  const blob=await new ArtifactBlobStore(ctx.storageService,'ingestion-artifacts',createArtifactBlobStoreRecorder(ctx.store),new LegacyArtifactBlobStore(ctx.workspaceRoot,join(ctx.recordsDir,'.ingestion-artifacts'))).save({artifactId:artifact.recordId,fileName,contentBase64:bytes.toString('base64')});
   artifact.payload={...artifact.payload,file_ref:{...artifact.payload.file_ref,stored_path:blob.storedPath,size_bytes:blob.sizeBytes},text_extract:{excerpt:extraction.text,extracted_at:new Date().toISOString(),method:extraction.diagnostics.some(d=>d.code==='LOCAL_OCR_REVIEW')?'local-ocr':'layout-text'}};
   const bundle=buildIngestionBundleEnvelope({job:job.payload,title:`${job.recordId} oligos`,bundleType:'other',summary:'Review names, base sequences, orientation and modifications before importing.'});
   const candidates=rows.map((row,index)=>buildIngestionCandidateEnvelope({job:job.payload,bundle:bundle.payload,candidateType:'oligo',title:`${job.recordId} row ${index+1}: ${row.label}`,payload:{...row,sha256},sourceRefs:[createSourceRef(artifact.recordId)],proposedRecordKind:'oligo-spec',proposedSchemaId:SEQUENCE_SCHEMA+'oligo-spec.schema.yaml'}));

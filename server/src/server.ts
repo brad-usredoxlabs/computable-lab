@@ -151,7 +151,7 @@ import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js'
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
-import { ArtifactBlobStore, createArtifactBlobStoreRecorder } from './ingestion/ArtifactBlobStore.js';
+import { ArtifactBlobStore, LegacyArtifactBlobStore, createArtifactBlobStoreRecorder } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
@@ -1011,11 +1011,14 @@ export async function createServer(
     : undefined;
   const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 
+  // Lazy device resolution: construction must never throw when
+  // storageDevices is empty (DEFAULT_APP_CONFIG) — the device is resolved on
+  // the first save()/loadBase64() instead. Legacy on-disk blobs stay readable.
   const ingestionBlobStore = new ArtifactBlobStore(
-    ctx.storageService.getProvider(ctx.storageService.defaultDeviceId()),
-    ctx.storageService.defaultDeviceId(),
+    ctx.storageService,
     'ingestion-artifacts',
     createArtifactBlobStoreRecorder(ctx.store),
+    new LegacyArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
   );
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,

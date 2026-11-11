@@ -5,13 +5,15 @@
  *
  * The legacy filesystem path is preserved in LegacyArtifactBlobStore for reading
  * pre-existing on-disk blobs (do NOT migrate or delete them). Production code
- * constructs ArtifactBlobStore with a provider + recorder.
+ * constructs ArtifactBlobStore with the StorageService (device resolved lazily)
+ * + recorder.
  */
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { StorageProvider } from '../storage/types.js';
+import { StorageError, type StorageProvider } from '../storage/types.js';
+import type { StorageService } from '../storage/StorageService.js';
 import type { RecordStore } from '../store/types.js';
 
 const DATA_REF_SCHEMA = 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml';
@@ -50,29 +52,41 @@ export interface ArtifactBlobStoreResult {
 
 export class ArtifactBlobStore {
   constructor(
-    private readonly provider: StorageProvider,
-    private readonly deviceId: string,
+    private readonly storage: StorageService,
     private readonly prefix: string,
     private readonly recorder: ArtifactBlobStoreRecorder,
+    private readonly legacy?: LegacyArtifactBlobStore,
   ) {}
+
+  /**
+   * Resolve the default device LAZILY (inside save()/loadBase64()). Boot must
+   * never depend on a storage device being configured: DEFAULT_APP_CONFIG has
+   * `storageDevices: []`, so an eager resolve threw MISSING_CONFIG from
+   * createServer and broke every suite that boots the server.
+   */
+  private resolveDevice(): { provider: StorageProvider; deviceId: string } {
+    const deviceId = this.storage.defaultDeviceId();
+    return { provider: this.storage.getProvider(deviceId), deviceId };
+  }
 
   async save(args: {
     artifactId: string;
     fileName?: string;
     contentBase64: string;
   }): Promise<ArtifactBlobStoreResult> {
+    const { provider, deviceId } = this.resolveDevice();
     const fileName = safeName(args.fileName ?? `${args.artifactId}.bin`);
     const storedPath = join(this.prefix, args.artifactId, fileName);
     const buffer = Buffer.from(args.contentBase64, 'base64');
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
     // Write bytes to the storage device — NOT into the worktree
-    await this.provider.write(storedPath, Readable.from(buffer));
+    await provider.write(storedPath, Readable.from(buffer));
 
     // Create data-reference record so the bytes are findable from git
     const { drefId } = await this.recorder({
       artifactId: args.artifactId,
-      deviceId: this.deviceId,
+      deviceId,
       path: storedPath,
       contentHash: sha256,
       sizeBytes: buffer.byteLength,
@@ -83,12 +97,27 @@ export class ArtifactBlobStore {
   }
 
   async loadBase64(storedPath: string): Promise<string> {
-    const stream = await this.provider.read(storedPath);
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream as AsyncIterable<Buffer>) {
-      chunks.push(Buffer.from(chunk));
+    try {
+      const { provider } = this.resolveDevice();
+      const stream = await provider.read(storedPath);
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream as AsyncIterable<Buffer>) {
+        chunks.push(Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks).toString('base64');
+    } catch (err) {
+      const code = err instanceof StorageError ? err.code : undefined;
+      // READ-ONLY fall-through for pre-migration on-disk blobs. Never a write
+      // fallback, and never masks a non-missing error (ACCESS_DENIED, IO...).
+      if (this.legacy && (code === 'NOT_FOUND' || code === 'MISSING_CONFIG')) {
+        try {
+          return await this.legacy.loadBase64(storedPath);
+        } catch {
+          // Legacy copy absent too — surface the original typed error.
+        }
+      }
+      throw err;
     }
-    return Buffer.concat(chunks).toString('base64');
   }
 }
 
@@ -121,8 +150,18 @@ export class LegacyArtifactBlobStore {
   }
 
   async loadBase64(storedPath: string): Promise<string> {
-    const buffer = await readFile(this.absolutePath(storedPath));
-    return buffer.toString('base64');
+    try {
+      return (await readFile(this.absolutePath(storedPath))).toString('base64');
+    } catch (err) {
+      // Pre-migration records may carry a records-root-relative path
+      // ('.ingestion-artifacts/<id>/<file>') while the bytes live under
+      // <recordsDir>/.ingestion-artifacts. Try that shape once, then rethrow.
+      const marker = '.ingestion-artifacts/';
+      const idx = storedPath.indexOf(marker);
+      if (idx < 0) throw err;
+      const rooted = join(this.workspaceRoot, this.storageRootRelative, storedPath.slice(idx + marker.length));
+      return (await readFile(rooted)).toString('base64');
+    }
   }
 }
 
