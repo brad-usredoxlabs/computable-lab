@@ -37,4 +37,4 @@ MUTATION PROBE:
 - Restored fix with git checkout -- app/src/collections/LabLabwareNewPage.tsx
 - Verified git status --short shows no product path
 
-L2-SPEC-SHEET-INGEST-1-d3d4prov UNIT d3d4prov DONE f08cc2b238356302588254e0b51fe21a1297d9b5
+L2-SPEC-SHEET-INGEST-1-d3d4prov UNIT d3d4prov DONE b3693d5c8420cf1b2ffe230e254bd1f230982172
