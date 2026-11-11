@@ -96,6 +96,7 @@ import {
   applySoleDeckPlacement,
   scientistAnswersFromReadingAnswers,
   answeredClarificationLabelsFromBatch,
+  recordIdFromCurie,
   type AcceptedShorthandBinding,
   type AnsweredSlot,
   type ShorthandCompileDeps,
@@ -1099,6 +1100,45 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
 
 
 /**
+ * L2-NOUN-RESOLUTION-POLICY-1 A1: derive AnsweredNounAnswer[] from the fold's
+ * accepted bindings. The fold's AcceptedShorthandBinding carries {label, ref}
+ * — the label is the scientist's chosen label (spliced into the document), and
+ * the ref is the record CURIE. Map each binding into the tier-1 binding the
+ * resolver accepts directly: the mechanism already exists (answeredSlotBindings
+ * in resolveNounsPass.ts), but was not passed on this arm.
+ *
+ * label = the binding's label (matched against the parsed intent's raw slot).
+ * recordId = the curie-stripped ref.
+ * recordLabel = the chosen record's own name/title/label from the store, with
+ *   safe fallback to the binding label when the record is absent (never throws).
+ * Store-miss = skip that entry (never-guess contract).
+ */
+async function bindingsToAnsweredSlots(
+  bindings: readonly AcceptedShorthandBinding[],
+  store: import('../store/types.js').RecordStore,
+): Promise<import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[]> {
+  const out: import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[] = [];
+  for (const binding of bindings) {
+    const recordId = recordIdFromCurie(binding.ref);
+    // Read the record's own label for recordLabel evidence.
+    // Store-miss is honest: skip the entry (never-guess contract).
+    const record = await store.get(recordId);
+    if (!record) continue;
+    const payload = record.payload as Record<string, unknown> | undefined;
+    const recordLabel: string =
+      typeof payload?.name === 'string' && payload.name
+        ? payload.name
+        : typeof payload?.title === 'string' && payload.title
+          ? payload.title
+          : typeof payload?.label === 'string' && payload.label
+            ? payload.label
+            : binding.label;
+    out.push({ label: binding.label, recordId, recordLabel });
+  }
+  return out;
+}
+
+/**
  * GHOSTPAINT-1 Leg 2B: exported helper that wraps the fold-seam compile.
  * Applies applySoleDeckPlacement to inject the sole deck placement's labwareId
  * into well-bearing actions, then compiles deterministically.
@@ -1516,6 +1556,13 @@ export function createAgentOrchestrator(
             // the answer fold is where a binding becomes ACCEPTED.
             const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
             rememberAcceptedShorthandBindings(conversationKey, foldBindings);
+            // L2-NOUN-RESOLUTION-POLICY-1 A1: derive AnsweredNounAnswer[] from
+            // the fold's accepted bindings BEFORE building the deps object
+            // (the mapper is async — store.get reads must complete).
+            const answeredFromFold =
+              deps.store && folded.bindings.length > 0
+                ? await bindingsToAnsweredSlots(folded.bindings, deps.store)
+                : [];
             // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
             // placement's labwareId into well-bearing actions that carry no
             // identity. The expander emits a top-level labwareId from
@@ -1526,6 +1573,11 @@ export function createAgentOrchestrator(
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // L2-NOUN-RESOLUTION-POLICY-1 A1: carry the fold's accepted bindings
+              // as tier-1 answeredSlots so the resolver binds the noun to the
+              // chosen record id directly. Conditional spread: ABSENT when empty,
+              // never undefined (exactOptionalPropertyTypes).
+              ...(answeredFromFold.length > 0 ? { answeredSlots: answeredFromFold } : {}),
               // WELLSET-RESOLVER-1 (report 3a/4d): the conversation's committed
               // contents layer rides the recompile as priorLabState (the same
               // cache the FIRST compile read — a recompile of the held intent
