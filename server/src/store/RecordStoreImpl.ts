@@ -43,6 +43,13 @@ import {
   isNestedKind,
   parseRecordPath,
 } from '../repo/PathConvention.js';
+import {
+  loadCascadePolicy,
+  findReferrers,
+  resolveDeleteAction,
+  type CascadePolicy,
+} from './referenceCascade.js';
+import type { FileChange } from '../repo/GitRepoAdapter.js';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -77,6 +84,8 @@ export interface LifecycleBypassAuditCollaborator {
 
 export class RecordStoreImpl implements RecordStore {
   private config: ResolvedConfig;
+  /** Cascade policy loaded from YAML (L2-RECORD-DELETE-DEPENDENTS-1). */
+  private readonly cascadePolicy: CascadePolicy;
   /**
    * Content-lock policy resolver (AM-2/AM-10). Always set in the
    * constructor — the absent-config default is the EXPLICIT shared
@@ -97,7 +106,7 @@ export class RecordStoreImpl implements RecordStore {
     repo: RepoAdapter,
     validator: AjvValidator,
     lintEngine: LintEngine,
-    config: RecordStoreConfig = {}
+    config: RecordStoreConfig & { cascadePolicyPath?: string } = {}
   ) {
     this.repo = repo;
     this.validator = validator;
@@ -109,6 +118,10 @@ export class RecordStoreImpl implements RecordStore {
     // `config.contentLockedStates` is optional in the type, so this line is
     // what makes the field non-undefined at runtime.
     this.contentLockedStates = config.contentLockedStates ?? defaultContentLockedStates;
+    // L2-RECORD-DELETE-DEPENDENTS-1: load cascade policy from YAML
+    this.cascadePolicy = config.cascadePolicyPath
+      ? loadCascadePolicy(config.cascadePolicyPath)
+      : new Map();
   }
 
   /**
@@ -1049,8 +1062,114 @@ export class RecordStoreImpl implements RecordStore {
         error: `SHA mismatch: expected ${expectedSha}, got ${file.sha}`,
       };
     }
-    
-    // Delete file
+
+    // L2-RECORD-DELETE-DEPENDENTS-1: check for referrers BEFORE deleting
+    const allRecords = await this.list();
+    const referrers = findReferrers(allRecords, recordId);
+
+    if (referrers.length > 0) {
+      // Partition into cascade vs refuse
+      const cascadeRefs: typeof referrers = [];
+      const refuseRefs: typeof referrers = [];
+      for (const ref of referrers) {
+        const action = resolveDeleteAction(this.cascadePolicy, ref);
+        if (action === 'cascade') {
+          cascadeRefs.push(ref);
+        } else {
+          refuseRefs.push(ref);
+        }
+      }
+
+      if (refuseRefs.length > 0) {
+        // Some references refuse — abort the delete entirely
+        const refuseIds = refuseRefs.map(r => r.recordId);
+        return {
+          success: false,
+          error: `HAS_DEPENDENTS: ${refuseIds.join(', ')}`,
+          ...(refuseIds.length > 0 ? { referrers: refuseIds } : {}),
+        };
+      }
+
+      // All referrers are cascade — collect their paths for atomic deletion
+      const filesToDelete: Array<{ path: string; content?: string; operation: 'delete' }> = [
+        { path: existing.path, operation: 'delete' },
+      ];
+      const cascadedIds: string[] = [];
+
+      for (const ref of cascadeRefs) {
+        const refRecord = allRecords.find(r => r.recordId === ref.recordId);
+        if (refRecord?.meta?.path) {
+          filesToDelete.push({ path: refRecord.meta.path, operation: 'delete' });
+          cascadedIds.push(ref.recordId);
+        }
+      }
+
+      // Atomic commit: delete the target + all cascade dependents in ONE commit
+      const commitMessage = message || `Delete ${recordId}${cascadedIds.length > 0 ? ` (cascade: ${cascadedIds.join(', ')})` : ''}`;
+
+      // Use commitFiles for atomic operation. The repo adapter may be GitRepoAdapter
+      // (which has commitFiles) or a test adapter — we duck-type to support both.
+      const repoWithCommitFiles = this.repo as { commitFiles?(options: { files: typeof filesToDelete; message: string; push?: boolean }): Promise<import('../repo/types.js').FileOperationResult> };
+      let result: import('../repo/types.js').FileOperationResult;
+
+      if (typeof repoWithCommitFiles.commitFiles === 'function') {
+        result = await repoWithCommitFiles.commitFiles({
+          files: filesToDelete,
+          message: commitMessage,
+          push: false,
+        });
+      } else {
+        // Fallback for LocalRepoAdapter (tests without commitFiles)
+        // Delete each file individually — this is NOT the production path
+        result = await this.repo.deleteFile({
+          path: existing.path,
+          sha,
+          message: commitMessage,
+        });
+        for (let i = 1; i < filesToDelete.length; i++) {
+          const depPath = filesToDelete[i].path;
+          const depFile = await this.repo.getFile(depPath);
+          await this.repo.deleteFile({
+            path: depPath,
+            sha: depFile?.sha ?? '',
+            message: commitMessage,
+          });
+        }
+      }
+
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error || 'Failed to delete files',
+        };
+      }
+
+      // Clear caches for deleted records
+      this.pathCache.delete(recordId);
+      for (const depId of cascadedIds) {
+        this.pathCache.delete(depId);
+      }
+
+      // Fire hooks for cascaded deletions
+      await this.fireDeleteHook(recordId);
+      for (const depId of cascadedIds) {
+        await this.fireDeleteHook(depId);
+      }
+
+      return {
+        success: true,
+        ...(result.commit !== undefined ? {
+          commit: {
+            sha: result.commit.sha,
+            message: result.commit.message,
+            timestamp: result.commit.timestamp,
+          },
+        } : {}),
+        ...(cascadedIds.length > 0 ? { cascaded: cascadedIds } : {}),
+      };
+    }
+
+    // No referrers — proceed with simple delete
     const commitMessage = message || `Delete ${recordId}`;
     const result = await this.repo.deleteFile({
       path: existing.path,

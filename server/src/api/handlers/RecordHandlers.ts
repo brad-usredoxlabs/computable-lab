@@ -1588,7 +1588,7 @@ export function createRecordHandlers(
           recordId: id,
           ...(expectedSha !== undefined ? { expectedSha } : {}),
         });
-        
+
         if (!result.success) {
           // Check for SHA mismatch
           if (result.error?.includes('SHA mismatch')) {
@@ -1598,14 +1598,26 @@ export function createRecordHandlers(
               error: result.error,
             };
           }
-          
+
+          // L2-RECORD-DELETE-DEPENDENTS-1: HAS_DEPENDENTS refusal (409)
+          if (result.error?.includes('HAS_DEPENDENTS')) {
+            reply.status(409);
+            const anyResult = result as Record<string, unknown>;
+            return {
+              success: false,
+              error: 'HAS_DEPENDENTS',
+              message: result.error,
+              ...(Array.isArray(anyResult.referrers) ? { referrers: anyResult.referrers as string[] } : {}),
+            };
+          }
+
           reply.status(400);
           return {
             success: false,
             error: result.error || 'Failed to delete record',
           };
         }
-        
+
         // Update index after successful delete
         if (indexManager) {
           try {
@@ -1614,10 +1626,13 @@ export function createRecordHandlers(
             console.error('Failed to update index after delete:', indexErr);
           }
         }
-        
+
+        // L2-RECORD-DELETE-DEPENDENTS-1: pass through cascaded array when present
+        const anyResult = result as Record<string, unknown>;
         return {
           success: true,
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
+          ...(Array.isArray(anyResult.cascaded) ? { cascaded: anyResult.cascaded as string[] } : {}),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
