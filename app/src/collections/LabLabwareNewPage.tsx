@@ -34,11 +34,13 @@ function mintRecordId(): string {
  * to the schema-declared types (integer, number) when the schema is available.
  * e.g. "topology.rows" → { topology: { rows: value } }
  * Optional fields (citation, etc.) are OMITTED when absent — never undefined.
+ * Source provenance (URL-level) is included when sheetUrl is non-empty.
  */
 function buildPayloadFromProposals(
   proposals: SpecSheetProposal[],
   displayName: string,
-  schema?: Record<string, unknown>
+  schema?: Record<string, unknown>,
+  sheetUrl?: string
 ): Record<string, unknown> {
   const recordId = mintRecordId()
   const payload: Record<string, unknown> = {
@@ -47,6 +49,12 @@ function buildPayloadFromProposals(
     type: 'labware_definition',
     id: recordId,
     display_name: displayName,
+  }
+
+  // D3: persist source provenance when URL is non-empty
+  const trimmedUrl = sheetUrl?.trim()
+  if (trimmedUrl) {
+    payload.source = { kind: 'imported' as const, url: trimmedUrl }
   }
 
   for (const p of proposals) {
@@ -174,7 +182,7 @@ export function LabLabwareNewPage() {
     setSaving(true)
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
-      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema)
+      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, sheetUrl)
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {
