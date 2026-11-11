@@ -4,11 +4,22 @@
  *
  * (i) submitting with no definition shows an inline error and calls nothing.
  * (ii) a valid submit calls createRecord with correct schemaId + payload.
+ * (iii) location is omitted when label is typed without a kind selection.
+ * (iv) location carries the chosen kind when selected from the dropdown.
+ * (v) location is kind-only when label is empty.
+ * (vi) rendered options reflect the served schema enum (non-canonical).
+ * (vii) when schema exposes no location.kind.enum, select renders no real kind options.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 
 const createRecordSpy = vi.fn().mockResolvedValue({ success: true })
+
+/*
+ * NON-CANONICAL enum — this tests that the modal reads the enum from the
+ * schema at runtime, rather than hardcoding values. The real schema enum
+ * is ['bench', 'incubator', 'freezer', 'instrument', 'rack', 'other'].
+ */
 const getSchemaSpy = vi.fn().mockResolvedValue({
   id: 'https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml',
   title: 'LabwareInstance',
@@ -17,7 +28,7 @@ const getSchemaSpy = vi.fn().mockResolvedValue({
       location: {
         properties: {
           kind: {
-            enum: ['bench', 'incubator', 'freezer', 'instrument', 'rack', 'other'],
+            enum: ['workbench', 'cold-room'],
           },
         },
       },
@@ -146,11 +157,7 @@ describe('LabwareInstanceCreateModal', () => {
     const [, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
 
     // Location must NOT be present when no kind is chosen
-    expect(payload.location).toBeUndefined()
-    // Specifically, kind: 'other' must never be injected
-    if (payload.location) {
-      expect((payload.location as Record<string, unknown>).kind).not.toBe('other')
-    }
+    expect(payload).not.toHaveProperty('location')
   })
 
   it('(iv) location carries the chosen kind when selected from the dropdown', async () => {
@@ -175,9 +182,9 @@ describe('LabwareInstanceCreateModal', () => {
     fireEvent.change(screen.getByTestId('labware-instance-label-input'), {
       target: { value: 'Test plate' },
     })
-    // Select a kind
+    // Select a kind (use non-canonical 'workbench' from the mock)
     fireEvent.change(screen.getByTestId('labware-instance-location-kind'), {
-      target: { value: 'bench' },
+      target: { value: 'workbench' },
     })
     // Type a label
     fireEvent.change(screen.getByTestId('labware-instance-location-input'), {
@@ -192,7 +199,114 @@ describe('LabwareInstanceCreateModal', () => {
     const [, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
     expect(payload.location).toBeDefined()
     const loc = payload.location as Record<string, unknown>
-    expect(loc.kind).toBe('bench')
+    expect(loc.kind).toBe('workbench')
     expect(loc.label).toBe('Bench 3')
+  })
+
+  it('(v) location is kind-only (no label key) when label input is empty', async () => {
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+    // Wait for schema to load and options to populate
+    await waitFor(() => {
+      const kindSelect = screen.queryByTestId('labware-instance-location-kind')
+      expect(kindSelect).toBeDefined()
+      expect((kindSelect as HTMLSelectElement).options.length).toBeGreaterThan(1)
+    }, { timeout: 3000 })
+
+    fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
+      target: { value: 'LW-TROUGH-S' },
+    })
+    fireEvent.change(screen.getByTestId('labware-instance-label-input'), {
+      target: { value: 'Test plate' },
+    })
+    // Select a kind but leave the location label EMPTY
+    fireEvent.change(screen.getByTestId('labware-instance-location-kind'), {
+      target: { value: 'workbench' },
+    })
+    // Do NOT fill the location label input
+    fireEvent.click(screen.getByTestId('labware-instance-create-submit'))
+
+    await waitFor(() => {
+      expect(createRecordSpy).toHaveBeenCalledTimes(1)
+    }, { timeout: 3000 })
+
+    const [, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload.location).toEqual({ kind: 'workbench' })
+    // Explicitly: no 'label' key should exist
+    expect((payload.location as Record<string, unknown>)).not.toHaveProperty('label')
+  })
+
+  it('(vi) rendered option values match the served schema enum exactly', async () => {
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+
+    // Verify getSchemaSpy was called with the labware-instance schema id
+    expect(getSchemaSpy).toHaveBeenCalledWith(
+      'https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml'
+    )
+
+    // Wait for schema to load and kind options to populate
+    await waitFor(() => {
+      const kindSelect = screen.queryByTestId('labware-instance-location-kind')
+      expect(kindSelect).toBeDefined()
+      expect((kindSelect as HTMLSelectElement).options.length).toBeGreaterThan(1)
+    }, { timeout: 3000 })
+
+    // Extract option values from the KIND select only (not the definition select)
+    const kindSelect = screen.getByTestId('labware-instance-location-kind') as HTMLSelectElement
+    const values = Array.from(kindSelect.options).map((o) => o.value)
+    expect(values).toEqual(['', 'workbench', 'cold-room'])
+  })
+
+  it('(vii) when schema exposes no location.kind.enum, select renders no real kind options', async () => {
+    // Override the mock to return a schema with NO kind enum
+    getSchemaSpy.mockResolvedValueOnce({
+      id: 'https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml',
+      title: 'LabwareInstance',
+      schema: {
+        properties: {
+          location: {
+            properties: {
+              kind: {
+                type: 'string',
+                // no enum key — modal should render only the placeholder
+              },
+            },
+          },
+        },
+      },
+    })
+
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+
+    // Wait for schema to load
+    await waitFor(() => {
+      const kindSelect = screen.queryByTestId('labware-instance-location-kind')
+      expect(kindSelect).toBeDefined()
+    }, { timeout: 3000 })
+
+    // Only the placeholder option should exist (no real kind options)
+    const kindSelect = screen.getByTestId('labware-instance-location-kind') as HTMLSelectElement
+    const values = Array.from(kindSelect.options).map((o) => o.value)
+    expect(values).toEqual([''])
   })
 })
