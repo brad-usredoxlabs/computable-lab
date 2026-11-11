@@ -287,7 +287,7 @@ describe('LabLabwareNewPage', () => {
     expect(payload.source.url).toBe('https://example.com/sheet')
   })
 
-  it('omits source when the URL is empty (exactOptionalPropertyTypes)', async () => {
+  it('preserves frozen provenance even when URL input is cleared after extract (D3 freeze)', async () => {
     const proposals = [
       { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 's1' },
     ]
@@ -307,7 +307,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
-    // Clear the URL before saving — source must be omitted
+    // Clear the URL input after extracting — D3 freeze means provenance stays
     fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
       target: { value: '' },
     })
@@ -316,8 +316,9 @@ describe('LabLabwareNewPage', () => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
     })
     const payload = (mockCreateRecord.mock.calls[0] as any)[1]
-    // exactOptionalPropertyTypes: source key must be absent when URL is empty
-    expect('source' in payload).toBe(false)
+    // D3 freeze: source is preserved from the frozen URL, not the cleared input
+    expect(payload.source).toBeDefined()
+    expect(payload.source.url).toBe('https://example.com/sheet')
   })
 
   it('freezes provenance URL at extraction time — URL changed after propose (D3 freeze)', async () => {

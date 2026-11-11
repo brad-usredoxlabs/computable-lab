@@ -34,27 +34,75 @@ function mintRecordId(): string {
  * to the schema-declared types (integer, number) when the schema is available.
  * e.g. "topology.rows" → { topology: { rows: value } }
  * Optional fields (citation, etc.) are OMITTED when absent — never undefined.
- * Source provenance (URL-level) is included when sheetUrl is non-empty.
+ *
+ * D3: provenance URL is frozen at extraction time — never read from mutable
+ *      state. Prefer the first proposal's sourceUrl (the backend declares it);
+ *      fall back to the frozen extraction URL.
+ * D4: kind, type, read_only, and source.kind are derived from the schema
+ *      properties. Hardcoded literals remain as fallback when schema is absent
+ *      or does not declare those keys.
  */
 function buildPayloadFromProposals(
   proposals: SpecSheetProposal[],
   displayName: string,
   schema?: Record<string, unknown>,
-  sheetUrl?: string
+  extractedUrl?: string
 ): Record<string, unknown> {
   const recordId = mintRecordId()
+
+  // D4: derive kind/type from schema const, fallback to literals
+  const props: Record<string, unknown> | undefined =
+    typeof schema?.properties === 'object' && schema?.properties !== null
+      ? schema.properties as Record<string, unknown>
+      : undefined
+  const kindVal: string =
+    props?.kind && typeof (props.kind as any).const === 'string'
+      ? (props.kind as any).const
+      : 'labware-definition'
+  const typeVal: string =
+    props?.type && typeof (props.type as any).const === 'string'
+      ? (props.type as any).const
+      : 'labware_definition'
+
   const payload: Record<string, unknown> = {
-    kind: 'labware-definition',
+    kind: kindVal,
     recordId,
-    type: 'labware_definition',
+    type: typeVal,
     id: recordId,
     display_name: displayName,
   }
 
-  // D3: persist source provenance when URL is non-empty
-  const trimmedUrl = sheetUrl?.trim()
-  if (trimmedUrl) {
-    payload.source = { kind: 'imported' as const, url: trimmedUrl }
+  // D4: set read_only: true only when schema declares read_only as boolean
+  if (props?.read_only &&
+      typeof props.read_only === 'object' &&
+      props.read_only !== null &&
+      (props.read_only as Record<string, unknown>).type === 'boolean'
+  ) {
+    payload.read_only = true
+  }
+
+  // D3: freeze provenance — use proposal.sourceUrl first, then extractedUrl
+  const provenanceUrl = proposals[0]?.sourceUrl ?? extractedUrl
+  if (provenanceUrl) {
+    // D4: source.kind from schema enum (prefer 'imported'), fallback to literal
+    const sourceNode = props?.source
+    const sourceProps: Record<string, unknown> | undefined =
+      typeof sourceNode === 'object' && sourceNode !== null &&
+      typeof (sourceNode as Record<string, unknown>).properties === 'object' &&
+      (sourceNode as Record<string, unknown>).properties !== null
+        ? (sourceNode as Record<string, unknown>).properties as Record<string, unknown>
+        : undefined
+    const kindNode: unknown = sourceProps?.kind
+    const sourceKindEnum: string[] | undefined =
+      typeof kindNode === 'object' && kindNode !== null &&
+      Array.isArray((kindNode as Record<string, unknown>).enum)
+        ? (kindNode as Record<string, unknown>).enum as string[]
+        : undefined
+    const sourceKind: string =
+      sourceKindEnum?.includes('imported')
+        ? 'imported'
+        : sourceKindEnum?.[0] ?? 'imported'
+    payload.source = { kind: sourceKind, url: provenanceUrl }
   }
 
   for (const p of proposals) {
@@ -129,17 +177,21 @@ export function LabLabwareNewPage() {
   const [noProposalsInfo, setNoProposalsInfo] = useState<{ url: string; reason: string } | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // D3: freeze the extraction URL at extraction time
+  const [extractedFromUrl, setExtractedFromUrl] = useState<string | null>(null)
 
   const handleExtract = async () => {
     if (!sheetUrl.trim()) return
     setState('extracting')
     setProposals(null)
+    setExtractedFromUrl(null)
     setBlockInfo(null)
     setNoProposalsInfo(null)
     setErrorMessage(null)
+    const frozenUrl = sheetUrl.trim()
     try {
       const result = await apiClient.extractSpecSheetProposals({
-        url: sheetUrl.trim(),
+        url: frozenUrl,
         recordKind: 'labware',
       })
 
@@ -171,6 +223,7 @@ export function LabLabwareNewPage() {
 
       setState('success')
       setProposals(result.proposals)
+      setExtractedFromUrl(frozenUrl)
     } catch (err) {
       setState('error')
       setErrorMessage(err instanceof Error ? err.message : String(err))
@@ -182,7 +235,7 @@ export function LabLabwareNewPage() {
     setSaving(true)
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
-      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, sheetUrl)
+      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {
