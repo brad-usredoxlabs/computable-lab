@@ -53,4 +53,4 @@ The unit-level tests (shelfLookup.test.ts) all pass green.
   call at :163 unchanged per spec
 - `labwareId` read as a plain string (not via `refId`) per schema definition
 
-L2-LAB-INVENTORY-CREATE-1-u3shelf UNIT unit DONE 598cee4323f251edf33a10deddbd1730f8816c75
+L2-LAB-INVENTORY-CREATE-1-u3shelf UNIT unit DONE d2aa1bfdc54bac9d8e6c3bde354bdddbe22bbef5
