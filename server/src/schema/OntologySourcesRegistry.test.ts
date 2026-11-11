@@ -5,20 +5,21 @@
  * schema-valid and that every enabled local-obo source actually loads
  * to a valid OBO file containing its declared root term.
  *
- * Six legs (from the brief):
- *   (i)   registry parses as YAML and validates against the schema
- *   (ii)  every enabled local-obo source's path exists AND parses to
- *         >= 1 [Term] stanza whose id: equals that entry's declared root
- *   (iii) id, prefix, namespace_iri are unique across sources
- *   (iv)  local-obo-with-path or ols4-without-path discipline, exercised
- *         by shipped data AND an inline negative fixture the schema rejects
- *   (v)   at least one enabled source and at least one local source
- *   (vi)  hardcode boundary: derive prefix list from registry and assert
- *         the literal '<PREFIX>:' does not appear in any non-test TS file
- *         under server/src or app/src
+ * Seven legs (from the brief + o1rfix):
+ *   (i)     registry parses as YAML and validates against the schema
+ *   (ii)    every enabled local-obo source's path exists AND parses to
+ *           >= 1 [Term] stanza whose id: equals that entry's declared root
+ *   (iii)   id, prefix, namespace_iri are unique across sources
+ *   (iv)    loader discipline: local-obo-with-path or ols4-without-path,
+ *           exercised by shipped data AND two inline negative fixtures
+ *   (v)     at least one enabled source and at least one local source
+ *   (v.bis) at least two enabled local-obo sources with distinct roots
+ *   (vi)    hardcode boundary: derive prefix list from registry and assert
+ *           the literal '<PREFIX>:' does not appear in any non-test TS/TSX
+ *           file under server/src or app/src
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -64,13 +65,13 @@ function parseObos(content: string): string[] {
   return ids;
 }
 
-// Helper: collect .ts files (excluding *.test.ts) recursively
+// Helper: collect .ts/.tsx files (excluding *.test.ts / *.test.tsx) recursively
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = resolve(dir, entry.name);
     if (entry.isDirectory()) out.push(...collectTsFiles(full));
-    else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+    else if (entry.isFile() && /\.(ts|tsx|mts|cts)$/.test(entry.name) && !/\.test\.(ts|tsx)$/.test(entry.name))
       out.push(full);
   }
   return out;
@@ -92,6 +93,7 @@ describe('Ontology Sources Registry', () => {
       const path = src.path as string;
       const root = src.root as string;
       expect(path, `${src.id}: path must exist`).toBeTruthy();
+      expect(existsSync(path), `${src.id}: path missing`).toBe(true);
       const content = readFileSync(path, 'utf8');
       const termIds = parseObos(content);
       expect(termIds.length, `${src.id}: >= 1 [Term]`).toBeGreaterThanOrEqual(1);
@@ -113,7 +115,7 @@ describe('Ontology Sources Registry', () => {
     expect(new Set(iris).size).toBe(iris.length);
   });
 
-  it('(iv) loader discipline: local-obo has path, ols4 has ols_key — data + negative fixture', () => {
+  it('(iv) loader discipline: local-obo has path, ols4 has ols_key — data + negative fixtures', () => {
     const registry = readRegistry();
     const { validator, schemaId } = buildValidator();
 
@@ -129,15 +131,15 @@ describe('Ontology Sources Registry', () => {
       }
     }
 
-    // Negative fixture: ols4 entry with a path must be rejected
-    const negFixture = {
+    // Negative fixture 1: ols4 entry with a path must be rejected
+    const negFixtureOls4WithPath = {
       version: '1.0',
       sources: [
         {
-          id: 'neg-fixture',
+          id: 'neg-fixture-1',
           prefix: 'NEG',
           namespace_iri: 'http://example.org/neg/',
-          display_name: 'Negative Fixture',
+          display_name: 'Negative Fixture 1',
           loader: 'ols4',
           enabled: true,
           ols_key: 'neg',
@@ -145,8 +147,25 @@ describe('Ontology Sources Registry', () => {
         },
       ],
     };
-    const negResult = validator.validate(negFixture, schemaId);
-    expect(negResult.valid, 'ols4-with-path fixture must be rejected').toBe(false);
+    const negResultOls4 = validator.validate(negFixtureOls4WithPath, schemaId);
+    expect(negResultOls4.valid, 'ols4-with-path fixture must be rejected').toBe(false);
+
+    // Negative fixture 2: local-obo entry without path/root must be rejected
+    const negFixtureLocalWithoutPath = {
+      version: '1.0',
+      sources: [
+        {
+          id: 'neg-fixture-2',
+          prefix: 'NEG',
+          namespace_iri: 'http://example.org/neg/',
+          display_name: 'Negative Fixture 2',
+          loader: 'local-obo',
+          enabled: true,
+        },
+      ],
+    };
+    const negResultLocal = validator.validate(negFixtureLocalWithoutPath, schemaId);
+    expect(negResultLocal.valid, 'local-obo-without-path-root fixture must be rejected').toBe(false);
   });
 
   it('(v) at least one enabled source and at least one local source', () => {
@@ -158,15 +177,24 @@ describe('Ontology Sources Registry', () => {
     expect(locals.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('(vi) hardcode boundary: prefix CURIE not in non-test TS files', () => {
+  it('(v.bis) at least two enabled local-obo sources with distinct roots', () => {
+    const registry = readRegistry();
+    const sources = registry.sources as Array<Record<string, unknown>>;
+    const enabledLocals = sources.filter((s) => s.loader === 'local-obo' && s.enabled === true);
+    expect(enabledLocals.length, 'at least two enabled local-obo sources').toBeGreaterThanOrEqual(2);
+    const roots = enabledLocals.map((s) => s.root as string);
+    expect(new Set(roots).size, 'distinct root values among enabled locals').toBeGreaterThanOrEqual(2);
+  });
+
+  it('(vi) hardcode boundary: prefix CURIE not in non-test TS/TSX files', () => {
     const registry = readRegistry();
     const sources = registry.sources as Array<Record<string, unknown>>;
     const prefixes = sources.map((s) => s.prefix as string);
 
     const serverTs = collectTsFiles(resolve(__dirname, '..'));
     const appDir = resolve(__dirname, '../../../app/src');
-    const appTs: string[] = [];
-    try { appTs.push(...collectTsFiles(appDir)); } catch { /* app/src may not exist */ }
+    expect(existsSync(appDir), 'app/src must exist for the hardcode boundary scan').toBe(true);
+    const appTs = collectTsFiles(appDir);
 
     for (const prefix of prefixes) {
       const literal = `${prefix}:`;
