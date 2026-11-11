@@ -2172,6 +2172,8 @@ export interface RoleBindingProposalsResponse {
   protocols: Array<{
     protocolId: string
     roles: RoleProposal[]
+    protocolNotFound?: boolean
+    reason?: string
   }>
   clarificationRequests?: Array<{ roleId?: string; prompt?: string }>
 }

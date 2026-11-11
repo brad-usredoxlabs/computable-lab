@@ -75,8 +75,10 @@ export function RoleBindingProposalsPanel({ runId }: RoleBindingProposalsPanelPr
     <section data-testid="role-binding-proposals" aria-label="Role binding proposals (read-only)" style={wrapStyle}>
       <h3 style={headingStyle}>Role bindings — proposals (read-only)</h3>
       {data.protocols.map((protocol) => (
-        <div key={protocol.protocolId} style={protocolStyle}>
-          <p style={protocolTitleStyle}>{protocol.protocolId}</p>
+        <div key={protocol.protocolId} style={protocolStyle} {...(protocol.protocolNotFound ? { 'data-protocol-not-found': '' } : {})}>
+          <p style={protocolTitleStyle}>
+            {protocol.protocolId}{protocol.reason ? <span style={metaStyle}> — {protocol.reason}</span> : ''}
+          </p>
           {protocol.roles.map((role) => {
             const prompt = data.clarificationRequests?.find((card) => card.roleId === role.roleId)?.prompt
             return (

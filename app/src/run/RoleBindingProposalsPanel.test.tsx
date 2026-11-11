@@ -127,4 +127,43 @@ describe('RoleBindingProposalsPanel', () => {
     await settle()
     expect(screen.queryByRole('alert')).not.toBeNull()
   })
+
+  it('renders protocolNotFound marker and reason for a missing protocol', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [
+        {
+          protocolId: 'MISSING-PROTO',
+          roles: [],
+          protocolNotFound: true,
+          reason: "protocol 'MISSING-PROTO' referenced by this run does not exist in the store",
+        },
+      ],
+    })
+    const { container } = render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => {
+      const marker = container.querySelector('[data-protocol-not-found]')
+      expect(marker).not.toBeNull()
+    })
+    expect(screen.getByText("protocol 'MISSING-PROTO' referenced by this run does not exist in the store")).toBeTruthy()
+    expect(screen.getByText('MISSING-PROTO')).toBeTruthy()
+  })
+
+  it('renders protocol-level reason when present alongside the protocol id', async () => {
+    mocks.getRoleBindingProposals.mockResolvedValue({
+      protocols: [
+        {
+          protocolId: 'PROTO-WITH-REASON',
+          roles: [],
+          reason: 'custom reason for this protocol',
+        },
+      ],
+    })
+    render(<RoleBindingProposalsPanel runId="run-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('PROTO-WITH-REASON')).toBeTruthy()
+      expect(screen.getByText('custom reason for this protocol')).toBeTruthy()
+    })
+  })
 })
