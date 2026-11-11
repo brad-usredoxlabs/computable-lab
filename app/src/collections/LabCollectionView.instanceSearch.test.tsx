@@ -26,6 +26,7 @@ vi.mock('../shared/api/client', () => ({
     listRecordsByKind: (...args: unknown[]) => listRecordsSpy(...args),
     getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }),
     getAccessPolicy: vi.fn().mockResolvedValue({ visibility: 'private', grants: [] }),
+    getSchema: vi.fn().mockResolvedValue({ schema: { properties: { location: { properties: { kind: { enum: ['cryobox', 'shelf', 'box'] } } } } } }),
   },
 }))
 
