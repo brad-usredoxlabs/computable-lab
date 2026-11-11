@@ -281,6 +281,50 @@ describe('RunProtocolStepsLoader', () => {
 
   // ---- Served box: tree-store reads via /ui/record + PLR localProtocolRef (D2) ----
 
+  it('follows localProtocolRef with type=local-protocol (served shape has kind=record) to inherited steps', async () => {
+    // The REAL served PLR payload carries kind:'record' (envelope tag) and
+    // type:'local-protocol' (discriminator). Testing kind === 'local-protocol'
+    // would be false, so discrimination MUST use type or the localProtocolRef key.
+    mocks.getRecord.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+    mocks.getRecordWithUI
+      .mockResolvedValueOnce(uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+      .mockResolvedValueOnce(uiRecord('PLR-1', {
+        localProtocolRef: { id: 'LPR-9', kind: 'record', type: 'local-protocol' },
+        bindings: {
+          labware: [{ roleId: 'deep-well-block', labwareInstanceRef: { kind: 'record', type: 'labware-instance', id: 'LABI-96A' } }],
+        },
+      }))
+      .mockResolvedValueOnce(uiRecord('LPR-9', { kind: 'local-protocol', inherits_from: { id: 'PRT-universal' } }))
+      .mockResolvedValueOnce(uiRecord('PRT-universal', stepsProtocolPayload))
+    const fetchMock = mockStepsEndpoint('/api/protocols/PRT-universal/steps')
+
+    const fetchUrls: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      fetchUrls.push(String(input))
+      if (String(input).includes('/api/protocols/PRT-universal/steps')) {
+        return new Response(JSON.stringify({ steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }] }), { status: 200 })
+      }
+      return new Response('Not Found', { status: 404 })
+    })
+
+    let readSteps: StepSummary[] = []
+    render(
+      <ProtocolSelectionProvider>
+        <RunProtocolStepsLoader runId="RUN-1" />
+        <StepsReader onSteps={(s) => (readSteps = s)} />
+      </ProtocolSelectionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(readSteps.map((s) => s.stepId)).toEqual(['s1'])
+    })
+    expect(readSteps[0]?.label).toBe('Lyse')
+    expect(fetchUrls).toContain('/api/protocols/PRT-universal/steps')
+    expect(fetchUrls).not.toContain('/api/protocols/LPR-9/steps')
+    expect(mocks.getRecordWithUI.mock.calls.map((c) => c[0])).toEqual(['RUN-1', 'PLR-1', 'LPR-9', 'PRT-universal'])
+    fetchMock.mockRestore()
+  })
+
   it('reads run + PLR via /ui/record and follows a PLR localProtocolRef to the inherited steps', async () => {
     // Served box (advc-c1 D2): the run envelope and its PLR are tree-store records —
     // /api/records/:id 404s for them, so the loader must read the /ui/record arm.

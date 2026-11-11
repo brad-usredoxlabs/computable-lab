@@ -89,15 +89,18 @@ async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | 
     // A specialized run's PLR names the LOCAL protocol it was specialized into under
     // `localProtocolRef`; `protocolRef`/`sourceRef` are the universal arms.
     const protoRef = (pp?.protocolRef ?? pp?.localProtocolRef ?? pp?.sourceRef) as
-      { id?: string; kind?: string; label?: string } | undefined
+      { id?: string; kind?: string; label?: string; type?: string } | undefined
     if (typeof protoRef?.id !== 'string') return null
     const attachedId = protoRef.id
     const label = typeof protoRef.label === 'string' ? protoRef.label : null
-    // `localProtocolRef` may omit `kind` — the key itself says the protocol is local.
-    const kind = typeof protoRef.kind === 'string'
-      ? protoRef.kind
-      : (pp?.localProtocolRef === protoRef ? 'local-protocol' : pp?.kind as string | undefined)
-    if (kind === 'local-protocol') {
+    // Discriminate a local protocol: the key is `localProtocolRef`, or
+    // the ref carries `type:'local-protocol'` (served shape has
+    // `kind:'record'` as envelope tag — never use kind for this).
+    // Keep `kind === 'local-protocol'` for legacy fixtures.
+    const isLocal = pp?.localProtocolRef === protoRef
+      || protoRef.type === 'local-protocol'
+      || protoRef.kind === 'local-protocol'
+    if (isLocal) {
       try {
         const lpResp = await apiClient.getRecordWithUI(attachedId)
         const lp = (lpResp.record?.payload ?? null) as Record<string, unknown> | null
