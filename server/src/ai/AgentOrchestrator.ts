@@ -2264,6 +2264,7 @@ export function createAgentOrchestrator(
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
         const turnToolStats: Array<{ name: string; durationMs: number; success: boolean }> = [];
+        const extraSubmissionNotes: string[] = [];
         const promptSize = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
         console.log(`[agent ${tid}] turn ${turn + 1} starting, promptChars=${promptSize}, docDiscussion=${isDocDiscussionTurn}`);
         onEvent?.({ type: 'status', message: isDocDiscussionTurn ? `Generating summary… (${Math.round(promptSize / 1024)} KB context)` : `Turn ${turn + 1}...` });
@@ -2673,7 +2674,11 @@ export function createAgentOrchestrator(
           // Fast path: the appliance usually returns the tool call as plain
           // content (its tool-call parser is off). Parse those args directly so
           // the common case costs ONE inference call, not two.
-          const rawInlineArgs = coerceDraftArgsFromContent(assistantMsg.content);
+          // C2: use recoverDraftArgsFromContent — the wrapper that also classifies
+          // HOW the draft was recovered (fenced-json / tool-envelope).
+          const recoveryResult = recoverDraftArgsFromContent(assistantMsg.content);
+          const rawInlineArgs = recoveryResult.args;
+          const recoveredFrom = recoveryResult.recoveredFrom;
           // The forced flow ships `agent_intent` as the terminal tool, so recovered
           // args must be callable AS that tool. Wrapping them as the compile-draft
           // tool produced a call no branch handled and the draft vanished with no
@@ -2701,9 +2706,13 @@ export function createAgentOrchestrator(
             onEvent?.({
               type: 'status',
               message: `Parsed the draft from the model's text (it did not emit a tool call); invoking ${inlineToolName}…`,
+              ...(recoveredFrom ? { recoveredFrom } : {}),
             });
+            if (recoveredFrom) {
+              extraSubmissionNotes.push(`recoveredFrom: ${recoveredFrom.driver}`);
+            }
             console.log(
-              `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
+              `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; driver=${recoveredFrom?.driver ?? 'none'}; skipped the second call`,
             );
           } else {
           // SH-QC-1S R1 (architect D2): the bounded zero-tool-call compliance
@@ -3002,7 +3011,6 @@ export function createAgentOrchestrator(
         // 3b. Terminal via submit_suggestion (#8): the agent finalized through
         // the structured output tool. Capture its args as the result directly —
         // no regex parse, grounded by the tool schema.
-        const extraSubmissionNotes: string[] = [];
         // ONE call is the contract ("call the agent_intent tool exactly once"),
         // and models break it: observed live, a turn carrying [create_record,
         // event_graph] lost the draft because the first match won and the rest
