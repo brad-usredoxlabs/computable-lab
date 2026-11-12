@@ -24,6 +24,6 @@ Tests  1 failed | 9 passed (10) — FAIL: "unknown onDelete action throws naming
 3. tsc --noEmit -p .: exit 0, zero lines output.
 4. git -c core.fileMode=false status --short: clean at exit (see below).
 
-Commit 1 (RED tests): b5ac97d2. Commit 2 (green loader + report): HEAD-OF-COMMIT-2.
+Commit 1 (RED tests): b5ac97d2. Commit 2 (green loader + report): 342263e55d7efe23a6d21640820dec12dcdcced9.
 
-L2-RECORD-DELETE-DEPENDENTS-1 UNIT delrefc3strict DONE PLACEHOLDER
+L2-RECORD-DELETE-DEPENDENTS-1 UNIT delrefc3strict DONE 342263e55d7efe23a6d21640820dec12dcdcced9
