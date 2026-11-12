@@ -105,4 +105,9 @@ None for this unit. Browser gate owns AC1/AC2/AC3 on :5193/:3093 after merge; th
 `config/journey/capabilities` directory does not exist yet (u4 seed unit), so the shipped default
 currently answers `capabilities: []` with one named diagnostic — by design, never a 500.
 
-L2-JOURNEY-CAPABILITY-CATALOGUE-1-u3route UNIT unit DONE 167119b91e715a076f959bdf2563aba412667007
+Commit 444d120d6ddacdd0785d6b951f4c7f829c1c070d is the commit whose tree first carries this report
+(its parent chain holds the u3route code commits 167119b91e715a076f959bdf2563aba412667007 and
+cc139097); the marker token order and sha below were corrected in this follow-up commit, which
+changes no product file.
+
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT 3 DONE 444d120d6ddacdd0785d6b951f4c7f829c1c070d
