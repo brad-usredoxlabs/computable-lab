@@ -1,0 +1,86 @@
+# UI specification for Vendor Product records (L2-DOC-INTAKE-1 g1viewable).
+# Without this sibling every vendor product rendered UI_SPEC_NOT_FOUND: the
+# record path resolves its spec by schemaId (UIHandlers.ts:236) and had none.
+# This is a VIEW of the finished intake, never an editor: the item's contract
+# is propose-never-write, so every field is readonly.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "material"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      readonly: true
+    - path: "$.vendor"
+      widget: "text"
+      label: "Vendor"
+      readonly: true
+    - path: "$.catalog_number"
+      widget: "text"
+      label: "Catalog number"
+      readonly: true
+    - path: "$.grade"
+      widget: "text"
+      label: "Grade"
+      readonly: true
+    - path: "$.formulation"
+      widget: "text"
+      label: "Formulation"
+      readonly: true
+    - path: "$.status"
+      widget: "text"
+      label: "Status"
+      readonly: true
+    - path: "$.product_url"
+      widget: "text"
+      label: "Product URL"
+      readonly: true
+  - title: "Documents"
+    fields:
+    - path: "$.documents[*].title"
+      widget: "text"
+      label: "Document"
+      readonly: true
+    - path: "$.documents[*].document_kind"
+      widget: "text"
+      label: "Document kind"
+      readonly: true
+    - path: "$.documents[*].file_ref.media_type"
+      widget: "text"
+      label: "Media type"
+      readonly: true
+    - path: "$.documents[*].extraction.method"
+      widget: "text"
+      label: "Extraction method (per document)"
+      readonly: true
+    - path: "$.documents[*].extraction.page_count"
+      widget: "number"
+      label: "Page count"
+      readonly: true
+  - title: "Composition drafts"
+    fields:
+    - path: "$.composition_drafts[*].status"
+      widget: "text"
+      label: "Draft status"
+      readonly: true
+    - path: "$.composition_drafts[*].extraction_method"
+      widget: "text"
+      label: "Draft extraction method"
+      readonly: true
