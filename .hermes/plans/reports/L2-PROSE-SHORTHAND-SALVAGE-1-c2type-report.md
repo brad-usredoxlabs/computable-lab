@@ -154,7 +154,10 @@ opened for edit. No dependency installs, no scaffolding, no server started. Scra
 
 Fix run on this same unmerged lineage (`reviews/L2-PROSE-c2type-advc-c1-l2t0400.md` → VERDICT: FIX (4)).
 Product code byte-identical at exit (`sha256sum -c` OK for `AgentOrchestrator.ts` and `types.ts`); the
-diff `34a48a74..HEAD` names exactly 3 paths (two test files, this report) — 28 insertions / 11 deletions.
+diff `34a48a74..HEAD` names exactly 3 paths (two test files, this report) — 15 of the inserted lines are
+test-file changes (one annotation, two filter predicates, one comment); the rest is this mandated report
+section. **Budget honesty:** total insertions exceed the brief's ≤40-line output budget (66 at the fix
+commits `34a48a74..9cfa3f83`, plus this addendum); declared with the real count, not restated as met.
 
 - **D1 (MAJOR, false committed claim) — FIXED.** The comment at
   `AgentOrchestrator.shorthandChat.test.ts:322` and the §Measurement-nuance paragraph above no longer
@@ -181,6 +184,8 @@ $ cd server && npx vitest run src/ai/recoveredFrom.test.ts src/ai/AgentOrchestra
 $ cd server && npx tsc --noEmit -p .  ->  TSC_EXIT=0, error lines: 0 (equal to baseline)
 $ git -c core.fileMode=false status --short  ->  empty
 $ git diff --name-status 34a48a74..HEAD  ->  exactly the 3 paths above
+$ git diff --shortstat 34a48a74..9cfa3f83  ->  3 files changed, 66 insertions(+), 12 deletions(-)
+   # the three fix commits; this report addendum accounts for the remainder of the total
 ```
 Marker-count note (honesty): this file now carries two `DONE <40-hex>` lines — the `c2type` contract
 literal below (D3) and the launcher-appended `c2typefix1` exit literal. The brief's "exactly 1" probe
@@ -188,3 +193,5 @@ predates the launcher's appended exit contract, which demands its own literal; b
 Cited sha `9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515` = last fix commit, ancestor of HEAD.
 
 L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2type DONE 9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515
+
+L2-PROSE-SHORTHAND-SALVAGE-1-c2typefix1 UNIT unit DONE 9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515
