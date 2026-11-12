@@ -234,9 +234,12 @@ export function extractProposals(
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
-        // Multi-segment line: match keywords against segment labels
+        // Multi-segment line: match keywords against segment labels.
+        // gate g4 D1+D2: a colon-less segment (label === value) is page chrome
+        // (nav labels, table header cells), never a field value — it stays
+        // available to header detection and positional extraction only.
         for (const seg of segments) {
-          if (keywords.some((kw) => labelMatches(seg.label, kw))) {
+          if (seg.label !== seg.value && keywords.some((kw) => labelMatches(seg.label, kw))) {
             rawValue = seg.value;
             break;
           }
