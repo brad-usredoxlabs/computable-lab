@@ -243,8 +243,10 @@ RecordHostPage, so that chunk graph is never evaluated there.
 
 ## Step 3 — repair / pin
 
-REPAIR LANDED (owned file: app/src/event-editor/viewer/pdf/usePdfDocument.ts,
-~46 changed lines; test-file touch-up ~28 lines; net product delta +12).
+REPAIR LANDED (owned file: app/src/event-editor/viewer/pdf/usePdfDocument.ts:
+70 changed lines, +44/-26, net +18; plus a NEW 141-line test file
+app/src/App.routeReal.record.test.tsx (status A, not a touch-up). Measured
+verbatim from `git diff --numstat 9911a2d2..HEAD`.)
 
 Root cause: static `import * as pdfjsLib from 'pdfjs-dist'` (line 15) put the
 pdf.js runtime — which executes `new DOMMatrix()` at module scope in
@@ -300,5 +302,4 @@ L2-DOC-INTAKE-2-RECORDCHUNKSPLIT.
 - App.url.test.tsx unmodified and 6/6.
 - Worktree clean at exit (git status empty; app/node_modules is git-ignored).
 
-L2-DOC-INTAKE-1 d5attr UNIT DONE a6909375017b98b1bb4a12280dd2f0d235a14980
-L2-DOC-INTAKE-1-d5attr2 UNIT unit DONE a6909375017b98b1bb4a12280dd2f0d235a14980
+L2-DOC-INTAKE-1-d5attr2 UNIT d5attr2 DONE a6909375017b98b1bb4a12280dd2f0d235a14980
