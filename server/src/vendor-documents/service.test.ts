@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildVendorDocumentExtraction } from './service.js';
 import {
   shapeDocumentResult,
@@ -269,5 +269,144 @@ describe('document result shaping', () => {
       title: 'Assay Protocol',
       sourceUrl: 'https://example.com/assay.pdf',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PDF arm delegates the page/OCR decision to the shared intake seam
+// (L2-DOC-INTAKE-1 unit 4). No binaries and no real PDF bytes: the injected
+// readPageTexts/ocrPage own everything the shared seam would shell out for.
+// ---------------------------------------------------------------------------
+
+const PDF_PAGE_1_TEXT = [
+  'RPMI 1640 formulation sheet (vendor product document)',
+  'Glucose 2 g/L',
+  'Sodium bicarbonate 2 g/L',
+].join('\n');
+
+function pdfUpload(): { fileName: string; mediaType: string; contentBase64: string } {
+  return {
+    fileName: 'formulation.pdf',
+    mediaType: 'application/pdf',
+    contentBase64: Buffer.from('bytes that are not a real PDF').toString('base64'),
+  };
+}
+
+describe('pdf extraction delegates to the shared intake service', () => {
+  it('OCRs only the page without a text layer and records the method per page', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'HEPES 4.77 g/L',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: '' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 2 },
+      extraction: {
+        method: 'ocr',
+        page_count: 2,
+        ocr_attempted: true,
+        ocr_available: true,
+      },
+    });
+    expect(ocrPage).toHaveBeenCalledTimes(1);
+    expect(ocrPage).toHaveBeenCalledWith(expect.any(String), 2, expect.anything());
+
+    const draft = result.draft as { items: Array<{ component_name: string; source_page: number }> };
+    expect(draft.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ component_name: 'HEPES', source_page: 2 }),
+      ]),
+    );
+  });
+
+  it('keeps a text-layer-only PDF on pdf_text and never calls OCR', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'unexpected OCR text',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: 'L-Glutamine 2 mM\nHEPES 4.77 g/L' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 2 },
+      extraction: {
+        method: 'pdf_text',
+        ocr_attempted: false,
+        ocr_available: false,
+      },
+    });
+    expect(ocrPage).not.toHaveBeenCalled();
+  });
+
+  // Adversarial c1 defect: a PDF whose fileName carries no `.pdf` suffix must
+  // still be extracted on the strength of its mediaType. Before the fix the
+  // temp file kept the suffixless name, so the shared seam
+  // (extractDocumentPages, which decides on `extension !== '.pdf'`) returned
+  // UNSUPPORTED and the arm reported method 'failed'.
+  it('extracts a PDF whose fileName has no .pdf suffix when mediaType says application/pdf', async () => {
+    const result = await buildVendorDocumentExtraction(
+      { ...pdfUpload(), fileName: 'spec-sheet-no-suffix' },
+      {
+        readPageTexts: async () => ({
+          pages: [{ page: 1, text: PDF_PAGE_1_TEXT }],
+          diagnostics: [],
+        }),
+        ocrPage: async () => ({ text: 'unexpected OCR text', diagnostics: [] }),
+        probeTool: async () => true,
+        loadOcrConfig: async () => ({
+          executable: 'tesseract',
+          language: 'eng',
+          timeoutSeconds: 30,
+          rasterizer: 'pdftoppm',
+          dpi: 200,
+          maxPages: 10,
+        }),
+      },
+    );
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 1 },
+      extraction: { method: 'pdf_text', page_count: 1 },
+    });
+    expect((result.document as { extraction: { method: string } }).extraction.method)
+      .not.toBe('failed');
   });
 });

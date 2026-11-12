@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, extname } from 'node:path';
+import { join, extname, basename } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { RecordStore } from '../store/types.js';
 import { createEnvelope } from '../types/RecordEnvelope.js';
 import { parseConcentration, type Concentration } from '../materials/concentration.js';
 import { extractVendorFormulationHtml } from '../ingestion/adapters/vendorFormulationHtml.js';
+import { extractDocumentPages } from '../ingestion/documentIntake.js';
+import type { DocumentIntakeOptions } from '../ingestion/documentIntake.js';
 import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from './protocolIdeVendors.js';
 import { isCuratedVendor } from './protocolIdeVendors.js';
 import { getCuratedVendorRegistry } from '../registry/CuratedVendorRegistry.js';
@@ -156,41 +158,57 @@ async function commandAvailable(command: string): Promise<boolean> {
   }
 }
 
-async function extractPdfPages(tempFile: string): Promise<{ pages: ExtractedPage[]; method: ExtractionMethod; ocrAttempted: boolean; ocrAvailable: boolean }> {
-  const pdfInfoStdout = await execFileAsync('pdfinfo', [tempFile]).then((result) => result.stdout).catch(() => '');
+/**
+ * Per-page text layer via `pdftotext -layout` (page count still from
+ * `pdfinfo`). Deliberately NOT the shared seam's pdf-parse default:
+ * `buildDraftItems` parses composition TABLE COLUMNS, which `-layout`
+ * preserves. Changing the text engine is a separate, measurable decision.
+ */
+async function readLayoutPageTexts(filePath: string) {
+  const pdfInfoStdout = await execFileAsync('pdfinfo', [filePath]).then((result) => result.stdout).catch(() => '');
   const pageCountMatch = pdfInfoStdout.match(/^Pages:\s+(\d+)/m);
   const pageCount = pageCountMatch ? Number(pageCountMatch[1]) : 1;
-  const pages: ExtractedPage[] = [];
+  const pages: Array<{ page: number; text: string }> = [];
   for (let page = 1; page <= Math.max(1, pageCount); page += 1) {
-    const { stdout } = await execFileAsync('pdftotext', ['-layout', '-f', String(page), '-l', String(page), tempFile, '-']);
-    pages.push({ pageNumber: page, text: stdout || '' });
+    const { stdout } = await execFileAsync('pdftotext', ['-layout', '-f', String(page), '-l', String(page), filePath, '-']);
+    pages.push({ page, text: stdout || '' });
   }
-  const mergedTextLength = pages.reduce((sum, page) => sum + page.text.trim().length, 0);
-  if (mergedTextLength > 40) {
-    return { pages, method: 'pdf_text', ocrAttempted: false, ocrAvailable: await commandAvailable('tesseract') };
-  }
-  const tesseractAvailable = await commandAvailable('tesseract');
-  const pdftoppmAvailable = await commandAvailable('pdftoppm');
-  if (!tesseractAvailable || !pdftoppmAvailable) {
-    return { pages, method: 'pdf_text', ocrAttempted: false, ocrAvailable: tesseractAvailable };
-  }
-  const tempDir = await mkdtemp(join(tmpdir(), 'vendor-doc-ocr-'));
-  try {
-    const prefix = join(tempDir, 'page');
-    await execFileAsync('pdftoppm', ['-png', tempFile, prefix]);
-    const imagePages: ExtractedPage[] = [];
-    for (let page = 1; page <= Math.max(1, pageCount); page += 1) {
-      const fileName = `${prefix}-${page}.png`;
-      const { stdout } = await execFileAsync('tesseract', [fileName, 'stdout']);
-      imagePages.push({ pageNumber: page, text: stdout || '' });
-    }
-    return { pages: imagePages, method: 'ocr', ocrAttempted: true, ocrAvailable: true };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
+  return { pages, diagnostics: [] };
 }
 
-async function extractTextPages(upload: VendorDocumentUpload): Promise<{ pages: ExtractedPage[]; method: ExtractionMethod; ocrAttempted: boolean; ocrAvailable: boolean }> {
+/**
+ * L2-DOC-INTAKE-1 u4: the page/OCR decision belongs to the shared seam
+ * (`extractDocumentPages`), which reads the text layer first and OCRs ONLY the
+ * pages without one. This function only maps its per-page result onto the
+ * vendor-document consumer contract; it must never re-introduce a
+ * whole-document `mergedTextLength` shortcut.
+ */
+async function extractPdfPages(
+  tempFile: string,
+  options: DocumentIntakeOptions = {},
+): Promise<{ pages: ExtractedPage[]; method: ExtractionMethod; ocrAttempted: boolean; ocrAvailable: boolean }> {
+  const result = await extractDocumentPages(tempFile, {
+    readPageTexts: () => readLayoutPageTexts(tempFile),
+    ...options,
+  });
+  const pages: ExtractedPage[] = result.pages.map((page) => ({ pageNumber: page.page, text: page.text }));
+  const ocrAttempted = result.pages.some((page) => page.method === 'ocr');
+  const tools = Object.values(result.toolsAvailable);
+  return {
+    pages,
+    method: pages.length === 0 ? 'failed' : ocrAttempted ? 'ocr' : 'pdf_text',
+    ocrAttempted,
+    // Declared narrowing: "was OCR required and available for THIS document",
+    // not "is tesseract installed on the host". A text-layer-only PDF records
+    // ocr_available: false (no probe runs).
+    ocrAvailable: tools.length > 0 && tools.every(Boolean),
+  };
+}
+
+async function extractTextPages(
+  upload: VendorDocumentUpload,
+  options: DocumentIntakeOptions = {},
+): Promise<{ pages: ExtractedPage[]; method: ExtractionMethod; ocrAttempted: boolean; ocrAvailable: boolean }> {
   const buffer = upload.contentBase64 ? Buffer.from(upload.contentBase64, 'base64') : null;
   const mediaType = upload.mediaType.toLowerCase();
   const extension = extname(upload.fileName).toLowerCase();
@@ -207,10 +225,19 @@ async function extractTextPages(upload: VendorDocumentUpload): Promise<{ pages: 
   }
   if (mediaType === 'application/pdf' || extension === '.pdf') {
     const tempDir = await mkdtemp(join(tmpdir(), 'vendor-doc-pdf-'));
-    const tempFile = join(tempDir, upload.fileName || 'document.pdf');
+    // The shared seam (extractDocumentPages) decides "is this a PDF?" from the
+    // file extension alone, so the temp name must carry `.pdf` whenever the PDF
+    // arm was chosen — a PDF uploaded as "spec" with mediaType application/pdf
+    // would otherwise be rejected as UNSUPPORTED. basename() keeps the original
+    // name as a basename and strips any path separators before join().
+    const tempBaseName = basename(upload.fileName || '');
+    const tempFile = join(
+      tempDir,
+      (tempBaseName || 'document') + (extname(tempBaseName).toLowerCase() === '.pdf' ? '' : '.pdf'),
+    );
     try {
       await writeFile(tempFile, buffer);
-      return await extractPdfPages(tempFile);
+      return await extractPdfPages(tempFile, options);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -294,7 +321,10 @@ function buildHtmlCompositionDrafts(args: {
     });
 }
 
-export async function buildVendorDocumentExtraction(upload: VendorDocumentUpload): Promise<VendorDocumentExtractionResult> {
+export async function buildVendorDocumentExtraction(
+  upload: VendorDocumentUpload,
+  options: DocumentIntakeOptions = {},
+): Promise<VendorDocumentExtractionResult> {
   const now = new Date().toISOString();
   const buffer = upload.contentBase64 ? Buffer.from(upload.contentBase64, 'base64') : null;
   const documentRefId = documentId(upload.fileName);
@@ -337,7 +367,7 @@ export async function buildVendorDocumentExtraction(upload: VendorDocumentUpload
       ...(drafts.length > 0 ? { drafts } : {}),
     };
   }
-  const extraction = await extractTextPages(upload);
+  const extraction = await extractTextPages(upload, options);
   const combinedText = extraction.pages.map((page) => page.text).join('\n\n');
   const items = buildDraftItems(extraction.pages);
   const documentRecord: Record<string, unknown> = {
