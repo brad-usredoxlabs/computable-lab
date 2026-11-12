@@ -13,7 +13,6 @@ header table fills both topology fields from the declared keywords". Fixture exa
 `topology.columns` value `'12'`, and no other `topology.*` targetField. Imports, file header
 and both existing legs unchanged. Production TS and all YAML byte-identical.
 GREEN at HEAD (missing witness, not a live bug): 3 passed (3), baseline 2 passed (2).
-
 ## Mutation probe (raw)
 Edit at `SpecSheetExtractor.ts:208` only:
   -    const kw = keywordsFor(mapping);
