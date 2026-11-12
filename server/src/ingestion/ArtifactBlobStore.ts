@@ -18,8 +18,25 @@ import type { RecordStore } from '../store/types.js';
 
 const DATA_REF_SCHEMA = 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml';
 
-function safeName(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'artifact.bin';
+/**
+ * Reduce an input to ONE safe path segment. Separators and spaces collapse to
+ * '-', dot runs collapse to one dot (so '..' never survives), and leading or
+ * trailing dots/hyphens are stripped (so '.' and '..' cannot be a whole
+ * segment). An empty result falls back so the segment is always present.
+ */
+function safeSegment(value: string, fallback = 'artifact'): string {
+  const segment = value
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[.-]+|[.-]+$/g, '');
+  return segment || fallback;
+}
+
+/** A prefix is a single device-relative segment, validated once at construction. */
+function assertPrefix(prefix: string): void {
+  if (prefix.length === 0 || prefix === '.' || prefix === '..' || /[/\\]/.test(prefix)) {
+    throw new Error(`ArtifactBlobStore prefix must be a single non-empty path segment, got '${prefix}'`);
+  }
 }
 
 function formatForPath(path: string): string {
@@ -56,7 +73,9 @@ export class ArtifactBlobStore {
     private readonly prefix: string,
     private readonly recorder: ArtifactBlobStoreRecorder,
     private readonly legacy?: LegacyArtifactBlobStore,
-  ) {}
+  ) {
+    assertPrefix(prefix);
+  }
 
   /**
    * Resolve the default device LAZILY (inside save()/loadBase64()). Boot must
@@ -75,8 +94,8 @@ export class ArtifactBlobStore {
     contentBase64: string;
   }): Promise<ArtifactBlobStoreResult> {
     const { provider, deviceId } = this.resolveDevice();
-    const fileName = safeName(args.fileName ?? `${args.artifactId}.bin`);
-    const storedPath = join(this.prefix, args.artifactId, fileName);
+    const fileName = safeSegment(args.fileName ?? `${args.artifactId}.bin`, 'artifact.bin');
+    const storedPath = join(this.prefix, safeSegment(args.artifactId), fileName);
     const buffer = Buffer.from(args.contentBase64, 'base64');
     const sha256 = createHash('sha256').update(buffer).digest('hex');
 
@@ -140,7 +159,7 @@ export class LegacyArtifactBlobStore {
     fileName?: string;
     contentBase64: string;
   }): Promise<{ storedPath: string; sha256: string; sizeBytes: number }> {
-    const fileName = safeName(args.fileName ?? `${args.artifactId}.bin`);
+    const fileName = safeSegment(args.fileName ?? `${args.artifactId}.bin`, 'artifact.bin');
     const storedPath = join(this.storageRootRelative, args.artifactId, fileName);
     const absolutePath = this.absolutePath(storedPath);
     const buffer = Buffer.from(args.contentBase64, 'base64');
@@ -185,7 +204,9 @@ export function createArtifactBlobStoreRecorder(store: RecordStore): ArtifactBlo
     }
     const drefId = `DREF-${String(max + 1).padStart(6, '0')}`;
 
-    // Build payload — conditionals for optional fields (exactOptionalPropertyTypes)
+    // format is always a non-empty string ('bin' when the name has no extension),
+    // so it is emitted unconditionally — there is no exactOptionalPropertyTypes
+    // absent/undefined case to guard here.
     const format = formatForPath(input.fileName);
     const drefPayload: Record<string, unknown> = {
       kind: 'data-reference',
@@ -196,7 +217,7 @@ export function createArtifactBlobStoreRecorder(store: RecordStore): ArtifactBlo
       contentHash: input.contentHash,
       sizeBytes: input.sizeBytes,
       dataKind: 'binary',
-      ...(format ? { format } : {}),
+      format,
       acquiredAt: new Date().toISOString(),
     };
 
