@@ -174,3 +174,8 @@ below; config/ untouched).
    AC3 probe by editing one `path:` in the lane config (read per query, revert
    after, `git status` clean); AC3b conformance 7/7 (already green here).
 3. Decide AC2 ownership per the scope-conflict note above.
+
+This report body is carried by commit 82a761ad7ebc8f59808e97ad697bf7e35a380924;
+the served code revision remains ee733e2b1c02f0882df2d8a390523d0011fa7952.
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT o2b DONE 82a761ad7ebc8f59808e97ad697bf7e35a380924
