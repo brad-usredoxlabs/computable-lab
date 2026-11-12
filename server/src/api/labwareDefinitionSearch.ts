@@ -15,6 +15,7 @@
  * existing hyphen/underscore fold; every query token must appear.
  */
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
+import { lookupLabwareClass } from '../resolve/bindings/labwareTypeBinding.js';
 import type { RecordStore } from '../store/types.js';
 
 export interface LabwareDefinitionSearchHit {
@@ -39,6 +40,12 @@ export interface LabwareDefinitionSearchHit {
   render_hints?: { profile?: string; linear_well_style?: string };
   physical_geometry?: { overall_dimensions_mm?: { length?: number; width?: number; height?: number } };
   legacy_labware_types?: string[];
+  /**
+   * Ontology class for this definition's labware type, mapped by the shipped
+   * bindings file. ABSENT (not null, not '') when the data maps the type to
+   * null or has no entry — a definition with no anchor shows no anchor.
+   */
+  lwoClass?: string;
 }
 
 export interface LabwareDefinitionSearchOptions {
@@ -84,6 +91,14 @@ function toHit(def: DefinitionLike, fallbackRecordId?: string): LabwareDefinitio
     hit.physical_geometry = def.physical_geometry as NonNullable<LabwareDefinitionSearchHit['physical_geometry']>;
   if (Array.isArray(def.legacy_labware_types))
     hit.legacy_labware_types = def.legacy_labware_types as string[];
+  // Anchor the hit on the FIRST legacy type only; the mapping is data (see
+  // config/ontology-bindings.yaml). A null/unknown mapping leaves the key
+  // absent — exactOptionalPropertyTypes forbids assigning undefined/null here.
+  const anchorType = Array.isArray(def.legacy_labware_types) ? def.legacy_labware_types[0] : undefined;
+  if (typeof anchorType === 'string') {
+    const binding = lookupLabwareClass(anchorType);
+    if (binding?.lwoClass) hit.lwoClass = binding.lwoClass;
+  }
   return hit;
 }
 
