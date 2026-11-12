@@ -167,7 +167,8 @@ git -c core.fileMode=false status --short                                       
 - `6bb20b73` L2-JOURNEY-DOC-1 u2ui: trim to output budget (282 lines <= 300); behavior/assertions unchanged
 - `f0525485` L2-JOURNEY-DOC-1 u2ui: add unit report (this file in tree)
 - `15955663` L2-JOURNEY-DOC-1 u2ui: exit marker attempt (marker line text botched by sed; see next)
-- `<final>` L2-JOURNEY-DOC-1 u2ui: fix marker line to name f05254855a0af9a629b80e9df8c2a889146ccd9d
+- `bdad09b6` L2-JOURNEY-DOC-1 u2ui: fix exit marker line to name f05254855a0af9a629b80e9df8c2a889146ccd9d
+- `<final>` L2-JOURNEY-DOC-1 u2ui: paste rev-parse HEAD next to the marker
 
 ## Decisions
 
@@ -188,5 +189,10 @@ git -c core.fileMode=false status --short                                       
 - No remaining blockers on this unit.
 
 L2-JOURNEY-DOC-1 UNIT u2ui DONE f05254855a0af9a629b80e9df8c2a889146ccd9d
-# git rev-parse HEAD at marker commit time:
-# (pasted below after the final commit is made)
+# git rev-parse HEAD at marker commit time (C3, which made this marker line):
+# bdad09b6986ac68167bcf3584c6f10a484dbb130
+# f05254855a0af9a629b80e9df8c2a889146ccd9d is verified to contain this report:
+#   git cat-file -e f05254855a0af9a629b80e9df8c2a889146ccd9d:.hermes/plans/deliverables/L2-JOURNEY-DOC-1-u2ui-report.md  # → OK
+
+## Exit note
+Tree clean at exit: the unit commits are a7b4787c (RED), d6c12125 (GREEN), 6bb20b73 (budget trim), f0525485 (report in tree), 15955663 (marker attempt), bdad09b6 (marker fixed; `git rev-parse HEAD` at that commit: bdad09b6986ac68167bcf3584c6f10a484dbb130). This closing note is the only change after bdad09b6; if the launcher auto-commits it, the marker line above remains authoritative.
