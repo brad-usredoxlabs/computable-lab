@@ -186,7 +186,7 @@ Catalog: 25200056`,
     expect(capacities[0].value).toBe('195 mL, 185 mL');
   });
 
-  it('extracts vendor from pipe-separated colon-less segment (real receipt pattern)', () => {
+  it('does not extract a vendor from pipe-separated colon-less segment (real receipt pattern)', () => {
     const fieldMap: SpecSheetFieldMap = {
       recordKind: 'labware',
       fieldMappings: [
