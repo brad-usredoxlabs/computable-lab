@@ -321,6 +321,17 @@ export function LabLabwareNewPage() {
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
       const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
+      // Named refusal before the POST: Ajv on the server stays the sole validator,
+      // but a payload that cannot satisfy the schema's required fields is refused
+      // here by field name instead of round-tripping a 422.
+      if (info.schema && typeof info.schema === 'object') {
+        const invalid: string[] = []
+        collectInvalidRequiredPaths(info.schema as Record<string, unknown>, payload, [], invalid)
+        if (invalid.length > 0) {
+          setErrorMessage(`Cannot save: missing or invalid: ${invalid.join(', ')}`)
+          return
+        }
+      }
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {
