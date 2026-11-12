@@ -109,6 +109,7 @@ import { seedBiologicalTerms } from './terms/seedBiologicalTerms.js';
 import { ensureSeedProtocols } from './protocols/seedProtocols.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
+import { reloadSchemaSurface } from './config/reloadSchemaSurface.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
 import { ChatHandlers } from './api/handlers/ChatHandlers.js';
 import { registerRoutes } from './api/routes.js';
@@ -249,6 +250,9 @@ function labProfileFor(ctx: AppContext, appConfig?: AppConfig): LabProfile | und
  * Application context holding all initialized components.
  */
 export interface AppContext {
+  /** When this process loaded its configuration — used by /api/admin/reload to tell whether a
+   *  boot-only surface (lifecycles, policy bundles, registry) changed since boot. */
+  bootedAt: Date;
   schemaRegistry: SchemaRegistry;
   validator: AjvValidator;
   lintEngine: LintEngine;
@@ -366,6 +370,11 @@ export async function initializeApp(
     appConfig = { ...DEFAULT_APP_CONFIG };
   }
   
+  // Boot timestamp: /api/admin/reload uses it to decide whether a BOOT-ONLY surface
+  // (lifecycles, policy bundles, registry) changed since this process started — those are not
+  // re-entrant, so the reload reports them as requiring a restart instead of pretending.
+  const bootedAt = new Date();
+
   // Initialize schema registry
   const schemaRegistry = createSchemaRegistry();
   
@@ -672,6 +681,7 @@ export async function initializeApp(
   console.log(`App initialized`);
 
   const ctx: AppContext = {
+    bootedAt,
     schemaRegistry,
     validator,
     lintEngine,
@@ -721,6 +731,11 @@ export async function createServer(
   config: ServerConfig = {}
 ): Promise<ReturnType<typeof Fastify>> {
   const opts = { ...DEFAULT_CONFIG, ...config };
+
+  // Process boot time for /api/admin/reload: boot-only surfaces (lifecycles, policy bundles,
+  // registry) are loaded once in initializeApp and are not re-entrant, so the reload compares their
+  // file mtimes against this and reports them as requiring a restart instead of pretending.
+  const bootedAt = ctx.bootedAt ?? new Date();
   
   // Create Fastify instance
   const fastify = Fastify({
@@ -1657,6 +1672,17 @@ export async function createServer(
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),
+      // POST /api/admin/reload — re-read schemas/lint/UI specs over the LIVE instances so a YAML
+      // change no longer needs a restart (Brad 2026-11-12). Boot-only surfaces are reported back.
+      reloadSurface: () =>
+        reloadSchemaSurface({
+          schemaDir: ctx.schemaDir,
+          schemaRegistry: ctx.schemaRegistry,
+          validator: ctx.validator,
+          lintEngine: ctx.lintEngine,
+          uiSpecLoader: ctx.uiSpecLoader,
+          bootedAt,
+        }),
     };
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.aiThreadHandlers = aiThreadHandlers;
