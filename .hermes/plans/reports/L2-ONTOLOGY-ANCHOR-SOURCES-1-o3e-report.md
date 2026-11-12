@@ -27,10 +27,11 @@ new cases appended before the last existing case).
 
 - schema/lab/equipment.schema.yaml — pattern `^(CL|LEQ):`, comment updated to
   name LEQ and the allowlist rationale.
-- server/src/schema/EquipmentFirstClass.test.ts — two appended cases:
-  (a) accepts `EQP-WATER-BATH-LEQ` with `{ kind: 'ontology', id: 'LEQ:0000100',
-  namespace: 'LEQ', label: 'Water Bath' }`;
-  (b) rejects `OBI:0000112` and asserts a `pattern` error at
+- server/src/schema/EquipmentFirstClass.test.ts — three appended cases:
+  (a) accepts `EQP-LEQ-ROOT` with `{ kind: 'ontology', id: 'LEQ:0000100',
+  namespace: 'LEQ', label: 'lab equipment' }`;
+  (b) accepts `EQP-CL-ANCHORED` with `CL:0000182` (CL half of the allowlist);
+  (c) rejects `OBI:0000112` and asserts a `pattern` error at
   `/equipmentClassRef/id`.
 
 ## Verification (raw)
@@ -82,4 +83,17 @@ package-lock sha b992230e…), and `server/schema -> ../schema` was created
 
 O4 (bindings file consumption) and O5 (boot wiring) remain separate units.
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-o3e UNIT unit DONE ea7ee649dfc59cc3e76f90eb55b698af51468df4
+## Fix1 — advc c1 MINORs D1/D2/D3 (no production change)
+
+- D1 marker token corrected to the unit id (this line, below).
+- D2 added the CL: pin: `CL:0000182` still validates after the pattern widened
+  to `^(CL|LEQ):`. Probe (temp file, deleted): forcing `^LEQ:` makes that CL
+  pin RED with `pattern` at `/equipmentClassRef/id`; forcing `^CL:` makes the
+  LEQ pin RED — both halves are load-bearing.
+- D3 the LEQ fixture no longer claims "Water Bath": `LEQ:0000100` is the LEO
+  root, `name: lab equipment` (leq.base.obo:45-46). Test id/name/label now say so.
+
+    ✓ src/schema/EquipmentFirstClass.test.ts  (10 tests)
+         Tests  10 passed (10)
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o3e UNIT o3e DONE ea7ee649dfc59cc3e76f90eb55b698af51468df4
