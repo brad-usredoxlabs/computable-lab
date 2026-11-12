@@ -56,4 +56,3 @@ contract, both naming commit A: the item-token line is COMMIT DISCIPLINE commit 
 line is the launcher EXIT CONTRACT marker (the launcher greps the newest report for it).
 
 L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u2loader-fix1 DONE acffe46aa04539ba70472bdd686fd2c81404ab35
-L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2loader-fix1 UNIT unit DONE acffe46aa04539ba70472bdd686fd2c81404ab35
