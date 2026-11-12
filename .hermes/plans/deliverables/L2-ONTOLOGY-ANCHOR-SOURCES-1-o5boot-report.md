@@ -70,3 +70,5 @@ Lane 2 stack :3093 left untouched and still answers 200; scratch dir deleted.
 Tree: `git -c core.fileMode=false status --short` → clean at exit.
 
 STATUS: complete
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o5boot UNIT unit DONE bff41f407e5c3b4863d12494e8ec90af842c0be7
