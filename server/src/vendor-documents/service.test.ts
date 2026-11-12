@@ -339,6 +339,39 @@ describe('pdf extraction delegates to the shared intake service', () => {
     );
   });
 
+  it('records the extraction method per page, not only for the document', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'HEPES 4.77 g/L',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: '' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    const extraction = (result.document as { extraction: { pages?: unknown } }).extraction;
+    expect(extraction.pages).toEqual([
+      { page_number: 1, method: 'pdf_text' },
+      { page_number: 2, method: 'ocr' },
+    ]);
+  });
+
   it('keeps a text-layer-only PDF on pdf_text and never calls OCR', async () => {
     const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
       text: 'unexpected OCR text',
