@@ -115,11 +115,11 @@ Sibling `src/api/InventoryShelfApi.test.ts` also green (3 passed).
 
 ### Fix1 file counts (acceptance 3 — exact `git diff --stat` per file)
 ```
-$ git diff --stat a58d56f0..<fix1 code commit> -- server/src
+$ git diff --stat a58d56f0..b1b80e5d -- server/src
  server/src/resolve/shelfLookup.test.ts | 70 ++++++++++++++++++++++++++++++++++
  server/src/resolve/shelfLookup.ts      | 56 ++++++++++++++++++++++-----
  2 files changed, 117 insertions(+), 9 deletions(-)
-$ git diff --numstat a58d56f0..<fix1 code commit> -- server/src
+$ git diff --numstat a58d56f0..b1b80e5d -- server/src
 70  0  server/src/resolve/shelfLookup.test.ts
 47  9  server/src/resolve/shelfLookup.ts
 ```
@@ -159,4 +159,10 @@ from both merged record families (shelflw2)"
 - AC2/AC3 covered by existing tests (empty-report test, InventoryShelfApi DMSO test) and
   by the untouched material provider arm.
 
-L2-LAB-INVENTORY-CREATE-1 UNIT shelflw2 DONE 5cb84ff1eecaa75cbf7709360c301d8de634927b
+## Fix1 commit
+b1b80e5ded59a5578d77911a50bb411147395dcc — "L2-LAB-INVENTORY-CREATE-1 shelflw2 fix1:
+family-fair concept budget + dual-family pin" (code + this report body). The exit
+marker below is appended in a follow-up bookkeeping commit, per the worktree's
+established pattern; the marker names the fix commit.
+
+L2-LAB-INVENTORY-CREATE-1-shelflw2-fix1 UNIT unit DONE b1b80e5ded59a5578d77911a50bb411147395dcc
