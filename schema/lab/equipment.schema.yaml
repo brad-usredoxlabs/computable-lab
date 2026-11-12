@@ -27,8 +27,11 @@ properties:
     minLength: 1
 
   # The class this instance is an instance OF. An `EQC-` record for an evidenced
-  # vendor model, or a `CL:` CURIE for a generic physical kind (`CL:water_bath`) —
-  # generic kinds are registry definitions (schema/registry/equipment-kinds), and
+  # vendor model, a `CL:` CURIE for a generic physical kind (`CL:water_bath`), or
+  # an `LEQ:` CURIE anchored to the Lab Equipment Ontology. `LEQ:` is the
+  # equipment ontology's home (config/ontology-sources.yaml); the prefix list is
+  # an explicit allowlist so unserved vocabularies cannot be smuggled in.
+  # Generic kinds are registry definitions (schema/registry/equipment-kinds), and
   # `EQC-` is reserved for models the lab can evidence.
   equipmentClassRef:
     allOf:
@@ -43,7 +46,7 @@ properties:
           kind: { const: ontology }
           id:
             type: string
-            pattern: "^CL:"
+            pattern: "^(CL|LEQ):"
 
   # INSTR-COLLAPSE-1 C2: instrumentRef RETIRED here — the reciprocal
   # equipment->instrument link was the memo §5 defect (two asset truths for

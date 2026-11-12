@@ -102,6 +102,48 @@ describe('first-class equipment model', () => {
     expect(out.valid).toBe(true);
   });
 
+  it('accepts an equipment instance anchored to the Lab Equipment Ontology (LEQ:)', async () => {
+    // O3: the existing equipmentClassRef ontology arm IS LEQ's home (no second
+    // field). A served-vocabulary anchor must validate, not be refused.
+    // The label is the served term's own name: LEQ:0000100 is the LEO root,
+    // "lab equipment" (leq.base.obo), not a specific device.
+    const validator = await loadEquipmentSchemas();
+    const out = validator.validate({
+      kind: 'equipment',
+      id: 'EQP-LEQ-ROOT',
+      name: 'Lab equipment (LEQ root)',
+      equipmentClassRef: { kind: 'ontology', id: 'LEQ:0000100', namespace: 'LEQ', label: 'lab equipment' },
+    }, EQUIPMENT_SCHEMA);
+    expect(out.valid).toBe(true);
+  });
+
+  it('still accepts a CL: equipment ontology anchor (allowlist keeps the CL half)', async () => {
+    // D2: the pattern widened to `^(CL|LEQ):` — widening must not drop the
+    // pre-existing CL half. Mirrors the repo's CL:0000182 (hepatocyte) fixture.
+    const validator = await loadEquipmentSchemas();
+    const out = validator.validate({
+      kind: 'equipment',
+      id: 'EQP-CL-ANCHORED',
+      name: 'Anchored to a cell-ontology term',
+      equipmentClassRef: { kind: 'ontology', id: 'CL:0000182', namespace: 'CL', label: 'hepatocyte' },
+    }, EQUIPMENT_SCHEMA);
+    expect(out.valid).toBe(true);
+  });
+
+  it('still rejects an equipment ontology anchor from an unserved vocabulary (OBI)', async () => {
+    // Prefix allowlist is the mechanism: widening to a free prefix would admit
+    // OBI/NCIT lookalikes. The rejection must come from `pattern` on the id.
+    const validator = await loadEquipmentSchemas();
+    const out = validator.validate({
+      kind: 'equipment',
+      id: 'EQP-X-OBI',
+      name: 'Anchored to an unserved vocabulary',
+      equipmentClassRef: { kind: 'ontology', id: 'OBI:0000112', namespace: 'OBI', label: 'OBI term' },
+    }, EQUIPMENT_SCHEMA);
+    expect(out.valid).toBe(false);
+    expect(out.errors.some((e) => e.keyword === 'pattern' && e.path === '/equipmentClassRef/id')).toBe(true);
+  });
+
   it('validates the seeded qPCR class profileDefinition (real cycling program)', async () => {
     const validator = await loadEquipmentSchemas();
     const out = validator.validate({
