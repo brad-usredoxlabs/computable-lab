@@ -217,3 +217,61 @@ this file.
 L2-SPEC-SHEET-INGEST-1 UNIT g6fix2 DONE bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e
 
 L2-SPEC-SHEET-INGEST-1-g6fix2 UNIT unit DONE bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e
+
+## Unit g6fix3 — advc c2 D1 (FIX) — "for" must not be in the shared strip
+
+Lineage: base 494534fb (g6fix2 marker) → e8e1b229 RED pins → cc13eeee production
+split → this report (plus an exit-contract marker commit naming it).
+
+### D1 — shared `prepositionRe` leaked "for" into the leftmost main strip
+
+g6fix2 added `for` to the single SHARED `prepositionRe`
+(`SpecSheetExtractor.ts`), so every non-quantified source phrase was also cut
+at "for": `Information for use` → `Information`. That changed generic parsing
+outside the owned of-complement guard and had no pin (advc c2 D1). The tail cut
+genuinely needs "for" (`Number of rows for grid addressing` → `Number of rows`),
+so the two cuts need different preposition sets.
+
+Fix (2 owned files, `server/src/ingestion/SpecSheetExtractor.ts`):
+- `prepositionRe` alternation minus `for` — the main strip never sees it;
+- new module-level `tailPrepositionRe` near it, identical plus `for`, used only
+  at the of-complement tail match (`const tail = complement.match(tailPrepositionRe)`).
+Comment records why `for` lives in exactly one of the two regexes.
+
+### Pins (both, in `SpecSheetExtractor.sourceKeywords.test.ts`)
+
+- pin a — source `Number of rows for grid addressing`, text `Number of rows: 8`
+  → exactly one `topology.rows` proposal, value `8`. The label is exactly the
+  keyword, so an untruncated keyword cannot match; the pin fails if the tail
+  regex loses `for`.
+- pin b — source `Information for use`: text `Information for use: store at
+  2-8 C` → one `notes` proposal; text `Information only: store at 2-8 C` → zero
+  (proves the keyword is not truncated to `Information`). Fails against the
+  baseline/g6fix2 code, i.e. RED before the regex split.
+
+### Verification (measured in this worktree)
+
+- RED (commit e8e1b229, unmodified production):
+  `npm run test:run -w server -- src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  → `Tests 1 failed | 6 passed (7)`; the failure is pin b
+  (`expected [ { targetField: 'notes', …(4) } ] to have a length of +0`).
+- GREEN after cc13eeee: same command → `Test Files 1 passed (1)`, `Tests 7 passed (7)`
+  (brief baseline 5 passed).
+- `npm run test:run -w server -- src/ingestion/SpecSheetExtractor` → 3 files,
+  `Tests 30 passed (30)` (brief baseline 28 passed; brief's known-unrelated 12
+  vendor-protocol failures are outside this filter and were not chased).
+- `npm run typecheck -w server` → `tsc --noEmit`, rc 0.
+- Mutation control (each mutant applied to the committed fix, then
+  `git -c core.fileMode=false checkout -- server/src/ingestion/SpecSheetExtractor.ts`):
+  1. baseline-shaped mutant (`for` back in the shared regex, tail matching the
+     shared regex) → pin b RED, pin a green;
+  2. tail loses `for` (neither regex has it) → pin a RED, pin b green.
+  Each pin therefore pins exactly one side of the split; tree clean after restore.
+- Scope: no YAML, no `SpecSheetFieldMaps.ts`, no schema/, no app/, no other
+  report edits. `server/records` symlink materialized as instructed (untracked/ignored).
+
+### Commits
+
+- `e8e1b229` RED pins (test only)
+- `cc13eeee` production split (`prepositionRe` minus `for` + `tailPrepositionRe`)
+
