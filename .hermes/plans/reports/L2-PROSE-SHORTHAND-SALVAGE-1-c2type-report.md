@@ -11,6 +11,11 @@ Base sha verified before work: `4b837b611b12029a670d21f8371ccca97d0f2337` (match
   NOT gated)` from the c2site run that died before its pin/paperwork: wired the wrapper into the
   production call site (`AgentOrchestrator.ts:2679`), and also landed an orchestrator run-path test
   block in `recoveredFrom.test.ts`.
+- Two inert product hunks inherited from `4b837b61` (disclosed, not squashed — both behaviour-preserving):
+  (a) the `extraSubmissionNotes` hoist — declared once per turn inside the turn loop at
+  `AgentOrchestrator.ts:2267` instead of at the old `:3011` (same per-turn scope; consumers unchanged at
+  `:3024`, `:3244`, `:3374`/`:3375` and `:4906`/`:4907`); (b) the recovery `console.log` rewrite at
+  `:2715`, which only appends `driver=<…>` to the existing message text (observability, no control flow).
 - `794dcd04dd363c97b50299ad512565f4d07676b5` — THIS unit (see marker).
 
 Neither prior commit was reverted, amended, rebased or re-branched.
