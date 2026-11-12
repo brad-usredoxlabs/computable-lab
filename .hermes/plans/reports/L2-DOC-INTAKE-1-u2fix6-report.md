@@ -21,3 +21,5 @@ artifactId level. That containment is the collapse-vs-passthrough tooth.
   Pre-fix test under the same variant was 1 failed / 17 passed, sole failure at `:347`.
 
 Commits: `5db98bd7` (test pin), then this report commit and the marker commit.
+
+L2-DOC-INTAKE-1-u2fix6 UNIT unit DONE 0938f20a614919d4c67d3942a82e2a3eb2cfd611
