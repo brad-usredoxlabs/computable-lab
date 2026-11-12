@@ -174,4 +174,18 @@ describe('MaterialReceivingDoor', () => {
     expect(acceptSpy).not.toHaveBeenCalled()
     expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
   })
+
+  it('carries the shared .lab-modal base layout authority, not only its own rules (gate D1)', () => {
+    // Browser gate L2-LABINV-SEEDLAB-browser-g1-l2t2210 D1: the door's own
+    // <style> block declared ONLY __result/__refusal/__hint, so the backdrop sat
+    // in normal flow (position: static) and cl-workspace__pane--left swallowed
+    // every click. jsdom does not cascade author <style> rules, so pin the rule
+    // TEXT here rather than a vacuous getComputedStyle assertion.
+    const { container } = renderDoor()
+    const styleText = Array.from(container.querySelectorAll('style'))
+      .map((el) => el.textContent ?? '')
+      .join('\n')
+    expect(styleText).toMatch(/\.lab-modal__backdrop\s*\{[^}]*position:\s*fixed/s)
+    expect(styleText).toMatch(/\.lab-modal\s*\{/)
+  })
 })
