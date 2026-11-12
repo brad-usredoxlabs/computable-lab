@@ -51,7 +51,7 @@ Owned files: documentIntake.ts, documentIntake.test.ts, this report.
       Test Files  1 passed (1) / Tests  13 passed (13)
       Duration 727ms
 - [x] tsc --noEmit: EXIT=0, 0 error lines.
-- [ ] commit + clean tree
+- [x] commit 7529063c (code + report); tree clean.
 
 ## Environment note
 
@@ -78,3 +78,5 @@ cd server && npx vitest run src/ingestion/documentIntake.test.ts
 cd server && npx tsc --noEmit
 git -c core.fileMode=false status --short
 ```
+
+L2-DOC-INTAKE-1 UNIT intakedoc DONE 7529063cb8fd31b6e06b184a8e59d3adc899de2c
