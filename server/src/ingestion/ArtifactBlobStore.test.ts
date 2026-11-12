@@ -360,6 +360,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
         { label: 'fileName ".." (raw dot-dot)', args: { artifactId: 'ING-001', fileName: '..' } },
         { label: 'fileName " .. " (cleaned-to-..)', args: { artifactId: 'ING-001', fileName: ' .. ' } },
       ];
+      const { resolve: resolvePath, relative: relativePath } = await import('node:path');
 
       for (const c of cases) {
         writeCalls.length = 0;
@@ -379,11 +380,10 @@ describe('ArtifactBlobStore — storage-backed', () => {
         expect(segments, `${c.label}: composed path ${written}`).not.toContain('.');
         // (c) the recorded path is the path the caller is told about
         expect(result.storedPath, `${c.label}: composed path ${written}`).toBe(written);
-
-        if (c.args.artifactId === '...') {
-          expect(segments, 'literal "..." must survive but must not be ".."').toContain('...');
-          expect(result.storedPath).not.toBe('..');
-        }
+        // (d) the composed path escapes no storage root (variant-neutral: says nothing
+        //     about HOW dots are sanitised, only that nothing traverses)
+        const absPath = resolvePath('/blob-root', written);
+        expect(relativePath('/blob-root', absPath).startsWith('..'), `${c.label}: composed path ${written}`).toBe(false);
       }
     });
 
