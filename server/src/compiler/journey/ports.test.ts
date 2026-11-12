@@ -27,7 +27,10 @@ const REJECTIONS: Rejection[] = [
     label: '(a) refuses a material layer collapse, naming both layers',
     producer: { port_type: 'MaterialReference', version: 'v1', material_id: 'MAT-1', provenance_layer: 'material' },
     consumer: { port_type: 'MaterialReference', provenance_layer: 'material-instance' },
-    code: 'provenance_layer_collapse', needles: ['material', 'material-instance'],
+    // 'declares material:' (word + colon) is the producer-layer interpolation itself:
+    // a substring of 'material-instance' cannot satisfy it, so dropping the
+    // ${producer.provenance_layer} interpolation goes RED here.
+    code: 'provenance_layer_collapse', needles: ['declares material:', 'material-instance'],
   },
   {
     label: '(b) refuses a staged draft bound to a committed requirement',
@@ -43,6 +46,17 @@ const REJECTIONS: Rejection[] = [
     code: 'committed_reference_without_receipt', needles: ['receipt_id', 'REC-1'],
   },
   {
+    // Whitespace-only receipt: separating the `trim() === ''` arm from the
+    // `=== undefined` arm, so deleting either one goes RED.
+    label: '(c) refuses a whitespace-only receipt, naming receipt_id and the record',
+    producer: {
+      port_type: 'CommittedRecordReference', version: 'v1', record_id: 'REC-2',
+      record_type: 'material-instance', receiptId: '   ',
+    },
+    consumer: { port_type: 'CommittedRecordReference' },
+    code: 'committed_reference_without_receipt', needles: ['receipt_id', 'REC-2'],
+  },
+  {
     label: '(d-negative) refuses a labware INSTANCE smuggled into a definition requirement',
     producer: {
       port_type: 'CommittedRecordReference', version: 'v1', record_id: 'LBI-1',
@@ -51,6 +65,18 @@ const REJECTIONS: Rejection[] = [
     consumer: { port_type: 'LabwareDefinitionReference', labware_reference: 'definition' },
     code: 'labware_instance_for_definition_requirement',
     needles: ['labware-instance', 'LabwareDefinitionReference'],
+  },
+  {
+    // The `labware_reference === undefined` arm of rule 3: a requirement that
+    // omits the field still means "definition", so an instance producer is refused.
+    label: '(d-negative) refuses a labware INSTANCE when the requirement omits labware_reference',
+    producer: {
+      port_type: 'CommittedRecordReference', version: 'v1', record_id: 'LBI-2',
+      record_type: 'labware-instance', receipt_id: 'RCPT-9',
+    },
+    consumer: { port_type: 'LabwareDefinitionReference' },
+    code: 'labware_instance_for_definition_requirement',
+    needles: ['labware-instance', 'LBI-2'],
   },
   {
     label: 'guard: unrelated port families fall back to port_type_mismatch',
@@ -68,8 +94,21 @@ describe('validatePortBinding', () => {
       if (result.ok) throw new Error('binding accepted, expected a named rejection');
       expect(result.diagnostic.code).toBe(code);
       for (const needle of needles) expect(result.diagnostic.message).toContain(needle);
+      // The diagnostic must carry the exact ports it judged, not a paraphrase.
+      expect(result.diagnostic.producer_port).toEqual(producer);
+      expect(result.diagnostic.consumer_port).toEqual(consumer);
     });
   }
+
+  it('(d) accepts an instance requirement, so rule 3 fires on definition only', () => {
+    const result = validatePortBinding(
+      {
+        port_type: 'CommittedRecordReference', version: 'v1', record_id: 'LBI-3',
+        record_type: 'labware-instance', receipt_id: 'RCPT-9',
+      },
+      { port_type: 'CommittedRecordReference', labware_reference: 'instance' });
+    expect(result.ok).toBe(true);
+  });
 
   it('(a-positive) accepts a matching material layer', () => {
     const result = validatePortBinding(
