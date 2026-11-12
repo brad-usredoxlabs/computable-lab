@@ -986,7 +986,7 @@ export interface AgentActionPayload {
 }
 
 export type AgentEvent =
-  | { type: 'status'; message: string }
+  | { type: 'status'; message: string; recoveredFrom?: import('./AgentOrchestrator.js').RecoveredDraft }
   | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
   | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
   | { type: 'thinking'; content: string }
