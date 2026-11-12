@@ -157,7 +157,8 @@ Product code byte-identical at exit (`sha256sum -c` OK for `AgentOrchestrator.ts
 diff `34a48a74..HEAD` names exactly 3 paths (two test files, this report) — 15 of the inserted lines are
 test-file changes (one annotation, two filter predicates, one comment); the rest is this mandated report
 section. **Budget honesty:** total insertions exceed the brief's ≤40-line output budget (66 at
-`34a48a74..34f20852`, the three c2typefix1 fix commits — the `..9cfa3f83` range is 28/11, see §c2typefix2
+`34a48a74..34f20852, the four c2typefix1 fix commits
+(b4cfe59a D2, 60f0c6bf D1, 9cfa3f83 D4, 34f20852 D3) — the `..9cfa3f83` range is 28/11, see §c2typefix2
 D-b; plus the `e01ebb73` marker commit and this addendum); declared with the real count, not restated as met.
 
 - **D1 (MAJOR, false committed claim) — FIXED.** The comment at
@@ -187,7 +188,7 @@ $ cd server && npx tsc --noEmit -p .  ->  TSC_EXIT=0, error lines: 0 (equal to b
 $ git -c core.fileMode=false status --short  ->  empty
 $ git diff --name-status 34a48a74..e01ebb73  ->  exactly the 3 paths above
 $ git diff --shortstat 34a48a74..34f20852  ->   3 files changed, 66 insertions(+), 12 deletions(-)
-   # the three c2typefix1 fix commits (D1-D4); the range the 66 figure belongs to
+   # the four c2typefix1 fix commits (b4cfe59a D2, 60f0c6bf D1, 9cfa3f83 D4, 34f20852 D3); count=$(git -c core.fileMode=false rev-list --count 34a48a74..34f20852) -> 4
 $ git diff --shortstat 34a48a74..9cfa3f83  ->   3 files changed, 28 insertions(+), 11 deletions(-)
    # c2typefix1 D4 commit only — NOT 66; that figure was mis-attributed here (fixed in §c2typefix2 D-b)
 $ git diff --shortstat 34a48a74..e01ebb73  ->   3 files changed, 73 insertions(+), 12 deletions(-)
@@ -246,3 +247,5 @@ The `HEAD` figures above are the measured state of this commit, not a projection
 L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2typefix2 DONE 10a028cef8b49cc9ddebf2d57fe3ea032a831414
 
 L2-PROSE-SHORTHAND-SALVAGE-1-c2typefix2 UNIT unit DONE 10a028cef8b49cc9ddebf2d57fe3ea032a831414
+
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2typepw DONE 57225f92c5ff78a0d64a72f1b2d35dfa4a613c10
