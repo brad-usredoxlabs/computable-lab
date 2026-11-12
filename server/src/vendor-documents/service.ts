@@ -52,6 +52,13 @@ export type VendorDocumentExtractionResult = {
   document: Record<string, unknown>;
   draft?: Record<string, unknown>;
   drafts?: Record<string, unknown>[];
+  /**
+   * L2-DOC-INTAKE-1 (dupdoc): present (the already-stored document's id) ONLY
+   * when the attach was refused because this vendor product already carries a
+   * document with the same `file_ref.sha256` — nothing was written. Absent
+   * (never `undefined`) on every real attach.
+   */
+  duplicateOf?: string;
 };
 
 export interface FoundryPdfCandidateProjectionOptions {
@@ -61,6 +68,18 @@ export interface FoundryPdfCandidateProjectionOptions {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * L2-DOC-INTAKE-1 (dupdoc): the dedup key of an attached document is the
+ * sha256 of the uploaded bytes, stored at `document.file_ref.sha256` (never at
+ * the document top level). Absent for manual / source_url-only attachments.
+ */
+function documentFileSha256(document: unknown): string | undefined {
+  if (!document || typeof document !== 'object') return undefined;
+  const fileRef = (document as Record<string, unknown>).file_ref;
+  if (!fileRef || typeof fileRef !== 'object') return undefined;
+  return stringValue((fileRef as Record<string, unknown>).sha256);
 }
 
 function canonicalUnit(unit: string): string {
@@ -435,6 +454,22 @@ export async function attachVendorDocumentExtraction(
     throw new Error(`Vendor product not found: ${vendorProductId}`);
   }
   const extraction = await buildVendorDocumentExtraction(upload);
+  const storedDocuments = Array.isArray(payload.documents) ? payload.documents : [];
+  // L2-DOC-INTAKE-1 (dupdoc): one intake = one document. A second tab that
+  // commits the same bytes must reuse the stored document, not append a twin.
+  // Dedupe only when BOTH sides carry a sha256 — manual entries (no sha256)
+  // keep appending exactly as before.
+  const incomingSha = documentFileSha256(extraction.document);
+  const duplicate = incomingSha
+    ? storedDocuments.find((entry) => documentFileSha256(entry) === incomingSha)
+    : undefined;
+  if (duplicate) {
+    const duplicateId = stringValue((duplicate as Record<string, unknown>).id);
+    return {
+      document: duplicate as Record<string, unknown>,
+      ...(duplicateId ? { duplicateOf: duplicateId } : {}),
+    };
+  }
   const { $schema: _schema, recordId: _recordId, ...persistedPayload } = payload as Record<string, unknown> & {
     $schema?: unknown;
     recordId?: unknown;
@@ -442,7 +477,7 @@ export async function attachVendorDocumentExtraction(
   const nextPayload: Record<string, unknown> = {
     ...persistedPayload,
     documents: [
-      ...(Array.isArray(payload.documents) ? payload.documents : []),
+      ...storedDocuments,
       extraction.document,
     ],
     ...(extraction.draft
