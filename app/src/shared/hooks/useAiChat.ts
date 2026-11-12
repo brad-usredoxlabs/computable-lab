@@ -1055,6 +1055,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     } else {
       if (reKeyed) {
         setMessages([])
+        // L2-PROSE-SHORTHAND-SALVAGE-1 fix1 (advc c1 D1): the re-key wipe
+        // drops the transcript, so it drops the recovery marker with it —
+        // matching resetChatState (:947) and the send reset (:1265). Without
+        // this a fresh EMPTY transcript rendered the previous turn's marker.
+        setStatusRecoveredFrom(null)
         persistedIdsRef.current = new Set()
       }
       lastThreadKeyRef.current = threadKey
