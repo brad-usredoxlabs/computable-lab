@@ -102,4 +102,6 @@ No useAiChat/ChatLog/HarnessChatPane behavioral failure; D1/D2 file 9/9.
 - Browser/advc review of the fix is still owned by the reviewer; this unit is
   implementation-complete only.
 
-L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlui-fix1 UNIT unit DONE a5e1ca7980b153a625cb1ea47f66d7bd4c618b50
+[advc c2 D1] The marker names a5e1ca79, the commit that first carried this report body and the production fix; this paperwork-only follow-up unit (L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlui-mk2) replaces the malformed marker line in place, leaving exactly one marker in the contracted ITEM UNIT DONE token order.
+
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c1yamlui-fix1 DONE a5e1ca7980b153a625cb1ea47f66d7bd4c618b50
