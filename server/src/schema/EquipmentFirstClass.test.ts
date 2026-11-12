@@ -102,6 +102,33 @@ describe('first-class equipment model', () => {
     expect(out.valid).toBe(true);
   });
 
+  it('accepts an equipment instance anchored to the Lab Equipment Ontology (LEQ:)', async () => {
+    // O3: the existing equipmentClassRef ontology arm IS LEQ's home (no second
+    // field). A served-vocabulary anchor must validate, not be refused.
+    const validator = await loadEquipmentSchemas();
+    const out = validator.validate({
+      kind: 'equipment',
+      id: 'EQP-WATER-BATH-LEQ',
+      name: 'Water Bath (LEQ-anchored)',
+      equipmentClassRef: { kind: 'ontology', id: 'LEQ:0000100', namespace: 'LEQ', label: 'Water Bath' },
+    }, EQUIPMENT_SCHEMA);
+    expect(out.valid).toBe(true);
+  });
+
+  it('still rejects an equipment ontology anchor from an unserved vocabulary (OBI)', async () => {
+    // Prefix allowlist is the mechanism: widening to a free prefix would admit
+    // OBI/NCIT lookalikes. The rejection must come from `pattern` on the id.
+    const validator = await loadEquipmentSchemas();
+    const out = validator.validate({
+      kind: 'equipment',
+      id: 'EQP-X-OBI',
+      name: 'Anchored to an unserved vocabulary',
+      equipmentClassRef: { kind: 'ontology', id: 'OBI:0000112', namespace: 'OBI', label: 'OBI term' },
+    }, EQUIPMENT_SCHEMA);
+    expect(out.valid).toBe(false);
+    expect(out.errors.some((e) => e.keyword === 'pattern' && e.path === '/equipmentClassRef/id')).toBe(true);
+  });
+
   it('validates the seeded qPCR class profileDefinition (real cycling program)', async () => {
     const validator = await loadEquipmentSchemas();
     const out = validator.validate({
