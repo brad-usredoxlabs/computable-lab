@@ -97,3 +97,5 @@ O4 (bindings file consumption) and O5 (boot wiring) remain separate units.
          Tests  10 passed (10)
 
 L2-ONTOLOGY-ANCHOR-SOURCES-1-o3e UNIT o3e DONE ea7ee649dfc59cc3e76f90eb55b698af51468df4
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o3e-fix1 UNIT o3e-fix1 DONE d6ceda3e739cd7546bcdf166f1f64e182ba98a54
