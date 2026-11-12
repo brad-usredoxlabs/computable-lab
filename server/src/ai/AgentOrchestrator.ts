@@ -109,7 +109,8 @@ import {
 import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
 // Canonical shorthand re-serialization (the carryShorthandIdentity /
 // foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
-import { stringify as stringifyShorthandYaml } from 'yaml';
+import { existsSync, readFileSync } from 'node:fs';
+import { stringify as stringifyShorthandYaml, parse as parseYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
@@ -853,6 +854,87 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// L2-PROSE-SHORTHAND-SALVAGE-1 (C1): the YAML arm of prose draft recovery.
+// The accepted shapes are DATA (config/drafting/draft-content-recovery.yaml);
+// Ajv via parseShorthandForChat is the SOLE authority on validity.
+// ---------------------------------------------------------------------------
+// D3 (advc C1) FAIL-CLOSED by decision: these closed unions are what the extractor/`RecoveredDraftDriver` can emit; DATA naming anything else throws (a new shape is a code change, never silently half-data).
+type DraftContentShape = 'tool-envelope' | 'fenced-json' | 'fenced-yaml' | 'bare-yaml';
+const DRAFT_CONTENT_SHAPES: readonly DraftContentShape[] = ['tool-envelope', 'fenced-json', 'fenced-yaml', 'bare-yaml'];
+const DRAFT_RECOVERY_DRIVERS: readonly RecoveredDraftDriver[] = ['tool-envelope', 'fenced-json', 'yaml-shorthand'];
+
+interface DraftContentRecoveryEntry {
+  shape: DraftContentShape;
+  driver: RecoveredDraftDriver;
+  enabled: boolean;
+}
+
+/** Read PER call (the forcedToolCompliance precedent: a DATA edit needs no
+ *  restart). Missing or malformed throws, naming the path — never a silent-off
+ *  default that would make the recovery path lie about what it accepts. */
+function loadDraftContentRecoveryPolicy(policyPath?: string): DraftContentRecoveryEntry[] {
+  // Optional path is the narrow injectable seam a test uses to point the loader
+  // at a temp DATA file (advc C1 D1: witness the `enabled` gate, not just the
+  // shape pairing). Production callers pass nothing.
+  const policyFile = policyPath ?? new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
+  const where = String(policyFile);
+  if (!existsSync(policyFile)) throw new Error(`draft-content recovery policy not found: ${where}`);
+  let raw: unknown;
+  try {
+    raw = parseYaml(readFileSync(policyFile, 'utf8'));
+  } catch (error) {
+    throw new Error(`draft-content recovery policy unreadable: ${error instanceof Error ? error.message : String(error)}: ${where}`);
+  }
+  const shapes = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>).shapes
+    : undefined;
+  if (!Array.isArray(shapes) || shapes.length === 0) {
+    throw new Error(`draft-content recovery policy: \`shapes\` must be a non-empty list: ${where}`);
+  }
+  return shapes.map((item: unknown): DraftContentRecoveryEntry => {
+    const { shape, driver, enabled } = (item ?? {}) as Record<string, unknown>;
+    if (typeof shape !== 'string' || !DRAFT_CONTENT_SHAPES.includes(shape as DraftContentShape)) {
+      throw new Error(`draft-content recovery policy: \`shape\` must be one of ${DRAFT_CONTENT_SHAPES.join(', ')}: ${where}`);
+    }
+    if (typeof driver !== 'string' || !DRAFT_RECOVERY_DRIVERS.includes(driver as RecoveredDraftDriver)) {
+      throw new Error(`draft-content recovery policy: \`driver\` must be one of ${DRAFT_RECOVERY_DRIVERS.join(', ')}: ${where}`);
+    }
+    if (typeof enabled !== 'boolean') {
+      throw new Error(`draft-content recovery policy: \`enabled\` must be a boolean: ${where}`);
+    }
+    return { shape: shape as DraftContentShape, driver: driver as RecoveredDraftDriver, enabled };
+  });
+}
+
+/** Driver a declared+enabled shape recovers as; null when the DATA does not
+ *  declare (or has disabled) it. */
+function declaredDraftDriver(shape: DraftContentShape, policyPath?: string): RecoveredDraftDriver | null {
+  return loadDraftContentRecoveryPolicy(policyPath).find((e) => e.shape === shape && e.enabled)?.driver ?? null;
+}
+
+/**
+ * The shorthand-YAML document carried as TEXT: the inner text of the first
+ * ```yaml / ```yml fence, else the whole trimmed text only when its top-level
+ * keys declare `intentId` AND `actions` (a prose mention is never a candidate).
+ * Returned VERBATIM — validity is parseShorthandForChat's call, not this one's.
+ */
+function extractShorthandYamlCandidate(content: string): { text: string; shape: 'fenced-yaml' | 'bare-yaml' } | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+  const fenced = trimmed.match(/```ya?ml[^\S\r\n]*\r?\n([\s\S]*?)```/i);
+  if (fenced?.[1]?.trim()) return { text: fenced[1].trim(), shape: 'fenced-yaml' };
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const keys = Object.keys(parsed as Record<string, unknown>);
+  return keys.includes('intentId') && keys.includes('actions') ? { text: trimmed, shape: 'bare-yaml' } : null;
+}
+
 /** Top-level keys that mark a bare forced-draft argument object. */
 // DRAFT_ARG_KEYS lives in draftArgDiagnostics.ts — one source, so the guard
 // below and the unknown-field diagnostic can never disagree.
@@ -866,59 +948,114 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
  * or null when the content carries no usable draft JSON — in which case the
  * caller re-asks the model. Parsing this inline skips a second inference call.
  */
-export function coerceDraftArgsFromContent(content: unknown): Record<string, unknown> | null {
-  if (typeof content !== 'string') return null;
+export function coerceDraftArgsFromContent(
+  content: unknown,
+  policyPath?: string,
+): Record<string, unknown> | null {
+  return recoverDraftArgsCore(content, policyPath).args;
+}
+
+/** JSON/`<tool_call>` driver classification (unchanged: the envelope marker). */
+function jsonRecoveryDriver(content: string): RecoveredDraftDriver {
+  return content.includes('<tool_call>') ? 'tool-envelope' : 'fenced-json';
+}
+
+interface DraftArgsRecovery {
+  args: Record<string, unknown> | null;
+  driver: RecoveredDraftDriver | null;
+  /** The validator's OWN refusal reason when a YAML candidate was rejected. */
+  refusal?: string;
+}
+
+/**
+ * One parse, one decision — the internal pass behind both public entry points
+ * (coerce: args only; recover: args + driver + named refusal).
+ */
+function recoverDraftArgsCore(content: unknown, policyPath?: string): DraftArgsRecovery {
+  if (typeof content !== 'string') return { args: null, driver: null };
   const obj = extractJsonObject(content);
-  if (!obj) return null;
-  if ('arguments' in obj) {
-    const args = obj.arguments;
-    if (args && typeof args === 'object' && !Array.isArray(args)) return args as Record<string, unknown>;
-    if (typeof args === 'string') {
+  if (obj) {
+    if ('arguments' in obj) {
+      const args = obj.arguments;
+      if (args && typeof args === 'object' && !Array.isArray(args)) {
+        return { args: args as Record<string, unknown>, driver: jsonRecoveryDriver(content) };
+      }
+      if (typeof args === 'string') {
+        try {
+          const parsed = JSON.parse(args) as unknown;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return { args: parsed as Record<string, unknown>, driver: jsonRecoveryDriver(content) };
+          }
+        } catch {
+          /* not a JSON-encoded arguments string — fall through */
+        }
+      }
+    }
+    // Bare argument object: require a known draft key so unrelated prose-JSON
+    // (an example, a code block) is never fed to the compiler. The protocol_edit
+    // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
+    // table) rather than DRAFT_ARG_KEYS, because that list also drives the
+    // unknown-field diagnostic and must stay event-draft-only. Guard stays
+    // strict: `{intent, protocolId}` with no substantive key is still not a draft.
+    if (DRAFT_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
+    // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
+    // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
+    if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    if ('sequenceAction' in obj) return { args: obj, driver: jsonRecoveryDriver(content) };
+  }
+  // C1: the YAML arm runs AFTER the JSON attempt and the argument-key guards,
+  // so JSON/`<tool_call>` recovery is untouched. The document rides the
+  // existing shorthand envelope (SHORTHAND_ARG_KEYS' route) — never events,
+  // never a second parser.
+  const yamlCandidate = extractShorthandYamlCandidate(content);
+  if (yamlCandidate) {
+    const driver = declaredDraftDriver(yamlCandidate.shape, policyPath);
+    if (driver) {
       try {
-        const parsed = JSON.parse(args) as unknown;
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
-      } catch {
-        /* not a JSON-encoded arguments string — fall through */
+        parseShorthandForChat(yamlCandidate.text);
+        return { args: { intent: 'event_shorthand', shorthand: yamlCandidate.text }, driver };
+      } catch (error) {
+        // REFUSED BY NAME: the validator's OWN text rides the recovery result
+        // to the caller's notes channel — its message plus the first Ajv row
+        // (path + the schema's suggestion, e.g. "teleport_sample is not
+        // allowed here"). Nothing is re-derived and nothing is coerced.
+        const row = error instanceof ScientistIntentValidationError
+          ? (error.errors?.[0] as { path?: string; suggestion?: string; message?: string } | undefined)
+          : undefined;
+        const reason = error instanceof Error ? error.message : String(error);
+        const detail = [row?.path, row?.suggestion ?? row?.message].filter((part): part is string => Boolean(part)).join(' ');
+        return { args: null, driver: null, refusal: detail ? `${reason}: ${detail}` : reason };
       }
     }
   }
-  // Bare argument object: require a known draft key so unrelated prose-JSON
-  // (an example, a code block) is never fed to the compiler. The protocol_edit
-  // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
-  // table) rather than DRAFT_ARG_KEYS, because that list also drives the
-  // unknown-field diagnostic and must stay event-draft-only. Guard stays
-  // strict: `{intent, protocolId}` with no substantive key is still not a draft.
-  if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
-  if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return obj;
-  // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
-  // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
-  // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
-  if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return obj;
-  if ('sequenceAction' in obj) return obj;
-  return null;
+  return { args: null, driver: null };
 }
 
-/** Recovery drivers — closed set; extension point for YAML shorthand (C1). */
-export type RecoveredDraftDriver = 'tool-envelope' | 'fenced-json';
-// Extension: C1 adds 'yaml-shorthand' when the YAML arm of shorthand recovery lands.
+/** Recovery drivers — closed set (the YAML arm classifies as `yaml-shorthand`). */
+export type RecoveredDraftDriver = 'tool-envelope' | 'fenced-json' | 'yaml-shorthand';
 export interface RecoveredDraft { driver: RecoveredDraftDriver }
 
 /**
  * Wrapper around {@link coerceDraftArgsFromContent} that declares HOW the
  * content was recovered. Returns `{ args, recoveredFrom }` where `args` is
  * the parsed argument object (or null) and `recoveredFrom` carries the
- * driver classification (or null when args is null).
+ * driver classification (or null when args is null). `refusal` is present
+ * ONLY when a shorthand-YAML candidate was rejected: it carries the
+ * validator's own reason so the caller can name it and nothing is coerced.
  *
- * Single source of truth: `args` comes from coerceDraftArgsFromContent.
- * Driver classification reads the same text to distinguish envelope shapes.
+ * Single source of truth: `args` AND the driver come from one internal pass
+ * (recoverDraftArgsCore) — the caller never re-classifies the text.
  */
-export function recoverDraftArgsFromContent(content: unknown):
-  { args: Record<string, unknown> | null; recoveredFrom: RecoveredDraft | null } {
-  const args = coerceDraftArgsFromContent(content);
-  if (args === null) return { args: null, recoveredFrom: null };
-  if (typeof content === 'string' && content.includes('<tool_call>'))
-    return { args, recoveredFrom: { driver: 'tool-envelope' } };
-  return { args, recoveredFrom: { driver: 'fenced-json' } };
+export function recoverDraftArgsFromContent(content: unknown, policyPath?: string):
+  { args: Record<string, unknown> | null; recoveredFrom: RecoveredDraft | null; refusal?: string } {
+  const recovered = recoverDraftArgsCore(content, policyPath);
+  return {
+    args: recovered.args,
+    recoveredFrom: recovered.args !== null && recovered.driver ? { driver: recovered.driver } : null,
+    ...(recovered.refusal ? { refusal: recovered.refusal } : {}),
+  };
 }
 
 function buildForcedDraftJsonPrompt(originalPrompt: string, antiEchoClause?: string): string {
@@ -2715,6 +2852,17 @@ export function createAgentOrchestrator(
               `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; driver=${recoveredFrom?.driver ?? 'none'}; skipped the second call`,
             );
           } else {
+          // C1: a shorthand-YAML candidate that FAILED the Ajv gate is REFUSED
+          // BY NAME — the validator's own reason rides the notes channel (the
+          // :2709 `recoveredFrom` precedent) and nothing is handed to the
+          // compiler. The re-ask budget below still runs.
+          if (recoveryResult.refusal) {
+            extraSubmissionNotes.push(`recoveredFrom: yaml-shorthand refused — ${recoveryResult.refusal}`);
+            onEvent?.({
+              type: 'status',
+              message: `Refused the shorthand draft in the model's text: ${recoveryResult.refusal}`,
+            });
+          }
           // SH-QC-1S R1 (architect D2): the bounded zero-tool-call compliance
           // arm is DATA (config/drafting/forced-tool-compliance.yaml — loaded
           // PER call, the drafting-config convention), NOT a surface literal.
