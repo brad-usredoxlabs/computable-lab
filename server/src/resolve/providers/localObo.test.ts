@@ -7,13 +7,15 @@
  * (b) a multi-word query returns several hits, and nothing is pre-selected
  *     or auto-ranked (no tier/score/selected on a raw ProviderHit);
  * (c) a registry row whose path does not exist yields a NAMED failure for
- *     that source id while the surviving sources still return hits.
+ *     that source id while the surviving sources still return hits;
+ * (d) the boot warm reports every enabled source as loaded (termCount > 0);
+ * (e) the boot warm NAMES a missing source and still loads the healthy one.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadLocalOboSources, searchLocalObo } from './localObo.js';
+import { loadLocalOboSources, searchLocalObo, warmLocalOboSources } from './localObo.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'cl-localobo-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -46,6 +48,10 @@ function registry(name: string, sources: string): string {
 }
 
 const GOOD_ROW = `  - id: "good"\n    prefix: "ZZTOP"\n    namespace_iri: "http://example.org/good"\n    display_name: "Good"\n    loader: "local-obo"\n    enabled: true\n    path: "${join(tmp, 'good.obo')}"\n    root: "TST:0000001"\n`;
+
+/** A registry row with only the fields the loader reads; path is caller-owned. */
+const row = (id: string, prefix: string, path: string): string =>
+  `  - id: "${id}"\n    prefix: "${prefix}"\n    namespace_iri: "http://example.org/${id}"\n    loader: "local-obo"\n    enabled: true\n    path: "${path}"\n    root: "${prefix}:0000001"\n`;
 
 describe('localObo provider', () => {
   it('(a) serves shipped local-obo sources: "deep well" returns file-backed CURIE/label/namespace', async () => {
@@ -90,5 +96,39 @@ describe('localObo provider', () => {
     expect(report.hits.length).toBeGreaterThanOrEqual(2);
     // namespace is derived from the parsed CURIE, never from the registry prefix literal.
     expect(report.hits[0]!.namespace).toBe('TST');
+  });
+
+  it('(d) boot warm reports every enabled source as loaded with terms', () => {
+    writeFileSync(join(tmp, 'good.obo'), GOOD_OBO);
+    writeFileSync(join(tmp, 'other.obo'), GOOD_OBO);
+    const path = registry(
+      'warm-ok',
+      row('good', 'ZZTOP', join(tmp, 'good.obo')) + row('other', 'OTHR', join(tmp, 'other.obo')),
+    );
+    const statuses = warmLocalOboSources({ registryPath: path });
+    expect(statuses).toHaveLength(2);
+    expect(statuses.map((s) => s.id)).toEqual(['good', 'other']);
+    for (const status of statuses) {
+      expect(status.ok, `${status.id} loads`).toBe(true);
+      expect(status.termCount, `${status.id} term count`).toBeGreaterThan(0);
+      expect(status).not.toHaveProperty('error');
+    }
+  });
+
+  it('(e) boot warm NAMES a missing source and still loads the healthy one', () => {
+    writeFileSync(join(tmp, 'good.obo'), GOOD_OBO);
+    const missing = join(tmp, 'absent-warm.obo');
+    const path = registry(
+      'warm-broken',
+      row('good', 'ZZTOP', join(tmp, 'good.obo')) + row('broken', 'BKN', missing),
+    );
+    const statuses = warmLocalOboSources({ registryPath: path });
+    expect(statuses).toHaveLength(2);
+    const broken = statuses.find((s) => s.id === 'broken')!;
+    const healthy = statuses.find((s) => s.id === 'good')!;
+    expect(broken.ok).toBe(false);
+    expect(broken.error).toContain('absent-warm.obo');
+    expect(healthy.ok).toBe(true);
+    expect(healthy.termCount).toBeGreaterThan(0);
   });
 });

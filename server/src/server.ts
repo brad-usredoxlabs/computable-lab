@@ -87,6 +87,7 @@ import {
   createCheckinHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
+import { warmLocalOboSources } from './resolve/providers/localObo.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createSpecSheetHandlers } from './api/handlers/SpecSheetHandlers.js';
@@ -844,6 +845,26 @@ export async function createServer(
   void resolveSpine
     .resolve('cell', { limit: 1 })
     .catch(() => {});
+
+  // Warm the local OBO snapshots for the same reason: today they are parsed
+  // lazily inside the first search, and a missing/unparsable file only shows up
+  // as a quietly smaller result set. Deferred via setImmediate so parsing never
+  // blocks boot, and best-effort so an unreadable registry cannot fail startup.
+  // A healthy boot logs nothing; each broken source gets ONE named warn line.
+  setImmediate(() => {
+    try {
+      for (const status of warmLocalOboSources()) {
+        if (!status.ok) {
+          console.warn(
+            `local-obo source ${status.id} failed to load from ${status.path}: ${status.error}`,
+          );
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`local-obo sources failed to load: ${message}`);
+    }
+  });
 
   // Compile hot path uses the SHARED full resolve() spine (local records + OAK +
   // OLS4), so the compiler agrees with the UI and agent — "one resolution path,
