@@ -141,7 +141,30 @@ describe('extractDocumentPages', () => {
     expect(noText?.severity).toBe('warning');
     expect(noText?.details).toEqual({ page: 1 });
     expect(noText?.message).toContain('OCR returned no text');
-    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'LOCAL_OCR_REVIEW')).toBe(true);
+    // Nothing was transcribed, so the page must not claim a local-OCR read
+    // happened (adversarial c2 D7); only the blank-page warning above speaks.
+    expect(
+      result.diagnostics.some((diagnostic) => diagnostic.code === 'LOCAL_OCR_REVIEW'),
+      'a zero-text OCR arm must not carry the "Transcribed using local OCR" caution',
+    ).toBe(false);
+  });
+
+  it('(e2) attaches the LOCAL_OCR_REVIEW caution when the OCR arm really transcribed text', async () => {
+    const result = await extractDocumentPages(join(scratch, 'scan-text.pdf'), {
+      readPageTexts: async () => ({ pages: [{ page: 1, text: '' }], diagnostics: [] }),
+      loadOcrConfig: async () => OCR_CONFIG,
+      probeTool: async () => true,
+      ocrPage: async () => ({ text: '10 g NaCl in 100 mL', diagnostics: [] }),
+    });
+
+    expect(result.pages).toEqual([{ page: 1, text: '10 g NaCl in 100 mL', method: 'ocr' }]);
+    const caution = result.diagnostics.find((diagnostic) => diagnostic.code === 'LOCAL_OCR_REVIEW');
+    expect(caution?.severity).toBe('warning');
+    expect(caution?.details).toEqual({ page: 1 });
+    expect(caution?.message).toContain('Transcribed using local OCR');
+    expect(
+      result.diagnostics.some((diagnostic) => diagnostic.code === PDF_DIAGNOSTIC_CODES.PDF_NO_TEXT_LAYER),
+    ).toBe(false);
   });
 
   it('(f) does NOT attach the LOCAL_OCR_REVIEW caution to a failed OCR arm', async () => {

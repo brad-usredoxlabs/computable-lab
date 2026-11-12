@@ -186,9 +186,13 @@ export async function extractDocumentPages(
         page.text = outcome.text;
         diagnostics.push(...outcome.diagnostics.filter((entry) => entry.code !== 'LOCAL_OCR_REVIEW'));
         // The caution rides a local-OCR read that ACTUALLY transcribed the
-        // page (adversarial c1 D2) — a failed arm carries its IMAGE_OCR_* error
-        // and must never claim "Transcribed using local OCR".
-        if (!outcome.diagnostics.some((entry) => entry.severity === 'error')) {
+        // page (adversarial c1 D2, c2 D7) — a failed arm carries its
+        // IMAGE_OCR_* error and a zero-text arm carries the blank-page
+        // warning below; neither may claim "Transcribed using local OCR".
+        if (
+          !outcome.diagnostics.some((entry) => entry.severity === 'error') &&
+          outcome.text.trim().length > 0
+        ) {
           diagnostics.push({
             severity: 'warning',
             code: 'LOCAL_OCR_REVIEW',
