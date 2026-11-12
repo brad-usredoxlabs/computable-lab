@@ -58,6 +58,23 @@ describe('source keywords — quantifier heads keep their complement', () => {
     expect(rows[0]?.value).toBe('8');
     expect(columns).toHaveLength(0);
   });
+
+  it('truncates at the next preposition so an "of" complement keeps only its noun phrase', () => {
+    // advc c1 D1: restoring the whole alternative made the keyword
+    // "number of rows as stated on the sheet", which can never startWith-match
+    // the label "Number of rows: 8" — the required field silently unmapped.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'topology.rows', source: 'Number of rows as stated on the sheet' },
+      ],
+    };
+    const proposals = extractProposals(fieldMap, { url: 'https://example.com/plate', text: 'Number of rows: 8' });
+    const rows = proposals.filter((p) => p.targetField === 'topology.rows');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.value).toBe('8');
+  });
 });
 
 describe('shipped labware map — topology sources yield distinct keywords', () => {
