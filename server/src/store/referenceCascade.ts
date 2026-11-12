@@ -16,6 +16,7 @@
 import { readFileSync } from 'node:fs';
 import * as yaml from 'js-yaml';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
+import { collectRefMatches } from './recordRefTraversal.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,39 +168,22 @@ interface RawRef {
  * Recursively scan a payload for every object with { kind: 'record', id }.
  * Returns all matching { pointer, targetId } pairs.
  *
- * Does NOT follow revisionRef — a record's own revisions must not report as
- * referrers or dangling references.
+ * Delegates to the shared traversal with this consumer's legacy policy: ref
+ * objects only (no bare strings), stop at the matched ref object (no `.id`
+ * child), and skip `revisionRef` at the top level — a record's own revisions
+ * must not report as referrers or dangling references. The skip is top-key
+ * only by design; a nested `x.revisionRef` is still scanned.
  */
 function collectAllRecordRefs(
   value: unknown,
   currentPath: string,
 ): RawRef[] {
-  const results: RawRef[] = [];
-
-  if (value == null || typeof value !== 'object') return results;
-
-  // Skip revisionRef to avoid self-referencing through revision history
-  if (currentPath === 'revisionRef') return results;
-
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      const childPath = `${currentPath}[${i}]`;
-      results.push(...collectAllRecordRefs(value[i], childPath));
-    }
-  } else {
-    const obj = value as Record<string, unknown>;
-    // Check if this object is a record ref
-    if (obj.kind === 'record' && typeof obj.id === 'string') {
-      results.push({ pointer: currentPath, targetId: obj.id });
-    } else {
-      for (const [key, val] of Object.entries(obj)) {
-        const childPath = currentPath ? `${currentPath}.${key}` : key;
-        results.push(...collectAllRecordRefs(val, childPath));
-      }
-    }
-  }
-
-  return results;
+  return collectRefMatches(value, {
+    initialPointer: currentPath,
+    skipTopLevelKeys: ['revisionRef'],
+    includeBareStrings: false,
+    descendIntoRefObjects: false,
+  }).map((match) => ({ pointer: match.pointer, targetId: match.targetId }));
 }
 
 /**
