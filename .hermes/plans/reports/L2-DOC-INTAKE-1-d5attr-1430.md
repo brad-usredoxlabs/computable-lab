@@ -243,7 +243,41 @@ RecordHostPage, so that chunk graph is never evaluated there.
 
 ## Step 3 — repair / pin
 
-(placeholder)
+REPAIR LANDED (owned file: app/src/event-editor/viewer/pdf/usePdfDocument.ts,
+~46 changed lines; test-file touch-up ~28 lines; net product delta +12).
+
+Root cause: static `import * as pdfjsLib from 'pdfjs-dist'` (line 15) put the
+pdf.js runtime — which executes `new DOMMatrix()` at module scope in
+canvas.js:63 — into the RecordHostPage lazy chunk's static import graph, so
+module evaluation of the chunk threw and the `lazy()` promise at App.tsx:67
+rejected → permanent "Loading..." (App.tsx:88) with zero /api requests.
+
+Change: replace the namespace import with a one-shot dynamic
+`import('pdfjs-dist')` on first real use (`loadPdfjs()` inside the effect,
+resolved before `getDocument`), move `GlobalWorkerOptions.workerSrc` setup to
+first real use, guard cleanup with `task !== null`, keep the original
+cancelled/destroy semantics. The `?url` worker import and the type-only import
+(erasable, no runtime graph edge) remain.
+
+Result (RAW tail of `npx vitest run src/App.routeReal.record.test.tsx`
+src/App.url.test.tsx`, cwd app, exit 0):
+
+```
+ ✓ src/App.url.test.tsx  (6 tests) 143ms
+ ✓ src/App.routeReal.record.test.tsx  (1 test) 1321ms
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+```
+
+Typecheck: `npx tsc --noEmit` (cwd app) — 0 errors in app/src/**; the only
+diagnostics are 6 pre-existing `TS2307 Cannot find module` errors in
+`../server/src/**` (server's own store/module-resolution gap in this worktree;
+server/ is untouched and out of scope).
+
+Not done (out of scope / follow-up): further code-splitting of the
+PDF/editing subtree out of the RecordHostPage chunk (the served-browser
+cold-transform perfs slowness from the g2 receipt). Named follow-up unit:
+L2-DOC-INTAKE-2-RECORDCHUNKSPLIT.
 
 ## AC mapping (browser gate)
 
@@ -256,4 +290,15 @@ RecordHostPage, so that chunk graph is never evaluated there.
 
 ## Verify before exit
 
-(placeholder)
+- RED (pre-repair): `cd app && npx vitest run src/App.routeReal.record.test.tsx`
+  → exit 1, RAW captured verbatim in Step 1 above (chunk rejects at module
+  evaluation; first owned frame usePdfDocument.ts:2 → pdfjs-dist canvas.js:63).
+- GREEN (post-repair, commit a6909375017b98b1bb4a12280dd2f0d235a14980):
+  `cd app && npx vitest run src/App.routeReal.record.test.tsx src/App.url.test.tsx`
+  → exit 0, `Test Files 2 passed (2)`, `Tests 7 passed (7)` (raw tail in Step 3).
+- `cd app && npx tsc --noEmit` → app/src clean; only pre-existing server/ TS2307.
+- App.url.test.tsx unmodified and 6/6.
+- Worktree clean at exit (git status empty; app/node_modules is git-ignored).
+
+L2-DOC-INTAKE-1 d5attr UNIT DONE a6909375017b98b1bb4a12280dd2f0d235a14980
+L2-DOC-INTAKE-1-d5attr2 UNIT unit DONE a6909375017b98b1bb4a12280dd2f0d235a14980
