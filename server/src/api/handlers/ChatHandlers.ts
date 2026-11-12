@@ -51,6 +51,7 @@ export interface ChatHandlersOptions {
 
 const ENV_BASE_URL = process.env.CLA_ORNITh_BASE_URL;
 const ENV_MODEL = process.env.CLA_ORNITh_MODEL;
+const ENV_API_KEY = process.env.CLA_ORNITh_API_KEY;
 
 /** Normalize a baseUrl to a single trailing `/v1` for the chat endpoint. */
 function toChatBase(baseUrl: string): string {
@@ -96,7 +97,7 @@ export class ChatHandlers {
    * Resolve the { baseUrl, model } the chat should target.
    * Follows the config-first, env-only-as-override rule.
    */
-  private resolveEndpoint(profileName?: string): { baseUrl: string; model: string } {
+  private resolveEndpoint(profileName?: string): { baseUrl: string; model: string; apiKey?: string } {
     const ai = this.options.getAppConfig()?.ai;
 
     if (ai) {
@@ -106,25 +107,37 @@ export class ChatHandlers {
         if (!profile) {
           throw new Error(`Unknown AI profile "${profileName}".`);
         }
-        return { baseUrl: profile.inference.baseUrl, model: profile.inference.model };
+        return {
+          baseUrl: profile.inference.baseUrl,
+          model: profile.inference.model,
+          ...(profile.inference.apiKey ? { apiKey: profile.inference.apiKey } : {}),
+        };
       }
 
       // 2. Active profile.
       const activeName = ai.activeProfile;
       const active = activeName ? ai.profiles?.[activeName] : undefined;
       if (active) {
-        return { baseUrl: active.inference.baseUrl, model: active.inference.model };
+        return {
+          baseUrl: active.inference.baseUrl,
+          model: active.inference.model,
+          ...(active.inference.apiKey ? { apiKey: active.inference.apiKey } : {}),
+        };
       }
 
       // 3. Legacy inline inference config.
       if (ai.inference?.baseUrl && ai.inference?.model) {
-        return { baseUrl: ai.inference.baseUrl, model: ai.inference.model };
+        return {
+          baseUrl: ai.inference.baseUrl,
+          model: ai.inference.model,
+          ...(ai.inference.apiKey ? { apiKey: ai.inference.apiKey } : {}),
+        };
       }
     }
 
     // 4. Dev-only env override (never the primary path).
     if (ENV_BASE_URL && ENV_MODEL) {
-      return { baseUrl: ENV_BASE_URL, model: ENV_MODEL };
+      return { baseUrl: ENV_BASE_URL, model: ENV_MODEL, ...(ENV_API_KEY ? { apiKey: ENV_API_KEY } : {}) };
     }
 
     throw new Error(
@@ -149,7 +162,7 @@ export class ChatHandlers {
       return;
     }
 
-    let resolved: { baseUrl: string; model: string };
+    let resolved: { baseUrl: string; model: string; apiKey?: string };
     try {
       resolved = this.resolveEndpoint(profileName);
     } catch (err) {
@@ -181,9 +194,18 @@ export class ChatHandlers {
     reply.raw.once('close', onClose);
 
     try {
+      // Auth: the upstream is an OpenAI-compatible endpoint and the overwhelming majority
+      // (OpenRouter, vLLM behind a key, appliance-2's NInfer) reject an unauthenticated
+      // /chat/completions with 401. The profile's apiKey is resolved alongside the baseUrl and
+      // forwarded exactly as InferenceClient.ts:80 does. Without this the standalone chat page
+      // answered every turn with `Upstream 401` (measured on all three stacks 2026-11-12).
+      const upstreamHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (resolved.apiKey) {
+        upstreamHeaders.Authorization = `Bearer ${resolved.apiKey}`;
+      }
       const response = await this.fetchImpl(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: upstreamHeaders,
         body: JSON.stringify({ model: resolved.model, messages, stream: true }),
         signal: abortController.signal,
       });

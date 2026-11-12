@@ -122,6 +122,73 @@ describe('ChatHandlers.streamChat', () => {
     expect(reply.raw.end).toHaveBeenCalled();
   });
 
+  it('forwards the profile apiKey as a Bearer credential upstream (401 fix, 2026-11-12)', async () => {
+    // Measured defect: the proxy sent ONLY Content-Type, so every keyed upstream (OpenRouter,
+    // vLLM behind a key, appliance-2 NInfer) answered 401 and the standalone chat page could not
+    // get an answer on any stack. The key lives on the profile, next to baseUrl/model.
+    const withKey: AppConfig = {
+      ...APP_CONFIG,
+      ai: {
+        ...APP_CONFIG.ai,
+        activeProfile: 'ornith',
+        profiles: {
+          ornith: {
+            inference: {
+              provider: 'openai-compatible',
+              baseUrl: 'http://thunderbeast:8080/v1',
+              model: 'singlespark-qwen3.8-flash-next',
+              apiKey: 'k-ey-123',
+            },
+            agent: {},
+          },
+        },
+      },
+    } as AppConfig;
+    let captured: RequestInit | undefined;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
+      return new Response(
+        openaiSSEStream([JSON.stringify({ choices: [{ index: 0, delta: { content: 'ok' } }] })]),
+        { status: 200 },
+      );
+    });
+    const handlers = new ChatHandlers({ getAppConfig: () => withKey, fetchImpl });
+    await handlers.streamChat(
+      {
+        headers: {},
+        body: { profileName: 'ornith', messages: [{ role: 'user', content: 'hi' }] },
+        log: { warn: vi.fn() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeReply() as any,
+    );
+    expect((captured?.headers as Record<string, string>).Authorization).toBe('Bearer k-ey-123');
+  });
+
+  it('sends NO Authorization header when the profile carries no apiKey (no "Bearer undefined")', async () => {
+    let captured: RequestInit | undefined;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
+      return new Response(
+        openaiSSEStream([JSON.stringify({ choices: [{ index: 0, delta: { content: 'ok' } }] })]),
+        { status: 200 },
+      );
+    });
+    const handlers = new ChatHandlers({ getAppConfig: () => APP_CONFIG, fetchImpl });
+    await handlers.streamChat(
+      {
+        headers: {},
+        body: { profileName: 'ornith', messages: [{ role: 'user', content: 'hi' }] },
+        log: { warn: vi.fn() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeReply() as any,
+    );
+    expect('Authorization' in ((captured?.headers ?? {}) as Record<string, string>)).toBe(false);
+  });
+
   it('forwards reasoning deltas (chain-of-thought) as reasoning events', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(
