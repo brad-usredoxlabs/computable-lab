@@ -8,7 +8,7 @@ Commits:
 - 561a6510 test(vendor-documents): pin per-page extraction method (RED)
 - 14552a15 feat(vendor-documents): record and render per-page extraction method
 
-## What changed (5 owned files, 39 insertions / 4 deletions)
+## What changed (5 owned files across 2 commits; product commit 39 insertions / 4 deletions across 4 product files)
 
 1. `server/src/vendor-documents/service.ts` — `ExtractedPage` gains
    `method: DocumentPageMethod` (imported from the seam's own union in
@@ -61,10 +61,18 @@ undefined
 
 ## MUTATION PROBE (deleted only the `pages:` spread in the `extraction` object)
 
+`cd server && npx vitest run src/vendor-documents/service.test.ts`
+
 ```
- ✓? no — output:
- ❯ src/vendor-documents/service.test.ts  (17 tests | 1 failed)
- Tests  1 failed | 16 passed (17)
+ ❯ src/vendor-documents/service.test.ts  (17 tests | 1 failed) 54ms
+   ❯ ... > records the extraction method per page, not only for the document
+     → expected undefined to deeply equal [ { page_number: 1, …(1) }, …(1) ]
+
+ FAIL  ... > records the extraction method per page, not only for the document
+AssertionError: expected undefined to deeply equal [ { page_number: 1, …(1) }, …(1) ]
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
 ```
 (the single failure is the new pin: `expected undefined to deeply equal [...]`;
 the other 16, including the three pre-existing PDF pins, stayed green).
@@ -133,7 +141,7 @@ for the document exactly as before, with page truth now beside it.)
 6. Unsupported/failed arms keep `pages: []` and therefore emit no `pages` key.
 7. Client parser is per-element tolerant (`flatMap`), one bad page cannot drop
    the document, drafts or sibling pages.
-8. Diff measured 39 inserted lines / 4 deleted across 4 product files (+41-line
+8. Diff measured 39 inserted lines / 4 deleted across 4 product files (+33-line
    test hunk in 561a6510); well under the 140-line budget.
 
 ## Notes / environment
@@ -150,4 +158,4 @@ for the document exactly as before, with page truth now beside it.)
   verification; UI acceptance (browser lane screenshot of a mixed PDF showing
   `pages 1 pdf_text, 2 ocr`) remains with the independent browser reviewer.
 
-L2-DOC-INTAKE-1-g1pagemethod UNIT unit DONE 14552a15ae4432052beea88ab764692b5ab0fc79
+L2-DOC-INTAKE-1 UNIT g1pagemethod DONE cd2b4362a008a8d86474bb2c3e78ab933bba7980
