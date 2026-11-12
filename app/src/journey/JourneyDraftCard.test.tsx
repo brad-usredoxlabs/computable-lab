@@ -102,8 +102,8 @@ describe('JourneyDraftCard', () => {
 
   it('renders every section in the fixed order: objective, contract, parameters, steps, alternatives, assumptions, questions, diagnostics', () => {
     const { container } = render(<JourneyDraftCard view={draft} diagnostics={diagnostics} />)
-    const sections = [...container.querySelectorAll('h2')].map((h) => h.textContent ?? '')
-    expect(sections).toEqual([
+    const headings = [...container.querySelectorAll('h2')].map((h) => h.textContent ?? '')
+    expect(headings).toEqual([
       'Objective',
       'Completion contract',
       'Parameters',
@@ -111,8 +111,9 @@ describe('JourneyDraftCard', () => {
       'Alternatives',
       'Assumptions',
       'Unresolved questions',
-      'Diagnostics',
     ])
+    const summary = container.querySelector('details summary')
+    expect(summary?.textContent).toContain('Diagnostics')
     // The fixed order is observable in the DOM itself: for each section, the
     // number of the other seven sections that precede it in document order
     // must equal its index.
