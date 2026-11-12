@@ -82,4 +82,6 @@ re-run green: 7 passed (7).
 - Hygiene lint rules once a catalogue collection exists (no lint YAML added here).
 - Fix the shared `@types/semver` install so `tsc --noEmit` can return to rc=0.
 
-L2-JOURNEY-CAPABILITY-CATALOGUE-1-u1schema UNIT unit DONE f9fd897d13ebf4a969c15967c4eafffa4307827c
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u1schema DONE 35d264d263b90301de09c272d2b5c5b22dd5799a
+
+[advc c1 D1] Marker re-emitted: corrected item token (removed spurious `-u1schema` suffix), unit token (`unit` → `u1schema`), and sha (`f9fd897d` → `35d264d2`, the commit that actually contains this report).
