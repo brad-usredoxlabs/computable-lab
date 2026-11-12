@@ -6,8 +6,10 @@
  * step with no input ports is NOT_READY on awaiting_human_completion; (c) a
  * step both input-fed and human carries both reasons in the fixed order;
  * (d) a capability_ref outside the admitted catalogue is relayed VERBATIM
- * under the lint's own rule, with no manifest; (e) the product module holds
- * no journey- literal and no step-id or surface-name table.
+ * under the lint's own rule, with no manifest; (e) the product module names
+ * exactly the closed literal and object-key vocabulary, with mutant proofs;
+ * (f) an empty descriptor version string is refused under
+ * journey_capability_version_missing.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -42,6 +44,53 @@ function port(name: string): Record<string, unknown> {
     case 'StagedDraftReference': return { version: 'v1', draft_id: 'DRAFT-1' };
     default: throw new Error(`unknown port $def ${name}`);
   }
+}
+// TypeScript/JavaScript reserved words: never object keys in this module's source.
+const KEYWORDS = new Set(['undefined', 'true', 'false', 'null', 'this', 'super', 'function', 'return', 'let', 'const', 'var', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'new', 'delete', 'typeof', 'instanceof', 'void', 'in', 'of', 'class', 'extends', 'implements', 'interface', 'type', 'import', 'export', 'from', 'default', 'public', 'private', 'readonly', 'static', 'abstract', 'enum', 'as', 'namespace', 'declare', 'keyof', 'infer', 'any', 'unknown', 'never', 'number', 'string', 'boolean', 'object', 'symbol', 'bigint']);
+/** Every quoted literal (any quote style) and every unquoted object key (identifier before ':');
+ * comments and literal contents are skipped, ternary ':' is excluded via the keyword filter. */
+function stringTokens(source: string) {
+  const literals: string[] = []; const keys: string[] = [];
+  let i = 0; const n = source.length;
+  while (i < n) {
+    const ch = source.charAt(i); const next = i + 1 < n ? source.charAt(i + 1) : '';
+    if (ch === '/' && (next === '/' || next === '*')) {
+      const end = next === '/' ? source.indexOf('\n', i) : source.indexOf('*/', i + 2);
+      i = end === -1 ? n : end + (next === '/' ? 1 : 2); continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      let j = i + 1;
+      while (j < n) { const c = source.charAt(j); if (c === ch) break; j += c === '\\' ? 2 : 1; }
+      literals.push(source.slice(i + 1, j)); i = j + 1; continue;
+    }
+    if (ch === ':') {
+      const at = source.charAt(i - 1) === ' ' ? i - 1 : i;
+      const token = source.slice(0, at).match(/[A-Za-z0-9_$]+$/)?.[0] ?? '';
+      if (token !== '' && !KEYWORDS.has(token)) keys.push(token);
+    }
+    i += 1;
+  }
+  return { literals, keys };
+}
+/** Closed string-literal vocabulary of the product module (any id would be a defect). */
+const CLOSED_LITERALS = [
+  'READY', 'NOT_READY', 'awaiting_producer_output', 'awaiting_human_completion',
+  'journey_capability_version_missing', 'automatic', 'human_in_the_loop',
+  // module wiring and defensive message text, verified by reading the source — not ids:
+  './journeyDocumentLint.js', './capabilityCatalogue.js',
+  'step ${step.id}: the admitted capability descriptor declares no version string', 'string',
+];
+/** Closed unquoted-object-key vocabulary of the product module. */
+const CLOSED_KEYS = [
+  'id', 'capability_ref', 'capability_version', 'interaction_mode', 'status', 'reasons',
+  'blocked_by', 'journey_id', 'revision', 'steps', 'not_ready', 'ok', 'manifest',
+  'diagnostics', 'input_ports', 'output_ports', 'document', 'catalogue', 'rule', 'step_id',
+  'blockedBy', 'compiled', 'rawVersion',
+];
+/** True when the source names a string literal or object key outside the closed sets. */
+function outsideClosedSets(mutant: string): boolean {
+  const { literals, keys } = stringTokens(mutant);
+  return literals.some((l) => !CLOSED_LITERALS.includes(l)) || keys.some((k) => !CLOSED_KEYS.includes(k));
 }
 
 describe('compileJourneyStructure', () => {
@@ -111,10 +160,42 @@ describe('compileJourneyStructure', () => {
     expect(result.diagnostics[0]!.step_id).toBe('step-a');
     expect('manifest' in result).toBe(false);
   });
+  it('refuses a catalogue descriptor with an empty version string under journey_capability_version_missing', () => {
+    // The version gap is the compiler's defensive contract: the lint checks
+    // membership, not version strings, so the fixture is clean at the gate.
+    const emptyVersion = CATALOGUE.map((d) => (d.capability_id === 'transfer' ? { ...d, version: '' } : d));
+    const plan = doc({ steps: [
+      { id: 'transfer', capability_ref: 'transfer', input_ports: [], interaction_mode: 'automatic', output_ports: [] },
+    ] });
+    expect(lintJourneyDocument(plan, emptyVersion).ok).toBe(true); // gate.ok first: unreachable via the loader
+    const result = compileJourneyStructure(plan, emptyVersion);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected the gate to refuse');
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.rule).toBe('journey_capability_version_missing');
+    expect(result.diagnostics[0]!.step_id).toBe('transfer');
+    expect('manifest' in result).toBe(false);
+  });
   it('the product module holds no journey- literal and no step-id or surface-name table', () => {
     const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'journeyCompiler.ts'), 'utf8');
     expect(source).not.toMatch(/["']journey-/);
     expect(source).not.toMatch(/["'][a-z0-9_.-]+["']\s*:/);
     expect(source).not.toMatch(/\bswitch\s*\(/);
+    // D-1: those three regexes miss unquoted keys, arrays and === 'id'
+    // comparisons, so the pin is strengthened (never weakened): every string
+    // literal and every unquoted object key must equal the closed set.
+    const { literals, keys } = stringTokens(source);
+    expect([...new Set(literals)].sort()).toEqual([...CLOSED_LITERALS].sort());
+    expect([...new Set(keys)].sort()).toEqual([...CLOSED_KEYS].sort());
+    // Negative controls, built by runtime concatenation so this test file
+    // itself carries no banned literal; each mutant must be REJECTED by the
+    // same extractor the pin above applies (the teeth: a mutant that passed
+    // the extractor would fail this suite).
+    const journeyId = 'jour' + 'ney-x'; // (i) a per-journey branch on an arbitrary id
+    expect(outsideClosedSets(source + "\nif (plan.journey_id === '" + journeyId + "') { return { ok: true, manifest: plan }; }\n")).toBe(true);
+    const stepIds = ['step' + 'Alpha', 'step' + 'Beta']; // (ii) an unquoted-key step-id table
+    expect(outsideClosedSets(source + '\nconst stepIdTable = { ' + stepIds[0] + ': 1, ' + stepIds[1] + ': 2 };\n')).toBe(true);
+    const capabilityId = 'ghost' + '-cap'; // (iii) a capability-id equality check
+    expect(outsideClosedSets(source + "\nif (step.capability_ref === '" + capabilityId + "') { return { ok: false, diagnostics: [] }; }\n")).toBe(true);
   });
 });
