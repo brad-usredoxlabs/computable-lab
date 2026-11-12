@@ -17,7 +17,7 @@ Implementation commit: ef7336049573d90f8083af5c3ea230c8410e83e8
 
 Not touched: UIHandlers.ts, UISpecLoader.ts, vendor-product.schema.yaml, app/**, other *.ui.yaml,
 surface-manifest.ui.yaml (no coverage/manifest test demanded an entry — the loader walks the tree).
-`git diff --stat 1dc9db1a..HEAD` = the 2 files above only.
+`git diff --stat 1dc9db1a..HEAD` (measured at this commit's HEAD) = 3 files changed, 274 insertions(+); the 2 implementation files above plus this report file.
 
 ## Deviation from the brief's step 2, with evidence (please read)
 
@@ -94,5 +94,5 @@ STILL OPEN for the gate (other units/legs, not this one):
 
 No stack boot was performed; the loader+projection tests are the evidence and YAML is not hot-reloaded.
 
-L2-DOC-INTAKE-1 UNIT g1viewable DONE ef7336049573d90f8083af5c3ea230c8410e83e8
-L2-DOC-INTAKE-1-g1viewable UNIT unit DONE ef7336049573d90f8083af5c3ea230c8410e83e8
+L2-DOC-INTAKE-1 UNIT g1viewable DONE c67608591c8f4a3b3433b92fd916e9d9f8bbc8c7
+L2-DOC-INTAKE-1-g1viewable UNIT unit DONE c67608591c8f4a3b3433b92fd916e9d9f8bbc8c7
