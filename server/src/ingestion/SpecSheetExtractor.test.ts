@@ -203,11 +203,11 @@ Catalog: 25200056`,
 
     const result = extractProposals(fieldMap, doc);
 
-    // Vendor should match "Manufacturer" keyword against colon-less segment
+    // gate g4 D2: "Manufacturer | OEM/ODM Supplier" is navigation/label chrome,
+    // not a field value — a colon-less segment (label === value) must NOT be
+    // proposed as the vendor.
     const vendors = result.filter((p) => p.targetField === 'vendor');
-    expect(vendors).toHaveLength(1);
-    expect(vendors[0].value).toBe('Manufacturer');
-    expect(vendors[0].value).not.toContain('OEM');
+    expect(vendors).toHaveLength(0);
 
     // Capacity from colon segment
     const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
@@ -506,5 +506,82 @@ describe('extractProposals — positional extraction scoped per table', () => {
     const packages = result.filter((p) => p.targetField === 'package_size');
     expect(packages).toHaveLength(1);
     expect(packages[0].value).toBe('10 mL');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* u6colonless — gate g4 D1 + D2: colon-less segments are not values  */
+/* ------------------------------------------------------------------ */
+
+describe('extractProposals — colon-less segments never accepted as values (g4 D1+D2)', () => {
+  it('D1: a table header cell "Number of Wells" yields no topology proposal (nest pages)', () => {
+    // Sources verbatim from schema/ingestion/spec-sheet.labware.yaml:53-56
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'topology.rows', source: 'Number of rows for grid addressing' },
+        { targetField: 'topology.columns', source: 'Number of columns for grid addressing' },
+      ],
+    };
+
+    // Real nest labware page: pipe-separated header chrome, no other matching line
+    const doc = {
+      url: 'https://example.com/nest-plate',
+      text: '| Number of Wells | Single Channel |',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    expect(result.filter((p) => p.targetField === 'topology.rows')).toHaveLength(0);
+    expect(result.filter((p) => p.targetField === 'topology.columns')).toHaveLength(0);
+  });
+
+  it('D2: a colon-less nav label "Manufacturer" yields no vendor proposal (cotaus page)', () => {
+    // The flipped pin at :206-210 covers the full cotaus fixture; this leg
+    // isolates the chrome line alone so the assertion cannot ride another
+    // field's proposal count.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'vendor', source: 'Vendor / Manufacturer from the spec sheet' },
+      ],
+    };
+
+    const doc = {
+      url: 'https://example.com/cotaus',
+      text: 'Manufacturer | OEM/ODM Supplier | Wholesale Factory Price',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    expect(result.filter((p) => p.targetField === 'vendor')).toHaveLength(0);
+  });
+
+  it('guard: a colon-less data cell reached positionally under a real header still arrives', () => {
+    // Anti-regression for the positional arm (:244-256) — colon-less cells are
+    // legitimate table VALUES when reached under a header, only the
+    // label-matching arm must reject them.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'color', source: 'Color of the reservoir' },
+        { targetField: 'capacity.max_well_volume_uL', source: 'Capacity of the reservoir', transform: 'parse_volume', unit: 'uL' },
+      ],
+    };
+
+    const doc = {
+      url: 'https://example.com/reservoir-table',
+      text: '| Color | Capacity |\n| Clear | 195 mL |',
+    };
+
+    const result = extractProposals(fieldMap, doc);
+
+    const colors = result.filter((p) => p.targetField === 'color');
+    expect(colors).toHaveLength(1);
+    expect(colors[0].value).toBe('Clear');
+
+    const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
+    expect(capacities).toHaveLength(1);
+    expect(capacities[0].value).toBe('195 mL');
   });
 });
