@@ -166,4 +166,56 @@ describe('chatReducer', () => {
     state = chatReducer(state, { type: 'stream-trace', entry: { seq: 0, kind: 'diagnostic', passId: 'validate', code: 'V1', severity: 'warning', message: 'labware resolved' } })
     expect(state.trace[0]).toMatchObject({ kind: 'diagnostic', severity: 'warning', code: 'V1' })
   })
+
+  // The draft-recovery marker is receipt plumbing: it rides the status frame
+  // for exactly one turn and is never inherited by a later clean turn.
+  it('stream-status carries the draft-recovery marker', () => {
+    const state = chatReducer(initialChatState, {
+      type: 'stream-status',
+      message: "Parsed the draft from the model's text",
+      recoveredFrom: { driver: 'fenced-json' },
+    })
+    expect(state.statusRecoveredFrom).toEqual({ driver: 'fenced-json' })
+  })
+
+  it('never inherits a previous turn marker across a clean turn', () => {
+    // Turn 1: a salvaged status, then the turn completes.
+    let state = chatReducer(initialChatState, {
+      type: 'stream-status',
+      message: 'recovered',
+      recoveredFrom: { driver: 'fenced-json' },
+    })
+    state = chatReducer(state, { type: 'stream-done' })
+    expect(state.statusRecoveredFrom).toBeNull()
+
+    // A new marker turns up, then the user starts another turn: the send
+    // itself must drop it (the marker belongs to the previous turn).
+    state = chatReducer(state, {
+      type: 'stream-status',
+      message: 'recovered again',
+      recoveredFrom: { driver: 'fenced-json' },
+    })
+    state = chatReducer(state, {
+      type: 'send',
+      userMessage: userMessage('next'),
+      pendingAssistantId: 'a-2',
+    })
+    expect(state.statusRecoveredFrom).toBeNull()
+
+    // Turn 2: a plain status carries no marker and must not inherit one.
+    state = chatReducer(state, { type: 'stream-status', message: 'clean turn' })
+    expect(state.statusRecoveredFrom).toBeNull()
+    expect(state.status).toBe('clean turn')
+  })
+
+  it('reset clears the draft-recovery marker', () => {
+    const recovered = chatReducer(initialChatState, {
+      type: 'stream-status',
+      message: 'recovered',
+      recoveredFrom: { driver: 'fenced-json' },
+    })
+    const reset = chatReducer(recovered, { type: 'reset' })
+    expect(reset.statusRecoveredFrom).toBeNull()
+    expect(reset).toEqual(initialChatState)
+  })
 })
