@@ -311,6 +311,55 @@ describe('ArtifactBlobStore — storage-backed', () => {
     });
   });
 
+  describe('path segment validation', () => {
+    it('sanitises artifactId into a single segment with no .. and no leading slash', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      const result = await blobStore.save({
+        artifactId: '../../etc/passwd',
+        fileName: 'x.pdf',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      const segments = result.storedPath.split('/');
+      expect(result.storedPath.startsWith('/')).toBe(false);
+      expect(result.storedPath).not.toContain('..');
+      expect(segments).toHaveLength(3);
+      expect(segments[0]).toBe('ingestion-artifacts');
+      expect(segments[1]).toBe('etc-passwd');
+      expect(segments[2]).toBe('x.pdf');
+    });
+
+    it('collapses whole-segment dots, .. runs and empty ids to a safe segment', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+      const cases: Array<[string, string]> = [
+        ['..', 'artifact'],
+        ['a/../b', 'a-.-b'],
+        ['', 'artifact'],
+      ];
+
+      for (const [artifactId, expectedSegment] of cases) {
+        const result = await blobStore.save({
+          artifactId,
+          fileName: 'x.pdf',
+          contentBase64: Buffer.from('abc').toString('base64'),
+        });
+        const segments = result.storedPath.split('/');
+        expect(segments).toHaveLength(3);
+        expect(segments[1]).toBe(expectedSegment);
+        expect(segments[1]).not.toContain('..');
+      }
+    });
+
+    it('throws naming the prefix when it is not a single non-empty path segment', () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      expect(() => new ArtifactBlobStore(makeStorage(provider), '../evil', recorder))
+        .toThrow(/'\.\.\/evil'/);
+    });
+  });
+
   describe('LegacyArtifactBlobStore', () => {
     it('can still read pre-existing on-disk blobs', async () => {
       const legacy = new LegacyArtifactBlobStore(workspaceDir, '.ingestion-artifacts');
@@ -328,24 +377,26 @@ describe('ArtifactBlobStore — storage-backed', () => {
   });
 
   describe('createArtifactBlobStoreRecorder()', () => {
-    it('omits undefined optional fields (exactOptionalPropertyTypes safety)', async () => {
+    it('emits format as a present string for extension and extensionless names', async () => {
       const fakeStore = makeFakeStore();
       const recorder = createArtifactBlobStoreRecorder(fakeStore.store);
-
-      await recorder({
+      const base = {
         artifactId: 'ING-001',
         deviceId: 'vast',
-        path: 'ingestion-artifacts/ING-001/test.bin',
+        path: 'ingestion-artifacts/ING-001/a.csv',
         contentHash: 'abc123',
         sizeBytes: 10,
-        fileName: 'test.bin',
-      });
+      };
 
-      const dref = fakeStore.createdEnvelopes[0].payload;
-      // Optional fields should either be present with a value or absent entirely
-      // acquiredAt is always set, format is set from fileName
-      expect(dref.acquiredAt).toBeDefined();
-      expect(dref.format).toBe('bin');
+      await recorder({ ...base, fileName: 'a.csv' });
+      await recorder({ ...base, fileName: 'report' });
+
+      const [withExt, withoutExt] = fakeStore.createdEnvelopes.map((e) => e.payload);
+      expect('format' in withExt).toBe(true);
+      expect(withExt.format).toBe('csv');
+      expect('format' in withoutExt).toBe(true);
+      expect(withoutExt.format).toBe('bin');
+      expect(withExt.acquiredAt).toBeDefined();
     });
 
     it('mints sequential DREF IDs', async () => {
