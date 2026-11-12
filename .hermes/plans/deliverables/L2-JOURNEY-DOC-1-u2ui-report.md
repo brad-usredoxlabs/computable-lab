@@ -165,7 +165,9 @@ git -c core.fileMode=false status --short                                       
 - `a7b4787c` L2-JOURNEY-DOC-1 u2ui: RED — JourneyDraftCard DOM contract test
 - `d6c12125` L2-JOURNEY-DOC-1 u2ui: JourneyDraftCard — read-only UNVALIDATED DRAFT render (first cut)
 - `6bb20b73` L2-JOURNEY-DOC-1 u2ui: trim to output budget (282 lines <= 300); behavior/assertions unchanged
-- (this report + exit marker: marker commit)
+- `f0525485` L2-JOURNEY-DOC-1 u2ui: add unit report (this file in tree)
+- `15955663` L2-JOURNEY-DOC-1 u2ui: exit marker attempt (marker line text botched by sed; see next)
+- `<final>` L2-JOURNEY-DOC-1 u2ui: fix marker line to name f05254855a0af9a629b80e9df8c2a889146ccd9d
 
 ## Decisions
 
@@ -185,4 +187,6 @@ git -c core.fileMode=false status --short                                       
   `diagnostics` prop verbatim.
 - No remaining blockers on this unit.
 
-PLACEHOLDER
+L2-JOURNEY-DOC-1 UNIT u2ui DONE f05254855a0af9a629b80e9df8c2a889146ccd9d
+# git rev-parse HEAD at marker commit time:
+# (pasted below after the final commit is made)
