@@ -9,7 +9,7 @@ import { createEnvelope } from '../types/RecordEnvelope.js';
 import { parseConcentration, type Concentration } from '../materials/concentration.js';
 import { extractVendorFormulationHtml } from '../ingestion/adapters/vendorFormulationHtml.js';
 import { extractDocumentPages } from '../ingestion/documentIntake.js';
-import type { DocumentIntakeOptions } from '../ingestion/documentIntake.js';
+import type { DocumentIntakeOptions, DocumentPageMethod } from '../ingestion/documentIntake.js';
 import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from './protocolIdeVendors.js';
 import { isCuratedVendor } from './protocolIdeVendors.js';
 import { getCuratedVendorRegistry } from '../registry/CuratedVendorRegistry.js';
@@ -36,6 +36,7 @@ export type VendorDocumentUpload = {
 type ExtractedPage = {
   pageNumber: number;
   text: string;
+  method: DocumentPageMethod;
 };
 
 export type CompositionDraftItem = {
@@ -191,7 +192,7 @@ async function extractPdfPages(
     readPageTexts: () => readLayoutPageTexts(tempFile),
     ...options,
   });
-  const pages: ExtractedPage[] = result.pages.map((page) => ({ pageNumber: page.page, text: page.text }));
+  const pages: ExtractedPage[] = result.pages.map((page) => ({ pageNumber: page.page, text: page.text, method: page.method }));
   const ocrAttempted = result.pages.some((page) => page.method === 'ocr');
   const tools = Object.values(result.toolsAvailable);
   return {
@@ -217,7 +218,7 @@ async function extractTextPages(
   }
   if (mediaType.startsWith('text/') || ['.txt', '.csv', '.tsv', '.md'].includes(extension)) {
     return {
-      pages: [{ pageNumber: 1, text: buffer.toString('utf8') }],
+      pages: [{ pageNumber: 1, text: buffer.toString('utf8'), method: 'plain_text' }],
       method: 'plain_text',
       ocrAttempted: false,
       ocrAvailable: await commandAvailable('tesseract'),
@@ -252,7 +253,7 @@ async function extractTextPages(
     try {
       await writeFile(tempFile, buffer);
       const { stdout } = await execFileAsync('tesseract', [tempFile, 'stdout']);
-      return { pages: [{ pageNumber: 1, text: stdout || '' }], method: 'ocr', ocrAttempted: true, ocrAvailable: true };
+      return { pages: [{ pageNumber: 1, text: stdout || '', method: 'ocr' }], method: 'ocr', ocrAttempted: true, ocrAvailable: true };
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -390,6 +391,9 @@ export async function buildVendorDocumentExtraction(
       method: extraction.method,
       extracted_at: now,
       ...(extraction.pages.length > 0 ? { page_count: extraction.pages.length } : {}),
+      ...(extraction.pages.length > 0
+        ? { pages: extraction.pages.map((page) => ({ page_number: page.pageNumber, method: page.method })) }
+        : {}),
       ocr_attempted: extraction.ocrAttempted,
       ocr_available: extraction.ocrAvailable,
       ...(combinedText.trim() ? { text_excerpt: excerpt(combinedText) } : {}),

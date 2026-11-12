@@ -128,6 +128,7 @@ export interface VendorDocumentValue {
     method?: 'plain_text' | 'pdf_text' | 'ocr' | 'html_section_parser' | 'unsupported' | 'failed'
     extractedAt?: string
     pageCount?: number
+    pages?: Array<{ pageNumber: number; method: 'plain_text' | 'pdf_text' | 'ocr' }>
     ocrAttempted?: boolean
     ocrAvailable?: boolean
     textExcerpt?: string
@@ -350,6 +351,19 @@ export function parseVendorDocuments(value: unknown): VendorDocumentValue[] {
     if (typeof entry.file_ref.file_name !== 'string' || !entry.file_ref.file_name.trim()) return []
     if (typeof entry.file_ref.media_type !== 'string' || !entry.file_ref.media_type.trim()) return []
     if (typeof entry.provenance.source_type !== 'string' || typeof entry.provenance.added_at !== 'string') return []
+    // Per-page methods are additive and tolerant: one malformed page drops that
+    // page only, never the document or its siblings.
+    const extractionPages: Array<{ pageNumber: number; method: 'plain_text' | 'pdf_text' | 'ocr' }> =
+      isRecord(entry.extraction) && Array.isArray(entry.extraction.pages)
+        ? entry.extraction.pages.flatMap((page) => (
+            isRecord(page)
+            && typeof page.page_number === 'number'
+            && Number.isFinite(page.page_number)
+            && (page.method === 'plain_text' || page.method === 'pdf_text' || page.method === 'ocr')
+              ? [{ pageNumber: page.page_number, method: page.method }]
+              : []
+          ))
+        : []
     return [{
       id: entry.id.trim(),
       ...(typeof entry.title === 'string' && entry.title.trim() ? { title: entry.title.trim() } : {}),
@@ -373,6 +387,7 @@ export function parseVendorDocuments(value: unknown): VendorDocumentValue[] {
               ...(typeof entry.extraction.method === 'string' ? { method: entry.extraction.method as NonNullable<VendorDocumentValue['extraction']>['method'] } : {}),
               ...(typeof entry.extraction.extracted_at === 'string' ? { extractedAt: entry.extraction.extracted_at } : {}),
               ...(typeof entry.extraction.page_count === 'number' ? { pageCount: entry.extraction.page_count } : {}),
+              ...(extractionPages.length > 0 ? { pages: extractionPages } : {}),
               ...(typeof entry.extraction.ocr_attempted === 'boolean' ? { ocrAttempted: entry.extraction.ocr_attempted } : {}),
               ...(typeof entry.extraction.ocr_available === 'boolean' ? { ocrAvailable: entry.extraction.ocr_available } : {}),
               ...(typeof entry.extraction.text_excerpt === 'string' && entry.extraction.text_excerpt.trim() ? { textExcerpt: entry.extraction.text_excerpt.trim() } : {}),

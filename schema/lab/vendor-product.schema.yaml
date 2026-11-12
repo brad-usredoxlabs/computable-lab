@@ -118,6 +118,19 @@ properties:
             page_count:
               type: integer
               minimum: 1
+            pages:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [ page_number, method ]
+                properties:
+                  page_number:
+                    type: integer
+                    minimum: 1
+                  method:
+                    type: string
+                    enum: [ plain_text, pdf_text, ocr, html_section_parser, unsupported, failed ]
             ocr_attempted:
               type: boolean
             ocr_available:

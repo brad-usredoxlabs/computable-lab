@@ -721,6 +721,9 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                       <div className="text-gray-600 mt-1">
                         {document.documentKind || 'other'} · {document.fileRef.mediaType}
                         {document.fileRef.pageCount ? ` · ${document.fileRef.pageCount} page${document.fileRef.pageCount === 1 ? '' : 's'}` : ''}
+                        {document.extraction?.pages?.length
+                          ? ` · pages ${document.extraction.pages.map((page) => `${page.pageNumber} ${page.method}`).join(', ')}`
+                          : ''}
                       </div>
                     </div>
                   ))}
