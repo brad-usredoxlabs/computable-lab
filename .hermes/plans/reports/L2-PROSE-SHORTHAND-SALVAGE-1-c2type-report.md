@@ -156,8 +156,9 @@ Fix run on this same unmerged lineage (`reviews/L2-PROSE-c2type-advc-c1-l2t0400.
 Product code byte-identical at exit (`sha256sum -c` OK for `AgentOrchestrator.ts` and `types.ts`); the
 diff `34a48a74..HEAD` names exactly 3 paths (two test files, this report) — 15 of the inserted lines are
 test-file changes (one annotation, two filter predicates, one comment); the rest is this mandated report
-section. **Budget honesty:** total insertions exceed the brief's ≤40-line output budget (66 at the fix
-commits `34a48a74..9cfa3f83`, plus this addendum); declared with the real count, not restated as met.
+section. **Budget honesty:** total insertions exceed the brief's ≤40-line output budget (66 at
+`34a48a74..34f20852`, the three c2typefix1 fix commits — the `..9cfa3f83` range is 28/11, see §c2typefix2
+D-b; plus the `e01ebb73` marker commit and this addendum); declared with the real count, not restated as met.
 
 - **D1 (MAJOR, false committed claim) — FIXED.** The comment at
   `AgentOrchestrator.shorthandChat.test.ts:322` and the §Measurement-nuance paragraph above no longer
@@ -168,7 +169,8 @@ commits `34a48a74..9cfa3f83`, plus this addendum); declared with the real count,
   hits. Closing that relay is a FOLLOW-ON unit; `app/**` was not opened.
 - **D2 (MINOR) — FIXED.** `recoveredFrom.test.ts:176` `const events: any[]` → `AgentEvent[]`; both
   negative-control filters now narrow with type predicates (`'recoveredFrom' in e`, sibling-leg style),
-  no `as any`, no cast, no assertion body or test name changed. Suite GREEN below.
+  no `as any`, no cast, no assertion body or test name changed. Suite GREEN below. *(The `:202` conjunct
+  was dropped again in c2typefix2 D-a — it suppressed the TS2339 pin; see below.)*
 - **D3 (MINOR) — FIXED.** Exit marker amended to the contract literal (last line of this file).
 - **D4 (MINOR) — FIXED.** §WIP lineage above now names the two inert hunks inherited from `4b837b61`
   (`extraSubmissionNotes` hoist `:3011` → `:2267`; `driver=` `console.log` rewrite `:2715`) and why each
@@ -183,15 +185,64 @@ $ cd server && npx vitest run src/ai/recoveredFrom.test.ts src/ai/AgentOrchestra
    Test Files  2 passed (2) / Tests  28 passed (28)
 $ cd server && npx tsc --noEmit -p .  ->  TSC_EXIT=0, error lines: 0 (equal to baseline)
 $ git -c core.fileMode=false status --short  ->  empty
-$ git diff --name-status 34a48a74..HEAD  ->  exactly the 3 paths above
-$ git diff --shortstat 34a48a74..9cfa3f83  ->  3 files changed, 66 insertions(+), 12 deletions(-)
-   # the three fix commits; this report addendum accounts for the remainder of the total
+$ git diff --name-status 34a48a74..e01ebb73  ->  exactly the 3 paths above
+$ git diff --shortstat 34a48a74..34f20852  ->   3 files changed, 66 insertions(+), 12 deletions(-)
+   # the three c2typefix1 fix commits (D1-D4); the range the 66 figure belongs to
+$ git diff --shortstat 34a48a74..9cfa3f83  ->   3 files changed, 28 insertions(+), 11 deletions(-)
+   # c2typefix1 D4 commit only — NOT 66; that figure was mis-attributed here (fixed in §c2typefix2 D-b)
+$ git diff --shortstat 34a48a74..e01ebb73  ->   3 files changed, 73 insertions(+), 12 deletions(-)
+   # + the c2typefix1 marker commit; the c2typefix2 addendum adds its own delta (§c2typefix2)
 ```
-Marker-count note (honesty): this file now carries two `DONE <40-hex>` lines — the `c2type` contract
-literal below (D3) and the launcher-appended `c2typefix1` exit literal. The brief's "exactly 1" probe
-predates the launcher's appended exit contract, which demands its own literal; both greps are satisfied.
-Cited sha `9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515` = last fix commit, ancestor of HEAD.
+Marker-count note (honesty): this file now carries four `<item> DONE <40-hex>` lines — the `c2type`
+contract literal below (D3), the launcher-appended `c2typefix1` exit literal, and the two `c2typefix2`
+literals at the very end (§c2typefix2). The brief's "exactly 1" probe predates the launcher's appended
+exit contract, which demands its own literal per run; every grep is satisfied by its own item name.
+Cited sha `9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515` = last fix commit of c2typefix1, ancestor of HEAD.
 
 L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2type DONE 9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515
 
 L2-PROSE-SHORTHAND-SALVAGE-1-c2typefix1 UNIT unit DONE 9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515
+
+## c2typefix2 (advc c2 FIX 2)
+
+Fix run on the same `c2typefix1` lineage (`reviews/L2-PROSE-c2type-advc-c2-l2t0445.md` → VERDICT: FIX (2)).
+**Zero product-code change:** `sha256sum -c` for `server/src/ai/types.ts`
+(`bcc0c30f1d3ba263459e6ff014a03deeac3e430f9e70b06699d15944b8e81dd4`) and
+`server/src/ai/AgentOrchestrator.ts` (`bda0715a5252259642ffc0d4b578864c32319965ad72bac171536988e64fb24b`)
+gives `OK`/`OK` before and after; the only paths this run touches are `recoveredFrom.test.ts` (one line,
+commit `10a028ce`) and this report.
+
+- **D-a (MINOR) — FIXED.** `recoveredFrom.test.ts:202` no longer carries the `'recoveredFrom' in e`
+  conjunct: `e.type === 'status' && e.recoveredFrom !== undefined`. The type predicate and every other
+  line of the filter are untouched. At HEAD types the test-inclusive `tsc` error set is byte-identical
+  with and without the conjunct (39 errors both ways, none at `:202`), so the retyping of D2 is preserved
+  while the pin is restored. Mutation proof, run ONLY on a scratch copy
+  (`/home/brad/.prose-c2typefix2-scratch`, a copy of `server/src` + symlinked `node_modules` + a
+  test-inclusive tsconfig; deleted at exit) whose `types.ts:989` status variant was reverted to
+  `{ type: 'status'; message: string }`:
+```
+  conjunct present + revert ->  43 errors, none at :202   (the D2 blindness, reproduced)
+  conjunct removed + revert ->  44 errors, incl.
+    src/ai/recoveredFrom.test.ts(202,34): error TS2339: Property 'recoveredFrom' does not exist on
+    type '{ type: "status"; message: string; }'.
+```
+  The worktree's frozen contract was never edited — the revert exists only inside the scratch copy.
+- **D-b (MINOR) — FIXED.** Every raw shortstat block above is re-quoted at its own range and reproduces
+  byte-for-byte today: `34a48a74..34f20852` = 66/12 (the figure that had been mis-attributed),
+  `34a48a74..9cfa3f83` = 28/11, `34a48a74..e01ebb73` = 73/12.
+
+Checks (raw):
+```
+$ cd server && npx vitest run src/ai/recoveredFrom.test.ts src/ai/AgentOrchestrator.shorthandChat.test.ts
+   Test Files  2 passed (2) / Tests  28 passed (28)
+$ cd server && npm run typecheck -w server  ->  TYPECHECK_RC=0, 0 `error TS` lines
+$ git -c core.fileMode=false diff 34a48a74..HEAD --shortstat   # HEAD = this addendum commit
+  3 files changed, 124 insertions(+), 12 deletions(-)
+$ git -c core.fileMode=false status --short  ->  empty
+```
+The `HEAD` figures above are the measured state of this commit, not a projection: they were read from
+`git diff 34a48a74` over the exact tree committed here.
+
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2typefix2 DONE 10a028cef8b49cc9ddebf2d57fe3ea032a831414
+
+L2-PROSE-SHORTHAND-SALVAGE-1-c2typefix2 UNIT unit DONE 10a028cef8b49cc9ddebf2d57fe3ea032a831414
