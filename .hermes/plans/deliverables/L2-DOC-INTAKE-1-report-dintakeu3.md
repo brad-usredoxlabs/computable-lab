@@ -32,9 +32,11 @@ Composition, not a rewrite:
 Honesty rules implemented:
 - never throws — the whole body is wrapped; every failure arm returns a typed
   diagnostic (verified by the missing-file test and by `await expect(...).resolves`).
-- an OCR success always carries `LOCAL_OCR_REVIEW` (+ `details.page`), attached by
-  this seam (duplicate caution diagnostics from the adapter are filtered so it is
-  emitted once).
+- an OCR arm that produced text (no error-severity diagnostic) carries
+  `LOCAL_OCR_REVIEW` (+ `details.page`), attached by this seam (duplicate caution
+  diagnostics from the adapter are filtered so it is emitted once). A FAILED arm
+  carries only its `IMAGE_OCR_*` error — it must never claim "Transcribed using
+  local OCR" (adversarial c1 D2, fixed in dintakeu3-fix1).
 - an OCR result with empty text adds `PDF_NO_TEXT_LAYER` for that page — a blank
   page is never a silent success.
 - unresolvable OCR tools → `IMAGE_OCR_TOOL_MISSING` error, OCR seam not invoked,
@@ -48,8 +50,8 @@ source (`config/ingestion/document-extraction.yaml` `images:` block consumed by
 reader would have been a defect. (YAML reload note: not applicable, no YAML edit.)
 
 ## Scope / invariants
-- New files only: `server/src/ingestion/documentIntake.ts` (280 lines),
-  `server/src/ingestion/documentIntake.test.ts` (146 lines, 5 tests).
+- New files only: `server/src/ingestion/documentIntake.ts` (324 lines after the
+  fix run), `server/src/ingestion/documentIntake.test.ts` (226 lines, 9 tests).
 - `server/src/extract/**`, `server/src/vendor-documents/service.ts`,
   `server/src/vendor-documents/pdfAcquisition.ts`, `server/src/server.ts`,
   `server/src/api/**`, `app/**`, `schema/**`, `records/**`, root `config.yaml`:
@@ -92,7 +94,7 @@ AssertionError: expected [ 'pdf_text', 'pdf_text' ] to deeply equal [ 'pdf_text'
       Tests  1 failed | 4 passed (5)
 ```
 First probe run stayed GREEN because the page-1 fixture was only 30 chars (< 40).
-Per the brief I fixed the FIXTURE (page 1 is now 58 chars: "Section 1. Reagent
+Per the brief I fixed the FIXTURE (page 1 is now 53 chars: "Section 1. Reagent
 preparation: 10 g in 100 mL buffer"), not the assertion wording; the re-run then
 failed as pasted above. Mutation reverted before the commit; `git status --short`
 at exit shows only the two new (committed) files.
@@ -125,4 +127,69 @@ to the existing sibling checkout `/home/brad/cl-wt/L2-DOC-INTAKE-1-u1-lane2/...`
 - Reviewer focus: per-page pin (d) fixture (>40 chars on the text page), imported
   caution, `exactOptionalPropertyTypes` spreads, no binary literals.
 
-L2-DOC-INTAKE-1 UNIT 3 DONE c91999b7d8368f0d2fb5e79ca213416d425eeda0
+## Fix run — unit dintakeu3-fix1 (adversarial c1 verdict FIX 6)
+
+Review: `.hermes/cl/lanes/2/reviews/L2-DOC-INTAKE-1-dintakeu3-advc-c1-l2t0040.md`.
+Code+test commit: `1eb221b7aa19b75706cf15f01b587454ae94b18b`. Scope kept to
+`documentIntake.ts`, `documentIntake.test.ts`, this report; `server/src/extract/**`
+untouched (only imported from), no YAML edit, no `tsc`/dep change.
+
+- D1 (pin gap) — new leg (e): injected `ocrPage` resolves `{text:'', diagnostics:[]}`;
+  asserts the per-page `PDF_NO_TEXT_LAYER` warning (severity, `details.page`, message
+  "OCR returned no text") and that the arm is not silent. Mutation M4 (block deleted)
+  is now RED.
+- D2 (false claim) — the `LOCAL_OCR_REVIEW` push is gated on the arm producing NO
+  error-severity diagnostic; a failed arm keeps only its `IMAGE_OCR_*` error. New leg
+  (f). Mutation M5 (unconditional push) RED.
+- D3 (config ignored) — the OCR loop counts attempts and stops at
+  `config.maxPages`; every untranscribed page is named in a `LOCAL_OCR_PAGE_LIMIT`
+  coverage warning, mirroring `pdfAcquisition.ts:369`. New leg (g) (maxPages=1,
+  3 text-less pages → `ocrPage` called once, warning names "page(s) 2, 3", only one
+  caution). Mutation M10 (cap disabled) RED.
+- D4 (duplicate policy list) — `PLAIN_TEXT_EXTENSIONS` deleted. `readableTextExtensions()`
+  derives the set from the existing `loadDocumentFormats()` (decodeAttachment) reader:
+  `mediaKind === 'text'` AND declared `mediaType` starts with `text/` → UTF-8 on disk.
+  `docx`/`doc`/`rtf` are mediaKind text but not UTF-8, so they stay refused rather than
+  decoded as mojibake. Effect declared: `.html`/`.htm` are now read (as raw text, markup
+  not interpreted); `.tsv` — declared nowhere — is now `DOCUMENT_INTAKE_UNSUPPORTED_FORMAT`.
+  New leg (h). Grep for a literal extension list in the module: no hits.
+- D5 (marker) — this report now names the commit carrying it (see marker below; the
+  marker-only follow-up commit exists because a commit cannot contain its own sha).
+- D6 — 58 → 53 chars in this report and in the fixture comment (measured:
+  `'Section 1. Reagent preparation: 10 g in 100 mL buffer'`).
+
+RED (tests added, implementation unchanged):
+```
+ → expected [] to deeply equal [ { page: 1, …(2) } ]                    (h)
+ → expected [ 'IMAGE_OCR_FAILED', …(2) ] to not include 'LOCAL_OCR_REVIEW'  (f)
+ → the declared page cap is load-bearing: expected "spy" to be called 1 times, but got 3  (g)
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 passed (9)
+```
+Leg (e) was already green before this run — D1 is a pin gap, so its RED is the mutation
+probe below, not a failing-first assertion.
+
+Mutation probes (worktree file, restored byte-identical, `cmp` = 0):
+```
+M4  delete the empty-OCR flag block   → Tests 1 failed | 8 passed (9)  (leg e)
+M1  route all pages to OCR            → Tests 2 failed | 7 passed (9)  (legs a, d)
+M5  caution pushed on a FAILED arm    → Tests 1 failed | 8 passed (9)  (leg f)
+M10 ignore config.maxPages            → Tests 1 failed | 8 passed (9)  (leg g)
+```
+GREEN / verify:
+```
+cd server && npx vitest run src/ingestion/documentIntake.test.ts
+ ✓ src/ingestion/documentIntake.test.ts  (9 tests) 79ms
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+
+cd server && npx vitest run src/extract/PdfTextAdapter.test.ts src/extract/ImageTextAdapter.test.ts
+ Test Files  2 passed (2) / Tests  22 passed (22)   (unchanged)
+
+cd server && npx tsc --noEmit -p .
+ TSC_EXIT=0 (no output)
+
+git status --porcelain → clean at exit (code+test committed in 1eb221b7; report after)
+```
+
+L2-DOC-INTAKE-1 UNIT dintakeu3-fix1 DONE 1eb221b7aa19b75706cf15f01b587454ae94b18b
