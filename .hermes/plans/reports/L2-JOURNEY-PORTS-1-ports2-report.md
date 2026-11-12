@@ -119,3 +119,6 @@ Tree clean: `git -c core.fileMode=false status --short` → (empty).
 
 `L2-JOURNEY-COMPILER-1` will call `validatePortBinding` for every step binding rather than restate these rules.
 The test and the production path are therefore one code path.
+
+L2-JOURNEY-PORTS-1 UNIT ports2 DONE e93284f976547c80cbbc2acc5d8cf954506bb1ea
+L2-JOURNEY-PORTS-1-ports2 UNIT unit DONE e93284f976547c80cbbc2acc5d8cf954506bb1ea
