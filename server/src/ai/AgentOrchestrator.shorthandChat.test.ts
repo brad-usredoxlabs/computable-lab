@@ -320,11 +320,16 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     // invoked AS agent_intent (intent inferred) — this is not a native tool call.
     expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(true);
     // C2 CONTRACT PIN (L2-PROSE-SHORTHAND-SALVAGE-1): the recovery marker rides the
-    // DECLARED `status` variant field in types.ts — a browser receipt reads it off
-    // the wire event instead of inferring salvage from a green turn. The RUNTIME
-    // assertion is the pin (tsconfig excludes *.test.ts, so the declaration is the
-    // consumer contract, not a gate on this file); the typed access means the wire
-    // type already names the field this test relies on.
+    // DECLARED `status` variant field in types.ts. Measured scope of that claim: the
+    // field IS on the SERVER wire event — AIHandlers.ts:380 serialises the whole
+    // AgentEvent into the SSE `data:` frame (JSON.stringify(event)) — but the BROWSER
+    // relay is NOT implemented: AssistStreamEvent's status member (assistStream.ts:277)
+    // is `{ type: 'status'; message: string }` and the parser at :483 projects
+    // `{ type: 'status', message: parsed.message ?? '' }`, dropping every
+    // non-whitelisted field (`grep -rn recoveredFrom app/src` = 0 hits). A client that
+    // consumes the field is a FOLLOW-ON unit. The RUNTIME assertion below is the pin
+    // (tsconfig excludes *.test.ts, so the declaration is not a compile gate here);
+    // the typed access means the wire type already names the field this test relies on.
     const recoveryStatuses = events.filter(
       (e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')),
     );

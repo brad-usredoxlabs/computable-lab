@@ -70,9 +70,14 @@ pinned the status event on that leg and left the notes assertion where it is rea
 
 `server/tsconfig.json` excludes `**/*.test.ts`, so `npx tsc --noEmit -p .` does not typecheck the test
 files: re-removing `recoveredFrom` from the status variant leaves tsc at 0 errors. The declaration is
-therefore the **consumer/wire contract** (receipts and SSE consumers read the field without `any`), not
-a compile gate on this test. The enforcement on the test side is the runtime assertion, which is proven
-RED below. I have not claimed otherwise in the test comments.
+therefore the **server wire contract** — `AIHandlers.ts:380` does serialise the whole `AgentEvent`
+(`JSON.stringify(event)`) into the SSE `data:` frame, so the field reaches the wire — but it is NOT a
+browser-receipt contract: the browser relay is not implemented. `AssistStreamEvent`'s status member
+(`app/src/event-editor/right-pane/ai/assistStream.ts:277`) is `{ type: 'status'; message: string }`, and
+the parser at `:483` projects every frame to `{ type: 'status', message: parsed.message ?? '' }`,
+dropping all non-whitelisted fields; `grep -rn recoveredFrom app/src` → 0 hits. Closing that relay is a
+FOLLOW-ON unit, not this one. The enforcement on the test side is the runtime assertion, which is proven
+RED below. The test comment states exactly this measured scope.
 
 ## Verification (raw)
 
