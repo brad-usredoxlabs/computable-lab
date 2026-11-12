@@ -59,6 +59,33 @@ describe('LabLabwareNewPage', () => {
     expect(screen.getByTestId('lab-labware-propose-button')).toBeDefined()
   })
 
+  // u4chrome — door-B form affordance: controls must carry visible chrome
+  it('renders visible input and button affordance chrome (u4chrome)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    renderPage()
+    const nameInput = screen.getByTestId('lab-labware-name-input') as HTMLElement
+    const urlInput = screen.getByTestId('lab-labware-url-input') as HTMLElement
+    const proposeButton = screen.getByTestId('lab-labware-propose-button') as HTMLElement
+    expect(nameInput.style.border).toContain('1px solid')
+    expect(nameInput.style.background).toContain('--cl-bg-elev')
+    expect(urlInput.style.border).toContain('1px solid')
+    expect(urlInput.style.background).toContain('--cl-bg-elev')
+    expect(proposeButton.style.background).not.toBe('')
+    expect(proposeButton.style.border).toContain('1px solid')
+    // save button chrome, reachable with a proposals fixture (same pattern as existing tests)
+    fireEvent.change(urlInput, { target: { value: 'https://example.com/sheet' } })
+    fireEvent.click(proposeButton)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    const saveButton = screen.getByTestId('lab-labware-save-button') as HTMLElement
+    expect(saveButton.style.background).not.toBe('')
+    expect(saveButton.style.border).toContain('1px solid')
+  })
+
   it('shows "not configured" state when extraction is not configured', async () => {
     mockExtract.mockResolvedValueOnce({ configured: false, reason: 'not_configured', proposals: [] })
     renderPage()
