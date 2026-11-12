@@ -16,10 +16,46 @@
  * All file I/O is the injected seam or a tmpdir fixture — no real binary is
  * invoked and no PDF/blob fixture is committed (bait: fixtures stay out of git).
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Scratches the acquisition seam's OWN temp dir (prefix `cl-doc-intake-`, never
+ * the fixture prefix `cl-doc-intake-test-`) and records it, so the cleanup and
+ * scratch-naming pins can observe the real path without a production seam that
+ * exists only for tests. Every other fs function stays the real one.
+ */
+const fsProbe = vi.hoisted(() => ({
+  scratchDirs: [] as string[],
+  rmCalls: [] as string[],
+  writtenPaths: [] as string[],
+}));
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const isIntakeScratch = (target: unknown): target is string =>
+    typeof target === 'string' &&
+    target.startsWith(join(tmpdir(), 'cl-doc-intake-')) &&
+    !target.includes('-test-');
+  return {
+    ...actual,
+    mkdtemp: async (prefix: string): Promise<string> => {
+      const dir = await actual.mkdtemp(prefix);
+      if (prefix === join(tmpdir(), 'cl-doc-intake-')) fsProbe.scratchDirs.push(dir);
+      return dir;
+    },
+    rm: (async (target: unknown, options?: object) => {
+      if (isIntakeScratch(target)) fsProbe.rmCalls.push(target);
+      return (actual.rm as (p: string, o?: object) => Promise<void>)(target as string, options);
+    }) as typeof actual.rm,
+    writeFile: (async (target: unknown, data: string | Buffer) => {
+      if (isIntakeScratch(target)) fsProbe.writtenPaths.push(target);
+      return actual.writeFile(target as string, data);
+    }) as typeof actual.writeFile,
+  };
+});
 import {
   DOCUMENT_INTAKE_DIAGNOSTIC_CODES,
   extractDocumentPages,
@@ -42,6 +78,9 @@ let scratch: string;
 
 beforeEach(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'cl-doc-intake-test-'));
+  fsProbe.scratchDirs.length = 0;
+  fsProbe.rmCalls.length = 0;
+  fsProbe.writtenPaths.length = 0;
 });
 
 afterEach(async () => {
@@ -337,5 +376,88 @@ describe('intakeDocument', () => {
     expect(extensionless.diagnostics.map((entry) => entry.code)).toContain(
       DOCUMENT_INTAKE_DIAGNOSTIC_CODES.UNSUPPORTED_FORMAT,
     );
+  });
+
+  /**
+   * Adversarial c1 D3: the acquisition order is STORE then EXTRACT. The store
+   * spy and the injected page reader share one log, so a reorder (extraction
+   * before the bytes are stored) flips the log and fails here even though every
+   * other assertion about the result still holds.
+   */
+  it('D3: stores the bytes BEFORE extracting pages (ordering pin, not just both-happened)', async () => {
+    const order: string[] = [];
+    const save = vi.fn(async () => {
+      order.push('save');
+      return STORED;
+    });
+    const result = await intakeDocument(
+      { artifactId: 'DOC-5', fileName: 'label.pdf', contentBase64: CONTENT },
+      { save },
+      {
+        readPageTexts: async () => {
+          order.push('extract');
+          return { pages: [{ page: 1, text: 'M13 Forward Primer 10 uM' }], diagnostics: [] as [] };
+        },
+      },
+    );
+
+    expect(result.pages).toHaveLength(1);
+    expect(order).toEqual(['save', 'extract']);
+  });
+
+  /**
+   * Adversarial c1 D1: the scratch dir is transient — after a successful run
+   * the directory this seam created no longer exists, and it is removed exactly
+   * once. Deleting the `finally` rm keeps the pages green but leaves the dir.
+   */
+  it('D1: removes the scratch directory it created before returning', async () => {
+    const save = vi.fn(async () => STORED);
+    await intakeDocument(
+      { artifactId: 'DOC-6', fileName: 'notes.txt', contentBase64: Buffer.from('Incubate 30 min.\n').toString('base64') },
+      { save },
+    );
+
+    expect(fsProbe.scratchDirs).toHaveLength(1);
+    const dir = fsProbe.scratchDirs[0] ?? '';
+    expect(dir).not.toBe('');
+    expect(fsProbe.rmCalls.filter((removed) => removed === dir)).toHaveLength(1);
+    const gone = await access(dir).then(
+      () => 'present',
+      () => 'gone',
+    );
+    expect(gone).toBe('gone');
+  });
+
+  /**
+   * Adversarial c1 D2: the declared fileName's extension is what reaches
+   * extraction (the scratch file is `document.<ext>`, so a `.md` upload is read
+   * as plain text). An EXTENSIONLESS name still cannot be sniffed — that is
+   * pinned honestly as a typed UNSUPPORTED_FORMAT with no inferred format, and
+   * the scratch file is the bare `document` (named limitation: content sniffing
+   * is a u3 follow-up, not bolted on here).
+   */
+  it('D2: passes the declared extension to extraction; an extensionless name stays an honest UNSUPPORTED_FORMAT', async () => {
+    const save = vi.fn(async () => STORED);
+    const markdown = await intakeDocument(
+      { artifactId: 'DOC-7', fileName: 'notes.md', contentBase64: Buffer.from('# Notes\n').toString('base64') },
+      { save },
+    );
+    expect(markdown.pages).toEqual([{ page: 1, text: '# Notes\n', method: 'plain_text' }]);
+    const mdScratch = fsProbe.writtenPaths[fsProbe.writtenPaths.length - 1] ?? '';
+    expect(mdScratch.endsWith('/document.md')).toBe(true);
+
+    const extensionless = await intakeDocument(
+      { artifactId: 'DOC-8', fileName: 'rawdoc', contentBase64: Buffer.from('{"wells":3}').toString('base64') },
+      { save },
+    );
+    const rawScratch = fsProbe.writtenPaths[fsProbe.writtenPaths.length - 1] ?? '';
+    expect(rawScratch.endsWith('/document')).toBe(true);
+    expect(extensionless.pages).toEqual([]);
+    const diagnostic = extensionless.diagnostics.find(
+      (entry) => entry.code === DOCUMENT_INTAKE_DIAGNOSTIC_CODES.UNSUPPORTED_FORMAT,
+    );
+    expect(diagnostic?.message).toContain('(none)');
+    // The store still owns the bytes: no page was fabricated, no identity lost.
+    expect(extensionless.drefId).toBe(STORED.drefId);
   });
 });
