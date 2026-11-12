@@ -192,3 +192,6 @@ arrives as fields, never via `allowsAny`).
 
 `report_commit:` names the commit carrying this report body; the DONE marker is
 committed immediately after it and adds only that one line.
+
+report_commit: 3c3e938f5ca80c9864ddf67dff72777f59e728e0
+L2-SPEC-SHEET-INGEST-1-f3verify2 UNIT unit DONE 3c3e938f5ca80c9864ddf67dff72777f59e728e0
