@@ -12,8 +12,11 @@ material provider arm (`['material']`), store.list-only property, LEVEL_ORDER an
 labwareDefIds Set semantics are untouched.
 
 ## Changed files (2 files, +65/-2; only owned paths)
-1. server/src/resolve/shelfLookup.ts — new const + call-site kind list (+12/-2 incl. comment)
-2. server/src/resolve/shelfLookup.test.ts — new non-vacuous pin H + kind-`labware` fixture (+53)
+1. server/src/resolve/shelfLookup.ts — new const + call-site kind list (+13/-2 incl. comment)
+2. server/src/resolve/shelfLookup.test.ts — new non-vacuous pin H + kind-`labware` fixture (+52)
+
+(Counts corrected in fix1 to match `git show --numstat 5cb84ff1`; the earlier +12 / +53
+were stale. `git diff --stat 5cb84ff1~1..5cb84ff1 -- server/src` = 65 insertions, 2 deletions.)
 
 ## RED (before the fix, raw)
 ```
@@ -61,6 +64,75 @@ AssertionError: expected undefined not to be undefined
 Restored; re-run green (`Test Files 1 passed (1)` / `Tests 9 passed (9)`), so the pin
 fails if the fix is reverted. Fixture is non-vacuous: schemaId `SCHEMA('labware')` AND
 payload.kind `'labware'`; instance label omits the term so only the labwareId join surfaces it.
+
+## Fix1 — family-fair concept budget (advc c1 verdict=fix)
+
+Advc c1 reported 3 MINORs (1 functional): after the shelflw2 fix, the two merged
+labware families were read by ONE provider call over
+`LABWARE_CONCEPT_KINDS = ['labware', 'labware-definition']` with the shared
+`CONCEPT_LIMIT = 20`. The provider fills in kind order and returns as soon as it
+reaches the limit, so 20 matching `labware` records consumed the entire budget and
+zero `labware-definition` concepts survived (advc probe P2: 20/20 hits LWB-*, 0 LWD-*).
+
+Fix (shelfLookup.ts only):
+- one provider call PER family (`createRecordProvider(store, [kind])`, limit
+  `CONCEPT_LIMIT`), still the same imported provider — no second resolver;
+- new `mergeFamiliesFairly(perFamily, limit)`: each family first takes
+  `Math.ceil(limit / families)` = 10, then the remaining slots backfill in family
+  order from leftovers; the MERGED list is capped at `CONCEPT_LIMIT` (20);
+- `CONCEPT_LIMIT` doc now states it caps the merged list, not a per-family grant;
+- `LABWARE_CONCEPT_KINDS`, the `sourceKind`/`joinedVia` unions, the material arm,
+  LEVEL_ORDER/grouping and the store.list-only property are unchanged.
+
+New pins (shelfLookup.test.ts):
+- I: a fixture holding BOTH families (`kind: labware` + `kind: labware-definition`)
+  matching one term proves both contribute concepts, still `sourceKind:
+  'labware-definition'`.
+- J: the starvation case — 20 matching `labware` records plus one
+  `labware-definition`: `LWD-CROWDED-PLATE` must be present, the crowded family
+  must still be represented, and the merged concept list stays exactly 20.
+
+### RED (test J against the pre-fix implementation, raw)
+```
+ ❯ src/resolve/shelfLookup.test.ts  (11 tests | 1 failed) 18ms
+   ❯ ... > J: 20 labware-family hits cannot starve the labware-definition family
+     → expected [ 'LWB-CROWDED-00', …(19) ] to include 'LWD-CROWDED-PLATE'
+AssertionError: expected [ 'LWB-CROWDED-00', …(19) ] to include 'LWD-CROWDED-PLATE'
+ ❯ src/resolve/shelfLookup.test.ts:514:24
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 passed (11)
+```
+
+### GREEN (after the fix, raw)
+```
+$ cd server && npx vitest run src/resolve/shelfLookup.test.ts
+ ✓ src/resolve/shelfLookup.test.ts  (11 tests) 14ms
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+```
+Existing 9 tests pass unchanged (acceptance 2); labware pins E/H stay green.
+Sibling `src/api/InventoryShelfApi.test.ts` also green (3 passed).
+
+### Fix1 file counts (acceptance 3 — exact `git diff --stat` per file)
+```
+$ git diff --stat a58d56f0..<fix1 code commit> -- server/src
+ server/src/resolve/shelfLookup.test.ts | 70 ++++++++++++++++++++++++++++++++++
+ server/src/resolve/shelfLookup.ts      | 56 ++++++++++++++++++++++-----
+ 2 files changed, 117 insertions(+), 9 deletions(-)
+$ git diff --numstat a58d56f0..<fix1 code commit> -- server/src
+70  0  server/src/resolve/shelfLookup.test.ts
+47  9  server/src/resolve/shelfLookup.ts
+```
+Scope note: the stat above covers the two owned CODE files only; this report file
+is bookkeeping and is not part of that code diff.
+
+### Typecheck (fix1)
+```
+$ cd server && npx tsc --noEmit
+EXIT=0
+```
+Read-only property unchanged (test D write-spy green; the fair merge only
+re-shapes `store.list` results).
 
 ## Typecheck (one run, at end)
 ```
