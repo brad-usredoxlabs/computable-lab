@@ -234,9 +234,12 @@ export function extractProposals(
       let rawValue: string | null = null;
 
       if (segments.length > 0) {
-        // Multi-segment line: match keywords against segment labels
+        // Multi-segment line: match keywords against segment labels.
+        // gate g4 D1+D2: a colon-less segment (label === value) is page chrome
+        // (nav labels, table header cells), never a field value — it stays
+        // available to header detection and positional extraction only.
         for (const seg of segments) {
-          if (keywords.some((kw) => labelMatches(seg.label, kw))) {
+          if (seg.label !== seg.value && keywords.some((kw) => labelMatches(seg.label, kw))) {
             rawValue = seg.value;
             break;
           }
@@ -255,7 +258,11 @@ export function extractProposals(
           }
         }
         // Fallback: whole-line keyword match + colon extraction
-        if (rawValue === null) {
+        // g4 D2 f2: if any segment carried a colon the line was already parsed segment-wise — whole-line re-slicing would blob it
+        if (
+          rawValue === null &&
+          !segments.some((seg) => seg.label !== seg.value)
+        ) {
           const matched = keywords.some((kw) =>
             labelMatches(trimmed, kw),
           );
