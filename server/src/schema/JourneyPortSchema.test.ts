@@ -2,16 +2,15 @@
 /**
  * L2-JOURNEY-PORTS-1 (unit u1vocab): the journey port vocabulary, as data.
  *
- * These are pure-logic pins (no jsdom): the REAL loader/registry/validator
- * pipeline over the real schema/ directory, exactly what the store enforces.
+ * Pure-logic pins (no jsdom): the REAL loader/registry/validator pipeline over
+ * the real schema/ directory, exactly what the store enforces.
  *
- * Fixtures are BUILT FROM the schema document (required lists, declared
- * property sets, enums) so this file does not coin a second copy of the port
- * vocabulary. The only literals here are the schema $id and the $defs keys
- * used to LOCATE fixtures; no port field, port kind or provenance layer is
- * hardcoded in TypeScript.
+ * Fixtures are BUILT FROM the schema document (required lists, declared property
+ * sets, enums), so this file holds no second copy of the port vocabulary. The
+ * only literals here are the schema $id and the $defs keys used to LOCATE
+ * fixtures; no port field, port kind or provenance layer is hardcoded in TS.
  *
- * The material provenance layer enum is pinned to the SHIPPED registry
+ * The material provenance enum is pinned to the SHIPPED registry
  * (schema/lab/material-profile.registry.yaml, clarification.layers) so the
  * campaign cannot grow a second authority for the layer vocabulary.
  */
@@ -37,32 +36,19 @@ const PORT_DEFS = [
   'StagedDraftReference',
 ] as const;
 
-const SCHEMA_DIR = join(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../../schema',
-);
+const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../schema');
 const MATERIAL_POLICY_PATH = join(SCHEMA_DIR, 'lab', 'material-profile.registry.yaml');
 const portRef = (def: string) => `${SCHEMA_ID}#/$defs/${def}`;
 
-interface PropSchema {
-  type?: string;
-  enum?: unknown[];
-  const?: unknown;
-}
+interface PropSchema { enum?: unknown[]; const?: unknown }
 interface DefSchema {
   type?: string;
   additionalProperties?: boolean;
   required?: string[];
   properties?: Record<string, PropSchema>;
 }
-interface DocSchema {
-  $defs?: Record<string, DefSchema>;
-}
-interface ValidationIssue {
-  path: string;
-  keyword: string;
-  params?: Record<string, unknown>;
-}
+interface DocSchema { $defs?: Record<string, DefSchema> }
+interface ValidationIssue { path: string; keyword: string; params?: Record<string, unknown> }
 
 describe('journey port vocabulary schema', () => {
   let validator: ReturnType<typeof createValidator>;
@@ -75,67 +61,51 @@ describe('journey port vocabulary schema', () => {
     validator = createValidator();
     for (const id of registry.getTopologicalOrder()) {
       const entry = registry.getById(id);
-      if (entry) {
-        validator.addSchema(entry.schema as never, id);
-      }
+      if (entry) validator.addSchema(entry.schema as never, id);
     }
   });
 
   const doc = (): DocSchema => registry.getById(SCHEMA_ID)!.schema as DocSchema;
   const defOf = (name: string): DefSchema => doc().$defs![name]!;
-  const propertiesOf = (name: string): string[] =>
-    Object.keys(defOf(name).properties ?? {});
+  const propertiesOf = (name: string): string[] => Object.keys(defOf(name).properties ?? {});
   const requiredOf = (name: string): string[] => defOf(name).required ?? [];
+  const valueFor = (prop?: PropSchema): unknown =>
+    prop?.enum?.[0] ?? prop?.const ?? 'FIXTURE-VALUE';
 
-  /** A value for one declared property, taken from the schema where it says. */
-  function valueFor(prop: PropSchema | undefined): unknown {
-    return prop?.enum?.[0] ?? prop?.const ?? 'FIXTURE-VALUE';
+  /** The single enum-bearing property of a port (its controlled vocabulary). */
+  function enumKeyOf(name: string): string {
+    const keys = Object.entries(defOf(name).properties ?? {})
+      .filter(([, prop]) => Array.isArray(prop.enum))
+      .map(([key]) => key);
+    expect(keys.length, `${name}: exactly one enum-bearing property`).toBe(1);
+    return keys[0]!;
   }
 
-  /** Build the minimal valid payload from the schema's required list. */
-  function validPayload(name: string): Record<string, unknown> {
+  function payload(name: string, all: boolean): Record<string, unknown> {
     const def = defOf(name);
-    const payload: Record<string, unknown> = {};
-    for (const key of def.required ?? []) {
-      payload[key] = valueFor(def.properties?.[key]);
-    }
-    return payload;
+    const keys = all ? Object.keys(def.properties ?? {}) : (def.required ?? []);
+    const out: Record<string, unknown> = {};
+    for (const key of keys) out[key] = valueFor(def.properties?.[key]);
+    return out;
   }
+  const validPayload = (name: string) => payload(name, false);
+  /** Every declared property populated, so a deletion test removes exactly one. */
+  const fullPayload = (name: string) => payload(name, true);
 
-  /** Populate EVERY declared property, so a deletion test removes exactly one. */
-  function fullPayload(name: string): Record<string, unknown> {
-    const def = defOf(name);
-    const payload: Record<string, unknown> = {};
-    for (const [key, prop] of Object.entries(def.properties ?? {})) {
-      payload[key] = valueFor(prop);
-    }
-    return payload;
-  }
-
-  function issues(payload: unknown, name: string): ValidationIssue[] {
-    const result = validator.validate(payload, portRef(name));
+  function issues(input: unknown, name: string): ValidationIssue[] {
+    const result = validator.validate(input, portRef(name));
     expect(result.valid, `${name} fixture should be refused`).toBe(false);
     return (result.errors ?? []) as ValidationIssue[];
   }
 
   function expectDecision(
-    payload: unknown,
-    name: string,
-    keyword: string,
-    paramKey: string,
-    paramValue: string,
-    path?: string,
+    input: unknown, name: string, keyword: string, paramKey: string, paramValue: string,
   ): void {
-    const found = issues(payload, name).find(
+    const found = issues(input, name).find(
       (issue) => issue.keyword === keyword && issue.params?.[paramKey] === paramValue,
     );
-    expect(
-      found,
-      `${name}: expected ${keyword}/${paramValue}${path ? ` at ${path}` : ''}`,
-    ).toBeDefined();
-    if (path !== undefined) {
-      expect(found!.path).toBe(path);
-    }
+    expect(found, `${name}: expected ${keyword}/${paramValue}`).toBeDefined();
+    expect(found!.path).toBe('/');
   }
 
   it('is registered under its declared $id with the six reference ports', () => {
@@ -160,31 +130,21 @@ describe('journey port vocabulary schema', () => {
     }
   });
 
-  it('refuses every payload missing any required field, naming that field', () => {
-    for (const name of PORT_DEFS) {
-      for (const key of requiredOf(name)) {
-        const payload = fullPayload(name);
-        delete payload[key];
-        expectDecision(payload, name, 'required', 'missingProperty', key, '/');
-      }
-    }
-  });
-
-  it('refuses every port payload missing the one field all ports share (its version)', () => {
+  it('refuses every payload missing any required field (including the shared version)', () => {
     const shared = requiredOf(PORT_DEFS[0]).filter((key) =>
       PORT_DEFS.every((name) => requiredOf(name).includes(key)),
     );
-    expect(shared.length, 'a single universally required key').toBe(1);
+    expect(shared.length, 'a single field every port requires (its version)').toBe(1);
     for (const name of PORT_DEFS) {
-      for (const key of shared) {
-        const payload = fullPayload(name);
-        delete payload[key];
-        expectDecision(payload, name, 'required', 'missingProperty', key, '/');
+      for (const key of requiredOf(name)) {
+        const input = fullPayload(name);
+        delete input[key];
+        expectDecision(input, name, 'required', 'missingProperty', key);
       }
     }
   });
 
-  it('refuses a staged draft that carries committed-record properties (closed shape)', () => {
+  it('refuses a staged draft carrying committed-record properties (closed shape)', () => {
     const staged = 'StagedDraftReference';
     const stagedProps = new Set(propertiesOf(staged));
     const committedOnly = propertiesOf('CommittedRecordReference').filter(
@@ -192,8 +152,10 @@ describe('journey port vocabulary schema', () => {
     );
     expect(committedOnly.length, 'committed-only properties exist').toBeGreaterThan(0);
     for (const key of committedOnly) {
-      const payload = { ...validPayload(staged), [key]: 'FIXTURE-VALUE' };
-      expectDecision(payload, staged, 'additionalProperties', 'additionalProperty', key, '/');
+      expectDecision(
+        { ...validPayload(staged), [key]: 'FIXTURE-VALUE' },
+        staged, 'additionalProperties', 'additionalProperty', key,
+      );
     }
   });
 
@@ -201,12 +163,12 @@ describe('journey port vocabulary schema', () => {
     const committed = 'CommittedRecordReference';
     const stagedProps = new Set(propertiesOf('StagedDraftReference'));
     const distinguishing = propertiesOf(committed).filter((key) => !stagedProps.has(key));
-    expect(distinguishing.length, 'committed declares distinguishing properties').toBeGreaterThan(0);
+    expect(distinguishing.length, 'distinguishing properties exist').toBeGreaterThan(0);
     for (const key of distinguishing) {
       expect(requiredOf(committed), `${committed}.required`).toContain(key);
-      const payload = fullPayload(committed);
-      delete payload[key];
-      expectDecision(payload, committed, 'required', 'missingProperty', key, '/');
+      const input = fullPayload(committed);
+      delete input[key];
+      expectDecision(input, committed, 'required', 'missingProperty', key);
     }
   });
 
@@ -214,29 +176,23 @@ describe('journey port vocabulary schema', () => {
     const target = 'LabwareDefinitionReference';
     const declared = new Set(propertiesOf(target));
     const foreign = [
-      ...new Set(
-        PORT_DEFS.filter((name) => name !== target).flatMap((name) => propertiesOf(name)),
-      ),
+      ...new Set(PORT_DEFS.filter((n) => n !== target).flatMap((n) => propertiesOf(n))),
     ].filter((key) => !declared.has(key));
     expect(foreign.length, 'foreign port properties exist').toBeGreaterThan(0);
     for (const key of foreign) {
-      const payload = { ...validPayload(target), [key]: 'FIXTURE-VALUE' };
-      expectDecision(payload, target, 'additionalProperties', 'additionalProperty', key, '/');
+      expectDecision(
+        { ...validPayload(target), [key]: 'FIXTURE-VALUE' },
+        target, 'additionalProperties', 'additionalProperty', key,
+      );
     }
   });
 
   it('refuses a material provenance layer outside the shipped registry enum', () => {
     const material = 'MaterialReference';
-    const enumKeys = Object.entries(defOf(material).properties ?? {})
-      .filter(([, prop]) => Array.isArray(prop.enum))
-      .map(([key]) => key);
-    expect(enumKeys.length, 'exactly one enum-bearing material property').toBe(1);
-    const layerKey = enumKeys[0];
+    const layerKey = enumKeyOf(material);
     const rejectedLayer = 'NOT-A-SHIPPED-LAYER';
-    const payload = { ...validPayload(material), [layerKey]: rejectedLayer };
-    const found = issues(payload, material).find(
-      (issue) => issue.keyword === 'enum' && issue.path === `/${layerKey}`,
-    );
+    const found = issues({ ...validPayload(material), [layerKey]: rejectedLayer }, material)
+      .find((issue) => issue.keyword === 'enum' && issue.path === `/${layerKey}`);
     expect(found, `${material}: expected enum refusal at /${layerKey}`).toBeDefined();
     expect(found!.params?.['allowedValues'] as unknown[]).not.toContain(rejectedLayer);
   });
@@ -249,12 +205,7 @@ describe('journey port vocabulary schema', () => {
     expect(shippedLayers.length, 'registry declares provenance layers').toBeGreaterThan(0);
 
     const material = defOf('MaterialReference');
-    const enumKeys = Object.entries(material.properties ?? {})
-      .filter(([, prop]) => Array.isArray(prop.enum))
-      .map(([key]) => key);
-    expect(enumKeys.length, 'one enum-bearing material property').toBe(1);
-
-    const declaredEnum = (material.properties?.[enumKeys[0]]?.enum ?? [])
+    const declaredEnum = (material.properties?.[enumKeyOf('MaterialReference')]?.enum ?? [])
       .map(String)
       .sort();
     expect(declaredEnum).toEqual(shippedLayers);
