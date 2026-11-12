@@ -164,3 +164,5 @@ no full `src/` run, no playwright.
   `addressing`) is an OPEN architect contract call — untouched by instruction.
 - Acceptance of the ITEM stays with advc + the independent browser gate; this unit only closes D2 at the
   unit level. Scratch dir `/home/brad/.specsheet-g6d2-scratch/` is deleted at exit.
+
+L2-SPEC-SHEET-INGEST-1-g6d2keywords UNIT unit DONE 526ec7778da3b441aa5e917b9ed73c2c23eb42e0
