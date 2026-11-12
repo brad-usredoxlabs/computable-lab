@@ -39,6 +39,7 @@ import { authoringGateActive, authoringGuardFiresOnUpdate, authoringPolicyPasses
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
+import { findDanglingReferences } from '../../store/referenceCascade.js';
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
@@ -1588,7 +1589,7 @@ export function createRecordHandlers(
           recordId: id,
           ...(expectedSha !== undefined ? { expectedSha } : {}),
         });
-        
+
         if (!result.success) {
           // Check for SHA mismatch
           if (result.error?.includes('SHA mismatch')) {
@@ -1598,14 +1599,25 @@ export function createRecordHandlers(
               error: result.error,
             };
           }
-          
+
+          // L2-RECORD-DELETE-DEPENDENTS-1: HAS_DEPENDENTS refusal (409)
+          if (result.error?.includes('HAS_DEPENDENTS')) {
+            reply.status(409);
+            return {
+              success: false,
+              error: 'HAS_DEPENDENTS',
+              message: result.error,
+              ...(result.referrers !== undefined ? { referrers: result.referrers } : {}),
+            };
+          }
+
           reply.status(400);
           return {
             success: false,
             error: result.error || 'Failed to delete record',
           };
         }
-        
+
         // Update index after successful delete
         if (indexManager) {
           try {
@@ -1614,10 +1626,12 @@ export function createRecordHandlers(
             console.error('Failed to update index after delete:', indexErr);
           }
         }
-        
+
+        // L2-RECORD-DELETE-DEPENDENTS-1: pass through cascaded array when present
         return {
           success: true,
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
+          ...(result.cascaded !== undefined ? { cascaded: result.cascaded } : {}),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1627,6 +1641,34 @@ export function createRecordHandlers(
           message: `Failed to delete record: ${message}`,
         };
       }
+    },
+
+    /**
+     * GET /records/dangling-references
+     * L2-RECORD-DELETE-DEPENDENTS-1 criterion (d) — read-only dangling-reference sweep.
+     */
+    async listDanglingReferences(
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<{ dangling: Array<{ recordId: string; kind: string; pointer: string; targetId: string }>; count: number } | ApiError> {
+      const user = await resolveRequestUser(request, reply);
+      if (!user) return unauthenticatedError('A valid local user is required');
+
+      const records = await store.list();
+      const dangling = findDanglingReferences(records);
+
+      // Filter through the same request-scoped ACL snapshot as listRecords
+      const aclSnapshot = security?.authorizationService
+        ? await security.authorizationService.buildAclSnapshot()
+        : undefined;
+
+      const byId = new Map(records.map((r) => [r.recordId, r]));
+      const visible: typeof dangling = [];
+      for (const ref of dangling) {
+        const owner = byId.get(ref.recordId) ?? null;
+        if (await canAccess(user, 'read', owner, aclSnapshot)) visible.push(ref);
+      }
+      return { dangling: visible, count: visible.length };
     },
   };
 }

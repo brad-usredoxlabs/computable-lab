@@ -28,7 +28,7 @@ import { PredicateRegistry, loadPredicateRegistry } from './registry/PredicateRe
 import { KindLifecycleRegistry, loadKindLifecycleRegistry, collectKnownKinds } from './registry/KindLifecycleRegistry.js';
 import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
-import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
+import { RecordStoreImpl } from './store/RecordStoreImpl.js';
 import { resolveSeedRecordsDir } from './index/seedRecordsDir.js';
 import { createEmbeddedDefaultRepositoryConfig, loadConfig, getDefaultRepository } from './config/loader.js';
 import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig, resolveAiProfile } from './config/types.js';
@@ -525,10 +525,11 @@ export async function initializeApp(
 
   // Initialize record store (use resolved identity for git commits)
   const seedDir = resolveSeedRecordsDir();
-  const store = createRecordStore(repoAdapter, validator, lintEngine, {
+  const store = new RecordStoreImpl(repoAdapter, validator, lintEngine, {
     baseDir: recordsDir,
     author: identity?.username ?? 'record-store',
     email: identity?.email ?? 'store@computable-lab.com',
+    cascadePolicyPath: join(schemaDir, 'store/reference-cascade.yaml'),
     ...(seedDir ? { seedDir } : {}),
     // Same list the record API walls read below: the store backstop and the
     // API answer 405/APPEND_ONLY from one data source (W2-5 §3.2).
