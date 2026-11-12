@@ -101,3 +101,5 @@ No useAiChat/ChatLog/HarnessChatPane behavioral failure; D1/D2 file 9/9.
   baseline-identical evidence above.
 - Browser/advc review of the fix is still owned by the reviewer; this unit is
   implementation-complete only.
+
+L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlui-fix1 UNIT unit DONE a5e1ca7980b153a625cb1ea47f66d7bd4c618b50
