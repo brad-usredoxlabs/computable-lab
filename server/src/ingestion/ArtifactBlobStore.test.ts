@@ -281,7 +281,7 @@ describe('ArtifactBlobStore — storage-backed', () => {
     });
   });
 
-  describe('safeName()', () => {
+  describe('fileName segment sanitisation', () => {
     it('sanitizes artifact filenames', async () => {
       const recorder = createArtifactBlobStoreRecorder(store);
       const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
