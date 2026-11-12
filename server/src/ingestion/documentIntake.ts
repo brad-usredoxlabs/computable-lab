@@ -19,7 +19,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -60,6 +60,7 @@ export interface DocumentIntakeResult {
 export const DOCUMENT_INTAKE_DIAGNOSTIC_CODES = {
   READ_FAILED: 'DOCUMENT_INTAKE_READ_FAILED',
   UNSUPPORTED_FORMAT: 'DOCUMENT_INTAKE_UNSUPPORTED_FORMAT',
+  STORAGE_FAILED: 'DOCUMENT_INTAKE_STORAGE_FAILED',
 } as const;
 
 /**
@@ -324,5 +325,101 @@ async function rasterizeAndOcrPage(
     };
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Store identity returned for the uploaded bytes — the STORE's values, verbatim. */
+export interface DocumentBlobIdentity {
+  storedPath: string;
+  sha256: string;
+  sizeBytes: number;
+  drefId: string;
+}
+
+/** Page level (text) + acquisition level (where the bytes actually live). */
+export type DocumentIntakeWithBlobResult = DocumentIntakeResult & DocumentBlobIdentity;
+
+/** The one capability this seam needs; `ArtifactBlobStore` satisfies it unchanged. */
+export interface DocumentIntakeBlobStore {
+  save(args: {
+    artifactId: string;
+    fileName?: string;
+    contentBase64: string;
+  }): Promise<DocumentBlobIdentity>;
+}
+
+export interface DocumentIntakeArgs {
+  artifactId: string;
+  fileName?: string;
+  contentBase64: string;
+}
+
+/**
+ * L2-DOC-INTAKE-1 acquisition half: store the uploaded bytes on the declared
+ * storage device, then read the pages from the already-in-hand buffer. The
+ * temp file is scratch (named from the declared extension, never a hardcoded
+ * `.pdf`) and is removed before return; it is never the artifact location.
+ *
+ * NEVER throws: a rejected store becomes STORAGE_FAILED carrying the store's
+ * own reason (so a missing device surfaces its real MISSING_CONFIG text), and a
+ * failed scratch materialisation returns no pages WITH a diagnostic — never an
+ * empty success, never a fabricated page or drefId.
+ */
+export async function intakeDocument(
+  args: DocumentIntakeArgs,
+  deps: DocumentIntakeBlobStore,
+  options: DocumentIntakeOptions = {},
+): Promise<DocumentIntakeWithBlobResult> {
+  const diagnostics: ExtractionDiagnostic[] = [];
+  let identity: DocumentBlobIdentity;
+  try {
+    // exactOptionalPropertyTypes: the key is ABSENT when no name was declared.
+    identity = await deps.save(
+      args.fileName === undefined
+        ? { artifactId: args.artifactId, contentBase64: args.contentBase64 }
+        : { artifactId: args.artifactId, fileName: args.fileName, contentBase64: args.contentBase64 },
+    );
+  } catch (err) {
+    diagnostics.push({
+      severity: 'error',
+      code: DOCUMENT_INTAKE_DIAGNOSTIC_CODES.STORAGE_FAILED,
+      message: err instanceof Error ? err.message : String(err),
+      details: { artifactId: args.artifactId },
+    });
+    return {
+      pages: [],
+      diagnostics,
+      toolsAvailable: {},
+      storedPath: '',
+      sha256: '',
+      sizeBytes: 0,
+      drefId: '',
+    };
+  }
+
+  let tempDir: string | null = null;
+  try {
+    tempDir = await mkdtemp(join(tmpdir(), 'cl-doc-intake-'));
+    const tempFile = join(tempDir, `document${extname(args.fileName ?? '')}`);
+    await writeFile(tempFile, Buffer.from(args.contentBase64, 'base64'));
+    const extracted = await extractDocumentPages(tempFile, options);
+    return {
+      ...identity,
+      pages: extracted.pages,
+      diagnostics: [...diagnostics, ...extracted.diagnostics],
+      toolsAvailable: extracted.toolsAvailable,
+    };
+  } catch (err) {
+    diagnostics.push({
+      severity: 'error',
+      code: DOCUMENT_INTAKE_DIAGNOSTIC_CODES.READ_FAILED,
+      message: err instanceof Error ? err.message : String(err),
+      details: { artifactId: args.artifactId },
+    });
+    return { ...identity, pages: [], diagnostics, toolsAvailable: {} };
+  } finally {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
