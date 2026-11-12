@@ -58,4 +58,5 @@ Exit code 0, zero errors.
 - 3 files changed, within budget
 - Streaming caller cannot see the signal in chunks; only the blocking `complete()` response carries `toolChoiceDowngraded`
 
-L2-PROSE-SHORTHAND-SALVAGE-1-u3b UNIT unit DONE 735175872b54f383d44fd9d68fcc01e85f66267a
+[prose c4marker] Provenance: 73517587 is the commit that first carried this report and the C4 code; the token order of the marker below was corrected in the follow-up commit that carries this sentence, which changed no product file.
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c4marker DONE 735175872b54f383d44fd9d68fcc01e85f66267a
