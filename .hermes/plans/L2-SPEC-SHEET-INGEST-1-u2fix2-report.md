@@ -40,4 +40,4 @@ Product file server/src/ingestion/SpecSheetExtractor.ts untouched:
 ## Remaining
 None. Independent review/browser acceptance is out of my scope.
 
-L2-SPEC-SHEET-u2fix2 UNIT unit DONE e1e62fb1d48e1bda23affeb799dd6acefe158104
+Marker: L2-SPEC-SHEET-INGEST-1 UNIT u2fix2 DONE 6356dc160099cae715f2126afeef2c81d27e393d
