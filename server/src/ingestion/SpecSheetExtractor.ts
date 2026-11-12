@@ -258,7 +258,11 @@ export function extractProposals(
           }
         }
         // Fallback: whole-line keyword match + colon extraction
-        if (rawValue === null) {
+        // g4 D2 f2: if any segment carried a colon the line was already parsed segment-wise — whole-line re-slicing would blob it
+        if (
+          rawValue === null &&
+          !segments.some((seg) => seg.label !== seg.value)
+        ) {
           const matched = keywords.some((kw) =>
             labelMatches(trimmed, kw),
           );
