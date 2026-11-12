@@ -1,0 +1,35 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 (u4seed) — read-only capability descriptor.
+# external_disclosure is declared: gene symbols and organism terms leave the lab
+# in the outbound query. handler_ref must exist in AGENT_ALLOWED_TOOLS.
+capability_id: journey.ncbi-gene-search
+version: "1.0.0"
+display_name: Resolve gene targets against NCBI Gene
+justification: >-
+  Sequence surfaces accept and edit sequences, but nothing queries an external
+  gene database, so resolving gene targets cannot be a prefill of an existing
+  editing capability.
+ports:
+  input:
+  - version: "1.0.0"
+    record_id: REC-3
+    record_type: sequence-set
+    receipt_id: RCPT-3
+  output:
+  - version: "1.0.0"
+    sequence_set_id: SS-1
+implementation:
+  handler_kind: agent_tool
+  handler_ref: ncbi_gene_search
+effects: [read, external_disclosure]
+permissions: [journey.read, network.egress]
+availability: {}
+surfaces: [sequences]
+idempotency: pure
+retry: none
+reconciliation: not_required
+evidence: [audit_event]
+status:
+  declared: true
+  implemented: true
+  available_now: true
+  browser_certified: false

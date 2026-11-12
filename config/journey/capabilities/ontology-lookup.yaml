@@ -1,0 +1,37 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 (u4seed) — read-only capability descriptor.
+# implementation.handler_ref names a tool that ships in AGENT_ALLOWED_TOOLS
+# (server/src/ai/ToolBridge.ts); admission refuses any other id.
+capability_id: journey.ontology-lookup
+version: "1.0.0"
+display_name: Resolve ontology terms for a committed record
+justification: >-
+  Record and library search return stored strings, not resolved ontology terms;
+  no shipped capability maps a committed record's free-text labels to declared
+  CURIEs without writing to the record.
+ports:
+  input:
+  - version: "1.0.0"
+    record_id: REC-1
+    record_type: material-spec
+    receipt_id: RCPT-1
+  output:
+  - version: "1.0.0"
+    record_id: REC-1
+    record_type: material-spec
+    receipt_id: RCPT-1
+implementation:
+  handler_kind: agent_tool
+  handler_ref: ontology_search
+effects: [read]
+permissions: [journey.read]
+availability: {}
+surfaces: [knowledge]
+idempotency: pure
+retry: none
+reconciliation: not_required
+evidence: [audit_event]
+status:
+  declared: true
+  implemented: true
+  available_now: true
+  browser_certified: false
