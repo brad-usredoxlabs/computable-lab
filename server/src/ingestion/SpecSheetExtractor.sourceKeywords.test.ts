@@ -127,3 +127,47 @@ describe('shipped labware map — topology sources yield distinct keywords', () 
     expect(byField('physical_geometry.well_length_mm')[0]?.value).toBe('8.0 mm');
   });
 });
+
+describe('source keywords — "for" cuts only the of-complement tail, never the main strip', () => {
+  it('keeps "Number of rows" when the of-complement is qualified with "for" (g6fix3 pin a)', () => {
+    // The of-complement tail must cut at "for" so the keyword stays the usable
+    // label prefix "Number of rows"; the label here is exactly that phrase, so
+    // an untruncated keyword ("Number of rows for grid addressing") cannot match.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'topology.rows', source: 'Number of rows for grid addressing' },
+      ],
+    };
+    const proposals = extractProposals(fieldMap, { url: 'https://example.com/plate', text: 'Number of rows: 8' });
+    const rows = proposals.filter((p) => p.targetField === 'topology.rows');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.value).toBe('8');
+  });
+
+  it('does not truncate "Information for use" to "Information" (g6fix3 pin b)', () => {
+    // advc c2 D1: putting "for" in the SHARED preposition regex made the main
+    // strip cut this non-quantified phrase to "Information", which then also
+    // matched unrelated labels. The phrase must survive intact.
+    const fieldMap: SpecSheetFieldMap = {
+      recordKind: 'labware',
+      fieldMappings: [
+        { targetField: 'notes', source: 'Information for use' },
+      ],
+    };
+    const matched = extractProposals(fieldMap, {
+      url: 'https://example.com/plate',
+      text: 'Information for use: store at 2-8 C',
+    });
+    expect(matched.filter((p) => p.targetField === 'notes')).toHaveLength(1);
+
+    // A label that only shares the "Information" prefix must NOT match: the
+    // keyword has to remain "Information for use".
+    const truncatedMatch = extractProposals(fieldMap, {
+      url: 'https://example.com/plate',
+      text: 'Information only: store at 2-8 C',
+    });
+    expect(truncatedMatch.filter((p) => p.targetField === 'notes')).toHaveLength(0);
+  });
+});
