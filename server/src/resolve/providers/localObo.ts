@@ -214,6 +214,25 @@ export async function searchLocalObo(
   return { hits: hits.slice(0, Math.max(0, limit)), sources: statuses, failures };
 }
 
+/**
+ * Boot warm: load every enabled local-obo source once and report one named
+ * status per source. Synchronous and side-effect-free beyond the parse cache;
+ * the caller decides how to surface failures.
+ */
+export function warmLocalOboSources(
+  options: LocalOboSearchOptions = {},
+): LocalOboSourceStatus[] {
+  return loadLocalOboSources(options.registryPath).map((source) => {
+    try {
+      const terms = loadTerms(source.path);
+      return { id: source.id, path: source.path, ok: true, termCount: terms.length };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { id: source.id, path: source.path, ok: false, termCount: 0, error: message };
+    }
+  });
+}
+
 /** Spine-facing provider: hits, or a thrown error NAMING every failed source. */
 export function createLocalOboProvider(options: LocalOboSearchOptions = {}): ResolveProvider {
   return async (term, limit) => {
