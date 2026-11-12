@@ -29,6 +29,38 @@ function mintRecordId(): string {
   return `LW-${hex}`
 }
 
+/** Unit token -> multiplier into microlitres (the schema's volume unit). */
+const UNIT_TO_UL: Record<string, number> = {
+  nl: 0.001,
+  ul: 1,
+  'µl': 1,
+  ml: 1000,
+  l: 1000000,
+}
+
+// The unit token must END the token: not followed by another letter ("100 lb",
+// "100mLx") or a compound-unit separator ("1 L/min"). Otherwise the bare-L arm
+// silently turns a mass or a rate into litres.
+const QUANTITY_UNIT_RE = /(-?\d+(?:\.\d+)?)\s*(nL|µL|uL|mL|L)(?![A-Za-z/])/gi
+
+/**
+ * Parse a SINGLE unambiguous "<number><unit>" quantity out of a string bound for
+ * a schema `number` field. "100mL" -> 100000. Returns undefined when the string
+ * carries two or more quantities ("195 mL, 185 mL"), another number, or no
+ * recognisable unit — the raw string is then kept so the save pre-flight can
+ * refuse it by name rather than guess.
+ */
+function parseUnitQuantity(raw: string): number | undefined {
+  const matches = [...raw.matchAll(QUANTITY_UNIT_RE)]
+  if (matches.length !== 1) return undefined
+  const match = matches[0]
+  if (/\d/.test(raw.replace(match[0], ''))) return undefined
+  const factor = UNIT_TO_UL[match[2].toLowerCase()]
+  if (factor === undefined) return undefined
+  const quantity = Number(match[1]) * factor
+  return Number.isFinite(quantity) ? quantity : undefined
+}
+
 /**
  * Build a nested payload from flat proposal targetField paths, coercing values
  * to the schema-declared types (integer, number) when the schema is available.
@@ -129,6 +161,10 @@ function buildPayloadFromProposals(
           } else if (declaredType === 'number') {
             value = num
           }
+        } else if (declaredType === 'number') {
+          // "100mL" style quantities: convert the unit to uL when unambiguous.
+          const withUnit = parseUnitQuantity(p.value)
+          if (withUnit !== undefined) value = withUnit
         }
       }
     }
@@ -162,6 +198,58 @@ function resolveSchemaType(
     return undefined
   }
   return undefined
+}
+
+/** Root required keys the payload builder always sets; never worth pre-flighting. */
+const PAYLOAD_BUILT_REQUIRED = new Set([
+  'state',
+  'recordId',
+  'type',
+  'id',
+  'kind',
+  'display_name',
+])
+
+/**
+ * Walk a schema node's `required` list against the built payload and collect the
+ * field paths that are absent/empty, or non-numeric where the schema says number
+ * or integer. Descends into a nested `required` list only when the parent value
+ * is present, so a wholly absent group is named by its own root path.
+ */
+function collectInvalidRequiredPaths(
+  node: Record<string, unknown>,
+  value: unknown,
+  prefix: string[],
+  invalid: string[]
+): void {
+  const required = node.required
+  const props = node.properties
+  if (!Array.isArray(required) || typeof props !== 'object' || props === null) return
+  const propsRec = props as Record<string, unknown>
+  for (const rawKey of required) {
+    if (typeof rawKey !== 'string') continue
+    if (prefix.length === 0 && PAYLOAD_BUILT_REQUIRED.has(rawKey)) continue
+    const path = [...prefix, rawKey]
+    const child =
+      typeof value === 'object' && value !== null
+        ? (value as Record<string, unknown>)[rawKey]
+        : undefined
+    if (child === undefined || child === null || child === '') {
+      invalid.push(path.join('.'))
+      continue
+    }
+    const childSchema = propsRec[rawKey]
+    if (typeof childSchema !== 'object' || childSchema === null) continue
+    const childNode = childSchema as Record<string, unknown>
+    if (
+      (childNode.type === 'number' && (typeof child !== 'number' || Number.isNaN(child))) ||
+      (childNode.type === 'integer' && (typeof child !== 'number' || !Number.isInteger(child)))
+    ) {
+      invalid.push(path.join('.'))
+      continue
+    }
+    collectInvalidRequiredPaths(childNode, child, path, invalid)
+  }
 }
 
 export function LabLabwareNewPage() {
@@ -236,6 +324,17 @@ export function LabLabwareNewPage() {
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
       const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
+      // Named refusal before the POST: Ajv on the server stays the sole validator,
+      // but a payload that cannot satisfy the schema's required fields is refused
+      // here by field name instead of round-tripping a 422.
+      if (info.schema && typeof info.schema === 'object') {
+        const invalid: string[] = []
+        collectInvalidRequiredPaths(info.schema as Record<string, unknown>, payload, [], invalid)
+        if (invalid.length > 0) {
+          setErrorMessage(`Cannot save: missing or invalid: ${invalid.join(', ')}`)
+          return
+        }
+      }
       await apiClient.createRecord(LABWARE_DEFINITION_SCHEMA, payload)
       navigate('/lab/labware')
     } catch (err) {

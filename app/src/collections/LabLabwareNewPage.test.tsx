@@ -599,6 +599,174 @@ describe('LabLabwareNewPage', () => {
     expect(payload.source.url).toBe('https://example.com/sheet-a')
   })
 
+  // g5d1save — the real schema's ROOT shape (required + nested required) used by the
+  // save pre-flight legs below. Mirrors schema/workflow/labware-definition.schema.yaml.
+  const labwareSchemaShape = {
+    required: ['kind', 'recordId', 'type', 'id', 'display_name', 'topology', 'capacity'],
+    properties: {
+      kind: { const: 'labware-definition' },
+      recordId: { type: 'string' },
+      type: { const: 'labware_definition' },
+      id: { type: 'string' },
+      display_name: { type: 'string' },
+      topology: {
+        type: 'object',
+        required: ['addressing'],
+        properties: {
+          addressing: { type: 'string' },
+          rows: { type: 'integer' },
+          columns: { type: 'integer' },
+        },
+      },
+      capacity: {
+        type: 'object',
+        required: ['max_well_volume_uL'],
+        properties: { max_well_volume_uL: { type: 'number' } },
+      },
+    },
+  }
+
+  async function extractAndOpenSave(proposals: Array<Record<string, unknown>>, schema: unknown) {
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-name-input'), { target: { value: '96-well plate' } })
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-save-button'))
+  }
+
+  // g5d1save leg 2 — a unit-bearing quantity in a number field must convert, not fall through raw
+  it('coerces a single unit-bearing quantity into the declared number field (100mL -> 100000)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '100mL', sourceUrl: 'https://example.com/sheet', passage: '100mL wells', specId: 's4' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.capacity.max_well_volume_uL).toBe(100000)
+  })
+
+  // g5d1save leg 2b — an ambiguous two-quantity string must stay raw in the payload
+  // (never guessed); only a single unambiguous quantity is converted.
+  it('leaves an ambiguous two-quantity string raw in a number field (no unit guessing)', async () => {
+    const schemaWithOptionalCapacity = {
+      ...labwareSchemaShape,
+      required: ['kind', 'recordId', 'type', 'id', 'display_name', 'topology'],
+    }
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'capacity.max_well_volume_uL', value: '195 mL, 185 mL', sourceUrl: 'https://example.com/sheet', passage: '195 mL, 185 mL', specId: 's3' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, schemaWithOptionalCapacity)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.capacity.max_well_volume_uL).toBe('195 mL, 185 mL')
+  })
+
+  // g5d1save-f1 D1 — a unit token followed by a letter is NOT a volume: "100 lb"
+  // must stay RAW so the pre-flight refuses it by name, never 100 lb -> 1e8.
+  it('refuses a "100 lb" mass instead of coercing it as litres (no unit guessing)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '100 lb', sourceUrl: 'https://example.com/sheet', passage: '100 lb', specId: 's4' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    const text = screen.getByTestId('lab-labware-error').textContent ?? ''
+    expect(text).toContain('Cannot save: missing or invalid:')
+    expect(text).toContain('capacity.max_well_volume_uL')
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+  })
+
+  // g5d1save-f1 D1 positive control — a real bare-litre quantity still converts.
+  it('coerces a bare-litre quantity at end of string (2 L -> 2000000)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '2 L', sourceUrl: 'https://example.com/sheet', passage: '2 L', specId: 's4' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.capacity.max_well_volume_uL).toBe(2000000)
+  })
+
+  // g5d1save-f1 D1 — a compound rate "1 L/min" is not a volume; stays RAW.
+  it('refuses a "1 L/min" rate instead of coercing it to 1000000 uL', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '1 L/min', sourceUrl: 'https://example.com/sheet', passage: '1 L/min', specId: 's4' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    const text = screen.getByTestId('lab-labware-error').textContent ?? ''
+    expect(text).toContain('Cannot save: missing or invalid:')
+    expect(text).toContain('capacity.max_well_volume_uL')
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+  })
+
+  // g5d1save leg 3a — schema-required field with no proposal refuses by name, no POST
+  it('refuses with a named reason when schema-required topology has no proposal', async () => {
+    const proposals = [
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's1' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('lab-labware-error').textContent).toBe(
+      'Cannot save: missing or invalid: topology',
+    )
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('lab-labware-missing-required')).toBeNull()
+  })
+
+  // g5d1save leg 3b — two quantities are ambiguous: stay raw so the pre-flight refuses by name
+  it('refuses an ambiguous two-quantity string in a number field instead of guessing', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '195 mL, 185 mL', sourceUrl: 'https://example.com/sheet', passage: '195 mL, 185 mL', specId: 's4' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    const text = screen.getByTestId('lab-labware-error').textContent ?? ''
+    expect(text).toContain('Cannot save: missing or invalid:')
+    expect(text).toContain('capacity.max_well_volume_uL')
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+  })
+
   // g4 defect D4 — the extractor stamps every proposal of one record kind with the SAME specId
   // (SpecSheetExtractor.ts:192). Rows keyed by specId collide and React logs
   // "Encountered two children with the same key". Key must be targetField (unique per proposal).

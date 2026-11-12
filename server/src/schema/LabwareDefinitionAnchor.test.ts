@@ -98,6 +98,30 @@ describe('labware-definition ontology_ref anchor', () => {
     expect(validated).toBeGreaterThan(0);
   });
 
+  // g5d1save D1(b) — the create path stamps provenance keys onto every payload
+  // before Ajv validation (RecordHandlers create path). The strict root
+  // (additionalProperties: false) must accept those server-supplied keys.
+  it('accepts a create payload carrying server-injected provenance timestamps', async () => {
+    const validator = await buildValidator();
+    const serverBuilt = {
+      kind: 'labware-definition',
+      recordId: 'LW-ABCD1234',
+      type: 'labware_definition',
+      id: 'LW-ABCD1234',
+      display_name: 'Server-built plate',
+      topology: { addressing: 'grid', rows: 8, columns: 12 },
+      capacity: { max_well_volume_uL: 200 },
+      createdAt: '2026-11-11T00:00:00.000Z',
+      updatedAt: '2026-11-11T00:00:00.000Z',
+      createdBy: 'local-user',
+    };
+    const result = validator.validate(
+      serverBuilt,
+      `${SCHEMA_ID}/labware-definition.schema.yaml`
+    );
+    expect(result.errors).toEqual([]);
+  });
+
   it('rejects a malformed CURIE (lowercase prefix, space in local part)', async () => {
     const validator = await buildValidator();
     const badCurie = {
