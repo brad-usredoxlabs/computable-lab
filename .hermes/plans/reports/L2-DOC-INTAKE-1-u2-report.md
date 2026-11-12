@@ -58,3 +58,17 @@ Typecheck (`npm run typecheck -w server`):
 commit docs(lane2): u2fix2 fix-run report (paperwork)
 
 L2-DOC-INTAKE-1 UNIT u2fix2 DONE a3617f71
+
+## CORRECTIONS (advc c1 D5)
+
+- **Old claim (line 49): "`safeName` strips `..` segments"** — measured truth: `safeName` is unchanged (`ArtifactBlobStore.ts:21-23`) and returns `'..'` verbatim; the segment sanitiser is `safeSegment` (`ArtifactBlobStore.ts:26-41`), which is what the traversal pins exercise.
+- **Old claim (line 50): "regardless of `format` option"** — measured truth: no `format` option exists in the module or in any caller of `save()`/the recorder; the line deleted in u2fix2 was the conditional spread `...(format ? { format } : {})` inside `createArtifactBlobStoreRecorder`, and the payload now always carries `format: formatForPath(input.fileName)` (`ArtifactBlobStore.ts:207,217`).
+- **Old claim (line 50): "test asserts record present with format=none"** — measured truth: the recorder test asserts `expect(dref.format).toBe('bin')` (`ArtifactBlobStore.test.ts:414`); the extensionless-filename fallback is the string `'bin'`, and `'none'` appears nowhere in the suite.
+
+### OBSERVATION — LegacyArtifactBlobStore raw artifactId (not graded here)
+
+`LegacyArtifactBlobStore.save()` (`ArtifactBlobStore.ts:157-169`) joins `args.artifactId` **unsanitised** (`:163`); only `fileName` goes through `safeName`. A hostile artifactId (e.g. `../../x`) can therefore compose a path outside the legacy storage root. It is not reachable from `ArtifactBlobStore.save()` (both inputs are routed through `safeSegment` at `:96-97`), has no production caller today (`server.ts:1021` and `oligoOrder.ts:100` only pass the instance for the read fallback in `loadBase64`), and is a pre-existing-class defect — recorded here as an observation, not fixed and not claimed as closed by this unit.
+
+### SCOPE HONESTY
+
+Defects 5, 6 and 8 of the c1 review are **out of this unit** and are not addressed by any change in this branch: D5 is paperwork and is corrected above only; D6 (u2fix3 writing into the u2 report and shipping an 8-hex `DONE a3617f71` marker) is repaired for THIS run only by writing an owned `L2-DOC-INTAKE-1-u2fix4-report.md` with a full 40-hex marker — the historical 8-hex line at `L2-DOC-INTAKE-1-u2-report.md:60` is left intact (append-only) and is not laundered; D8 is untouched. No YAML was changed in this unit, so no lane-stack YAML reload is owed.
