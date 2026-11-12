@@ -856,14 +856,9 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 
 // ---------------------------------------------------------------------------
 // L2-PROSE-SHORTHAND-SALVAGE-1 (C1): the YAML arm of prose draft recovery.
-// The accepted content shapes are DATA (config/drafting/draft-content-
-// recovery.yaml — the forced-tool-compliance.yaml precedent); Ajv via
-// parseShorthandForChat is the SOLE authority on whether a declared shape
-// carries a valid scientist-intent document.
+// The accepted shapes are DATA (config/drafting/draft-content-recovery.yaml);
+// Ajv via parseShorthandForChat is the SOLE authority on validity.
 // ---------------------------------------------------------------------------
-
-/** Content shapes the recovery path can recognise — declared in DATA, never
- *  inferred from a surface name. */
 type DraftContentShape = 'tool-envelope' | 'fenced-json' | 'fenced-yaml' | 'bare-yaml';
 const DRAFT_CONTENT_SHAPES: readonly DraftContentShape[] = ['tool-envelope', 'fenced-json', 'fenced-yaml', 'bare-yaml'];
 const DRAFT_RECOVERY_DRIVERS: readonly RecoveredDraftDriver[] = ['tool-envelope', 'fenced-json', 'yaml-shorthand'];
@@ -874,69 +869,51 @@ interface DraftContentRecoveryEntry {
   enabled: boolean;
 }
 
-const defaultDraftContentRecoveryPath =
-  new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
-/** Cached per resolved path (the vocabulary-loader discipline). A missing or
- *  malformed file throws, naming its own path — never a silent-off default
- *  that would make the recovery path lie about what it accepts. */
-const draftContentRecoveryCache = new Map<string, DraftContentRecoveryEntry[]>();
-
-function loadDraftContentRecoveryPolicy(
-  policyPath: string | URL = defaultDraftContentRecoveryPath,
-): DraftContentRecoveryEntry[] {
-  const key = String(policyPath);
-  const cached = draftContentRecoveryCache.get(key);
-  if (cached) return cached;
-  if (!existsSync(policyPath)) {
-    throw new Error(`draft-content recovery policy not found: ${key}`);
-  }
+/** Read PER call (the forcedToolCompliance precedent: a DATA edit needs no
+ *  restart). Missing or malformed throws, naming the path — never a silent-off
+ *  default that would make the recovery path lie about what it accepts. */
+function loadDraftContentRecoveryPolicy(): DraftContentRecoveryEntry[] {
+  const policyPath = new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
+  const where = String(policyPath);
+  if (!existsSync(policyPath)) throw new Error(`draft-content recovery policy not found: ${where}`);
   let raw: unknown;
   try {
     raw = parseYaml(readFileSync(policyPath, 'utf8'));
   } catch (error) {
-    throw new Error(`draft-content recovery policy unreadable: ${error instanceof Error ? error.message : String(error)}: ${key}`);
+    throw new Error(`draft-content recovery policy unreadable: ${error instanceof Error ? error.message : String(error)}: ${where}`);
   }
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(`draft-content recovery policy must be an object: ${key}`);
-  }
-  const shapes = (raw as Record<string, unknown>).shapes;
+  const shapes = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>).shapes
+    : undefined;
   if (!Array.isArray(shapes) || shapes.length === 0) {
-    throw new Error(`draft-content recovery policy: \`shapes\` must be a non-empty list: ${key}`);
+    throw new Error(`draft-content recovery policy: \`shapes\` must be a non-empty list: ${where}`);
   }
-  const entries: DraftContentRecoveryEntry[] = shapes.map((item: unknown) => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error(`draft-content recovery policy: every \`shapes\` entry must be an object: ${key}`);
-    }
-    const { shape, driver, enabled } = item as Record<string, unknown>;
+  return shapes.map((item: unknown): DraftContentRecoveryEntry => {
+    const { shape, driver, enabled } = (item ?? {}) as Record<string, unknown>;
     if (typeof shape !== 'string' || !DRAFT_CONTENT_SHAPES.includes(shape as DraftContentShape)) {
-      throw new Error(`draft-content recovery policy: entry \`shape\` must be one of ${DRAFT_CONTENT_SHAPES.join(', ')}: ${key}`);
+      throw new Error(`draft-content recovery policy: \`shape\` must be one of ${DRAFT_CONTENT_SHAPES.join(', ')}: ${where}`);
     }
     if (typeof driver !== 'string' || !DRAFT_RECOVERY_DRIVERS.includes(driver as RecoveredDraftDriver)) {
-      throw new Error(`draft-content recovery policy: entry \`driver\` must be one of ${DRAFT_RECOVERY_DRIVERS.join(', ')}: ${key}`);
+      throw new Error(`draft-content recovery policy: \`driver\` must be one of ${DRAFT_RECOVERY_DRIVERS.join(', ')}: ${where}`);
     }
     if (typeof enabled !== 'boolean') {
-      throw new Error(`draft-content recovery policy: entry \`enabled\` must be a boolean: ${key}`);
+      throw new Error(`draft-content recovery policy: \`enabled\` must be a boolean: ${where}`);
     }
     return { shape: shape as DraftContentShape, driver: driver as RecoveredDraftDriver, enabled };
   });
-  draftContentRecoveryCache.set(key, entries);
-  return entries;
 }
 
-/** The driver a declared+enabled shape recovers as; null when the DATA does
- *  not declare (or has disabled) that shape. */
+/** Driver a declared+enabled shape recovers as; null when the DATA does not
+ *  declare (or has disabled) it. */
 function declaredDraftDriver(shape: DraftContentShape): RecoveredDraftDriver | null {
-  const entry = loadDraftContentRecoveryPolicy().find((e) => e.shape === shape && e.enabled);
-  return entry ? entry.driver : null;
+  return loadDraftContentRecoveryPolicy().find((e) => e.shape === shape && e.enabled)?.driver ?? null;
 }
 
 /**
  * The shorthand-YAML document carried as TEXT: the inner text of the first
  * ```yaml / ```yml fence, else the whole trimmed text only when its top-level
- * keys already declare `intentId` AND `actions` (so a prose paragraph that
- * merely mentions the key name is never a candidate). The document is
- * returned VERBATIM — whether it is a valid draft is parseShorthandForChat's
- * call, never this helper's.
+ * keys declare `intentId` AND `actions` (a prose mention is never a candidate).
+ * Returned VERBATIM — validity is parseShorthandForChat's call, not this one's.
  */
 function extractShorthandYamlCandidate(content: string): { text: string; shape: 'fenced-yaml' | 'bare-yaml' } | null {
   const trimmed = content.trim();
@@ -951,8 +928,7 @@ function extractShorthandYamlCandidate(content: string): { text: string; shape: 
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const keys = Object.keys(parsed as Record<string, unknown>);
-  if (!keys.includes('intentId') || !keys.includes('actions')) return null;
-  return { text: trimmed, shape: 'bare-yaml' };
+  return keys.includes('intentId') && keys.includes('actions') ? { text: trimmed, shape: 'bare-yaml' } : null;
 }
 
 /** Top-level keys that mark a bare forced-draft argument object. */
