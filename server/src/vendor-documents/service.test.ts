@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { buildVendorDocumentExtraction } from './service.js';
+import type { RecordStore } from '../store/types.js';
+import { attachVendorDocumentExtraction, buildVendorDocumentExtraction } from './service.js';
 import {
   shapeDocumentResult,
   filterAndShapeDocumentResults,
@@ -441,5 +443,91 @@ describe('pdf extraction delegates to the shared intake service', () => {
     });
     expect((result.document as { extraction: { method: string } }).extraction.method)
       .not.toBe('failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-DOC-INTAKE-1 (unit dupdoc): attaching the same file bytes to the same
+// vendor product twice must reuse the stored document whose
+// file_ref.sha256 matches, and write nothing. Different bytes still append.
+// ---------------------------------------------------------------------------
+
+const DUP_BYTES = Buffer.from('Glucose 2 g/L\nL-Glutamine 2 mM', 'utf8');
+const DUP_SHA = createHash('sha256').update(DUP_BYTES).digest('hex');
+const DUP_UPLOAD = {
+  fileName: 'acme-hepes-formulation.txt',
+  mediaType: 'text/plain',
+  contentBase64: DUP_BYTES.toString('base64'),
+  documentKind: 'formulation_sheet' as const,
+};
+
+function storedDocument(id: string, sha256?: string): Record<string, unknown> {
+  return {
+    id,
+    file_ref: {
+      file_name: 'acme-hepes-formulation.txt',
+      media_type: 'text/plain',
+      ...(sha256 ? { sha256 } : {}),
+    },
+  };
+}
+
+function vendorProductStore(documents: unknown[]) {
+  const update = vi.fn(async (_options: { envelope: { payload: { documents: unknown[] } } }) => ({ success: true }));
+  const envelope = {
+    recordId: 'VPR-DUP-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
+    payload: {
+      kind: 'vendor-product',
+      id: 'VPR-DUP-1',
+      name: 'Acme HEPES',
+      vendor: 'Acme',
+      catalog_number: 'AC-1',
+      documents,
+    },
+    meta: { createdAt: '2026-01-01T00:00:00.000Z' },
+  };
+  return {
+    store: { get: vi.fn(async () => envelope), update } as unknown as RecordStore,
+    update,
+  };
+}
+
+describe('attach vendor document extraction is idempotent on file sha256', () => {
+  it('reuses the stored document when the same file bytes are attached again', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-EXISTING', DUP_SHA)]);
+
+    const result = await attachVendorDocumentExtraction(store, 'VPR-DUP-1', DUP_UPLOAD);
+
+    expect(result.document).toMatchObject({ id: 'VDOC-EXISTING', file_ref: { sha256: DUP_SHA } });
+    expect(result.duplicateOf).toBe('VDOC-EXISTING');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('appends a document for a genuinely different file', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-EXISTING', DUP_SHA)]);
+
+    const result = await attachVendorDocumentExtraction(store, 'VPR-DUP-1', {
+      ...DUP_UPLOAD,
+      fileName: 'acme-hepes-formulation-v2.txt',
+      contentBase64: Buffer.from('Glucose 4.5 g/L', 'utf8').toString('base64'),
+    });
+
+    expect(result.document.id).not.toBe('VDOC-EXISTING');
+    expect(result.duplicateOf).toBeUndefined();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0].envelope.payload.documents).toHaveLength(2);
+  });
+
+  it('still appends manual documents that carry no sha256 on either side', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-MANUAL-1')]);
+
+    await attachVendorDocumentExtraction(store, 'VPR-DUP-1', {
+      fileName: 'acme-hepes-formulation.txt',
+      mediaType: 'text/plain',
+    });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0].envelope.payload.documents).toHaveLength(2);
   });
 });
