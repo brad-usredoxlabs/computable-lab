@@ -40,3 +40,21 @@ Both probes confirm the correct implementation catches the defects.
 
 L2-DOC-INTAKE-1-u2 UNIT 2 DONE 8ffe234e5c3aa5e9691571c351261e7e67ba9b59
 report_commit: f83fd82886dc94b13744277acddb7b8a3dd9fc48
+
+## u2fix2 fix-run (paperwork)
+
+Shortstat `2f232e9c..a3617f71`: 2 files changed, 50 insertions(+), 8 deletions(-)
+
+Defects closed:
+- **Defect 4**: path-segment sanitise incl. '..' — `ArtifactBlobStore.ts` `safeName` strips `..` segments; test confirms no directory traversal.
+- **Defect 7**: format always emitted — `ArtifactBlobStore.ts` calls `recorder()` unconditionally regardless of `format` option; test asserts record present with format=none.
+
+Test run (`npm run test:run -w server -- src/ingestion/ArtifactBlobStore.test.ts`):
+  Test Files  1 passed (1), Tests  15 passed (15) — 31ms
+
+Typecheck (`npm run typecheck -w server`):
+  tsc --noEmit — 0 errors.
+
+commit docs(lane2): u2fix2 fix-run report (paperwork)
+
+L2-DOC-INTAKE-1 UNIT u2fix2 DONE a3617f71
