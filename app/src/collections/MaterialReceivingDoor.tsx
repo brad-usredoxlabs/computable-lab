@@ -20,6 +20,7 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
+import { labModalStyles } from './labModalStyles'
 
 type Status = 'known' | 'approximate' | 'unknown'
 type CompileResponse = Awaited<ReturnType<typeof apiClient.compileWorkstateDraft>>
@@ -123,7 +124,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
   return (
     <div className="lab-modal__backdrop" role="presentation"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <style>{`
+      <style>{`${labModalStyles}
 .lab-modal__result { margin: 0; padding: 8px 10px; border: 1px solid var(--cl-border); border-radius: 6px; }
 .lab-modal__result dl { margin: 0; }
 .lab-modal__result dt, .lab-modal__refusal dl dt {
