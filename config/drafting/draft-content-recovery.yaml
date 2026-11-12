@@ -1,0 +1,30 @@
+# DRAFT-CONTENT-RECOVERY — the content shapes the forced-draft prose-recovery
+# path accepts when a model answers with TEXT instead of a native tool call
+# (the dominant recoverable flake bucket: a correct scientist-intent document
+# thrown away as prose).
+#
+# This file declares WHICH shapes are recognised and under which recovery
+# driver name. It never restates the draft contract: Ajv via
+# parseShorthandForChat is the SOLE authority on whether a declared shape
+# carries a valid scientist-intent document. A shape listed here is only
+# "may be looked at", never "is valid" — an invalid candidate is refused with
+# the validator's own reason, never coerced.
+#
+# `driver` values are the closed RecoveredDraftDriver union surfaced in the
+# done payload's recoveredFrom marker. `enabled: false` switches a shape off
+# without deleting its declaration.
+shapes:
+  - shape: tool-envelope
+    driver: tool-envelope
+    enabled: true
+  - shape: fenced-json
+    driver: fenced-json
+    enabled: true
+  # L2-PROSE-SHORTHAND-SALVAGE-1 C1: the YAML arm. A ```yaml / ```yml fence,
+  # and a bare document whose top-level keys declare intentId + actions.
+  - shape: fenced-yaml
+    driver: yaml-shorthand
+    enabled: true
+  - shape: bare-yaml
+    driver: yaml-shorthand
+    enabled: true
