@@ -20,6 +20,7 @@ import { apiClient } from '../shared/api/client'
 import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
 import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
 import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
+import { MaterialReceivingDoor } from './MaterialReceivingDoor'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
@@ -236,6 +237,8 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
 
   // Labware-instance create modal state
   const [showInstanceModal, setShowInstanceModal] = useState(false)
+  // Receive-a-lot door state (materials category) — stages a receiving draft only
+  const [showReceiveModal, setShowReceiveModal] = useState(false)
   const [labwareDefinitions, setLabwareDefinitions] = useState<RecordEnvelope[]>([])
 
   const activeKind = CATEGORIES.find((c) => c.id === activeCategory)?.kind ?? 'protocol'
@@ -389,6 +392,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New material
             </button>
           )}
+          {activeCategory === 'materials' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-receive-lot"
+              onClick={() => setShowReceiveModal(true)}
+            >
+              + Receive a lot
+            </button>
+          )}
           {activeCategory === 'labware' && (
             <button
               type="button"
@@ -528,6 +541,10 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
         isOpen={showInstanceModal}
         onClose={() => setShowInstanceModal(false)}
         onSuccess={() => void fetchRecords('labware-instance')}
+      />
+      <MaterialReceivingDoor
+        isOpen={showReceiveModal}
+        onClose={() => setShowReceiveModal(false)}
       />
     </>
   )
