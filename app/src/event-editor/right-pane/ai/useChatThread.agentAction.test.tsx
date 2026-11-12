@@ -164,3 +164,40 @@ describe('useChatThread — agent_action / workstate_proposal cases (PB-CH-4)', 
     expect(h.requests[1].workingFocus).toBeDefined()
   })
 })
+
+describe('useChatThread — draft-recovery marker rides the status frame (C2 relay)', () => {
+  const RECOVERED = "Draft recovered from the model's text"
+
+  it('forwards event.recoveredFrom onto stream-status (driver relayed opaquely)', async () => {
+    const h = harness()
+    await sendOnce(h)
+    await act(async () => {
+      h.emitters[0]?.({ type: 'status', message: RECOVERED, recoveredFrom: { driver: 'fenced-json' } })
+    })
+    expect(h.result.current.state.statusRecoveredFrom).toEqual({ driver: 'fenced-json' })
+    expect(h.result.current.state.status).toBe(RECOVERED)
+  })
+
+  it('a status frame with no recoveredFrom leaves the marker null', async () => {
+    const h = harness()
+    await sendOnce(h)
+    await act(async () => {
+      h.emitters[0]?.({ type: 'status', message: 'Working on it' })
+    })
+    expect(h.result.current.state.status).toBe('Working on it')
+    expect(h.result.current.state.statusRecoveredFrom).toBeNull()
+  })
+
+  it('the marker survives only one status frame — the next plain status clears it', async () => {
+    const h = harness()
+    await sendOnce(h)
+    await act(async () => {
+      h.emitters[0]?.({ type: 'status', message: RECOVERED, recoveredFrom: { driver: 'fenced-json' } })
+    })
+    await act(async () => {
+      h.emitters[0]?.({ type: 'status', message: 'Summarizing the draft' })
+    })
+    expect(h.result.current.state.status).toBe('Summarizing the draft')
+    expect(h.result.current.state.statusRecoveredFrom).toBeNull()
+  })
+})
