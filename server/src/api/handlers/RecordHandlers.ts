@@ -41,6 +41,14 @@ import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
 import { findDanglingReferences } from '../../store/referenceCascade.js';
 
+/** Schema-driven provenance check: describes which fields the target schema accepts */
+interface SchemaProvenanceCheck {
+  hasCreatedAt: boolean;
+  hasUpdatedAt: boolean;
+  hasCreatedBy: boolean;
+  allowsAny: boolean;
+}
+
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
   authorizationService?: AuthorizationService;
@@ -63,6 +71,12 @@ interface RecordHandlerSecurityOptions {
    * no authoring gates (system works with the wiring ripped out).
    */
   getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
+  /**
+   * Schema-driven provenance check: which fields the target schema accepts.
+   * Absent accessor → kind-based fallback (backward compat; system works with
+   * the wiring ripped out). NO kind names in TS — the schema shape decides.
+   */
+  getSchemaProperties?: (schemaId: string) => SchemaProvenanceCheck | undefined;
   /**
    * QMS7-3: registry-kind lifecycle coverage, loaded from
    * schema/registry/registry-kinds.registry.yaml via KindLifecycleRegistry.
@@ -754,22 +768,34 @@ export function createRecordHandlers(
         // also carry createdBy for durable file-level provenance.
         const now = new Date().toISOString();
         const creator = user.userId ?? identity?.username ?? 'system';
-        // NOTE: material-instance and aliquot schemas use unevaluatedProperties:false
-        // at root level and do NOT include FAIRCommon via allOf. Ajv rejects
-        // createdAt/createdBy/updatedAt for these types, so we skip injecting them
-        // into the payload and rely on envelope meta instead. Event graphs accept
-        // createdAt/updatedAt but not createdBy, so actor provenance stays in meta.
+        // Schema-driven: inject createdAt/updatedAt/createdBy only when the target
+        // schema accepts them. When the caller provides getSchemaProperties, we
+        // consult it; otherwise we fall back to kind-based checks for backward
+        // compatibility. Schemas with additionalProperties:false and no
+        // createdAt/updatedAt/createdBy will reject injection — rely on envelope
+        // meta for provenance instead.
         const payloadObj = payload as Record<string, unknown>;
-        const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
-        const supportsPayloadCreatedBy = payloadObj.kind !== 'event-graph';
-        const payloadWithProvenance = isInventoryRecord
-          ? payloadObj
-          : {
-              ...payloadObj,
-              createdAt: now,
-              updatedAt: now,
-              ...(supportsPayloadCreatedBy ? { createdBy: creator } : {}),
-            };
+        const schemaProps = security?.getSchemaProperties?.(schemaId);
+        let acceptsCreatedAt: boolean, acceptsUpdatedAt: boolean, acceptsCreatedBy: boolean;
+        if (schemaProps) {
+          acceptsCreatedAt = schemaProps.hasCreatedAt || schemaProps.allowsAny;
+          acceptsUpdatedAt = schemaProps.hasUpdatedAt || schemaProps.allowsAny;
+          acceptsCreatedBy = schemaProps.hasCreatedBy || schemaProps.allowsAny;
+        } else {
+          // Backward-compat fallback when getSchemaProperties is unavailable:
+          // material-instance and aliquot schemas reject extra fields, event-graph
+          // declares createdAt/updatedAt but not createdBy.
+          const kind = payloadObj.kind as string;
+          acceptsCreatedAt = kind !== 'material-instance' && kind !== 'aliquot';
+          acceptsUpdatedAt = kind !== 'material-instance' && kind !== 'aliquot';
+          acceptsCreatedBy = kind !== 'material-instance' && kind !== 'aliquot' && kind !== 'event-graph';
+        }
+        const payloadWithProvenance = {
+          ...payloadObj,
+          ...(acceptsCreatedAt ? { createdAt: now } : {}),
+          ...(acceptsUpdatedAt ? { updatedAt: now } : {}),
+          ...(acceptsCreatedBy ? { createdBy: creator } : {}),
+        };
 
         // Inherit FAIR fields from parent record
         const typedPayload = payloadWithProvenance as Record<string, unknown>;

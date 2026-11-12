@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
 import { loadAllSchemas } from './schema/SchemaLoader.js';
+import { makeGetSchemaProperties } from './schema/composedProperties.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
 import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
@@ -799,6 +800,9 @@ export async function createServer(
       // QMS7-3: registry-kind lifecycle coverage (loaded in initializeApp;
       // absent when the load failed → no stamp-at-create, degraded loudly).
       getKindLifecycleCoverage: () => ctx.kindLifecycleRegistry,
+      // f3server: schema-driven provenance check — consult the schema registry
+      // to decide which provenance fields to inject. Absent → kind-based fallback.
+      getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
