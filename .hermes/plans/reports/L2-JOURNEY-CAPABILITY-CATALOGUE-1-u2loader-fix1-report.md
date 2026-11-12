@@ -49,3 +49,11 @@ $ cd server && npx tsc --noEmit -p . → TSC_EXIT=0
 - .hermes/plans/reports/L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2loader-report.md (marker line deleted)
 - server/src/compiler/journey/capabilityCatalogue.test.ts (leg (f) added)
 - .hermes/plans/reports/L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2loader-fix1-report.md (this file)
+
+## Exit
+Commit A (carries this report body and the leg): acffe46a. Two markers follow, one per mandated
+contract, both naming commit A: the item-token line is COMMIT DISCIPLINE commit B's marker; the final
+line is the launcher EXIT CONTRACT marker (the launcher greps the newest report for it).
+
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u2loader-fix1 DONE acffe46aa04539ba70472bdd686fd2c81404ab35
+L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2loader-fix1 UNIT unit DONE acffe46aa04539ba70472bdd686fd2c81404ab35
