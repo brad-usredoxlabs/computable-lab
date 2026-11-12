@@ -156,3 +156,4 @@ Verification: `timeout 300 npx vitest run server/src/ai/coerceDraftArgs.yamlReco
 Code commits: 9021ad4e (D1), 8cc3550f (D3).
 
 L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlarm UNIT unit DONE 102085a1c3b2ebb8c557c924fa46192e34bc39f0
+L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlarm-fix1 UNIT 1 of 1 DONE 8cc3550fa03b61386db4d368c3193b0ff1314051
