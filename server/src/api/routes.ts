@@ -173,6 +173,12 @@ export interface RouteOptions {
   specSheetHandlers?: SpecSheetHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
+  /**
+   * Reload the declarative schema surface in place (schemas + lint + UI specs) without a restart.
+   * Set by server.ts from the live registry/validator/lint/ui instances. Absent => the route
+   * answers 501 rather than pretending to have reloaded.
+   */
+  reloadSurface?: () => Promise<import('../config/reloadSchemaSurface.js').ReloadResult>;
   uiSpecCount?: () => number;
   aiInfo?: { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string };
   getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string } | undefined;
@@ -192,6 +198,7 @@ export function registerRoutes(
     validationHandlers,
     schemaCount,
     ruleCount,
+    reloadSurface,
   } = options;
   
   // ============================================================================
@@ -212,6 +219,34 @@ export function registerRoutes(
       timestamp: new Date().toISOString(),
       components,
     };
+  });
+
+  // ============================================================================
+  // Operator: reload the declarative schema surface WITHOUT a restart
+  // ============================================================================
+  // Brad 2026-11-12: `tsx --watch` reloads TypeScript but NOT YAML, so every schema/UI/lint
+  // change forced a full backend restart and serialised the lane behind it. This route reloads
+  // schemas + lint specs + UI specs in place over the LIVE instances (no handler re-wiring), and
+  // reports any boot-only surface (lifecycles, policy bundles, registry) that still needs a
+  // restart instead of pretending it covered them.
+  // Local operator route: it writes no records and changes no policy — it re-reads data files.
+  fastify.post('/admin/reload', async (_req, reply) => {
+    if (!reloadSurface) {
+      reply.status(501);
+      return { error: 'NOT_WIRED', message: 'Schema reload is not wired on this build.' };
+    }
+    try {
+      const result = await reloadSurface();
+      reply.status(result.ok ? 200 : 500);
+      return result;
+    } catch (err) {
+      reply.status(500);
+      return {
+        ok: false,
+        error: 'RELOAD_FAILED',
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   });
   
   // ============================================================================
