@@ -1,0 +1,7 @@
+version: "1.0"
+# Data source for labwareType -> ontology-class binding. The mapping itself is
+# NOT re-encoded here or in TypeScript: the ontology repo ships it and this
+# config only names where to read it. The ontology repo is read-only input.
+source_id: "lwo"
+map_key: "labware_type_to_lwo"
+path: "/home/brad/git/lab-ontologies/src/bindings/computable-lab.yaml"

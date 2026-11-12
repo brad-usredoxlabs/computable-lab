@@ -1,0 +1,32 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ontology-bindings.schema.yaml"
+title: "Ontology Bindings Registry"
+description: >
+  Declares the ontology repo's shipped bindings file as a data source for concept
+  lookups. The mapping lives in that file; this registry names only the path, the
+  source id (also the per-entry field holding the class CURIE) and the map key.
+
+type: object
+unevaluatedProperties: false
+required:
+  - version
+  - path
+  - source_id
+  - map_key
+properties:
+  version:
+    type: string
+    description: "Registry format version."
+    minLength: 1
+  path:
+    type: string
+    description: "Absolute path to the shipped bindings file (read-only input)."
+    pattern: "^/"
+  source_id:
+    type: string
+    description: "Ontology source id; also the key holding the class CURIE inside each binding entry."
+    pattern: "^[a-z][a-z0-9-]*$"
+  map_key:
+    type: string
+    description: "Top-level key of the labwareType -> class map in the bindings file."
+    pattern: "^[a-z][a-z0-9_]*$"
