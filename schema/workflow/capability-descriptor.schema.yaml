@@ -1,0 +1,124 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 (unit u1schema) — the capability descriptor.
+#
+# A DECLARATION document: one capability a journey step may name. It declares the
+# contract and POINTS AT the implementation; it never restates either. Ports are
+# $refs into the shipped journey-port vocabulary (journey-port.schema.yaml:10 —
+# vocabulary, later legs reference it by $ref), so a port's shape has one
+# authority. implementation.handler_ref names an existing governed handler or
+# agent tool, never an embedded argument schema (a second authority, DJ3).
+#
+# The four status booleans are separate claims (declared / implemented /
+# available_now / browser_certified); collapsing them into one enum is refused.
+# No lint host or ui spec yet: lint needs a catalogue collection (later unit).
+# Not a FAIR record: no common.schema.yaml allOf, as journey-port.schema.yaml.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/capability-descriptor.schema.yaml"
+title: "Journey Capability Descriptor"
+description: >
+  One capability's declared contract: typed ports, implementation binding,
+  effects, permissions, prerequisites, surfaces, human-interaction contract,
+  idempotency/retry/reconciliation policy, emitted evidence, four status claims.
+
+type: object
+# Not additionalProperties: with the if/then below, that would silently ignore
+# the conditional's fields.
+unevaluatedProperties: false
+required: [capability_id, version, display_name, justification, ports, implementation,
+  effects, permissions, availability, surfaces, idempotency, retry, reconciliation,
+  evidence, status]
+
+$defs:
+  # One declared port, typed by the journey-port vocabulary. The ref is relative
+  # on purpose: Ajv resolves it against this $id, so an unresolvable vocabulary
+  # member is a compile error, not a silently open slot.
+  PortDeclaration:
+    oneOf:
+    - $ref: "./journey-port.schema.yaml#/$defs/SequenceSetReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/AlignmentReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/MaterialReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/LabwareDefinitionReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/CommittedRecordReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/StagedDraftReference"
+
+properties:
+  capability_id: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+  version: { type: string, minLength: 1 }
+  display_name: { type: string, minLength: 1 }
+  justification:
+    type: string
+    minLength: 1
+    description: >
+      Why this is not configuration of an existing capability (a different
+      prefill or tab order is not a new capability).
+  ports:
+    type: object
+    additionalProperties: false
+    required: [input, output]
+    properties:
+      input: { type: array, items: { $ref: "#/$defs/PortDeclaration" } }
+      output: { type: array, items: { $ref: "#/$defs/PortDeclaration" } }
+  implementation:
+    type: object
+    additionalProperties: false
+    required: [handler_kind, handler_ref]
+    properties:
+      handler_kind: { type: string, enum: [governed_write, agent_tool, query] }
+      handler_ref:
+        type: string
+        minLength: 1
+        description: "Pointer to the existing governed write path or agent tool id."
+  effects:
+    type: array
+    uniqueItems: true
+    items: { type: string, enum: [read, external_disclosure, workflow_state_change,
+      domain_mutation, compute_submission, deployment] }
+  permissions: { type: array, uniqueItems: true, items: { type: string, pattern: "^[a-z][a-z0-9_.:-]*$" } }
+  availability:
+    type: object
+    additionalProperties: false
+    description: "Declared prerequisites; an absent key means none declared."
+    properties:
+      requires_records: { type: array, uniqueItems: true, items: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" } }
+      requires_config: { type: array, uniqueItems: true, items: { type: string, minLength: 1 } }
+      requires_equipment: { type: array, uniqueItems: true, items: { type: string, pattern: "^[a-z][a-z0-9_.:-]*$" } }
+      requires_schema_version: { type: string, minLength: 1 }
+  surfaces:
+    type: array
+    uniqueItems: true
+    description: "Presentation only, never an execution contract."
+    items: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+  human_interaction:
+    type: object
+    additionalProperties: false
+    required: [pauses_for_person, contract]
+    properties:
+      pauses_for_person: { type: boolean }
+      contract: { type: string, minLength: 1 }
+  idempotency: { type: string, enum: [pure, idempotent, non_idempotent] }
+  retry: { type: string, enum: [automatic, manual, none] }
+  reconciliation: { type: string, enum: [not_required, receipt_required, manual_review] }
+  evidence: { type: array, uniqueItems: true, items: { type: string, enum: [governed_write_receipt, validation_report, compute_receipt, audit_event] } }
+  status:
+    type: object
+    additionalProperties: false
+    required: [declared, implemented, available_now, browser_certified]
+    description: "Four separate claims. They may not be collapsed."
+    properties:
+      declared: { type: boolean }
+      implemented: { type: boolean }
+      available_now: { type: boolean }
+      browser_certified: { type: boolean }
+
+# A domain mutation must go through a governed write path; an agent tool that
+# happens to write is not that path. The contract, not a test, owns this rule.
+allOf:
+- if:
+    properties:
+      effects: { type: array, contains: { const: domain_mutation } }
+    required: [effects]
+  then:
+    properties:
+      implementation:
+        type: object
+        properties:
+          handler_kind: { const: governed_write }
