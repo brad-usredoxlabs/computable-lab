@@ -104,8 +104,8 @@ the item exit marker directly above it.
 - app/src/collections/LabLabwareNewPage.test.tsx  (+3 pins)
 - deliverables/L2-SPEC-SHEET-INGEST-1-report-l2t2405.md  (this section)
 
-(A commit cannot carry its own sha; both markers name the content commit that
-the marker-only amend extends.)
+(A commit cannot carry its own sha: this marker names the content commit c34d6c0f, which is an ancestor of this marker-only commit.)
 
-L2-SPEC-SHEET-INGEST-1 UNIT unit DONE 48b92db43602c54ceda8932d8fbd6a4963998f12
+L2-SPEC-SHEET-INGEST-1 UNIT g5d1marker DONE c34d6c0f64f8cf10c01383462ca195a26f5a6684
+L2-SPEC-SHEET-INGEST-1 UNIT unit DONE c34d6c0f64f8cf10c01383462ca195a26f5a6684
 SPECSHEET-G5D1SAVE DONE c34d6c0f64f8cf10c01383462ca195a26f5a6684
