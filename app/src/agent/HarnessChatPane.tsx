@@ -379,6 +379,12 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
       <ChatLog
         messages={chat.messages}
         isStreaming={chat.isStreaming}
+        // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the drafting
+        // transcript exposes the recovery marker the hook recorded. Same
+        // conditional-spread key-absent discipline as the card props above:
+        // on a clean turn the prop is ABSENT, so ChatLog renders no attribute
+        // (never an empty one) and adds no visible text.
+        {...(chat.statusRecoveredFrom ? { recoveredFrom: chat.statusRecoveredFrom } : {})}
         prompt={prompt}
         onPromptChange={setPrompt}
         onSend={() => { chat.sendPrompt(prompt); setPrompt('') }}

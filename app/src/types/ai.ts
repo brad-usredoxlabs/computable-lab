@@ -33,6 +33,15 @@ export interface AiActiveDeckScope {
 export interface AiStatusEvent {
   type: 'status'
   message: string
+  /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate D2, surface half): the server
+   * names the driver that salvaged a draft from the model's text
+   * (server/src/ai/types.ts status frame). The CLIENT relays it OPAQUELY as
+   * a `string` — deliberately NOT a union of known drivers, so the next
+   * server driver needs no client edit. Absent on a clean turn (an absent
+   * key, never `undefined`).
+   */
+  recoveredFrom?: { driver: string }
 }
 
 export interface AiToolCallEvent {

@@ -252,6 +252,23 @@ export interface UseAiChatReturn {
    */
   honestWall: string | null
   /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate L2-prose-shorthand-browser-g1
+   * D2, surface half): the drafting transcript's recovery marker. The LAST
+   * status frame's `recoveredFrom` — the server-named driver that salvaged a
+   * draft from the model's text — relayed OPAQUELY (a `string`, never a
+   * client-side driver union). null when the turn was not recovered (or had
+   * no status frame yet); cleared on the same resets that clear the status
+   * surface (a new send, a thread reset, clearHistory). ChatLog renders it as
+   * the inspection-only `data-recovered-from` attribute — no visible text.
+   *
+   * OPTIONAL on the interface only so the hand-rolled legacy stub literals
+   * that predate the marker (e.g. ChatPreviewCard.dropRestore's faithful
+   * chat host) keep typechecking without editing files this unit does not
+   * own. The REAL hook always supplies the key (null on a clean turn), so a
+   * consumer never sees it missing where `useAiChat` produced the chat.
+   */
+  statusRecoveredFrom?: { driver: string } | null
+  /**
    * L2-CHAT-1 regatefix2 D1: the adoption REFUSAL the card must show
    * verbatim — set when the `onPreviewAccept` seam THROWS (e.g. the deck
    * lock conflict, `RunDeckLockConflictError`), cleared on a fresh apply
@@ -709,6 +726,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // REPORTED failure in plain language, owned by its turn. AiTabPanel's
   // `honestWall` state ported to the generic stack.
   const [honestWall, setHonestWall] = useState<string | null>(null)
+  // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the drafting
+  // lineage's recovery marker. Owned by the LAST status frame of a turn and
+  // cleared on the same resets as the status surface — never sticky across
+  // turns. `?? null` keeps the state shape (a clean frame writes null).
+  const [statusRecoveredFrom, setStatusRecoveredFrom] = useState<{ driver: string } | null>(null)
   // L2-CHAT-1 regatefix2 D1 — the adoption REFUSAL the card renders as a
   // visible honest wall (the onPreviewAccept seam threw; e.g. the deck lock
   // conflict). Null when the last apply attempt succeeded or was not yet
@@ -919,6 +941,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
 
   const resetChatState = useCallback(() => {
     setMessages([])
+    // L2-PROSE-SHORTHAND-SALVAGE-1: a transcript wipe (switchThread /
+    // newThread / re-key) also drops the recovery marker — it belonged to the
+    // turn whose messages just left the screen.
+    setStatusRecoveredFrom(null)
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
     // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
@@ -1029,6 +1055,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     } else {
       if (reKeyed) {
         setMessages([])
+        // L2-PROSE-SHORTHAND-SALVAGE-1 fix1 (advc c1 D1): the re-key wipe
+        // drops the transcript, so it drops the recovery marker with it —
+        // matching resetChatState (:947) and the send reset (:1265). Without
+        // this a fresh EMPTY transcript rendered the previous turn's marker.
+        setStatusRecoveredFrom(null)
         persistedIdsRef.current = new Set()
       }
       lastThreadKeyRef.current = threadKey
@@ -1234,6 +1265,9 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // synchronously (before any await) so the fresh turn never renders the
       // prior turn's wall.
       setHonestWall(null)
+      // L2-PROSE-SHORTHAND-SALVAGE-1: a new send starts a new turn — the
+      // prior turn's recovery marker must not survive onto it.
+      setStatusRecoveredFrom(null)
 
       // LEG F fix run 1 (advc D1): RESUME a deferred re-key at the START of
       // a new turn. If the thread scope flipped while the previous turn was
@@ -1460,6 +1494,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
           resendAnswers,
         )) {
           accumulated.push(event)
+
+          // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the status
+          // frame is where the server names the recovery driver. Record the
+          // LAST frame's marker — a plain status frame (no `recoveredFrom`)
+          // clears it, keeping the marker one-turn-scoped. Opaque relay: the
+          // driver rides as a plain string, no client-side driver union.
+          if (event.type === 'status') {
+            setStatusRecoveredFrom(event.recoveredFrom ?? null)
+          }
 
           const content = buildAssistantContent(accumulated)
 
@@ -2530,6 +2573,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // ------------------------------------------------------------------
   const clearHistory = useCallback(() => {
     setMessages([])
+    setStatusRecoveredFrom(null)
     setPreviewEvents([])
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
@@ -2563,6 +2607,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     honestWall,
+    statusRecoveredFrom,
     adoptionError,
     previewStagedLabwareCount,
     inputText,

@@ -84,6 +84,17 @@ export interface ChatLogProps {
    * and no non-deck caller breaks.
    */
   selectedWells?: readonly string[]
+  /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate D2, surface half): the
+   * recovery marker for the turn on screen — the server-named driver that
+   * salvaged a draft from the model's text (useAiChat.statusRecoveredFrom,
+   * relayed opaquely). Rendered ONLY as the inspection attribute
+   * `data-recovered-from` on the existing root <aside> — ZERO visible text,
+   * no new element, no layout change. Absent on a clean turn (an absent key,
+   * never `undefined`): key-absent discipline, so the attribute is either a
+   * driver string or not present at all.
+   */
+  recoveredFrom?: { driver: string }
 }
 
 /** Shape the exported lane-2 answer helper expects, built from the message's clarification. */
@@ -227,7 +238,7 @@ export function clarificationBubbleText(content: string): string {
   return clarificationAnsweredText(content)
 }
 
-export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells }: ChatLogProps) {
+export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells, recoveredFrom }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
@@ -436,7 +447,12 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     </div>
   }
 
-  return <aside className="sequences-page sequence-chat">
+  // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the recovery marker
+  // rides the EXISTING root element as an inspection attribute only — the
+  // conditional spread keeps the key ABSENT on a clean turn (never an empty
+  // attribute, never `undefined`), the same discipline the sibling lineage
+  // uses at MessageLog.tsx:225 / useChatThread.ts:239.
+  return <aside className="sequences-page sequence-chat" {...(recoveredFrom ? { 'data-recovered-from': recoveredFrom.driver } : {})}>
     <h2>AI Chat</h2>
     <p className="sequence-hint">Ask for an edit, a draft or a navigation. Review proposed actions before applying them.</p>
     <div className="sequence-chat-messages" ref={scrollerRef} onScroll={onScroll} role="log" aria-label="Conversation" aria-live="polite" tabIndex={0}>
