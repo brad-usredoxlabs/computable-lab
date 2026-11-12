@@ -29,6 +29,15 @@ properties:
     description: "Stable internal identifier."
   display_name:
     type: string
+  # The create path injects these provenance keys into every payload before Ajv
+  # validation (RecordHandlers.createRecord); declaring them keeps the strict
+  # root from rejecting a server-built record. Not required — server-supplied.
+  createdAt:
+    type: string
+  updatedAt:
+    type: string
+  createdBy:
+    type: string
   vendor:
     type: string
   ontology_ref:
