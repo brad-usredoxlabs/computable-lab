@@ -112,7 +112,12 @@ function parseSourceKeywords(source: string): string[] {
   const withoutParentheticals = source.replace(/\([^)]*\)/g, ' ');
   const alternatives = withoutParentheticals.split('/').map((s) => s.trim());
   const keywords: string[] = [];
-  const prepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with|for)\b/i;
+  const prepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with)\b/i;
+  // The of-complement tail cuts at its own next preposition, and "for" belongs
+  // ONLY here: "Number of rows for grid addressing" keeps "Number of rows",
+  // while the main strip above must not see "for", so non-quantified phrases
+  // like "Information for use" survive intact (g6fix3, advc c2 D1).
+  const tailPrepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with|for)\b/i;
 
   for (const alt of alternatives) {
     if (!alt) continue;
@@ -124,7 +129,7 @@ function parseSourceKeywords(source: string): string[] {
       // usable label prefix: "Number of rows as stated on the sheet" keeps
       // "Number of rows" (advc c1 D1).
       const complement = alt.slice(match[0].length).trim();
-      const tail = complement.match(prepositionRe);
+      const tail = complement.match(tailPrepositionRe);
       phrase = tail && typeof tail[1] === 'string' ? `${phrase} of ${tail[1].trim()}` : alt.trim();
     }
     if (phrase) keywords.push(phrase);
