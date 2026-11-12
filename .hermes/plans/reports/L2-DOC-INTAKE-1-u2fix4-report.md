@@ -93,12 +93,29 @@ Owned new report path. The historical 8-hex `DONE a3617f71` at
 `L2-DOC-INTAKE-1-u2-report.md:60` is left intact (append-only; not rewritten). Marker
 below is full 40-hex, read from `git rev-parse HEAD` in this worktree.
 
-## Commits
+## Verification (raw, at report commit `ce3440d7`)
 
-- `d2b108d54a457f4d4a249e3ee5ea35ba6a61f653` — test: table pin (39 insertions, 0 deletions)
-- report body commit: this file
-- marker commit: appends the exit marker
+    RUN  v1.6.1 /home/brad/cl-wt/L2-DOC-INTAKE-1-u2fix2-lane2/server
+
+     ✓ src/ingestion/ArtifactBlobStore.test.ts  (18 tests) 23ms
+
+     Test Files  1 passed (1)
+          Tests  18 passed (18)
+
+    $ git -c core.fileMode=false status --short
+    (empty)
+
+    $ git -c core.fileMode=false diff --name-only 33297602..HEAD
+    .hermes/plans/reports/L2-DOC-INTAKE-1-u2-report.md
+    .hermes/plans/reports/L2-DOC-INTAKE-1-u2fix4-report.md
+    server/src/ingestion/ArtifactBlobStore.test.ts
+
+Typecheck skipped by design: no `.ts` signature change and no product-file change.
+Commits: `d2b108d5` (test pin), `ce3440d7` (test pin + both reports), marker commit.
 
 ## Remaining obligation
 
 The item's only remaining obligation is the browser gate.
+
+L2-DOC-INTAKE-1 UNIT u2fix4 DONE ce3440d7a12b67ffafe3e18ba2f0d743e72cc322
+L2-DOC-INTAKE-1-u2fix4 UNIT unit DONE ce3440d7a12b67ffafe3e18ba2f0d743e72cc322
