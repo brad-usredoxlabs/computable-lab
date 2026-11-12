@@ -119,3 +119,5 @@ Final: `git -c core.fileMode=false status --short` → empty.
 - UI unvalidated-draft leg: separate unit.
 - Orchestrator owns reloading the lane stack only if YAML changes are exercised
   live (this unit adds a schema file; no lane reload was performed here).
+
+L2-JOURNEY-DOC-1-u1schema UNIT unit DONE 0071dcc796f889e840a8f71af87e30fd6bf0fac3
