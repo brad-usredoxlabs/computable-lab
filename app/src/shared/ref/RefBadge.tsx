@@ -60,7 +60,7 @@ function getOntologyUrl(ref: OntologyRef): string | null {
   const namespace = ref.namespace.toLowerCase()
   
   // OLS-compatible ontologies
-  const olsOntologies = ['cl', 'chebi', 'go', 'uberon', 'obi', 'uo', 'ncbitaxon', 'mondo']
+  const olsOntologies = ['cl', 'chebi', 'go', 'uberon', 'obi', 'uo', 'ncbitaxon', 'mondo', 'ncit']
   if (olsOntologies.includes(namespace)) {
     const iri = encodeURIComponent(`http://purl.obolibrary.org/obo/${ref.id.replace(':', '_')}`)
     return `https://www.ebi.ac.uk/ols4/ontologies/${namespace}/classes/${iri}`
