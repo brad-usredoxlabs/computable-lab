@@ -260,20 +260,21 @@ export function LabLabwareNewPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Labware name"
-            style={{ padding: '0.4rem 0.6rem' }}
+            style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)' }}
           />
           <input
             data-testid="lab-labware-url-input"
             value={sheetUrl}
             onChange={(e) => setSheetUrl(e.target.value)}
             placeholder="Spec-sheet URL"
-            style={{ padding: '0.4rem 0.6rem' }}
+            style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)' }}
           />
           <button
             type="button"
             data-testid="lab-labware-propose-button"
             onClick={() => void handleExtract()}
             disabled={!sheetUrl.trim() || state === 'extracting'}
+            style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
           >
             Propose fields
           </button>
@@ -353,6 +354,7 @@ export function LabLabwareNewPage() {
               data-testid="lab-labware-save-button"
               onClick={() => void handleSave()}
               disabled={saving}
+              style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
             >
               {saving ? 'Saving…' : 'Save labware definition'}
             </button>
