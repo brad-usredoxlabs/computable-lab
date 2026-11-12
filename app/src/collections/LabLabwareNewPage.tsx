@@ -327,7 +327,7 @@ export function LabLabwareNewPage() {
               </thead>
               <tbody>
                 {proposals.map((proposal) => (
-                  <tr key={proposal.specId}>
+                  <tr key={proposal.targetField}>
                     <td style={{ padding: '0.25rem' }}>{proposal.targetField}</td>
                     <td style={{ padding: '0.25rem' }}>
                       {proposal.passage ? (
