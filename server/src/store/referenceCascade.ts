@@ -22,20 +22,28 @@ import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 // ---------------------------------------------------------------------------
 
 /**
+ * The declared onDelete action vocabulary — the item's two-value cascade/refuse
+ * vocabulary, NOT a list of record kind names. One source of truth; the
+ * CascadeAction type derives from it.
+ */
+export const CASCADE_ACTIONS = ['cascade', 'refuse'] as const;
+export type CascadeAction = (typeof CASCADE_ACTIONS)[number];
+
+/**
  * A loaded cascade policy rule: which (referrerKind, pointer) pairs
  * cascade on deletion vs refuse.
  */
 export interface CascadeRule {
   /** The kind of record that holds the reference (e.g. 'access-policy') */
   referrerKind: string;
-  /** Map of pointer field paths → 'cascade' | 'refuse' */
-  pointers: Record<string, 'cascade' | 'refuse'>;
+  /** Map of pointer field paths → CascadeAction */
+  pointers: Record<string, CascadeAction>;
 }
 
 /**
  * Parsed cascade policy, keyed by (referrerKind, pointer).
  */
-export type CascadePolicy = Map<string, Map<string, 'cascade' | 'refuse'>>;
+export type CascadePolicy = Map<string, Map<string, CascadeAction>>;
 
 /**
  * A referrer found by the walker: the record that references the target,
@@ -109,20 +117,31 @@ export function loadCascadePolicy(yamlPath: string): CascadePolicy {
   }
 
   const obj = data as Record<string, unknown>;
-  const policy = new Map<string, Map<string, 'cascade' | 'refuse'>>();
-  const rules: unknown[] = Array.isArray(obj.rules) ? obj.rules : [];
-  for (const rule of rules) {
-    if (!rule || typeof rule !== 'object') continue;
-    const referrerKind = (rule as Record<string, unknown>).referrerKind as string;
-    if (typeof referrerKind !== 'string') continue;
-    const pointers = (rule as Record<string, unknown>).pointers as Record<string, string> | undefined;
-    if (!pointers || typeof pointers !== 'object') continue;
+  if (!Array.isArray(obj.rules)) throw new Error(`${yamlPath}: rule[-] 'rules' must be an array, got ${typeof obj.rules}`);
+  const policy = new Map<string, Map<string, CascadeAction>>();
+  const rules: unknown[] = obj.rules;
+  const bad = (i: number, problem: string): Error =>
+    new Error(`${yamlPath}: rule[${i}] ${problem}`);
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    if (!rule || typeof rule !== 'object') {
+      throw bad(i, `must be an object, got ${rule === null ? 'null' : typeof rule}`);
+    }
+    const referrerKind = (rule as Record<string, unknown>).referrerKind;
+    if (typeof referrerKind !== 'string' || referrerKind.length === 0) {
+      throw bad(i, `has invalid 'referrerKind' (expected a non-empty string)`);
+    }
+    const pointers = (rule as Record<string, unknown>).pointers;
+    if (!pointers || typeof pointers !== 'object' || Array.isArray(pointers)) {
+      throw bad(i, `has invalid 'pointers' (expected an object mapping pointer -> action)`);
+    }
 
-    const pointerMap = new Map<string, 'cascade' | 'refuse'>();
-    for (const [pointer, value] of Object.entries(pointers)) {
-      if (value === 'cascade' || value === 'refuse') {
-        pointerMap.set(pointer, value);
+    const pointerMap = new Map<string, CascadeAction>();
+    for (const [pointer, value] of Object.entries(pointers as Record<string, unknown>)) {
+      if (!(CASCADE_ACTIONS as readonly string[]).includes(value as string)) {
+        throw bad(i, `pointer '${pointer}' has onDelete '${String(value)}' (allowed: ${CASCADE_ACTIONS.join(' | ')})`);
       }
+      pointerMap.set(pointer, value as CascadeAction);
     }
     if (pointerMap.size > 0) {
       policy.set(referrerKind, pointerMap);
