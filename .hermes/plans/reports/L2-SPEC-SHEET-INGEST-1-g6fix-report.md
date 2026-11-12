@@ -1,0 +1,282 @@
+# L2-SPEC-SHEET-INGEST-1 / unit g6fix-fieldmap — report
+
+- Lane: 2
+- Worktree: /home/brad/cl-wt/L2-SPECSHEET-g6fix-lane2
+- Branch: cl/lane2-specsheet-g6fix-0402
+- Base: 55b9c86c (trunk cl/integration-2 tip at dispatch, verified with `git rev-parse HEAD`)
+- Code commit: a2bb73fabbb0f031fca03eda01824a365a06b499
+- Unit: 1 of 1 (g6fix-fieldmap). Implementation complete; acceptance (browser re-gate) NOT claimed here.
+
+## Root cause (two defects in one field map)
+
+1. D1 (HIGH, g6) — `parseSourceKeywords` did `source.split('/')` *before* removing
+   parentheticals, so the shipped labware addressing source
+   `"Addressing type (grid/linear/single) from the sheet"` produced the literal keyword
+   `Addressing type (grid`. `labelMatches` is `labelNorm.startsWith(kwNorm)`
+   (`server/src/ingestion/SpecSheetExtractor.ts:113-119`), so no real label matched and
+   `topology.addressing` — REQUIRED by `schema/workflow/labware-definition.schema.yaml`
+   (`required: [addressing]`, `enum: [grid, linear, single]`) — never received a value:
+   every Save 422'd, 0 records written.
+2. D2 (MINOR, g6) — `"Number of rows for grid addressing"` and
+   `"Number of columns for grid addressing"` both stripped at `of` to the single keyword
+   `Number`, so one sheet line filled both `topology.rows` and `topology.columns`
+
+The defect class is the extractor field map + its keyword parser. The schema is untouched.
+
+## Change (3 files, 141 added lines — product+test; budget 3 files / 150 lines)
+
+### `server/src/ingestion/SpecSheetExtractor.ts` (+21/-4, parseSourceKeywords only)
+- Drop parenthetical groups (`(...)`) **before** splitting on `/`: a parenthetical
+  enumerates allowed values/units, it is never a label alternative (fixes D1).
+- Keep the complement of an "of"-strip when the stripped head is a bare quantifier
+  (`BARE_QUANTIFIER_HEADS = number|no|count|quantity|total|amount`), so
+  `"Number of rows"` stays `Number of rows` instead of collapsing to `Number` (fixes D2).
+  Deliberately scoped to an `of` complement so provenance tails (`"Package size / Quantity as
+  stated on the sheet"`) still strip to `Quantity` — the vendor-product map is unchanged.
+- No new extraction path, no signature change, `labelMatches` untouched.
+
+### `schema/ingestion/spec-sheet.labware.yaml` (+8/-3, topology block only)
+Each targetField now lists label **openings** a sheet actually starts with, and the
+rows/columns alternatives are disjoint:
+
+    - targetField: topology.addressing
+      source: "Addressing type / Addressing (grid / linear / single)"
+    - targetField: topology.rows
+      source: "Number of rows / Rows / Row count"
+    - targetField: topology.columns
+      source: "Number of columns / Columns / Column count"
+
+Parsed keywords (verified through the tests): `Addressing type`, `Addressing`;
+`Number of rows`, `Rows`, `Row count`; `Number of columns`, `Columns`, `Column count`
+— intersection between the rows and columns sets is empty, and each keyword is a prefix
+of a plausible label (`Addressing type: grid`, `Number of rows: 8`, `Columns: 12`).
+
+### `server/src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts` (new, 112 lines)
+`parseSourceKeywords` is private, so its behaviour is pinned through `extractProposals`
+(no API surface added):
+1. D1 truncation pin — pre-fix source line, doc `Addressing type: grid` → exactly one
+   proposal, value ∈ {grid, linear, single} (RED before the parser fix: 0 proposals).
+2. D2 collapse pin — sources `Number of rows` / `Number of columns`, doc with only
+   `Number of rows: 8` → rows = `8`, columns = **0 proposals** (RED before: columns = 8).
+3. Shipped-map distinctness — `getSpecSheetFieldMap('labware')`, doc
+   `Rows: 8 / Columns: 12` → rows `8`, columns `12`, distinct passages.
+4. End-to-end realistic plate sheet (display name, vendor, max well volume, well length,
+   addressing, rows, columns) → addressing ∈ enum, rows/columns from their own lines, and
+   the non-topology fields still map (no regression).
+
+## Schema untouched (reviewer bait #1)
+
+    $ git diff HEAD~1 HEAD -- '*.schema.yaml' | wc -l
+    0
+
+`git show --stat` for the code commit lists exactly three paths, none of them `*.schema.yaml`.
+
+## VERIFY (raw)
+
+Base baseline — `timeout 240 npx vitest run src/ingestion/ --root server`:
+
+    Test Files  3 failed | 33 passed | 2 skipped (38)
+         Tests  176 passed | 2 skipped (225)
+
+After the change, same command:
+
+    Test Files  3 failed | 34 passed | 2 skipped (39)
+         Tests  180 passed | 2 skipped (229)
+
+Named suites (all green, reviewer bait #4):
+
+    ✓ src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts  (4 tests) 50ms
+    ✓ src/ingestion/SpecSheetFieldMaps.test.ts  (7 tests) 131ms
+    ✓ src/ingestion/SpecSheetExtractor.test.ts  (19 tests) 69ms
+    ✓ src/ingestion/SpecSheetExtractor.labelMatch.test.ts  (4 tests) 47ms
+
+New test file alone — `timeout 240 npx vitest run src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts --root server`:
+
+    RUN  v1.6.1 /home/brad/cl-wt/L2-SPECSHEET-g6fix-lane2/server
+    ✓ src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts  (4 tests) 14ms
+    Test Files  1 passed (1)
+         Tests  4 passed (4)
+
+Typecheck — `timeout 300 npx tsc --noEmit -p server`:
+
+    (no output) tsc_exit=0
+
+### Pre-existing failures (NOT caused by this unit; identical before and after)
+
+The same three files fail at collection on the untouched base and after the change:
+`src/ingestion/vendor-protocol/Wave2SemanticFamilyPass.test.ts`,
+`ZymoCampaignGoldenE2E.test.ts`, `ZymoCampaignNegatives.test.ts`.
+First error in both logs: `ENOENT ... /home/brad/cl-wt/schema/lab/material-profile.registry.yaml`
+— those suites compute their repo root with `resolve(here, '../../../..')`, which lands one
+directory above this pre-existing worktree layout. Environment/worktree-depth gap, outside
+this unit's owned files; every file that passed at baseline still passes (33 → 34 files,
++4 tests, all mine). Owner: orchestrator/lane env; resume condition: run the same suite in a
+tree where that repo-root probe resolves, or fix the helper's depth.
+
+## MUTATION PROBE (required) — all RED
+
+| mutant | change | result |
+|---|---|---|
+| A | parser fully reverted (no paren strip, no quantifier guard) | `Tests 3 failed | 1 passed (4)` — D1 addressing test: `expected [] to have a length of 1 but got +0`; D2: `expected [ { …(5) } ] to have a length of +0 but got 1`; e2e: `expected '8' to be '12'` |
+| B | rows/columns YAML sources reverted to the two old lines | `Tests 2 failed | 2 passed (4)` — distinctness + e2e: `expected [] to have a length of 1 but got +0` (both fields unmapped) |
+| C | paren strip kept, quantifier guard removed | `Tests 2 failed | 2 passed (4)` — one line fills both: `expected [ { …(5) } ] to have a length of +0 but got 1`, `expected '8' to be '12'` |
+
+Files were byte-restored after each mutant (`restored: True True`) before committing.
+
+## Reviewer bait
+
+- "You relaxed the schema" — schema diff is empty (0 lines), see above.
+- "Magic string" — every keyword is justified by `labelMatches` = `startsWith` on the label
+  text before `:`; the YAML now lists label openings (`Addressing type`, `Rows`,
+  `Number of columns`, …) and the parser strips only parentheticals and prepositional tails.
+- "rows/columns still share a keyword" — test 2 and test 3 kill both the parser-level and the
+  shipped-map version of that (columns = 0 proposals when only the rows line exists).
+- "vendor-product map regressed" — the quantifier guard is scoped to `of` complements, so
+  `Quantity as stated on the sheet` still yields `Quantity`; `SpecSheetExtractor.test.ts`
+  (19 tests, includes the vendor-product happy path) and `SpecSheetFieldMaps.test.ts`
+  (7 tests) both pass.
+
+## Notes / follow-ups for the orchestrator
+
+- YAML changed ⇒ the lane stack needs a reload before any live/browser re-verification
+  (no stack was restarted by this coder). The browser gate owns acceptance; I claim
+  implementation only.
+- Accepted-stale comment: `server/src/ingestion/SpecSheetExtractor.test.ts:517-522` still says
+  its inline sources are "verbatim from schema/ingestion/spec-sheet.labware.yaml:53-56". That
+  test asserts colon-less chrome rejection using pre-fix strings and is independent of YAML
+  fidelity, so it was left untouched (it would also have breached the 3-file budget).
+  Optional follow-up: reword that comment or drive the strings from the shipped map.
+- Observed during the work: worktree `node_modules` were materialised as symlinks to
+  /mnt/vast/home/brad/git/cl-integration-2/node_modules; `server/schema` is a symlink into
+  this worktree's `schema/`. No files were edited through symlinks.
+
+L2-SPEC-SHEET-INGEST-1-g6fix UNIT unit DONE a2bb73fabbb0f031fca03eda01824a365a06b499
+
+## Unit g6fix2 — advc c1 (VERDICT: FIX (2)) — MINOR D1 + D2 closed
+
+Lineage: base 55b9c86c → g6fix fieldmap a2bb73fa → c1209669 (report/marker) → this unit.
+
+### D1 (MINOR) — "of"-complement guard restored the whole alternative
+
+Pre-fix guard did `phrase = alt.trim()` so `Number of rows as stated on the sheet`
+became the keyword `number of rows as stated on the sheet`; `labelMatches` is
+`label.startsWith(keyword)`, so `Number of rows: 8` could never match — the same
+silent-unmapped-required-field class as gate g6 D1.
+
+Fix (`server/src/ingestion/SpecSheetExtractor.ts`, guard block + its doc comment only):
+the kept "of" complement is now cut at ITS next preposition. `complement` is the
+remainder after the head+"of", re-matched against `prepositionRe`; when a tail
+preposition is found the keyword is `head of <noun phrase>`, otherwise the whole
+alternative is kept (unchanged behaviour for a bare `Number of rows`).
+`for` was added to `prepositionRe`'s alternation so `Number of rows for grid
+addressing` also truncates to `Number of rows`; the main strip is leftmost, so
+`of` still wins for those sources — the two existing `for` sources
+(`SpecSheetExtractor.test.ts:522-523`) and their g4 colon-less pin are unaffected
+(verified green).
+
+Outcomes: `Number of rows as stated on the sheet` → `Number of rows`;
+`Number of rows for grid addressing` → `Number of rows`;
+`Quantity as stated on the sheet` → `Quantity` (unchanged: preposition `as`, guard
+not reached); `Number of rows` → `Number of rows`.
+
+### D2 (MINOR) — DONE marker did not match the contract literal
+
+Contract regex `L2-SPEC-SHEET-INGEST-1 UNIT g6fix.*DONE [0-9a-f]{40}` failed on
+`L2-SPEC-SHEET-INGEST-1-g6fix UNIT unit DONE ...` (item/unit hyphen-joined before
+`UNIT`). Old line kept verbatim above; the corrected line is emitted at the end of
+this file.
+
+### Verification (worktree root / server/)
+
+- RED first: new pin `truncates at the next preposition so an "of" complement
+  keeps only its noun phrase` in
+  `server/src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  (`source: 'Number of rows as stated on the sheet'`, text `Number of rows: 8`,
+  expects exactly one `topology.rows` proposal). Against unmodified code:
+  `Tests 1 failed | 4 passed (5)` — `AssertionError: expected [] to have a length
+  of 1 but got +0`.
+- GREEN after fix: `npx vitest run src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  → `Test Files 1 passed (1) / Tests 5 passed (5)`.
+- Regression `npx vitest run src/ingestion/` → `Test Files 3 failed | 34 passed |
+  2 skipped (39)`, `Tests 12 failed | 200 passed | 2 skipped (230)`. All 12
+  failures are in `src/ingestion/vendor-protocol/` (`Record already exists:
+  XDR-w211-golden` state pollution; `can't resolve reference
+  ./datatypes/revision-ref.schema.yaml` sibling-schema path debt). Baseline check
+  with this unit's code change stashed: same `Test Files 3 failed | 19 passed`,
+  `Tests 12 failed | 101 passed` — identical failure set, i.e. pre-existing and
+  unrelated (note-and-ignore).
+- Typecheck: `npm run typecheck -w server` → clean (tsc --noEmit, rc=0).
+- No YAML changes; no schema/ or SpecSheetFieldMaps.ts edits.
+
+### Commits
+
+- `66a83e53` RED pin (test only)
+- `bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e` code fix (sha used in the marker)
+- report + marker commit follows.
+
+L2-SPEC-SHEET-INGEST-1 UNIT g6fix2 DONE bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e
+
+L2-SPEC-SHEET-INGEST-1-g6fix2 UNIT unit DONE bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e
+
+## Unit g6fix3 — advc c2 D1 (FIX) — "for" must not be in the shared strip
+
+Lineage: base 494534fb (g6fix2 marker) → e8e1b229 RED pins → cc13eeee production
+split → this report (plus an exit-contract marker commit naming it).
+
+### D1 — shared `prepositionRe` leaked "for" into the leftmost main strip
+
+g6fix2 added `for` to the single SHARED `prepositionRe`
+(`SpecSheetExtractor.ts`), so every non-quantified source phrase was also cut
+at "for": `Information for use` → `Information`. That changed generic parsing
+outside the owned of-complement guard and had no pin (advc c2 D1). The tail cut
+genuinely needs "for" (`Number of rows for grid addressing` → `Number of rows`),
+so the two cuts need different preposition sets.
+
+Fix (2 owned files, `server/src/ingestion/SpecSheetExtractor.ts`):
+- `prepositionRe` alternation minus `for` — the main strip never sees it;
+- new module-level `tailPrepositionRe` near it, identical plus `for`, used only
+  at the of-complement tail match (`const tail = complement.match(tailPrepositionRe)`).
+Comment records why `for` lives in exactly one of the two regexes.
+
+### Pins (both, in `SpecSheetExtractor.sourceKeywords.test.ts`)
+
+- pin a — source `Number of rows for grid addressing`, text `Number of rows: 8`
+  → exactly one `topology.rows` proposal, value `8`. The label is exactly the
+  keyword, so an untruncated keyword cannot match; the pin fails if the tail
+  regex loses `for`.
+- pin b — source `Information for use`: text `Information for use: store at
+  2-8 C` → one `notes` proposal; text `Information only: store at 2-8 C` → zero
+  (proves the keyword is not truncated to `Information`). Fails against the
+  baseline/g6fix2 code, i.e. RED before the regex split.
+
+### Verification (measured in this worktree)
+
+- RED (commit e8e1b229, unmodified production):
+  `npm run test:run -w server -- src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  → `Tests 1 failed | 6 passed (7)`; the failure is pin b
+  (`expected [ { targetField: 'notes', …(4) } ] to have a length of +0`).
+- GREEN after cc13eeee: same command → `Test Files 1 passed (1)`, `Tests 7 passed (7)`
+  (brief baseline 5 passed).
+- `npm run test:run -w server -- src/ingestion/SpecSheetExtractor` → 3 files,
+  `Tests 30 passed (30)` (brief baseline 28 passed; brief's known-unrelated 12
+  vendor-protocol failures are outside this filter and were not chased).
+- `npm run typecheck -w server` → `tsc --noEmit`, rc 0.
+- Mutation control (each mutant applied to the committed fix, then
+  `git -c core.fileMode=false checkout -- server/src/ingestion/SpecSheetExtractor.ts`):
+  1. baseline-shaped mutant (`for` back in the shared regex, tail matching the
+     shared regex) → pin b RED, pin a green;
+  2. tail loses `for` (neither regex has it) → pin a RED, pin b green.
+  Each pin therefore pins exactly one side of the split; tree clean after restore.
+- Scope: no YAML, no `SpecSheetFieldMaps.ts`, no schema/, no app/, no other
+  report edits. `server/records` symlink materialized as instructed (untracked/ignored).
+
+### Commits
+
+- `e8e1b229` RED pins (test only)
+- `cc13eeee` production split (`prepositionRe` minus `for` + `tailPrepositionRe`)
+- `c72d5487933cf5305bbe97d3d61a847ed84de399` this report commit
+
+L2-SPEC-SHEET-INGEST-1 UNIT g6fix3 DONE c72d5487933cf5305bbe97d3d61a847ed84de399
+
+L2-SPEC-SHEET-INGEST-1-g6fix3 UNIT unit DONE c72d5487933cf5305bbe97d3d61a847ed84de399
+

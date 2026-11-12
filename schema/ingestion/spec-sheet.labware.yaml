@@ -48,9 +48,14 @@ targets:
         source: "Well depth as stated on the sheet"
         unit: "mm"
         required: false
+      # Label forms the sheet uses for each topology field. Keywords are
+      # matched as prefixes of the label before ":" (startsWith), so every
+      # alternative below must be a plausible label OPENING. topology.addressing
+      # is required by labware-definition.schema.yaml with enum
+      # [grid, linear, single] — a sheet that states its addressing must map.
       - targetField: topology.addressing
-        source: "Addressing type (grid/linear/single) from the sheet"
+        source: "Addressing type / Addressing (grid / linear / single)"
       - targetField: topology.rows
-        source: "Number of rows for grid addressing"
+        source: "Number of rows / Rows / Row count"
       - targetField: topology.columns
-        source: "Number of columns for grid addressing"
+        source: "Number of columns / Columns / Column count"
