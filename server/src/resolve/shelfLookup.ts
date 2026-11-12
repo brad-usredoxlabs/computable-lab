@@ -93,6 +93,16 @@ const KIND_LEVEL: Record<string, ShelfReferentLevel> = {
   'labware-instance': 'labware-instance',
 };
 
+/**
+ * Concept record kinds for the shelf's labware arm. The store holds TWO
+ * merged labware record families that both mean "a labware concept":
+ * records/seed/labware/* declares `kind: labware`, while
+ * records/seed/labware-definition/* declares `kind: labware-definition`.
+ * Read BOTH (the provider lists by record kind); the reported sourceKind
+ * stays 'labware-definition' for either family.
+ */
+const LABWARE_CONCEPT_KINDS = ['labware', 'labware-definition'];
+
 /** Cap on concept hits per query (mirrors the spine's default candidate limit). */
 const CONCEPT_LIMIT = 20;
 
@@ -175,8 +185,9 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
       }));
       const conceptIds = new Set(concepts.map((c) => c.recordId));
 
-      // 1b. Labware definitions as concepts (separate provider, separate id set).
-      const lwProvider = createRecordProvider(store, ['labware-definition']);
+      // 1b. Labware concepts from BOTH merged record families (kind `labware`
+      //     and kind `labware-definition`; see LABWARE_CONCEPT_KINDS).
+      const lwProvider = createRecordProvider(store, LABWARE_CONCEPT_KINDS);
       let lwHits: ProviderHit[] = [];
       try {
         lwHits = await lwProvider(term, CONCEPT_LIMIT, controller.signal);

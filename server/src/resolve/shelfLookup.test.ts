@@ -394,4 +394,56 @@ describe('shelfLookup — concept-keyed inventory (MATRES-SHELF)', () => {
     // Location still comes from the instance's own location.label
     expect(orphan!.location).toBe('-80 freezer');
   });
+
+  /* ── Merged labware record families (shelflw2 unit) ── */
+
+  /**
+   * The store holds TWO merged labware record families: `kind: labware`
+   * (records/seed/labware/*, plain vessel records) and `kind:
+   * labware-definition` (records/seed/labware-definition/*). Both halves of
+   * this record differ from the labwareRecords() fixture above, so the pin
+   * is non-vacuous: only a provider that reads the `labware` kind can hit it.
+   */
+  function labwareFamilyRecords(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'LWB-RES-1',
+        schemaId: SCHEMA('labware'),
+        payload: {
+          kind: 'labware',
+          id: 'LWB-RES-1',
+          name: 'Generic 1 Well Reservoir (seed)',
+        },
+      },
+      {
+        // Instance joins by labwareId -> LWB-RES-1. Its label deliberately
+        // omits the term, so only the join (not lexical fallback) can surface it.
+        recordId: 'LBI-RES-1',
+        schemaId: SCHEMA('labware-instance'),
+        payload: {
+          kind: 'labware-instance',
+          recordId: 'LBI-RES-1',
+          labwareId: 'LWB-RES-1',
+          label: 'Reservoir bottle A',
+        },
+      },
+    ];
+  }
+
+  it('H: kind labware record resolves as a concept and joins its labware-instance via labwareId', async () => {
+    const store = new ShelfFixtureStore(labwareFamilyRecords());
+    const report = await createShelfLookup(store).queryShelf('Generic 1 Well Reservoir (seed)');
+
+    const concept = report.concepts.find((c) => c.recordId === 'LWB-RES-1');
+    expect(concept).toBeDefined();
+    expect(concept!.label).toBe('Generic 1 Well Reservoir (seed)');
+    // The union does NOT widen: the shelf reports the labware concept source
+    // as 'labware-definition' for both merged record families.
+    expect(concept!.sourceKind).toBe('labware-definition');
+
+    const instance = entryOf(report, 'LBI-RES-1');
+    expect(instance).toBeDefined();
+    expect(instance!.kind).toBe('labware-instance');
+    expect(instance!.joinedVia).toBe('labware-definition');
+  });
 });
