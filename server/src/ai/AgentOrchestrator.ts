@@ -859,6 +859,7 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 // The accepted shapes are DATA (config/drafting/draft-content-recovery.yaml);
 // Ajv via parseShorthandForChat is the SOLE authority on validity.
 // ---------------------------------------------------------------------------
+// D3 (advc C1) FAIL-CLOSED by decision: these closed unions are what the extractor/`RecoveredDraftDriver` can emit; DATA naming anything else throws (a new shape is a code change, never silently half-data).
 type DraftContentShape = 'tool-envelope' | 'fenced-json' | 'fenced-yaml' | 'bare-yaml';
 const DRAFT_CONTENT_SHAPES: readonly DraftContentShape[] = ['tool-envelope', 'fenced-json', 'fenced-yaml', 'bare-yaml'];
 const DRAFT_RECOVERY_DRIVERS: readonly RecoveredDraftDriver[] = ['tool-envelope', 'fenced-json', 'yaml-shorthand'];

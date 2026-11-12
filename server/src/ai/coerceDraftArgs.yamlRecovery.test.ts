@@ -81,6 +81,36 @@ describe('YAML shorthand recovery (C1)', () => {
     }
   });
 
+  // advc C1 D3: the shape/driver vocabularies are CLOSED and fail closed by
+  // decision — a DATA row outside the unions is a loud error naming what is accepted.
+  it('fails CLOSED on DATA naming a shape outside the closed vocabulary', () => {
+    const { path, cleanup } = tempPolicy(`shapes:
+  - shape: prose-jsonl
+    driver: yaml-shorthand
+    enabled: true
+`);
+    try {
+      expect(() => recoverDraftArgsFromContent(DOCUMENT_YAML, path))
+        .toThrow(/`shape` must be one of tool-envelope, fenced-json, fenced-yaml, bare-yaml/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('fails CLOSED on DATA naming a driver outside the closed vocabulary', () => {
+    const { path, cleanup } = tempPolicy(`shapes:
+  - shape: fenced-yaml
+    driver: yaml-json
+    enabled: true
+`);
+    try {
+      expect(() => recoverDraftArgsFromContent(DOCUMENT_YAML, path))
+        .toThrow(/`driver` must be one of tool-envelope, fenced-json, yaml-shorthand/);
+    } finally {
+      cleanup();
+    }
+  });
+
   it('does not recover a prose paragraph that merely mentions "intentId"', () => {
     expect(() => coerceDraftArgsFromContent(PROSE_MENTIONING_KEY)).not.toThrow();
     expect(coerceDraftArgsFromContent(PROSE_MENTIONING_KEY)).toBeNull();
