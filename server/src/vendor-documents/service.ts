@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, extname } from 'node:path';
+import { join, extname, basename } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { RecordStore } from '../store/types.js';
@@ -225,7 +225,16 @@ async function extractTextPages(
   }
   if (mediaType === 'application/pdf' || extension === '.pdf') {
     const tempDir = await mkdtemp(join(tmpdir(), 'vendor-doc-pdf-'));
-    const tempFile = join(tempDir, upload.fileName || 'document.pdf');
+    // The shared seam (extractDocumentPages) decides "is this a PDF?" from the
+    // file extension alone, so the temp name must carry `.pdf` whenever the PDF
+    // arm was chosen — a PDF uploaded as "spec" with mediaType application/pdf
+    // would otherwise be rejected as UNSUPPORTED. basename() keeps the original
+    // name as a basename and strips any path separators before join().
+    const tempBaseName = basename(upload.fileName || '');
+    const tempFile = join(
+      tempDir,
+      (tempBaseName || 'document') + (extname(tempBaseName).toLowerCase() === '.pdf' ? '' : '.pdf'),
+    );
     try {
       await writeFile(tempFile, buffer);
       return await extractPdfPages(tempFile, options);
