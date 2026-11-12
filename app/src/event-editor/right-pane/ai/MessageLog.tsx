@@ -223,11 +223,6 @@ export function MessageLog({ state }: MessageLogProps) {
           className="message-log__status"
           data-testid="message-log-status"
           data-recovered-from={state.statusRecoveredFrom?.driver}
-          title={
-            state.statusRecoveredFrom
-              ? `Draft recovered from the model's text (${state.statusRecoveredFrom.driver})`
-              : undefined
-          }
         >
           {state.status}
         </div>

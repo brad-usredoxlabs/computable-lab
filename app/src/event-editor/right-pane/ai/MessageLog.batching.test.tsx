@@ -119,8 +119,7 @@ describe('MessageLog draft-recovery marker', () => {
     const status = document.querySelector('[data-testid="message-log-status"]')
     expect(status).not.toBeNull()
     expect(status?.getAttribute('data-recovered-from')).toBe('fenced-json')
-    expect(status?.textContent?.startsWith(message)).toBe(true)
-    expect(status?.getAttribute('title')).toContain("Draft recovered from the model's text")
+    expect(status?.textContent).toBe(message)
   })
 
   it('omits the marker for a clean turn but still renders the status line', () => {
