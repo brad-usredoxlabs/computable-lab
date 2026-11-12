@@ -1010,9 +1010,16 @@ function recoverDraftArgsCore(content: unknown): DraftArgsRecovery {
         parseShorthandForChat(yamlCandidate.text);
         return { args: { intent: 'event_shorthand', shorthand: yamlCandidate.text }, driver };
       } catch (error) {
-        // REFUSED BY NAME: the validator's own reason (never re-derived) rides
-        // the recovery result to the caller's notes channel; nothing is coerced.
-        return { args: null, driver: null, refusal: error instanceof Error ? error.message : String(error) };
+        // REFUSED BY NAME: the validator's OWN text rides the recovery result
+        // to the caller's notes channel — its message plus the first Ajv row
+        // (path + the schema's suggestion, e.g. "teleport_sample is not
+        // allowed here"). Nothing is re-derived and nothing is coerced.
+        const row = error instanceof ScientistIntentValidationError
+          ? (error.errors?.[0] as { path?: string; suggestion?: string; message?: string } | undefined)
+          : undefined;
+        const reason = error instanceof Error ? error.message : String(error);
+        const detail = [row?.path, row?.suggestion ?? row?.message].filter((part): part is string => Boolean(part)).join(' ');
+        return { args: null, driver: null, refusal: detail ? `${reason}: ${detail}` : reason };
       }
     }
   }

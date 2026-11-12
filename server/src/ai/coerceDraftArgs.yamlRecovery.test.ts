@@ -60,6 +60,9 @@ describe('YAML shorthand recovery (C1)', () => {
     expect(result.recoveredFrom).toBeNull();
     expect(result.refusal).toBeTruthy();
     expect(result.refusal).toContain(validatorReason(INVALID_ENUM_YAML));
+    // NAMED: the validator's own row names the offending verb, not a generic
+    // "validation failed" — the gate's C1 refusal arm was a swallowed reason.
+    expect(result.refusal).toContain('teleport_sample');
     // and the coercer never hands a refused document to the compiler
     expect(coerceDraftArgsFromContent('```yaml\n' + INVALID_ENUM_YAML + '```')).toBeNull();
   });
