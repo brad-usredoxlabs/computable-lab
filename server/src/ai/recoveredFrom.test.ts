@@ -199,7 +199,7 @@ describe('C2 call-site wiring — orchestrator run path', () => {
 
     const eventsWithRecoveredFrom = events.filter(
       (e): e is Extract<AgentEvent, { type: 'status' }> =>
-        e.type === 'status' && 'recoveredFrom' in e && e.recoveredFrom !== undefined,
+        e.type === 'status' && e.recoveredFrom !== undefined,
     );
     expect(eventsWithRecoveredFrom).toHaveLength(0);
 
