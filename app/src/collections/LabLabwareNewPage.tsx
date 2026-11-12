@@ -38,7 +38,10 @@ const UNIT_TO_UL: Record<string, number> = {
   l: 1000000,
 }
 
-const QUANTITY_UNIT_RE = /(-?\d+(?:\.\d+)?)\s*(nL|µL|uL|mL|L)/gi
+// The unit token must END the token: not followed by another letter ("100 lb",
+// "100mLx") or a compound-unit separator ("1 L/min"). Otherwise the bare-L arm
+// silently turns a mass or a rate into litres.
+const QUANTITY_UNIT_RE = /(-?\d+(?:\.\d+)?)\s*(nL|µL|uL|mL|L)(?![A-Za-z/])/gi
 
 /**
  * Parse a SINGLE unambiguous "<number><unit>" quantity out of a string bound for
