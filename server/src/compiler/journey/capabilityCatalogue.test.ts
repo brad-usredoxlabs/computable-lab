@@ -1,11 +1,8 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-CAPABILITY-CATALOGUE-1 (unit u2loader), RED-first: one admission
- * function owns BOTH halves — Ajv shape validity against
- * capability-descriptor.schema.yaml, and referential validity of
- * implementation.handler_ref against a caller-supplied known-handler set.
- * Every rejection must NAME the file, the JSON path and (when relevant) the
- * dangling id. Fixtures are strings in a scratch dir: no committed data.
+ * L2-JOURNEY-CAPABILITY-CATALOGUE-1 (u2loader), RED-first: admission owns both
+ * Ajv shape validity and handler_ref referential validity. Every rejection names
+ * the file, the JSON path and the dangling id. Fixtures are uncommitted strings.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -13,7 +10,6 @@ import { join } from 'node:path';
 import { loadCapabilityCatalogueDir } from './capabilityCatalogue.js';
 
 const SCRATCH = '/home/brad/.jcc-u2-scratch';
-
 const descriptorYaml = (id: string, handlerRef: string, handlerKind = 'query'): string => `
 capability_id: ${id}
 version: "1.0.0"
@@ -46,7 +42,6 @@ status:
 `;
 
 const KNOWN = new Set(['compiler.journey.align']);
-
 async function dirWith(files: Record<string, string>): Promise<string> {
   const dir = await mkdtemp(join(SCRATCH, 'u2-'));
   for (const [name, body] of Object.entries(files)) {
@@ -59,7 +54,6 @@ function diagnosticsOf(result: Awaited<ReturnType<typeof loadCapabilityCatalogue
   if (result.ok) throw new Error(`expected rejection, got ${result.capabilities.length} admitted`);
   return result.diagnostics;
 }
-
 beforeAll(async () => { await mkdir(SCRATCH, { recursive: true }); });
 afterAll(async () => { await rm(SCRATCH, { recursive: true, force: true }); });
 
