@@ -42,15 +42,6 @@ Added a browser-gate vitest suite with 7 tests across 3 describe blocks:
 
 ## Commit 2: `6560c8fe` — Relay hook status
 
-**Files:** `app/src/agent/ChatLog.tsx` (+20/-2, `app/src/agent/HarnessChatPane.tsx` (+6))
-
-- `ChatLog.tsx:87-96`: New `recoveredFrom?: { driver: string }` prop with JSDoc (L2-PROSE-SHORTHAND-SALVAGE-1).
-- `ChatLog.tsx:241`: Destructures `recoveredFrom` from props.
-- `ChatLog.tsx:450`: Adds `{...(recoveredFrom ? { 'data-recovered-from': recoveredFrom.driver } : {})}` to the root `<aside className="sequences-page sequence-chat">` — key-absent discipline: attribute present (driver string) or absent, never empty/undefined.
-- `HarnessChatPane.tsx:382-386`: Spreads `{...(chat.statusRecoveredFrom ? { recoveredFrom: chat.statusRecoveredFrom } : {})}` onto `<ChatLog>`.
-
-## Commit 3: `cd8ce7bd` — Render on drafting transcript root; pane forwards hook value
-
 **Files:** `app/src/shared/hooks/useAiChat.ts` (+40), `app/src/types/ai.ts` (+9)
 
 - `ai.ts:36-44`: New `AiStatusEvent.recoveredFrom?: { driver: string }` field — server names the driver that salvaged a draft.
@@ -61,6 +52,15 @@ Added a browser-gate vitest suite with 7 tests across 3 describe blocks:
 - `useAiChat.ts:1493-1501`: Status event handler records `event.recoveredFrom ?? null` on `statusRecoveredFrom`.
 - `useAiChat.ts:2571`: `clearHistory` clears `statusRecoveredFrom` to `null`.
 - `useAiChat.ts:2605`: `statusRecoveredFrom` returned on hook result.
+
+## Commit 3: `cd8ce7bd` — Render on drafting transcript root; pane forwards hook value
+
+**Files:** `app/src/agent/ChatLog.tsx` (+20/-2), `app/src/agent/HarnessChatPane.tsx` (+6)
+
+- `ChatLog.tsx:87-96`: New `recoveredFrom?: { driver: string }` prop with JSDoc (L2-PROSE-SHORTHAND-SALVAGE-1).
+- `ChatLog.tsx:241`: Destructures `recoveredFrom` from props.
+- `ChatLog.tsx:450`: Adds `{...(recoveredFrom ? { 'data-recovered-from': recoveredFrom.driver } : {})}` to the root `<aside className="sequences-page sequence-chat">` — key-absent discipline: attribute present (driver string) or absent, never empty/undefined.
+- `HarnessChatPane.tsx:382-386`: Spreads `{...(chat.statusRecoveredFrom ? { recoveredFrom: chat.statusRecoveredFrom } : {})}` onto `<ChatLog>`.
 
 ## Typecheck Result
 
@@ -98,7 +98,43 @@ RUN  v1.6.1 /home/brad/cl-wt/L2-PROSE-c1yamlui-lane2/app
 rc=0
 ```
 
-All 7 tests pass. RED pin is closed.
+The pin passes against the committed product; the raw RED (scratch revert) and three-file GREEN captures are below.
+
+## Evidence
+
+RED — four product paths scratch-reverted to `e982b8f6` (test file left at HEAD):
+
+```
+$ git checkout e982b8f6 -- app/src/agent/ChatLog.tsx app/src/agent/HarnessChatPane.tsx app/src/shared/hooks/useAiChat.ts app/src/types/ai.ts
+$ cd app && npx vitest run src/agent/ChatLog.recovered.d2.test.tsx
+ Test Files  1 failed (1)
+      Tests  7 failed | 2 passed (9)
+   Start at  11:41:46
+   Duration  24.38s (transform 921ms, setup 2.13s, collect 6.03s, tests 330ms, environment 13.06s, prepare 1.31s)
+rc=1
+```
+
+The reviewer's pre-fix baseline was 5 failed / 2 passed on the 7-leg file; this run is 7 failed / 2 passed on the 9-leg file (fix1 added two failing legs under revert), same two passing negative legs.
+
+Restore proof:
+
+```
+$ git checkout HEAD -- app/src/agent/ChatLog.tsx app/src/agent/HarnessChatPane.tsx app/src/shared/hooks/useAiChat.ts app/src/types/ai.ts
+$ git status --short
+(empty)
+$ git diff --stat HEAD -- app/
+(empty)
+```
+
+GREEN — three files:
+
+```
+$ cd app && npx vitest run src/agent/ChatLog.recovered.d2.test.tsx src/agent/ChatLog.test.tsx src/agent/HarnessChatPane.test.tsx
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Duration  7.24s (transform 1.13s, setup 1.17s, collect 3.74s, tests 1.13s, environment 7.75s, prepare 677ms)
+rc=0
+```
 
 ## D2 Surface Half Summary
 
@@ -118,6 +154,8 @@ $ git -c core.fileMode=false status --porcelain
 (empty — clean)
 ```
 
-## Exit Marker
+## Marker provenance
 
-L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c1yamlui DONE 76d736f327a0e1d46ddeb475bf3a953e578b6be3
+The DONE marker in the final commit names the commit that FIRST contains this report body, and later edits append without re-pointing the marker.
+
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c1yamlui-pw DONE 0d86627dea808103d00062ccfa7983f8e257e64e (item L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlui-pw)
