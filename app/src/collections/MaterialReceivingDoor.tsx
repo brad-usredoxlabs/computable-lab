@@ -46,12 +46,13 @@ interface TextProps {
   tid: string
   type?: string
   placeholder?: string
+  disabled?: boolean
 }
 
-function Text({ id, label, value, onChange, tid, type, placeholder }: TextProps) {
+function Text({ id, label, value, onChange, tid, type, placeholder, disabled }: TextProps) {
   return (
     <Row id={id} label={label}>
-      <input id={id} type={type} value={value} placeholder={placeholder}
+      <input id={id} type={type} value={value} placeholder={placeholder} disabled={disabled}
         onChange={(e) => onChange(e.target.value)} data-testid={tid} />
     </Row>
   )
@@ -122,6 +123,16 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
   return (
     <div className="lab-modal__backdrop" role="presentation"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <style>{`
+.lab-modal__result { margin: 0; padding: 8px 10px; border: 1px solid var(--cl-border); border-radius: 6px; }
+.lab-modal__result dl { margin: 0; }
+.lab-modal__result dt, .lab-modal__refusal dl dt {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cl-text-faint);
+}
+.lab-modal__result dd, .lab-modal__refusal dl dd { margin: 0 0 4px; font-family: monospace; font-size: 0.8rem; }
+.lab-modal__refusal dl { margin: 0 0 6px; }
+.lab-modal__hint { margin: 0; font-size: 0.75rem; color: var(--cl-text-faint); }
+`}</style>
       <div className="lab-modal" role="dialog" aria-modal="true" aria-label="Receive a lot">
         <header className="lab-modal__header">
           <h2>Receive a lot</h2>
@@ -148,7 +159,13 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
           <StatusSelect id="recv-occurred-status" label="Arrival date (status)" value={occurredAtStatus}
             onChange={setOccurredAtStatus} tid="material-receiving-occurred-at-status" />
           <Text id="recv-occurred-at" label="Arrival date" value={occurredAt} onChange={setOccurredAt}
-            tid="material-receiving-occurred-at" type="date" />
+            tid="material-receiving-occurred-at" type="date"
+            disabled={occurredAtStatus === 'unknown'} />
+          {occurredAtStatus === 'unknown' && (
+            <p className="lab-modal__hint" data-testid="material-receiving-occurred-at-cue">
+              not sent while status is unknown
+            </p>
+          )}
           {occurredAtStatus === 'approximate' && (
             <Text id="recv-approximation" label="How approximate?" value={approximation}
               onChange={setApproximation} tid="material-receiving-approximation" placeholder="e.g. last week" />
@@ -169,6 +186,12 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
           )}
           {result && !result.canAccept && (
             <div className="lab-modal__error" data-testid="material-receiving-refusal">
+              <dl>
+                <dt>Draft ID</dt>
+                <dd data-testid="material-receiving-draft-id">{result.draftId}</dd>
+                <dt>Review hash</dt>
+                <dd data-testid="material-receiving-review-hash">{result.reviewHash}</dd>
+              </dl>
               <p>The server refused this receiving draft:</p>
               <ul data-testid="material-receiving-diagnostics">
                 {result.diagnostics.map((d, i) => <li key={i}>{d.message}</li>)}

@@ -103,7 +103,7 @@ describe('MaterialReceivingDoor', () => {
     expect(claim.occurredAtStatus).toBe('known')
   })
 
-  it('renders the server diagnostics VERBATIM on refusal and shows no accept affordance', async () => {
+  it('renders the server diagnostics VERBATIM on refusal with draftId+reviewHash present-but-refused and no accept affordance', async () => {
     const message = 'material-receiving-lot-requires-product: vendor-scoped lot: a receipt claim carries assertion.lot without assertion.vendorProductRef (claims)'
     compileSpy.mockResolvedValue({
       draftId: 'DRAFT-u6recv-2', revision: 1, reviewHash: 'sha256:def456', canAccept: false,
@@ -113,8 +113,47 @@ describe('MaterialReceivingDoor', () => {
     fillClaim()
     fireEvent.click(screen.getByTestId('material-receiving-submit'))
     await waitFor(() => expect(screen.getByText(message)).toBeTruthy())
-    expect(screen.queryByTestId('material-receiving-draft-id')).toBeNull()
+    // u6fix1 D2: the server returns draftId+reviewHash on BOTH arms — the refusal
+    // panel must show them present-but-refused alongside the verbatim diagnostics.
+    const refusal = screen.getByTestId('material-receiving-refusal')
+    expect(within(refusal).queryByTestId('material-receiving-draft-id')).not.toBeNull()
+    expect(within(refusal).getByTestId('material-receiving-draft-id').textContent).toBe('DRAFT-u6recv-2')
+    expect(within(refusal).getByTestId('material-receiving-review-hash').textContent).toBe('sha256:def456')
     expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
     expect(screen.queryByRole('button', { name: /accept/i })).toBeNull()
+    expect(acceptSpy).not.toHaveBeenCalled()
+  })
+
+  it('makes the unknown-status discard explicit: date input disabled with a cue, claim carries no occurredAt', async () => {
+    renderDoor()
+    fillClaim()
+    type('material-receiving-occurred-at-status', 'known')
+    type('material-receiving-occurred-at', '2026-11-01')
+    type('material-receiving-occurred-at-status', 'unknown')
+    const dateInput = screen.getByTestId('material-receiving-occurred-at')
+    // u6fix1 D1: the typed fact stays visible (value retained) but the discard is explicit.
+    expect(dateInput).toBeDisabled()
+    expect(dateInput).toHaveValue('2026-11-01')
+    expect(screen.getByText('not sent while status is unknown')).toBeDefined()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await waitFor(() => expect(compileSpy).toHaveBeenCalledTimes(1))
+    const claim = (compileSpy.mock.calls[0][0] as { intent: { claim: Record<string, unknown> } }).intent.claim
+    expect('occurredAt' in claim).toBe(false)
+    expect(claim.occurredAtStatus).toBe('unknown')
+  })
+
+  it('rapid double submit hits the busy guard: exactly one compile, no accept/create', async () => {
+    renderDoor()
+    fillClaim()
+    const submit = screen.getByTestId('material-receiving-submit')
+    fireEvent.click(submit)
+    fireEvent.click(submit)
+    // u6fix1 D3: pinned per actual behaviour — the busy flag disables the submit
+    // button while the first compile is in flight, so a second rapid click never
+    // reaches the form: exactly ONE compile, and no accept/create call ever.
+    await waitFor(() => expect(screen.getByTestId('material-receiving-draft-id')).toBeDefined())
+    expect(compileSpy).toHaveBeenCalledTimes(1)
+    expect(acceptSpy).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
   })
 })
