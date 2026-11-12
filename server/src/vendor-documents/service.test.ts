@@ -375,4 +375,38 @@ describe('pdf extraction delegates to the shared intake service', () => {
     });
     expect(ocrPage).not.toHaveBeenCalled();
   });
+
+  // Adversarial c1 defect: a PDF whose fileName carries no `.pdf` suffix must
+  // still be extracted on the strength of its mediaType. Before the fix the
+  // temp file kept the suffixless name, so the shared seam
+  // (extractDocumentPages, which decides on `extension !== '.pdf'`) returned
+  // UNSUPPORTED and the arm reported method 'failed'.
+  it('extracts a PDF whose fileName has no .pdf suffix when mediaType says application/pdf', async () => {
+    const result = await buildVendorDocumentExtraction(
+      { ...pdfUpload(), fileName: 'spec-sheet-no-suffix' },
+      {
+        readPageTexts: async () => ({
+          pages: [{ page: 1, text: PDF_PAGE_1_TEXT }],
+          diagnostics: [],
+        }),
+        ocrPage: async () => ({ text: 'unexpected OCR text', diagnostics: [] }),
+        probeTool: async () => true,
+        loadOcrConfig: async () => ({
+          executable: 'tesseract',
+          language: 'eng',
+          timeoutSeconds: 30,
+          rasterizer: 'pdftoppm',
+          dpi: 200,
+          maxPages: 10,
+        }),
+      },
+    );
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 1 },
+      extraction: { method: 'pdf_text', page_count: 1 },
+    });
+    expect((result.document as { extraction: { method: string } }).extraction.method)
+      .not.toBe('failed');
+  });
 });
