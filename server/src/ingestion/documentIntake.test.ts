@@ -340,11 +340,18 @@ describe('intakeDocument', () => {
     const save = vi.fn(async () => {
       throw new Error('MISSING_CONFIG: no storage device configured');
     });
+    const readPageTexts = vi.fn(async () => ({
+      pages: [{ page: 1, text: 'unused' }],
+      diagnostics: [],
+    }));
+    const ocrPage = vi.fn(async () => ({ text: 'unused', diagnostics: [] }));
+    // Inline clear: the rejection must not depend on beforeEach having just run.
+    fsProbe.scratchDirs.length = 0;
 
     const result = await intakeDocument(
       { artifactId: 'DOC-2', fileName: 'label.pdf', contentBase64: CONTENT },
       { save },
-      { readPageTexts: async () => ({ pages: [{ page: 1, text: 'unused' }], diagnostics: [] }) },
+      { readPageTexts, ocrPage },
     );
 
     expect(result.pages).toEqual([]);
@@ -355,6 +362,10 @@ describe('intakeDocument', () => {
     );
     expect(diagnostic?.severity).toBe('error');
     expect(diagnostic?.message).toContain('MISSING_CONFIG');
+    // A rejected store is not allowed to buy temp-write or extraction work.
+    expect(readPageTexts).not.toHaveBeenCalled();
+    expect(ocrPage).not.toHaveBeenCalled();
+    expect(fsProbe.scratchDirs).toEqual([]);
   });
 
   it('names the scratch file from the declared extension (not a hardcoded .pdf) and survives an extensionless name', async () => {
