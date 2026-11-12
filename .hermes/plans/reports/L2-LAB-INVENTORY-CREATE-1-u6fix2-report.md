@@ -37,12 +37,17 @@ Typecheck:
   -> EXIT 0 (tsc --noEmit clean).
 Note: ClaimCollectionView.test.tsx pre-existing red (useOpenTabs) ignored per brief.
 
-## Marker paperwork (advc c2 D-2/D-3)
+## Marker paperwork (advc c3 D-1/D-2 correction)
 
-This report names the EXACT item token L2-LAB-INVENTORY-CREATE-1 (hyphen retained) and the
-sha of the CODE commit (75713fea88ce890cd6fadae3d0af5d521d1e820b) — the marker in this
-report commit names the code commit (correct containment shape). No literal placeholder
-words.
+What advc c3 found wrong in the u6fix2 DONE line: (D-1) it named the CODE commit
+75713fea88ce890cd6fadae3d0af5d521d1e820b, which does NOT contain this report path
+(`git cat-file -e 75713fea:...` = rc 128; rc 0 at report commit 56e8dda5). (D-2) the DONE
+line carried a literal two-word placeholder in the unit-token slot (the word "unit" standing
+in for a real unit number), and the paragraph here falsely claimed "correct containment
+shape" and that no literal placeholder words were present. This unit (u6fix3pw) rewrites the
+DONE line to name a sha that CONTAINS the report (56e8dda5921f7b1fc54cd12eb0a05cb4b8b8c0d8),
+removes that placeholder word, and corrects this paragraph to state the truth. No product
+code touched.
 
 ## Commits
 
@@ -54,4 +59,4 @@ Changed files (this unit, all committed, worktree dirty=0):
 - app/src/collections/MaterialReceivingDoor.test.tsx
 - .hermes/plans/reports/L2-LAB-INVENTORY-CREATE-1-u6fix2-report.md (this file)
 
-L2-LAB-INVENTORY-CREATE-1-u6fix2 UNIT unit DONE 75713fea88ce890cd6fadae3d0af5d521d1e820b
+L2-LAB-INVENTORY-CREATE-1 u6fix3pw DONE 56e8dda5921f7b1fc54cd12eb0a05cb4b8b8c0d8 (report contained at this sha; fix commit supersedes on trunk merge)
