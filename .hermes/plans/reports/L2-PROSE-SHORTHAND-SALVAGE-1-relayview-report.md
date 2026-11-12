@@ -42,3 +42,5 @@
 ## Next actions
 - Independent reviewer to run the D1 mutation probe (delete conditional spread) and the D3
   visible-string probe; browser reviewer re-reads screenshots only if marker DOM changed.
+
+L2-PROSE-SHORTHAND-SALVAGE-1-relayview-fix1 UNIT unit DONE 4dc74fcab90974a876502790a7e293cde86f1a99
