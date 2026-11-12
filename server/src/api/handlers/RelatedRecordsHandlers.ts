@@ -4,6 +4,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore } from '../../store/types.js';
+import { collectRefMatches } from '../../store/recordRefTraversal.js';
 import type { ApiError } from '../types.js';
 
 export interface RelatedRecordsResponse {
@@ -11,30 +12,21 @@ export interface RelatedRecordsResponse {
 }
 
 /**
- * Recursively search for references to targetId. Returns matching field paths.
+ * Search for references to targetId. Returns matching field paths.
+ *
+ * Delegates to the shared traversal; the option set is this endpoint's legacy
+ * policy (bare strings count; descend into matched ref objects, which is why a
+ * ref object contributes both `x` and `x.id`; revisionRef is not special).
  */
 function findRefFields(obj: unknown, targetId: string, prefix: string): string[] {
-  const results: string[] = [];
-  if (obj === null || obj === undefined) return results;
-  if (typeof obj === 'string') {
-    if (obj === targetId) results.push(prefix);
-    return results;
-  }
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      results.push(...findRefFields(obj[i], targetId, prefix ? `${prefix}[${i}]` : `[${i}]`));
-    }
-    return results;
-  }
-  if (typeof obj === 'object') {
-    const record = obj as Record<string, unknown>;
-    if (record.kind === 'record' && record.id === targetId) results.push(prefix);
-    for (const [key, value] of Object.entries(record)) {
-      results.push(...findRefFields(value, targetId, prefix ? `${prefix}.${key}` : key));
-    }
-    return results;
-  }
-  return results;
+  return collectRefMatches(obj, {
+    initialPointer: prefix,
+    skipTopLevelKeys: [],
+    includeBareStrings: true,
+    descendIntoRefObjects: true,
+  })
+    .filter((match) => match.targetId === targetId)
+    .map((match) => match.pointer);
 }
 
 function extractTitle(payload: Record<string, unknown>): string {

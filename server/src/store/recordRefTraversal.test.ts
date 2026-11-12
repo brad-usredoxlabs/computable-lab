@@ -23,6 +23,7 @@
 import { describe, it, expect } from 'vitest';
 import { findRefFields } from '../api/handlers/RelatedRecordsHandlers.js';
 import { findReferrers } from './referenceCascade.js';
+import { collectRefMatches } from './recordRefTraversal.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 
 const TARGET = 'REC-TARGET';
@@ -83,5 +84,63 @@ describe('L2-RECORD-DELETE-DEPENDENTS-1 d5traversal — cascade consumer charact
   it('pin D: a bare string equal to the target is NOT a referrer for the cascade walker', () => {
     const records = [envelope('REC-B', { kind: 'note', body: TARGET })];
     expect(findReferrers(records, TARGET)).toEqual([]);
+  });
+});
+
+// The option sets are the two consumers' policies, spelled out at the call
+// sites they replace (RelatedRecordsHandlers / referenceCascade).
+const RELATED_OPTIONS = {
+  initialPointer: '',
+  skipTopLevelKeys: [],
+  includeBareStrings: true,
+  descendIntoRefObjects: true,
+} as const;
+
+const CASCADE_OPTIONS = {
+  initialPointer: '',
+  skipTopLevelKeys: ['revisionRef'],
+  includeBareStrings: false,
+  descendIntoRefObjects: false,
+} as const;
+
+describe('L2-RECORD-DELETE-DEPENDENTS-1 d5traversal — shared traversal characterisation', () => {
+  it('pin E: related-record policy reproduces findRefFields pointers exactly', () => {
+    const filtered = collectRefMatches(payload, RELATED_OPTIONS).filter((m) => m.targetId === TARGET);
+
+    expect(filtered.map((m) => m.pointer)).toEqual([
+      'resource',
+      'resource.id',
+      'note',
+      'revisionRef',
+      'revisionRef.id',
+      'parent.revisionRef',
+      'parent.revisionRef.id',
+      'items[0]',
+      'items[0].id',
+    ]);
+    // Measurements absent from the cascade walker: the `.id` child and the
+    // bare-string match, both typed as such.
+    expect(filtered.find((m) => m.pointer === 'resource.id')?.via).toBe('bare-string');
+    expect(filtered.find((m) => m.pointer === 'note')?.via).toBe('bare-string');
+    expect(filtered.find((m) => m.pointer === 'resource')?.via).toBe('ref-object');
+    // Parity with the endpoint itself — the pin is not vacuous.
+    expect(filtered.map((m) => m.pointer)).toEqual(findRefFields(payload, TARGET, ''));
+  });
+
+  it('pin F: cascade policy reproduces the cascade walker matches exactly', () => {
+    expect(collectRefMatches(payload, CASCADE_OPTIONS)).toEqual([
+      { pointer: 'resource', targetId: TARGET, via: 'ref-object' },
+      { pointer: 'parent.revisionRef', targetId: TARGET, via: 'ref-object' },
+      { pointer: 'items[0]', targetId: TARGET, via: 'ref-object' },
+      { pointer: 'items[1]', targetId: OTHER, via: 'ref-object' },
+    ]);
+
+    const pointers = collectRefMatches(payload, CASCADE_OPTIONS).map((m) => m.pointer);
+    expect(pointers).not.toContain('revisionRef');
+    expect(pointers).toContain('parent.revisionRef');
+    expect(pointers).not.toContain('resource.id');
+    expect(
+      collectRefMatches(payload, CASCADE_OPTIONS).filter((m) => m.targetId === TARGET).map((m) => m.pointer),
+    ).toEqual(findReferrers([envelope('REC-A', payload)], TARGET).map((r) => r.pointer));
   });
 });
