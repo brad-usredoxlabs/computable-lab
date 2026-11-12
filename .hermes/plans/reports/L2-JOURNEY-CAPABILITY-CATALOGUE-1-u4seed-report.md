@@ -193,3 +193,6 @@ Note on worktree infra: `server/node_modules` was absent in this fresh worktree,
 - `availability: {}` on all four is a declaration of "no prerequisite" — if a later leg attaches prerequisites it
   must edit YAML, not this test.
 - The seed directory is not read by any runtime path yet (unit 5).
+
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u4seed DONE be11f8d3d79403376435c6911e3094041f3c05be
+L2-JOURNEY-CAPABILITY-CATALOGUE-1-u4seed UNIT unit DONE be11f8d3d79403376435c6911e3094041f3c05be
