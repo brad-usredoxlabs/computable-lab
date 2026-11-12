@@ -41,4 +41,7 @@ sanitiser applied to the same six inputs pass (a)-(d); hostile control
 
 Baseline at `9e28c220` was also 18/18; test count unchanged. Commits: `ead89b02`
 (test pin, this unit), then the report-body commit and the marker commit. The marker
-names the report-body commit; the marker line itself ships in the commit after it.
+names the report-body commit `3e18a488`; the marker line itself ships in the commit
+after it.
+
+L2-DOC-INTAKE-1-u2fix5 UNIT unit DONE 3e18a48803f5ddf3b2b5567b46ca9124ec33a759
