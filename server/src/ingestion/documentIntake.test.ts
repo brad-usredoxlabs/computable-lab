@@ -20,7 +20,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DOCUMENT_INTAKE_DIAGNOSTIC_CODES, extractDocumentPages } from './documentIntake.js';
+import {
+  DOCUMENT_INTAKE_DIAGNOSTIC_CODES,
+  extractDocumentPages,
+  intakeDocument,
+} from './documentIntake.js';
 import { IMAGE_DIAGNOSTIC_CODES, LOCAL_OCR_REVIEW_MESSAGE, type ImageOcrConfig } from '../extract/ImageTextAdapter.js';
 import { PDF_DIAGNOSTIC_CODES } from '../extract/PdfTextAdapter.js';
 
@@ -245,5 +249,93 @@ describe('extractDocumentPages', () => {
         (diagnostic) => diagnostic.code === DOCUMENT_INTAKE_DIAGNOSTIC_CODES.READ_FAILED,
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * Unit intakedoc — the acquisition half: store the uploaded bytes, then read the
+ * pages from the in-hand buffer. The store is an injected structural seam (the
+ * production `ArtifactBlobStore` satisfies it unchanged), so no storage device,
+ * network or real PDF is needed here.
+ */
+describe('intakeDocument', () => {
+  const SHA256 = '4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293';
+  const STORED = {
+    storedPath: 'ingestion-artifacts/DOC-1/label.pdf',
+    sha256: SHA256,
+    sizeBytes: 42,
+    drefId: 'DREF-000042',
+  };
+  const CONTENT = Buffer.from('%PDF-1.4 fixture bytes').toString('base64');
+
+  it('stores once, then returns the STORE identity plus the extracted pages', async () => {
+    const save = vi.fn(async () => STORED);
+    const result = await intakeDocument(
+      { artifactId: 'DOC-1', fileName: 'label.pdf', contentBase64: CONTENT },
+      { save },
+      {
+        readPageTexts: async () => ({
+          pages: [{ page: 1, text: 'M13 Forward Primer 10 uM in TE buffer' }],
+          diagnostics: [],
+        }),
+      },
+    );
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith({
+      artifactId: 'DOC-1',
+      fileName: 'label.pdf',
+      contentBase64: CONTENT,
+    });
+    expect(result).toMatchObject({
+      drefId: 'DREF-000042',
+      sha256: SHA256,
+      sizeBytes: 42,
+      storedPath: 'ingestion-artifacts/DOC-1/label.pdf',
+      pages: [{ page: 1, text: 'M13 Forward Primer 10 uM in TE buffer', method: 'pdf_text' }],
+      diagnostics: [],
+    });
+  });
+
+  it('resolves with a typed STORAGE_FAILED diagnostic when the store rejects (never throws, never empty-success)', async () => {
+    const save = vi.fn(async () => {
+      throw new Error('MISSING_CONFIG: no storage device configured');
+    });
+
+    const result = await intakeDocument(
+      { artifactId: 'DOC-2', fileName: 'label.pdf', contentBase64: CONTENT },
+      { save },
+      { readPageTexts: async () => ({ pages: [{ page: 1, text: 'unused' }], diagnostics: [] }) },
+    );
+
+    expect(result.pages).toEqual([]);
+    expect(result.storedPath).toBe('');
+    expect(result.drefId).toBe('');
+    const diagnostic = result.diagnostics.find(
+      (entry) => entry.code === DOCUMENT_INTAKE_DIAGNOSTIC_CODES.STORAGE_FAILED,
+    );
+    expect(diagnostic?.severity).toBe('error');
+    expect(diagnostic?.message).toContain('MISSING_CONFIG');
+  });
+
+  it('names the scratch file from the declared extension (not a hardcoded .pdf) and survives an extensionless name', async () => {
+    const save = vi.fn(async () => ({ ...STORED, storedPath: 'ingestion-artifacts/DOC-3/notes.txt' }));
+    const text = 'Incubate 30 min at 37 C.\n';
+    const plain = await intakeDocument(
+      { artifactId: 'DOC-3', fileName: 'notes.txt', contentBase64: Buffer.from(text).toString('base64') },
+      { save },
+    );
+    expect(plain.pages).toEqual([{ page: 1, text, method: 'plain_text' }]);
+
+    // No extension to derive: the format gate answers with its own typed
+    // diagnostic instead of a throw or a fabricated page.
+    const extensionless = await intakeDocument(
+      { artifactId: 'DOC-4', fileName: 'rawdoc', contentBase64: CONTENT },
+      { save },
+    );
+    expect(extensionless.pages).toEqual([]);
+    expect(extensionless.diagnostics.map((entry) => entry.code)).toContain(
+      DOCUMENT_INTAKE_DIAGNOSTIC_CODES.UNSUPPORTED_FORMAT,
+    );
   });
 });
