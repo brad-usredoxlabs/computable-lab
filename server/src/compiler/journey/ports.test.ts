@@ -51,7 +51,7 @@ const REJECTIONS: Rejection[] = [
     label: '(c) refuses a whitespace-only receipt, naming receipt_id and the record',
     producer: {
       port_type: 'CommittedRecordReference', version: 'v1', record_id: 'REC-2',
-      record_type: 'material-instance', receiptId: '   ',
+      record_type: 'material-instance', receipt_id: '   ',
     },
     consumer: { port_type: 'CommittedRecordReference' },
     code: 'committed_reference_without_receipt', needles: ['receipt_id', 'REC-2'],
