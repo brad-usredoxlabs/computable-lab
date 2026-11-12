@@ -74,6 +74,22 @@ describe('resolve() spine', () => {
     expect(hit?.source).toBe('oak');
   });
 
+  it('ranks shipped .obo hits at tier 2 as source local-obo (visible under localOnly)', async () => {
+    stubFetch({});
+    const spine = createResolveSpine({
+      localOboProvider: staticProvider([
+        { curie: 'LWO:0000100', label: 'well plate 96', namespace: 'LWO', level: 'concept' },
+      ]),
+    });
+    const out = await spine.resolve('plate');
+    const hit = out.find((c) => c.curie === 'LWO:0000100');
+    expect(hit).toBeDefined();
+    expect(hit?.source).toBe('local-obo');
+    expect(hit?.tier).toBe(2);
+    const localOnly = await spine.resolve('plate', { localOnly: true });
+    expect(localOnly.some((c) => c.curie === 'LWO:0000100')).toBe(true);
+  });
+
   it('skips the OAK tier when no service URL is configured', async () => {
     stubFetch({ oak: [{ curie: 'CHEBI:4593', label: 'fenofibrate' }] });
     const spine = createResolveSpine(); // no ontology config, no env
