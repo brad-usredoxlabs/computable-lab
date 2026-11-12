@@ -12,7 +12,10 @@
  *
  * Honesty contract (CLAUDE.md): the function NEVER throws. Every failure arm
  * returns a typed diagnostic; an empty OCR result is flagged, never presented
- * as a successful blank page; every local-OCR read carries LOCAL_OCR_REVIEW.
+ * as a successful blank page; a local-OCR read that produced text carries
+ * LOCAL_OCR_REVIEW (a FAILED arm carries its IMAGE_OCR_* error, never a false
+ * "transcribed" claim); the OCR arm stops at the config-declared
+ * `images.maxPages` and names the pages it did not transcribe.
  */
 
 import { execFile } from 'node:child_process';
@@ -29,6 +32,7 @@ import {
   type ImageOcrConfig,
 } from '../extract/ImageTextAdapter.js';
 import { PDF_DIAGNOSTIC_CODES } from '../extract/PdfTextAdapter.js';
+import { loadDocumentFormats } from '../extract/decodeAttachment.js';
 import type { ExtractionDiagnostic } from '../extract/ExtractorAdapter.js';
 
 const execFileAsync = promisify(execFile);
@@ -58,8 +62,24 @@ export const DOCUMENT_INTAKE_DIAGNOSTIC_CODES = {
   UNSUPPORTED_FORMAT: 'DOCUMENT_INTAKE_UNSUPPORTED_FORMAT',
 } as const;
 
-/** Plain-text sources are one pseudo-page (they have no page model). */
-const PLAIN_TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv']);
+/**
+ * Plain-text sources are one pseudo-page (they have no page model). WHICH
+ * formats those are is DATA: the config `formats:` map (adversarial c1 D4 — a
+ * hand-written extension list here was a second policy list and had already
+ * diverged from the declared one). A `mediaKind: text` entry whose declared
+ * mediaType is `text/*` is UTF-8 bytes on disk. `docx`/`doc`/`rtf` are also
+ * mediaKind text, but their bytes are NOT UTF-8 — they carry the
+ * config-declared `docx:` reader tool and are refused here rather than decoded
+ * as mojibake. Changing what this seam reads is a config edit.
+ */
+async function readableTextExtensions(): Promise<Set<string>> {
+  const formats = await loadDocumentFormats();
+  return new Set(
+    formats
+      .filter((format) => format.mediaKind === 'text' && format.mediaType.startsWith('text/'))
+      .map((format) => `.${format.extension}`),
+  );
+}
 
 interface PageTexts {
   pages: Array<{ page: number; text: string }>;
@@ -90,8 +110,9 @@ export async function extractDocumentPages(
   const toolsAvailable: DocumentToolsAvailable = {};
   try {
     const extension = extname(filePath).toLowerCase();
+    const plainTextExtensions = await readableTextExtensions();
 
-    if (PLAIN_TEXT_EXTENSIONS.has(extension)) {
+    if (plainTextExtensions.has(extension)) {
       const text = await readFile(filePath, 'utf-8');
       return { pages: [{ page: 1, text, method: 'plain_text' }], diagnostics, toolsAvailable };
     }
@@ -143,6 +164,8 @@ export async function extractDocumentPages(
 
     const ocr = options.ocrPage ?? rasterizeAndOcrPage;
     const pages: DocumentIntakePage[] = [];
+    const skippedPages: number[] = [];
+    let ocrAttempts = 0;
     for (const sourcePage of textOutcome.pages) {
       if (sourcePage.text.trim().length > 0) {
         pages.push({ page: sourcePage.page, text: sourcePage.text, method: 'pdf_text' });
@@ -150,16 +173,29 @@ export async function extractDocumentPages(
       }
       const page: DocumentIntakePage = { page: sourcePage.page, text: '', method: 'ocr' };
       if (ocrConfig && ocrAvailable) {
+        // The declared `images.maxPages` cap is LOAD-BEARING (adversarial c1
+        // D3): never silently rasterize beyond it — the skipped pages are named
+        // in the LOCAL_OCR_PAGE_LIMIT coverage warning below.
+        if (ocrAttempts >= ocrConfig.maxPages) {
+          skippedPages.push(sourcePage.page);
+          pages.push(page);
+          continue;
+        }
+        ocrAttempts += 1;
         const outcome = await ocr(filePath, sourcePage.page, ocrConfig);
         page.text = outcome.text;
         diagnostics.push(...outcome.diagnostics.filter((entry) => entry.code !== 'LOCAL_OCR_REVIEW'));
-        // The caution rides EVERY local-OCR success, imported, never retyped.
-        diagnostics.push({
-          severity: 'warning',
-          code: 'LOCAL_OCR_REVIEW',
-          message: LOCAL_OCR_REVIEW_MESSAGE,
-          details: { page: sourcePage.page },
-        });
+        // The caution rides a local-OCR read that ACTUALLY transcribed the
+        // page (adversarial c1 D2) — a failed arm carries its IMAGE_OCR_* error
+        // and must never claim "Transcribed using local OCR".
+        if (!outcome.diagnostics.some((entry) => entry.severity === 'error')) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'LOCAL_OCR_REVIEW',
+            message: LOCAL_OCR_REVIEW_MESSAGE,
+            details: { page: sourcePage.page },
+          });
+        }
         if (outcome.text.trim().length === 0) {
           diagnostics.push({
             severity: 'warning',
@@ -170,6 +206,14 @@ export async function extractDocumentPages(
         }
       }
       pages.push(page);
+    }
+    if (skippedPages.length > 0) {
+      // Mirrors pdfAcquisition.ts's LOCAL_OCR_PAGE_LIMIT coverage warning.
+      diagnostics.push({
+        severity: 'warning',
+        code: 'LOCAL_OCR_PAGE_LIMIT',
+        message: `OCR covered the first ${ocrAttempts} page(s) — the configured page limit (images.maxPages) was reached, so page(s) ${skippedPages.join(', ')} were not transcribed.`,
+      });
     }
 
     return { pages, diagnostics, toolsAvailable };
