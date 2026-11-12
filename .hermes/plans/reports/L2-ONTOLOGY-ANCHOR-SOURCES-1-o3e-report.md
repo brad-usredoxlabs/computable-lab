@@ -81,3 +81,5 @@ package-lock sha b992230e…), and `server/schema -> ../schema` was created
 ## Next actions (outside this unit)
 
 O4 (bindings file consumption) and O5 (boot wiring) remain separate units.
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o3e UNIT unit DONE ea7ee649dfc59cc3e76f90eb55b698af51468df4
