@@ -151,3 +151,67 @@ Files were byte-restored after each mutant (`restored: True True`) before commit
   this worktree's `schema/`. No files were edited through symlinks.
 
 L2-SPEC-SHEET-INGEST-1-g6fix UNIT unit DONE a2bb73fabbb0f031fca03eda01824a365a06b499
+
+## Unit g6fix2 — advc c1 (VERDICT: FIX (2)) — MINOR D1 + D2 closed
+
+Lineage: base 55b9c86c → g6fix fieldmap a2bb73fa → c1209669 (report/marker) → this unit.
+
+### D1 (MINOR) — "of"-complement guard restored the whole alternative
+
+Pre-fix guard did `phrase = alt.trim()` so `Number of rows as stated on the sheet`
+became the keyword `number of rows as stated on the sheet`; `labelMatches` is
+`label.startsWith(keyword)`, so `Number of rows: 8` could never match — the same
+silent-unmapped-required-field class as gate g6 D1.
+
+Fix (`server/src/ingestion/SpecSheetExtractor.ts`, guard block + its doc comment only):
+the kept "of" complement is now cut at ITS next preposition. `complement` is the
+remainder after the head+"of", re-matched against `prepositionRe`; when a tail
+preposition is found the keyword is `head of <noun phrase>`, otherwise the whole
+alternative is kept (unchanged behaviour for a bare `Number of rows`).
+`for` was added to `prepositionRe`'s alternation so `Number of rows for grid
+addressing` also truncates to `Number of rows`; the main strip is leftmost, so
+`of` still wins for those sources — the two existing `for` sources
+(`SpecSheetExtractor.test.ts:522-523`) and their g4 colon-less pin are unaffected
+(verified green).
+
+Outcomes: `Number of rows as stated on the sheet` → `Number of rows`;
+`Number of rows for grid addressing` → `Number of rows`;
+`Quantity as stated on the sheet` → `Quantity` (unchanged: preposition `as`, guard
+not reached); `Number of rows` → `Number of rows`.
+
+### D2 (MINOR) — DONE marker did not match the contract literal
+
+Contract regex `L2-SPEC-SHEET-INGEST-1 UNIT g6fix.*DONE [0-9a-f]{40}` failed on
+`L2-SPEC-SHEET-INGEST-1-g6fix UNIT unit DONE ...` (item/unit hyphen-joined before
+`UNIT`). Old line kept verbatim above; the corrected line is emitted at the end of
+this file.
+
+### Verification (worktree root / server/)
+
+- RED first: new pin `truncates at the next preposition so an "of" complement
+  keeps only its noun phrase` in
+  `server/src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  (`source: 'Number of rows as stated on the sheet'`, text `Number of rows: 8`,
+  expects exactly one `topology.rows` proposal). Against unmodified code:
+  `Tests 1 failed | 4 passed (5)` — `AssertionError: expected [] to have a length
+  of 1 but got +0`.
+- GREEN after fix: `npx vitest run src/ingestion/SpecSheetExtractor.sourceKeywords.test.ts`
+  → `Test Files 1 passed (1) / Tests 5 passed (5)`.
+- Regression `npx vitest run src/ingestion/` → `Test Files 3 failed | 34 passed |
+  2 skipped (39)`, `Tests 12 failed | 200 passed | 2 skipped (230)`. All 12
+  failures are in `src/ingestion/vendor-protocol/` (`Record already exists:
+  XDR-w211-golden` state pollution; `can't resolve reference
+  ./datatypes/revision-ref.schema.yaml` sibling-schema path debt). Baseline check
+  with this unit's code change stashed: same `Test Files 3 failed | 19 passed`,
+  `Tests 12 failed | 101 passed` — identical failure set, i.e. pre-existing and
+  unrelated (note-and-ignore).
+- Typecheck: `npm run typecheck -w server` → clean (tsc --noEmit, rc=0).
+- No YAML changes; no schema/ or SpecSheetFieldMaps.ts edits.
+
+### Commits
+
+- `66a83e53` RED pin (test only)
+- `bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e` code fix (sha used in the marker)
+- report + marker commit follows.
+
+L2-SPEC-SHEET-INGEST-1 UNIT g6fix2 DONE bca4d4a8c16842ee06a1f46dbcfa7c9cf707833e
