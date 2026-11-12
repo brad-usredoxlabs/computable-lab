@@ -310,6 +310,44 @@ describe('ArtifactBlobStore — storage-backed', () => {
       expect(result.storedPath).toBe('ingestion-artifacts/ING-001/ING-001.bin');
     });
 
+    it('keeps the write path under the prefix when a cleaned segment becomes ".."', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      // '.. ' is not '..' pre-clean, but the character-cleaning fallback
+      // yields exactly '..' — the re-join must not reintroduce traversal.
+      const result = await blobStore.save({
+        artifactId: '.. ',
+        fileName: 'x.bin',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      expect(writeCalls.length).toBe(1);
+      const written = writeCalls[0].path;
+      expect(written.startsWith('ingestion-artifacts/')).toBe(true);
+      expect(written.split('/')).not.toContain('..');
+      expect(result.storedPath).toBe(written);
+    });
+
+    it('routes fileName through safeSegment (../evil.txt cannot traverse)', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      const result = await blobStore.save({
+        artifactId: 'ING-001',
+        fileName: '../evil.txt',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      expect(writeCalls.length).toBe(1);
+      const written = writeCalls[0].path;
+      expect(written.startsWith('ingestion-artifacts/')).toBe(true);
+      expect(written.split('/')).not.toContain('..');
+      // safeSegment collapses the '..' segment to its literal placeholder
+      expect(written.split('/')).toContain('dot-dot');
+      expect(result.storedPath).toBe(written);
+    });
+
     it('sanitises artifactId segments (blocks ../ traversal)', async () => {
       const { LocalMountStorageProvider } = await import('../storage/LocalMountStorageProvider.js');
       const root = mkdtempSync(`${tmpdir()}/dref-path-safety-`);
@@ -365,10 +403,10 @@ describe('ArtifactBlobStore — storage-backed', () => {
       await recorder({
         artifactId: 'ING-001',
         deviceId: 'vast',
-        path: 'ingestion-artifacts/ING-001/test.bin',
+        path: 'ingestion-artifacts/ING-001/testfile',
         contentHash: 'abc123',
         sizeBytes: 10,
-        fileName: 'test.bin',
+        fileName: 'testfile',
       });
 
       const dref = fakeStore.createdEnvelopes[0].payload;
