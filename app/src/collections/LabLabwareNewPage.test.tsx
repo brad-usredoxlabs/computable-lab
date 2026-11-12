@@ -658,6 +658,27 @@ describe('LabLabwareNewPage', () => {
     expect(payload.capacity.max_well_volume_uL).toBe(100000)
   })
 
+  // g5d1save leg 2b — an ambiguous two-quantity string must stay raw in the payload
+  // (never guessed); only a single unambiguous quantity is converted.
+  it('leaves an ambiguous two-quantity string raw in a number field (no unit guessing)', async () => {
+    const schemaWithOptionalCapacity = {
+      ...labwareSchemaShape,
+      required: ['kind', 'recordId', 'type', 'id', 'display_name', 'topology'],
+    }
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'capacity.max_well_volume_uL', value: '195 mL, 185 mL', sourceUrl: 'https://example.com/sheet', passage: '195 mL, 185 mL', specId: 's3' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, schemaWithOptionalCapacity)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.capacity.max_well_volume_uL).toBe('195 mL, 185 mL')
+  })
+
   // g5d1save leg 3a — schema-required field with no proposal refuses by name, no POST
   it('refuses with a named reason when schema-required topology has no proposal', async () => {
     const proposals = [
