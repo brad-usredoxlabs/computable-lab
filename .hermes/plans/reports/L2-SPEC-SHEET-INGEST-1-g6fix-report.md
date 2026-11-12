@@ -274,4 +274,9 @@ Comment records why `for` lives in exactly one of the two regexes.
 
 - `e8e1b229` RED pins (test only)
 - `cc13eeee` production split (`prepositionRe` minus `for` + `tailPrepositionRe`)
+- `c72d5487933cf5305bbe97d3d61a847ed84de399` this report commit
+
+L2-SPEC-SHEET-INGEST-1 UNIT g6fix3 DONE c72d5487933cf5305bbe97d3d61a847ed84de399
+
+L2-SPEC-SHEET-INGEST-1-g6fix3 UNIT unit DONE c72d5487933cf5305bbe97d3d61a847ed84de399
 
