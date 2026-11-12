@@ -83,6 +83,4 @@ $ ls /home/brad/.jcc-u2-scratch → No such file or directory (test afterAll rem
 - Duplicate `capability_id` across files is not diagnosed in this unit (not in acceptance); candidate follow-up.
 
 
-L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2loader UNIT unit DONE d756600e17b0253fd9e7fded0b352bb79b663919
-
 L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT 2 DONE d756600e17b0253fd9e7fded0b352bb79b663919

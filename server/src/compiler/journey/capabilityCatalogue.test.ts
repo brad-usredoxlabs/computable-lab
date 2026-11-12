@@ -106,4 +106,15 @@ describe('capability catalogue admission', () => {
     if (result.ok) throw new Error('expected rejection');
     expect(result.capabilities.map((c) => c.capability_id)).toEqual(['journey.align-sequences']);
   });
+
+  it('(f) orders by capability_id even when filenames invert that order', async () => {
+    const dir = await dirWith({
+      'zzz.yaml': descriptorYaml('journey.aaa', 'compiler.journey.align'),
+      'aaa.yaml': descriptorYaml('journey.zzz', 'compiler.journey.align'),
+    });
+    const result = await loadCapabilityCatalogueDir(dir, KNOWN);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.capabilities.map((c) => c.capability_id)).toEqual(['journey.aaa', 'journey.zzz']);
+  });
 });
