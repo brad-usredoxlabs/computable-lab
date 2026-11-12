@@ -87,13 +87,27 @@ describe('journey port vocabulary schema', () => {
     Object.keys(defOf(name).properties ?? {});
   const requiredOf = (name: string): string[] => defOf(name).required ?? [];
 
-  /** Build the minimal valid payload from the schema's own declarations. */
+  /** A value for one declared property, taken from the schema where it says. */
+  function valueFor(prop: PropSchema | undefined): unknown {
+    return prop?.enum?.[0] ?? prop?.const ?? 'FIXTURE-VALUE';
+  }
+
+  /** Build the minimal valid payload from the schema's required list. */
   function validPayload(name: string): Record<string, unknown> {
     const def = defOf(name);
     const payload: Record<string, unknown> = {};
     for (const key of def.required ?? []) {
-      const prop = def.properties?.[key];
-      payload[key] = prop?.enum?.[0] ?? prop?.const ?? 'FIXTURE-VALUE';
+      payload[key] = valueFor(def.properties?.[key]);
+    }
+    return payload;
+  }
+
+  /** Populate EVERY declared property, so a deletion test removes exactly one. */
+  function fullPayload(name: string): Record<string, unknown> {
+    const def = defOf(name);
+    const payload: Record<string, unknown> = {};
+    for (const [key, prop] of Object.entries(def.properties ?? {})) {
+      payload[key] = valueFor(prop);
     }
     return payload;
   }
@@ -149,7 +163,7 @@ describe('journey port vocabulary schema', () => {
   it('refuses every payload missing any required field, naming that field', () => {
     for (const name of PORT_DEFS) {
       for (const key of requiredOf(name)) {
-        const payload = validPayload(name);
+        const payload = fullPayload(name);
         delete payload[key];
         expectDecision(payload, name, 'required', 'missingProperty', key, '/');
       }
@@ -163,7 +177,7 @@ describe('journey port vocabulary schema', () => {
     expect(shared.length, 'a single universally required key').toBe(1);
     for (const name of PORT_DEFS) {
       for (const key of shared) {
-        const payload = validPayload(name);
+        const payload = fullPayload(name);
         delete payload[key];
         expectDecision(payload, name, 'required', 'missingProperty', key, '/');
       }
@@ -180,6 +194,19 @@ describe('journey port vocabulary schema', () => {
     for (const key of committedOnly) {
       const payload = { ...validPayload(staged), [key]: 'FIXTURE-VALUE' };
       expectDecision(payload, staged, 'additionalProperties', 'additionalProperty', key, '/');
+    }
+  });
+
+  it('requires every committed-only property a staged draft must never carry (the receipt)', () => {
+    const committed = 'CommittedRecordReference';
+    const stagedProps = new Set(propertiesOf('StagedDraftReference'));
+    const distinguishing = propertiesOf(committed).filter((key) => !stagedProps.has(key));
+    expect(distinguishing.length, 'committed declares distinguishing properties').toBeGreaterThan(0);
+    for (const key of distinguishing) {
+      expect(requiredOf(committed), `${committed}.required`).toContain(key);
+      const payload = fullPayload(committed);
+      delete payload[key];
+      expectDecision(payload, committed, 'required', 'missingProperty', key, '/');
     }
   });
 
