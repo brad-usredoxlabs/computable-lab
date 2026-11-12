@@ -183,8 +183,9 @@ not reached); `Number of rows` → `Number of rows`.
 
 Contract regex `L2-SPEC-SHEET-INGEST-1 UNIT g6fix.*DONE [0-9a-f]{40}` failed on
 `L2-SPEC-SHEET-INGEST-1-g6fix UNIT unit DONE ...` (item/unit hyphen-joined before
-`UNIT`). Old line kept verbatim above; the corrected line is emitted at the end of
-this file.
+`UNIT`). Old line kept verbatim above; both marker lines exist at the end of this
+file: the brief-form marker at line 217 naming code commit bca4d4a8, and the
+item/unit-hyphenated launcher form at line 219 after it.
 
 ### Verification (worktree root / server/)
 
@@ -202,9 +203,13 @@ this file.
   failures are in `src/ingestion/vendor-protocol/` (`Record already exists:
   XDR-w211-golden` state pollution; `can't resolve reference
   ./datatypes/revision-ref.schema.yaml` sibling-schema path debt). Baseline check
-  with this unit's code change stashed: same `Test Files 3 failed | 19 passed`,
-  `Tests 12 failed | 101 passed` — identical failure set, i.e. pre-existing and
-  unrelated (note-and-ignore).
+  with this unit's code change stashed (re-measured in a scratch copy under /tmp,
+  reverting only `SpecSheetExtractor.ts` to c1209669 content, keeping HEAD tests,
+  running `timeout 300 npm run test:run -w server -- src/ingestion/`):
+  `Test Files  4 failed | 33 passed | 2 skipped (39)`,
+  `Tests  14 failed | 200 passed | 2 skipped (232)`. Identical failure set
+  (vendor-protocol, XDR-w211-golden + revision-ref missingRef), i.e. pre-existing
+  and unrelated (note-and-ignore).
 - Typecheck: `npm run typecheck -w server` → clean (tsc --noEmit, rc=0).
 - No YAML changes; no schema/ or SpecSheetFieldMaps.ts edits.
 
@@ -280,3 +285,4 @@ L2-SPEC-SHEET-INGEST-1 UNIT g6fix3 DONE c72d5487933cf5305bbe97d3d61a847ed84de399
 
 L2-SPEC-SHEET-INGEST-1-g6fix3 UNIT unit DONE c72d5487933cf5305bbe97d3d61a847ed84de399
 
+L2-SPEC-SHEET-INGEST-1 UNIT g6fixpw DONE 39a3d4898e35ba550999f9bb88119343827e8500
