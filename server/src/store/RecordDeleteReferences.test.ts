@@ -303,5 +303,34 @@ describe('L2-RECORD-DELETE-DEPENDENTS-1 — reference-aware deletion', () => {
       await writeFile(tmpPath, 'hello: [unclosed');
       expect(() => loadCascadePolicy(tmpPath)).toThrow('YAML parse error');
     });
+
+    // c3-strict (advc c2 D6): mis-declared rules must throw, never silently degrade
+    it('unknown onDelete action throws naming the offending value', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const tmpPath = join(testDir, 'typo-action.yaml');
+      await writeFile(tmpPath, 'rules:\n  - referrerKind: experiment\n    pointers:\n      materialRef: cascde\n');
+      expect(() => loadCascadePolicy(tmpPath)).toThrow('cascde');
+    });
+
+    it('rule missing referrerKind throws naming the rule index', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const tmpPath = join(testDir, 'no-referrer-kind.yaml');
+      await writeFile(tmpPath, 'rules:\n  - pointers:\n      materialRef: refuse\n');
+      expect(() => loadCascadePolicy(tmpPath)).toThrow(/rule\[0\].*referrerKind/);
+    });
+
+    it('rule missing pointers throws naming pointers', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const tmpPath = join(testDir, 'no-pointers.yaml');
+      await writeFile(tmpPath, 'rules:\n  - referrerKind: experiment\n');
+      expect(() => loadCascadePolicy(tmpPath)).toThrow(/rule\[0\].*pointers/);
+    });
+
+    it('non-array rules key throws instead of coercing to empty policy', async () => {
+      const { loadCascadePolicy } = await import('./referenceCascade.js');
+      const tmpPath = join(testDir, 'rules-not-a-list.yaml');
+      await writeFile(tmpPath, 'rules: "not-a-list"\n');
+      expect(() => loadCascadePolicy(tmpPath)).toThrow(/rules/i);
+    });
   });
 });
