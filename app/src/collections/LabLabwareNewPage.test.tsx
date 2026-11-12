@@ -571,4 +571,26 @@ describe('LabLabwareNewPage', () => {
     // Empty-string sourceUrl falls back to frozen URL
     expect(payload.source.url).toBe('https://example.com/sheet-a')
   })
+
+  // g4 defect D4 — the extractor stamps every proposal of one record kind with the SAME specId
+  // (SpecSheetExtractor.ts:192). Rows keyed by specId collide and React logs
+  // "Encountered two children with the same key". Key must be targetField (unique per proposal).
+  it('does not warn about duplicate React keys when proposals share a specId (g4 D4)', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid format', specId: 'XSPEC-LABWARE' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 'XSPEC-LABWARE' },
+    ]
+    mockExtract.mockResolvedValueOnce({ configured: true, proposals })
+    renderPage()
+    fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
+      target: { value: 'https://example.com/sheet' },
+    })
+    fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
+    })
+    expect(consoleErrorSpy.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
+    consoleErrorSpy.mockRestore()
+  })
 })
