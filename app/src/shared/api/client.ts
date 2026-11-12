@@ -2563,8 +2563,10 @@ export const apiClient = {
      * QMS7-7 (OQ-1 ruling A) adds 'record-drafting' — the third registered
      * adapter on the SAME seam; this transport stays adapter-blind.
      * MATRES-CHAIN (OQ-3(a)) adds 'chain' — the fourth registered adapter on
-     * the SAME adapter-blind seam. */
-    adapter: 'workstate' | 'analysis' | 'record-drafting' | 'chain'
+     * the SAME adapter-blind seam. MATRES-RECV adds 'receiving' — the fifth
+     * registered adapter (config/drafting/adapters.yaml); the stale side was
+     * this closed union, not the server registration. */
+    adapter: 'workstate' | 'analysis' | 'record-drafting' | 'chain' | 'receiving'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number

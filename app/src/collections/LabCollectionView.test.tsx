@@ -242,4 +242,38 @@ describe('LabCollectionView', () => {
     // Button must be absent on the materials category.
     expect(screen.queryByTestId('lab-category-new-labware')).toBeNull()
   })
+
+  // ── u6recvdoor — "Receive a lot" door on the materials category ────────
+
+  const renderCategory = (category: string) =>
+    render(
+      <MemoryRouter initialEntries={[`/lab/${category}`]}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+  it('mounts "+ Receive a lot" beside "+ New material" and opens the receiving door', () => {
+    renderCategory('materials')
+    expect(screen.getByTestId('lab-category-new-material')).toBeDefined()
+    fireEvent.click(screen.getByTestId('lab-category-receive-lot'))
+    expect(screen.getByRole('dialog', { name: 'Receive a lot' })).toBeDefined()
+    expect(screen.getByTestId('material-receiving-vendor')).toBeDefined()
+  })
+
+  it('does NOT show "+ Receive a lot" on non-materials categories (existing doors untouched)', () => {
+    renderCategory('labware')
+    expect(screen.queryByTestId('lab-category-receive-lot')).toBeNull()
+    expect(screen.getByTestId('lab-category-new-labware')).toBeDefined()
+  })
 })
