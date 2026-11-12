@@ -47,7 +47,11 @@ interface DefSchema {
   required?: string[];
   properties?: Record<string, PropSchema>;
 }
-interface DocSchema { $defs?: Record<string, DefSchema> }
+interface DocSchema {
+  additionalProperties?: boolean;
+  properties?: Record<string, PropSchema>;
+  $defs?: Record<string, DefSchema>;
+}
 interface ValidationIssue { path: string; keyword: string; params?: Record<string, unknown> }
 
 describe('journey port vocabulary schema', () => {
@@ -120,6 +124,10 @@ describe('journey port vocabulary schema', () => {
       expect(def.additionalProperties, `${name}.additionalProperties`).toBe(false);
       expect(requiredOf(name).length, `${name}.required`).toBeGreaterThan(0);
     }
+    // The ROOT container is closed too and carries no payload shape of its own:
+    // a caller addresses a port by $ref, never validates a bare root document.
+    expect(doc().additionalProperties, 'root.additionalProperties').toBe(false);
+    expect(Object.keys(doc().properties ?? {}), 'root payload properties').toHaveLength(0);
   });
 
   it('accepts a minimal valid payload for every port', () => {
@@ -146,11 +154,18 @@ describe('journey port vocabulary schema', () => {
 
   it('refuses a staged draft carrying committed-record properties (closed shape)', () => {
     const staged = 'StagedDraftReference';
+    const committed = 'CommittedRecordReference';
     const stagedProps = new Set(propertiesOf(staged));
-    const committedOnly = propertiesOf('CommittedRecordReference').filter(
-      (key) => !stagedProps.has(key),
-    );
+    const committedOnly = propertiesOf(committed).filter((key) => !stagedProps.has(key));
     expect(committedOnly.length, 'committed-only properties exist').toBeGreaterThan(0);
+    // ...and the reverse derivation, so a field ADDED to staged cannot shrink
+    // committedOnly silently: the two families share exactly the version field.
+    const sharedProps = propertiesOf(committed).filter((key) => stagedProps.has(key));
+    const sharedRequired = requiredOf(committed).filter((key) =>
+      requiredOf(staged).includes(key),
+    );
+    expect(sharedRequired.length, 'the single shared required field (version)').toBe(1);
+    expect(sharedProps, 'staged and committed share only that field').toEqual(sharedRequired);
     for (const key of committedOnly) {
       expectDecision(
         { ...validPayload(staged), [key]: 'FIXTURE-VALUE' },
