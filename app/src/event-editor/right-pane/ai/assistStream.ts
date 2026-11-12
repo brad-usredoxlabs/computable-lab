@@ -274,7 +274,13 @@ export interface LedgerAnswerEnvelope {
 }
 
 export type AssistStreamEvent =
-  | { type: 'status'; message: string }
+  // C2 relay: the server's draft-recovery marker rides the `status` frame.
+  // `driver` is relayed OPAQUELY as a string — this union is NOT an enumeration
+  // of the server's driver values (the server union is open to a future YAML
+  // driver, and an app-side union would silently read a new value as
+  // "no recovery"). Present exactly when the server marked the turn salvaged;
+  // absent otherwise.
+  | { type: 'status'; message: string; recoveredFrom?: { driver: string } }
   | { type: 'text_delta'; delta: string }
   | { type: 'done'; result?: AssistDraftResult }
   | { type: 'error'; message: string }
@@ -469,7 +475,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; recordDraft?: Record<string, unknown>; chain?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; recordDraft?: Record<string, unknown>; chain?: Record<string, unknown>; answer?: LedgerAnswerEnvelope; recoveredFrom?: { driver: string } }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -480,7 +486,14 @@ function dispatchFrame(
   }
   switch (parsed.type) {
     case 'status':
-      onEvent({ type: 'status', message: parsed.message ?? '' })
+      // Conditional spread: an absent marker stays ABSENT (app tsconfig does
+      // not set exactOptionalPropertyTypes, so `recoveredFrom: undefined` would
+      // compile and still change `'recoveredFrom' in event`).
+      onEvent({
+        type: 'status',
+        message: parsed.message ?? '',
+        ...(parsed.recoveredFrom ? { recoveredFrom: parsed.recoveredFrom } : {}),
+      })
       return
     case 'text_delta':
       onEvent({ type: 'text_delta', delta: parsed.delta ?? '' })

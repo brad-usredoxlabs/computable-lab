@@ -178,6 +178,46 @@ describe('runAssistStream', () => {
     expect(events).toHaveLength(1)
     expect(events[0].type).toBe('error')
   })
+
+  // C2 relay pin (L2-PROSE-SHORTHAND-SALVAGE-1): the turn's draft-recovery
+  // marker rides the status frame and must survive the client's projection.
+  // The app relays `{ driver: string }` OPAQUELY — it never enumerates driver
+  // values, so a future server driver cannot be silently read as "no recovery".
+  it('carries the draft-recovery marker off a status frame', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      makeStreamResponse([
+        frame({
+          type: 'status',
+          message: "Parsed the draft from the model's text…",
+          recoveredFrom: { driver: 'fenced-json' },
+        }),
+        frame({ type: 'done' }),
+      ]),
+    )
+    const events: AssistStreamEvent[] = []
+    await runAssistStream(
+      { prompt: 'hi', surface: 'workspace.deck', context: {} },
+      { onEvent: (e) => events.push(e) },
+    )
+    expect(events[0]).toMatchObject({ type: 'status', message: "Parsed the draft from the model's text…" })
+    expect((events[0] as { recoveredFrom?: unknown }).recoveredFrom).toEqual({ driver: 'fenced-json' })
+  })
+
+  it('omits the recovery key when the frame carries none', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      makeStreamResponse([
+        frame({ type: 'status', message: 'starting' }),
+        frame({ type: 'done' }),
+      ]),
+    )
+    const events: AssistStreamEvent[] = []
+    await runAssistStream(
+      { prompt: 'hi', surface: 'workspace.deck', context: {} },
+      { onEvent: (e) => events.push(e) },
+    )
+    expect(events[0].type).toBe('status')
+    expect('recoveredFrom' in events[0]).toBe(false)
+  })
 })
 
 describe('summarizeDraftResult', () => {
