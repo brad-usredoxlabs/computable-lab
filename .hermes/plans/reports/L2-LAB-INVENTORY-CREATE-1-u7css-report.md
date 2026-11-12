@@ -59,3 +59,9 @@ app/src/collections/labModalStyles.ts (new, 56 lines)
 app/src/collections/LabwareInstanceCreateModal.tsx (import + delete local const)
 app/src/collections/MaterialReceivingDoor.tsx (import + prepend base block)
 app/src/collections/MaterialReceivingDoor.test.tsx (+14, one pin)
+## Exit
+
+Fix commit (all four files + this report body): f065729c14bc1f227ba58da09c3938e3137045b4
+
+L2-LAB-INVENTORY-CREATE-1 u7css DONE f065729c14bc1f227ba58da09c3938e3137045b4
+L2-LAB-INVENTORY-CREATE-1 UNIT unit DONE f065729c14bc1f227ba58da09c3938e3137045b4
