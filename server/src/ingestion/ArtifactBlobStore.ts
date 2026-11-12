@@ -32,6 +32,10 @@ function safeSegment(value: string): string {
     if (seg === '.') return 'dot';
     // Fall back to safeName for any segment containing unsafe chars
     const cleaned = seg.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    // Cleaning can RE-PRODUCE a dot segment (e.g. '.. ' -> '..'), so the
+    // pre-clean checks above are not sufficient for a total function.
+    if (cleaned === '..') return 'dot-dot';
+    if (cleaned === '.') return 'dot';
     return cleaned || 'artifact';
   }).join('/');
 }
@@ -90,7 +94,7 @@ export class ArtifactBlobStore {
   }): Promise<ArtifactBlobStoreResult> {
     const { provider, deviceId } = this.resolveDevice();
     const artifactId = safeSegment(args.artifactId);
-    const fileName = safeName(args.fileName ?? `${artifactId}.bin`);
+    const fileName = safeSegment(args.fileName ?? `${artifactId}.bin`);
     const storedPath = join(this.prefix, artifactId, fileName);
     const buffer = Buffer.from(args.contentBase64, 'base64');
     const sha256 = createHash('sha256').update(buffer).digest('hex');
