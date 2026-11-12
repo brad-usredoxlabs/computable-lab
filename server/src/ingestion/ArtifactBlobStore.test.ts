@@ -348,6 +348,45 @@ describe('ArtifactBlobStore — storage-backed', () => {
       expect(result.storedPath).toBe(written);
     });
 
+    it('pins residual dot-segment classes on the composed provider path (artifactId " ..", ".. /.. ", "..."; fileName ".", "..", " .. ")', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      const cases: Array<{ label: string; args: { artifactId: string; fileName?: string } }> = [
+        { label: 'artifactId " .." (cleaned-to-..)', args: { artifactId: ' ..', fileName: 'x.bin' } },
+        { label: 'artifactId ".. /.. " (double residual)', args: { artifactId: '.. /.. ', fileName: 'x.bin' } },
+        { label: 'artifactId "..." (literal, not "..")', args: { artifactId: '...', fileName: 'x.bin' } },
+        { label: 'fileName "." (cleaned-to-dot)', args: { artifactId: 'ING-001', fileName: '.' } },
+        { label: 'fileName ".." (raw dot-dot)', args: { artifactId: 'ING-001', fileName: '..' } },
+        { label: 'fileName " .. " (cleaned-to-..)', args: { artifactId: 'ING-001', fileName: ' .. ' } },
+      ];
+
+      for (const c of cases) {
+        writeCalls.length = 0;
+        const result = await blobStore.save({
+          ...c.args,
+          contentBase64: Buffer.from('abc').toString('base64'),
+        });
+
+        expect(writeCalls.length, `${c.label}: exactly one provider write`).toBe(1);
+        const written = writeCalls[0]!.path;
+        const segments = written.split('/');
+
+        // (a) the store's OWN composed output stays under the prefix
+        expect(written.startsWith('ingestion-artifacts/'), `${c.label}: composed path ${written}`).toBe(true);
+        // (b) no segment is a traversal or self-reference marker
+        expect(segments, `${c.label}: composed path ${written}`).not.toContain('..');
+        expect(segments, `${c.label}: composed path ${written}`).not.toContain('.');
+        // (c) the recorded path is the path the caller is told about
+        expect(result.storedPath, `${c.label}: composed path ${written}`).toBe(written);
+
+        if (c.args.artifactId === '...') {
+          expect(segments, 'literal "..." must survive but must not be ".."').toContain('...');
+          expect(result.storedPath).not.toBe('..');
+        }
+      }
+    });
+
     it('sanitises artifactId segments (blocks ../ traversal)', async () => {
       const { LocalMountStorageProvider } = await import('../storage/LocalMountStorageProvider.js');
       const root = mkdtempSync(`${tmpdir()}/dref-path-safety-`);
