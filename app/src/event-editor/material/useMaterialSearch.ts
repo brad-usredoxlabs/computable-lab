@@ -36,6 +36,33 @@ const SEARCH_LIMIT = 12
 const ONTOLOGY_LIMIT = 40
 
 /**
+ * Accepted sources for the material picker's ontology section. The resolve
+ * spine can emit `oak` (on-box OAK snapshot), `ols4` (remote) and `local-obo`
+ * (on-box local-ontology tier serving the shipped .obo sources, e.g. LWO) —
+ * all three carry real CURIEs and belong in the ontology list. Everything
+ * else (local records, canonical terms, vendor hits, the tier-5 "mint"
+ * affordance) belongs to its own section or affordance and is excluded here.
+ * This constant IS the accepted-source registry: no client-side source
+ * config exists (config/ontology-sources.yaml is a server-side loader list),
+ * so the set is typed rather than data-driven until a client registry exists.
+ */
+export const ONTOLOGY_PICKER_SOURCES = new Set<ResolveCandidate['source']>([
+  'oak',
+  'ols4',
+  'local-obo',
+])
+
+/**
+ * A candidate belongs in the picker's ontology section iff its source is in
+ * {@link ONTOLOGY_PICKER_SOURCES} and it carries a non-empty CURIE. Kept as a
+ * module-level predicate (not an inline arrow) so it is unit-testable without
+ * mounting the hook.
+ */
+export function isOntologyPickerCandidate(c: ResolveCandidate): boolean {
+  return ONTOLOGY_PICKER_SOURCES.has(c.source) && Boolean(c.curie)
+}
+
+/**
  * Re-rank ontology hits so the closest term is on top (exact → prefix →
  * substring → other; shorter label first). Spine input is score-sorted, so the
  * stable sort keeps score order within a tie. See {@link rankByLabelMatch}.
@@ -133,13 +160,12 @@ export function useMaterialSearch(): UseMaterialSearchResult {
         limit: ONTOLOGY_LIMIT,
       })
       if (latestQueryRef.current.trim() !== trimmed) return
-      // Keep the true ontology tiers (on-box OAK snapshot + remote OLS4) that
-      // carry a CURIE. Local records are already in their own section, and the
-      // tier-5 "mint" affordance is handled by "Create new material…". Re-rank
-      // so the exact/shortest match leads (see rankOntologyCandidates).
-      const filtered = (candidates ?? []).filter(
-        (c) => (c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
-      )
+      // Keep the true ontology tiers (on-box OAK snapshot, remote OLS4, and the
+      // on-box local-ontology tier) that carry a CURIE. Local records are already
+      // in their own section, and the tier-5 "mint" affordance is handled by
+      // "Create new material…". Re-rank so the exact/shortest match leads (see
+      // rankOntologyCandidates).
+      const filtered = (candidates ?? []).filter(isOntologyPickerCandidate)
       setOntologyResults(rankOntologyCandidates(filtered, trimmed))
     } catch (err) {
       if (latestQueryRef.current.trim() !== trimmed) return

@@ -448,6 +448,7 @@ const RESOLVE_SOURCE_LABEL: Record<ResolveCandidate['source'], string> = {
   'local-record': 'Workspace record (this lab)',
   oak: 'On-box ontology snapshot (OAK)',
   ols4: 'EBI Ontology Lookup Service (remote)',
+  'local-obo': 'Local OBO ontology snapshot (this appliance)',
   vendor: 'Vendor / Exa web',
   mint: 'New local term',
 }
