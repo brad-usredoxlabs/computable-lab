@@ -63,7 +63,7 @@ L2-DOC-INTAKE-1 UNIT u2fix2 DONE a3617f71
 
 - **Old claim (line 49): "`safeName` strips `..` segments"** — measured truth: `safeName` is unchanged (`ArtifactBlobStore.ts:21-23`) and returns `'..'` verbatim; the segment sanitiser is `safeSegment` (`ArtifactBlobStore.ts:26-41`), which is what the traversal pins exercise.
 - **Old claim (line 50): "regardless of `format` option"** — measured truth: no `format` option exists in the module or in any caller of `save()`/the recorder; the line deleted in u2fix2 was the conditional spread `...(format ? { format } : {})` inside `createArtifactBlobStoreRecorder`, and the payload now always carries `format: formatForPath(input.fileName)` (`ArtifactBlobStore.ts:207,217`).
-- **Old claim (line 50): "test asserts record present with format=none"** — measured truth: the recorder test asserts `expect(dref.format).toBe('bin')` (`ArtifactBlobStore.test.ts:414`); the extensionless-filename fallback is the string `'bin'`, and `'none'` appears nowhere in the suite.
+- **Old claim (line 50): "test asserts record present with format=none"** — measured truth: the recorder test asserts `expect(dref.format).toBe('bin')` (`ArtifactBlobStore.test.ts:453`); the extensionless-filename fallback is the string `'bin'`, and `'none'` appears nowhere in the suite.
 
 ### OBSERVATION — LegacyArtifactBlobStore raw artifactId (not graded here)
 

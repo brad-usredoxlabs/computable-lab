@@ -91,7 +91,7 @@ HONESTY note (defects 5/6/8 out of unit).
 
 Owned new report path. The historical 8-hex `DONE a3617f71` at
 `L2-DOC-INTAKE-1-u2-report.md:60` is left intact (append-only; not rewritten). Marker
-below is full 40-hex, read from `git rev-parse HEAD` in this worktree.
+below names `ce3440d7` (the report commit); the marker line itself ships in `9e28c220`.
 
 ## Verification (raw, at report commit `ce3440d7`)
 
@@ -111,7 +111,7 @@ below is full 40-hex, read from `git rev-parse HEAD` in this worktree.
     server/src/ingestion/ArtifactBlobStore.test.ts
 
 Typecheck skipped by design: no `.ts` signature change and no product-file change.
-Commits: `d2b108d5` (test pin), `ce3440d7` (test pin + both reports), marker commit.
+Commits: `d2b108d5` (test pin), `ce3440d7` (both reports), `9e28c220` (verification text + marker).
 
 ## Remaining obligation
 
