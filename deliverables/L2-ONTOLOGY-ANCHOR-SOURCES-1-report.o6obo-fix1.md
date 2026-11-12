@@ -176,4 +176,4 @@ the new D2 pin). No amend/rebase of 9c96e437.
 - Post-merge: run the 35-suite sweep (this unit ran only brief items 1-5).
 - LWO picker visibility leg remains a separate later unit (no app work here).
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-o6obofix1 UNIT unit DONE 1c0919b92d8b6b07119d693af45484eb545c6ff4
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o6obofix1 UNIT unit DONE 0acda131854d01feee4fc2ede56f1a2db3d653d3
