@@ -358,6 +358,93 @@ describe('ArtifactBlobStore — storage-backed', () => {
       expect(() => new ArtifactBlobStore(makeStorage(provider), '../evil', recorder))
         .toThrow(/'\.\.\/evil'/);
     });
+
+    // Ported from cl/lane2-docintake-1-u2fix2-l2t1655 (u2fix4/5/6, advc c3 ACCEPT):
+    // variant-neutral pins — green against EITHER safeSegment variant
+    // (placeholder-collapse or total-sanitise). They assert only that nothing
+    // traverses, never HOW dots are sanitised.
+    it('keeps the write path under the prefix when a cleaned segment becomes ".."', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      // '.. ' is not '..' pre-clean, but the character-cleaning fallback
+      // yields exactly '..' — the re-join must not reintroduce traversal.
+      const result = await blobStore.save({
+        artifactId: '.. ',
+        fileName: 'x.bin',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      expect(writeCalls.length).toBe(1);
+      const written = writeCalls[0].path;
+      expect(written.startsWith('ingestion-artifacts/')).toBe(true);
+      expect(written.split('/')).not.toContain('..');
+      expect(result.storedPath).toBe(written);
+    });
+
+    it('routes fileName through safeSegment (../evil.txt cannot traverse)', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      const result = await blobStore.save({
+        artifactId: 'ING-001',
+        fileName: '../evil.txt',
+        contentBase64: Buffer.from('abc').toString('base64'),
+      });
+
+      expect(writeCalls.length).toBe(1);
+      const written = writeCalls[0].path;
+      const segments = written.split('/');
+      expect(written.startsWith('ingestion-artifacts/')).toBe(true);
+      // Variant-neutral: a cleaned segment must never consume a path level, so the
+      // artifactId directory survives whatever the sanitiser does with dots
+      // (collapse to a placeholder, or total '.' substitution).
+      expect(segments).toContain('ING-001');
+      expect(segments).not.toContain('..');
+      expect(segments).not.toContain('.');
+      const { resolve, relative } = await import('node:path');
+      expect(relative('/blob-root', resolve('/blob-root', written)).startsWith('..')).toBe(false);
+      expect(result.storedPath).toBe(written);
+    });
+
+    it('pins residual dot-segment classes on the composed provider path (artifactId " ..", ".. /.. ", "..."; fileName ".", "..", " .. ")', async () => {
+      const recorder = createArtifactBlobStoreRecorder(store);
+      const blobStore = new ArtifactBlobStore(makeStorage(provider), 'ingestion-artifacts', recorder);
+
+      const cases: Array<{ label: string; args: { artifactId: string; fileName?: string } }> = [
+        { label: 'artifactId " .." (cleaned-to-..)', args: { artifactId: ' ..', fileName: 'x.bin' } },
+        { label: 'artifactId ".. /.. " (double residual)', args: { artifactId: '.. /.. ', fileName: 'x.bin' } },
+        { label: 'artifactId "..." (literal, not "..")', args: { artifactId: '...', fileName: 'x.bin' } },
+        { label: 'fileName "." (cleaned-to-dot)', args: { artifactId: 'ING-001', fileName: '.' } },
+        { label: 'fileName ".." (raw dot-dot)', args: { artifactId: 'ING-001', fileName: '..' } },
+        { label: 'fileName " .. " (cleaned-to-..)', args: { artifactId: 'ING-001', fileName: ' .. ' } },
+      ];
+      const { resolve: resolvePath, relative: relativePath } = await import('node:path');
+
+      for (const c of cases) {
+        writeCalls.length = 0;
+        const result = await blobStore.save({
+          ...c.args,
+          contentBase64: Buffer.from('abc').toString('base64'),
+        });
+
+        expect(writeCalls.length, `${c.label}: exactly one provider write`).toBe(1);
+        const written = writeCalls[0]!.path;
+        const segments = written.split('/');
+
+        // (a) the store's OWN composed output stays under the prefix
+        expect(written.startsWith('ingestion-artifacts/'), `${c.label}: composed path ${written}`).toBe(true);
+        // (b) no segment is a traversal or self-reference marker
+        expect(segments, `${c.label}: composed path ${written}`).not.toContain('..');
+        expect(segments, `${c.label}: composed path ${written}`).not.toContain('.');
+        // (c) the recorded path is the path the caller is told about
+        expect(result.storedPath, `${c.label}: composed path ${written}`).toBe(written);
+        // (d) the composed path escapes no storage root (variant-neutral: says nothing
+        //     about HOW dots are sanitised, only that nothing traverses)
+        const absPath = resolvePath('/blob-root', written);
+        expect(relativePath('/blob-root', absPath).startsWith('..'), `${c.label}: composed path ${written}`).toBe(false);
+      }
+    });
   });
 
   describe('LegacyArtifactBlobStore', () => {
