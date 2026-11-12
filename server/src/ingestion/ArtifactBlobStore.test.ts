@@ -341,10 +341,16 @@ describe('ArtifactBlobStore — storage-backed', () => {
 
       expect(writeCalls.length).toBe(1);
       const written = writeCalls[0].path;
+      const segments = written.split('/');
       expect(written.startsWith('ingestion-artifacts/')).toBe(true);
-      expect(written.split('/')).not.toContain('..');
-      // safeSegment collapses the '..' segment to its literal placeholder
-      expect(written.split('/')).toContain('dot-dot');
+      // Variant-neutral: a cleaned segment must never consume a path level, so the
+      // artifactId directory survives whatever the sanitiser does with dots
+      // (collapse to a placeholder, or total '.' substitution).
+      expect(segments).toContain('ING-001');
+      expect(segments).not.toContain('..');
+      expect(segments).not.toContain('.');
+      const { resolve, relative } = await import('node:path');
+      expect(relative('/blob-root', resolve('/blob-root', written)).startsWith('..')).toBe(false);
       expect(result.storedPath).toBe(written);
     });
 
