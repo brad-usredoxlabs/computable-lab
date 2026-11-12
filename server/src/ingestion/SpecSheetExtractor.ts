@@ -92,16 +92,33 @@ function applyTransform(value: string, transform: string | undefined): string {
 // Keyword extraction — parse source description into match phrases
 // ---------------------------------------------------------------------------
 
+/**
+ * A bare quantifier head is not a usable label anchor: "Number of rows" and
+ * "Number of columns" both reduced to "Number", so one sheet line filled both
+ * fields (browser gate g6 D2). Keep the complement when the strip lands on
+ * such a head — but ONLY for an "of" complement, so provenance tails like
+ * "Quantity as stated on the sheet" still strip to "Quantity".
+ */
+const BARE_QUANTIFIER_HEADS = new Set(['number', 'no', 'count', 'quantity', 'total', 'amount']);
+
 function parseSourceKeywords(source: string): string[] {
-  // Split on "/" to get alternatives, then strip prepositional tails
-  const alternatives = source.split('/').map((s) => s.trim());
+  // Parenthetical groups document allowed values or units; they are never
+  // label alternatives. Drop them BEFORE splitting on "/", otherwise
+  // "Addressing type (grid/linear/single) from the sheet" truncates to the
+  // unusable literal "Addressing type (grid" (browser gate g6 D1).
+  const withoutParentheticals = source.replace(/\([^)]*\)/g, ' ');
+  const alternatives = withoutParentheticals.split('/').map((s) => s.trim());
   const keywords: string[] = [];
-  const prepositionRe = /^(.+?)\s+(?:from|as|described|referenced|listed|on|in|of|with)\b/i;
+  const prepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with)\b/i;
 
   for (const alt of alternatives) {
     if (!alt) continue;
     const match = alt.match(prepositionRe);
-    const phrase = match && typeof match[1] === 'string' ? match[1].trim() : alt.trim();
+    let phrase = match && typeof match[1] === 'string' ? match[1].trim() : alt.trim();
+    const preposition = match && typeof match[2] === 'string' ? match[2].toLowerCase() : '';
+    if (preposition === 'of' && BARE_QUANTIFIER_HEADS.has(phrase.toLowerCase())) {
+      phrase = alt.trim();
+    }
     if (phrase) keywords.push(phrase);
   }
   return keywords;
