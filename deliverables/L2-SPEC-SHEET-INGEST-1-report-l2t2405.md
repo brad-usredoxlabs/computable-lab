@@ -64,3 +64,9 @@ source changes; no other files touched.
 ### State / next actions
 Implementation complete; acceptance (adversarial + browser review) still owned by
 the reviewer. Nothing blocked.
+
+(Marker shas name the last content commit before the marker-only amend that
+introduced these lines; a commit cannot carry its own sha.)
+
+SPECSHEET-G5D1SAVE DONE 171f1f0b9be020efc0ffa08e6374c0b3dbcc9b55
+L2-SPEC-SHEET-INGEST-1 UNIT unit DONE 171f1f0b9be020efc0ffa08e6374c0b3dbcc9b55
