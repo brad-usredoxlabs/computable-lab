@@ -173,7 +173,7 @@ describe('C2 call-site wiring — orchestrator run path', () => {
     const model = stubModel([{
       toolCalls: [{ name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_graph', events: [{ event_type: 'add_material', details: { well: 'A1' } }] } }],
     }]);
-    const events: any[] = [];
+    const events: AgentEvent[] = [];
 
     const orchestrator = createAgentOrchestrator(
       model.client,
@@ -192,12 +192,14 @@ describe('C2 call-site wiring — orchestrator run path', () => {
     });
 
     const recoveryStatus = events.find(
-      (e) => e.type === 'status' && e.message.includes("Parsed the draft from the model's text"),
+      (e): e is Extract<AgentEvent, { type: 'status' }> =>
+        e.type === 'status' && e.message.includes("Parsed the draft from the model's text"),
     );
     expect(recoveryStatus).toBeUndefined();
 
     const eventsWithRecoveredFrom = events.filter(
-      (e) => e.type === 'status' && e.recoveredFrom !== undefined,
+      (e): e is Extract<AgentEvent, { type: 'status' }> =>
+        e.type === 'status' && 'recoveredFrom' in e && e.recoveredFrom !== undefined,
     );
     expect(eventsWithRecoveredFrom).toHaveLength(0);
 
