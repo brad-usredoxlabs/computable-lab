@@ -2607,7 +2607,16 @@ export const apiClient = {
     draftId: string
     revision: number
     reviewHash: string
-  }): Promise<{ sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }> {
+  }): Promise<{
+    sessionDocument: unknown
+    summary?: string
+    resolvedTerms?: unknown
+    /** Receiving-shaped accepted plan (adapters.ts stage → compiled.result): the
+     * receipt record id and the material-instance record id the server wrote.
+     * Absent-or-value — never a present-but-undefined slot. */
+    recordId?: string
+    instanceRecordId?: string
+  }> {
     return request(`/drafts/accept`, {
       method: 'POST',
       body: JSON.stringify(body),
