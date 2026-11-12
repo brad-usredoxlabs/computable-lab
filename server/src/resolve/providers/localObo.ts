@@ -153,9 +153,23 @@ function loadTerms(path: string): OboTerm[] {
   return terms;
 }
 
+/**
+ * A definition may only answer queries the lexical surface cannot: the query
+ * must be multi-token with every token >= 3 characters. Ordinary single-token
+ * nouns ("sample", "water", "plate") and short-token noise ("b" in "Material B")
+ * match English prose in definitions everywhere — admitting them made the tier
+ * non-additive (D1: 4 junk candidates flipped the seeded drive to
+ * needs-clarification). The label/synonym arm above is the additive surface and
+ * is UNCHANGED by this gate.
+ */
+function definitionArmAllowed(tokens: string[]): boolean {
+  return tokens.length > 1 && tokens.every((token) => token.length >= 3);
+}
+
 function matchesQuery(term: OboTerm, tokens: string[]): boolean {
   const lexical = `${term.label}\n${term.synonyms.join('\n')}`.toLowerCase();
   if (tokens.every((token) => lexical.includes(token))) return true;
+  if (!definitionArmAllowed(tokens)) return false;
   const definition = term.definition?.toLowerCase();
   return Boolean(definition) && tokens.every((token) => (definition as string).includes(token));
 }

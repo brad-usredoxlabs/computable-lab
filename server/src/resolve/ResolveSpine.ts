@@ -33,6 +33,7 @@ import type {
 } from './types.js';
 import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
+import { createLocalOboProvider } from './providers/localObo.js';
 import { createRecordProvider } from './providers/records.js';
 import { createTermProvider } from './providers/terms.js';
 import { createVendorExaProvider } from './providers/vendorExa.js';
@@ -49,6 +50,8 @@ export interface ResolveSpineDeps {
   termProvider?: ResolveProvider;
   /** Tier 1 — existing workspace records (incl. previously-minted local terms). */
   recordProvider?: ResolveProvider;
+  /** Tier 2 — shipped .obo sources from config/ontology-sources.yaml (same tier as OAK). */
+  localOboProvider?: ResolveProvider;
   /** Tier 4 — vendor/catalog search. */
   vendorProvider?: ResolveProvider;
   /** Override timeouts (testing). */
@@ -167,6 +170,9 @@ export function createResolveSpine(deps: ResolveSpineDeps = {}): ResolveSpine {
   if (oak) {
     tiers.push({ tier: 2, source: 'oak', provider: oak, remote: false });
   }
+  if (deps.localOboProvider) {
+    tiers.push({ tier: 2, source: 'local-obo', provider: deps.localOboProvider, remote: false });
+  }
   tiers.push({
     tier: 3,
     source: 'ols4',
@@ -263,6 +269,10 @@ export function createResolveSpineFromContext(ctx: {
   };
   if (ctx.appConfig?.ontology) deps.ontology = ctx.appConfig.ontology;
   if (ctx.getAppConfig) deps.vendorProvider = createVendorExaProvider(ctx.getAppConfig);
+  // Shipped .obo sources: the provider reads config/ontology-sources.yaml lazily
+  // and throws only when every source failed — runProvider isolates that per
+  // call, so a registry-less checkout still boots (and simply contributes []).
+  deps.localOboProvider = createLocalOboProvider();
   return createResolveSpine(deps);
 }
 

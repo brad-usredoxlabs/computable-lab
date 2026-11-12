@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createResolveSpine } from './ResolveSpine.js';
+import { createLocalOboProvider } from './providers/localObo.js';
 import type { ProviderHit, ResolveProvider } from './types.js';
 
 const realFetch = globalThis.fetch;
@@ -72,6 +73,22 @@ describe('resolve() spine', () => {
     const hit = out.find((c) => c.curie === 'CHEBI:4593');
     expect(hit?.tier).toBe(2); // deduped to the local OAK instance, not OLS4
     expect(hit?.source).toBe('oak');
+  });
+
+  it('ranks shipped .obo hits at tier 2 as source local-obo (visible under localOnly)', async () => {
+    stubFetch({});
+    const spine = createResolveSpine({
+      localOboProvider: staticProvider([
+        { curie: 'LWO:0000100', label: 'well plate 96', namespace: 'LWO', level: 'concept' },
+      ]),
+    });
+    const out = await spine.resolve('plate');
+    const hit = out.find((c) => c.curie === 'LWO:0000100');
+    expect(hit).toBeDefined();
+    expect(hit?.source).toBe('local-obo');
+    expect(hit?.tier).toBe(2);
+    const localOnly = await spine.resolve('plate', { localOnly: true });
+    expect(localOnly.some((c) => c.curie === 'LWO:0000100')).toBe(true);
   });
 
   it('skips the OAK tier when no service URL is configured', async () => {
@@ -156,5 +173,17 @@ describe('resolve() spine', () => {
     });
     const out = await spine.resolve('plain');
     expect('formulationDeclared' in (out.find((c) => c.curie === 'local:MAT-10') ?? {})).toBe(false);
+  });
+
+  it('D2 consumer pin: a single-token generic noun ("sample") adds no local-obo candidates (tier additive)', async () => {
+    stubFetch({});
+    const withTier = createResolveSpine({ localOboProvider: createLocalOboProvider() });
+    const out = await withTier.resolve('sample');
+    expect(out.filter((c) => c.source === 'local-obo')).toEqual([]);
+    // Base-equality: the single-token noun resolves identically with the tier off.
+    const base = await createResolveSpine({}).resolve('sample');
+    expect(out.filter((c) => c.tier < 5).map((c) => c.curie)).toEqual(
+      base.filter((c) => c.tier < 5).map((c) => c.curie),
+    );
   });
 });

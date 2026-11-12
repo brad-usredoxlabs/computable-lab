@@ -9,13 +9,34 @@
  * (c) a registry row whose path does not exist yields a NAMED failure for
  *     that source id while the surviving sources still return hits;
  * (d) the boot warm reports every enabled source as loaded (termCount > 0);
- * (e) the boot warm NAMES a missing source and still loads the healthy one.
+ * (e) the boot warm NAMES a missing source and still loads the healthy one;
+ * (f)-(h) match policy (D1): the definition arm is a LAST-RESORT arm for
+ *     multi-token, content-rich queries only — single-token and short-token
+ *     (1-2 char) queries never match on definitions (the "Material B" junk
+ *     matches), while genuinely multi-token queries keep definition reach.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadLocalOboSources, searchLocalObo, warmLocalOboSources } from './localObo.js';
+
+/** A second OBO whose LABELS/SYNONYMS never carry the query tokens but whose
+ *  definitions do — isolates the definition arm (D1 fixture). */
+const SAMPLE_DEF_OBO = [
+  'format-version: 1.2',
+  '',
+  '[Term]',
+  'id: TST:0000010',
+  'name: specimen tray',
+  'def: "A tray for holding material samples in bulk during a protocol." [TST:0000010]',
+  '',
+  '[Term]',
+  'id: TST:0000011',
+  'name: intake port',
+  'def: "An opening where a sample enters the device." [TST:0000011]',
+  '',
+].join('\n');
 
 const tmp = mkdtempSync(join(tmpdir(), 'cl-localobo-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -130,5 +151,49 @@ describe('localObo provider', () => {
     expect(broken.error).toContain('absent-warm.obo');
     expect(healthy.ok).toBe(true);
     expect(healthy.termCount).toBeGreaterThan(0);
+  });
+
+  it('(f) match policy: single-token queries NEVER match on the definition arm (D1)', async () => {
+    writeFileSync(join(tmp, 'sdef.obo'), SAMPLE_DEF_OBO);
+    const path = registry('single-token', row('sdef', 'SDEF', join(tmp, 'sdef.obo')));
+    // 'sample' (and 'samples') is a substring of the definitions but of NO
+    // label/synonym — pre-fix the definition arm admitted definition-only hits.
+    const single = await searchLocalObo('sample', 10, { registryPath: path });
+    expect(single.hits).toEqual([]);
+    const plural = await searchLocalObo('samples', 10, { registryPath: path });
+    expect(plural.hits).toEqual([]);
+    // Shipped registry: no LWO/LEQ label/synonym carries "sample", so a
+    // single-token "sample" must return ZERO local-obo hits (pre-fix: 36
+    // definition matches; the spine caps the visible set at 20).
+    const shipped = await searchLocalObo('sample', 100);
+    expect(shipped.hits).toEqual([]);
+  });
+
+  it('(g) match policy: short content tokens (1-2 chars) never reach the definition arm (D1)', async () => {
+    writeFileSync(join(tmp, 'sdef.obo'), SAMPLE_DEF_OBO);
+    const path = registry('short-token', row('sdef', 'SDEF', join(tmp, 'sdef.obo')));
+    // The regression: "Material B" -> tokens ['material','b']; every definition
+    // contains the 1-char token 'b', so the arm matched junk (LWO:0000100,
+    // LEQ:0000149/184/187) and flipped the seeded drive to ambiguous-noun.
+    const materialB = await searchLocalObo('Material B', 10, { registryPath: path });
+    expect(materialB.hits).toEqual([]);
+    const shortTwo = await searchLocalObo('sample b', 10, { registryPath: path });
+    expect(shortTwo.hits).toEqual([]);
+    // Shipped registry: the measured 4-definition junk set must be gone.
+    const shippedMaterialB = await searchLocalObo('Material B', 100);
+    expect(shippedMaterialB.hits).toEqual([]);
+  });
+
+  it('(h) match policy: multi-token, content-rich queries KEEP definition reach (arm stays live)', async () => {
+    writeFileSync(join(tmp, 'sdef.obo'), SAMPLE_DEF_OBO);
+    const path = registry('multi-token', row('sdef', 'SDEF', join(tmp, 'sdef.obo')));
+    // 'holding samples' (2 tokens, each >= 3 chars) hits ONLY via the
+    // definition of TST:0000010 — no label/synonym carries both tokens.
+    const hits = (await searchLocalObo('holding samples', 10, { registryPath: path })).hits;
+    expect(hits.map((h) => h.curie)).toEqual(['TST:0000010']);
+    // And a genuinely multi-token labware query still reaches the shipped
+    // label/synonym surface (behavior unchanged by the gate).
+    const shipped = await searchLocalObo('deep well', 50);
+    expect(shipped.hits.some((h) => h.label === 'deep-well plate')).toBe(true);
   });
 });

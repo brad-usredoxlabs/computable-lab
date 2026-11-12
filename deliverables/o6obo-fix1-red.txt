@@ -1,0 +1,347 @@
+L2-ONTOLOGY-ANCHOR-SOURCES-1 o6obo-fix1 — RAW RED captures (base 9c96e437, pre-fix)
+
+=== RED-1: unit tests at HEAD (provider tests (f)(g) + spine D2 pin) ===
+
+ RUN  v1.6.1 /home/brad/cl-wt/L2-ONTOLOGY-o6obo-lane2/server
+
+ ❯ src/resolve/providers/localObo.test.ts  (8 tests | 2 failed) 42ms
+   ❯ src/resolve/providers/localObo.test.ts > localObo provider > (f) match policy: single-token queries NEVER match on the definition arm (D1)
+     → expected [ Array(2) ] to deeply equal []
+   ❯ src/resolve/providers/localObo.test.ts > localObo provider > (g) match policy: short content tokens (1-2 chars) never reach the definition arm (D1)
+     → expected [ { curie: 'TST:0000010', …(5) } ] to deeply equal []
+ ❯ src/resolve/ResolveSpine.test.ts  (12 tests | 1 failed) 24ms
+   ❯ src/resolve/ResolveSpine.test.ts > resolve() spine > D2 consumer pin: a single-token generic noun ("sample") adds no local-obo candidates (tier additive)
+     → expected [ …(20) ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/resolve/ResolveSpine.test.ts > resolve() spine > D2 consumer pin: a single-token generic noun ("sample") adds no local-obo candidates (tier additive)
+AssertionError: expected [ …(20) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "curie": "LWO:0000100",
++     "definition": "A processed material entity designed to contain, hold, or transfer a sample or reagent, as opposed to being designed to act upon it; labware is the passive physical container or consumable of a wet lab workflow (tubes, plates, tips, vials, bottles, flasks, racks, lids, filters, columns). The counterpart concept for devices that act on samples is laboratory equipment (LEQ:0000100).",
++     "label": "labware",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000100",
++   },
++   Object {
++     "curie": "LWO:0000103",
++     "definition": "A small plastic tube with a nominal volume of about 0.5, 1.5, or 2 milliliters, closed by a snap or screw cap; the standard low-volume sample container of the wet lab.",
++     "label": "microcentrifuge tube",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000103",
++   },
++   Object {
++     "curie": "LWO:0000107",
++     "definition": "A long, thin glass or plastic tube with a nominal volume of about 3 to 5 milliliters and a bore of 5 or 3 millimeters, used to hold samples in a nuclear magnetic resonance spectrometer.",
++     "label": "NMR tube",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000107",
++   },
++   Object {
++     "curie": "LWO:0000109",
++     "definition": "A small vial, typically of 1 to 2 milliliters with a screw cap, designed for storage of biological samples at cryogenic temperatures (e.g. -80 degree Celsius or liquid nitrogen); the cap is often ribbed for torque at low temperature.",
++     "label": "cryovial",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000109",
++   },
++   Object {
++     "curie": "LWO:0000117",
++     "definition": "A labware item with a large open top and a volume of tens to hundreds of milliliters, used to hold a bulk volume of reagent or sample from which smaller volumes are dispensed; distinct from a bottle in being designed for active workflow use.",
++     "label": "reservoir",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000117",
++   },
++   Object {
++     "curie": "LWO:0000129",
++     "definition": "A 96-well plate in which each well contains a membrane filter, used to capture cells or particulates from a liquid sample; the classic form is the 24- or 96-well filter plate for cell separation.",
++     "label": "filter plate",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000129",
++   },
++   Object {
++     "curie": "LWO:0000130",
++     "definition": "A 96-well plate with a nominal well volume of 1 to 2.4 milliliters and a deep, narrow well, used for sample storage, reagent preparation, and headspace analysis.",
++     "label": "deep-well plate",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000130",
++   },
++   Object {
++     "curie": "LWO:0000170",
++     "definition": "A labware item that separates a liquid (or liquid sample) from particulates or cells by passing the liquid through a membrane or frit; the classic forms are the syringe filter and the vacuum manifold filter plate.",
++     "label": "filter",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000170",
++   },
++   Object {
++     "curie": "LWO:0000172",
++     "definition": "A filter plate that sits on a vacuum manifold, used to capture cells or particulates from multiple samples in parallel under vacuum; the classic form is the 96-well vacuum manifold filter plate.",
++     "label": "vacuum manifold filter plate",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000172",
++   },
++   Object {
++     "curie": "LWO:0000173",
++     "definition": "A disk of paper or membrane used to hold a sample or to filter a liquid; the classic forms are the Whatman disk and the nitrocellulose transfer membrane.",
++     "label": "filter paper",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000173",
++   },
++   Object {
++     "curie": "LWO:0000180",
++     "definition": "A labware item consisting of a tube or cartridge packed with a matrix (resin, beads, silica) that separates components of a liquid sample by affinity, size, charge, or hydrophobicity.",
++     "label": "column",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000180",
++   },
++   Object {
++     "curie": "LWO:0000181",
++     "definition": "A column used in chromatography to separate components of a liquid sample by differential partitioning between a stationary and a mobile phase.",
++     "label": "chromatography column",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000181",
++   },
++   Object {
++     "curie": "LWO:0000183",
++     "definition": "A column packed with a gel matrix that separates a sample from salts by size exclusion; the classic form is the gel filtration desalting column.",
++     "label": "desalting column",
++     "level": "concept",
++     "namespace": "LWO",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/lwo/LWO_0000183",
++   },
++   Object {
++     "curie": "LEQ:0000100",
++     "definition": "A device (COB:0001300) used in a laboratory to act upon, transform, measure, store, or move samples, reagents, or labware; equipment is the active counterpart of labware (LWO:0000100), which is the passive container or consumable.",
++     "label": "lab equipment",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000100",
++   },
++   Object {
++     "curie": "LEQ:0000106",
++     "definition": "An instrument that repeatedly raises and lowers the temperature of a sample through a programmed series of cycles, used canonically for polymerase chain reaction (PCR) and related enzymatic amplification or denaturation workflows.",
++     "label": "thermal cycler",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000106",
++   },
++   Object {
++     "curie": "LEQ:0000109",
++     "definition": "An instrument that measures optical or kinetic properties of samples in a microplate (absorbance, fluorescence, luminescence, or kinetic time courses), reading one or more plates at a time.",
++     "label": "microplate reader",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000109",
++   },
++   Object {
++     "curie": "LEQ:0000110",
++     "definition": "An enclosed chamber that maintains a controlled temperature (and optionally humidity or gas composition, e.g. 5% CO2 for cell culture) over an extended period to support the growth or reaction of samples.",
++     "label": "incubator",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000110",
++   },
++   Object {
++     "curie": "LEQ:0000123",
++     "definition": "A device that uses ultrasound to mix, lyse, or emulsify a sample by cavitation; the classic forms are the probe sonicator (for tubes) and the bath sonicator (for plates and multi-tube lysis).",
++     "label": "sonicator",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000123",
++   },
++   Object {
++     "curie": "LEQ:0000124",
++     "definition": "A device that disrupts tissue or cell samples by mechanical shear, typically using a rotating blade or a reciprocating plunger in a chamber; the classic forms are the Dounce homogenizer and the tissue lyser.",
++     "label": "homogenizer",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000124",
++   },
++   Object {
++     "curie": "LEQ:0000127",
++     "definition": "A device that removes water from a sample by freeze-drying (sublimation under vacuum), used to dry and preserve biological samples, proteins, and cell suspensions.",
++     "label": "lyophilizer",
++     "level": "concept",
++     "namespace": "LEQ",
++     "score": 0.8,
++     "source": "local-obo",
++     "tier": 2,
++     "uri": "https://brad-usredoxlabs.github.io/lab-ontologies/leq/LEQ_0000127",
++   },
++ ]
+
+ ❯ src/resolve/ResolveSpine.test.ts:182:57
+    180|     const withTier = createResolveSpine({ localOboProvider: createLoca…
+    181|     const out = await withTier.resolve('sample');
+    182|     expect(out.filter((c) => c.source === 'local-obo')).toEqual([]);
+       |                                                         ^
+    183|     // Base-equality: the single-token noun resolves identically with …
+    184|     const base = await createResolveSpine({}).resolve('sample');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/resolve/providers/localObo.test.ts > localObo provider > (f) match policy: single-token queries NEVER match on the definition arm (D1)
+AssertionError: expected [ Array(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "curie": "TST:0000010",
++     "definition": "A tray for holding material samples in bulk during a protocol.",
++     "label": "specimen tray",
++     "level": "concept",
++     "namespace": "TST",
++     "uri": "http://example.org/sdef/TST_0000010",
++   },
++   Object {
++     "curie": "TST:0000011",
++     "definition": "An opening where a sample enters the device.",
++     "label": "intake port",
++     "level": "concept",
++     "namespace": "TST",
++     "uri": "http://example.org/sdef/TST_0000011",
++   },
++ ]
+
+ ❯ src/resolve/providers/localObo.test.ts:162:25
+    160|     // label/synonym — pre-fix the definition arm admitted definition-…
+    161|     const single = await searchLocalObo('sample', 10, { registryPath: …
+    162|     expect(single.hits).toEqual([]);
+       |                         ^
+    163|     const plural = await searchLocalObo('samples', 10, { registryPath:…
+    164|     expect(plural.hits).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/resolve/providers/localObo.test.ts > localObo provider > (g) match policy: short content tokens (1-2 chars) never reach the definition arm (D1)
+AssertionError: expected [ { curie: 'TST:0000010', …(5) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "curie": "TST:0000010",
++     "definition": "A tray for holding material samples in bulk during a protocol.",
++     "label": "specimen tray",
++     "level": "concept",
++     "namespace": "TST",
++     "uri": "http://example.org/sdef/TST_0000010",
++   },
++ ]
+
+ ❯ src/resolve/providers/localObo.test.ts:179:28
+    177|     // LEQ:0000149/184/187) and flipped the seeded drive to ambiguous-…
+    178|     const materialB = await searchLocalObo('Material B', 10, { registr…
+    179|     expect(materialB.hits).toEqual([]);
+       |                            ^
+    180|     const shortTwo = await searchLocalObo('sample b', 10, { registryPa…
+    181|     expect(shortTwo.hits).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 17 passed (20)
+   Start at  17:30:22
+   Duration  1.57s (transform 118ms, setup 0ms, collect 906ms, tests 66ms, environment 0ms, prepare 1.15s)
+
+
+=== RED-2: THE regression gate at HEAD (base-green/HEAD-red) ===
+
+ RUN  v1.6.1 /home/brad/cl-wt/L2-ONTOLOGY-o6obo-lane2
+
+stdout | server/src/compiler/scientistIntent/wellsetSeededDrive.test.ts > WELLSET-RESOLVER-1 FIX2 D13 — seeded-priorState AC2 drive: NON-EMPTY union on the mix event > prior-seeded A1:H1 + same-doc add A2:H2 + token mix => mix ships the 16-well union + LWI-1 binding (never []==[])
+[D13-SEEDED-DRIVE] outcome: needs-clarification
+[D13-SEEDED-DRIVE] clarifications: ["ambiguous-noun"]
+[D13-SEEDED-DRIVE] mix count: 0 with computed_wells: 0
+[D13-SEEDED-DRIVE] computed_wells: []
+[D13-SEEDED-DRIVE] details: {}
+
+ ❯ server/src/compiler/scientistIntent/wellsetSeededDrive.test.ts  (1 test | 1 failed) 110ms
+   ❯ server/src/compiler/scientistIntent/wellsetSeededDrive.test.ts > WELLSET-RESOLVER-1 FIX2 D13 — seeded-priorState AC2 drive: NON-EMPTY union on the mix event > prior-seeded A1:H1 + same-doc add A2:H2 + token mix => mix ships the 16-well union + LWI-1 binding (never []==[])
+     → expected [ { label: 'Material B', …(3) } ] to deeply equal []
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  17:30:31
+   Duration  2.36s (transform 493ms, setup 0ms, collect 1.70s, tests 110ms, environment 0ms, prepare 64ms)
+
