@@ -137,6 +137,15 @@ function parseSourceKeywords(source: string): string[] {
   return keywords;
 }
 
+/**
+ * Keywords for a mapping: an explicit `keywords` list wins; otherwise the
+ * list is derived from `source` (unchanged fallback for maps without it).
+ */
+function keywordsFor(mapping: { source: string; keywords?: string[] }): string[] {
+  if (mapping.keywords && mapping.keywords.length > 0) return mapping.keywords;
+  return parseSourceKeywords(mapping.source);
+}
+
 // ---------------------------------------------------------------------------
 // Anchored label matching — keyword must start the label, not appear mid-text
 // ---------------------------------------------------------------------------
@@ -226,7 +235,7 @@ export function extractProposals(
   // Collect ALL keywords across every mapping for header detection
   const allKeywords: string[] = [];
   for (const mapping of fieldMap.fieldMappings) {
-    const kw = parseSourceKeywords(mapping.source);
+    const kw = keywordsFor(mapping);
     if (kw.length > 0) allKeywords.push(...kw);
   }
 
@@ -239,7 +248,7 @@ export function extractProposals(
   let lastHeader: { positions: Map<string, number>; count: number } | null = null;
 
   for (const mapping of fieldMap.fieldMappings) {
-    const keywords = parseSourceKeywords(mapping.source);
+    const keywords = keywordsFor(mapping);
     if (keywords.length === 0) continue;
     // Reset per-mapping so each field scans independently
     lastHeader = null;

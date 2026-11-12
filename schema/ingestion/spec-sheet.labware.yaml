@@ -57,5 +57,7 @@ targets:
         source: "Addressing type / Addressing (grid / linear / single)"
       - targetField: topology.rows
         source: "Number of rows / Rows / Row count"
+        keywords: ["number of rows", "rows"]
       - targetField: topology.columns
         source: "Number of columns / Columns / Column count"
+        keywords: ["number of columns", "columns"]
