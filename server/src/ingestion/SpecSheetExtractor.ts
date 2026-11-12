@@ -97,7 +97,10 @@ function applyTransform(value: string, transform: string | undefined): string {
  * "Number of columns" both reduced to "Number", so one sheet line filled both
  * fields (browser gate g6 D2). Keep the complement when the strip lands on
  * such a head — but ONLY for an "of" complement, so provenance tails like
- * "Quantity as stated on the sheet" still strip to "Quantity".
+ * "Quantity as stated on the sheet" still strip to "Quantity". The kept
+ * complement is itself cut at ITS next preposition: "Number of rows as stated
+ * on the sheet" keeps "Number of rows", never the whole alternative, which
+ * could not prefix-match the label "Number of rows: 8" (advc c1 D1).
  */
 const BARE_QUANTIFIER_HEADS = new Set(['number', 'no', 'count', 'quantity', 'total', 'amount']);
 
@@ -109,15 +112,20 @@ function parseSourceKeywords(source: string): string[] {
   const withoutParentheticals = source.replace(/\([^)]*\)/g, ' ');
   const alternatives = withoutParentheticals.split('/').map((s) => s.trim());
   const keywords: string[] = [];
-  const prepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with)\b/i;
+  const prepositionRe = /^(.+?)\s+(from|as|described|referenced|listed|on|in|of|with|for)\b/i;
 
   for (const alt of alternatives) {
     if (!alt) continue;
     const match = alt.match(prepositionRe);
     let phrase = match && typeof match[1] === 'string' ? match[1].trim() : alt.trim();
     const preposition = match && typeof match[2] === 'string' ? match[2].toLowerCase() : '';
-    if (preposition === 'of' && BARE_QUANTIFIER_HEADS.has(phrase.toLowerCase())) {
-      phrase = alt.trim();
+    if (preposition === 'of' && match && BARE_QUANTIFIER_HEADS.has(phrase.toLowerCase())) {
+      // Cut the complement at its own next preposition so the keyword remains a
+      // usable label prefix: "Number of rows as stated on the sheet" keeps
+      // "Number of rows" (advc c1 D1).
+      const complement = alt.slice(match[0].length).trim();
+      const tail = complement.match(prepositionRe);
+      phrase = tail && typeof tail[1] === 'string' ? `${phrase} of ${tail[1].trim()}` : alt.trim();
     }
     if (phrase) keywords.push(phrase);
   }
