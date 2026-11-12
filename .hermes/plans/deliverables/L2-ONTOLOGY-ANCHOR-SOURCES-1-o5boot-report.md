@@ -19,7 +19,7 @@ Base: 8d964dce81533f6d7fa70077853b059d60d91dcd (trunk cl/integration-2 tip at co
 ## Changed files (3 files, +82 / -2)
 - server/src/resolve/providers/localObo.ts  — `warmLocalOboSources` (+19)
 - server/src/server.ts                      — boot warm block after the OLS4 warm (+21)
-- server/src/resolve/providers/localObo.test.ts — cases (d)/(e) + row helper (+44/-2)
+- server/src/resolve/providers/localObo.test.ts — cases (d)/(e) + row helper (42 additions / 2 deletions, git diff --numstat)
 
 Commits:
 - a40c0ef2 o5boot: RED pins (d)(e) for boot warm of local-obo sources
@@ -71,4 +71,4 @@ Tree: `git -c core.fileMode=false status --short` → clean at exit.
 
 STATUS: complete
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-o5boot UNIT unit DONE bff41f407e5c3b4863d12494e8ec90af842c0be7
+L2-ONTOLOGY-ANCHOR-SOURCES-1 o5boot DONE 0000000000000000000000000000000000000000
