@@ -872,13 +872,16 @@ interface DraftContentRecoveryEntry {
 /** Read PER call (the forcedToolCompliance precedent: a DATA edit needs no
  *  restart). Missing or malformed throws, naming the path — never a silent-off
  *  default that would make the recovery path lie about what it accepts. */
-function loadDraftContentRecoveryPolicy(): DraftContentRecoveryEntry[] {
-  const policyPath = new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
-  const where = String(policyPath);
-  if (!existsSync(policyPath)) throw new Error(`draft-content recovery policy not found: ${where}`);
+function loadDraftContentRecoveryPolicy(policyPath?: string): DraftContentRecoveryEntry[] {
+  // Optional path is the narrow injectable seam a test uses to point the loader
+  // at a temp DATA file (advc C1 D1: witness the `enabled` gate, not just the
+  // shape pairing). Production callers pass nothing.
+  const policyFile = policyPath ?? new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
+  const where = String(policyFile);
+  if (!existsSync(policyFile)) throw new Error(`draft-content recovery policy not found: ${where}`);
   let raw: unknown;
   try {
-    raw = parseYaml(readFileSync(policyPath, 'utf8'));
+    raw = parseYaml(readFileSync(policyFile, 'utf8'));
   } catch (error) {
     throw new Error(`draft-content recovery policy unreadable: ${error instanceof Error ? error.message : String(error)}: ${where}`);
   }
@@ -905,8 +908,8 @@ function loadDraftContentRecoveryPolicy(): DraftContentRecoveryEntry[] {
 
 /** Driver a declared+enabled shape recovers as; null when the DATA does not
  *  declare (or has disabled) it. */
-function declaredDraftDriver(shape: DraftContentShape): RecoveredDraftDriver | null {
-  return loadDraftContentRecoveryPolicy().find((e) => e.shape === shape && e.enabled)?.driver ?? null;
+function declaredDraftDriver(shape: DraftContentShape, policyPath?: string): RecoveredDraftDriver | null {
+  return loadDraftContentRecoveryPolicy(policyPath).find((e) => e.shape === shape && e.enabled)?.driver ?? null;
 }
 
 /**
@@ -944,8 +947,11 @@ function extractShorthandYamlCandidate(content: string): { text: string; shape: 
  * or null when the content carries no usable draft JSON — in which case the
  * caller re-asks the model. Parsing this inline skips a second inference call.
  */
-export function coerceDraftArgsFromContent(content: unknown): Record<string, unknown> | null {
-  return recoverDraftArgsCore(content).args;
+export function coerceDraftArgsFromContent(
+  content: unknown,
+  policyPath?: string,
+): Record<string, unknown> | null {
+  return recoverDraftArgsCore(content, policyPath).args;
 }
 
 /** JSON/`<tool_call>` driver classification (unchanged: the envelope marker). */
@@ -964,7 +970,7 @@ interface DraftArgsRecovery {
  * One parse, one decision — the internal pass behind both public entry points
  * (coerce: args only; recover: args + driver + named refusal).
  */
-function recoverDraftArgsCore(content: unknown): DraftArgsRecovery {
+function recoverDraftArgsCore(content: unknown, policyPath?: string): DraftArgsRecovery {
   if (typeof content !== 'string') return { args: null, driver: null };
   const obj = extractJsonObject(content);
   if (obj) {
@@ -1004,7 +1010,7 @@ function recoverDraftArgsCore(content: unknown): DraftArgsRecovery {
   // never a second parser.
   const yamlCandidate = extractShorthandYamlCandidate(content);
   if (yamlCandidate) {
-    const driver = declaredDraftDriver(yamlCandidate.shape);
+    const driver = declaredDraftDriver(yamlCandidate.shape, policyPath);
     if (driver) {
       try {
         parseShorthandForChat(yamlCandidate.text);
@@ -1041,9 +1047,9 @@ export interface RecoveredDraft { driver: RecoveredDraftDriver }
  * Single source of truth: `args` AND the driver come from one internal pass
  * (recoverDraftArgsCore) — the caller never re-classifies the text.
  */
-export function recoverDraftArgsFromContent(content: unknown):
+export function recoverDraftArgsFromContent(content: unknown, policyPath?: string):
   { args: Record<string, unknown> | null; recoveredFrom: RecoveredDraft | null; refusal?: string } {
-  const recovered = recoverDraftArgsCore(content);
+  const recovered = recoverDraftArgsCore(content, policyPath);
   return {
     args: recovered.args,
     recoveredFrom: recovered.args !== null && recovered.driver ? { driver: recovered.driver } : null,

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { coerceDraftArgsFromContent, recoverDraftArgsFromContent } from './AgentOrchestrator.js';
 import { parseShorthandForChat } from './shorthandChat.js';
 
@@ -23,6 +26,14 @@ actions:
 const PROSE_MENTIONING_KEY =
   'The document needs a top-level intentId and an actions list, but this sentence is prose.';
 
+/** Write a temp recovery-policy DATA file (the loader's injectable path seam). */
+function tempPolicy(yaml: string): { path: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), 'cl-draft-policy-'));
+  const path = join(dir, 'draft-content-recovery.yaml');
+  writeFileSync(path, yaml);
+  return { path, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
 /** The validator's OWN reason — never re-derived by the recovery path. */
 function validatorReason(yaml: string): string {
   try {
@@ -44,6 +55,30 @@ describe('YAML shorthand recovery (C1)', () => {
     const result = recoverDraftArgsFromContent(DOCUMENT_YAML);
     expect(result.args).toEqual({ intent: 'event_shorthand', shorthand: DOCUMENT_YAML.trim() });
     expect(result.recoveredFrom?.driver).toBe('yaml-shorthand');
+  });
+
+  // advc C1 D1: the DATA gate is `enabled`, not just the shape pairing. Under a
+  // mutation that ignores the policy (`declaredDraftDriver -> 'yaml-shorthand'`)
+  // this leg goes RED; at HEAD it stays green.
+  it('does NOT recover a declared-but-disabled shape (`enabled: false` gates the arm)', () => {
+    const { path, cleanup } = tempPolicy(`shapes:
+  - shape: fenced-json
+    driver: fenced-json
+    enabled: true
+  - shape: fenced-yaml
+    driver: yaml-shorthand
+    enabled: false
+`);
+    try {
+      for (const content of ['```yaml\n' + DOCUMENT_YAML + '```', DOCUMENT_YAML]) {
+        const result = recoverDraftArgsFromContent(content, path);
+        expect(result.args).toBeNull();
+        expect(result.recoveredFrom).toBeNull();
+        expect(coerceDraftArgsFromContent(content, path)).toBeNull();
+      }
+    } finally {
+      cleanup();
+    }
   });
 
   it('does not recover a prose paragraph that merely mentions "intentId"', () => {
