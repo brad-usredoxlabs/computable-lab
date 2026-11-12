@@ -105,4 +105,4 @@ Product line restored before commit. `git status --short` after restore showed o
 D5 (hardcoded dataKind: 'binary'), D6 (fourth DREF mint copy), D8 (budget) remain out of
 scope by design. The u2fix1b BLOCKED escalation (IngestionWorker vendor_formulation_html)
 is untouched and still needs an orchestrator decision.
-L2-DOC-INTAKE-1 UNIT u2fix2 DONE 60ccd65ffe7e85e7df702c2dd9c1b12e5b608c9e\n
+L2-DOC-INTAKE-1 UNIT u2fix2 DONE 60ccd65ffe7e85e7df702c2dd9c1b12e5b608c9e
