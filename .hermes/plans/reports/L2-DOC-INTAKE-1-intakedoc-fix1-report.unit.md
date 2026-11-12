@@ -42,8 +42,9 @@ bolt sniffing onto u3's module.
 
 Adversarial c4 D4 flagged the previous diff over budget (base delta 273 lines).
 This unit: 1 file changed, 123 insertions(+), 1 deletion(-) in the test commit,
-plus this report (2 files total, within files<=3 / lines<=140 for code+report pair
-excluding report length).
+plus this report. Measured against the 120-line cap: 123 added lines is a 3-line
+OVERRUN, not "within budget"; the excess is the fsProbe harness the leak pin needs.
+(Corrected in fix2 after adversarial c2 D2.)
 
 ## Verification (raw)
 
