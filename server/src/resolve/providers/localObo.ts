@@ -131,7 +131,10 @@ export function parseObo(content: string): OboTerm[] {
     }
     if (line.startsWith('id: ')) current.id = line.slice(4).trim();
     else if (line.startsWith('name: ')) current.label = line.slice(6).trim();
-    else if (line.startsWith('def: ')) current.definition = quoted(line.slice(5));
+    else if (line.startsWith('def: ')) {
+      const definition = quoted(line.slice(5));
+      if (definition) current.definition = definition;
+    }
     else if (line.startsWith('synonym: ')) {
       const synonym = quoted(line.slice(9));
       if (synonym) current.synonyms.push(synonym);
@@ -160,9 +163,9 @@ function matchesQuery(term: OboTerm, tokens: string[]): boolean {
 function toHit(term: OboTerm, source: LocalOboSource): ProviderHit {
   const colon = term.curie.indexOf(':');
   const prefix = colon > 0 ? term.curie.slice(0, colon) : source.prefix;
-  const localId = colon > 0 ? term.curie.slice(colon + 1) : term.curie;
+  // OBO IRI convention: <namespace_iri>/<PREFIX>_<local id>.
   const uri = source.namespaceIri
-    ? `${source.namespaceIri.replace(/\/+$/, '')}/${localId.replace(/:/g, '_')}`
+    ? `${source.namespaceIri.replace(/\/+$/, '')}/${term.curie.replace(/:/g, '_')}`
     : undefined;
   return {
     curie: term.curie,

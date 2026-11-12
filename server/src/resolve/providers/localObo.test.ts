@@ -55,6 +55,7 @@ describe('localObo provider', () => {
     const hit = report.hits.find((h) => h.label.toLowerCase().includes('deep-well')) ?? report.hits[0]!;
     expect(hit.curie).toMatch(/^[A-Za-z][A-Za-z0-9]*:\d+$/);
     expect(hit.namespace).toBe(hit.curie.split(':')[0]);
+    expect(hit.uri ?? '').toContain(hit.curie.replace(':', '_'));
     expect(hit.label.length).toBeGreaterThan(0);
     expect(hit.definition ?? '').toContain('well');
   });
