@@ -93,7 +93,20 @@ const KIND_LEVEL: Record<string, ShelfReferentLevel> = {
   'labware-instance': 'labware-instance',
 };
 
-/** Cap on concept hits per query (mirrors the spine's default candidate limit). */
+/**
+ * Concept record kinds for the shelf's labware arm. The store holds TWO
+ * merged labware record families that both mean "a labware concept":
+ * records/seed/labware/* declares `kind: labware`, while
+ * records/seed/labware-definition/* declares `kind: labware-definition`.
+ * Read BOTH (the provider lists by record kind); the reported sourceKind
+ * stays 'labware-definition' for either family.
+ */
+const LABWARE_CONCEPT_KINDS = ['labware', 'labware-definition'];
+
+/**
+ * Cap on concept hits per query (mirrors the spine's default candidate limit).
+ * This is the cap on the MERGED labware concept list, not a per-family grant.
+ */
 const CONCEPT_LIMIT = 20;
 
 function payloadOf(record: RecordEnvelope): Record<string, unknown> {
@@ -147,6 +160,33 @@ async function listKind(store: RecordStore, kind: string): Promise<RecordEnvelop
   }
 }
 
+/**
+ * Merge per-family concept hits under ONE shared cap without starvation.
+ *
+ * Each family first takes up to an equal share (CEIL of the cap / families);
+ * the leftover slots are then backfilled in family order. So a family with
+ * plenty of matches can never consume the whole budget and erase a family
+ * that matches the term less often (advc probe P2: 20 `labware` hits used to
+ * leave zero `labware-definition` concepts). Within-family order is kept, so
+ * the merged list stays deterministic.
+ */
+function mergeFamiliesFairly(perFamily: ProviderHit[][], limit: number): ProviderHit[] {
+  const share = Math.ceil(limit / Math.max(perFamily.length, 1));
+  const merged: ProviderHit[] = [];
+  const leftovers: ProviderHit[][] = [];
+  for (const hits of perFamily) {
+    merged.push(...hits.slice(0, share));
+    leftovers.push(hits.slice(share));
+  }
+  for (const rest of leftovers) {
+    for (const hit of rest) {
+      if (merged.length >= limit) return merged;
+      merged.push(hit);
+    }
+  }
+  return merged.slice(0, limit);
+}
+
 const LEVEL_ORDER: Record<ShelfReferentLevel, number> = { instance: 0, lot: 1, aliquot: 2, 'labware-instance': 3 };
 
 /**
@@ -175,14 +215,23 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
       }));
       const conceptIds = new Set(concepts.map((c) => c.recordId));
 
-      // 1b. Labware definitions as concepts (separate provider, separate id set).
-      const lwProvider = createRecordProvider(store, ['labware-definition']);
-      let lwHits: ProviderHit[] = [];
-      try {
-        lwHits = await lwProvider(term, CONCEPT_LIMIT, controller.signal);
-      } catch {
-        lwHits = [];
-      }
+      // 1b. Labware concepts from BOTH merged record families (kind `labware`
+      //     and kind `labware-definition`; see LABWARE_CONCEPT_KINDS). One
+      //     provider call per family so the shared cap is applied AFTER the
+      //     merge by mergeFamiliesFairly — a single call over both kinds would
+      //     let the first family's 20 hits starve the second (advc P2).
+      const lwHits = mergeFamiliesFairly(
+        await Promise.all(
+          LABWARE_CONCEPT_KINDS.map(async (kind) => {
+            try {
+              return await createRecordProvider(store, [kind])(term, CONCEPT_LIMIT, controller.signal);
+            } catch {
+              return [] as ProviderHit[];
+            }
+          }),
+        ),
+        CONCEPT_LIMIT,
+      );
       const labwareDefIds = new Set<string>();
       for (const hit of lwHits) {
         const id = hit.curie.startsWith('local:') ? hit.curie.slice('local:'.length) : hit.curie;
