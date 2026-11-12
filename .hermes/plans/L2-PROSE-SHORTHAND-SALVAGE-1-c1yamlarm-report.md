@@ -15,9 +15,12 @@ success, recovers as the existing shorthand envelope
 `{ intent: 'event_shorthand', shorthand: <document verbatim> }` with
 `recoveredFrom.driver === 'yaml-shorthand'`. On rejection nothing is coerced: `args: null`,
 and the validator's OWN text (its `message` plus the first Ajv row: instance path + the
-schema's suggestion naming the offending value) rides `refusal` into the caller's existing
-notes channel (`extraSubmissionNotes`) plus a status event, so the caller's re-ask budget
-still runs. No second parser was added; `DRAFT_ARG_KEYS` / `SHORTHAND_ARG_KEYS`,
+schema's suggestion naming the offending value) rides `refusal` into the caller's STATUS
+channel only — the status event `Refused the shorthand draft in the model's text: <refusal>`.
+The code does push that text onto `extraSubmissionNotes` (:2853), but refusal paths never
+merge that array into `result.notes` (reviewer probe: notes=undefined on the event-editor
+result), so there is NO notes-channel delivery for a refused draft; the caller's re-ask
+budget still runs. No second parser was added; `DRAFT_ARG_KEYS` / `SHORTHAND_ARG_KEYS`,
 `parseShorthandForChat`, `shorthandChat.ts`, `coerceAgentIntent.ts`, the prompt text and the
 :2715 status line shape are untouched.
 
@@ -28,10 +31,11 @@ precedent: a DATA edit needs no restart; this is a deliberate deviation from the
 word "cached", justified by that file's own documented rule — no behaviour depends on
 caching), and throws naming the file path if it is missing or malformed.
 
-## Files changed (exactly the three owned paths)
+## Files changed (the three owned code/DATA paths, plus this report as the fourth file)
 - server/src/ai/AgentOrchestrator.ts
 - config/drafting/draft-content-recovery.yaml (new)
 - server/src/ai/coerceDraftArgs.yamlRecovery.test.ts (new)
+- .hermes/plans/L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlarm-report.md (this report — the fourth file)
 
 `git diff fb603a5c --name-only` lists exactly those three; `coerceDraftArgs.test.ts` is
 byte-identical to base (C1b pin, 10/10 green unmodified).
@@ -106,11 +110,13 @@ tree clean.
 - Stack not started; no YAML-reload exposure.
 
 ## Deliverable / budget note (disclosed, not silent)
-`git diff fb603a5c --stat` = 3 files changed, 285 insertions(+), 37 deletions(-). The
+At c1 HEAD f7a419d7, `git -c core.fileMode=false diff --stat fb603a5c..HEAD` = 4 files
+changed, 408 insertions(+), 37 deletions(-) — the fourth file is this report (the earlier
+"3 files" claim was wrong because the report commit itself is in the range). The
 200-line budget is exceeded; the overrun is comment/validation text plus the mechanical
 re-indent of the pre-existing `coerceDraftArgsFromContent` body into the single-pass core
 (~50 lines of pure indentation churn). No files were widened: still exactly the three owned
-paths. If the reviewer wants the budget met literally, the cheapest cut is the loader's
+code/DATA paths plus this report. If the reviewer wants the budget met literally, the cheapest cut is the loader's
 per-field named errors — flagged here rather than silently dropped.
 
 ## Next actions / remaining blockers
@@ -119,5 +125,34 @@ per-field named errors — flagged here rather than silently dropped.
   separate unit; this unit only guarantees the driver value exists and is emitted.
 - Nothing blocked; no config reload needed for the lane stack beyond the orchestrator's own
   restart when it next redeploys this branch (the DATA file is read per call).
+
+## fix1 — advc C1 defects D1-D4 (unit c1yamlarm-fix1)
+
+- D1 (MAJOR, test-only): added the leg "does NOT recover a declared-but-disabled shape
+  (`enabled: false` gates the arm)". It points the loader at a temp policy DATA file
+  (narrow seam: optional `policyPath` on `loadDraftContentRecoveryPolicy`,
+  `declaredDraftDriver`, `recoverDraftArgsCore` and the two public entry points; production
+  callers pass nothing) that declares `fenced-yaml` with `enabled: false`, and asserts args
+  null / no yaml driver frame.
+  Mutation proof M2a (`declaredDraftDriver` body -> `return 'yaml-shorthand';`):
+    FAIL  coerceDraftArgs.yamlRecovery.test.ts > ... does NOT recover a declared-but-disabled shape
+    AssertionError: expected { intent: 'event_shorthand', ...(1) } to be null  (line 75)
+    Tests 1 failed | 5 skipped (6)
+  Reverted: `Tests 8 passed (8)` (after D3 legs landed); at D1-only commit `6 passed (6)`.
+  No named refusal was added for a declared-but-disabled shape: that stays a silent drop,
+  because the existing `if (driver)` guard carries no refusal path without widening scope.
+- D2 (report): corrected the false claim — the refusal rides the STATUS channel only;
+  refusal paths never merge `extraSubmissionNotes` into `result.notes`.
+- D3: chose the documented FAIL-CLOSED contract over structural-only membership: one comment
+  line at the `DraftContentShape` declaration states the closed unions are what the extractor
+  /`RecoveredDraftDriver` can emit, so DATA naming anything else throws by name (a new shape
+  is a code change, never silently half-data). Pinned non-vacuously by two new legs: unknown
+  `shape` and unknown `driver` in temp DATA both throw naming the accepted vocabulary.
+- D4 (report): stat line now quotes the f7a419d7 range (4 files, 408 insertions(+),
+  37 deletions(-)) and names this report as the fourth file.
+
+Verification: `timeout 300 npx vitest run server/src/ai/coerceDraftArgs.yamlRecovery.test.ts`
+= 8 passed (8); `cd server && timeout 240 npx tsc --noEmit` = rc 0.
+Code commits: 9021ad4e (D1), 8cc3550f (D3).
 
 L2-PROSE-SHORTHAND-SALVAGE-1-c1yamlarm UNIT unit DONE 102085a1c3b2ebb8c557c924fa46192e34bc39f0
