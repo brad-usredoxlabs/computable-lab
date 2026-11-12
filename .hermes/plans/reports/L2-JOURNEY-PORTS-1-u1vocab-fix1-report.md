@@ -110,4 +110,41 @@ Diff size: 1 file changed, 19 insertions(+), 4 deletions(-) (budget 40 lines / 1
    for this unit (test-only change).
 3. Adversarial c1's D1/D2 are the whole scope; nothing else in the file was modified.
 
-L2-JOURNEY-PORTS-1 UNIT u1vocab-fix1 DONE cff3904d6d70235686f7a1a8c8d4b423e0215d7d
+## Re-verification (fix-run pass 2, no new code change needed)
+
+Pass-1 output above was re-checked first-hand at HEAD f2545240 (tree clean, shipped schema
+untouched). No assertion needed to change; only the exit marker line's format was corrected
+to the launcher's `ITEM UNIT unit DONE <sha>` shape.
+
+    $ npx vitest run src/schema/JourneyPortSchema.test.ts
+     ✓ src/schema/JourneyPortSchema.test.ts  (9 tests) 378ms
+     Test Files  1 passed (1)
+          Tests  9 passed (9)
+
+    $ npx tsc -p tsconfig.json --noEmit   -> TSC_EXIT=0
+
+Probe (a), root `additionalProperties: false` deleted from the worktree YAML:
+
+     → root.additionalProperties: expected undefined to be false // Object.is equality
+     FAIL  ... > declares every port as a closed object, so extra properties are refused
+     129|     expect(doc().additionalProperties, 'root.additionalProperties').to…
+          Tests  1 failed | 8 passed (9)
+
+Probe (b), `receipt_id` added to StagedDraftReference properties + required:
+
+     → the single shared required field (version): expected 2 to be 1 // Object.is equality
+     FAIL  ... > refuses a staged draft carrying committed-record properties (closed shape)
+     167|     expect(sharedRequired.length, 'the single shared required field (v…
+
+Probe (b'), properties-only variant (exercises the sharedProps equality line):
+
+     AssertionError: staged and committed share only that field:
+       expected [ 'version', 'receipt_id' ] to deeply equal [ 'version' ]
+          Tests  1 failed | 8 passed (9)
+
+All three probes reverted via `git checkout -- schema/workflow/journey-port.schema.yaml`;
+post-revert run 9/9 green and `git status --porcelain` clean.
+
+## Marker (names the code commit carrying the pins)
+
+L2-JOURNEY-PORTS-1-u1vocab-fix1 UNIT unit DONE cff3904d6d70235686f7a1a8c8d4b423e0215d7d
