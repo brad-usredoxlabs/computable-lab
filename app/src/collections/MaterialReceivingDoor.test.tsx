@@ -142,6 +142,24 @@ describe('MaterialReceivingDoor', () => {
     expect(claim.occurredAtStatus).toBe('unknown')
   })
 
+  it('makes the unknown-status discard explicit: name input disabled with a cue, claim carries no receivedByLabel', async () => {
+    renderDoor()
+    fillClaim()
+    type('material-receiving-received-by-status', 'known')
+    type('material-receiving-received-by-label', 'Brad')
+    type('material-receiving-received-by-status', 'unknown')
+    const nameInput = screen.getByTestId('material-receiving-received-by-label')
+    // u6fix2: the typed name stays visible (value retained) but the discard is explicit.
+    expect(nameInput).toBeDisabled()
+    expect(nameInput).toHaveValue('Brad')
+    expect(screen.getByTestId('material-receiving-received-by-cue')).toBeDefined()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await waitFor(() => expect(compileSpy).toHaveBeenCalledTimes(1))
+    const claim = (compileSpy.mock.calls[0][0] as { intent: { claim: Record<string, unknown> } }).intent.claim
+    expect('receivedByLabel' in claim).toBe(false)
+    expect(claim.receivedByStatus).toBe('unknown')
+  })
+
   it('rapid double submit hits the busy guard: exactly one compile, no accept/create', async () => {
     renderDoor()
     fillClaim()

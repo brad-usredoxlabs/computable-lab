@@ -152,9 +152,13 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
             onChange={setLotNumber} tid="material-receiving-lot-number" />
           <StatusSelect id="recv-received-by-status" label="Received by (status)" value={receivedByStatus}
             onChange={setReceivedByStatus} tid="material-receiving-received-by-status" />
-          {receivedByStatus !== 'unknown' && (
-            <Text id="recv-received-by-label" label="Received by (name)" value={receivedByLabel}
-              onChange={setReceivedByLabel} tid="material-receiving-received-by-label" />
+          <Text id="recv-received-by-label" label="Received by (name)" value={receivedByLabel}
+            onChange={setReceivedByLabel} tid="material-receiving-received-by-label"
+            disabled={receivedByStatus === 'unknown'} />
+          {receivedByStatus === 'unknown' && (
+            <p className="lab-modal__hint" data-testid="material-receiving-received-by-cue">
+              not sent while status is unknown
+            </p>
           )}
           <StatusSelect id="recv-occurred-status" label="Arrival date (status)" value={occurredAtStatus}
             onChange={setOccurredAtStatus} tid="material-receiving-occurred-at-status" />
