@@ -86,6 +86,17 @@ import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
 import type { StorageHandlers } from './handlers/StorageHandlers.js';
 import type { AnalysisHandlers } from './handlers/AnalysisHandlers.js';
 import type { HealthResponse } from './types.js';
+import { fileURLToPath } from 'node:url';
+import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
+import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
+
+/**
+ * L2-JOURNEY-CAPABILITY-CATALOGUE-1: the shipped catalogue directory, resolved
+ * repo-relative exactly like forcedToolCompliance.ts:20 — never from cwd.
+ */
+const DEFAULT_JOURNEY_CATALOGUE_DIR = fileURLToPath(
+  new URL('../../../config/journey/capabilities', import.meta.url),
+);
 
 /**
  * Options for registering routes.
@@ -182,6 +193,12 @@ export interface RouteOptions {
   uiSpecCount?: () => number;
   aiInfo?: { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string };
   getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string } | undefined;
+  /**
+   * L2-JOURNEY-CAPABILITY-CATALOGUE-1: directory of capability descriptor YAML.
+   * Absent => the shipped repo-relative config/journey/capabilities. Optional so
+   * every existing registerRoutes caller is untouched.
+   */
+  journeyCatalogueDir?: string;
 }
 
 /**
@@ -295,6 +312,34 @@ export function registerRoutes(
   if (relatedRecordsHandlers) {
     fastify.get('/records/:id/related', relatedRecordsHandlers.getRelatedRecords.bind(relatedRecordsHandlers));
   }
+
+  // ============================================================================
+  // Journey Capability Catalogue (L2-JOURNEY-CAPABILITY-CATALOGUE-1)
+  // ============================================================================
+  // Read-only served surface for the admitted capability catalogue. The directory
+  // is re-read PER REQUEST (no module cache), so a YAML-only capability needs no
+  // TypeScript change. Admission — Ajv shape plus handler_ref membership — is
+  // unit 2's loadCapabilityCatalogueDir/admitCapabilityCatalogue; the known set is
+  // the shipped AGENT_ALLOWED_TOOLS, never a literal list here. A rejection is a
+  // 200 carrying diagnostics, never a 500 and never a silently empty list.
+  fastify.get('/journey/capabilities', async () => {
+    const dir = options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR;
+    try {
+      const admitted = await loadCapabilityCatalogueDir(dir, new Set(AGENT_ALLOWED_TOOLS));
+      return {
+        capabilities: admitted.capabilities,
+        diagnostics: admitted.ok ? [] : admitted.diagnostics,
+      };
+    } catch (error) {
+      // Absent/unreadable directory: an empty catalogue WITH a named diagnostic.
+      return {
+        capabilities: [],
+        diagnostics: [
+          `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
+        ],
+      };
+    }
+  });
 
   // Identity / groups / sharing (optional - requires identityHandlers)
   const { identityHandlers, authHandlers } = options;
