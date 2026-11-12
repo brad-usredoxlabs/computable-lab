@@ -192,4 +192,4 @@ cd server && npx tsc --noEmit -p .
 git status --porcelain → clean at exit (code+test committed in 1eb221b7; report after)
 ```
 
-L2-DOC-INTAKE-1 UNIT dintakeu3-fix1 DONE 1eb221b7aa19b75706cf15f01b587454ae94b18b
+L2-DOC-INTAKE-1 UNIT dintakeu3-fix1 DONE c767a86c0800dc9111ccba04af7a1c3250f84bb5
