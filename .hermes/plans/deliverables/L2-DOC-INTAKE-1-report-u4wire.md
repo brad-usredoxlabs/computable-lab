@@ -100,3 +100,6 @@ before any browser receipt.
 - `cd server && npx vitest run src/vendor-documents/service.test.ts src/ingestion/documentIntake.test.ts`
 - `cd server && npx tsc --noEmit -p .`
 - `git -c core.fileMode=false status --short`
+
+L2-DOC-INTAKE-1 UNIT 4 DONE 5c973c32d002f4e81a6706d06a0753532c14cdc0
+L2-DOC-INTAKE-1-u4wire UNIT unit DONE 5c973c32d002f4e81a6706d06a0753532c14cdc0
