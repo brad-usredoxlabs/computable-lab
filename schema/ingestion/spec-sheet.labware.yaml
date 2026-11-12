@@ -52,5 +52,7 @@ targets:
         source: "Addressing type (grid/linear/single) from the sheet"
       - targetField: topology.rows
         source: "Number of rows for grid addressing"
+        keywords: ["number of rows", "rows"]
       - targetField: topology.columns
         source: "Number of columns for grid addressing"
+        keywords: ["number of columns", "columns"]

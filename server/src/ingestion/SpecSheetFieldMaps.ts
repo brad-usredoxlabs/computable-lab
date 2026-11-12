@@ -19,6 +19,8 @@ export interface FieldMapping {
   transform?: string;
   unit?: string;
   required?: boolean;
+  /** Literal label prefixes overriding the keywords derived from `source`. */
+  keywords?: string[];
 }
 
 export interface SpecSheetFieldMap {

@@ -124,6 +124,12 @@ properties:
                 type: boolean
                 default: false
                 description: "The sheet must state this for the proposal to be considered complete."
+              keywords:
+                type: array
+                minItems: 1
+                items:
+                  type: string
+                description: "Literal label prefixes for matching this mapping; overrides the keyword list derived from `source`."
         defaults:
           type: object
           description: "Default values for fields not in the source."
