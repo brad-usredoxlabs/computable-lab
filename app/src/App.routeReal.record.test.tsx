@@ -8,22 +8,18 @@
  * mocked. App.url.test.tsx:48 mocks RecordHostPage wholesale, so its 6/6 green cannot see a
  * chunk that rejects or stalls at module-evaluation time. This pin documents that failure.
  *
- * EXPECTED WHILE THE DEFECT IS OPEN (jsdom): the chunk REJECTS at module-evaluation —
- * usePdfDocument.ts:15 `import * as pdfjsLib from 'pdfjs-dist'` evaluates
- * pdfjs-dist@5.4.296/build/pdf.mjs:9387 `const SCALE_MATRIX = new DOMMatrix()` at module
- * scope, which throws `ReferenceError: DOMMatrix is not defined` (jsdom 29.1.1 has no
- * DOMMatrix; real browsers do). The lazy import rejects, Suspense stays on "Loading...",
- * the host surface never paints, and this test FAILS (that failure IS the pin).
- *
- * In the served browser (g2 receipt DOC-INTAKE-browser-g2-l2t1335) the same oversized eager
- * chunk (167 app modules + ~1 MB pdfjs) does NOT throw (no console/page errors) but
- * COLD-TRANSFORMS too slowly to resolve within 30 s (perfs: 2.2 KB -> 1802 ms, 6.4 KB ->
- * 2603 ms; zero /api/records/* + /api/ui/record/*). Same root cause: the RecordHostPage lazy
- * chunk is oversized. FOLLOW-UP UNIT: code-split the PDF/editing subtree out of the eager
- * RecordHostPage chunk (lazy-load the PDF subtree; ideally the whole editing subtree).
+ * REPAIRED (d5attr k=1, 2026-11-12): the static `import * as pdfjsLib from
+ * 'pdfjs-dist'` in usePdfDocument.ts:15 replaced by a lazy `import('pdfjs-dist')`
+ * on first real use, so pdfjs-dist is no longer in the RecordHostPage chunk's
+ * static graph. This test is now the GREEN regression pin: the real chunk must
+ * resolve and paint within 3000 ms with no component mocks.
+ * FOLLOW-UP (optional, named for the record): the served-browser perfs slowness
+ * (cold transform ~2.6 s) suggests further code-splitting of the PDF/editing
+ * subtree out of the RecordHostPage chunk.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 
 // Trunk idiom (GcEvidenceRunPage.route.test.tsx:42): `virtual:cla-ai-overlay` is not
 // resolvable in the vitest transform; Slot is the /event-editor/fixit route, not this pin.
@@ -35,7 +31,7 @@ vi.mock('react-router-dom', async (original) => {
   const real = (await original()) as typeof import('react-router-dom')
   return {
     ...real,
-    BrowserRouter: ({ children }: { children: unknown }) => (
+    BrowserRouter: ({ children }: { children: ReactNode }) => (
       <real.MemoryRouter initialEntries={[window.location.pathname]}>{children}</real.MemoryRouter>
     ),
   }
