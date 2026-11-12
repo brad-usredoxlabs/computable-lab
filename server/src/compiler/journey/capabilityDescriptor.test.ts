@@ -1,14 +1,11 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-CAPABILITY-CATALOGUE-1 (unit u1schema), RED-first.
- *
- * The deliverable is the contract, so Ajv alone must decide valid vs invalid:
- * there is no TypeScript descriptor type and no test-only branch. The
- * capability schema and the shipped journey-port vocabulary are both added to
- * one Ajv instance, so the descriptor's RELATIVE
- * `./journey-port.schema.yaml#/$defs/<Name>` refs have to resolve at compile
- * time. A broken ref throws there; deliberately no try/catch around compile,
- * because a caught compile error would hide exactly the failure this pins.
+ * L2-JOURNEY-CAPABILITY-CATALOGUE-1 (unit u1schema), RED-first: Ajv alone decides
+ * valid vs invalid — no TS descriptor type, no test-only branch. Both schemas are
+ * added to one Ajv instance, so the descriptor's RELATIVE
+ * `./journey-port.schema.yaml#/$defs/<Name>` refs must resolve at compile time.
+ * Deliberately no try/catch around compile: a caught compile error would hide the
+ * one failure this pin exists for.
  */
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
@@ -17,8 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-const SCHEMA_DIR = join(
-  fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow');
+const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow');
 const load = async (name: string): Promise<Record<string, any>> =>
   parseYaml(await readFile(join(SCHEMA_DIR, name), 'utf8')) as Record<string, any>;
 
@@ -28,7 +24,7 @@ const capabilitySchema = await load('capability-descriptor.schema.yaml');
 ajv.addSchema(capabilitySchema);
 const validate = ajv.compile(capabilitySchema);
 
-/** Fresh sample each call: a capability that reads a committed sequence set. */
+/** Fresh sample each call: a capability reading a committed sequence set. */
 const descriptor = (): Record<string, any> => ({
   capability_id: 'journey.align-sequences',
   version: '1.0.0',
@@ -62,12 +58,9 @@ describe('capability descriptor schema (Ajv is the sole authority)', () => {
 
   it('resolves the relative $ref into the journey-port vocabulary, and the port stays closed', () => {
     const material = descriptor();
-    material.ports.input = [
-      { version: '1.0.0', material_id: 'MAT-1', provenance_layer: 'aliquot' },
-    ];
+    material.ports.input = [{ version: '1.0.0', material_id: 'MAT-1', provenance_layer: 'aliquot' }];
     expect(validate(material), JSON.stringify(validate.errors)).toBe(true);
-
-    // Vocabulary shape actually applies: MaterialReference requires provenance_layer.
+    // The vocabulary's own closure applies: MaterialReference requires provenance_layer.
     const unrestated = descriptor();
     unrestated.ports.input = [{ version: '1.0.0', material_id: 'MAT-1' }];
     expect(validate(unrestated)).toBe(false);
@@ -77,8 +70,8 @@ describe('capability descriptor schema (Ajv is the sole authority)', () => {
   it('rejects an unknown top-level field (unevaluatedProperties bites)', () => {
     const doc = { ...descriptor(), tab_order: 'new-prefill' };
     expect(validate(doc)).toBe(false);
-    const err = errorsFor(doc).find((e) => e.keyword === 'unevaluatedProperties');
-    expect(err?.params).toMatchObject({ unevaluatedProperty: 'tab_order' });
+    expect(errorsFor(doc).find((e) => e.keyword === 'unevaluatedProperties')?.params)
+      .toMatchObject({ unevaluatedProperty: 'tab_order' });
   });
 
   it('rejects an invented handler_kind', () => {
@@ -94,7 +87,6 @@ describe('capability descriptor schema (Ajv is the sole authority)', () => {
     agent.implementation = { handler_kind: 'agent_tool', handler_ref: 'tools.commit_record' };
     expect(validate(agent)).toBe(false);
     expect(errorsFor(agent).some((e) => e.instancePath === '/implementation/handler_kind')).toBe(true);
-
     const governed = descriptor();
     governed.effects = ['domain_mutation'];
     governed.implementation = { handler_kind: 'governed_write', handler_ref: 'records.commit' };
@@ -115,7 +107,6 @@ describe('capability descriptor schema (Ajv is the sole authority)', () => {
     expect(validate(missing)).toBe(false);
     expect(errorsFor(missing).some((e) => e.instancePath === '/status' && e.keyword === 'required'))
       .toBe(true);
-
     const extra = descriptor();
     extra.status.shipped = true;
     expect(validate(extra)).toBe(false);
