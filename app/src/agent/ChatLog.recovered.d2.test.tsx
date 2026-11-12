@@ -46,6 +46,15 @@ vi.mock('../api/client', () => ({
   },
 }))
 
+// The re-key leg below mounts with an endpoint+scope, so the thread transport
+// must answer without a network: every thread reads as EMPTY (the wipe is the
+// only thing that can clear the transcript) and appends are no-ops.
+vi.mock('../shared/api/aiThreadClient', () => ({
+  getThread: vi.fn(async () => ({ endpoint: 'browser', userId: 'USR-TEST', messages: [], mentions: [], updatedAt: '1970-01-01T00:00:00.000Z' })),
+  appendThreadMessage: vi.fn(async () => ({ ok: true })),
+  listThreads: vi.fn(async () => ({ threads: [] })),
+}))
+
 afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
@@ -116,6 +125,44 @@ describe('drafting-surface recovery marker — hook (useAiChat)', () => {
       h.result.current.sendPrompt('again')
     })
     await waitFor(() => expect(h.result.current.isStreaming).toBe(false), { timeout: 4000 })
+    expect(h.result.current.statusRecoveredFrom).toBeNull()
+  })
+
+  it('a plain status frame LATER IN THE SAME TURN clears the marker', async () => {
+    // advc c1 D2: the leg above clears via the send reset (:1265), so the
+    // per-frame write's `?? null` (:1499) was never witnessed. Both frames
+    // ride ONE turn: the recovered status sets the marker, the following
+    // plain status must clear it with no send/reset in between.
+    const h = await runTurn(
+      { type: 'status', message: 'Draft recovered from the model text', recoveredFrom: { driver: 'yaml-shorthand' } },
+      { type: 'status', message: 'Summarizing the draft' },
+      { type: 'done', result: { success: true, events: [], notes: [] } },
+    )
+    expect(h.result.current.statusRecoveredFrom).toBeNull()
+  })
+
+  it('a thread re-key wipe clears the marker with the transcript', async () => {
+    // advc c1 D1: the idle re-key arm (:1056) wipes the transcript; the
+    // marker belonged to the messages it just dropped, so it must go too —
+    // otherwise a FRESH EMPTY transcript renders a recovery marker.
+    frames(
+      { type: 'status', message: 'Draft recovered from the model text', recoveredFrom: { driver: 'yaml-shorthand' } },
+      { type: 'done', result: { success: true, events: [], notes: [] } },
+    )
+    const h = renderHook(
+      ({ scope }: { scope: string }) => useAiChat({ aiContext, endpoint: 'browser', scope }),
+      { initialProps: { scope: 'DECK-A' } },
+    )
+    await act(async () => {
+      h.result.current.sendPrompt('draft it')
+    })
+    await waitFor(() => expect(h.result.current.isStreaming).toBe(false), { timeout: 4000 })
+    expect(h.result.current.statusRecoveredFrom).toEqual({ driver: 'yaml-shorthand' })
+    expect(h.result.current.messages.length).toBeGreaterThan(0)
+    // Idle (no turn in flight): the scope change re-keys to a DIFFERENT
+    // (scope, threadId) pair and the wipe arm fires.
+    h.rerender({ scope: 'DECK-B' })
+    await waitFor(() => expect(h.result.current.messages).toHaveLength(0), { timeout: 4000 })
     expect(h.result.current.statusRecoveredFrom).toBeNull()
   })
 })
