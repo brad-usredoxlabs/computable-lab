@@ -1,39 +1,50 @@
-# L2-SPEC-SHEET-INGEST-1 / f3verify2 Report
+# L2-SPEC-SHEET-INGEST-1 / f3verify2 — probe report
 
-Verification-only unit. Base: `18b36804345785500868bcd221533aee60bab39e`
-(branch `cl/lane2-specsheet-doorb1-0114`, clean tree at start, no rebase/merge).
-The three f3fix3 majors are exercised by applying each mutation probe ALONE,
-recording the raw RED, and reverting.
+Item: `L2-SPEC-SHEET-INGEST-1-f3verify2` (lane 2, re-cut of f3verify)
+Branch: `cl/lane2-specsheet-doorb1-0114`
+Base: `18b36804345785500868bcd221533aee60bab39e` (f3fix3 `WIP AT EXIT` commit)
+HEAD at verification start: `3f010692708cdbb773161856acdab4c8ff17738d`
 
-## Result
+`18b36804` is an ancestor of HEAD; the whole delta is this unit's own work:
 
-| probe | target | verdict |
+```
+A  server/src/api/handlers/L2-SPEC-SHEET-INGEST-1-f3verify2-report.md
+M  server/src/schema/composedProperties.test.ts
+```
+
+The test extension was produced by the first pass of this unit (commit `046cd5af`):
+P1's pin was vacuous, so a pin was added. This revision re-ran all three probes
+first-hand on the tree above. Every raw block below is from these runs.
+
+## Verdict
+
+| probe | mutation | raw result |
 |---|---|---|
-| P1 (D3 wiring) | `server.ts:804` factory bypass | first run GREEN → pin was vacuous; test extended; re-run RED |
-| P2 (D2 cycle guard) | `composedProperties.ts:40` `$id`-keyed guard | RED on first run |
-| P3 (D4 strictness) | `composedProperties.ts:61` unevaluatedProperties arm | RED on first run |
+| P1 (D3 wiring) | `server.ts:804` factory bypass | RED — 1 failed \| 18 passed (19) |
+| P2 (D2 cycle guard) | `composedProperties.ts:40` `$id`-keyed guard | RED — 2 failed \| 17 passed (19) |
+| P3 (D4 strictness) | `composedProperties.ts:61` `unevaluatedProperties` arm | RED — 2 failed \| 17 passed (19) |
 
-Product files are BYTE-IDENTICAL at exit (`composedProperties.ts`, `server.ts`).
-Only the test file changed: +2 cases (9 existing kept), 11+8 = 19 green.
+Product files are BYTE-IDENTICAL to base at exit. Only the test file changed
+(9 existing cases kept, +2 wiring cases).
 
-## Baseline (base 18b36804, clean tree)
+## Baseline at base (test file restored to `18b36804`)
 
 ```
-cd server && node node_modules/vitest/vitest.mjs run \
-  src/schema/composedProperties.test.ts \
-  src/api/handlers/RecordHandlers.provenanceInjection.test.ts
-```
-```
- ✓ src/api/handlers/RecordHandlers.provenanceInjection.test.ts  (8 tests) 6ms
- ✓ src/schema/composedProperties.test.ts  (9 tests) 281ms
+$ cd server && node node_modules/vitest/vitest.mjs run \
+    src/schema/composedProperties.test.ts \
+    src/api/handlers/RecordHandlers.provenanceInjection.test.ts
+ ✓ src/api/handlers/RecordHandlers.provenanceInjection.test.ts  (8 tests) 5ms
+ ✓ src/schema/composedProperties.test.ts  (9 tests) 274ms
 
  Test Files  2 passed (2)
       Tests  17 passed (17)
 ```
+Restored afterwards: `git checkout HEAD -- ...composedProperties.test.ts` →
+`git -c core.fileMode=false status --short` empty.
 
-## P1 — D3 wiring (`server.ts:804`)
+## P1 — D3 wiring (`server/src/server.ts:804`)
 
-Edit applied verbatim (single line replaced, 17 lines in):
+Edit applied alone (verbatim diff of the only hunk):
 
 ```diff
 -      getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),
@@ -53,36 +64,15 @@ Edit applied verbatim (single line replaced, 17 lines in):
 +      },
 ```
 
-First run — STAYED GREEN (the finding):
+Raw result — RED:
 
 ```
- ✓ src/api/handlers/RecordHandlers.provenanceInjection.test.ts  (8 tests) 6ms
- ✓ src/schema/composedProperties.test.ts  (9 tests) 289ms
+❯ src/schema/composedProperties.test.ts  (11 tests | 1 failed) 488ms
+   ❯ src/schema/composedProperties.test.ts > D3 wiring — server.ts → RecordHandlers > server.ts wires getSchemaProperties to makeGetSchemaProperties(ctx.schemaRegistry)
+     → expected 'getSchemaProperties: (probeSchemaId: …' to be 'getSchemaProperties: makeGetSchemaPro…' // Object.is equality
 
- Test Files  2 passed (2)
-      Tests  17 passed (17)
-```
-
-Diagnosis: `composedProperties.test.ts:149` constructs `makeGetSchemaProperties`
-itself; it never reads `server.ts`, so mutating the wiring site could not fail
-any test. The pin was vacuous at the wiring seam (no product defect — the
-factory behaviour was already pinned).
-
-Repair (test only — `server/src/schema/composedProperties.test.ts`, new
-`D3 wiring — server.ts → RecordHandlers` describe):
-1. asserts `server.ts` has exactly one `getSchemaProperties:` wiring line and
-   that it is `makeGetSchemaProperties(ctx.schemaRegistry)` — any inline
-   raw-`$id`/top-level lookup fails it;
-2. drives `createRecordHandlers` with the real registry factory and asserts an
-   aliquot create receives `createdAt`/`updatedAt`/`createdBy` (provenance via
-   FAIRCommon, never via `allowsAny`).
-
-P1 re-run after the repair — RED:
-
-```
- ❯ src/schema/composedProperties.test.ts (11 tests | 1 failed)
-   ❯ ... > server.ts wires getSchemaProperties to makeGetSchemaProperties(ctx.schemaRegistry)
-     → expected 'getSchemaProperties: (probeSchemaId: …' to be 'getSchemaProperties: makeGetSchemaPro…'
+- Expected
++ Received
 
 - getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),
 + getSchemaProperties: (probeSchemaId: string) => {
@@ -91,54 +81,47 @@ P1 re-run after the repair — RED:
       Tests  1 failed | 18 passed (19)
 ```
 
-Revert proof (`git checkout -- server/src/server.ts`):
-`git -c core.fileMode=false status --short` → (empty)
+Revert: `git checkout -- server/src/server.ts` →
+`git -c core.fileMode=false status --short` empty.
 
-## P2 — D2 cycle guard (`composedProperties.ts:40`)
+## P2 — D2 cycle guard (`server/src/schema/composedProperties.ts:40`)
 
-Edit applied verbatim:
+Edit applied alone (verbatim diff):
 
 ```diff
 -  const visited = new Set<Record<string, unknown>>();
 +  const visited = new Set<string | undefined>();
 ...
--  function walk(obj: Record<string, unknown>) {
 -    if (visited.has(obj)) {
--      // Cycle detected — skip this branch
--      return;
--    }
--    visited.add(obj);
-+  function walk(obj: Record<string, unknown>) {
 +    // P2 PROBE (D2): old $id-keyed guard, inert on nodes without $id.
 +    const id = (obj.$id as string) ?? undefined;
 +    if (id !== undefined && visited.has(id)) {
-+      // Cycle detected — skip this branch
-+      return;
-+    }
-+    visited.add(id);
 ```
 
-Raw result — RED:
+Raw result — RED (both cycle fixtures):
 
 ```
- ❯ src/schema/composedProperties.test.ts (9 tests | 1 failed)
-   ❯ ... > fragment-pointer cycle without $id terminates
-     → expected [Function] to not throw an error but 'RangeError: Maximum call stack size e…' was thrown
+FAIL  src/schema/composedProperties.test.ts > getComposedProperties > terminates on $ref cycle without throwing
+FAIL  src/schema/composedProperties.test.ts > makeGetSchemaProperties — real registry > fragment-pointer cycle without $id terminates
+AssertionError: expected [Function] to not throw an error but 'RangeError: Maximum call stack size e…' was thrown
 
-- Expected: undefined
-+ Received: "RangeError: Maximum call stack size exceeded"
+- Expected:
+undefined
 
- ❯ src/schema/composedProperties.test.ts:221:61
++ Received:
+"RangeError: Maximum call stack size exceeded"
+
+ ❯ src/schema/composedProperties.test.ts:224:61
 
  Test Files  1 failed | 1 passed (2)
-      Tests  1 failed | 16 passed (17)
+      Tests  2 failed | 17 passed (19)
 ```
 
-Revert proof: `git -c core.fileMode=false status --short` → (empty)
+Revert: `git checkout -- server/src/schema/composedProperties.ts` → status empty.
 
-## P3 — D4 strictness (`composedProperties.ts:61`)
+## P3 — D4 strictness (`server/src/schema/composedProperties.ts:61`)
 
-Edit applied verbatim:
+Edit applied alone (verbatim diff):
 
 ```diff
 -    if (obj.additionalProperties === false || obj.unevaluatedProperties === false) {
@@ -146,65 +129,66 @@ Edit applied verbatim:
 +    if (obj.additionalProperties === false) {
 ```
 
-Raw result — RED (2 cases):
+Raw result — RED (aliquot strictness plus the dedicated `unevaluatedProperties` case):
 
 ```
- FAIL ... > aliquot resolves FAIRCommon via relative ref and reports strict
-AssertionError: expected true to be false  (composedProperties.test.ts:158 allowsAny)
-
- FAIL ... > unevaluatedProperties: false makes allowsAny false
-AssertionError: expected true to be false  (composedProperties.test.ts:179 allowsAny)
-
- Test Files  1 failed | 1 passed (2)
-      Tests  2 failed | 15 passed (17)
+ FAIL  src/schema/composedProperties.test.ts > makeGetSchemaProperties — real registry > aliquot resolves FAIRCommon via relative ref and reports strict
+AssertionError: expected true to be false // Object.is equality
+ FAIL  src/schema/composedProperties.test.ts > makeGetSchemaProperties — real registry > unevaluatedProperties: false makes allowsAny false
+AssertionError: expected true to be false // Object.is equality
+      Tests  2 failed | 17 passed (19)
 ```
 
-Revert proof: `git -c core.fileMode=false status --short` → (empty)
+Revert: `git checkout -- server/src/schema/composedProperties.ts` → status empty.
 
-## Final green (after revert; 9 + 2 new + 8)
+## Final green (after all three reverts)
 
 ```
  ✓ src/api/handlers/RecordHandlers.provenanceInjection.test.ts  (8 tests) 5ms
- ✓ src/schema/composedProperties.test.ts  (11 tests) 501ms
+ ✓ src/schema/composedProperties.test.ts  (11 tests) 488ms
 
  Test Files  2 passed (2)
       Tests  19 passed (19)
 ```
 
-## Typecheck (once, after the test change)
+## Typecheck (once)
 
 ```
-cd /home/brad/cl-wt/L2-SPECSHEET-doorB1-lane2 && npm run typecheck -w server
+$ npm run typecheck -w server
 > @computable/server@1.0.0 typecheck
 > tsc --noEmit
 TYPECHECK_EXIT=0
 ```
-No error lines. (`server/tsconfig.json` excludes `**/*.test.ts`, so the changed
-test file is not typechecked; no non-test `.ts` changed.)
+No error lines. `server/tsconfig.json` excludes `**/*.test.ts`; no non-test `.ts` changed.
 
-## Invariants checked
+## Invariants
 
 ```
 git diff --stat 18b36804..HEAD -- server/src/schema/composedProperties.ts server/src/server.ts
 → (empty)
 git diff --name-only 18b36804..HEAD -- schema/
-→ (empty)   [0 lines: no YAML touched, no lane reload needed]
+→ (empty)   [0 YAML files — no lane reload needed]
 grep -nE "material-instance|aliquot|event-graph|labware-definition|protocol|\.yaml" \
   server/src/schema/composedProperties.ts
 → no match (exit 1)
-git diff --name-status 18b36804..HEAD
-M  server/src/schema/composedProperties.test.ts
+git -c core.fileMode=false status --short
+→ (empty)
 ```
-`RecordHandlers.ts` untouched (8/8 pin still 8/8). Return shape, the `undefined`
-for unknown ids, the `allOf`/inline walk and the `#/$defs/...` arm are unchanged.
-No `191/205` count claimed — only what these runs measured.
 
-## Note for the reviewer
+`RecordHandlers.ts` untouched — its 8/8 provenance pin still 8/8. Return shape
+`{hasCreatedAt, hasUpdatedAt, hasCreatedBy, allowsAny}`, the `undefined` return
+for unknown schema ids, the `allOf`/inline-branch walk and the intra-document
+`#/$defs/...` arm are unchanged. No `191/205` count is claimed; only what these
+runs measured.
 
-P1's pin is structural at the wiring line (a schema unit test cannot boot
-`createServer` without a full app/records fixture) plus behavioral at the
-handler seam. The literal probe above is RED against it.
+## Note on the P1 pin
 
-report_commit: d30dc72d9c7f27a8875a9ae8aac6be349c2908bb
-L2-SPEC-SHEET-INGEST-1 UNIT f3verify2 DONE d30dc72d9c7f27a8875a9ae8aac6be349c2908bb
-L2-SPEC-SHEET-INGEST-1-f3verify2 UNIT unit DONE 358521cefb35ed8d8a95b844b2a2f04dc70eb1f7
+A schema unit test cannot boot `createServer` without a full app/records fixture,
+so P1 is pinned twice: structurally at the wiring line (exactly one
+`getSchemaProperties:` line, and it is the factory call) and behaviourally at the
+handler seam (`createRecordHandlers` fed the real-registry factory injects
+`createdAt`/`updatedAt`/`createdBy` for an aliquot, which is strict — provenance
+arrives as fields, never via `allowsAny`).
+
+`report_commit:` names the commit carrying this report body; the DONE marker is
+committed immediately after it and adds only that one line.
