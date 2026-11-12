@@ -55,3 +55,5 @@ fields absent, never undefined; no *.lint.yaml / server/src/lint touched (vocabu
 mutation probe not owed. The marker below names the report-body commit R (`git rev-parse HEAD` read
 after committing the body, before appending this marker); R's tree contains this report. UI/DOM leg
 = separate later unit.
+
+L2-JOURNEY-DOC-1 UNIT u2lint DONE 3ceac8fd47b2ff8ec021ffa2c43dd2d5dd7d8e44
