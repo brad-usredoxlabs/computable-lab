@@ -3,6 +3,13 @@
 # record path resolves its spec by schemaId (UIHandlers.ts:236) and had none.
 # This is a VIEW of the finished intake, never an editor: the item's contract
 # is propose-never-write, so every field is readonly.
+#
+# Documents / drafts are declared as `array` rows, NOT as `$.documents[*].x`
+# field rows: the record page resolves a row's value with the dotted-only
+# getValueAtPath (app/src/shared/lib/formHelpers.ts:15-25 via
+# documentMapper.ts:283), so a `[*]` row renders its label with an EMPTY value.
+# The read-only array rail (ArrayWidget.tsx:214-232) prints every item's
+# fields, which is what makes the recorded extraction method visible.
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml"
 
@@ -54,33 +61,15 @@ form:
       readonly: true
   - title: "Documents"
     fields:
-    - path: "$.documents[*].title"
-      widget: "text"
-      label: "Document"
-      readonly: true
-    - path: "$.documents[*].document_kind"
-      widget: "text"
-      label: "Document kind"
-      readonly: true
-    - path: "$.documents[*].file_ref.media_type"
-      widget: "text"
-      label: "Media type"
-      readonly: true
-    - path: "$.documents[*].extraction.method"
-      widget: "text"
-      label: "Extraction method (per document)"
-      readonly: true
-    - path: "$.documents[*].extraction.page_count"
-      widget: "number"
-      label: "Page count"
+    - path: "$.documents"
+      widget: "array"
+      label: "Attached documents"
+      help: "One entry per document: title, kind, file media type, and the extraction method recorded for it."
       readonly: true
   - title: "Composition drafts"
     fields:
-    - path: "$.composition_drafts[*].status"
-      widget: "text"
-      label: "Draft status"
-      readonly: true
-    - path: "$.composition_drafts[*].extraction_method"
-      widget: "text"
-      label: "Draft extraction method"
+    - path: "$.composition_drafts"
+      widget: "array"
+      label: "Composition drafts"
+      help: "Draft status and the extraction method each draft came from."
       readonly: true
