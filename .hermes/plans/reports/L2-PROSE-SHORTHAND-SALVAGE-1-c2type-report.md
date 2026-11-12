@@ -150,4 +150,41 @@ report); `AgentOrchestrator.ts` restored byte-identical and uncommitted; net cod
 opened for edit. No dependency installs, no scaffolding, no server started. Scratch under
 `/home/brad/.prose-c2type-scratch/` (deleted at exit).
 
-L2-PROSE-SHORTHAND-SALVAGE-1-c2type UNIT unit DONE 794dcd04dd363c97b50299ad512565f4d07676b5
+## c2typefix1 (advc c1 FIX 4)
+
+Fix run on this same unmerged lineage (`reviews/L2-PROSE-c2type-advc-c1-l2t0400.md` → VERDICT: FIX (4)).
+Product code byte-identical at exit (`sha256sum -c` OK for `AgentOrchestrator.ts` and `types.ts`); the
+diff `34a48a74..HEAD` names exactly 3 paths (two test files, this report) — 28 insertions / 11 deletions.
+
+- **D1 (MAJOR, false committed claim) — FIXED.** The comment at
+  `AgentOrchestrator.shorthandChat.test.ts:322` and the §Measurement-nuance paragraph above no longer
+  say a browser receipt reads `recoveredFrom` off the wire. Measured truth, restated in both places: the
+  field IS on the server wire (`AIHandlers.ts:380` serialises the whole `AgentEvent`); the BROWSER relay
+  is NOT implemented — `assistStream.ts:277` types status as `{ type; message }`, `:483` projects
+  `{ type: 'status', message }` and drops non-whitelisted fields, `grep -rn recoveredFrom app/src` = 0
+  hits. Closing that relay is a FOLLOW-ON unit; `app/**` was not opened.
+- **D2 (MINOR) — FIXED.** `recoveredFrom.test.ts:176` `const events: any[]` → `AgentEvent[]`; both
+  negative-control filters now narrow with type predicates (`'recoveredFrom' in e`, sibling-leg style),
+  no `as any`, no cast, no assertion body or test name changed. Suite GREEN below.
+- **D3 (MINOR) — FIXED.** Exit marker amended to the contract literal (last line of this file).
+- **D4 (MINOR) — FIXED.** §WIP lineage above now names the two inert hunks inherited from `4b837b61`
+  (`extraSubmissionNotes` hoist `:3011` → `:2267`; `driver=` `console.log` rewrite `:2715`) and why each
+  is behaviour-preserving.
+
+Falsifiable checks (raw):
+```
+$ grep -rn 'const events: any\[\]' server/src/ai/recoveredFrom.test.ts   # rc=1, no output
+$ grep -n 'a browser receipt reads it off' server/src/ai/AgentOrchestrator.shorthandChat.test.ts  # rc=1
+$ sha256sum -c  ->  server/src/ai/AgentOrchestrator.ts: OK / server/src/ai/types.ts: OK
+$ cd server && npx vitest run src/ai/recoveredFrom.test.ts src/ai/AgentOrchestrator.shorthandChat.test.ts
+   Test Files  2 passed (2) / Tests  28 passed (28)
+$ cd server && npx tsc --noEmit -p .  ->  TSC_EXIT=0, error lines: 0 (equal to baseline)
+$ git -c core.fileMode=false status --short  ->  empty
+$ git diff --name-status 34a48a74..HEAD  ->  exactly the 3 paths above
+```
+Marker-count note (honesty): this file now carries two `DONE <40-hex>` lines — the `c2type` contract
+literal below (D3) and the launcher-appended `c2typefix1` exit literal. The brief's "exactly 1" probe
+predates the launcher's appended exit contract, which demands its own literal; both greps are satisfied.
+Cited sha `9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515` = last fix commit, ancestor of HEAD.
+
+L2-PROSE-SHORTHAND-SALVAGE-1 UNIT c2type DONE 9cfa3f831bd1b2f4f6df6fbfd41eb46a3ee23515
