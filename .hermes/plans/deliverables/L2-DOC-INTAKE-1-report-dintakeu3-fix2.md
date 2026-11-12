@@ -58,4 +58,4 @@ Only `server/src/ingestion/documentIntake.ts` (one condition + comment) and
 maxPages/extension work untouched; the `PDF_NO_TEXT_LAYER` warning untouched; no YAML,
 schema, or adapter change. Tree clean after the marker commit.
 
-L2-DOC-INTAKE-1 UNIT dintakeu3-fix2 DONE c1c2179b68a719f1401ce1a3ad7afece727a8da2
+L2-DOC-INTAKE-1 UNIT dintakeu3-fix2 DONE f2a9021f2d20b9e3060a226a835e3b5417c3e191
