@@ -79,4 +79,4 @@ and a confirmed ontology anchor belongs to the g4 LEG 3 re-gate (lane-stack
 reload required after YAML change per fleet rules).
 
 ---
-L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT anchor-d1fix DONE <report-commit-sha>
+L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT anchor-d1fix DONE 1ef7c00ab1dd995066281eb9a45ae8966de77d48
