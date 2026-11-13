@@ -135,3 +135,5 @@ implemented here.
 - TS-only unit; no YAML touched, no stack restart, no installs. `app/node_modules` is the
   launcher-provided symlink. Scratch: `/home/brad/.d3authclose-scratch/` (raw logs),
   deleted at exit.
+
+L2-SUBPROTOCOL-EXPAND-1-d3authclose UNIT unit DONE ece3f1899556f5b67c84bd1efd5661e5fc54a517
