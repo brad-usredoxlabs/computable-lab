@@ -115,19 +115,25 @@ export class PendingIntentHandlers {
     return reply.send({ receipt: result.checkpoint.resume_receipt });
   }
 
-  /** POST .../checkpoints/:checkpointId/delta — the store's injection-mode refusal => 422. */
+  /** POST .../checkpoints/:checkpointId/delta — the store's injection-mode refusal => 422; a thread that does not hold the NAMED checkpoint => 404 (a not-found is never collapsed into the contract-rejection 400). */
   async attachDelta(request: FastifyRequest<{ Params: CheckpointRouteParams; Querystring: CheckpointRouteQuery }>, reply: FastifyReply) {
     const checkpointId = request.params.checkpointId ?? '';
     const store = storeFor(request, this.rootDir, this.factory, request.params.endpoint, request.query);
-    const result = await store.attachDelta(request.body);
+    // The store confirms the path id against the stored document's own checkpoint_id; we pass it through, never assume it.
+    const result = await store.attachDelta(request.body, checkpointId);
     if (!result.ok) {
       const refusal = result.diagnostics.find((d) => d.code === 'injection-refused');
       if (refusal !== undefined) {
         return reply.status(422).send({ error: 'injection-refused', code: refusal.code, reason: refusal.message });
       }
+      const notFound = result.diagnostics.find((d) => d.code === 'checkpoint-not-found');
+      if (notFound !== undefined) {
+        return reply.status(404).send({ error: 'checkpoint-not-found', code: notFound.code, reason: notFound.message });
+      }
       return reply.status(400).send({ error: 'delta rejected by contract', codes: toCodes(result.diagnostics), diagnostics: result.diagnostics });
     }
-    return reply.send({ delta_id: result.delta.delta_id, checkpoint_id: checkpointId });
+    // The confirmed document's id, NOT the raw path string: the association is the store's answer.
+    return reply.send({ delta_id: result.delta.delta_id, checkpoint_id: result.checkpointId });
   }
 }
 

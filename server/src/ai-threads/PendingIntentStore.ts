@@ -35,7 +35,8 @@ export interface ResumeInput { expectedVersion: number; receiptId: string; resum
 
 export type SaveResult = { ok: true } | { ok: false; diagnostics: ContractDiagnostic[] };
 export type ResumeResult = { ok: true; checkpoint: PendingIntentCheckpoint } | { ok: false; diagnostics: ContractDiagnostic[] };
-export type AttachResult = { ok: true; delta: ContextDelta } | { ok: false; diagnostics: ContractDiagnostic[] };
+/** The success arm carries the CONFIRMED document id (it equals the requested id only because the store compared them) — the caller must never echo the path segment instead. */
+export type AttachResult = { ok: true; delta: ContextDelta; checkpointId: string } | { ok: false; diagnostics: ContractDiagnostic[] };
 
 /** Named store-level "no checkpoint" — distinct from version_conflict, so the caller can tell "none here" from "already resumed". */
 const DIAG_NOT_FOUND: ContractDiagnostic = {
@@ -134,7 +135,7 @@ export class PendingIntentStore {
     // the path is only a claim until the stored document's own checkpoint_id confirms it.
     const doc = await this.readDocument();
     if (doc === null || doc.checkpoint_id !== checkpointId) return { ok: false, diagnostics: [DIAG_NOT_FOUND] };
-    return { ok: true, delta: result.delta };
+    return { ok: true, delta: result.delta, checkpointId: doc.checkpoint_id };
   }
 
   /** Raw read: null on absent OR malformed JSON (never a partial interpretation); other I/O errors propagate. */
