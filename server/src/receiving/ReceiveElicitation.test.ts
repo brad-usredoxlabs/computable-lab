@@ -525,7 +525,8 @@ describe('parse/menu regression (§5.4 mirror of submitSuggestionTool.test)', ()
     const props = (AGENT_INTENT_TOOL_DEF.function.parameters as { properties: Record<string, { enum?: string[] }> }).properties;
     // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
     // joins the menu tail — the one-tool lock is about the tool, not a frozen enum.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain']);
+    // SEQ-ANSWER-CONTRACT-1: `answer` joined the menu as the last element (deliberate golden diff).
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain', 'answer']);
   });
 
   it('parses compose_receiving and retains the envelope VERBATIM (by reference — the compile endpoint is the trust boundary)', () => {
