@@ -3,10 +3,16 @@
 # code: it changes no behavior. It must survive lintJourneyDocument against the
 # REAL shipped capability catalogue and the REAL work-surface registry.
 #
-# Scope note: exactly two steps, both capability_refs in the admitted catalogue
-# (journey.ontology-lookup). There is NO instance-placement step — no
-# place-instance capability exists in the admitted catalogue; that is declared
-# unresolved below and owned by a later unit.
+# Scope note (unit u2adefwire): three steps in the admitted catalogue.
+# anchor-noun (journey.ontology-lookup) resolves the noun; complete-definition
+# (journey.labware-definition-create) is the governed write that mints the
+# definition record; place-instance (journey.labware-instance-place) consumes
+# the definition as a LabwareDefinitionReference and commits the instance.
+# Both governed writes are ADMITTED but status.implemented: false — their
+# executor legs are unresolved below and owned by a later unit. The committed
+# record stays declared on complete-definition's human_task.output_port; the
+# definition flows to place-instance as a definition reference, never as the
+# committed record port.
 journey_id: journey-labware-definition
 revision: 1
 authoring_actor:
@@ -35,9 +41,11 @@ steps:
         draft_id: DRAFT-labware-definition
     interaction_mode: automatic
   - id: complete-definition
-    capability_ref: journey.ontology-lookup
+    capability_ref: journey.labware-definition-create
     input_ports: []
-    output_ports: []
+    output_ports:
+      - version: v1
+        labware_definition_id: LAB-DEF-1
     interaction_mode: human_in_the_loop
     human_task:
       decision: "complete the geometry for the new deepwell-plate labware definition"
@@ -55,6 +63,17 @@ steps:
         receipt_id: RCPT-labware-definition
       on_cancel: keep_journey_active
       on_defer: keep_journey_active
+  - id: place-instance
+    capability_ref: journey.labware-instance-place
+    input_ports:
+      - version: v1
+        labware_definition_id: LAB-DEF-1
+    output_ports:
+      - version: v1
+        record_id: LAB-INST-1
+        record_type: labware-instance
+        receipt_id: RCPT-labware-instance
+    interaction_mode: automatic
 alternatives:
   options:
     - alternative_id: author-new-definition
@@ -69,5 +88,5 @@ return_contract:
 assumptions:
   - "a geometry-bearing labware-definition record is the durable artifact this journey commits"
 unresolved_questions:
-  - "place-instance capability not yet in the admitted catalogue — declared unresolved; a later unit owns it"
+  - "the place-instance capability is admitted but status.implemented is false — the governed-write executor leg for the placement is still unresolved and owned by a later unit"
   - "the record-create surface is declared in config/ui/surfaces.yaml but not yet in the work-surface registry (schema/registry/surfaces/surfaces.yaml); declared unresolved pending registry admission"
