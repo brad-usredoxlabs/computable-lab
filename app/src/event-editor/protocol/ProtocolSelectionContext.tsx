@@ -129,13 +129,10 @@ interface ProtocolSelectionState {
   steps: ProtocolStepSummary[]
   /** Set the step concept list (populated when the protocol steps first load). */
   setSteps: (steps: ProtocolStepSummary[]) => void
-  /** True while the attached protocol's steps are still being fetched. The
-   *  loader publishes the protocol IDENTITY before the steps fetch lands, so
-   *  this flags the pending window and keeps the rail from falling through to
-   *  "no protocol attached" (G3-D3). Cleared the moment the steps fetch
-   *  settles (success, !res.ok, or throw). */
+  /** True while the attached protocol's steps are still being fetched: the loader
+   *  publishes the identity before the steps fetch lands (G3-D3), so the rail shows
+   *  a pending rail, never "No protocol attached". Cleared when the steps fetch settles. */
   stepsPending: boolean
-  /** Set the steps-in-flight flag (true before the steps fetch, false on settle). */
   setStepsPending: (next: boolean) => void
   /** The protocol's DECLARED labware / equipment roles — what the assay needs,
    *  shown as collapsible sections beside the steps in the rail. */

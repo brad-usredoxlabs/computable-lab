@@ -160,16 +160,11 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
     // that could replace it (G3-D3).
     const proto = sel?.protocol
     if (proto && sel?.stepsPending) {
-      // (a) Identity known but the steps fetch is still settling: the identity
-      //     header + a loading line. No attach affordance.
       return (
         <aside className="protocol-nav" data-testid="protocol-nav">
           {title ? <header className="protocol-nav__head">{title}</header> : null}
           <div className="protocol-nav__identity">
-            <ProtocolIdentity
-              protocolId={proto.recordId}
-              fallbackTitle={proto.title ?? null}
-            />
+            <ProtocolIdentity protocolId={proto.recordId} fallbackTitle={proto.title ?? null} />
           </div>
           <p className="protocol-nav__empty" data-testid="protocol-nav-pending">
             Loading steps for {proto.title ?? proto.recordId}…
@@ -178,16 +173,11 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
       )
     }
     if (proto) {
-      // (b) Identity known and the steps fetch has settled (list empty) → the
-      //     read failed. An honest line, still no attach affordance.
       return (
         <aside className="protocol-nav" data-testid="protocol-nav">
           {title ? <header className="protocol-nav__head">{title}</header> : null}
           <div className="protocol-nav__identity">
-            <ProtocolIdentity
-              protocolId={proto.recordId}
-              fallbackTitle={proto.title ?? null}
-            />
+            <ProtocolIdentity protocolId={proto.recordId} fallbackTitle={proto.title ?? null} />
           </div>
           <p className="protocol-nav__error" data-testid="protocol-nav-read-error">
             The attached protocol's steps could not be read — open the run

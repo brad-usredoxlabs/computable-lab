@@ -157,9 +157,6 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       // stale labels on every runId/protocol switch, regardless of whether
       // the step/resource fetches below succeed (PROTO-AI-10).
       sel?.setLabwareBindings(resolved?.labwareBindings ?? {})
-      // Publish the pending flag the moment the identity is known, BEFORE the
-      // steps fetch, so the rail renders "loading steps" — never "No protocol
-      // attached" — during the window (G3-D3). Cleared in the finally below.
       sel?.setStepsPending(true)
       try {
         // What the assay NEEDS (declared labware / equipment roles) comes from
@@ -218,10 +215,7 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       } catch {
         // loader is best-effort — ProtocolTabPanel covers fallbacks
       } finally {
-        // Settle the pending flag on success, on !res.ok, and on throw — the
-        // rail leaves "loading steps" for the settled rail (steps landed) or
-        // the honest read-failure line (G3-D3). A superseded load must never
-        // clear the pending flag a newer load just published.
+        // Settle on success, !res.ok, and throw — a superseded load must not clear a newer load's flag.
         if (!cancelled) sel?.setStepsPending(false)
       }
     }
