@@ -59,3 +59,5 @@ None touch scope; both files owned by this unit typecheck cleanly.
 getComputedStyle(.lab-modal).backgroundColor is not rgba(0,0,0,0).
 
 L2-LAB-INVENTORY-CREATE-1 UNIT unit DONE 898ca32f90853cc3d786e5266ba3d19eb34cfb8f
+
+L2-LAB-INVENTORY-CREATE-1 UNIT unit DONE 898ca32f90853cc3d786e5266ba3d19eb34cfb8f
