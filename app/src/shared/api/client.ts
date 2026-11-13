@@ -2822,23 +2822,7 @@ export const apiClient = {
         editorLayout?: unknown
       }
     } catch (error) {
-      // Per-run plan graphs are filed under records/runs/<run>/event-graphs/
-      // and are not listed by /records, so GET /records/:id 404s for them
-      // while GET /ui/record/:id still returns their envelope. Fall back to
-      // the /ui/record route on 404 ONLY — every other fault (500, network,
-      // lint) must keep surfacing as a fault, not be papered over.
-      if (ApiError.isApiError(error) && error.status === 404) {
-        const ui = await request<RecordWithUIResponse>(`/ui/record/${encodeURIComponent(eventGraphId)}`)
-        return ui.record.payload as {
-          id: string
-          events: unknown[]
-          labwares: unknown[]
-          runId?: string
-          name?: string
-          deckLayout?: unknown
-          editorLayout?: unknown
-        }
-      }
+      // A 404 from /records/:id may be a genuinely missing record OR an access denial (the record route denies as NOT_FOUND) — surface it, never re-fetch through an unchecked route.
       throw error
     }
   },

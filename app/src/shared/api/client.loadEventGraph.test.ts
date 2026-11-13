@@ -1,9 +1,10 @@
 // @vitest-environment node
-// d3loadpath: pins apiClient.loadEventGraph's 404-only fallback to the
-// /ui/record/:id envelope. The /records/:id route 404s for per-run plan
-// graphs (they are filed under records/runs/<run>/event-graphs/ and are not
-// listed by /records), while GET /ui/record/:id returns their envelope —
-// so a run's own plan graph must load instead of surfacing as missing.
+// d3authclose: pins that apiClient.loadEventGraph FAILS CLOSED on a 404 from
+// /records/:id — that 404 may be a genuinely missing record OR an access
+// denial (the record route denies as NOT_FOUND, byte-identical to absence),
+// so the client must reject instead of re-reading through the /ui/record
+// route, which performs no access check. Non-404 faults (500, network) must
+// keep surfacing as faults and never trigger a second route.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiClient } from './client'
 
@@ -19,28 +20,17 @@ afterEach(() => {
 
 const payload = (id: string) => ({ id, events: [], labwares: [] })
 
-describe('apiClient.loadEventGraph (d3loadpath)', () => {
-  it('falls back to /ui/record/:id when /records/:id 404s (per-run plan graph)', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            record: { recordId: 'EVG-1', schemaId: 'event-graph', payload: payload('EVG-1'), meta: {} },
-            uiSpec: null,
-            schema: null,
-          }),
-          { status: 200 }
-        )
-      )
+describe('apiClient.loadEventGraph (d3authclose)', () => {
+  it('a 404 from /records/:id rejects and NEVER re-reads via /ui/record (deny-404)', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'NOT_FOUND' }), { status: 404 }))
 
-    const result = await apiClient.loadEventGraph('EVG-1')
-
-    expect(result.id).toBe('EVG-1')
-    expect(result.events).toEqual([])
-    expect(result.labwares).toEqual([])
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/ui/record/EVG-1')
+    await expect(apiClient.loadEventGraph('EVG-1')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/records/EVG-1')
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('/ui/record/')
   })
 
   it('does NOT fall back on non-404 faults — a 500 still rejects', async () => {
