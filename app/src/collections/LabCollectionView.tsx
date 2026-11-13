@@ -20,6 +20,7 @@ import { apiClient } from '../shared/api/client'
 import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
 import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
 import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
+import { LabShelfLookup } from './LabShelfLookup'
 import { MaterialReceivingDoor } from './MaterialReceivingDoor'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
@@ -371,6 +372,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
         </p>
       )}
 
+      {activeCategory === 'materials' && <LabShelfLookup />}
       <div className="lab-collection__body">
         <nav className="lab-collection__categories" role="navigation">
           {CATEGORIES.map((cat) => (
