@@ -177,3 +177,8 @@ I changed no .ts signature, but ran it anyway since a new .ts file was added:
   hardcoding field names.
 - Item milestone gate: durability browser legs (reload / back / second tab) —
   explicitly NOT this unit.
+
+--- exit marker ---
+
+L2-JOURNEY-CHECKPOINT-1 UNIT 5 DONE 3a21700ebb4d8f82dbc4f38a68edc0aa75bc2337
+L2-JOURNEY-CHECKPOINT-1 UNIT cpdeclare DONE 3a21700ebb4d8f82dbc4f38a68edc0aa75bc2337
