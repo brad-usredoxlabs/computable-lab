@@ -147,5 +147,7 @@ with no projection still renders the minimal fallback form (pinned by leg (c)).
 The lane stack was NOT restarted and no browser gate was run here (not this unit's job); no
 YAML was edited (nothing here is data-driven).
 
+Report commit (this file): `4b0cef7c` on `cl/integration-2`; unit code state: `d13f20da` in the worktree.
+
 L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT g7form DONE d13f20da3cb99cefee8b078261afd9e4c08b0279
 L2-ONTOLOGY-ANCHOR-SOURCES-1-g7form UNIT unit DONE d13f20da3cb99cefee8b078261afd9e4c08b0279
