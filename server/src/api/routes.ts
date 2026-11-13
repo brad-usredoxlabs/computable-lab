@@ -352,7 +352,7 @@ export function registerRoutes(
     if (document === null || typeof document !== 'object' || Array.isArray(document)) {
       return reply.code(400).send({ ok: false, diagnostics: [{
         rule: 'journey_compile_request_invalid',
-        message: `document must be a non-null object; received ${document === null ? 'null' : typeof document}`,
+        message: `document must be a non-null object; received ${document === null ? 'null' : Array.isArray(document) ? 'array' : typeof document}`,
       }] });
     }
     const dir = options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR;
