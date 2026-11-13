@@ -56,6 +56,10 @@ export const labModalStyles = `
   border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit;
 }
 .lab-modal__save:disabled { opacity: 0.6; cursor: default; }
+/* savecontrast: AppShell.css '.cl-app button { color: inherit }' is 0,1,1 and outranks
+   the 0,1,0 block above, so the on-accent label never applied (measured 3.04:1 on the
+   served bundle). This one rule wins on specificity; do not use !important. */
+.cl-app .lab-modal__save { color: var(--cl-on-accent); }
 .lab-modal__cancel {
   background: transparent; color: var(--cl-text);
   border: 1px solid var(--cl-border); border-radius: 6px; padding: 6px 14px;
