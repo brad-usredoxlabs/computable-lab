@@ -199,3 +199,8 @@ receipt: `/home/brad/.L2-NOUN-FROM-DOC-1-d1gwrite-scratch/probe-run-seed.txt`.
 - If `server/src/compiler/journey/capabilityCatalogueSeed.test.ts` is deemed outside this unit's
   file list by review, the re-pinning (decision 4) is the minimal compensating change — AC3
   cannot hold otherwise; it changes no product behaviour.
+
+---
+
+L2-NOUN-FROM-DOC-1 UNIT d1gwrite DONE 189c201b73888731be00bca10e64c59d55caf4b7
+L2-NOUN-FROM-DOC-1-d1gwrite UNIT unit DONE 189c201b73888731be00bca10e64c59d55caf4b7
