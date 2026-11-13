@@ -90,6 +90,8 @@ import { fileURLToPath } from 'node:url';
 import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
 import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
 import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
+import { compileJourneyEnvelope, type ResolvedInputVersion } from '../compiler/journey/journeyEnvelope.js';
+import { guardJourneyDispatch, loadPolicySetsDir, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
 
 /**
  * L2-JOURNEY-CAPABILITY-CATALOGUE-1: the shipped catalogue directory, resolved
@@ -200,6 +202,13 @@ export interface RouteOptions {
    * every existing registerRoutes caller is untouched.
    */
   journeyCatalogueDir?: string;
+  /**
+   * L2-JOURNEY-POLICY-1: directory of declared policy-set YAML, re-read per
+   * dispatch so an edit is visible without a restart. Absent => dispatch is
+   * REFUSED (restrictive default: a missing policy surface is not a permission);
+   * an empty directory is likewise a refusal, never a pass.
+   */
+  journeyPolicySetDir?: string;
 }
 
 /**
@@ -368,6 +377,48 @@ export function registerRoutes(
         rule: 'journey_catalogue_unavailable',
         message: `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
       }] };
+    }
+  });
+
+  // L2-JOURNEY-POLICY-1 (unit psdispatch3): the ONE place a compiled envelope is
+  // handed on. The envelope is built here from the document + the admitted
+  // catalogue, policy sets are re-read PER REQUEST, and only guardJourneyDispatch
+  // decides — this adapter derives no attribute and reads none from the body.
+  fastify.post('/journey/dispatch', async (request, reply) => {
+    const body = request.body as { document?: unknown; step_id?: unknown; current_inputs?: unknown } | null | undefined;
+    const document = body === null || body === undefined ? undefined : body.document;
+    const stepId = body === null || body === undefined ? undefined : body.step_id;
+    if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: 'journey_dispatch_request_invalid', message: 'document must be a non-null object' }] });
+    }
+    if (typeof stepId !== 'string' || stepId.length === 0) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: 'journey_dispatch_request_invalid', message: 'step_id must be a non-empty string' }] });
+    }
+    const policyDir = options.journeyPolicySetDir;
+    if (policyDir === undefined) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: 'no journey policy-set directory is configured; dispatch is refused by the restrictive default', step_id: stepId }] });
+    }
+    const current: ResolvedInputVersion[] = body !== null && body !== undefined && Array.isArray(body.current_inputs)
+      ? body.current_inputs as ResolvedInputVersion[]
+      : [];
+    try {
+      const admitted = await loadCapabilityCatalogueDir(options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR, new Set(AGENT_ALLOWED_TOOLS));
+      const compiled = compileJourneyStructure(document, admitted.capabilities);
+      if (!compiled.ok) return reply.code(400).send({ ok: false, diagnostics: compiled.diagnostics });
+      const built = compileJourneyEnvelope(compiled.manifest, document, stepId, current);
+      if (!built.ok) return reply.code(400).send({ ok: false, diagnostics: built.diagnostics });
+      const capability = admitted.capabilities.find((d) => d.capability_id === built.envelope.capability_ref);
+      if (capability === undefined) {
+        return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `${built.envelope.capability_ref}: capability descriptor is not admitted; dispatch is refused`, step_id: stepId }] });
+      }
+      const sets = await loadPolicySetsDir(policyDir);
+      if (sets.length === 0) {
+        return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `${policyDir}: no policy set declared; dispatch is refused`, step_id: stepId }] });
+      }
+      const result = guardJourneyDispatch({ envelope: built.envelope, capability, sets, now: new Date().toISOString() });
+      return reply.code(result.allowed ? 200 : 403).send({ ok: result.allowed, record: result.record, diagnostics: result.diagnostics });
+    } catch (error) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `dispatch refused: policy evaluation from ${policyDir} failed: ${error instanceof Error ? error.message : String(error)}`, step_id: stepId }] });
     }
   });
 
