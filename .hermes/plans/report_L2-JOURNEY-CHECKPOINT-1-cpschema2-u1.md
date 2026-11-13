@@ -84,4 +84,4 @@ no install run.
 - `29be43e5` checkpointContract.ts + test (seam + drift tests)
 - (this report) paperwork commit
 
-UNIT L2-JOURNEY-CHECKPOINT-1 DONE b2917dee25a74b2b32b39fe3c78256da0706ce3a
+UNIT L2-JOURNEY-CHECKPOINT-1 DONE defe31d41549fdcc4ecad320138e70db66e696b4
