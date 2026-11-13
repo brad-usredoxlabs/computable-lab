@@ -8,7 +8,8 @@ type Decls = Record<string, string>
 
 function parseRules(css: string): Record<string, Decls> {
   const rules: Record<string, Decls> = {}
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  const uncommented = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const match of uncommented.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     for (const selector of match[1].split(',').map((s) => s.trim()).filter(Boolean)) {
       const decls = (rules[selector] ??= {})
       for (const part of match[2].split(';')) {
