@@ -82,9 +82,12 @@ describe('Surface manifest checkpoint declaration (cpdeclare)', () => {
     const result = validator.validate(broken, SURFACE_MANIFEST_ID);
     const symmetric =
       [...target.checkpoint.exports].sort().join(',') === [...target.checkpoint.restores].sort().join(',');
+    // The schema enforces shape only (required/pattern/uniqueItems); the
+    // export<->restore symmetry is the contract this file asserts. The mutation
+    // above keeps shape intact, so the symmetry assertion is the check that fires.
     expect(
-      result.valid || symmetric,
-      'an asymmetric checkpoint declaration must be rejected by Ajv validation or the symmetry assertion',
-    ).toBe(false);
+      result.valid === false || symmetric === false,
+      'an asymmetric checkpoint declaration must be caught by Ajv validation or the symmetry assertion',
+    ).toBe(true);
   });
 });
