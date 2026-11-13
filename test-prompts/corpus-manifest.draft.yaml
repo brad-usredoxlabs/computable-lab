@@ -17,7 +17,7 @@
 
 version: draft-1
 source_file: test-prompts/AI-Chat-Corpus2.md
-source_sha256: 9388c5c7fafe723709fd188dc924446b   # recorded when this draft was authored
+source_sha256: ce5afdd809fc4dfecd12841c8b1f994a   # recorded when this draft was authored (after the scenario-id edit)
 scenarios:
   - id: prompt-1
     title: a plate type that does not exist yet
