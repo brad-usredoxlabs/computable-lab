@@ -350,6 +350,9 @@ describe('MaterialReceivingDoor', () => {
     expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
     expect((screen.getByTestId('material-receiving-vendor') as HTMLInputElement).value).toBe('')
     expect((screen.getByTestId('material-receiving-lot-number') as HTMLInputElement).value).toBe('')
+    // The discard path is purely local: exactly ONE compile (the original
+    // stage), nothing else committed — no accept, no second compile.
+    expect(compileSpy).toHaveBeenCalledTimes(1)
     expect(acceptSpy).not.toHaveBeenCalled()
     // A visible discard cue: the cue element is present on the page and its
     // text matches /discard/i. (jsdom 29 does not implement
