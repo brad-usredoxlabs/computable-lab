@@ -237,4 +237,4 @@ committed).
 - Commits for this unit: (1) cdee80c3 test assertions; (2) this report; (3)
   marker correction to the final sha. No `git reset` / `--amend` / `rebase`.
 
-L2-NOUN-FROM-DOC-1 UNIT 1 DONE __PENDING__
+L2-NOUN-FROM-DOC-1 UNIT 1 DONE 03bf3fbf1a4c19b42be4b9228279527d68e30149 (report contained at this sha)
