@@ -1,16 +1,12 @@
 // @vitest-environment node
 /**
  * L2-JOURNEY-HUMANTASK-1 (unit htcdispose3): apply a human task's DECLARED
- * `on_cancel` / `on_defer` as ONE pure decision. RED-first.
- * (a) cancel + on_cancel keep_journey_active -> cancelled, journey continues;
- * (b) cancel + on_cancel end_journey          -> cancelled, journey ends;
- * (c) defer  + on_defer  keep_journey_active -> deferred, journey continues;
- * (d) defer  + on_defer  end_journey          -> deferred, journey ends;
- * (e) an input already carrying a completion receipt is REFUSED and returns
- *     no status at all (the anti-partial-record arm);
- * (f) an undeclared disposition string is refused, naming the value;
- * (g) an absent on_cancel key is refused, never defaulted to `true`;
- * (h) the totality of the declared dispositions is pinned (one status each).
+ * `on_cancel` / `on_defer` as ONE pure decision. RED-first: (a,b) cancel ->
+ * cancelled / journey continues or ends; (c,d) defer -> deferred / continues
+ * or ends; (e) a committed receipt makes the disposition REFUSED with no
+ * status (anti-partial-record); (f) an undeclared disposition is refused,
+ * naming it; (g) an absent on_cancel is refused, never defaulted; (h) the
+ * declared dispositions are total, one status each.
  */
 import { describe, expect, it } from 'vitest';
 import type { HumanTaskReceipt } from './humanTaskCompletion.js';
@@ -26,7 +22,7 @@ function contract(overrides: Record<string, unknown> = {}): unknown {
   return { on_cancel: 'keep_journey_active', on_defer: 'end_journey', ...overrides };
 }
 
-/** A real committed receipt value — no stub cast. */
+/** A real committed receipt value — built with unit 2's type, no stub cast. */
 const RECEIPT: HumanTaskReceipt = {
   kind: 'human-task-receipt',
   task_id: 'HT-1',
@@ -38,47 +34,32 @@ const RECEIPT: HumanTaskReceipt = {
 
 describe('decideHumanTaskDisposition', () => {
   it('(a) cancel with on_cancel keep_journey_active cancels and keeps the journey active', () => {
-    const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'cancel',
-      contract: contract(),
-    });
+    const out = decideHumanTaskDisposition({ task_id: 'HT-1', disposition: 'cancel', contract: contract() });
     expect(out).toEqual({ ok: true, task_status: 'cancelled', journey_continues: true });
   });
 
   it('(b) cancel with on_cancel end_journey ends the journey', () => {
     const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'cancel',
-      contract: contract({ on_cancel: 'end_journey' }),
+      task_id: 'HT-1', disposition: 'cancel', contract: contract({ on_cancel: 'end_journey' }),
     });
     expect(out).toEqual({ ok: true, task_status: 'cancelled', journey_continues: false });
   });
 
   it('(c) defer with on_defer keep_journey_active defers and keeps the journey active', () => {
     const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'defer',
-      contract: contract({ on_defer: 'keep_journey_active' }),
+      task_id: 'HT-1', disposition: 'defer', contract: contract({ on_defer: 'keep_journey_active' }),
     });
     expect(out).toEqual({ ok: true, task_status: 'deferred', journey_continues: true });
   });
 
   it('(d) defer with on_defer end_journey ends the journey', () => {
-    const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'defer',
-      contract: contract(),
-    });
+    const out = decideHumanTaskDisposition({ task_id: 'HT-1', disposition: 'defer', contract: contract() });
     expect(out).toEqual({ ok: true, task_status: 'deferred', journey_continues: false });
   });
 
   it('(e) a task carrying a completion receipt is refused with no status', () => {
     const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'cancel',
-      contract: contract(),
-      receipt: RECEIPT,
+      task_id: 'HT-1', disposition: 'cancel', contract: contract(), receipt: RECEIPT,
     });
     expect(out.ok).toBe(false);
     expect(out).toMatchObject({
@@ -89,11 +70,8 @@ describe('decideHumanTaskDisposition', () => {
 
   it('(f) an undeclared disposition value is refused, naming the value', () => {
     const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'resume' as 'cancel',
-      contract: contract(),
+      task_id: 'HT-1', disposition: 'resume' as 'cancel', contract: contract(),
     });
-    expect(out.ok).toBe(false);
     if (out.ok) throw new Error('unreachable');
     expect(out.diagnostics).toHaveLength(1);
     expect(out.diagnostics[0]?.rule).toBe(RULE_HUMAN_TASK_DISPOSITION_UNDECLARED);
@@ -103,11 +81,8 @@ describe('decideHumanTaskDisposition', () => {
 
   it('(g) an absent on_cancel key is refused, never defaulted to continuing', () => {
     const out = decideHumanTaskDisposition({
-      task_id: 'HT-1',
-      disposition: 'cancel',
-      contract: { on_defer: 'keep_journey_active' },
+      task_id: 'HT-1', disposition: 'cancel', contract: { on_defer: 'keep_journey_active' },
     });
-    expect(out.ok).toBe(false);
     if (out.ok) throw new Error('unreachable');
     expect(out.diagnostics[0]?.rule).toBe(RULE_HUMAN_TASK_DISPOSITION_UNDECLARED);
     expect('task_status' in out).toBe(false);
@@ -115,11 +90,7 @@ describe('decideHumanTaskDisposition', () => {
 
   it('(h) the declared dispositions are total: each yields its own status', () => {
     const statuses = DECLARED_JOURNEY_DISPOSITIONS.map((disposition) => {
-      const out = decideHumanTaskDisposition({
-        task_id: 'HT-1',
-        disposition,
-        contract: contract(),
-      });
+      const out = decideHumanTaskDisposition({ task_id: 'HT-1', disposition, contract: contract() });
       if (!out.ok) throw new Error(`unexpected refusal for ${disposition}`);
       return out.task_status;
     });
