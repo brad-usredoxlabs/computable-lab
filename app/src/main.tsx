@@ -12,17 +12,23 @@ async function bootstrap(): Promise<void> {
 
   if (isLabwareFixture) {
     const { LabwareEventEditor } = await import('./graph/LabwareEventEditor')
+    const { LabwareEditorProvider } = await import('./graph/context/LabwareEditorContext')
     const { AiPanelProvider } = await import('./shared/context/AiPanelContext')
     root.render(
       <StrictMode>
         <ExtensionProvider manifest={manifest}>
           <AiPanelProvider>
-            <BrowserRouter>
-              <Routes>
-                <Route path="*" element={<LabwareEventEditor />} />
-              </Routes>
-            </BrowserRouter>
-            <Slot name="chat.panel.global" />
+            {/* g4labmount (g4 D-2): LabwareEventEditor requires a
+                LabwareEditorProvider above it, or useLabwareEditor()
+                throws and the error boundary blanks the page. */}
+            <LabwareEditorProvider>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="*" element={<LabwareEventEditor />} />
+                </Routes>
+              </BrowserRouter>
+              <Slot name="chat.panel.global" />
+            </LabwareEditorProvider>
           </AiPanelProvider>
         </ExtensionProvider>
       </StrictMode>

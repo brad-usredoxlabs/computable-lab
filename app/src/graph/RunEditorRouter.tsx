@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { LabwareEditorProvider } from './context/LabwareEditorContext'
 
 const BindingModeEditor = lazy(
   async () => import('./BindingMode/BindingModeEditor').then((m) => ({ default: m.BindingModeEditor })),
@@ -30,7 +31,12 @@ function RunEditorRouterContent({ record, loading, plannedRunId }: RunEditorRout
 
   return (
     <Suspense fallback={<div className="run-editor-router">Loading editor...</div>}>
-      <LabwareEventEditor />
+      {/* g4labmount (g4 D-2): LabwareEventEditor calls useLabwareEditor(),
+          which throws outside a LabwareEditorProvider — mount it here.
+          BindingModeEditor above is NOT wrapped: it has its own deck path. */}
+      <LabwareEditorProvider>
+        <LabwareEventEditor />
+      </LabwareEditorProvider>
     </Suspense>
   )
 }
