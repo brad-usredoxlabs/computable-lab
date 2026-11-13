@@ -12,6 +12,17 @@
 # labware-definition.schema.yaml:43): the form's required-check never fires
 # on it, and a save with the anchor left empty succeeds and reads back
 # WITHOUT the key (AC2 negative).
+#
+# L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A): the schema's required
+# list is [kind, id, display_name]. kind is stamped by the client (payload.kind
+# — never a form field for any kind); recordId/type/topology/capacity are
+# OPTIONAL (still declared, value-constrained): recordId is spine identity the
+# server derives from the author's id (GC-16 D-A — knowledge kinds carry the
+# AUTHOR's id, never a client-fabricated recordId); type is a const redundant
+# with kind; topology/capacity are import/authoring facts, not door fields.
+# So this form collects exactly what the create door needs (name + author id +
+# anchor + vendor) and its required marks match the schema — the save validates
+# with no client-fabricated identity.
 
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml"
@@ -23,6 +34,9 @@ form:
   sections:
     - title: "Labware definition"
       fields:
+        # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A): required mark
+        # matches the schema's required list ([kind, id, display_name] — kind
+        # is stamped by the client, recordId/type/topology/capacity are optional).
         - path: "$.display_name"
           label: "Display name"
           widget: "text"
@@ -36,6 +50,11 @@ form:
           required: true
           placeholder: "e.g. lbw-def-my-plate@v1"
 
+        # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT B): the ref widget
+        # commits the CANONICAL ref object {kind:'ontology', id, namespace,
+        # label, uri?} (refSelectionValue.ts — the shape stays, untouched).
+        # The schema now declares the optional namespace/label/uri keys, so
+        # this commit validates instead of 422-ing as Unknown property.
         - path: "$.ontology_ref"
           label: "Ontology anchor"
           widget: "ref"

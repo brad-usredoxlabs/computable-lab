@@ -10,12 +10,15 @@ type: object
 additionalProperties: false
 required:
   - kind
-  - recordId
-  - type
   - id
   - display_name
-  - topology
-  - capacity
+  # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A): the create door
+  # author-supplies only {name, author id, anchor, vendor}. recordId is SPINE
+  # identity — knowledge kinds carry the AUTHOR's `id` (GC-16 D-A, never
+  # client-minted) and the server derives recordId from it (extractRecordId
+  # id-fallback). `type` is a const redundant with `kind`. `topology`/
+  # `capacity` are optional import/authoring facts. All four STAY declared
+  # and value-constrained below, so a complete import/seed still validates.
 
 properties:
   kind:
@@ -56,6 +59,21 @@ properties:
         type: string
         pattern: "^[A-Z][A-Za-z0-9]*:[0-9A-Za-z_.-]+$"
         description: "CURIE of the anchored LWO term (e.g., LWO:0000100)."
+      # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT B): the ref widget
+      # commits the CANONICAL ref object {kind, id, namespace, label, uri?}
+      # (refSelectionValue.ts). Declaring the optional keys keeps the strict
+      # additionalProperties:false from 422-ing them as Unknown properties.
+      # `uri` is present only when the term carries an IRI.
+      namespace:
+        type: string
+        description: "Ontology namespace (the CURIE prefix, e.g. LWO)."
+      label:
+        type: string
+        description: "Human label of the anchored term as resolved by the ref widget."
+      uri:
+        type: string
+        pattern: "^[a-zA-Z][a-zA-Z0-9+.-]*:[^\\s]*$"
+        description: "IRI of the anchored term, present only when the source carries one."
   platform_aliases:
     type: array
     items:
