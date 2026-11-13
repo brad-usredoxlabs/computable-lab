@@ -149,3 +149,6 @@ error introduced.
 - Envelope consumed as `RecordWithUIResponse.record.payload` verbatim — same payload
   shape as `/records/:id` (uiSpec.ts:151-156); no re-mapping, no key dropping.
 - Mutation probes used `git checkout --` reverts; both pins confirmed non-vacuous.
+
+L2-SUBPROTOCOL-EXPAND-1 UNIT d3loadpath DONE d21400b986f7cd8fdf366f5ad190cfdbc14888a3
+L2-SUBPROTOCOL-EXPAND-1-d3loadpath UNIT unit DONE d21400b986f7cd8fdf366f5ad190cfdbc14888a3
