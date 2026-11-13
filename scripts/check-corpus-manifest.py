@@ -35,7 +35,8 @@ def norm(s: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo-root", default=".")
+    # default to the repo this script lives in, so it works from any cwd (profiles call it by absolute path)
+    ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]))
     root = Path(ap.parse_args().repo_root)
     corpus_path, manifest_path = root / CORPUS, root / MANIFEST
     try:
