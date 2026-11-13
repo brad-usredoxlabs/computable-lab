@@ -480,6 +480,10 @@ export function RecordCreatePanel({
 
   const handleFormChange = useCallback(
     (next: Record<string, unknown>) => {
+      // g7form C-3 (gate g7-legA-20261113T091102:132-135): the banner describes
+      // the SUBMITTED state; an author edit makes it stale. Clear on EDIT only
+      // (not on validity — real refusals must stay until the author acts).
+      if (error !== null) setError(null)
       if (
         next.title &&
         typeof next.title === 'string' &&
@@ -498,7 +502,7 @@ export function RecordCreatePanel({
       }
       setFormData(next)
     },
-    [formData.title, nodeType, idField, isSpine, schemaDeclaresShortSlug],
+    [formData.title, nodeType, idField, isSpine, schemaDeclaresShortSlug, error],
   )
 
   const handleEditorUpdate = useCallback(
@@ -728,7 +732,11 @@ export function RecordCreatePanel({
       >
         <div className="record-create-panel__body">
           {error ? (
-            <div className="record-create-panel__error" role="alert">
+            <div
+              className="record-create-panel__error"
+              role="alert"
+              data-testid="record-create-refusal"
+            >
               {error}
             </div>
           ) : null}
@@ -749,6 +757,11 @@ export function RecordCreatePanel({
               disabled={isSubmitting}
               onUpdate={handleEditorUpdate}
               enableOntologyCopilot
+              // g7form C-2 (gate g7-legA-20261113T091102:124-131): a create form
+              // is a form, not prose — ProjectionTapTabEditor defaults to 'prose'
+              // (TapTabEditor.tsx:184) whose sheet suppresses the required asterisk
+              // (taptab.css:451-452). Choose the posture; kind-independent.
+              style="form"
             />
           ) : (
             <div className="record-create-panel__fallback">
