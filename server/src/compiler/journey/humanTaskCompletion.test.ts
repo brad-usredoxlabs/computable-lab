@@ -61,7 +61,7 @@ describe('decideHumanTaskCompletion', () => {
       task_id: 'task-select-step',
       contract: contract(),
       candidate: { record_id: 'REC-COLLECTION-1' },
-      committed_record: committed([member('MEMBER-A', 'REV-AAA1'), member('MEMBER-B', 'REV-BBB2')]),
+      committed_record: committed([member('MEMBER-B', 'REV-BBB2'), member('MEMBER-A', 'REV-AAA1')]),
       staged_draft_ids: [],
       now: NOW,
     });
@@ -69,8 +69,8 @@ describe('decideHumanTaskCompletion', () => {
     if (!out.ok) return;
     expect(out.receipt.record_id).toBe('REC-COLLECTION-1');
     expect(out.receipt.member_refs).toEqual([
-      { record_id: 'MEMBER-A', revision_id: 'REV-AAA1' },
       { record_id: 'MEMBER-B', revision_id: 'REV-BBB2' },
+      { record_id: 'MEMBER-A', revision_id: 'REV-AAA1' },
     ]);
   });
 
