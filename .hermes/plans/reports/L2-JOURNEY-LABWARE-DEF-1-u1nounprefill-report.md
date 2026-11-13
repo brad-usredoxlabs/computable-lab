@@ -28,12 +28,13 @@
 - app/src/collections/LabLabwareNewPage.tsx — +15/−1: `initialPrefillName()`
   helper after `mintRecordId`; `const [name, setName] = useState(() =>
   initialPrefillName())` replacing `useState('')` (was line 288).
-- app/src/collections/LabLabwareNewPage.prefill.test.tsx — NEW, 64 lines, 2
+- app/src/collections/LabLabwareNewPage.prefill.test.tsx — NEW, 62 lines, 2
   tests (prefill seed; empty/absent query arms).
 - app/src/collections/LabLabwareNewPage.test.tsx — byte-identical to base
   (verified `git diff --stat b73ec396` on that path is empty).
 
-Output budget: 2 files, 79 changed lines (<= 200). No prohibited file opened
+Output budget: 2 files, 78 changed lines (62 new test + 16 in the page;
+<= 200). No prohibited file opened
 for edit (App.tsx, RecordHostPage.tsx, RecordCreatePanel.tsx, spec-sheet
 suite, config/ui/surfaces.yaml, server/src/**, schema/**, config/journey/**).
 
@@ -109,3 +110,6 @@ mutation-run.txt, tsc-baseline.txt); the scratch dir is deleted at exit.
 
 None for this unit. Units 2–3 of L2-JOURNEY-LABWARE-DEF-1 remain gated per
 the item plan (write-capability legs).
+
+L2-JOURNEY-LABWARE-DEF-1 UNIT 1 DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
+L2-JOURNEY-LABWARE-DEF-1-u1nounprefill UNIT unit DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
