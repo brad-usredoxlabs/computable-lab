@@ -122,7 +122,10 @@ scenarios:
       100 uL of DMEM being proposed. After accept, mousing over the same wells shows 100 uL DMEM.
     completed_when:
       - >-
-        The selected well range is highlighted in yellow before any proposal is applied.
+        The selected region is the rectangle A2-H5 — rows A through H across columns 2 through 5,
+        32 wells — highlighted in yellow before any proposal is applied.
+      - >-
+        All 32 wells of that rectangle receive the 100 uL DMEM; no well outside it does.
       - >-
         A committed event exists for the named wells carrying 100 uL of the Sigma D6429-500ML DMEM
         vendor product, and the wells are painted accordingly.
@@ -157,11 +160,9 @@ scenarios:
       applied, then reload. Acceptable — the person sees DMEM already exists and the proposal still
       applies once, or an explicit partial state naming what exists. Not acceptable — two DMEM
       vendor products, an event applied twice, or the wells reverted to empty with no notice.
-    open_questions:
-      - >-
-        Well addressing is ambiguous in the source. "select A2 then shift-click H5" implies a
-        rectangle, while scenario 2a splits the same range into A2-D5 and E2-H5. Record which wells
-        the drive actually selected; do not let a model decide the intended block.
+    open_questions: []   # ANSWERED by Brad 2026-11-13, verbatim: "We add cells to a rectangle and
+                         # then split that rectangle into two squares, each of which get a different
+                         # treatment." A2-H5 is the rectangle (rows A-H x columns 2-5 = 32 wells).
 
   - id: prompt-2a
     title: 1 mM clofibrate in DMSO, and the composition the wells now carry
@@ -188,6 +189,10 @@ scenarios:
         exists at 1 mM in DMSO referencing that concept.
       - >-
         Committed events carry 1 uL of that formulation into the named wells.
+      - >-
+        The clofibrate lands only in the LOWER square E2-H5 — rows E through H across columns 2
+        through 5, 16 wells — leaving the upper square A2-D5 carrying DMEM alone. Brad, 2026-11-13:
+        the rectangle is split into two squares, each with a different treatment.
       - >-
         Selecting A1 shows the two blocks in DIFFERENT colours — the DMEM-only wells in one block,
         the clofibrate wells in another.
@@ -219,11 +224,8 @@ scenarios:
       Interrupt after the formulation record commits but before the events are applied, then
       reload. Acceptable — no second formulation is minted and the apply happens once. Not
       acceptable — two 1 mM formulations, or wells carrying double the clofibrate.
-    open_questions:
-      - >-
-        Same well-addressing ambiguity as scenario 2. "E2-H5" is used as a block, and the
-        A2-D5/E2-H5 split only makes sense under one reading of the earlier selection. Record what
-        the drive used; do not resolve it with a guess.
+    open_questions: []   # ANSWERED 2026-11-13: no ambiguity. The rectangle A2-H5 is split into two
+                         # squares of 16; the lower square E2-H5 carries the clofibrate.
 
   - id: prompt-3
     title: cells counted in units rather than volume, from an attached protocol
@@ -232,13 +234,20 @@ scenarios:
     utterances:
       - "Add 10,000 HepG2 cells to wells A2-H5"
     entry_state: >-
-      Continuing in the same run and session. The Cell Seeding Protocol is not yet attached to the
-      run. HepG2 is not in the system. Trypsin-EDTA, DMEM and FBS exist as vendor products or can
-      be created from the catalogue numbers Brad supplied.
+      Continuing in the same run and session. The Cell Seeding Protocol — the one at the bottom of
+      the corpus file, really the preamble that precedes seeding — is not yet attached to the run.
+      Its final step is a count on a hemocytometer, an analogue device, so the number CANNOT be read
+      by the system: a person must report it. HepG2 is not in the system. Trypsin-EDTA, DMEM and FBS
+      exist as vendor products or can be created from the catalogue numbers Brad supplied.
     human_choices:
       - >-
-        The person adds the Cell Seeding Protocol to the list of protocols followed in this run.
-        That protocol produces a parameter, cells per uL, which the corpus states as 483.
+        The person adds the Cell Seeding Protocol to the list of protocols followed in this run, so
+        that the run follows the lab's protocol rather than an abstract one.
+      - >-
+        The person completes the protocol's counting step by entering the number they read off the
+        hemocytometer — 483 cells per uL in this corpus — as the protocol's measured result. That
+        number is the input the NEXT instruction consumes; the system must ask for it and must never
+        invent or default it.
       - >-
         If HepG2 is absent, the assistant creates the cell line material anchored to its cell line
         ontology term and uses it here.
@@ -250,16 +259,20 @@ scenarios:
       from the cell count, never typed by the person.
     completed_when:
       - >-
-        The protocol is attached to the run and its cells-per-uL parameter is recorded as 483,
-        readable by name from the run.
+        The protocol is attached to the run, and its final counting step is recorded as a measurement
+        supplied by a person — value 483 cells per uL, with who entered it and when as provenance.
+        A hemocytometer reading cannot be obtained by the system, so a system-invented value fails.
+      - >-
+        That value is addressable as a named parameter of this run, so a later instruction can consume
+        it without the person retyping it and without any code holding 483 as a constant.
       - >-
         HepG2 exists as a cell-line material anchored to a cell-line ontology term.
       - >-
         Trypsin-EDTA (Thermo 25200056), DMEM (Sigma D6429-500ML) and FBS (Sigma F4135-100ML) exist
         as vendor products with those exact catalogue numbers, each pointing at its concept.
       - >-
-        The proposal is 20.7 uL of the mix containing 10,000 cells, and the arithmetic is shown or
-        derivable from the stated 483 cells per uL.
+        The proposal is 20.7 uL of the mix containing 10,000 cells, and the arithmetic follows from
+        the entered value — 10,000 divided by 483 cells per uL — rather than from a hardcoded volume.
       - >-
         After accept, mousing over any well in the range shows 10,000 HepG2 cells plus the final
         concentrations of FBS, DMEM and trypsin-EDTA (~8.6, ~82.9, ~8.6 percent), and the
@@ -289,12 +302,10 @@ scenarios:
       Interrupt after the cell-line record commits but before the derived proposal applies, then
       reload. Acceptable — the parameter is still readable and the apply happens once. Not
       acceptable — two HepG2 concepts, a lost cells-per-uL parameter, or wells carrying 20,000 cells.
-    open_questions:
-      - >-
-        The corpus states the cells-per-uL parameter is "assumed" to be 483. Confirm whether the
-        system must ASK for it at execution, per the standing rule that it asks and never assumes,
-        or may consume a value the corpus declares. As written, a drive should treat 483 as
-        declared input and record where it came from.
+    open_questions: []   # ANSWERED by Brad 2026-11-13: 483 is not an assumption to be consumed — it is
+                         # the number the person reads off the hemocytometer at the protocol's last step
+                         # and enters as the protocol's result, which the NEXT instruction consumes to
+                         # compute the volume for 10,000 cells/well. Ask for it; never default it.
 
   - id: prompt-3a
     title: an incubation with a visible place in the plate's history
@@ -444,12 +455,14 @@ scenarios:
       Interrupt after the source document is fetched and stored but before the draft is produced,
       then reload and resume. Acceptable — one stored document, one draft. Not acceptable — the
       document fetched twice under two ids, or a draft produced from a half-fetched page.
-    open_questions:
-      - >-
-        Brad wrote that the surface should probably offer "Build Protocol" and then "Extract
-        Candidate", and that the other links should probably be deleted. Confirm whether the other
-        entry points are to be removed or merely demoted before a gate treats their presence as a
-        defect.
+    open_questions: []   # SETTLED AS SCOPE, not as a question (Brad 2026-11-13, verbatim: "The
+                         # protocol ingestion interface is very confused ... in some cases the
+                         # components need work", and "the problem with the protocol ingestion surface
+                         # is that the AI never drove it, which is why I continually failed to get it
+                         # working how I want it"). The surface may be REDESIGNED, not merely stitched.
+                         # Brad's lean (Build Protocol, then Extract Candidate; other links probably
+                         # deleted) is INPUT, not a spec. Root cause to respect: nothing has ever
+                         # driven this surface, so a gate must walk it as a person would.
 
   - id: prompt-6
     title: the ingested protocol becomes the run's active protocol
@@ -506,9 +519,18 @@ scenarios:
         Buffer" in the protocol.  Add the 10mls of solution to a single channel 25ml reservoir,
         Use the 8-channel pipette to transfer 100ul of the pre-mixed stain to each well (A2-H5).
     entry_state: >-
-      Continuing in the same run and session. The assay protocol is attached and active. A 25 ml
-      single-channel reservoir type may not exist yet. Nile Red and Hoechst may not exist.
+      Continuing in the same run and session. The assay protocol attached from a vendor PDF is a
+      GLOBAL protocol — the kind Thermo or Bio-Rad publishes. The run does not follow a global
+      protocol; it follows the LOCAL protocol: what THIS lab actually does, with its own buffers and
+      its own instrument, arriving at the same assay. A 25 ml single-channel reservoir type may not
+      exist yet. Nile Red and Hoechst may not exist.
     human_choices:
+      - >-
+        The person (or the assistant, with the person's approval) localizes the global protocol into
+        a local one — taking the AMOUNTS from the global protocol and recording the lab's
+        substitutions, here that Invitrogen Live Cell Imaging Solution replaces the global protocol's
+        "Assay Buffer" — so the run follows the local protocol while the numbers stay traceable to
+        the global source.
       - >-
         If the reservoir type is absent, the person confirms a single-well reservoir wide and deep
         enough for the whole 8-channel head, which at 9 mm tip spacing means at least 63 mm across,
@@ -524,6 +546,13 @@ scenarios:
       Live Cell Imaging Solution carrying 0.1 percent Nile Red reagent and 0.1 percent Hoechst,
       both APExBIO products, and the reservoir holds the remainder.
     completed_when:
+      - >-
+        The run follows a LOCAL protocol that exists as its own record, distinguishable from the
+        global protocol it came from, and the run's protocol list names the local one.
+      - >-
+        The local protocol carries the AMOUNTS from the global protocol and records its substitutions
+        as substitutions — the Live Cell Imaging Solution in place of Assay Buffer — so a reader can
+        see both what was changed and what came from the source. Silent substitution fails.
       - >-
         The mixed stain is one composed material — 10 ml of Live Cell Imaging Solution plus the
         per-protocol amounts of Nile Red and Hoechst — with the components and their percentages
@@ -564,15 +593,16 @@ scenarios:
       Interrupt after the stain composition is committed but before the transfer applies, then
       reload. Acceptable — one composition, one transfer. Not acceptable — two reservoirs, or wells
       that received the stain twice.
-    open_questions:
-      - >-
-        The corpus states 0.1 percent Nile Red and 0.1 percent Hoechst in 99.8 percent solution,
-        while also saying the amounts come from the protocol. If the protocol disagrees with those
-        numbers, the protocol wins and the receipt must say which source was used. Confirm this
-        ordering before a gate treats a mismatch as a defect.
+    open_questions: []   # ANSWERED by Brad 2026-11-13: the protocol hierarchy settles it. A protocol
+                         # from a PDF is GLOBAL; runs always follow the LOCALIZED protocol; the local
+                         # one takes its AMOUNTS from the global one and records its substitutions.
+                         # The corpus percentages are the expectation for the local protocol.
 
   - id: prompt-8
     title: images on the NAS become a linked, analysable dataset for this run
+    state: deferred_by_brad   # Brad 2026-11-13: "Let's punt on prompt 8 for now, I was running out of
+                              # steam." Not a gate target and not dispatchable until he revisits it.
+                              # The scenario stays written down so nothing is lost.
     continues_from: prompt-7
     starts_at: /runs
     utterances:
@@ -612,8 +642,6 @@ scenarios:
       - >-
         The served application revision.
     fault_injection_leg: null
-    open_questions:
-      - >-
-        Brad's expectation here is the thinnest in the corpus ("we will build an image analysis
-        layer using Napari"). Confirm the minimum that counts as done — linking plus an openable
-        analysis surface, or a working Napari view — before a gate grades it.
+    open_questions: []   # PUNTED by Brad 2026-11-13 ("Let's punt on prompt 8 for now"). When it comes
+                         # back, the first question is still what counts as done — linking plus an
+                         # openable surface, or a working Napari view. Not asked now.
