@@ -49,3 +49,5 @@ During RED→GREEN one fixture was corrected (committed in step 3): output_port 
 
 ## Recovery
 Receipts: /home/brad/.humantask-htcschema-scratch/{red-run.txt,mutationA.txt,mutationB.txt,tsc.txt,probe.ts,probe2.ts}. Scratch dir is outside git per brief.
+
+L2-JOURNEY-HUMANTASK-1 UNIT htc-schema DONE 0dc9a1de6a2020767081672929efc2330a61f1fc
