@@ -114,7 +114,7 @@ bare access type-checks by construction; `exactOptionalPropertyTypes`-safe, no `
 ## Next actions
 - None for the coder. Adversarial re-run against the new commit is the gate.
 
-L2-NOUN-FROM-DOC-1 UNIT nfdoutcomesfix1 DONE __SHA__
+L2-NOUN-FROM-DOC-1 UNIT nfdoutcomesfix1 DONE 38bc83ee984ac5c62f5f0bd14a24ad13323a082a
 
 ### 7. Final tree state (post-commit, pre-report)
 `git -c core.fileMode=false status --short` → (empty = clean)
