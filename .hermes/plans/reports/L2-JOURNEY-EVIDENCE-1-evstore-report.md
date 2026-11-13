@@ -78,4 +78,4 @@ No route in server/src/api/**, no client/app code, no schema/YAML edit, no secon
 None for this unit. Unit 3 (handoff citation format / route surface) is un-briefed and not started — out of scope here.
 
 ## Marker
-(append after the report commit)
+L2-JOURNEY-EVIDENCE-1 UNIT 2 DONE 69524b9615aee54c6ae97829075e42361d7b733a
