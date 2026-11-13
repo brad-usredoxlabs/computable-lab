@@ -86,7 +86,7 @@ export function evaluatePolicySet(input: {
 
   const { stale_inputs: staleInputs, ...evaluatedAttributes } = attributes;
   const stale = staleInputs && staleInputs.length > 0 ? [...new Set(staleInputs)] : [];
-  const matchedRuleIds = matched.map(({ rule }) => rule.rule_id);
+  const matchedRuleIds = [...new Set(matched.map(({ rule }) => rule.rule_id))];
 
   // (d) UNCLASSIFIED: no rule matched ⇒ the set's DECLARED restrictive default.
   // No rule id is synthesised — a default is not a rule. Declared stale inputs
