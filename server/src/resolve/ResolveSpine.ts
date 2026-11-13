@@ -33,7 +33,7 @@ import type {
 } from './types.js';
 import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
-import { createLocalOboProvider, loadLocalOboSources, LocalOboSource } from './providers/localObo.js';
+import { createLocalOboProvider, loadLocalOboSources } from './providers/localObo.js';
 import { createRecordProvider } from './providers/records.js';
 import { createTermProvider } from './providers/terms.js';
 import { createVendorExaProvider } from './providers/vendorExa.js';
