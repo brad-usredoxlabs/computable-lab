@@ -6,8 +6,10 @@
  * DRAFTING surface only: it relays the scientist's stated facts as the
  * `compose-receiving` intent to the EXISTING /drafts/compile seam (adapter
  * `receiving`, config/drafting/adapters.yaml) and renders the compiled draft
- * (draftId + reviewHash) or the server's own typed refusal. No accept call, no
- * record create — accept is a later leg.
+ * (draftId + reviewHash) or the server's own typed refusal. Compiling NEVER
+ * accepts: a canAccept draft additionally offers Accept, which relays exactly
+ * {draftId, revision, reviewHash} to the EXISTING /drafts/accept seam and
+ * renders the ids the server returned.
  *
  * Hard rules: the claim rides the RECEIVING_INTENT_SCHEMA vocabulary
  * (additionalProperties:false — no undeclared key is sent); refusal copy is
@@ -84,6 +86,8 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
   const [result, setResult] = useState<CompileResponse | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [acceptBusy, setAcceptBusy] = useState(false)
+  const [accepted, setAccepted] = useState<{ receiptId: string | null; instanceId: string | null } | null>(null)
 
   if (!isOpen) return null
 
@@ -91,6 +95,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
     event.preventDefault()
     setResult(null)
     setFailure(null)
+    setAccepted(null)
     setBusy(true)
     const catalog = nz(catalogNumber)
     const product = nz(productLabel)
@@ -118,6 +123,24 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
       setFailure(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    if (!result || acceptBusy) return
+    setAcceptBusy(true)
+    setFailure(null)
+    try {
+      // Exactly the three keys the server compares against the stored draft;
+      // no document, claim or envelope is ever resubmitted.
+      const a = await apiClient.acceptWorkstateDraft({
+        draftId: result.draftId, revision: result.revision, reviewHash: result.reviewHash,
+      })
+      setAccepted({ receiptId: a.recordId ?? null, instanceId: a.instanceRecordId ?? null })
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAcceptBusy(false)
     }
   }
 
@@ -187,6 +210,20 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
                 <dt>Review hash</dt>
                 <dd data-testid="material-receiving-review-hash">{result.reviewHash}</dd>
               </dl>
+              {!accepted && (
+                <button type="button" className="lab-modal__primary" onClick={handleAccept}
+                  disabled={acceptBusy} data-testid="material-receiving-accept">
+                  {acceptBusy ? 'Accepting…' : 'Accept'}
+                </button>
+              )}
+              {accepted && (
+                <dl data-testid="material-receiving-accepted">
+                  <dt>Receipt record</dt>
+                  <dd data-testid="material-receiving-accepted-record-id">{accepted.receiptId ?? '—'}</dd>
+                  <dt>Material instance</dt>
+                  <dd data-testid="material-receiving-accepted-instance-id">{accepted.instanceId ?? '—'}</dd>
+                </dl>
+              )}
             </div>
           )}
           {result && !result.canAccept && (

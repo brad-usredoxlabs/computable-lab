@@ -4,8 +4,9 @@
  *
  * The door stages a material-receiving attestation through the EXISTING
  * /drafts/compile seam (adapter `receiving`) and renders the compiled draft or
- * the server's own refusal. Nothing is accepted here: this leg stops before
- * accept, so no accept call may happen.
+ * the server's own refusal. Compiling alone never accepts; the accept control
+ * (canAccept only) relays the compiled {draftId, revision, reviewHash} to the
+ * EXISTING /drafts/accept seam and renders the ids the server returned.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
@@ -87,8 +88,9 @@ describe('MaterialReceivingDoor', () => {
 
     expect(screen.getByTestId('material-receiving-draft-id').textContent).toBe('DRAFT-u6recv-1')
     expect(screen.getByTestId('material-receiving-review-hash').textContent).toBe('sha256:abc123')
+    // Compiling alone stages nothing durable: the accept control is offered but never fired.
+    expect(screen.getByTestId('material-receiving-accept')).toBeDefined()
     expect(acceptSpy).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
   })
 
   it('sends occurredAt when the occurrence status is stated and omits it when unknown', async () => {
@@ -172,7 +174,42 @@ describe('MaterialReceivingDoor', () => {
     await waitFor(() => expect(screen.getByTestId('material-receiving-draft-id')).toBeDefined())
     expect(compileSpy).toHaveBeenCalledTimes(1)
     expect(acceptSpy).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
+    expect(screen.getByTestId('material-receiving-accept')).toBeDefined()
+  })
+
+  it('accepts a canAccept draft through the ONE existing seam and renders the ids the server returned', async () => {
+    acceptSpy.mockResolvedValue({
+      recordId: 'MATREC-u8-1', instanceRecordId: 'MATINST-u8-1',
+    })
+    renderDoor()
+    fillClaim()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    const accept = await screen.findByTestId('material-receiving-accept')
+    // Compiling alone must not commit: no accept call until the scientist presses it.
+    expect(acceptSpy).not.toHaveBeenCalled()
+
+    fireEvent.click(accept)
+    await waitFor(() => expect(acceptSpy).toHaveBeenCalledTimes(1))
+    // The server accepts ONLY these three keys; no document/claim/envelope rides back.
+    expect(acceptSpy.mock.calls[0][0]).toEqual({
+      draftId: 'DRAFT-u6recv-1', revision: 1, reviewHash: 'sha256:abc123',
+    })
+    await waitFor(() => expect(screen.getByTestId('material-receiving-accepted-record-id').textContent)
+      .toBe('MATREC-u8-1'))
+    expect(screen.getByTestId('material-receiving-accepted-instance-id').textContent).toBe('MATINST-u8-1')
+    expect(screen.queryByTestId('material-receiving-request-error')).toBeNull()
+  })
+
+  it('renders the server message VERBATIM when the accept is rejected, and shows no accepted ids', async () => {
+    const message = 'Draft changed. Review the current revision before accepting.'
+    acceptSpy.mockRejectedValue(new Error(message))
+    renderDoor()
+    fillClaim()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    fireEvent.click(await screen.findByTestId('material-receiving-accept'))
+    await waitFor(() => expect(screen.getByTestId('material-receiving-request-error').textContent).toBe(message))
+    expect(screen.queryByTestId('material-receiving-accepted-record-id')).toBeNull()
+    expect(screen.queryByTestId('material-receiving-accepted-instance-id')).toBeNull()
   })
 
   it('carries the shared .lab-modal base layout authority, not only its own rules (gate D1)', () => {
