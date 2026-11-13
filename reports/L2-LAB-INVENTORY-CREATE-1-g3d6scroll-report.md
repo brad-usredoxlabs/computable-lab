@@ -188,5 +188,4 @@ fix1-{baseline2,mutA,mutB,mutC,final}.log (outside git).
 DEFECT 2: the line-16 numstat claim is replaced with the measured per-file figures (see above).
 DEFECT 3: exactly one DONE marker line remains, naming the report-body commit (see below).
 
-L2-LAB-INVENTORY-CREATE-1 UNIT DONE 13f6e7d922b620d995e3482480992bb700603e87
-L2-LAB-INVENTORY-CREATE-1 UNIT unit DONE 13f6e7d922b620d995e3482480992bb700603e87
+L2-LABINV-g3d6scroll-fix1 UNIT unit DONE 52cc2d13948dbd9906d1e76ad45f9200f277a016
