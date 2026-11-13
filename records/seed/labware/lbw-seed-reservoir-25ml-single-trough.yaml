@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-reservoir-25ml-single-trough
+name: 25 mL Single-Trough Reservoir (seed)
+labwareType: reservoir_25ml_single
+format:
+  rows: 1
+  cols: 1
+  wellCount: 1
+  wellNaming: "A1"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - reservoir
+  - reservoir_25ml_single
