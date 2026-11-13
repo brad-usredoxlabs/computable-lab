@@ -288,9 +288,11 @@ export interface EventEditorState {
    * POINTER, not a transport failure, so it is a named load state
    * (`loadState: 'missing'`) carrying the graph id instead of the generic
    * `loadError` splash. `load_start` / `load_error` clear it so a successful
-   * (or genuinely failed) retry cannot resurrect a stale banner.
+   * (or genuinely failed) retry cannot resurrect a stale banner. Optional so
+   * the many full-state test fixtures that build a literal `EventEditorState`
+   * keep compiling untouched (they never exercise the missing branch).
    */
-  missingGraphId: string | null
+  missingGraphId?: string | null
   platforms: PlatformManifest[]
   platformId: string
   variantId: string

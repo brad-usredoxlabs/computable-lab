@@ -24,6 +24,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+// jsdom ships no bundled .d.ts (no @types/jsdom in the store) — the import is
+// the only untyped one in this file. The DOM is only a commit surface for the
+// two surface components under test (AppShell's theme effect + react-dom's
+// commit). The item mandates `// @vitest-environment node`, so we build the
+// window by hand rather than letting vitest supply one.
+// @ts-expect-error deliberate: jsdom has no type declarations in this store
 import { JSDOM } from 'jsdom'
 import { apiClient } from '../shared/api/client'
 import { ThemeProvider } from '../shared/shell'
@@ -102,19 +108,23 @@ async function mountWithGraphError(
   // Pending forever: the surfaces stay in the load-failure branch (this unit
   // degrades that branch only — the ready deck is not in scope here).
   vi.spyOn(apiClient, 'getPlatforms').mockReturnValue(new Promise(() => {}))
-  vi.spyOn(apiClient, 'getRecord').mockResolvedValue({ recordId: RUN_ID, payload: {} })
+  vi.spyOn(apiClient, 'getRecord').mockResolvedValue({ recordId: RUN_ID, schemaId: 'run/v1', payload: {} })
   vi.spyOn(apiClient, 'updateRecord').mockRejectedValue(new Error('updateRecord must never be called'))
   const root: Root = createRoot(dom.window.document.getElementById('root')!)
+  // children live in the props object: ProviderProps declares `children`
+  // (required), so createElement(Provider, { runId, eventGraphId, children }).
+  const children = [
+    React.createElement(Probe, { key: 'probe' }),
+    React.createElement(EventEditorShell, { key: 'shell' }),
+    React.createElement(DeckViewer, { key: 'viewer' }),
+  ] as React.ReactNode
   root.render(
     React.createElement(
       ThemeProvider,
       null,
       React.createElement(
         EventEditorProvider,
-        { runId: runId ?? undefined, eventGraphId: GRAPH_ID },
-        React.createElement(Probe),
-        React.createElement(EventEditorShell),
-        React.createElement(DeckViewer),
+        { runId: runId ?? undefined, eventGraphId: GRAPH_ID, children },
       ),
     ),
   )
