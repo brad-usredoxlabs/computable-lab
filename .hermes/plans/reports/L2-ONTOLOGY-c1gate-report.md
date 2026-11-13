@@ -50,9 +50,9 @@ ACCEPTANCE VERIFIED
 ✓ readonly-mint arm untouched: spine kinds still save with client-minted recordId;
   non-spine kinds with schema-required `id` now get client-side rejection for empty.
 
-COMMIT HASHES
--------------
+COMMIT HASHES (final)
+---------------------
 Test commit: f70238b8 — test(ontology-c1): RED — empty required identifier must not POST
-Product commit: 1759d722 — fix(ontology-c1): client gate — empty schema-required identifier refused before POST
+Product commits: 1759d722 + 5ad0bfa6 (merged into fix(ontology-c1))
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-c1gate UNIT unit DONE 1759d722c
+L2-ONTOLOGY-ANCHOR-SOURCES-1-c1gate UNIT unit DONE 29876257

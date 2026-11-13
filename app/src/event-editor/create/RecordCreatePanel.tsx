@@ -536,7 +536,6 @@ export function RecordCreatePanel({
       // unavailable → the gate is skipped and the server speaks. The spine keeps
       // its pre-existing mint (client never checks an empty field for those);
       // only non-spine kinds with schema-required `id` get this parity gate.
-      const schemaRequiresId = !isSpine && Boolean(schemaDoc?.required?.includes(idField))
       if (schemaRequiresId && !identitySlotReadOnly) {
         const idVal = formData[idField]
         const idOk = typeof idVal === 'string' && idVal.trim() !== ''
