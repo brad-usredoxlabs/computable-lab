@@ -93,6 +93,7 @@ import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalo
 import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
 import { compileJourneyEnvelope, type ResolvedInputVersion } from '../compiler/journey/journeyEnvelope.js';
 import { guardJourneyDispatch, loadPolicySetsDir, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
+import { JourneyEvidenceStore, JourneyEvidenceStoreError } from '../compiler/journey/journeyEvidenceStore.js';
 
 /**
  * L2-JOURNEY-CAPABILITY-CATALOGUE-1: the shipped catalogue directory, resolved
@@ -101,6 +102,13 @@ import { guardJourneyDispatch, loadPolicySetsDir, RULE_DISPATCH_POLICY_UNAVAILAB
 const DEFAULT_JOURNEY_CATALOGUE_DIR = fileURLToPath(
   new URL('../../../config/journey/capabilities', import.meta.url),
 );
+
+// L2-JOURNEY-EVIDENCE-1 (unit evroute): the notice is product copy required by the item
+// text — a bundle is retained evidence, not by itself a compliance claim.
+const JOURNEY_EVIDENCE_NOTICE = 'A journey evidence bundle is retained evidence, not by itself a compliance claim: it certifies nothing; it only makes the request, the decisions, the approvals and the effects recoverable for an auditor.';
+const RULE_EVIDENCE_REQUEST_INVALID = 'journey_evidence_request_invalid';
+const RULE_EVIDENCE_NOT_FOUND = 'journey_evidence_not_found';
+const RULE_EVIDENCE_ROOT_UNAVAILABLE = 'journey_evidence_root_unavailable';
 
 /**
  * Options for registering routes.
@@ -212,6 +220,13 @@ export interface RouteOptions {
    * an empty directory is likewise a refusal, never a pass.
    */
   journeyPolicySetDir?: string;
+  /**
+   * L2-JOURNEY-EVIDENCE-1 (unit evroute): root directory of the durable journey
+   * evidence store, read PER REQUEST so a bundle written after boot is served
+   * without a restart. Absent => GET /journey/evidence REFUSES (restrictive
+   * default: the route never guesses a root from cwd).
+   */
+  journeyEvidenceRootDir?: string;
 }
 
 /**
@@ -422,6 +437,43 @@ export function registerRoutes(
       return reply.code(result.allowed ? 200 : 403).send({ ok: result.allowed, record: result.record, diagnostics: result.diagnostics });
     } catch (error) {
       return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `dispatch refused: policy evaluation from ${policyDir} failed: ${error instanceof Error ? error.message : String(error)}`, step_id: stepId }] });
+    }
+  });
+
+  // L2-JOURNEY-EVIDENCE-1 (unit evroute): READ-ONLY surface for one retained bundle.
+  // journey_id/revision are QUERYSTRING params because a schema-legal id may contain
+  // '/' and '@' (a path segment would split it into a different id than the citation
+  // names). The store is PER REQUEST and only its OWN load/verify are called: this
+  // route re-hashes, repairs and validates nothing; a tampered document is served as
+  // verify.ok:false with the bundle refused (null), never silently re-hashed to "valid".
+  fastify.get('/journey/evidence', async (request, reply) => {
+    const query = request.query as Record<string, unknown>;
+    const journeyId = query['journey_id'];
+    const rawRevision = query['revision'];
+    if (typeof journeyId !== 'string' || journeyId.length === 0) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_REQUEST_INVALID, message: 'journey_id must be a non-empty string in the querystring' }] });
+    }
+    const revision = typeof rawRevision === 'string' && /^[1-9][0-9]*$/u.test(rawRevision) ? Number(rawRevision) : Number.NaN;
+    if (!Number.isSafeInteger(revision)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_REQUEST_INVALID, message: `revision must be a positive integer in the querystring; received ${typeof rawRevision === 'string' ? `'${rawRevision}'` : 'nothing'}` }] });
+    }
+    const rootDir = options.journeyEvidenceRootDir;
+    if (rootDir === undefined) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_ROOT_UNAVAILABLE, message: 'no journey evidence root directory is configured; the evidence surface is refused by the restrictive default' }] });
+    }
+    const store = new JourneyEvidenceStore({ rootDir });
+    try {
+      const verify = await store.verify(journeyId, revision);
+      const bundle = await store.load(journeyId, revision);
+      if (bundle === null && verify.mismatches.length === 0) {
+        return reply.code(404).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_NOT_FOUND, message: `journey '${journeyId}' revision ${revision}: no schema-valid bundle is stored under ${rootDir} — a failed read is reported, never a defaulted bundle` }] });
+      }
+      return { ok: true, bundle, verify, notice: JOURNEY_EVIDENCE_NOTICE };
+    } catch (error) {
+      if (error instanceof JourneyEvidenceStoreError) {
+        return reply.code(400).send({ ok: false, diagnostics: [{ rule: error.rule, message: error.message }] });
+      }
+      throw error;
     }
   });
 
