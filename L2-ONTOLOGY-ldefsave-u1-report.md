@@ -86,4 +86,4 @@ Make the labware-definition create door SAVE (g4/g6 DEFECT A+B). Fixed DECLARATI
 - f5da440b  step 3 — save pins for the create door (DEFECT A+B)
 - 3ab05921  tighten comments to the 150-line budget (behavior-neutral)
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT ldefsave-u1 DONE <sha>
+L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT ldefsave-u1 DONE 27837efff2321a1aa8e091e9ad4546cb0c5fa147
