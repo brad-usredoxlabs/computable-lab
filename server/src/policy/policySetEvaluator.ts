@@ -85,10 +85,13 @@ export function evaluatePolicySet(input: {
   );
 
   const { stale_inputs: staleInputs, ...evaluatedAttributes } = attributes;
+  const stale = staleInputs && staleInputs.length > 0 ? [...new Set(staleInputs)] : [];
   const matchedRuleIds = matched.map(({ rule }) => rule.rule_id);
 
   // (d) UNCLASSIFIED: no rule matched ⇒ the set's DECLARED restrictive default.
-  // No rule id is synthesised — a default is not a rule.
+  // No rule id is synthesised — a default is not a rule. Declared stale inputs
+  // still force blocked here, before any classification: they are not a rule,
+  // but they are never allowed to vanish into a default.
   if (matched.length === 0) {
     return {
       kind: 'policy-decision-record',
@@ -96,8 +99,8 @@ export function evaluatePolicySet(input: {
       policy_set_ref: { id: primary.id, version: primary.version },
       evaluated_attributes: evaluatedAttributes,
       matched_rule_ids: [],
-      outcome: OUTCOME[primary.defaults.unclassified],
-      remaining_obligations: [],
+      outcome: stale.length > 0 ? OUTCOME.deny : OUTCOME[primary.defaults.unclassified],
+      remaining_obligations: stale,
       evaluated_at: now,
     };
   }
@@ -111,9 +114,9 @@ export function evaluatePolicySet(input: {
   // (b) obligations accumulate above; (a) deny wins any matching allow;
   // (e) declared stale inputs force blocked regardless of a matching allow.
   let outcome: PolicyDecisionDisposition;
-  if (staleInputs && staleInputs.length > 0) {
+  if (stale.length > 0) {
     outcome = 'blocked';
-    addObligations(staleInputs);
+    addObligations(stale);
   } else if (matched.some(({ rule }) => rule.execution === 'deny')) {
     outcome = 'blocked';
   } else if (
