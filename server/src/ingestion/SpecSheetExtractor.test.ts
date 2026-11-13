@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { SpecSheetFieldMap } from './SpecSheetFieldMaps.js';
+import { getSpecSheetFieldMap } from './SpecSheetFieldMaps.js';
 import { extractProposals, extractFromUrl, EXA_FETCH_BLOCKED } from './SpecSheetExtractor.js';
 
 /* ------------------------------------------------------------------ */
@@ -583,5 +584,70 @@ describe('extractProposals — colon-less segments never accepted as values (g4 
     const capacities = result.filter((p) => p.targetField === 'capacity.max_well_volume_uL');
     expect(capacities).toHaveLength(1);
     expect(capacities[0].value).toBe('195 mL');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* L2-NOUN-FROM-DOC-1 unit 1 — fieldOutcomes (RED pin)                 */
+/* ------------------------------------------------------------------ */
+
+describe('extractFromUrl — fieldOutcomes accounts for every declared field', () => {
+  let exaMod: typeof import('../integrations/exa.js');
+
+  beforeEach(async () => {
+    exaMod = await import('../integrations/exa.js');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('success payload carries an outcome for all 9 declared fields: 2 extracted, 7 not_present', async () => {
+    vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.exa.ai',
+      defaultSearchType: 'auto',
+      defaultContentMode: 'highlights',
+      defaultMaxCharacters: 4000,
+      timeoutMs: 20000,
+    });
+    const docText = 'Vendor: Thermo\nCatalog Number: 25200056';
+    vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({
+      results: [{ text: docText }],
+    });
+
+    const cfg = {
+      integrations: { exa: { apiKey: 'test-key', enabled: true } },
+    } as unknown as Parameters<typeof extractFromUrl>[2];
+    const result = await extractFromUrl('vendor-product', 'https://example.com/partial-doc', cfg);
+
+    expect(result.configured).toBe(true);
+    expect(result.proposals).toHaveLength(2);
+
+    // Every declared field is accounted for, in YAML declaration order (no sort)
+    const fieldMap = await getSpecSheetFieldMap('vendor-product');
+    expect(fieldMap.fieldMappings).toHaveLength(9);
+    expect(result.fieldOutcomes).toHaveLength(9);
+    expect(result.fieldOutcomes.map((o) => o.targetField)).toEqual(
+      fieldMap.fieldMappings.map((m) => m.targetField),
+    );
+
+    const extracted = result.fieldOutcomes.filter((o) => o.status === 'extracted');
+    const notPresent = result.fieldOutcomes.filter((o) => o.status === 'not_present');
+    expect(extracted).toHaveLength(2);
+    expect(notPresent).toHaveLength(7);
+
+    // extracted: passage is a verbatim substring of the document text
+    for (const o of extracted) {
+      expect(o.passage).toBeTypeOf('string');
+      expect(docText).toContain(o.passage!);
+    }
+    // not_present: NO passage key at all — never an empty string, never a guess
+    for (const o of notPresent) {
+      expect('passage' in o).toBe(false);
+      expect(o.passage).toBeUndefined();
+    }
+    // and the not_present fields never appear in proposals (proposals = evidence found)
+    expect(result.proposals.map((p) => p.targetField).sort()).toEqual(['catalog_number', 'vendor']);
   });
 });
