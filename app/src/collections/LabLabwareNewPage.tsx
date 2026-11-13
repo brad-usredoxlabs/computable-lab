@@ -137,7 +137,29 @@ function buildPayloadFromProposals(
     payload.source = { kind: sourceKind, url: provenanceUrl }
   }
 
-  for (const p of proposals) {
+  // g6 D1: the schema REQUIRES topology.addressing, but real spec sheets state array
+  // facts (rows/columns/linear_count) without ever naming an addressing type. Derive it
+  // deterministically from what the document DID yield; an extractor-supplied value wins.
+  const hasField = (field: string) => proposals.some((p) => p.targetField === field)
+  const loopProposals: SpecSheetProposal[] = hasField('topology.addressing')
+    ? proposals
+    : [
+        ...proposals,
+        {
+          targetField: 'topology.addressing',
+          value:
+            hasField('topology.rows') && hasField('topology.columns')
+              ? 'grid'
+              : hasField('topology.linear_count')
+                ? 'linear'
+                : 'single',
+          sourceUrl: proposals[0]?.sourceUrl ?? '',
+          passage: '',
+          specId: 'derived-topology-addressing',
+        },
+      ]
+
+  for (const p of loopProposals) {
     if (p.targetField === 'display_name') continue // already set from the name input
     const parts = p.targetField.split('.')
     let current: Record<string, unknown> = payload

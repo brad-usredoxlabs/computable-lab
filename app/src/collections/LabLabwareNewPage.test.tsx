@@ -811,7 +811,7 @@ describe('LabLabwareNewPage', () => {
       expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
     })
     expect(screen.getByTestId('lab-labware-error').textContent).toBe(
-      'Cannot save: missing or invalid: capacity.max_well_volume_uL',
+      'Cannot save: missing or invalid: capacity',
     )
     expect(mockCreateRecord).not.toHaveBeenCalled()
     expect(screen.queryByTestId('lab-labware-missing-required')).toBeNull()
