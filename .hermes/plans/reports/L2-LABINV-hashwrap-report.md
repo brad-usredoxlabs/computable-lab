@@ -106,3 +106,5 @@ the pre-existing prosemirror-view/ajv worktree-link errors are neither introduce
 ## Remaining / owner
 - AC1/AC2/AC3 acceptance stays with the LABINV g5 browser bundle (independent browser reviewer).
 - No blockers.
+
+L2-LAB-INVENTORY-CREATE-1 UNIT 1 DONE 3e09c2a3ccc3d02d25e89f4df73a180f1d3cb1e3
