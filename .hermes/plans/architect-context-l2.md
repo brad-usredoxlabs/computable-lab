@@ -55,7 +55,7 @@ did not state; surface a named refusal and ask for what is missing.
     additions carry their epistemic status and who accepted them. Owner: `schema/workflow/context-delta.schema.yaml`.
 12. **A saved checkpoint is not an exactly-once write.** Consumption-once state and effect-once domain
     writes are different guarantees; anything crossing a commit boundary owes a fault-injection leg.
-    Owner: `test-prompts/corpus-manifest.yaml` (`fault_injection_leg`).
+    Owner: `/mnt/vast/home/brad/git/computable-lab/test-prompts/corpus-manifest.yaml` (`fault_injection_leg`).
 13. **Policy is data and deny wins.** Permission to propose, permission to execute and approval
     obligations are separate; regulated status comes from authoritative records, never an AI field.
     Owner: `schema/governance/policy-set.schema.yaml`;
@@ -81,11 +81,13 @@ Measured gaps that decide real work:
 - `config/journey/capabilities/` holds FOUR descriptors, all read-only (material-library-search,
   ontology-lookup, vendor-web-search, ncbi-gene-search). No capability CREATES anything, and
   `config/journey/` contains no journey document at all.
-- The universal→local protocol machinery EXISTS and is wired: schema + three lint rules, `BranchResolver`
-  ("Phase-0 of localization"), four producers of local-protocol records
-  (`compiler/protocol/LocalProtocolBuilder.ts`, `compiler/pipeline/passes/ProtocolRealizePass.ts`,
-  `protocol/ProtocolContextService.ts:377,:468`, `api/handlers/IntentAcceptHandlers.ts:58-70`), three
-  YAML pipelines, and `POST /runs/from-local-protocol`.
+- The universal→local protocol machinery EXISTS and is wired: schema + three lint rules,
+  `server/src/protocol/BranchResolver.ts` ("Phase-0 of localization"), four producers of
+  local-protocol records
+  (`server/src/compiler/protocol/LocalProtocolBuilder.ts`,
+  `server/src/compiler/pipeline/passes/ProtocolRealizePass.ts`,
+  `server/src/protocol/ProtocolContextService.ts`, `server/src/api/handlers/IntentAcceptHandlers.ts`),
+  three YAML pipelines, and `POST /runs/from-local-protocol`.
   Missing: nothing writes `overrides.substitutions` (no material substitution is ever produced); no rule
   refuses a run whose effective authority is a universal protocol; the localization pipeline is not a
   declared capability. Do not build a fifth producer.
@@ -93,17 +95,17 @@ Measured gaps that decide real work:
 ## 4. Where the acceptance lives
 
 IMPORTANT — the canon lives in Brad's own working tree, NOT in the lane trunk:
-`/mnt/vast/home/brad/git/computable-lab/test-prompts/`. A lane worktree contains only `easy1.md`
-under `test-prompts/`, so a relative path will not resolve for a coder. Read the canon from that
+`/mnt/vast/home/brad/git/computable-lab/test-prompts/`. A lane worktree's `test-prompts/` holds only the old `easy1.md`, so a
+relative path will not resolve for a coder. Read the canon from that
 absolute path; never copy it into the lane trunk (that would create a second authority, and the
 tripwire below compares one hash against one file).
 
-- `.../test-prompts/AI-Chat-Corpus2.md` — the canon, in Brad's words. Scenario ids 1, 2, 2a, 3, 3a, 4-8.
-- `.../test-prompts/corpus-manifest.yaml` — per scenario: verbatim utterances, entry state, human
+- `/mnt/vast/home/brad/git/computable-lab/test-prompts/AI-Chat-Corpus2.md` — the canon, in Brad's words. Scenario ids 1, 2, 2a, 3, 3a, 4-8.
+- `/mnt/vast/home/brad/git/computable-lab/test-prompts/corpus-manifest.yaml` — per scenario: verbatim utterances, entry state, human
   choices, return expectation, `completed_when`, `not_done_if`, evidence, `continues_from`,
   `fault_injection_leg`. Gates grade `completed_when` as written and treat any `not_done_if` as
   disqualifying. Prompt 8 is deferred by Brad.
-- `python3 .../scripts/check-corpus-manifest.py` — the drift tripwire. Run it before any gate; a
+- `python3 /mnt/vast/home/brad/git/computable-lab/scripts/check-corpus-manifest.py` — the drift tripwire. Run it before any gate; a
   changed corpus needs every utterance re-verified and the hash re-pinned, never a blanket accept.
 - `~/.hermes/cl/lanes/2/corpus-state.md` — which scenario is active, and the old→new id mapping for
   old receipts.
