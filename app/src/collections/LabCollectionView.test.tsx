@@ -276,4 +276,17 @@ describe('LabCollectionView', () => {
     expect(screen.queryByTestId('lab-category-receive-lot')).toBeNull()
     expect(screen.getByTestId('lab-category-new-labware')).toBeDefined()
   })
+
+  // ── L2-SEED-LABLOCAL-1 — instance picker kind pin ─────────────────────
+  // The "New instance" modal's Definition select is fed by the view's own
+  // listRecordsByKind fetch; the grid fetch (labware-instance) is separate,
+  // so the pin asserts the ARGUMENT, not the call count.
+
+  it('opens the instance modal and requests labware-definition records for the Definition picker', async () => {
+    renderCategory('labware-instances')
+    fireEvent.click(screen.getByTestId('lab-category-new-labware-instance'))
+    await waitFor(() => {
+      expect(listRecordsSpy).toHaveBeenCalledWith('labware-definition', 200)
+    })
+  })
 })

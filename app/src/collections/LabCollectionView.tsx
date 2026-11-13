@@ -263,7 +263,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   // Load labware definitions when the instance create modal opens
   useEffect(() => {
     if (showInstanceModal) {
-      void apiClient.listRecordsByKind('labware', 200).then((r) => setLabwareDefinitions(r.records))
+      void apiClient.listRecordsByKind('labware-definition', 200).then((r) => setLabwareDefinitions(r.records))
     }
   }, [showInstanceModal])
 
