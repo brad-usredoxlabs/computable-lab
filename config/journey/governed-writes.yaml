@@ -11,5 +11,5 @@ writes:
   route: POST /records
   handler: RecordHandlers.create
   store: RecordStoreImpl
-  record_kinds: [material, vendor-product]
+  record_kinds: [material, vendor-product, labware, labware-instance]
   guards: [ajv-schema-validation, lint, ownership-acl]
