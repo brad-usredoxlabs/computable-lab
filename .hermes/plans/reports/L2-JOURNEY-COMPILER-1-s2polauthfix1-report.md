@@ -108,4 +108,4 @@ EXIT=0
 ## Next actions
 None for this unit; ready for adversarial re-review (the probe receipt above is the acceptance object).
 
-L2-JOURNEY-COMPILER-1 UNIT s2polauthfix1 DONE <SHA_PLACEHOLDER>
+L2-JOURNEY-COMPILER-1 UNIT s2polauthfix1 DONE f1cbb08fe28e7a290bb7213863c75d527cc28d94
