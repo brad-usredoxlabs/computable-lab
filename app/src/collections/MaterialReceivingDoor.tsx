@@ -165,7 +165,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
 .lab-modal__result dt, .lab-modal__refusal dl dt {
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cl-text-faint);
 }
-.lab-modal__result dd, .lab-modal__refusal dl dd { margin: 0 0 4px; font-family: monospace; font-size: 0.8rem; }
+.lab-modal__result dd, .lab-modal__refusal dl dd { margin: 0 0 4px; font-family: monospace; font-size: 0.8rem; overflow-wrap: anywhere; }
 .lab-modal__refusal dl { margin: 0 0 6px; }
 .lab-modal__hint { margin: 0; font-size: 0.75rem; color: var(--cl-text-faint); }
 `}</style>
