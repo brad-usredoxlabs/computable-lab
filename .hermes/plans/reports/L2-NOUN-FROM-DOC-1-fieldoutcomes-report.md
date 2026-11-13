@@ -202,3 +202,4 @@ met). Awaiting adversarial review / gate. No blockers. If the reviewer rules
 the client key must be REQUIRED, the follow-up must extend the legacy union
 + the specSheetDoor test fixtures — a different item per this brief's scope.
 L2-NOUN-FROM-DOC-1 UNIT 1 DONE 3284dd581aa790697c3d832aacf1a680a3ad4945 (report contained at this sha)
+L2-NOUN-FROM-DOC-1 UNIT 1 DONE 9509856f0781fdade3d4f5aa639fa68e3562619d (final; supersedes the earlier marker line — that sha contains this report and this line)
