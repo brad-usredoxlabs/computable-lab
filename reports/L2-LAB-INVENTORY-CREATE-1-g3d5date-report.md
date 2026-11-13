@@ -140,3 +140,6 @@ no hits).
   (a fresh lane reload is needed if the gate reads from a running server; this unit changed no
   YAML, so no schema reload is required).
 - Blockers: none on this unit.
+
+L2-LAB-INVENTORY-CREATE-1 UNIT g3d5date DONE ec9de5a11b988381fd740052306f1c6a2105270f
+L2-LABINV-g3d5date UNIT g3d5date DONE ec9de5a11b988381fd740052306f1c6a2105270f
