@@ -151,6 +151,41 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
   }
 
   if (steps.length === 0) {
+    // The rail has no step concepts to render. A protocol record requires at
+    // least one step (schema/workflow/protocol.schema.yaml:320 minItems: 1), so
+    // "identity known AND steps empty" can ONLY mean the steps are still in
+    // flight or their read failed — never a genuinely step-less protocol. The
+    // attach surface is therefore reserved for runs with NO known protocol; a
+    // run that already carries a protocol must not show a live "Attach to run"
+    // that could replace it (G3-D3).
+    const proto = sel?.protocol
+    if (proto && sel?.stepsPending) {
+      return (
+        <aside className="protocol-nav" data-testid="protocol-nav">
+          {title ? <header className="protocol-nav__head">{title}</header> : null}
+          <div className="protocol-nav__identity">
+            <ProtocolIdentity protocolId={proto.recordId} fallbackTitle={proto.title ?? null} />
+          </div>
+          <p className="protocol-nav__empty" data-testid="protocol-nav-pending">
+            Loading steps for {proto.title ?? proto.recordId}…
+          </p>
+        </aside>
+      )
+    }
+    if (proto) {
+      return (
+        <aside className="protocol-nav" data-testid="protocol-nav">
+          {title ? <header className="protocol-nav__head">{title}</header> : null}
+          <div className="protocol-nav__identity">
+            <ProtocolIdentity protocolId={proto.recordId} fallbackTitle={proto.title ?? null} />
+          </div>
+          <p className="protocol-nav__error" data-testid="protocol-nav-read-error">
+            The attached protocol's steps could not be read — open the run
+            workspace to retry.
+          </p>
+        </aside>
+      )
+    }
     // No protocol on this run → the rail has nothing to rail. This is the ONE
     // place a biologist can attach one from the run workspace (the right-pane
     // Protocol tab that used to host the picker is not rendered by the

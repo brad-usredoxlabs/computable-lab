@@ -157,6 +157,7 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       // stale labels on every runId/protocol switch, regardless of whether
       // the step/resource fetches below succeed (PROTO-AI-10).
       sel?.setLabwareBindings(resolved?.labwareBindings ?? {})
+      sel?.setStepsPending(true)
       try {
         // What the assay NEEDS (declared labware / equipment roles) comes from
         // the protocol record, not the steps endpoint — publish it alongside the
@@ -213,6 +214,9 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
         }
       } catch {
         // loader is best-effort — ProtocolTabPanel covers fallbacks
+      } finally {
+        // Settle on success, !res.ok, and throw — a superseded load must not clear a newer load's flag.
+        if (!cancelled) sel?.setStepsPending(false)
       }
     }
     void doLoad()
