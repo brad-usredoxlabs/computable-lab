@@ -64,6 +64,13 @@ properties:
         output_ports: { type: array, items: { $ref: "#/$defs/PortBinding" } }
         interaction_mode: { type: string, enum: [automatic, human_in_the_loop] }
         presentation_surface: { type: string, minLength: 1 }
+        # L2-JOURNEY-HUMANTASK-1 (unit htcschema): the declared human-task
+        # contract. Intentionally ABSENT from `required`: the conditionality —
+        # human_in_the_loop steps MUST carry one, automatic steps MUST NOT —
+        # is the lint's journey_human_task_* rules (a `required` here would
+        # break every existing automatic-mode fixture and make the mode/contract
+        # agreement unjudgeable). The closed shape is human-task.schema.yaml.
+        human_task: { $ref: "./human-task.schema.yaml" }
   alternatives:
     type: object
     additionalProperties: false

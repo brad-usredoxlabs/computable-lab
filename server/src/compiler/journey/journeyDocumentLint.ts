@@ -16,7 +16,12 @@
  * default applies. validatePortBinding owns every port rule; this module only
  * builds the requirement, calls it, and relays diagnostic.code and
  * diagnostic.message VERBATIM. A missing producer at an index the consumer needs
- * is journey_port_missing_producer.
+ * is journey_port_missing_producer. (iv) HUMAN-TASK CONTRACT (L2-JOURNEY-
+ * HUMANTASK-1, unit htcschema) — only when the caller passes the surfaces
+ * registry: a human_in_the_loop step must carry a human_task contract, an
+ * automatic step may not, the contract's surface must be declared by the
+ * registry, and its selectable_kinds must be a subset of that surface's
+ * registry selectableKinds (the registry is the authority, never this pass).
  *
  * A step port is a CLOSED vocabulary shape (journey-port.schema.yaml) with no
  * port_type of its own; its type is the $def it validates against, decided by the
@@ -31,10 +36,14 @@ import type { ErrorObject, ValidateFunction } from 'ajv';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
 import { validatePortBinding } from './ports.js';
 import type { MaterialProvenanceLayer, PortReference, PortRequirement, PortType } from './ports.js';
+import { validateHumanTaskContract, RULE_HUMAN_TASK_MISSING, RULE_HUMAN_TASK_UNEXPECTED, RULE_HUMAN_TASK_SURFACE_UNKNOWN, RULE_HUMAN_TASK_KIND_NOT_SELECTABLE } from './humanTaskContract.js';
+import type { SurfacesRegistry } from '../../surfaces/surfaces.js';
 
 export const RULE_SCHEMA = 'journey_document_schema';
 export const RULE_CAPABILITY_NOT_IN_CATALOGUE = 'journey_capability_not_in_catalogue';
 export const RULE_PORT_MISSING_PRODUCER = 'journey_port_missing_producer';
+// Re-exported so callers name the human-task rules from the lint's own module:
+export { RULE_HUMAN_TASK_MISSING, RULE_HUMAN_TASK_UNEXPECTED, RULE_HUMAN_TASK_SURFACE_UNKNOWN, RULE_HUMAN_TASK_KIND_NOT_SELECTABLE };
 export interface JourneyDocumentLintDiagnostic {
   rule: string;
   message: string;
@@ -47,10 +56,18 @@ export interface JourneyDocumentLintResult { ok: boolean; diagnostics: JourneyDo
 interface ShapedStep {
   id: string; capability_ref: string;
   input_ports: Array<Record<string, unknown>>; output_ports: Array<Record<string, unknown>>;
+  interaction_mode: 'automatic' | 'human_in_the_loop';
+  // Optional, absent (never undefined) on automatic steps: the closed contract
+  // when present is human-task.schema.yaml, added to the SAME Ajv below so the
+  // document's relative $ref resolves (schema gate first, semantic rules after).
+  human_task?: { surface: string; selectable_kinds: string[] };
 }
 const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow');
 /** One Ajv for the whole pass: the port vocabulary is added first, so both the
- * document's relative port $refs and the per-$def validators resolve to it. */
+ * document's relative port $refs and the per-$def validators resolve to it.
+ * The human-task contract is added the same way and BEFORE the document: the
+ * document's relative human_task $ref throws at compile time under strict:true
+ * otherwise, exactly as the port $refs would. */
 let compiled: { validate: ValidateFunction; portDefs: Record<string, ValidateFunction> } | undefined;
 function getCompiled() {
   if (compiled !== undefined) return compiled;
@@ -58,6 +75,7 @@ function getCompiled() {
   const ajv = new Ajv2020({ strict: true, allErrors: true });
   const portSchema = load('journey-port.schema.yaml') as { $defs: Record<string, unknown> };
   ajv.addSchema(portSchema);
+  ajv.addSchema(load('human-task.schema.yaml'));
   const validate = ajv.compile(load('journey-document.schema.yaml'));
   const portDefs: Record<string, ValidateFunction> = {};
   for (const [name, def] of Object.entries(portSchema.$defs)) portDefs[name] = ajv.compile(def as object);
@@ -74,7 +92,7 @@ function portTypeOf(port: Record<string, unknown>, defs: Record<string, Validate
 function schemaDiagnostics(errors: readonly ErrorObject[]): JourneyDocumentLintDiagnostic[] {
   return errors.map((e) => ({ rule: RULE_SCHEMA, message: `${e.instancePath || '/'}: ${e.message ?? e.keyword}` }));
 }
-export function lintJourneyDocument(document: unknown, catalogue: CapabilityDescriptor[]): JourneyDocumentLintResult {
+export function lintJourneyDocument(document: unknown, catalogue: CapabilityDescriptor[], surfaces?: SurfacesRegistry): JourneyDocumentLintResult {
   const { validate, portDefs } = getCompiled();
   if (!validate(document)) return { ok: false, diagnostics: schemaDiagnostics(validate.errors ?? []) };
   // The gate proved the shape; the semantic rules read only shaped fields.
@@ -89,6 +107,13 @@ export function lintJourneyDocument(document: unknown, catalogue: CapabilityDesc
         step_id: step.id,
       });
     }
+  }
+  // (iv) HUMAN-TASK CONTRACT — only when the caller passes the registry: the
+  // registry is the authority for what a surface can select, and a caller
+  // without one (the compiler's stage-1 gate) has no authority to judge.
+  // Runs after the capability-membership loop, before the port chaining.
+  if (surfaces !== undefined) {
+    for (const step of steps) diagnostics.push(...validateHumanTaskContract(step, surfaces));
   }
   for (let n = 0; n + 1 < steps.length; n++) {
     const producerStep = steps[n]!;
