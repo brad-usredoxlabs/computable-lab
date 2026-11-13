@@ -29,10 +29,12 @@ form:
           required: true
           placeholder: "e.g. Generic 96-well plate"
 
+        # Author-supplied stable id (GC-16 D-A: client mints no knowledge ids).
         - path: "$.id"
           label: "Identifier"
           widget: "text"
-          readonly: true
+          required: true
+          placeholder: "e.g. lbw-def-my-plate@v1"
 
         - path: "$.ontology_ref"
           label: "Ontology anchor"
