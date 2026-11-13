@@ -1,16 +1,11 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-POLICY-1 (unit ps-schema): the policy set and the policy decision
- * record are two CLOSED, self-contained schemas whose disposition vocabularies
- * are pinned to the shipped server policy types. Ajv (one instance, strict,
- * allErrors) is the sole authority: a set with no restrictive default, a
- * regulated allow without approval, or a rule matching an AI-supplied field
- * must be rejected BEFORE any evaluator exists.
- *
- * No $ref into common.schema.yaml (relative-ref resolution risk under
- * strict: true in this node test; the common ref is unrelated to this seam).
- * The vocabulary pin imports the SHIPPED types, so a schema-local re-typing of
- * either disposition enum is impossible — change one side and this file goes RED.
+ * L2-JOURNEY-POLICY-1 (unit ps-schema): CLOSED, self-contained policy-set and
+ * policy-decision-record schemas; Ajv (one instance, strict, allErrors) is the
+ * sole authority. Self-contained on purpose: NO $ref into common.schema.yaml —
+ * a relative-ref resolution risk under strict:true in a node test, unrelated
+ * to this seam. The vocabulary pin imports the SHIPPED types, so a schema-local
+ * re-typing of either disposition enum is impossible: change one side → RED.
  */
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
@@ -18,6 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import type { PolicyDecisionDisposition, PolicyDisposition } from '../policy/types.js';
 
 const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../schema/governance');
@@ -27,7 +23,10 @@ const load = async (name: string): Promise<Record<string, any>> =>
 const policySetSchema = await load('policy-set.schema.yaml');
 const pdrSchema = await load('policy-decision-record.schema.yaml');
 
+// Pinned instance: { strict: true, allErrors: true }; ajv-formats registers
+// date-time (AjvValidator.ts:157-169 pipeline) so the format is enforced under strict mode.
 const ajv = new Ajv2020({ strict: true, allErrors: true });
+addFormats(ajv);
 ajv.addSchema(policySetSchema);
 ajv.addSchema(pdrSchema);
 const validateSet = ajv.compile(policySetSchema);
@@ -37,7 +36,16 @@ const errorsFor = (validate: ReturnType<typeof ajv.compile>, doc: unknown) => {
   validate(doc);
   return validate.errors ?? [];
 };
-
+/** The full evaluated-attribute vocabulary, once (shared by set + record). */
+const FULL_ATTRS: Record<string, any> = {
+  capability: 'journey.execute-step',
+  effect_kind: 'domain_mutation',
+  record_kind: 'sequence-set',
+  regulated: true,
+  actor_role: 'run-operator',
+  provenance_completeness: 'verified',
+  environment: 'production',
+};
 /** Valid 2-rule set: one regulated confirm-with-approval, one deny. */
 const validSet = (): Record<string, any> => ({
   kind: 'policy-set',
@@ -49,15 +57,7 @@ const validSet = (): Record<string, any> => ({
   rules: [
     {
       rule_id: 'R1',
-      match: {
-        capability: 'journey.execute-step',
-        effect_kind: 'domain_mutation',
-        record_kind: 'sequence-set',
-        regulated: true,
-        actor_role: 'run-operator',
-        provenance_completeness: 'verified',
-        environment: 'production',
-      },
+      match: { ...FULL_ATTRS },
       proposal: 'confirm',
       execution: 'confirm',
       approval: {
@@ -69,12 +69,7 @@ const validSet = (): Record<string, any> => ({
       obligations: ['notify-stakeholders', 'record-evidence'],
       evidence_retention: '90d',
     },
-    {
-      rule_id: 'R2',
-      match: { effect_kind: 'external_disclosure', regulated: false },
-      proposal: 'deny',
-      execution: 'deny',
-    },
+    { rule_id: 'R2', match: { effect_kind: 'external_disclosure', regulated: false }, proposal: 'deny', execution: 'deny' },
   ],
   defaults: { unclassified: 'deny' },
   conflict: { deny_wins: true },
@@ -85,15 +80,7 @@ const validPdr = (): Record<string, any> => ({
   kind: 'policy-decision-record',
   id: 'PDR-0001',
   policy_set_ref: { id: 'PSET-LAB2-ALPHA', version: 1 },
-  evaluated_attributes: {
-    capability: 'journey.execute-step',
-    effect_kind: 'domain_mutation',
-    record_kind: 'sequence-set',
-    regulated: true,
-    actor_role: 'run-operator',
-    provenance_completeness: 'verified',
-    environment: 'production',
-  },
+  evaluated_attributes: { ...FULL_ATTRS },
   matched_rule_ids: ['R1'],
   outcome: 'needs-confirmation',
   remaining_obligations: ['notify-stakeholders'],
@@ -105,19 +92,19 @@ describe('policy-set + policy-decision-record schemas (Ajv is the sole authority
     expect(validateSet(validSet()), JSON.stringify(validateSet.errors)).toBe(true);
   });
 
-  it('(b) rejects a set missing defaults.unclassified, at /required', () => {
+  it('(b) rejects a set missing defaults.unclassified — named required error', () => {
     const doc = validSet();
     delete doc.defaults.unclassified;
     expect(validateSet(doc)).toBe(false);
-    expect(errorsFor(validateSet, doc).some((e) => e.instancePath === '/defaults' && e.keyword === 'required')).toBe(true);
+    expect(errorsFor(validateSet, doc).some((e) => e.instancePath === '/defaults' && e.keyword === 'required' && e.params.missingProperty === 'unclassified')).toBe(true);
   });
 
-  it('(c) rejects a regulated:true + execution:allow rule without approval, at /rules/0/approval', () => {
+  it('(c) rejects a regulated:true + execution:allow rule with no approval — named required error', () => {
     const doc = validSet();
     doc.rules[0].execution = 'allow';
     delete doc.rules[0].approval;
     expect(validateSet(doc)).toBe(false);
-    expect(errorsFor(validateSet, doc).some((e) => e.instancePath === '/rules/0/approval' && e.keyword === 'required')).toBe(true);
+    expect(errorsFor(validateSet, doc).some((e) => e.instancePath === '/rules/0' && e.keyword === 'required' && e.params.missingProperty === 'approval')).toBe(true);
   });
 
   it('(d) rejects a rule whose match carries ai_supplied_tier (closed match)', () => {
@@ -134,7 +121,7 @@ describe('policy-set + policy-decision-record schemas (Ajv is the sole authority
     expect(errorsFor(validateSet, doc).find((e) => e.instancePath === '' && e.keyword === 'additionalProperties')?.params?.additionalProperty).toBe('tier');
   });
 
-  it('(f) accepts a valid decision record; rejects outcome: allow (wrong vocabulary)', () => {
+  it('(f) accepts a valid decision record; rejects outcome: allow (schema enum is allowed, not allow)', () => {
     expect(validatePdr(validPdr()), JSON.stringify(validatePdr.errors)).toBe(true);
     const doc = validPdr();
     doc.outcome = 'allow';
@@ -145,13 +132,9 @@ describe('policy-set + policy-decision-record schemas (Ajv is the sole authority
   it('pins both disposition vocabularies to the shipped server policy types', () => {
     const dispositions: Record<PolicyDisposition, true> = { allow: true, confirm: true, deny: true };
     expect(Object.keys(dispositions).sort()).toEqual(
-      (policySetSchema.properties.rules.items.properties.proposal.enum as string[]).slice().sort(),
+      (policySetSchema.$defs.rule.properties.proposal.enum as string[]).slice().sort(),
     );
-    const outcomes: Record<PolicyDecisionDisposition, true> = {
-      allowed: true,
-      'needs-confirmation': true,
-      blocked: true,
-    };
+    const outcomes: Record<PolicyDecisionDisposition, true> = { allowed: true, 'needs-confirmation': true, blocked: true };
     expect(Object.keys(outcomes).sort()).toEqual(
       (pdrSchema.properties.outcome.enum as string[]).slice().sort(),
     );
