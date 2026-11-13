@@ -227,3 +227,65 @@ describe('record provider (tier 1) — formulationDeclared fact', () => {
     expect('formulationDeclared' in hit!).toBe(false);
   });
 });
+
+describe('record provider (tier 1) — g3 D2: display_name-only definition is matchable', () => {
+  /** Shipped labware-definition shape (records/seed/labware-definition/):
+   *  these records carry `display_name` and NO name/title/label. The
+   *  fixture mirrors the shipped payload field-for-field. */
+  function displayOnlyDefinition(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'lbw-def-generic-1-5ml-microfuge-tube',
+        schemaId: SCHEMA('labware-definition'),
+        payload: {
+          kind: 'labware-definition',
+          id: 'generic/tube_1.5ml@v1',
+          display_name: 'Generic 1.5 mL Microfuge Tube',
+        },
+      },
+    ];
+  }
+
+  it('a display_name-only labware-definition resolves as a concept hit labeled from display_name (not the recordId)', async () => {
+    const store = new RecordsFixtureStore(displayOnlyDefinition());
+    const provider = createRecordProvider(store, ['labware-definition']);
+    const hits = await provider('microfuge', 20, new AbortController().signal);
+    expect(hits.length).toBe(1);
+    expect(hits[0].curie).toBe('local:lbw-def-generic-1-5ml-microfuge-tube');
+    expect(hits[0].label).toBe('Generic 1.5 mL Microfuge Tube');
+  });
+
+  it('display_name extends the match set after name/title/label: a name-bearing definition keeps labelling from name', async () => {
+    const store = new RecordsFixtureStore([
+      {
+        recordId: 'lbw-def-both-fields-1',
+        schemaId: SCHEMA('labware-definition'),
+        payload: {
+          kind: 'labware-definition',
+          name: 'lw-96-deep',
+          display_name: 'Deep Well Plate 96 (served display)',
+        },
+      },
+    ]);
+    const provider = createRecordProvider(store, ['labware-definition']);
+    const hits = await provider('deep well', 20, new AbortController().signal);
+    expect(hits.length).toBe(1);
+    expect(hits[0].label).toBe('lw-96-deep');
+  });
+
+  it('a non-string display_name is skipped (same guard as name/title/label)', async () => {
+    const store = new RecordsFixtureStore([
+      {
+        recordId: 'lbw-def-nondisplay-1',
+        schemaId: SCHEMA('labware-definition'),
+        payload: {
+          kind: 'labware-definition',
+          display_name: 42,
+        },
+      },
+    ]);
+    const provider = createRecordProvider(store, ['labware-definition']);
+    const hits = await provider('anything', 20, new AbortController().signal);
+    expect(hits.length).toBe(0);
+  });
+});
