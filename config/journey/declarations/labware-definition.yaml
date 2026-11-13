@@ -1,0 +1,73 @@
+# L2-JOURNEY-LABWARE-DEF-1 (unit u2a/u2adecl) — the Pilot-A labware-definition
+# journey, AUTHORED AS DATA in the journey-document format. A declaration, not
+# code: it changes no behavior. It must survive lintJourneyDocument against the
+# REAL shipped capability catalogue and the REAL work-surface registry.
+#
+# Scope note: exactly two steps, both capability_refs in the admitted catalogue
+# (journey.ontology-lookup). There is NO instance-placement step — no
+# place-instance capability exists in the admitted catalogue; that is declared
+# unresolved below and owned by a later unit.
+journey_id: journey-labware-definition
+revision: 1
+authoring_actor:
+  actor_kind: agent
+  actor_id: journey-author
+request_anchor:
+  message_id: corpus2-prompt1
+  verbatim_text: "define and place a deepwell plate that does not exist yet"
+objective: >
+  create a geometry-bearing labware-definition record, anchor or
+  visibly-unanchor it via journey.ontology-lookup, place an instance, and
+  resume the origin prompt.
+completion_contract:
+  - "the labware-definition record is committed"
+  - "the origin prompt is resumed at the journey checkpoint"
+parameters:
+  - name: plate-noun
+    provenance: user-supplied
+    status: unresolved
+steps:
+  - id: anchor-noun
+    capability_ref: journey.ontology-lookup
+    input_ports: []
+    output_ports:
+      - version: v1
+        draft_id: DRAFT-labware-definition
+    interaction_mode: automatic
+  - id: complete-definition
+    capability_ref: journey.ontology-lookup
+    input_ports: []
+    output_ports: []
+    interaction_mode: human_in_the_loop
+    human_task:
+      decision: "complete the geometry for the new deepwell-plate labware definition"
+      surface: record-create
+      controls:
+        - labware-geometry-form
+      selectable_kinds: []
+      completion:
+        kind: governed_write
+        receipt_required: true
+      output_port:
+        version: v1
+        record_id: REC-labware-definition
+        record_type: labware-definition
+        receipt_id: RCPT-labware-definition
+      on_cancel: keep_journey_active
+      on_defer: keep_journey_active
+alternatives:
+  options:
+    - alternative_id: author-new-definition
+      summary: "author a new labware-definition record for the deepwell plate"
+  selection_authority: user
+return_contract:
+  checkpoint_ref: cp-journey-labware-definition
+  permitted_result_types:
+    - completed
+    - abandoned
+  require_explicit_resume: true
+assumptions:
+  - "a geometry-bearing labware-definition record is the durable artifact this journey commits"
+unresolved_questions:
+  - "place-instance capability not yet in the admitted catalogue — declared unresolved; a later unit owns it"
+  - "the record-create surface is declared in config/ui/surfaces.yaml but not yet in the work-surface registry (schema/registry/surfaces/surfaces.yaml); declared unresolved pending registry admission"
