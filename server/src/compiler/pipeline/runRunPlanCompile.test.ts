@@ -7,8 +7,54 @@ import { runRunPlanCompile } from './runRunPlanCompile.js';
 import { PassRegistry } from './PassRegistry.js';
 import type { Pass, PassRunArgs, PassResult } from './types.js';
 import { loadPipeline } from './PipelineLoader.js';
+import type { RecordStore } from '../../store/types.js';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// ---------------------------------------------------------------------------
+// In-memory RecordStore for full-pipeline runs (planned-run → emit pass).
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal in-memory store covering the method surface the run-plan-compile
+ * pipeline touches: get (by id), list (revision enumeration), create/update.
+ */
+function makeInMemoryStore(initial: Record<string, Record<string, unknown>>): {
+  store: RecordStore;
+  created: Array<Record<string, unknown>>;
+  updated: Array<Record<string, unknown>>;
+} {
+  const records = new Map<string, Record<string, unknown>>(
+    Object.entries(initial).map(([id, payload]) => [id, { recordId: id, schemaId: '', payload }]),
+  );
+  const created: Array<Record<string, unknown>> = [];
+  const updated: Array<Record<string, unknown>> = [];
+  const envelope = (id: string) => {
+    const r = records.get(id);
+    return r ? { recordId: id, schemaId: r.schemaId, payload: r.payload } : null;
+  };
+  const store = {
+    get: async (id: string) => envelope(id),
+    getByPath: async () => null,
+    getWithValidation: async () => ({ success: false, error: 'not implemented' }),
+    list: async () => Array.from(records.values()).map((r) => ({ recordId: r.recordId as string, schemaId: r.schemaId as string, payload: r.payload })),
+    create: async (options: { envelope: { recordId: string; schemaId: string; payload: Record<string, unknown> } }) => {
+      records.set(options.envelope.recordId, { recordId: options.envelope.recordId, schemaId: options.envelope.schemaId, payload: options.envelope.payload });
+      created.push(options.envelope);
+      return { success: true, envelope: options.envelope };
+    },
+    update: async (options: { envelope: { recordId: string; schemaId: string; payload: Record<string, unknown> } }) => {
+      records.set(options.envelope.recordId, { recordId: options.envelope.recordId, schemaId: options.envelope.schemaId, payload: options.envelope.payload });
+      updated.push(options.envelope);
+      return { success: true, envelope: options.envelope };
+    },
+    delete: async () => ({ success: false, error: 'not implemented' }),
+    validate: async () => ({ valid: true, errors: [] }),
+    lint: async () => ({ ok: true, errors: [] }),
+    exists: async () => true,
+  } as unknown as RecordStore;
+  return { store, created, updated };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PIPELINE_PATH = path.join(__dirname, '../../../../schema/registry/compile-pipelines/run-plan-compile.yaml');
@@ -276,5 +322,110 @@ describe('runRunPlanCompile', () => {
       // Only ai_plan_quality_scoring should be missing
       expect(missingPasses).toEqual(['ai_plan_quality_scoring']);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Full pipeline: drive runRunPlanCompile end-to-end against an in-memory store.
+// An unbound role must surface as status 'blocked' with an UNBOUND_ROLE
+// diagnostic, and must NOT create a graph or repoint the planned-run (D-6).
+// (The happy path — a fully bound plan creates exactly one linked graph — is
+// pinned by the emit-pass legs in PlannedRunEventsEmitPass.test.ts.)
+// ---------------------------------------------------------------------------
+
+const PLR_D6 = 'PLR-d6';
+
+/**
+ * Minimal in-memory store covering the surface the run-plan-compile pipeline
+ * touches for a string-role step: get (PLR/LPR/protocol/verb), create, update.
+ */
+function makeD6Store(
+  initial: Record<string, Record<string, unknown>>,
+  sink: { created: Array<Record<string, unknown>>; updated: Array<Record<string, unknown>> },
+) {
+  const m = new Map(
+    Object.entries(initial).map(([id, payload]) => [id, { recordId: id, schemaId: '', payload }]),
+  );
+  const env = (id: string) => {
+    const r = m.get(id);
+    return r ? { recordId: r.recordId as string, schemaId: r.schemaId as string, payload: r.payload } : null;
+  };
+  const store = {
+    get: async (id: string) => env(id),
+    create: async (o: { envelope: { recordId: string } }) => {
+      const e = o.envelope;
+      m.set(e.recordId, e);
+      sink.created.push(e);
+      return { success: true, envelope: e };
+    },
+    update: async (o: { envelope: { recordId: string } }) => {
+      const e = o.envelope;
+      m.set(e.recordId, e);
+      sink.updated.push(e);
+      return { success: true, envelope: e };
+    },
+  } as unknown as RecordStore;
+  return { store, created: sink.created, updated: sink.updated };
+}
+
+/**
+ * Seed a planned-run whose transfer step references a role ('reservoir') with
+ * no binding. String-role steps leave expandedProtocol.labwareRoles empty, so
+ * the binding passes resolve nothing and project_result stays non-blocked —
+ * the emit pass is the only thing that can refuse (exactly the D-6 path).
+ */
+function seedUnboundStore() {
+  const sink = { created: [] as Array<Record<string, unknown>>, updated: [] as Array<Record<string, unknown>> };
+  const protocol = {
+    kind: 'protocol', recordId: 'PRTO-d6', version: '1.0.0', resolvedSampleCount: 1,
+    phases: [{ id: 'prep', label: 'Prep', ordinal: 1 }],
+    steps: [{ stepId: 'step-1', ordinal: 1, phaseId: 'prep', kind: 'transfer', source: 'reservoir', target: 'plate', volume_uL: 200 }],
+  };
+  const plr = {
+    kind: 'planned-run', recordId: PLR_D6, localProtocolRef: { id: 'LPR-d6' },
+    methodEventGraphId: 'EVG-PREV', bindings: {},
+  };
+  const initial = {
+    [PLR_D6]: plr,
+    'LPR-d6': { kind: 'local-protocol', recordId: 'LPR-d6', inherits_from: { id: 'PRTO-d6' } },
+    'PRTO-d6': protocol,
+    'VERB-TRANSFER': {
+      canonical: 'transfer',
+      semanticInputs: [
+        { name: 'source', derivedFrom: { input: 'source', fn: 'passthrough' }, required: true },
+        { name: 'target', derivedFrom: { input: 'target', fn: 'passthrough' }, required: true },
+      ],
+    },
+  };
+  return makeD6Store(initial, sink);
+}
+
+describe('runRunPlanCompile full pipeline (D-6)', () => {
+  it('unbound role → status blocked, diagnostic names role, no graph created, no repoint', async () => {
+    const { store, created, updated } = seedUnboundStore();
+
+    const result = await runRunPlanCompile({ plannedRunRef: PLR_D6, recordStore: store });
+
+    // Refusal must not read as success; eventGraphRef stays absent.
+    expect(result.runPlanCompileResult.status).toBe('blocked');
+    expect(result.eventGraphRef).toBeUndefined();
+
+    // A diagnostic names the unbound role using the sibling endpoint's
+    // { roleId, stepId } vocabulary.
+    const refusal = result.runPlanCompileResult.diagnostics.find(
+      (d) => d.code === 'UNBOUND_ROLE',
+    );
+    expect(refusal).toBeDefined();
+    expect(refusal!.severity).toBe('error');
+    expect(refusal!.message).toContain('reservoir');
+    expect(refusal!.details).toEqual(
+      expect.objectContaining({ roleId: 'reservoir', stepId: 'step-1' }),
+    );
+
+    // Nothing persisted and the planned-run link was not repointed.
+    expect(created.length).toBe(0);
+    expect(updated.length).toBe(0);
+    const plrPayload = (await store.get(PLR_D6))!.payload as Record<string, unknown>;
+    expect(plrPayload.methodEventGraphId).toBe('EVG-PREV');
   });
 });
