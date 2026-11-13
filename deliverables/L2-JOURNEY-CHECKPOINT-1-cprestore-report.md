@@ -177,3 +177,6 @@ restore, before this report was written).
 - HTTP routes (cproute), surface declarations (cpdeclare), client affordance (cpclient).
 - Browser receipt for the blocked-restoration acceptance case (task-list.md:20154-20155) —
   milestone gate over cpstore3+cproute+cpclient, waived for this leg.
+
+L2-JOURNEY-CHECKPOINT-1 UNIT cprestore DONE 81efad193a1e8875d81e1b3646ed279fba9fe9a6
+L2-JOURNEY-CHECKPOINT-1-cprestore UNIT unit DONE 81efad193a1e8875d81e1b3646ed279fba9fe9a6
