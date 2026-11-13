@@ -15,14 +15,14 @@
 #
 # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A): the schema's required
 # list is [kind, id, display_name]. kind is stamped by the client (payload.kind
-# — never a form field for any kind), and recordId/type/topology/capacity are
+# — never a form field for any kind); recordId/type/topology/capacity are
 # OPTIONAL (still declared, value-constrained): recordId is spine identity the
 # server derives from the author's id (GC-16 D-A — knowledge kinds carry the
 # AUTHOR's id, never a client-fabricated recordId); type is a const redundant
 # with kind; topology/capacity are import/authoring facts, not door fields.
 # So this form collects exactly what the create door needs (name + author id +
-# anchor + vendor), and its required marks match the schema's required list —
-# the save validates with no client-fabricated identity.
+# anchor + vendor) and its required marks match the schema — the save validates
+# with no client-fabricated identity.
 
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml"

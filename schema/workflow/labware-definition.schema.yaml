@@ -12,15 +12,13 @@ required:
   - kind
   - id
   - display_name
-  # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A) — the create door
-  # author-supplies only {name, author id, anchor, vendor}. recordId is a SPINE
-  # identity: knowledge kinds carry the AUTHOR's `id` (GC-16 D-A — never
-  # client-minted) and the server derives recordId from it (extractRecordId's
-  # id fallback), so recordId is optional here, never a client-fabricated stamp.
-  # `type` is a const redundant with `kind` (auto-satisfied only when sent).
-  # `topology`/`capacity` are optional structural facts supplied by
-  # import/authoring, not by the minimal create. All four STAY declared
-  # (value-constrained) below, so a complete import/seed still validates fully.
+  # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT A): the create door
+  # author-supplies only {name, author id, anchor, vendor}. recordId is SPINE
+  # identity — knowledge kinds carry the AUTHOR's `id` (GC-16 D-A, never
+  # client-minted) and the server derives recordId from it (extractRecordId
+  # id-fallback). `type` is a const redundant with `kind`. `topology`/
+  # `capacity` are optional import/authoring facts. All four STAY declared
+  # and value-constrained below, so a complete import/seed still validates.
 
 properties:
   kind:
@@ -61,12 +59,11 @@ properties:
         type: string
         pattern: "^[A-Z][A-Za-z0-9]*:[0-9A-Za-z_.-]+$"
         description: "CURIE of the anchored LWO term (e.g., LWO:0000100)."
-      # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT B) — the ref widget
+      # L2-ONTOLOGY-ANCHOR-SOURCES-1 (ldefsave-u1, DEFECT B): the ref widget
       # commits the CANONICAL ref object {kind, id, namespace, label, uri?}
-      # (app/src/editor/taptab/refSelectionValue.ts). Declaring the optional
-      # keys here keeps the strict additionalProperties:false from 422-ing
-      # them as Unknown properties. `uri` is present only when the term
-      # carries an IRI, so it is constrained to IRI form.
+      # (refSelectionValue.ts). Declaring the optional keys keeps the strict
+      # additionalProperties:false from 422-ing them as Unknown properties.
+      # `uri` is present only when the term carries an IRI.
       namespace:
         type: string
         description: "Ontology namespace (the CURIE prefix, e.g. LWO)."
