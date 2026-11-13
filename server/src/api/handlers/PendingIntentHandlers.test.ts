@@ -116,6 +116,30 @@ describe('PendingIntentHandlers — HTTP surface over the checkpoint store (cpro
     expect(refused.body).toMatchObject({ code: 'injection-refused' });
   });
 
+  it('a delta naming a checkpoint id the thread does not hold => 404 checkpoint-not-found, no fabricated association (d1bind)', async () => {
+    const root = await makeRoot('cproute-deltabind-');
+    const handlers = createPendingIntentHandlers({ rootDir: root });
+    await handlers.save(fakeRequest({ endpoint: 'protocols' }, { body: makeCheckpoint() }), fakeReply() as unknown as FastifyReply);
+    // The thread holds cp-journey-1; the path names CP-GHOST. The store never had that document,
+    // so the attach must refuse — NOT echo the path segment back as if it were confirmed.
+    const ghost = fakeReply();
+    await handlers.attachDelta(
+      fakeRequest({ endpoint: 'protocols', checkpointId: 'CP-GHOST' }, { body: makeDelta() }),
+      ghost as unknown as FastifyReply,
+    );
+    expect(ghost.statusCode).toBe(404);
+    expect(ghost.body).toMatchObject({ error: 'checkpoint-not-found' });
+    expect(ghost.body).not.toHaveProperty('delta_id');
+    // The SAME request with the id the thread DOES hold still attaches, and the echoed id is the confirmed document's.
+    const matched = fakeReply();
+    await handlers.attachDelta(
+      fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }, { body: makeDelta() }),
+      matched as unknown as FastifyReply,
+    );
+    expect(matched.statusCode).toBe(200);
+    expect(matched.body).toEqual({ delta_id: 'delta-1', checkpoint_id: 'cp-journey-1' });
+  });
+
   it('a contract-invalid checkpoint => 400 with the diagnostic codes and NOTHING persisted', async () => {
     const root = await makeRoot('cproute-invalid-');
     const handlers = createPendingIntentHandlers({ rootDir: root });
