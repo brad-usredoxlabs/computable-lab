@@ -104,3 +104,5 @@ exit 0, fully green (verbatim tail, full output at
   src/editor/taptab/RefCombobox.ontologyref.test.tsx (searchField: string vs
   "keywords" | "tags") exists at base e18cc3ee with fresh deps; outside this
   unit's scope, needs an owner.
+
+L2-SUBPROTOCOL-EXPAND-1-g6leg2a UNIT unit DONE 5d6cc14fddc2df76401b5867a46daf1bd721650a
