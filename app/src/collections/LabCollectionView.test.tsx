@@ -309,4 +309,14 @@ describe('LabCollectionView', () => {
       document.querySelector('.cl-app .lab-modal__backdrop [data-testid="labware-instance-label-input"]'),
     ).not.toBeNull()
   })
+
+  // ── L2-LAB-INVENTORY-CREATE-1 d7shelf — MATRES-SHELF mount pin ─────────
+  // Mutation probe: deleting the activeCategory === 'materials' guard left
+  // the suite at 15/15 (unpinned), so the panel's ABSENCE outside materials
+  // is now asserted directly.
+
+  it('does NOT show the shelf lookup panel on non-materials categories (d7shelf mount pin)', () => {
+    renderCategory('labware')
+    expect(screen.queryByTestId('lab-shelf-lookup')).toBeNull()
+  })
 })
