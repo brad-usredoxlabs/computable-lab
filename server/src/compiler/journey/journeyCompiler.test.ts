@@ -77,18 +77,24 @@ function stringTokens(source: string) {
 }
 /** Closed string-literal vocabulary of the product module (any id would be a defect). */
 const CLOSED_LITERALS = [
-  'READY', 'NOT_READY', 'awaiting_producer_output', 'awaiting_human_completion',
+  'READY', 'NOT_READY', 'awaiting_producer_output', 'awaiting_human_completion', 'stale_input',
   'journey_capability_version_missing', 'automatic', 'human_in_the_loop',
   // module wiring and defensive message text, verified by reading the source — not ids:
   './journeyDocumentLint.js', './capabilityCatalogue.js',
   'step ${step.id}: the admitted capability descriptor declares no version string', 'string',
 ];
-/** Closed unquoted-object-key vocabulary of the product module. */
+/** Closed unquoted-object-key vocabulary of the product module. Unit s2inval adds
+ * the declared manifest field invalidations, the function parameter invalidation,
+ * and the JourneyEnvelopeInvalidation field message. (JourneyEnvelopeInvalidation
+ * and recordEnvelopeInvalidation are type/function identifiers: the extractor scans
+ * only string literals and unquoted object keys, and this pin is an exact-set match,
+ * so they are declared in the source, not in these lists.) */
 const CLOSED_KEYS = [
   'id', 'capability_ref', 'capability_version', 'interaction_mode', 'status', 'reasons',
   'blocked_by', 'journey_id', 'revision', 'steps', 'not_ready', 'ok', 'manifest',
   'diagnostics', 'input_ports', 'output_ports', 'document', 'catalogue', 'rule', 'step_id',
   'blockedBy', 'compiled', 'rawVersion',
+  'invalidations', 'invalidation', 'message',
 ];
 /** The same clean two-step fixture the first pin uses: step 1 READY,
  * step 2 NOT_READY awaiting its producer — the shape unit s2inval needs. */
@@ -209,31 +215,82 @@ describe('compileJourneyStructure', () => {
     const capabilityId = 'ghost' + '-cap'; // (iii) a capability-id equality check
     expect(outsideClosedSets(source + "\nif (step.capability_ref === '" + capabilityId + "') { return { ok: false, diagnostics: [] }; }\n")).toBe(true);
   });
-  it('RED probe (unit s2inval): the manifest can carry a stage-2 envelope invalidation', () => {
+  // Unit s2inval: the manifest records a stage-2 envelope invalidation.
+  it('AC1: a compiled manifest reads back with not_ready exactly the non-READY ids, and after recordEnvelopeInvalidation the step is NOT_READY with stale_input once and one invalidation entry verbatim', () => {
     const plan = twoStepPlan();
     const result = compileJourneyStructure(plan, CATALOGUE);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('gate unexpectedly failed');
     const manifest = result.manifest;
-    // The NOT_READY step of the fixture is the step an envelope can go stale on.
+    // Unchanged baseline: not_ready is exactly the ids whose status !== 'READY', document order.
+    expect(manifest.not_ready).toEqual(manifest.steps.filter((s) => s.status !== 'READY').map((s) => s.id));
+    expect(manifest.not_ready).toEqual(['measure']);
     const target = manifest.steps[1]!;
-    expect(target.id).toBe('measure');
-    expect(target.status).toBe('NOT_READY');
-    // RED today: CompiledJourneyManifest has no invalidations member and the
-    // export does not exist — this call is the probe the unit must make pass.
     const recorded = recordEnvelopeInvalidation(manifest, {
       step_id: target.id,
       rule: 'journey_envelope_stale_input',
-      message: 'the step 2 input is stale',
+      message: 'step measure: the source record was revised',
     });
-    expect(recorded).toBeDefined();
+    expect(recorded).not.toBe(manifest);
+    expect(recorded.journey_id).toBe(manifest.journey_id);
+    expect(recorded.revision).toBe(manifest.revision);
     expect(recorded.invalidations).toEqual([{
       step_id: 'measure',
       rule: 'journey_envelope_stale_input',
-      message: 'the step 2 input is stale',
+      message: 'step measure: the source record was revised',
     }]);
     expect(recorded.steps[1]!.status).toBe('NOT_READY');
-    expect(recorded.steps[1]!.reasons).toEqual(['awaiting_producer_output', 'stale_input']);
+    const reasonCount = recorded.steps[1]!.reasons.filter((r) => r === 'stale_input').length;
+    expect(recorded.steps[1]!.reasons).toContain('stale_input');
+    expect(reasonCount).toBe(1); // stale_input exactly once
+    // The other step rides through unchanged.
+    expect(recorded.steps[0]!.status).toBe('READY');
+    expect(recorded.steps[0]!.reasons).toEqual([]);
     expect(recorded.not_ready).toEqual(['measure']);
+    // READY = zero reasons, NOT_READY = at least one reason, for every step.
+    for (const step of recorded.steps) {
+      expect(step.status === 'READY' ? step.reasons.length === 0 : step.reasons.length > 0).toBe(true);
+    }
+  });
+  it('AC2: a second refusal for the same step and rule adds no duplicate stale_input reason and does not mutate the input manifest', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    const original = JSON.parse(JSON.stringify(manifest)); // snapshot taken BEFORE the calls
+    const entry = {
+      step_id: 'measure',
+      rule: 'journey_envelope_stale_input',
+      message: 'step measure: the source record was revised',
+    };
+    const once = recordEnvelopeInvalidation(manifest, entry);
+    const onceSnapshot = JSON.parse(JSON.stringify(once)); // snapshot BEFORE the second call
+    const twice = recordEnvelopeInvalidation(once, entry);
+    expect(twice.steps[1]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1); // no duplicate reason
+    expect(twice.steps[1]!.status).toBe('NOT_READY');
+    expect(twice.invalidations).toHaveLength(2); // each refusal appends its own entry
+    expect(twice.not_ready).toEqual(['measure']);
+    // The input manifest is never mutated: deep-equality against the pre-call snapshot.
+    expect(manifest).toEqual(original);
+    expect('invalidations' in manifest).toBe(false); // the original still carries no invalidation
+    expect(manifest.steps[1]!.reasons).toEqual(['awaiting_producer_output']);
+    expect(manifest.steps[1]!.status).toBe('NOT_READY');
+    // Neither intermediate result is mutated by a later call.
+    expect(once).toEqual(onceSnapshot);
+    expect(once.steps[1]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1);
+  });
+  it('AC3: a manifest compiled with no invalidation carries no invalidations key at all (absent, not undefined)', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    expect('invalidations' in result.manifest).toBe(false);
+    // And after recording, the invalidations key is present with the declared entry.
+    const recorded = recordEnvelopeInvalidation(result.manifest, {
+      step_id: 'measure', rule: 'journey_envelope_stale_input', message: 'step measure: revised',
+    });
+    expect('invalidations' in recorded).toBe(true);
+    expect(recorded.invalidations).toHaveLength(1);
   });
 });
