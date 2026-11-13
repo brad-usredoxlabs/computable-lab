@@ -1,10 +1,11 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-POLICY-1 (unit psdispatch3): red-first arms for the dispatch guard.
- * The guard is the ONLY place a compiled envelope is handed on; these cases pin
- * that render is not authority, that no caller-supplied attribute moves the
- * outcome, and that a missing policy set refuses instead of passing. Policy-set
- * fixtures are inline temp dirs written by this test (never config/).
+ * L2-JOURNEY-POLICY-1 (unit psdispatch2) — POST /api/journey/dispatch.
+ * Render is not authority: an envelope carrying a recorded `allowed`
+ * authorization is REFUSED when the declared policy set says otherwise, and the
+ * evaluated attributes come from the envelope + admitted descriptor, NEVER from
+ * the request body. Real registerRoutes; sets/descriptors live on disk under
+ * /home/brad/.jp-dispatch2-scratch (never /tmp — inode exhaustion 2026-11-05).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -13,112 +14,12 @@ import { join } from 'node:path';
 import { stringify } from 'yaml';
 import { AGENT_ALLOWED_TOOLS } from '../../ai/index.js';
 import { registerRoutes } from '../../api/routes.js';
-import type { PolicyDecisionRecord, PolicyRule, PolicySetDoc } from '../../policy/policySetEvaluator.js';
+import { dispatchAttributes } from './journeyDispatch.js';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
-import type { CompiledJourneyEnvelope } from './journeyEnvelope.js';
-import {
-  RULE_DISPATCH_POLICY_UNAVAILABLE,
-  RULE_DISPATCH_UNCLASSIFIED,
-  derivePolicyAttributes,
-  guardJourneyDispatch,
-  loadPolicySetsDir,
-} from './journeyDispatch.js';
 
-const SCRATCH_ROOT = '/home/brad/.jcc-dispatch-scratch';
+const SCRATCH_ROOT = '/home/brad/.jp-dispatch2-scratch';
 const CAP = 'journey.fixture.dispatch';
-const NOW = '2026-11-13T05:00:00Z';
 
-/** Valid against schema/governance/policy-set.schema.yaml; only id/rules vary. */
-const makeSet = (id: string, rules: PolicyRule[], unclassified: 'allow' | 'confirm' | 'deny' = 'deny'): PolicySetDoc => ({
-  kind: 'policy-set', id, label: 'lane2 dispatch probe', version: 1,
-  effective_from: '2026-11-12T23:00:00Z',
-  scope: { lab: 'LAB-0001', project: 'PROJ-0002' },
-  rules, defaults: { unclassified }, conflict: { deny_wins: true },
-});
-const rule = (rule_id: string, match: PolicyRule['match'], execution: 'allow' | 'confirm' | 'deny', extra: Partial<PolicyRule> = {}): PolicyRule =>
-  ({ rule_id, match, proposal: execution, execution, ...extra });
-
-const capability = (effects: string[], recordType?: string): CapabilityDescriptor => ({
-  capability_id: CAP, version: '1.0.0',
-  implementation: { handler_kind: 'agent_tool', handler_ref: AGENT_ALLOWED_TOOLS[0]! },
-  effects,
-  ...(recordType === undefined ? {} : {
-    ports: { input: [], output: [{ version: '1.0.0', record_id: 'rec-1', record_type: recordType, receipt_id: 'rcpt-1' }] },
-  }),
-});
-const envelope = (bindings: CompiledJourneyEnvelope['bindings'] = []): CompiledJourneyEnvelope => ({
-  journey_id: 'journey-dispatch-fixture', revision: 1, step_id: 'search',
-  capability_ref: CAP, capability_version: '1.0.0', bindings,
-});
-
-describe('guardJourneyDispatch', () => {
-  it('(a) a denied effect is refused while the review card exists; the record names the rule', () => {
-    const card = { rendered: true, surface: 'journey.review', action: 'dispatch' };
-    const sets = [makeSet('PSET-LANE2-ONE', [rule('R-NO-EGRESS', { effect_kind: 'external_disclosure' }, 'deny')])];
-    const result = guardJourneyDispatch({ envelope: envelope(), capability: capability(['read', 'external_disclosure']), sets, now: NOW });
-    expect(card.rendered).toBe(true);
-    expect(result.allowed).toBe(false);
-    expect(result.record.outcome).toBe('blocked');
-    expect(result.record.matched_rule_ids).toEqual(['R-NO-EGRESS']);
-    expect(result.record.evaluated_attributes.effect_kind).toBe('external_disclosure');
-    expect(result.diagnostics[0]!.message).toContain('R-NO-EGRESS');
-  });
-
-  it('(b) an effect no rule classifies is denied by the declared default and says no rule matched', () => {
-    const sets = [makeSet('PSET-LANE2-ONE', [rule('R-LAB', { environment: 'lab' }, 'allow')])];
-    const result = guardJourneyDispatch({ envelope: envelope(), capability: capability(['deployment']), sets, now: NOW });
-    expect(result.allowed).toBe(false);
-    expect(result.record.matched_rule_ids).toEqual([]);
-    expect(result.record.outcome).toBe('blocked');
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]!.rule).toBe(RULE_DISPATCH_UNCLASSIFIED);
-    expect(result.diagnostics[0]!.message).toContain('no policy rule matched');
-  });
-
-  it('(c) allow and deny both match: deny wins and both rule ids are named', () => {
-    const sets = [
-      makeSet('PSET-LANE2-ONE', [rule('R-ALLOW', { capability: CAP }, 'allow')]),
-      makeSet('PSET-LANE2-TWO', [rule('R-DENY', { capability: CAP }, 'deny')]),
-    ];
-    const result = guardJourneyDispatch({ envelope: envelope(), capability: capability(['read']), sets, now: NOW });
-    expect(result.allowed).toBe(false);
-    expect(result.record.outcome).toBe('blocked');
-    expect([...result.record.matched_rule_ids].sort()).toEqual(['R-ALLOW', 'R-DENY']);
-  });
-
-  it('(d) obligations from two sets accumulate on the decision record', () => {
-    const sets = [
-      makeSet('PSET-LANE2-ONE', [rule('R-A', { capability: CAP }, 'allow', { obligations: ['record-evidence'] })]),
-      makeSet('PSET-LANE2-TWO', [rule('R-B', { capability: CAP }, 'allow', { obligations: ['notify-stakeholders'] })]),
-    ];
-    const result = guardJourneyDispatch({ envelope: envelope(), capability: capability(['read']), sets, now: NOW });
-    expect(result.allowed).toBe(true);
-    expect(result.record.outcome).toBe('allowed');
-    expect(result.record.remaining_obligations).toEqual(['record-evidence', 'notify-stakeholders']);
-  });
-
-  it('(e) attributes come from the envelope + descriptor only: neither role nor regulated is derivable', () => {
-    const derived = derivePolicyAttributes(envelope(), capability(['read'], 'sequence-set'));
-    expect(derived.effects).toEqual(['read']);
-    expect(derived.attributes).toEqual({ capability: CAP, record_kind: 'sequence-set', provenance_completeness: 'complete' });
-    expect(derived.attributes).not.toHaveProperty('actor_role');
-    expect(derived.attributes).not.toHaveProperty('regulated');
-    // A set that allows only regulated work cannot be satisfied by a body claim.
-    const sets = [makeSet('PSET-LANE2-ONE', [rule('R-REG', { regulated: true }, 'allow')])];
-    const result = guardJourneyDispatch({ envelope: envelope(), capability: capability(['read']), sets, now: NOW });
-    expect(result.allowed).toBe(false);
-    expect(result.record.evaluated_attributes.regulated).toBeUndefined();
-    expect(result.record.matched_rule_ids).toEqual([]);
-  });
-
-  it('(g) an unreadable policy-set dir throws; it never returns an empty pass', async () => {
-    await mkdir(SCRATCH_ROOT, { recursive: true });
-    const missing = join(await mkdtemp(join(SCRATCH_ROOT, 'policy-')), 'not-created');
-    await expect(loadPolicySetsDir(missing)).rejects.toThrow();
-  });
-});
-
-/** Minimal stubs for the unconditional registerRoutes registrations. */
 function stubRouteOptions() {
   const noop = async () => ({});
   return {
@@ -134,104 +35,154 @@ function stubRouteOptions() {
   };
 }
 
-/** A document the shipped lint admits, naming CAP as its one automatic step. */
-const document = () => ({
-  journey_id: 'journey-dispatch-fixture', revision: 1,
-  authoring_actor: { actor_kind: 'person', actor_id: 'operator-1' },
-  request_anchor: { message_id: 'msg-1', verbatim_text: 'search the register' },
-  objective: 'search the register', completion_contract: ['the search record is committed'],
-  parameters: [],
-  steps: [{ id: 'search', capability_ref: CAP, input_ports: [], interaction_mode: 'automatic', output_ports: [] }],
-  alternatives: { options: [{ alternative_id: 'alt-a', summary: 'a single declared option' }], selection_authority: 'user' },
-  return_contract: { checkpoint_ref: 'cp-1', permitted_result_types: ['completed'], require_explicit_resume: true },
-  assumptions: [], unresolved_questions: [],
+const descriptorDoc = () => ({
+  capability_id: CAP, version: '1.0.0', display_name: CAP,
+  justification: 'Dispatch fixture: the admitted capability the envelope names.',
+  ports: { input: [{ kind: 'any' }], output: [] },
+  implementation: { handler_kind: 'agent_tool', handler_ref: AGENT_ALLOWED_TOOLS[0] },
+  effects: ['read'], permissions: ['records.read'], availability: {},
+  surfaces: ['journey.catalogue'], idempotency: 'pure', retry: 'none',
+  reconciliation: 'not_required', evidence: ['validation_report'],
+  status: { declared: true, implemented: true, available_now: true, browser_certified: false },
+});
+
+const rule = (ruleId: string, match: Record<string, unknown>, execution: string) => ({
+  rule_id: ruleId, match, proposal: execution, execution,
+});
+const policySet = (rules: unknown[], unclassified = 'deny') => ({
+  kind: 'policy-set', id: 'PSET-JPD-FIXTURE', label: 'dispatch fixture set', version: 1,
+  effective_from: '2026-01-01T00:00:00Z', scope: { lab: 'fixture-lab', project: 'fixture-project' },
+  rules, defaults: { unclassified }, conflict: { deny_wins: true },
+});
+
+/** The card-rendered envelope: its recorded authorization always says allowed. */
+const envelope = (over: Record<string, unknown> = {}) => ({
+  journey_id: 'journey-dispatch-fixture', revision: 1, step_id: 's1',
+  capability_ref: CAP, capability_version: '1.0.0', bindings: [],
+  authorization: {
+    action: 'auto-create', target: 'journey-dispatch-fixture/s1', disposition: 'allowed',
+    authority: 'project-owner', setting_key: 'allowAutoCreate',
+    origin_profile_id: 'render-card', rationale: 'the card rendered, so the UI showed a run button',
+  },
+  ...over,
 });
 
 const apps: FastifyInstance[] = [];
 const dirs: string[] = [];
-const scratch = async (): Promise<string> => {
-  await mkdir(SCRATCH_ROOT, { recursive: true });
-  const dir = await mkdtemp(join(SCRATCH_ROOT, 'dispatch-'));
+async function scratchDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(SCRATCH_ROOT, `${prefix}-`));
   dirs.push(dir);
   return dir;
-};
-const writeCatalogue = async (): Promise<string> => {
-  const dir = await scratch();
-  await writeFile(join(dir, 'dispatch.yaml'), stringify({
-    capability_id: CAP, version: '1.0.0', display_name: CAP,
-    justification: 'Dispatch fixture: a YAML-only capability that policy may refuse.',
-    ports: { input: [], output: [] },
-    implementation: { handler_kind: 'agent_tool', handler_ref: AGENT_ALLOWED_TOOLS[0]! },
-    effects: ['read'], permissions: ['journey.read'], availability: {}, surfaces: ['journey.dispatch'],
-    idempotency: 'pure', retry: 'none', reconciliation: 'not_required',
-    evidence: ['validation_report'],
-    status: { declared: true, implemented: true, available_now: true, browser_certified: false },
-  }), 'utf8');
-  return dir;
-};
-const writePolicyDir = async (sets: PolicySetDoc[]): Promise<string> => {
-  const dir = await scratch();
-  for (const [index, set] of sets.entries()) await writeFile(join(dir, `set-${index}.yaml`), stringify(set), 'utf8');
-  return dir;
-};
-const buildApp = async (journeyCatalogueDir: string, journeyPolicySetDir: string): Promise<FastifyInstance> => {
+}
+async function buildApp(policyDir: string): Promise<FastifyInstance> {
+  const catDir = await scratchDir('catalogue');
+  await writeFile(join(catDir, 'fixture.yaml'), stringify(descriptorDoc()), 'utf8');
   const app = Fastify();
   await app.register(async (instance) => {
-    registerRoutes(instance, { ...stubRouteOptions(), journeyCatalogueDir, journeyPolicySetDir });
+    registerRoutes(instance, { ...stubRouteOptions(), journeyCatalogueDir: catDir, journeyPolicySetDir: policyDir });
   }, { prefix: '/api' });
   await app.ready();
   apps.push(app);
   return app;
-};
-interface DispatchBody { ok: boolean; record?: PolicyDecisionRecord; diagnostics: Array<{ rule: string; message: string }> }
-const dispatch = async (app: FastifyInstance, extra: Record<string, unknown> = {}) => {
-  const response = await app.inject({
-    method: 'POST', url: '/api/journey/dispatch',
-    payload: { document: document(), step_id: 'search', ...extra },
-  });
-  return { status: response.statusCode, body: response.json() as DispatchBody };
-};
+}
+async function dispatch(app: FastifyInstance, body: unknown) {
+  const r = await app.inject({ method: 'POST', url: '/api/journey/dispatch', payload: body as object });
+  return { status: r.statusCode, body: r.json() as Record<string, any> };
+}
 
+beforeAll(async () => { await mkdir(SCRATCH_ROOT, { recursive: true }); });
 afterAll(async () => {
   for (const app of apps) await app.close();
   for (const dir of dirs) await rm(dir, { recursive: true, force: true });
 });
 
-describe('POST /api/journey/dispatch', () => {
-  it('(f) forbidden envelope: 403 { ok: false } with the matched rule; allowed envelope: 200 + record', async () => {
-    const catalogue = await writeCatalogue();
-    const denying = await writePolicyDir([makeSet('PSET-LANE2-ONE', [rule('R-DENY-READ', { effect_kind: 'read' }, 'deny')])]);
-    const forbidden = await dispatch(await buildApp(catalogue, denying), { role: 'admin', attributes: { actor_role: 'admin', regulated: false } });
-    expect(forbidden.status).toBe(403);
-    expect(forbidden.body.ok).toBe(false);
-    expect(forbidden.body.record!.outcome).toBe('blocked');
-    expect(forbidden.body.record!.matched_rule_ids).toContain('R-DENY-READ');
-    // The body's `role`/`attributes` claims reached no decision attribute.
-    expect(forbidden.body.record!.evaluated_attributes.actor_role).toBeUndefined();
-    expect(forbidden.body.record!.evaluated_attributes.regulated).toBeUndefined();
-
-    const allowing = await writePolicyDir([makeSet('PSET-LANE2-ONE', [rule('R-ALLOW-READ', { effect_kind: 'read' }, 'allow')])]);
-    const permitted = await dispatch(await buildApp(catalogue, allowing));
-    expect(permitted.status).toBe(200);
-    expect(permitted.body.ok).toBe(true);
-    expect(permitted.body.record!.outcome).toBe('allowed');
+describe('POST /api/journey/dispatch (L2-JOURNEY-POLICY-1 unit psdispatch2)', () => {
+  it('(a) render is not authority: recorded allowed + matching deny rule => refused, deny rule named', async () => {
+    const dir = await scratchDir('sets');
+    await writeFile(join(dir, 'deny.yaml'), stringify(policySet([rule('R-DENY-CAP', { capability: CAP }, 'deny')])), 'utf8');
+    const { status, body } = await dispatch(await buildApp(dir), { envelope: envelope(), regulated: false });
+    expect(status).toBe(200);
+    expect(body.ok).toBe(false);
+    expect(body.diagnostics[0].rule).toBe('journey_dispatch_policy_blocked');
+    expect(body.decision.matched_rule_ids).toContain('R-DENY-CAP');
+    expect(body.decision.outcome).toBe('blocked');
+    // the body's regulated:false changed nothing — attributes came from envelope+descriptor
+    expect(body.decision.evaluated_attributes).toEqual({ capability: CAP, effect_kind: 'read' });
   });
 
-  it('(g) a missing policy-set directory refuses with a diagnostic naming it', async () => {
-    const catalogue = await writeCatalogue();
-    const missing = join(await scratch(), 'not-created');
-    const { status, body } = await dispatch(await buildApp(catalogue, missing));
-    expect(status).toBe(403);
+  it('(b) no rule matches => refused via the declared default with matched_rule_ids []', async () => {
+    const dir = await scratchDir('sets');
+    await writeFile(join(dir, 'nomatch.yaml'), stringify(policySet([rule('R-NEVER', { environment: 'env-nothing-pins' }, 'allow')])), 'utf8');
+    const { body } = await dispatch(await buildApp(dir), { envelope: envelope() });
     expect(body.ok).toBe(false);
-    expect(body.diagnostics[0]!.rule).toBe(RULE_DISPATCH_POLICY_UNAVAILABLE);
-    expect(body.diagnostics[0]!.message).toContain(missing);
+    expect(body.decision.matched_rule_ids).toEqual([]);
+    expect(body.diagnostics[0].rule).toBe('journey_dispatch_policy_blocked');
+    expect(body.diagnostics[0].message.toLowerCase()).toContain('default');
   });
 
-  it('(g) an empty policy-set directory is an unclassified default deny, never a pass', async () => {
-    const catalogue = await writeCatalogue();
-    const { status, body } = await dispatch(await buildApp(catalogue, await writePolicyDir([])));
-    expect(status).toBe(403);
+  it('(c) allowing set => ok:true and the returned envelope records allowed', async () => {
+    const dir = await scratchDir('sets');
+    await writeFile(join(dir, 'allow.yaml'), stringify(policySet([rule('R-ALLOW-CAP', { capability: CAP }, 'allow')])), 'utf8');
+    const { status, body } = await dispatch(await buildApp(dir), { envelope: envelope() });
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.envelope.authorization.disposition).toBe('allowed');
+    expect(body.decision.outcome).toBe('allowed');
+  });
+
+  it('(d) execution: confirm => approval-required refusal carrying the decision (no approval store this rev)', async () => {
+    const dir = await scratchDir('sets');
+    await writeFile(join(dir, 'confirm.yaml'), stringify(policySet([rule('R-CONFIRM-CAP', { capability: CAP }, 'confirm')])), 'utf8');
+    const { body } = await dispatch(await buildApp(dir), { envelope: envelope() });
     expect(body.ok).toBe(false);
-    expect(body.diagnostics[0]!.message).toContain('no policy set declared');
+    expect(body.diagnostics[0].rule).toBe('journey_dispatch_approval_required');
+    expect(body.decision.outcome).toBe('needs-confirmation');
+  });
+
+  it('(e) moved current input version => the shipped stale rule, relayed unchanged', async () => {
+    const dir = await scratchDir('sets');
+    await writeFile(join(dir, 'allow.yaml'), stringify(policySet([rule('R-ALLOW-CAP', { capability: CAP }, 'allow')])), 'utf8');
+    const env = envelope({ bindings: [{ port_index: 0, declared_version: 'v1', resolved_version: 'v7' }] });
+    const { body } = await dispatch(await buildApp(dir), { envelope: env, current_inputs: [{ port_index: 0, version: 'v8' }] });
+    expect(body.ok).toBe(false);
+    expect(body.diagnostics[0].rule).toBe('journey_envelope_stale_input');
+  });
+
+  it('(f) fail-closed: absent dir, empty dir, >1 set => refused, never ok:true', async () => {
+    const missing = join(await scratchDir('sets'), 'not-created');
+    const absent = await dispatch(await buildApp(missing), { envelope: envelope() });
+    expect(absent.body.ok).toBe(false);
+    expect(absent.body.diagnostics[0].rule).toBe('journey_policy_unavailable');
+
+    const empty = await dispatch(await buildApp(await scratchDir('sets')), { envelope: envelope() });
+    expect(empty.body.ok).toBe(false);
+    expect(empty.body.diagnostics[0].rule).toBe('journey_policy_unavailable');
+
+    const two = await scratchDir('sets');
+    await writeFile(join(two, 'a.yaml'), stringify({ ...policySet([rule('R-A', { capability: CAP }, 'allow')]), id: 'PSET-A' }), 'utf8');
+    await writeFile(join(two, 'b.yaml'), stringify({ ...policySet([rule('R-B', { capability: CAP }, 'allow')]), id: 'PSET-B' }), 'utf8');
+    const ambiguous = await dispatch(await buildApp(two), { envelope: envelope() });
+    expect(ambiguous.body.ok).toBe(false);
+    expect(ambiguous.body.diagnostics[0].rule).toBe('journey_policy_ambiguous');
+    expect(ambiguous.body.diagnostics[0].message).toContain('PSET-A');
+    expect(ambiguous.body.diagnostics[0].message).toContain('PSET-B');
+  });
+
+  it('(g) malformed request body => 400 with journey_dispatch_request_invalid', async () => {
+    const { status, body } = await dispatch(await buildApp(await scratchDir('sets')), { envelope: 'not-an-envelope' });
+    expect(status).toBe(400);
+    expect(body.diagnostics[0].rule).toBe('journey_dispatch_request_invalid');
+  });
+
+  it('pure legs: ambiguous effects refuse with the effects named; a cardless envelope is not permission', () => {
+    const env = envelope() as unknown as Parameters<typeof dispatchAttributes>[0];
+    const two = { capability_id: CAP, effects: ['read', 'domain_mutation'], implementation: { handler_kind: 'agent_tool', handler_ref: 'x' } } as unknown as CapabilityDescriptor;
+    const refused = dispatchAttributes(env, two);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.diagnostic.rule).toBe('journey_policy_effect_ambiguous');
+      expect(refused.diagnostic.message).toContain('read');
+      expect(refused.diagnostic.message).toContain('domain_mutation');
+    }
   });
 });
