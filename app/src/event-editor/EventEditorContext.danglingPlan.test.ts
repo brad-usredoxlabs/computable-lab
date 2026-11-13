@@ -59,10 +59,6 @@ function Probe() {
   return null
 }
 
-function surfaceText(): string {
-  return (dom.window.document.getElementById('root')?.textContent ?? '').replace(/\s+/g, ' ')
-}
-
 /** Poll until `check` passes or the budget runs out (effects settle async). */
 async function waitFor(check: () => boolean, budgetMs = 8000): Promise<void> {
   const deadline = Date.now() + budgetMs
@@ -73,15 +69,35 @@ async function waitFor(check: () => boolean, budgetMs = 8000): Promise<void> {
 }
 
 /**
+ * Wait until the failure branch is fully settled: the load has left
+ * 'loading' AND the separate `set_run` effect has committed the run id
+ * (the missing surface renders the run link from state.runId). Effects
+ * settle async, so waiting on the load alone can snapshot a frame before
+ * runId has landed.
+ */
+async function waitForSettled(runId: string | null, loadState: string): Promise<void> {
+  await waitFor(() => {
+    const s = (globalThis as Record<string, unknown>)['danglingPlanState'] as
+      | { loadState: string; runId: string | null }
+      | undefined
+    if (!s) return false
+    return s.loadState === loadState && (runId === null || s.runId === runId)
+  })
+}
+
+/**
  * Mount the editor surfaces with a graph loader that rejects with
- * `graphError`, and wait for the load to settle. Returns the last committed
- * editor state observed by the probe, with the surface DOM snapshotted
- * BEFORE unmount (the splash lives in the committed tree).
+ * `graphError`, and wait for the failure branch to fully settle (load left
+ * 'loading' AND the run id committed). Returns the last committed editor
+ * state observed by the probe plus the `#root` innerHTML snapshotted BEFORE
+ * unmount (the surface lives in the committed tree; querying the live DOM
+ * after unmount sees the emptied root).
  */
 async function mountWithGraphError(
   graphError: unknown,
   runId: string | null,
-): Promise<{ state: EventEditorState | undefined; surface: string; doc: Document }> {
+  settledLoadState: string,
+): Promise<{ state: EventEditorState | undefined; surface: string; html: string }> {
   vi.spyOn(apiClient, 'loadEventGraph').mockRejectedValue(graphError)
   // Pending forever: the surfaces stay in the load-failure branch (this unit
   // degrades that branch only — the ready deck is not in scope here).
@@ -102,19 +118,15 @@ async function mountWithGraphError(
       ),
     ),
   )
-  await waitFor(() => {
-    const s = (globalThis as Record<string, unknown>)['danglingPlanState'] as
-      | { loadState: string }
-      | undefined
-    return s === undefined || s.loadState !== 'loading'
-  })
+  await waitForSettled(runId, settledLoadState)
   // One settle beat so the failure branch is fully committed before readout.
   await new Promise((r) => setTimeout(r, 40))
   const state = (globalThis as Record<string, unknown>)['danglingPlanState'] as EventEditorState | undefined
-  const surface = surfaceText()
-  const doc = dom.window.document
+  // Snapshot the committed tree BEFORE unmount clears it.
+  const html = dom.window.document.getElementById('root')?.innerHTML ?? ''
+  const surface = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
   root.unmount()
-  return { state, surface, doc }
+  return { state, surface, html }
 }
 
 afterEach(() => {
@@ -127,9 +139,10 @@ describe('danglingplan — a NOT_FOUND on the run plan graph degrades honestly',
   it('a 404 on the plan graph lands in loadState missing with the named graph id (no red splash)', async () => {
     // The NOT_FOUND-shaped rejection the server sends (ApiError wire shape:
     // "<token>: <message>" — 404 with `error: 'NOT_FOUND'` / `Record not found: <id>`).
-    const { state, surface, doc } = await mountWithGraphError(
+    const { state, surface, html } = await mountWithGraphError(
       new Error(`NOT_FOUND: Record not found: ${GRAPH_ID}`),
       RUN_ID,
+      'missing',
     )
     expect(state, 'provider state never reached the probe (RED at HEAD)').toBeTruthy()
     if (!state) return
@@ -141,26 +154,30 @@ describe('danglingplan — a NOT_FOUND on the run plan graph degrades honestly',
     // The surface names the exact graph id and says it does not exist yet.
     expect(surface).toContain(GRAPH_ID)
     expect(surface).toContain('does not exist yet')
-    // It offers the way back to the run.
-    const runLink = doc.querySelector(`a[href="/runs/${RUN_ID}"]`)
-    expect(runLink, 'surface must offer a link back to the run').toBeTruthy()
+    // It offers the way back to the run (pre-unmount committed tree).
+    expect(html).toContain(`<a class="splash--missing-link" href="/runs/${RUN_ID}">`)
     // It does NOT paint the red "Failed to load" splash.
     expect(surface).not.toContain('Failed to load')
-    expect(doc.querySelector('.splash--error')).toBeNull()
+    expect(html).not.toContain('splash--error')
     // Degradation only: the run record was never written.
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
   })
 
   it('a genuine server failure (500) keeps the existing error splash (the missing branch must not swallow real errors)', async () => {
-    const { state, surface } = await mountWithGraphError(
+    const { state, surface, html } = await mountWithGraphError(
       Object.assign(new Error('INTERNAL_ERROR: boom'), { status: 500 }),
       RUN_ID,
+      'error',
     )
     expect(state, 'provider state never reached the probe').toBeTruthy()
     if (!state) return
     expect(state.loadState).toBe('error')
     expect(state.loadError).toContain('event graph')
     expect(surface).toContain('Failed to load')
+    // The genuine error keeps the existing red splash; the missing branch
+    // did not swallow it.
+    expect(html).toContain('splash--error')
+    expect(html).not.toContain('splash--missing')
     expect(apiClient.updateRecord).not.toHaveBeenCalled()
   })
 })

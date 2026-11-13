@@ -30,7 +30,7 @@ import {
   type PlateRailPatch,
 } from './rail/state'
 
-export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
+export type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'missing'
 
 /**
  * A staged proposal from the AI dock, layered on top of committed state. The
@@ -282,6 +282,15 @@ export type FixItSessionSnapshot = Pick<
 export interface EventEditorState {
   loadState: LoadState
   loadError: string | null
+  /**
+   * danglingplan (L2-SUBPROTOCOL-EXPAND-1): the event-graph id whose read
+   * came back NOT_FOUND. A 404 on the run's `methodEventGraphId` is a STALE
+   * POINTER, not a transport failure, so it is a named load state
+   * (`loadState: 'missing'`) carrying the graph id instead of the generic
+   * `loadError` splash. `load_start` / `load_error` clear it so a successful
+   * (or genuinely failed) retry cannot resurrect a stale banner.
+   */
+  missingGraphId: string | null
   platforms: PlatformManifest[]
   platformId: string
   variantId: string
@@ -405,6 +414,7 @@ export type EventEditorAction =
   | { type: 'redo' }
   | { type: 'load_start' }
   | { type: 'load_error'; error: string }
+  | { type: 'load_graph_missing'; eventGraphId: string }
   | { type: 'load_success'; platforms: PlatformManifest[]; initialPlatformId?: string }
   | {
       type: 'load_event_graph_success'
@@ -478,6 +488,7 @@ const DEFAULT_PLATFORM_ID = 'manual'
 const initialState: EventEditorState = {
   loadState: 'idle',
   loadError: null,
+  missingGraphId: null,
   platforms: [],
   platformId: DEFAULT_PLATFORM_ID,
   variantId: '',
@@ -694,12 +705,32 @@ function mergeCommittedOfferBinding(
   return next
 }
 
+/**
+ * danglingplan (L2-SUBPROTOCOL-EXPAND-1): strict test for the NOT_FOUND wire
+ * wording the server sends when a record read 404s (client `ApiError` builds
+ * the message from the body as `<errorCode>: <message>` — e.g.
+ * `NOT_FOUND: Record not found: <id>` — or the bare 404 status text).
+ * Everything else is a genuine transport/server failure.
+ */
+export function isGraphNotFound(message: string): boolean {
+  return /\bNOT_FOUND\b/.test(message) || /\bRecord not found:/.test(message) || /\b404\b/.test(message)
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
-      return { ...state, loadState: 'loading', loadError: null }
+      // Reset the stale-banner marker so a retry of a graph read never
+      // resurrects a `missing` banner for a graph that has since loaded.
+      return { ...state, loadState: 'loading', loadError: null, missingGraphId: null }
     case 'load_error':
-      return { ...state, loadState: 'error', loadError: action.error }
+      // A genuine transport/server failure replaces any dangling-plan
+      // banner: the error splash wins, and the named graph id is cleared.
+      return { ...state, loadState: 'error', loadError: action.error, missingGraphId: null }
+    case 'load_graph_missing':
+      // A NOT_FOUND on the event-graph id is a stale pointer, not a
+      // transport failure: name the missing graph and keep the surface
+      // honest instead of painting the red load_error splash.
+      return { ...state, loadState: 'missing', loadError: null, missingGraphId: action.eventGraphId }
     case 'load_success': {
       const platforms = action.platforms
       const fallbackPlatformId =
@@ -710,6 +741,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         loadState: 'ready',
         loadError: null,
+        missingGraphId: null,
         platforms,
         platformId,
         variantId: state.runDeck?.variantId ?? defaults.variantId,
@@ -1529,7 +1561,15 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
-        dispatch({ type: 'load_error', error: `event graph ${eventGraphId}: ${message}` })
+        // danglingplan (L2-SUBPROTOCOL-EXPAND-1): a NOT_FOUND on the graph id
+        // is a STALE POINTER, not a transport failure — degrade to a named
+        // `missing` state instead of the red load_error splash. Every other
+        // failure keeps the existing load_error dispatch verbatim.
+        if (isGraphNotFound(message)) {
+          dispatch({ type: 'load_graph_missing', eventGraphId })
+        } else {
+          dispatch({ type: 'load_error', error: `event graph ${eventGraphId}: ${message}` })
+        }
       })
     return () => {
       cancelled = true
