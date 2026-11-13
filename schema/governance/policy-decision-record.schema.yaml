@@ -28,7 +28,9 @@ properties:
       id: { type: string, pattern: '^PSET-[A-Z0-9][A-Z0-9_-]*$' }
       version: { type: integer, minimum: 1 }
   evaluated_attributes: { $ref: '#/$defs/evaluated_attributes' }
-  matched_rule_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string, minLength: 1 } }
+  # minItems: 0 — a record produced from a policy set's configured DEFAULT names
+  # NO rule, because a default is not a rule; it MUST NOT be attributed to one.
+  matched_rule_ids: { type: array, minItems: 0, uniqueItems: true, items: { type: string, minLength: 1 } }
   outcome: { type: string, enum: [allowed, needs-confirmation, blocked] }
   remaining_obligations: { type: array, items: { type: string, minLength: 1 } }
   evaluated_at: { type: string, format: date-time }
