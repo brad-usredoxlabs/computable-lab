@@ -8,21 +8,19 @@
  * LEG 2 of the ONTOLOGY browser gate (bundle1-20261112T1523) saw
  * UI_SPEC_NOT_FOUND for
  * https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
- * because schema/workflow/ has no *.ui.yaml sibling for that schema —
- * UISpecLoader has nothing to cache for the registry id and UIHandlers
- * answers 404, so /record/new/labware-definition and the record editor
- * fall back to the minimal form.
+ * because schema/workflow/ had no *.ui.yaml sibling — UISpecLoader cached
+ * nothing for the registry id and UIHandlers answered 404, so
+ * /record/new/labware-definition fell back to the minimal form.
  *
- * The schema half is delivered and MUST NOT change: ontology_ref is
- * optional at schema/workflow/labware-definition.schema.yaml:43. This pin
- * proves the UI half: the sibling spec loads, carries the EXACT registry
- * schemaId (a variant string leaves UI_SPEC_NOT_FOUND in place even when
- * the loader succeeds), and declares exactly one $.ontology_ref field
- * with the ontology-ref commit contract (widget ref + refKind ontology +
- * valueShape ontology-ref + ontologyBinding allow-ontology) whose
- * sources declare BOTH 'ols' and 'local-obo' — the local-obo source is
- * the opt-in that lets the ref combobox keep the resolve spine's
- * in-house tier-2 candidates (provider name, not a vocabulary term).
+ * The schema half is delivered and MUST NOT change (ontology_ref optional
+ * at schema/workflow/labware-definition.schema.yaml:43). This pin proves
+ * the UI half: the spec loads, carries the EXACT registry schemaId (a
+ * variant string leaves UI_SPEC_NOT_FOUND in place even when the loader
+ * succeeds), and declares exactly one $.ontology_ref field with the
+ * ontology-ref commit contract whose sources declare BOTH 'ols' and
+ * 'local-obo' — the local-obo source is the per-field opt-in that lets
+ * the ref combobox keep the resolve spine's in-house tier-2 candidates
+ * (provider name, not a vocabulary term).
  */
 import { describe, it, expect } from 'vitest'
 import { readFile } from 'node:fs/promises'

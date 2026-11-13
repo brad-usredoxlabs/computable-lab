@@ -3,20 +3,17 @@
  * L2-ONTOLOGY-ANCHOR-SOURCES-1 (o3uispec) — client pin for the
  * useResolveOntology local-obo opt-in.
  *
- * The resolve spine (server/src/resolve/ResolveSpine.ts:174) already SERVES
- * the in-house `local-obo` tier (tier 2), but the shared hook every ref
- * combobox uses filtered candidates to
- * canonical-term | oak | ols4 — so the LWO rows a labware-definition
- * anchor needs never reached a ref field (LEG 2 of the ONTOLOGY browser
- * gate: "type plate, see LWO rows, commit LWO:0000100" was undriveable
- * even with the ui.yaml in place).
+ * The resolve spine (server/src/resolve/ResolveSpine.ts:174) serves the
+ * in-house `local-obo` tier, but the shared hook every ref combobox uses
+ * filtered candidates to canonical-term | oak | ols4 — so the LWO rows a
+ * labware-definition anchor needs never reached a ref field (LEG 2).
  *
- * The fix is a per-field opt-in: the hook keeps `local-obo` candidates
- * ONLY when the caller passes includeLocalObo: true. The combobox derives
- * that flag from the field's own declared sources (the same data-driven
- * shape as the existing 'ols' switch) — never a global default flip, so
- * every field that does not declare 'local-obo' stays decoy-free
- * (AC2: claim $.subject typing "plate" returns NO LWO rows).
+ * The fix is a per-field opt-in: the hook keeps `local-obo` candidates ONLY
+ * when the caller passes includeLocalObo: true. The combobox derives that
+ * flag from the field's own declared sources (same data-driven shape as the
+ * existing 'ols' switch) — never a global default flip, so every field that
+ * does not declare 'local-obo' stays decoy-free (AC2: claim $.subject typing
+ * "plate" returns NO LWO rows).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, waitFor, cleanup } from '@testing-library/react'
