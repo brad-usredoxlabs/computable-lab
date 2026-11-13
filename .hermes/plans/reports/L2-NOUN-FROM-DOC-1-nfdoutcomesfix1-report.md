@@ -114,7 +114,7 @@ bare access type-checks by construction; `exactOptionalPropertyTypes`-safe, no `
 ## Next actions
 - None for the coder. Adversarial re-run against the new commit is the gate.
 
-L2-NOUN-FROM-DOC-1 UNIT nfdoutcomesfix1 DONE 38bc83ee984ac5c62f5f0bd14a24ad13323a082a
+
 
 ### 7. Final tree state (post-commit, pre-report)
 `git -c core.fileMode=false status --short` → (empty = clean)
@@ -123,3 +123,11 @@ L2-NOUN-FROM-DOC-1 UNIT nfdoutcomesfix1 DONE 38bc83ee984ac5c62f5f0bd14a24ad13323
  1 file changed, 3 insertions(+), 5 deletions(-)
 `git diff 05366741 38bc83ee -- server/src/ingestion/SpecSheetExtractor.ts` → empty
 (production file byte-identical to base; sha256 e14b0444df927b276cf7364328134178416a1d0d6246887aed48da1fdb4e4336)
+## Commit history (transparency)
+- `38bc83ee984ac5c62f5f0bd14a24ad13323a082a` — the one code commit (test file only).
+- Report committed in docs follow-ups because a report blob cannot contain its own commit sha;
+  the marker above names the CODE commit, per the lane convention (cf. L2-LABINV-modalmount:
+  marker 898ca32f in docs commit 31341a2d). The first docs commit (28578946) landed the marker
+  as a `__SHA__` placeholder; docs commit f08615e5 filled it with the real code-commit sha.
+
+L2-NOUN-FROM-DOC-1 UNIT nfdoutcomesfix1 DONE 38bc83ee984ac5c62f5f0bd14a24ad13323a082a
