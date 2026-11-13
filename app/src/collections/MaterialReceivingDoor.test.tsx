@@ -101,8 +101,22 @@ describe('MaterialReceivingDoor', () => {
     fireEvent.click(screen.getByTestId('material-receiving-submit'))
     await waitFor(() => expect(compileSpy).toHaveBeenCalledTimes(1))
     const claim = (compileSpy.mock.calls[0][0] as { intent: { claim: Record<string, unknown> } }).intent.claim
-    expect(claim.occurredAt).toBe('2026-11-01')
+    expect(claim.occurredAt).toBe('2026-11-01T00:00:00.000Z')
     expect(claim.occurredAtStatus).toBe('known')
+  })
+
+  it('anchors the stated arrival date on the approximate arm too, with its approximation (g3 D5)', async () => {
+    renderDoor()
+    fillClaim()
+    type('material-receiving-occurred-at-status', 'approximate')
+    type('material-receiving-occurred-at', '2026-11-01')
+    type('material-receiving-approximation', 'last week')
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await waitFor(() => expect(compileSpy).toHaveBeenCalledTimes(1))
+    const claim = (compileSpy.mock.calls[0][0] as { intent: { claim: Record<string, unknown> } }).intent.claim
+    expect(claim.occurredAt).toBe('2026-11-01T00:00:00.000Z')
+    expect(claim.occurredAtStatus).toBe('approximate')
+    expect(claim.approximation).toBe('last week')
   })
 
   it('renders the server diagnostics VERBATIM on refusal with draftId+reviewHash present-but-refused and no accept affordance', async () => {
