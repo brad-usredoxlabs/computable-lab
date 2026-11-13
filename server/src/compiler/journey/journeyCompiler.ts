@@ -9,12 +9,19 @@
  * capability_version records the admitted descriptor's version per step; the
  * document carries no capability version of its own, so it is recorded, not
  * judged. No envelope, no route, no second validation authority.
+ *
+ * L2-JOURNEY-COMPILER-1 (unit s2inval, stage 2): a compiled manifest also
+ * declares a stage-2 freshness refusal. recordEnvelopeInvalidation appends
+ * one JourneyEnvelopeInvalidation entry, marks the named step NOT_READY with
+ * the closed reason stale_input (exactly once), and recomputes not_ready
+ * with the same status !== 'READY' filter, document order. It returns a new
+ * manifest and never mutates its argument.
  */
 import { lintJourneyDocument } from './journeyDocumentLint.js';
 import type { JourneyDocumentLintDiagnostic } from './journeyDocumentLint.js';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
 export type JourneyStepStatus = 'READY' | 'NOT_READY';
-export type JourneyNotReadyReason = 'awaiting_producer_output' | 'awaiting_human_completion';
+export type JourneyNotReadyReason = 'awaiting_producer_output' | 'awaiting_human_completion' | 'stale_input';
 export interface CompiledJourneyStep {
   id: string;
   capability_ref: string;
@@ -24,11 +31,17 @@ export interface CompiledJourneyStep {
   reasons: JourneyNotReadyReason[];
   blocked_by: string[];
 }
+export interface JourneyEnvelopeInvalidation {
+  step_id: string;
+  rule: string;
+  message: string;
+}
 export interface CompiledJourneyManifest {
   journey_id: string;
   revision: number;
   steps: CompiledJourneyStep[];
   not_ready: string[];
+  invalidations?: JourneyEnvelopeInvalidation[];
 }
 export type JourneyCompileResult =
   | { ok: true; manifest: CompiledJourneyManifest }
@@ -71,5 +84,23 @@ export function compileJourneyStructure(document: unknown, catalogue: Capability
       journey_id: plan.journey_id, revision: plan.revision, steps: compiled,
       not_ready: compiled.filter((s) => s.status !== 'READY').map((s) => s.id),
     },
+  };
+}
+/** Unit s2inval: record a stage-2 envelope invalidation on the manifest
+ * without mutating the argument. Appends the entry, marks the named step
+ * NOT_READY with the closed reason stale_input (added only if absent, so a
+ * second refusal never duplicates it), and recomputes not_ready with the
+ * same status !== 'READY' filter the compiler already uses, document order. */
+export function recordEnvelopeInvalidation(manifest: CompiledJourneyManifest, invalidation: JourneyEnvelopeInvalidation): CompiledJourneyManifest {
+  const steps = manifest.steps.map((step): CompiledJourneyStep => {
+    if (step.id !== invalidation.step_id) return step;
+    const stale = step.reasons.includes('stale_input');
+    const reasons: JourneyNotReadyReason[] = stale ? step.reasons : [...step.reasons, 'stale_input'];
+    return { ...step, status: 'NOT_READY', reasons };
+  });
+  return {
+    journey_id: manifest.journey_id, revision: manifest.revision, steps,
+    not_ready: steps.filter((s) => s.status !== 'READY').map((s) => s.id),
+    invalidations: [...(manifest.invalidations ?? []), invalidation],
   };
 }

@@ -9,13 +9,16 @@
  * under the lint's own rule, with no manifest; (e) the product module names
  * exactly the closed literal and object-key vocabulary, with mutant proofs;
  * (f) an empty descriptor version string is refused under
- * journey_capability_version_missing.
+ * journey_capability_version_missing; (g) RED probe for unit s2inval: a
+ * compiled manifest must be able to carry a stage-2 envelope invalidation
+ * via recordEnvelopeInvalidation — today the manifest has no way to carry
+ * one and the probe fails.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { compileJourneyStructure } from './journeyCompiler.js';
+import { compileJourneyStructure, recordEnvelopeInvalidation } from './journeyCompiler.js';
 import { lintJourneyDocument } from './journeyDocumentLint.js';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
 
@@ -74,19 +77,33 @@ function stringTokens(source: string) {
 }
 /** Closed string-literal vocabulary of the product module (any id would be a defect). */
 const CLOSED_LITERALS = [
-  'READY', 'NOT_READY', 'awaiting_producer_output', 'awaiting_human_completion',
+  'READY', 'NOT_READY', 'awaiting_producer_output', 'awaiting_human_completion', 'stale_input',
   'journey_capability_version_missing', 'automatic', 'human_in_the_loop',
   // module wiring and defensive message text, verified by reading the source — not ids:
   './journeyDocumentLint.js', './capabilityCatalogue.js',
   'step ${step.id}: the admitted capability descriptor declares no version string', 'string',
 ];
-/** Closed unquoted-object-key vocabulary of the product module. */
+/** Closed unquoted-object-key vocabulary of the product module. Unit s2inval adds
+ * the declared manifest field invalidations, the function parameter invalidation,
+ * and the JourneyEnvelopeInvalidation field message. (JourneyEnvelopeInvalidation
+ * and recordEnvelopeInvalidation are type/function identifiers: the extractor scans
+ * only string literals and unquoted object keys, and this pin is an exact-set match,
+ * so they are declared in the source, not in these lists.) */
 const CLOSED_KEYS = [
   'id', 'capability_ref', 'capability_version', 'interaction_mode', 'status', 'reasons',
   'blocked_by', 'journey_id', 'revision', 'steps', 'not_ready', 'ok', 'manifest',
   'diagnostics', 'input_ports', 'output_ports', 'document', 'catalogue', 'rule', 'step_id',
   'blockedBy', 'compiled', 'rawVersion',
+  'invalidations', 'invalidation', 'message',
 ];
+/** The same clean two-step fixture the first pin uses: step 1 READY,
+ * step 2 NOT_READY awaiting its producer — the shape unit s2inval needs. */
+function twoStepPlan() {
+  return doc({ steps: [
+    { id: 'transfer', capability_ref: 'transfer', input_ports: [], interaction_mode: 'automatic', output_ports: [port('StagedDraftReference')] },
+    { id: 'measure', capability_ref: 'measure', input_ports: [port('StagedDraftReference')], interaction_mode: 'automatic', output_ports: [] },
+  ] });
+}
 /** True when the source names a string literal or object key outside the closed sets. */
 function outsideClosedSets(mutant: string): boolean {
   const { literals, keys } = stringTokens(mutant);
@@ -197,5 +214,118 @@ describe('compileJourneyStructure', () => {
     expect(outsideClosedSets(source + '\nconst stepIdTable = { ' + stepIds[0] + ': 1, ' + stepIds[1] + ': 2 };\n')).toBe(true);
     const capabilityId = 'ghost' + '-cap'; // (iii) a capability-id equality check
     expect(outsideClosedSets(source + "\nif (step.capability_ref === '" + capabilityId + "') { return { ok: false, diagnostics: [] }; }\n")).toBe(true);
+  });
+  // Unit s2inval: the manifest records a stage-2 envelope invalidation.
+  it('AC1: a compiled manifest reads back with not_ready exactly the non-READY ids, and after recordEnvelopeInvalidation the step is NOT_READY with stale_input once and one invalidation entry verbatim', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    // Unchanged baseline: not_ready is exactly the ids whose status !== 'READY', document order.
+    expect(manifest.not_ready).toEqual(manifest.steps.filter((s) => s.status !== 'READY').map((s) => s.id));
+    expect(manifest.not_ready).toEqual(['measure']);
+    const target = manifest.steps[1]!;
+    const recorded = recordEnvelopeInvalidation(manifest, {
+      step_id: target.id,
+      rule: 'journey_envelope_stale_input',
+      message: 'step measure: the source record was revised',
+    });
+    expect(recorded).not.toBe(manifest);
+    expect(recorded.journey_id).toBe(manifest.journey_id);
+    expect(recorded.revision).toBe(manifest.revision);
+    expect(recorded.invalidations).toEqual([{
+      step_id: 'measure',
+      rule: 'journey_envelope_stale_input',
+      message: 'step measure: the source record was revised',
+    }]);
+    expect(recorded.steps[1]!.status).toBe('NOT_READY');
+    const reasonCount = recorded.steps[1]!.reasons.filter((r) => r === 'stale_input').length;
+    expect(recorded.steps[1]!.reasons).toContain('stale_input');
+    expect(reasonCount).toBe(1); // stale_input exactly once
+    // The other step rides through unchanged.
+    expect(recorded.steps[0]!.status).toBe('READY');
+    expect(recorded.steps[0]!.reasons).toEqual([]);
+    expect(recorded.not_ready).toEqual(['measure']);
+    // READY = zero reasons, NOT_READY = at least one reason, for every step.
+    for (const step of recorded.steps) {
+      expect(step.status === 'READY' ? step.reasons.length === 0 : step.reasons.length > 0).toBe(true);
+    }
+  });
+  // D1 (advc c1): the realistic stage-2 target is a READY step — the AC1 pin above
+  // only invalidates 'measure', which is already NOT_READY, so it cannot witness the
+  // status flip or the not_ready recompute. This leg invalidates the READY 'transfer'.
+  it('AC1b: invalidating a READY step flips it to NOT_READY with stale_input and adds it to not_ready in document order', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    // Fixture precondition, asserted not assumed: 'transfer' really is READY.
+    expect(manifest.steps[0]!.status).toBe('READY');
+    expect(manifest.not_ready).toEqual(['measure']);
+    const recorded = recordEnvelopeInvalidation(manifest, {
+      step_id: 'transfer',
+      rule: 'journey_envelope_stale_input',
+      message: 'step transfer: the source record was revised',
+    });
+    expect(recorded.invalidations).toHaveLength(1);
+    expect(recorded.invalidations).toEqual([{
+      step_id: 'transfer',
+      rule: 'journey_envelope_stale_input',
+      message: 'step transfer: the source record was revised',
+    }]);
+    expect(recorded.steps[0]!.status).toBe('NOT_READY');
+    expect(recorded.steps[0]!.reasons).toContain('stale_input');
+    expect(recorded.steps[0]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1);
+    // The recompute must re-derive, not reuse the old array: document order, both ids.
+    expect(recorded.not_ready).toEqual(['transfer', 'measure']);
+    // 'measure' rides through unchanged.
+    expect(recorded.steps[1]!.status).toBe('NOT_READY');
+    expect(recorded.steps[1]!.reasons).toEqual(['awaiting_producer_output']);
+    // The input manifest is untouched.
+    expect(manifest.steps[0]!.status).toBe('READY');
+    expect(manifest.not_ready).toEqual(['measure']);
+  });
+  it('AC2: a second refusal for the same step and rule adds no duplicate stale_input reason and does not mutate the input manifest', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    const original = JSON.parse(JSON.stringify(manifest)); // snapshot taken BEFORE the calls
+    const entry = {
+      step_id: 'measure',
+      rule: 'journey_envelope_stale_input',
+      message: 'step measure: the source record was revised',
+    };
+    const once = recordEnvelopeInvalidation(manifest, entry);
+    const onceSnapshot = JSON.parse(JSON.stringify(once)); // snapshot BEFORE the second call
+    const twice = recordEnvelopeInvalidation(once, entry);
+    expect(twice.steps[1]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1); // no duplicate reason
+    expect(twice.steps[1]!.status).toBe('NOT_READY');
+    expect(twice.invalidations).toHaveLength(2); // each refusal appends its own entry
+    expect(twice.not_ready).toEqual(['measure']);
+    // The input manifest is never mutated: deep-equality against the pre-call snapshot.
+    expect(manifest).toEqual(original);
+    expect('invalidations' in manifest).toBe(false); // the original still carries no invalidation
+    expect(manifest.steps[1]!.reasons).toEqual(['awaiting_producer_output']);
+    expect(manifest.steps[1]!.status).toBe('NOT_READY');
+    // Neither intermediate result is mutated by a later call.
+    expect(once).toEqual(onceSnapshot);
+    expect(once.steps[1]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1);
+  });
+  it('AC3: a manifest compiled with no invalidation carries no invalidations key at all (absent, not undefined)', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    expect('invalidations' in result.manifest).toBe(false);
+    // And after recording, the invalidations key is present with the declared entry.
+    const recorded = recordEnvelopeInvalidation(result.manifest, {
+      step_id: 'measure', rule: 'journey_envelope_stale_input', message: 'step measure: revised',
+    });
+    expect('invalidations' in recorded).toBe(true);
+    expect(recorded.invalidations).toHaveLength(1);
   });
 });
