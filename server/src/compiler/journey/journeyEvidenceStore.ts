@@ -2,7 +2,8 @@
  * L2-JOURNEY-EVIDENCE-1 (unit evstore): the DURABLE seam for the journey
  * evidence bundle — the unit-1 bundle is pure (it exists only for the length
  * of one call); this store is what an auditor reads back later. save:
- * tmp-then-rename (the AiThreadStore idiom) to
+ * tmp-then-EXCLUSIVE-link (so the existence check and the publish are one
+ * syscall — two racing saves of one revision cannot both win) to
  * {rootDir}/journeys/{journey_id}/{revision}.bundle.json, refusing anything
  * the closed schema rejects through the unit-1 module's ONE Ajv loader
  * (validateJourneyEvidenceBundle) — never a second instance. A same-revision
@@ -17,7 +18,7 @@
  * ref_id, never repaired, never re-hashed locally. Journey identity arrives
  * as an argument, never a literal.
  */
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
@@ -57,8 +58,9 @@ export class JourneyEvidenceStore {
     return join(this.rootDir, 'journeys', sanitizeSegment(journeyId), `${sanitizeSegment(String(revision))}.bundle.json`);
   }
   /** Write the bundle durably. The candidate must pass the closed schema (the
-   * unit-1 module's single loader — one Ajv authority); the tmp-then-rename
-   * write copies the AiThreadStore idiom. An existing revision is overwritten
+   * unit-1 module's single loader — one Ajv authority); the write goes to a tmp
+   * path and is published by link(), an exclusive create, so a racing writer
+   * gets EEXIST rather than overwriting the winner. An existing revision is overwritten
    * ONLY when the bytes are identical (a no-op); otherwise the named
    * revision_exists refusal is thrown — the append-only trail is never silently replaced. */
   async save(bundle: JourneyEvidenceBundle): Promise<void> {
@@ -69,16 +71,25 @@ export class JourneyEvidenceStore {
     }
     const finalPath = this.bundlePath(bundle.journey_id, bundle.revision);
     const payload = JSON.stringify(bundle, null, 2);
-    const existing = await readMaybe(finalPath);
-    if (existing !== undefined) {
+    await mkdir(dirname(finalPath), { recursive: true });
+    const tmpPath = `${finalPath}.${randomUUID()}.tmp`;
+    await writeFile(tmpPath, payload, 'utf8');
+    try {
+      // The existence check and the publish are ONE exclusive-create syscall: a racing
+      // writer gets EEXIST instead of both seeing ENOENT and the later rename winning.
+      await link(tmpPath, finalPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+        await unlink(tmpPath).catch(() => {});
+        throw err;
+      }
+      await unlink(tmpPath).catch(() => {});
+      const existing = await readMaybe(finalPath);
       if (existing === payload) return; // byte-identical re-save: a no-op, the file is untouched
       throw new JourneyEvidenceStoreError(RULE_STORE_REVISION_EXISTS,
         `journey ${bundle.journey_id}: revision ${bundle.revision} is already stored with different bytes — evidence is append-only and a silent overwrite destroys the audit trail`);
     }
-    await mkdir(dirname(finalPath), { recursive: true });
-    const tmpPath = `${finalPath}.${randomUUID()}.tmp`;
-    await writeFile(tmpPath, payload, 'utf8');
-    await rename(tmpPath, finalPath);
+    await unlink(tmpPath).catch(() => {}); // the link is the file now; the tmp name is scratch
   }
   /** Read ONE revision. Absent, malformed JSON, schema-invalid (determinism.mode
    * absent/changed on disk, a fourth mode) or digest-mismatched (the unit-1
