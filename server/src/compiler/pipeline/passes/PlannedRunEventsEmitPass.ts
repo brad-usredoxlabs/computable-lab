@@ -358,6 +358,10 @@ export function createPlannedRunEventsEmitPass(
       const events: Array<Record<string, unknown>> = [];
       const ordinalTracker = new Map<string, number>();
       const diagnostics: PassDiagnostic[] = [];
+      // D-6 guard: collect unbound roles so we can refuse BEFORE persisting a
+      // graph. A plan with an unbound role (or zero events) must not leave a
+      // vacuous event-graph behind or repoint the planned-run at it.
+      const unboundRoleRefs: Array<{ roleId: string; stepId: string }> = [];
 
       // 4. Process each step context
       for (const stepContext of perStepContexts) {
@@ -408,6 +412,7 @@ export function createPlannedRunEventsEmitPass(
             const hasLabwareBinding = bindings.labwareResolutions[value];
             const hasMaterialBinding = bindings.materialResolutions[value];
             if (!hasLabwareBinding && !hasMaterialBinding) {
+              unboundRoleRefs.push({ roleId: value, stepId });
               diagnostics.push({
                 severity: 'warning',
                 code: 'unbound_role',
@@ -541,6 +546,44 @@ export function createPlannedRunEventsEmitPass(
 
           events.push(event);
         }
+      }
+
+      // 5b. D-6 refusal: never persist a vacuous / unbound plan graph.
+      //     An unbound role, or zero emitted events, means this is not a real
+      //     plan — return ok:false BEFORE creating the record and BEFORE the
+      //     planned-run repoint, so nothing is written and methodEventGraphId
+      //     is left untouched. Mirrors the plan-graph endpoint's
+      //     details: { roleId, stepId } vocabulary.
+      if (unboundRoleRefs.length > 0) {
+        const first = unboundRoleRefs[0]!;
+        return {
+          ok: false,
+          diagnostics: [
+            ...diagnostics,
+            {
+              severity: 'error',
+              code: 'UNBOUND_ROLE',
+              message: `Plan build refused: role '${first.roleId}' at step '${first.stepId}' has no binding`,
+              pass_id: 'planned_run_events_emit',
+              details: { roleId: first.roleId, stepId: first.stepId },
+            },
+          ],
+        };
+      }
+      if (events.length === 0) {
+        return {
+          ok: false,
+          diagnostics: [
+            ...diagnostics,
+            {
+              severity: 'error',
+              code: 'VACUOUS_PLAN_GRAPH',
+              message: 'Plan build refused: zero events emitted (an empty event-graph is not a plan)',
+              pass_id: 'planned_run_events_emit',
+              details: { eventCount: 0 },
+            },
+          ],
+        };
       }
 
       // 6. Build event-graph envelope
