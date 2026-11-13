@@ -1,0 +1,15 @@
+# GOVERNED WRITE REGISTRY — the ONLY admissible source of a governed_write
+# handler_ref. A descriptor's implementation.handler_ref is admitted only when
+# its id appears below (or in AGENT_ALLOWED_TOOLS, for agent_tool kind).
+# Adding an entry is a REVIEWABLE ACT: it admits a write path for journeys,
+# so every entry names the route identity (server/src/api/routes.ts), the
+# handler and store that execute it, the record kinds it may write, and the
+# guards the route already runs. This file is data, never code.
+version: "1.0.0"
+writes:
+- id: records.create
+  route: POST /records
+  handler: RecordHandlers.create
+  store: RecordStoreImpl
+  record_kinds: [material, vendor-product]
+  guards: [ajv-schema-validation, lint, ownership-acl]
