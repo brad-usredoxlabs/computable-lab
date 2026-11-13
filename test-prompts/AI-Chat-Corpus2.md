@@ -35,7 +35,7 @@ Activity:  A mouseover of the selected wells should now display "100 uL DMEM"
 
 ## Prompt 2a
 
-Context:  This is a continuation of prompt 1, we are iteratively building an experiment.
+Context:  This is a continuation of prompt 2, we are iteratively building an experiment.
 Prompt:  Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.
 Activity:  Optionally, if there is no 1mM clofibrate material we specify what to mint.
 Activity:  If clofibrate itself isn't in the system, create the concept anchored to its chemistry ontology term first, then the 1mM in DMSO formulation against that concept.
