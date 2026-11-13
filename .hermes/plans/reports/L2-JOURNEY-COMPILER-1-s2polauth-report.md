@@ -51,3 +51,5 @@ Both logs kept in `/home/brad/.cl-s2polauth-scratch/`.
 The launcher's worktree `node_modules` symlink pointed at a partial install without
 fastify; for typecheck it was repointed to the full same-repo install in
 `L2-DOC-INTAKE-1-u1-lane2/node_modules` (gitignored, no product change).
+
+L2-JOURNEY-COMPILER-1 UNIT 1 DONE 3f69bcf2f017d150bb33541690c77718d1488f7a
