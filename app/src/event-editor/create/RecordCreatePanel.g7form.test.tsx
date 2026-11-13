@@ -101,6 +101,8 @@ describe('g7form — create door posture + banner freshness', () => {
     mocked.refuse = true
     renderPanel()
     await waitFor(() => expect(findRow('Identifier')).toBeTruthy(), { timeout: 8000 })
+    // Provide an ID value to allow the submission through the ID gate.
+    typeInto(findRow('Identifier'), 'lbw-def-initial-id')
     submit()
     expect((await screen.findByRole('alert')).textContent).toContain('422')
     expect(mocked.createCalls).toHaveLength(1)
@@ -109,6 +111,20 @@ describe('g7form — create door posture + banner freshness', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     // Editing cleared the banner; it did NOT submit again.
     expect(mocked.createCalls).toHaveLength(1)
+  })
+
+  it('empty required Identifier is refused client-side — no POST, named identifier banner', async () => {
+    // Leave the Identifier field empty, fill only Display name, then submit.
+    renderPanel()
+    await waitFor(() => expect(findRow('Display name')).toBeTruthy(), { timeout: 8000 })
+    // Fill ONLY Display name via typeInto, leave Identifier untouched (empty).
+    typeInto(findRow('Display name'), 'g8probe')
+    submit()
+    // No POST should happen: createCalls.length === 0
+    expect(mocked.createCalls).toHaveLength(0)
+    // A banner must be visible containing a named identifier message (matches /identifier/i).
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy(), { timeout: 8000 })
+    expect(screen.getByRole('alert').textContent).toMatch(/identifier/i)
   })
 
   it('the minimal fallback form still renders for a kind with no projection', async () => {
