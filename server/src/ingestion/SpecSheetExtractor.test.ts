@@ -384,6 +384,11 @@ describe('extractFromUrl — zero proposals returns typed no-proposals', () => {
     expect((result as any).noProposals).toBeDefined();
     expect((result as any).noProposals.url).toBe('https://example.com/reservoir-abc');
     expect((result as any).noProposals.reason).toBe('no_field_match');
+    const declared = (await getSpecSheetFieldMap('labware')).fieldMappings.map((m) => m.targetField);
+    const outcomes = (result as any).fieldOutcomes as Array<{ targetField: string; status: string; passage?: string }>;
+    expect(outcomes.map((o) => o.targetField)).toEqual(declared); // every declared field, YAML order
+    expect(outcomes.every((o) => o.status === 'not_present')).toBe(true);
+    expect(outcomes.every((o) => !('passage' in o))).toBe(true); // no empty-string / guessed passage
   });
 
   it('returns noProposals with reason empty_document when fetched text is empty', async () => {
@@ -406,6 +411,11 @@ describe('extractFromUrl — zero proposals returns typed no-proposals', () => {
     expect((result as any).noProposals).toBeDefined();
     expect((result as any).noProposals.url).toBe('https://example.com/empty-page');
     expect((result as any).noProposals.reason).toBe('empty_document');
+    const declared = (await getSpecSheetFieldMap('labware')).fieldMappings.map((m) => m.targetField);
+    const outcomes = (result as any).fieldOutcomes as Array<{ targetField: string; status: string; passage?: string }>;
+    expect(outcomes.map((o) => o.targetField)).toEqual(declared); // every declared field, YAML order
+    expect(outcomes.every((o) => o.status === 'not_present')).toBe(true);
+    expect(outcomes.every((o) => !('passage' in o))).toBe(true); // no empty-string / guessed passage
   });
 });
 
