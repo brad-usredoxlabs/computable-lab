@@ -641,6 +641,71 @@ describe('LabLabwareNewPage', () => {
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
   }
 
+  // g6 D1 — real spec sheets state rows/columns but never an addressing keyword, and the
+  // schema REQUIRES topology.addressing. The builder must derive it from the array facts
+  // the document DID yield, so the save writes instead of being refused.
+  it('derives topology.addressing = grid from rows+columns and writes (g6 D1)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's2' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's3' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('grid')
+    expect(screen.queryByTestId('lab-labware-error')).toBeNull()
+  })
+
+  // g6 D1 — a linear array (troughs in a row) is described by a count, not rows+columns.
+  it('derives topology.addressing = linear from linear_count alone (g6 D1)', async () => {
+    const proposals = [
+      { targetField: 'topology.linear_count', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 troughs', specId: 's1' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's2' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('linear')
+  })
+
+  // g6 D1 — no array facts at all describes a single-well/trough vessel.
+  it('derives topology.addressing = single when the sheet states no array facts (g6 D1)', async () => {
+    const proposals = [
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's1' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('single')
+  })
+
+  // g6 D1 — an extractor-supplied addressing is authoritative; derivation never overwrites it.
+  it('keeps an extractor-supplied topology.addressing (g6 D1 no overwrite)', async () => {
+    const proposals = [
+      { targetField: 'topology.addressing', value: 'linear', sourceUrl: 'https://example.com/sheet', passage: 'Linear addressing', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('linear')
+  })
+
   // g5d1save leg 2 — a unit-bearing quantity in a number field must convert, not fall through raw
   it('coerces a single unit-bearing quantity into the declared number field (100mL -> 100000)', async () => {
     const proposals = [
@@ -733,17 +798,20 @@ describe('LabLabwareNewPage', () => {
     expect(mockCreateRecord).not.toHaveBeenCalled()
   })
 
-  // g5d1save leg 3a — schema-required field with no proposal refuses by name, no POST
-  it('refuses with a named reason when schema-required topology has no proposal', async () => {
+  // g5d1save leg 3a — schema-required field with no proposal refuses by name, no POST.
+  // g6 D1: topology.addressing is now derived from array facts, so the unwitnessed
+  // required field here is capacity — the walk still refuses it by name.
+  it('refuses with a named reason when schema-required capacity has no proposal', async () => {
     const proposals = [
-      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's1' },
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's2' },
     ]
     await extractAndOpenSave(proposals, labwareSchemaShape)
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
     })
     expect(screen.getByTestId('lab-labware-error').textContent).toBe(
-      'Cannot save: missing or invalid: topology',
+      'Cannot save: missing or invalid: capacity.max_well_volume_uL',
     )
     expect(mockCreateRecord).not.toHaveBeenCalled()
     expect(screen.queryByTestId('lab-labware-missing-required')).toBeNull()
