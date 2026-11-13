@@ -67,5 +67,4 @@ Both mutants were reverted; `git diff --quiet -- .../journeyCompiler.ts` is clea
   base, so both closed-set pins still hold (10/10).
 - No blockers.
 
-L2-JOURNEY-COMPILER-1-s2invalfix1 UNIT DONE 5a37e4e9
-L2-JOURNEY-COMPILER-1 UNIT unit DONE 5a37e4e9
+L2-JOURNEY-COMPILER-1 UNIT unit DONE 5a37e4e996285b3e860d96dc769e35c3d219b8cc
