@@ -79,3 +79,55 @@ None for this unit. Unit 3 (handoff citation format / route surface) is un-brief
 
 ## Marker
 L2-JOURNEY-EVIDENCE-1 UNIT 2 DONE 69524b9615aee54c6ae97829075e42361d7b733a
+
+## evtoctou fix cycle
+
+WHY: adversarial review c1 (reviews/L2-JOURNEY-EVIDENCE-1-evstore-advc-c1-l2t1872.md) MEASURED a check-then-write TOCTOU in `save()` — `readMaybe(finalPath)` (:72) then unconditional `rename(tmp, final)`
+(:81): two racing saves both see ENOENT and the later rename silently destroys the first caller's bytes while both promises resolve as success. Evidence is append-only, so this is the worst defect class for the item.
+
+### RED (before any fix; raw)
+New arm `(AC4) two concurrent saves of DIFFERENT bytes at the same revision` at revision 20, two distinct observation texts, `Promise.allSettled([store.save(first), store.save(second)])` through ONE store instance.
+```
+AC4 concurrent-save outcome: ["FULFILLED","FULFILLED"]
+ ❯ src/compiler/journey/journeyEvidenceStore.test.ts  (9 tests | 1 failed) 87ms
+     → expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+AssertionError: expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+      Tests  1 failed | 8 passed (9)
+```
+Committed RED first: `1896acf3`.
+
+### FIX
+Chose `link()` (tmp file + exclusive hard link) over a direct `flag:'wx'` write: link keeps the publish ATOMIC for readers — a concurrent `load`/`verify` can never observe a half-written bundle (a `wx`-direct write to `finalPath` would expose partial bytes, which the read path would report as malformed → null, i.e. a false "absent" for an auditor). Both are exclusive-create; link preserves the existing tmp-then-publish durability shape and only changes the FINAL step's semantics.
+- `mkdir` stays BEFORE the attempt; tmp write unchanged.
+- `await link(tmpPath, finalPath)` — check and publish in ONE syscall; no `readMaybe` before it.
+- Non-EEXIST errors propagate (tmp removed first); EEXIST → tmp removed, then `readMaybe(finalPath)`: identical bytes → the original no-op return (:74 semantics preserved verbatim), different bytes → the original `RULE_STORE_REVISION_EXISTS` throw with the same message (:75-76 verbatim).
+- Tmp name removed after a successful link (the link IS the file).
+- Unchanged: `load`/`verify`/`bundlePath`, byte-identical no-op, rule string, no Ajv change, no schema edit, no new option, no export change. `rename` import dropped, `link`/`unlink` added.
+Committed: `91257e09` (21 insertions / 10 deletions in store.ts — inside the 60-line budget).
+
+### GREEN (raw, post-fix)
+```
+AC4 concurrent-save outcome: ["FULFILLED","REJECTED:revision_exists"]
+ ✓ src/compiler/journey/journeyEvidenceStore.test.ts  (9 tests) 118ms
+      Tests  9 passed (9)
+```
+AC4 also asserts the on-disk revision-20 bundle `toEqual(first)` — the survivor's bytes, i.e. the loser never overwrote the winner.
+
+### Mutation probe (AC2 negative; performed, restored)
+EEXIST treated as success (catch body → unlink tmp + `return`) — RAW:
+```
+AC4 concurrent-save outcome: ["FULFILLED","FULFILLED"]
+     → expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+     Tests  2 failed | 7 passed (9)
+```
+(Both the concurrent arm and the pre-existing serial refusal arm go red — the pin is the refusal, non-vacuous.) Restored; re-ran: 9/9 and tsc 0.
+
+### Verify (raw, post-restoration)
+- `cd server && npx vitest run src/compiler/journey/journeyEvidenceStore.test.ts` → `Tests  9 passed (9)` (988 ms wall).
+- `cd server && npx vitest run src/compiler/journey/journeyEvidenceBundle.test.ts` → `Tests  9 passed (9)`.
+- `cd server && npx tsc --noEmit -p .` → exit 0.
+- `git diff --stat` vs pre-fix commit → only `server/src/compiler/journey/journeyEvidenceStore.ts` (1 file, 21 insertions, 10 deletions); across the whole unit the two owned files only.
+- `RULE_STORE_REVISION_EXISTS = 'revision_exists'` unchanged (line 30).
+
+### Residual note
+`link()` requires the tmp and final names on the same filesystem — they are in the same directory by construction, so this holds; a filesystem without hardlink support would surface as a non-EEXIST error rather than a silent overwrite (fail-closed).
