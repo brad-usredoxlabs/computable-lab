@@ -170,6 +170,24 @@ function generateSpineRecordId(nodeType: SpineKind, title: string, rand: string)
   return `${prefix}-${slug}-${rand}`
 }
 
+/**
+ * L2-ONTSRC (idmintreadonly7): the mint for a PROJECTION-marked readonly
+ * identity slot — `REC-` + 8 UPPERCASE hex characters (the g4 RED pin
+ * requires ^REC-[0-9A-F]{8}$ exactly). Deliberately distinct from
+ * generateSpineRecordId (4 lowercase base36 chars — the spine's own shape):
+ * reused, it would fail the pin. Minted once per submit (never on mount),
+ * so the header preview does not churn and the created record's identity is
+ * stable (AC3 — the record is re-read at the minted id, not re-minted per
+ * render).
+ */
+function mintReadonlyIdentity(): string {
+  let hex = ''
+  for (let i = 0; i < 8; i++) {
+    hex += Math.floor(Math.random() * 16).toString(16)
+  }
+  return `REC-${hex.toUpperCase()}`
+}
+
 export interface RecordCreatePanelProps {
   /**
    * The record kind to create. Spine kinds ('study'|'experiment'|'run') keep
@@ -266,15 +284,29 @@ export function RecordCreatePanel({
   const unserved = registryNodes !== null && resolvedNode === null && !(registryError !== null && isSpine)
   const registryUnavailable = registryError !== null && resolvedNode === null
 
+  // L2-ONTSRC (idmintreadonly7): the submit-time mint discriminator is the
+  // SERVED projection's `readOnly` flag on the identity slot — never the kind
+  // name (D16 stays correct for assertion/claim: the author supplies the id).
+  // Uses the RAW projection.slots — the `slots` memo below force-sets
+  // readOnly on parent-path slots and is a different array. A missing
+  // projection or a missing slot means NO mint (strict === true).
+  const identitySlotReadOnly =
+    !isSpine &&
+    projection?.slots.find((s) => s.path === `$.${idField}`)?.readOnly === true
+
   // GC-16 FIX RUN 2 (adversarial defect 4; provisional D-A): honest note for
   // a SERVED non-spine kind — the client mints no id; the form exposes the
   // schema-declared `id` field for the author to fill (the server's
   // required-check speaks). Spine kinds carry no note (the client mints
-  // recordId as before).
+  // recordId as before). L2-ONTSRC (idmintreadonly7): a projection-marked
+  // readonly identity slot flips the note to the mint statement — the D16
+  // writable-identity text is byte-identical to pre-idmintreadonly7.
   const idNote =
     isSpine || registryNodes === null || resolvedNode === null
       ? null
-      : `Supply a stable id before saving — the client does not mint knowledge ids; the schema requires one (server validation is the authority).`
+      : identitySlotReadOnly
+        ? `An identifier is minted when you save — the UI spec marks it read-only.`
+        : `Supply a stable id before saving — the client does not mint knowledge ids; the schema requires one (server validation is the authority).`
 
   const label =
     resolvedNode?.title ?? (isSpine ? SPINE_LABELS[nodeType as SpineKind] : nodeType)
@@ -573,6 +605,23 @@ export function RecordCreatePanel({
             randRef.current,
           )
         }
+        // L2-ONTSRC (idmintreadonly7): the served projection marks the
+        // identity slot readonly → mint the id at submit (the g4 defect: the
+        // write carried the anchor and NO id, and the server 400'd with
+        // 'payload must contain recordId or id field'). Placed AFTER the
+        // empty-field strip above (a mint before it is deleted again) and
+        // before the kind re-stamp; the spine branch is untouched (its mint
+        // keeps the STU-/EXP-/RUN- shape). recordId is NEVER invented here —
+        // the server derives it from id (RecordEnvelope.ts).
+        // `!payload[idField]` guard (the gc16 D4 pin): the mint is the
+        // fallback for an EMPTY identity slot — an id already in the payload
+        // (the author's, the D16 contract) is never replaced by a client-
+        // fabricated one. A readonly slot renders NO input in the real form,
+        // so the served-readonly path always reaches this with the id
+        // absent — the guard only protects author-supplied values.
+        if (identitySlotReadOnly && !payload[idField]) {
+          payload[idField] = mintReadonlyIdentity()
+        }
         payload.kind = nodeType
         // System provenance is server-owned — never submit it from the client.
         stripSystemProvenance(payload)
@@ -620,6 +669,7 @@ export function RecordCreatePanel({
       schemaRequiresTitle,
       schemaDocFor,
       schemaDocFailed,
+      identitySlotReadOnly,
     ],
   )
 
