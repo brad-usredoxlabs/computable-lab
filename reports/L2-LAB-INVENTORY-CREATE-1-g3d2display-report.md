@@ -142,12 +142,16 @@ Tree clean after restore (git status --porcelain empty).
   git diff b8f291edeb951798821124ca4be5f5563e656d11 --stat
 
 ## Marker
-L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT DONE 7a414036d85354a7eecccc74078937d7e533eee1
-The 40-char sha above is the fix commit (fix(resolve): match display_name in the record
-lexical law + label fallback) — the commit containing the product change
-(server/src/resolve/providers/records.ts) and the RED/GREEN tests.
-This report file was committed in 5a06c07979b76ece954e47b27e2ba1cf53074daa, which also
-contains the fix commit; the exit marker below therefore names 5a06c079 (in-branch history,
-contains this file and the fix — verifiable: git cat-file -e 5a06c079:reports/...).
+All marker lines below name the SAME sha: 5a06c07979b76ece954e47b27e2ba1cf53074daa — the
+report commit (docs(plan): L2-LAB-INVENTORY-CREATE-1 g3d2display report + DONE marker),
+which contains this file AND the fix commit 7a414036d85354a7eecccc74078937d7e533eee1
+(fix(resolve): match display_name in the record lexical law + label fallback).
+Verifiable in-branch: git cat-file -e 5a06c07979b76ece954e47b27e2ba1cf53074daa:reports/L2-LAB-INVENTORY-CREATE-1-g3d2display-report.md (rc 0)
+and git merge-base --is-ancestor 5a06c07979b76ece954e47b27e2ba1cf53074daa HEAD (rc 0).
+The `UNIT unit` line is the launcher's literal template line, kept verbatim; the
+`UNIT g3d2display` lines name this item's unit token.
 
+L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
+L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT g3d2display DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
+L2-LABINV-g3d2display UNIT g3d2display DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
 L2-LABINV-g3d2display UNIT unit DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
