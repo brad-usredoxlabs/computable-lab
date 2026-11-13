@@ -106,4 +106,4 @@ Unit 3 completes L2-JOURNEY-EVIDENCE-1. The branch head now contains the closed 
 
 ## Marker
 
-L2-JOURNEY-EVIDENCE-1 UNIT evcite DONE <sha-to-be-filled>
+L2-JOURNEY-EVIDENCE-1 UNIT evcite DONE 89d271e41bb0f0e2aedc050ba3eedb965afb53ff
