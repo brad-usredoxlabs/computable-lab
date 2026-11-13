@@ -201,3 +201,4 @@ Implementation complete (3/3 owned files, 5 commits, all pins green, budget
 met). Awaiting adversarial review / gate. No blockers. If the reviewer rules
 the client key must be REQUIRED, the follow-up must extend the legacy union
 + the specSheetDoor test fixtures — a different item per this brief's scope.
+L2-NOUN-FROM-DOC-1 UNIT 1 DONE 3284dd581aa790697c3d832aacf1a680a3ad4945 (report contained at this sha)
