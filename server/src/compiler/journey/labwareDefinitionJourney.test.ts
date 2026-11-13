@@ -75,4 +75,35 @@ describe('labware-definition journey declaration (data, linted against real regi
     expect(result.diagnostics).toEqual([]);
     expect(result.ok).toBe(true);
   });
+
+  // u2adefwire pins: the declaration is wired to the admitted governed writes.
+  it('pins the u2adefwire capability_refs: complete-definition is the governed write and place-instance is its consumer', () => {
+    const doc = loadDeclaration();
+    const byId = new Map((doc.steps as any[]).map((s) => [s.id, s]));
+    const complete = byId.get('complete-definition');
+    expect(complete, 'a complete-definition step must be declared').toBeDefined();
+    expect(complete.capability_ref).toBe('journey.labware-definition-create');
+    const place = byId.get('place-instance');
+    expect(place, 'a place-instance step must be declared').toBeDefined();
+    expect(place.capability_ref).toBe('journey.labware-instance-place');
+  });
+
+  it('pins the definition-id seam: complete-definition output_ports[0] is the same LabwareDefinitionReference as place-instance input_ports[0]', () => {
+    const doc = loadDeclaration();
+    const byId = new Map((doc.steps as any[]).map((s) => [s.id, s]));
+    const producerPort = (byId.get('complete-definition') as any).output_ports?.[0];
+    const consumerPort = (byId.get('place-instance') as any).input_ports?.[0];
+    expect(producerPort, 'complete-definition must declare an output port at index 0').toBeDefined();
+    expect(consumerPort, 'place-instance must declare an input port at index 0').toBeDefined();
+    expect(producerPort.labware_definition_id).toBeTruthy();
+    expect(consumerPort.labware_definition_id).toBeTruthy();
+    // The same definition id at both ends of the seam — identity is the seam.
+    expect(consumerPort.labware_definition_id).toBe(producerPort.labware_definition_id);
+  });
+
+  it('lints clean against the catalogue alone (no surfaces registry, so the human-task rules do not run)', () => {
+    const doc = loadDeclaration();
+    const result = lintJourneyDocument(doc, catalogue);
+    expect(result.diagnostics).toEqual([]);
+  });
 });
