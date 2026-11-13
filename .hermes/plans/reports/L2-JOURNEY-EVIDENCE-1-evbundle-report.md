@@ -144,8 +144,9 @@ plus the module-header comment lines (18, 23) that name the schema file. Zero jo
 4e06981e7632a6ed0d4e48593d18f97a9fd20172  L2-JOURNEY-EVIDENCE-1 evbundle (unit 1): RED probes + closed journey evidence bundle schema
 66d2a8ac9b94c6af5324aaa1e9eebfc5e9a638c2  L2-JOURNEY-EVIDENCE-1 evbundle (unit 1): pure build/verify module for the closed bundle
 76a52998d44d5596f4f7d2b5b32f33f3b3026917  L2-JOURNEY-EVIDENCE-1 evbundle (unit 1): tighten comments, single-loader a2 arm
+1564b534ada77b1610d82ef34277ebfe2f606ed4  L2-JOURNEY-EVIDENCE-1 evbundle (unit 1): unit report with exit marker (bookkeeping only)
 ```
-Plus this report commit (the marker line below names the sha of the commit that CONTAINS this report; the marker text itself is set in a final follow-up commit, same shape as the u6fix3pw/c4marker precedent).
+This report file is contained at 1564b534 (git cat-file -e 1564b534:.hermes/plans/reports/L2-JOURNEY-EVIDENCE-1-evbundle-report.md -> rc 0). The final marker commit (next sha on the branch) only fixes the marker line below to name 1564b534 — the report-containing sha — the same two-commit shape as the u6fix3pw/c4marker precedent.
 
 ## Reviewer notes (bait pre-emption status)
 
@@ -165,4 +166,4 @@ Plus this report commit (the marker line below names the sha of the commit that 
 
 ## Marker
 
-L2-JOURNEY-EVIDENCE-1 UNIT evbundle DONE <REPLACE-WITH-REPORT-CONTAINING-SHA>
+L2-JOURNEY-EVIDENCE-1 UNIT evbundle DONE 1564b534ada77b1610d82ef34277ebfe2f606ed4
