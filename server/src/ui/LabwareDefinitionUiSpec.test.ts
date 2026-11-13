@@ -76,4 +76,15 @@ describe('labware-definition ui spec — ontology anchor field (LEG 2)', () => {
     expect(sources).toContain('ols')
     expect(sources).toContain('local-obo')
   })
+
+  it('the $.id Identifier field is authorable (not readonly) and required', async () => {
+    const content = await readFile(UI_PATH, 'utf-8')
+    const result = createUISpecLoader().load(content, UI_PATH)
+    const field = result.spec?.form?.sections
+      .flatMap((s) => s.fields)
+      .find((f) => f.path === '$.id')
+    expect(field).toBeDefined()
+    expect(field?.readonly).not.toBe(true)
+    expect(field?.required).toBe(true)
+  })
 })
