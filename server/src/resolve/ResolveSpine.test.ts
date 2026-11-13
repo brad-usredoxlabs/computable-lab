@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createResolveSpine } from './ResolveSpine.js';
+import { createResolveSpine, createResolveSpineFromContext, localOboTierEnabled } from './ResolveSpine.js';
 import { createLocalOboProvider } from './providers/localObo.js';
 import type { ProviderHit, ResolveProvider } from './types.js';
 
@@ -139,12 +139,7 @@ describe('resolve() spine', () => {
   it('surfaces vendor hits with source vendor when a vendor provider is wired', async () => {
     stubFetch({});
     const spine = createResolveSpine({
-      vendorProvider: staticProvider([{
-        curie: 'local:vendor-catalog-abc1',
-        label: 'Cayman Rotenone 1 mM',
-        namespace: 'local',
-        uri: 'https://example.com/rotenone',
-      }]),
+      vendorProvider: staticProvider([{ curie: 'local:vendor-catalog-abc1', label: 'Cayman Rotenone 1 mM', namespace: 'local', uri: 'https://example.com/rotenone' }]),
     });
     const out = await spine.resolve('rotenone');
     const vendor = out.find((c) => c.source === 'vendor');
@@ -185,5 +180,43 @@ describe('resolve() spine', () => {
     expect(out.filter((c) => c.tier < 5).map((c) => c.curie)).toEqual(
       base.filter((c) => c.tier < 5).map((c) => c.curie),
     );
+  });
+});
+
+describe('local-obo tier conditional mount', () => {
+  const scratchDir = '/home/brad/.ontocond-scratch';
+  const shippedRegistryPath = undefined; // defaults to server/config/ontology-sources.yaml
+
+  it('localOboTierEnabled returns true when shipped registry has enabled local-obo sources', () => {
+    expect(localOboTierEnabled(shippedRegistryPath)).toBe(true);
+  });
+
+  it('localOboTierEnabled returns false when all sources are disabled', () => {
+    expect(localOboTierEnabled(`${scratchDir}/test-disabled-registry.yaml`)).toBe(false);
+  });
+
+  it('localOboTierEnabled returns false when registry path does not exist', () => {
+    expect(localOboTierEnabled('/nonexistent/path.yaml')).toBe(false);
+  });
+
+  it('spine respects disabled registry: no candidates from source local-obo', async () => {
+    stubFetch({});
+    const disabledSpine = createResolveSpineFromContext({
+      store: {} as any,
+      localOboRegistryPath: `${scratchDir}/test-disabled-registry.yaml`,
+    });
+    const out = await disabledSpine.resolve('plate');
+    expect(out.filter((c) => c.source === 'local-obo')).toEqual([]);
+  });
+
+  it('spine accepts custom registry path via context.factory override', async () => {
+    stubFetch({});
+    const disabledSpine = createResolveSpineFromContext({
+      store: {} as any,
+      localOboRegistryPath: `${scratchDir}/test-disabled-registry.yaml`,
+    });
+    const localOnlyOut = await disabledSpine.resolve('plate', { localOnly: true });
+    expect(localOnlyOut.filter((c) => c.source === 'local-obo')).toEqual([]);
+    expect(localOnlyOut[localOnlyOut.length - 1]?.source).toBe('mint');
   });
 });
