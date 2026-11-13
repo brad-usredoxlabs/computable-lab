@@ -110,6 +110,31 @@ describe('compileJourneyEnvelope', () => {
     expect(stale.diagnostics[0]!.message).toContain('v1');
     expect(stale.diagnostics[0]!.message).toContain('v2');
   });
+  it('AC3b: compile-time staleness is refused when a resolved version differs from the pin', () => {
+    const document = twoStepDocument();
+    const manifest = compileManifest(document);
+    const result = compileJourneyEnvelope(manifest, document, 'measure', [{ port_index: 0, version: 'v2' }]);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('a moved resolved version must be refused at compile time');
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.rule).toBe(RULE_ENVELOPE_STALE_INPUT);
+    expect(result.diagnostics[0]!.message).toContain('0');
+    expect(result.diagnostics[0]!.message).toContain('v1');
+    expect(result.diagnostics[0]!.message).toContain('v2');
+    expect('envelope' in result).toBe(false);
+  });
+  it('AC3b: a re-measured current set missing a bound port is refused on the freshness side as input unbound', () => {
+    const document = twoStepDocument();
+    const manifest = compileManifest(document);
+    const result = compileJourneyEnvelope(manifest, document, 'measure', [{ port_index: 0, version: 'v1' }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected the envelope to compile');
+    const unbound = checkEnvelopeFreshness(result.envelope, []);
+    expect(unbound.valid).toBe(false);
+    if (unbound.valid) throw new Error('expected the re-measured empty current set to be refused');
+    expect(unbound.diagnostics).toHaveLength(1);
+    expect(unbound.diagnostics[0]!.rule).toBe(RULE_ENVELOPE_INPUT_UNBOUND);
+  });
   it('AC4: a missing resolved version is refused under journey_envelope_input_unbound naming the index', () => {
     const document = twoStepDocument();
     const manifest = compileManifest(document);
