@@ -528,24 +528,30 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
 
   if (embedded) return collectionContent
 
+  // The dialogs use the shared .lab-modal__* styles built on var(--cl-*)
+  // tokens, which are scoped to .cl-app. Mount them inside the leftPane tree
+  // (not as AppShell siblings) or they render unpainted. children is dropped
+  // on layout="workspace", so leftPane is the only in-scope slot.
   return (
-    <>
-      <AppShell
-        brand="Lab"
-        layout="workspace"
-        topbarTabs={<WorkspaceTabStrip />}
-        leftPane={collectionContent}
-      />
-      <LabwareInstanceCreateModal
-        definitions={labwareDefinitions}
-        isOpen={showInstanceModal}
-        onClose={() => setShowInstanceModal(false)}
-        onSuccess={() => void fetchRecords('labware-instance')}
-      />
-      <MaterialReceivingDoor
-        isOpen={showReceiveModal}
-        onClose={() => setShowReceiveModal(false)}
-      />
-    </>
+    <AppShell
+      brand="Lab"
+      layout="workspace"
+      topbarTabs={<WorkspaceTabStrip />}
+      leftPane={
+        <>
+          {collectionContent}
+          <LabwareInstanceCreateModal
+            definitions={labwareDefinitions}
+            isOpen={showInstanceModal}
+            onClose={() => setShowInstanceModal(false)}
+            onSuccess={() => void fetchRecords('labware-instance')}
+          />
+          <MaterialReceivingDoor
+            isOpen={showReceiveModal}
+            onClose={() => setShowReceiveModal(false)}
+          />
+        </>
+      }
+    />
   )
 }
