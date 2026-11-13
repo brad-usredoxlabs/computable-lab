@@ -50,6 +50,21 @@ interface LabContextFromNotes {
 }
 
 /**
+ * Collapse a planned-run title that already begins with its own "Plan:" label.
+ *
+ * The bindings heading renders `Plan: {title}`; when the stored title is itself
+ * `Plan: 2026-09-06 Run template` the page stutters. This strips only an
+ * anchored `plan:` prefix (case/space-insensitive) at render time — the record
+ * title is never written, renamed or trimmed in storage. A title that merely
+ * contains the word Plan is left verbatim, and an empty remainder falls back to
+ * the original so the heading never loses its title.
+ */
+export function planHeadingTitle(title: string): string {
+  const stripped = title.replace(/^\s*plan\s*:\s*/i, '')
+  return stripped.trim() ? stripped : title
+}
+
+/**
  * Extract labContext from local-protocol notes JSON string.
  */
 function extractLabContextFromNotes(notes: string | undefined): LabContextFromNotes | undefined {
@@ -351,7 +366,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
       {/* Header */}
       <div className="binding-mode-editor__header">
-        <h2 className="binding-mode-editor__title">Plan: {title}</h2>
+        <h2 className="binding-mode-editor__title">Plan: {planHeadingTitle(title)}</h2>
         <div className="binding-mode-editor__controls">
           <DeckPickerSelect
             platforms={platforms}
