@@ -1,16 +1,15 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-EVIDENCE-1 (unit evstore): the durable seam — round-trip
- * (bundle in === bundle out, including determinism.mode; a byte-identical
- * re-save is a no-op), absent → null, a second save at the same revision
- * with different bytes refused by the named revision_exists (the original
- * file byte-identical), a stored document edited on disk named by verify on
- * its ref_id (expected ≠ actual), load → null for a tampered bundle,
- * byte-stable verify, malformed JSON → null (not a throw), determinism
- * missing on disk → null (not defaulted), and '..' / '/' segments refused
- * before any write. Root is a mkdtemp under os.tmpdir(), removed in
- * afterAll; nothing is written into the worktree. Fixtures mirror the
- * unit-1 shapes with neutral ids.
+ * L2-JOURNEY-EVIDENCE-1 (unit evstore), RED-first: round-trip (bundle in ===
+ * bundle out, including determinism.mode; a byte-identical re-save is a
+ * no-op), absent → null, a second save at the same revision with different
+ * bytes refused by the named revision_exists (the original file
+ * byte-identical), a stored document edited on disk named by verify on its
+ * ref_id (expected ≠ actual) and refused by load, byte-stable verify,
+ * malformed JSON → null (not a throw), determinism missing on disk → null
+ * (not defaulted), and '..' / '/' segments refused before any write. Root
+ * is a mkdtemp under os.tmpdir(), removed in afterAll; nothing is written
+ * into the worktree. Fixtures mirror the unit-1 shapes with neutral ids.
  */
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
