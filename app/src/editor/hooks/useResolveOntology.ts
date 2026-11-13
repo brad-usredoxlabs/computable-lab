@@ -23,6 +23,13 @@ export interface UseResolveOntologyOptions {
   debounceMs?: number
   minQueryLength?: number
   maxResults?: number
+  /**
+   * Keep the spine's in-house `local-obo` tier (provider name, not an
+   * ontology term) alongside the canonical/OAK/OLS4 candidates. OFF by
+   * default so fields that do not declare the source stay decoy-free; a
+   * ref field opts in from its own ui.yaml-declared sources.
+   */
+  includeLocalObo?: boolean
 }
 
 export interface UseResolveOntologyResult {
@@ -32,7 +39,7 @@ export interface UseResolveOntologyResult {
 }
 
 export function useResolveOntology(opts: UseResolveOntologyOptions): UseResolveOntologyResult {
-  const { query, enabled = true, debounceMs = 300, minQueryLength = 2, maxResults = 10 } = opts
+  const { query, enabled = true, debounceMs = 300, minQueryLength = 2, maxResults = 10, includeLocalObo = false } = opts
 
   const [results, setResults] = useState<ResolveCandidate[]>([])
   const [loading, setLoading] = useState(false)
@@ -67,7 +74,7 @@ export function useResolveOntology(opts: UseResolveOntologyOptions): UseResolveO
         // ("f prausnitzii", spelled 8 ways) resolves nowhere even though the
         // backend ranked it first. Re-rank so exact/shortest leads.
         const filtered = (candidates ?? []).filter(
-          (c) => (c.source === 'canonical-term' || c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
+          (c) => (c.source === 'canonical-term' || c.source === 'oak' || c.source === 'ols4' || (includeLocalObo && c.source === 'local-obo')) && Boolean(c.curie),
         )
         setResults(rankByLabelMatch(filtered, (c) => c.label, q).slice(0, maxResults))
       } catch {
@@ -80,7 +87,7 @@ export function useResolveOntology(opts: UseResolveOntologyOptions): UseResolveO
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [query, enabled, debounceMs, minQueryLength, maxResults])
+  }, [query, enabled, debounceMs, minQueryLength, maxResults, includeLocalObo])
 
   return { results, loading, fromCache: false }
 }

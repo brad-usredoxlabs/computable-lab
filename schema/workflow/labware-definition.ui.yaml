@@ -1,0 +1,50 @@
+# UI display spec for the labware definition schema.
+# Pairs with labware-definition.schema.yaml.
+#
+# L2-ONTOLOGY-ANCHOR-SOURCES-1 (o3uispec): restores the structured form for
+# /record/new/labware-definition (UI_SPEC_NOT_FOUND at the browser gate) and
+# exposes the optional ontology_ref as a "ref" field whose plan declares the
+# 'local-obo' source alongside 'ols'. The shared ref combobox derives its
+# local-obo opt-in from this plan (data-driven, per field); the resolve spine
+# already serves the in-house LWO tier.
+#
+# `ontology_ref` stays OPTIONAL (schema side, declared optional at
+# labware-definition.schema.yaml:43): the form's required-check never fires
+# on it, and a save with the anchor left empty succeeds and reads back
+# WITHOUT the key (AC2 negative).
+
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml"
+
+display:
+  titleField: "$.display_name"
+
+form:
+  sections:
+    - title: "Labware definition"
+      fields:
+        - path: "$.display_name"
+          label: "Display name"
+          widget: "text"
+          required: true
+          placeholder: "e.g. Generic 96-well plate"
+
+        - path: "$.id"
+          label: "Identifier"
+          widget: "text"
+          readonly: true
+
+        - path: "$.ontology_ref"
+          label: "Ontology anchor"
+          widget: "ref"
+          refKind: "ontology"
+          required: false
+          props:
+            sources: ["ols", "local-obo"]
+            valueShape: "ontology-ref"
+            ontologyBinding: "allow-ontology"
+
+        - path: "$.vendor"
+          label: "Vendor"
+          widget: "text"
+          placeholder: "e.g. Thermo Fisher"

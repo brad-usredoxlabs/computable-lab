@@ -214,7 +214,7 @@ definitions:
             type: "array"
             items:
               type: "string"
-              enum: ["local", "ols", "vendor-search", "local-records"]
+              enum: ["local", "ols", "vendor-search", "local-records", "local-obo"]
           ontologies:
             type: "array"
             items:
