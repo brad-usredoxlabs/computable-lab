@@ -282,16 +282,8 @@ export type FixItSessionSnapshot = Pick<
 export interface EventEditorState {
   loadState: LoadState
   loadError: string | null
-  /**
-   * danglingplan (L2-SUBPROTOCOL-EXPAND-1): the event-graph id whose read
-   * came back NOT_FOUND. A 404 on the run's `methodEventGraphId` is a STALE
-   * POINTER, not a transport failure, so it is a named load state
-   * (`loadState: 'missing'`) carrying the graph id instead of the generic
-   * `loadError` splash. `load_start` / `load_error` clear it so a successful
-   * (or genuinely failed) retry cannot resurrect a stale banner. Optional so
-   * the many full-state test fixtures that build a literal `EventEditorState`
-   * keep compiling untouched (they never exercise the missing branch).
-   */
+  /** danglingplan (L2-SUBPROTOCOL-EXPAND-1): graph id whose read 404'd (stale pointer, not a transport
+   *  failure). Optional so existing full-state fixtures compile; load_start/load_error/load_success clear it. */
   missingGraphId?: string | null
   platforms: PlatformManifest[]
   platformId: string
@@ -707,13 +699,8 @@ function mergeCommittedOfferBinding(
   return next
 }
 
-/**
- * danglingplan (L2-SUBPROTOCOL-EXPAND-1): strict test for the NOT_FOUND wire
- * wording the server sends when a record read 404s (client `ApiError` builds
- * the message from the body as `<errorCode>: <message>` — e.g.
- * `NOT_FOUND: Record not found: <id>` — or the bare 404 status text).
- * Everything else is a genuine transport/server failure.
- */
+/** danglingplan: strict NOT_FOUND test for a 404 record read (ApiError message is `<code>: <msg>`, e.g.
+ *  `NOT_FOUND: Record not found: <id>`); anything else is a genuine failure. */
 export function isGraphNotFound(message: string): boolean {
   return /\bNOT_FOUND\b/.test(message) || /\bRecord not found:/.test(message) || /\b404\b/.test(message)
 }
@@ -721,17 +708,12 @@ export function isGraphNotFound(message: string): boolean {
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
-      // Reset the stale-banner marker so a retry of a graph read never
-      // resurrects a `missing` banner for a graph that has since loaded.
       return { ...state, loadState: 'loading', loadError: null, missingGraphId: null }
     case 'load_error':
-      // A genuine transport/server failure replaces any dangling-plan
-      // banner: the error splash wins, and the named graph id is cleared.
       return { ...state, loadState: 'error', loadError: action.error, missingGraphId: null }
     case 'load_graph_missing':
-      // A NOT_FOUND on the event-graph id is a stale pointer, not a
-      // transport failure: name the missing graph and keep the surface
-      // honest instead of painting the red load_error splash.
+      // A 404 on the graph id is a stale pointer, not a transport failure: name the
+      // missing graph instead of painting the red load_error splash.
       return { ...state, loadState: 'missing', loadError: null, missingGraphId: action.eventGraphId }
     case 'load_success': {
       const platforms = action.platforms
@@ -1563,10 +1545,8 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
-        // danglingplan (L2-SUBPROTOCOL-EXPAND-1): a NOT_FOUND on the graph id
-        // is a STALE POINTER, not a transport failure — degrade to a named
-        // `missing` state instead of the red load_error splash. Every other
-        // failure keeps the existing load_error dispatch verbatim.
+        // danglingplan: a 404 on the graph id is a stale pointer — degrade to a
+        // named missing state; every other failure keeps load_error verbatim.
         if (isGraphNotFound(message)) {
           dispatch({ type: 'load_graph_missing', eventGraphId })
         } else {

@@ -33,24 +33,18 @@ export function EventEditorShell() {
   }
 
   if (state.loadState === 'missing') {
-    // danglingplan (L2-SUBPROTOCOL-EXPAND-1): the run's plan graph is a
-    // stale pointer — name the missing graph and the way back to the run.
-    // A plain anchor (not a router Link) so the surface degrades even
-    // outside a Router context; no new fetch, no polling, no auto-retry.
+    // danglingplan: 404 on the plan graph is a stale pointer — name the missing
+    // graph and the way back to the run (neutral .splash, not the red --error).
     return (
       <AppShell brand={brand} bare>
         <div className="event-editor">
-          <div className="splash splash--missing">
-            This surface points at plan graph{' '}
-            <span className="splash--missing-id">{state.missingGraphId ?? 'unknown graph'}</span>,
-            which does not exist yet. Rebuild the plan graph from the run
-            workspace.
+          <div className="splash">
+            This surface points at plan graph <span>{state.missingGraphId ?? 'unknown graph'}</span>, which
+            does not exist yet. Rebuild the plan graph from the run workspace.
             {state.runId ? (
               <>
                 <br />
-                <a className="splash--missing-link" href={`/runs/${state.runId}`}>
-                  Back to run {state.runId}
-                </a>
+                <a href={`/runs/${state.runId}`}>Back to run {state.runId}</a>
               </>
             ) : null}
           </div>
