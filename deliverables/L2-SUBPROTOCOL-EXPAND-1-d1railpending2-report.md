@@ -131,5 +131,5 @@ Tree clean at exit: `git -c core.fileMode=false status --short` → empty (verif
   reads "No protocol attached" / shows live attach during the resolve window (AC1–AC3).
 - No other owner actions known.
 
-L2-SUBPROTOCOL-EXPAND-1-d1railpending2 UNIT d1railpending2 DONE __SHA__
-L2-SUBPROTOCOL-EXPAND-1-d1railpending2 UNIT unit DONE __SHA__
+L2-SUBPROTOCOL-EXPAND-1-d1railpending2 UNIT d1railpending2 DONE 8f53dce6bb300f6a412ea50f71e31f83136e5b49
+L2-SUBPROTOCOL-EXPAND-1-d1railpending2 UNIT unit DONE 8f53dce6bb300f6a412ea50f71e31f83136e5b49
