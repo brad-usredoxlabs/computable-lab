@@ -104,4 +104,13 @@ None for this unit. Reviewer: rerun the two vitest commands above; the
 RED/GREEN/probe receipts are outside git at /home/brad/.hermes/plans/receipts/.
 
 ## Marker
-L2-ONTO-o3uispec-fix2 UNIT o3uispec-fix2 BLOCKED <placeholder — replaced after final commit>
+Marker sha = 3d3268678311509a2a2422c7cf966aa91bff8fa7 — the commit that
+CONTAINS this report (verified with `git cat-file -e
+3d3268678311509a2a2422c7cf966aa91bff8fa7:.hermes/plans/reports/L2-ONTOLOGY-ANCHOR-SOURCES-1-o3uispec-fix2-report.md`).
+The marker line below was appended by the immediately following marker
+commit, same convention as o3uispec-fix1 (marker at 39b4bffb pointing at
+report commit d14f61b7).
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1 UNIT o3uispec-fix2 DONE 3d3268678311509a2a2422c7cf966aa91bff8fa7
+L2-ONTO-o3uispec-fix2 UNIT o3uispec-fix2 DONE 3d3268678311509a2a2422c7cf966aa91bff8fa7
+L2-ONTO-o3uispec-fix2 UNIT unit DONE 3d3268678311509a2a2422c7cf966aa91bff8fa7
