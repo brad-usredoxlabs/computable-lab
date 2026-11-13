@@ -1,0 +1,78 @@
+# L2-JOURNEY-HUMANTASK-1 (unit htcschema) — the human-task contract.
+#
+# A journey step's human_in_the_loop interaction is DECLARED, not implied: this
+# contract states what decision the person makes (decision), on which surface
+# (surface — the registry is the authority for what that surface can select),
+# with which controls, producing which receipt, through which vocabulary port
+# (output_port — a $ref into journey-port.schema.yaml, no new port vocabulary).
+# The compiler's stage-2 refusal (journeyEnvelope.ts) pre-dates this contract;
+# nothing here changes it.
+#
+# CLOSED and declarative: additionalProperties is false everywhere, on_cancel
+# and on_defer are enums (no free prose), and completion.kind is a two-value
+# enum. This file grants nothing — no policy tier, no role, no approval:
+# those are L2-JOURNEY-POLICY-1's authority, not this schema's.
+#
+# The document schema pins this contract via a relative $ref and never in
+# `required`: the conditionality (a human_in_the_loop step MUST carry it, an
+# automatic step MUST NOT) is the lint's journey_human_task_* rules — the same
+# shape as capability membership, which the schema pins but the lint judges.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/human-task.schema.yaml"
+title: "Human Task Contract"
+description: >
+  The declared contract for a journey step completed by a person. Its
+  selectable_kinds must be a subset of the declared surface's registry
+  selectableKinds (journey_human_task_kind_not_selectable); the registry,
+  never this file, is the authority for what a surface can select.
+type: object
+additionalProperties: false
+required: [decision, surface, controls, selectable_kinds, completion, output_port, on_cancel, on_defer]
+properties:
+  decision:
+    type: string
+    minLength: 1
+    description: "The decision the person makes, stated as a decision, not as a task. This is the WHAT the step awaits; the compiler's refusal alone states nothing about it."
+  surface:
+    type: string
+    minLength: 1
+    description: "The surface id the contract's controls run on, exactly as declared in the work-surface registry (schema/registry/surfaces/surfaces.yaml). Unknown ids are journey_human_task_surface_unknown."
+  controls:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: { type: string, minLength: 1 }
+    description: "The named controls offered to the person on the surface; the surface's selectableKinds bounds what may be selected, not the control names."
+  selectable_kinds:
+    type: array
+    uniqueItems: true
+    items: { type: string, minLength: 1 }
+    description: >
+      The object kinds the person may select. Must be a subset of the declared
+      surface's registry selectableKinds — a task can never offer a kind its
+      surface cannot select (journey_human_task_kind_not_selectable). Absent
+      when the surface offers no selectable kinds.
+  completion:
+    type: object
+    additionalProperties: false
+    required: [kind, receipt_required]
+    properties:
+      kind:
+        type: string
+        enum: [governed_write, versioned_selection]
+        description: "How the decision becomes durable: a governed write or a versioned selection. The completion-receipt path that consumes this is a later humantask unit's authority."
+      receipt_required:
+        type: boolean
+        enum: [true]
+        description: "Always true: a human completion without a receipt is the surface the journey check must refuse, same as a staged draft bound to a committed reference."
+  output_port:
+    $ref: "./journey-port.schema.yaml#/$defs/CommittedRecordReference"
+    description: "The vocabulary port the completed task produces. Reuses the shipped port vocabulary (journey-port.schema.yaml) — no new port kind exists here."
+  on_cancel:
+    type: string
+    enum: [keep_journey_active, end_journey]
+    description: "The closed lifecycle when the person cancels; no free prose."
+  on_defer:
+    type: string
+    enum: [keep_journey_active, end_journey]
+    description: "The closed lifecycle when the person defers; no free prose."
