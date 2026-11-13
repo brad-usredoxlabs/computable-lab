@@ -397,6 +397,7 @@ export function RecordCreatePanel({
     schemaDoc?.properties && 'shortSlug' in (schemaDoc.properties as Record<string, unknown>),
   )
   const schemaRequiresTitle = Boolean(schemaDoc?.required?.includes('title'))
+  const schemaRequiresId = !isSpine && Boolean(schemaDoc?.required?.includes(idField))
 
   const parentPaths = useMemo(() => {
     const paths: string[] = []
@@ -528,6 +529,21 @@ export function RecordCreatePanel({
       if (schemaRequiresTitle && !titleOk) {
         setError('Title is required')
         return
+      }
+      // GC-16 FIX RUN 2 (adversarial defect 9/4; D-A): client-side id gate applies
+      // ONLY when the served schema's `required` names `id` AND the slot is a
+      // visible writable author slot (`!identitySlotReadOnly`). Schema doc
+      // unavailable → the gate is skipped and the server speaks. The spine keeps
+      // its pre-existing mint (client never checks an empty field for those);
+      // only non-spine kinds with schema-required `id` get this parity gate.
+      const schemaRequiresId = !isSpine && Boolean(schemaDoc?.required?.includes(idField))
+      if (schemaRequiresId && !identitySlotReadOnly) {
+        const idVal = formData[idField]
+        const idOk = typeof idVal === 'string' && idVal.trim() !== ''
+        if (!idOk) {
+          setError('An identifier is required before saving')
+          return
+        }
       }
       if (!schemaId) {
         setError(
@@ -671,6 +687,7 @@ export function RecordCreatePanel({
       isSpine,
       schemaDeclaresShortSlug,
       schemaRequiresTitle,
+      schemaRequiresId,
       schemaDocFor,
       schemaDocFailed,
       identitySlotReadOnly,
