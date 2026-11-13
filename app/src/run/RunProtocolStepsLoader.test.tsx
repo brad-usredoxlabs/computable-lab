@@ -370,4 +370,50 @@ describe('RunProtocolStepsLoader', () => {
     expect(mocks.getRecord).not.toHaveBeenCalled()
     fetchMock.mockRestore()
   })
+
+  it('publishes the pending flag BEFORE its first await — and settles it when the steps land (D-1 ordering)', async () => {
+    const settle: boolean[] = []
+    let resolveRun: () => void = () => {}
+    // Hang the run read until released, so the resolve window is observable.
+    // The PLR names PRT-zymo so the steps call goes through the mock (never
+    // the network): resolution settles exactly once, through the mocked arm.
+    mocks.getRecordWithUI.mockImplementation(
+      (id: string) => id === 'RUN-1'
+        ? new Promise<void>((resolve) => { resolveRun = resolve }).then(() =>
+            uiRecord('RUN-1', { plannedRunRef: { id: 'PLR-1' } }))
+        : Promise.resolve(uiRecord('PLR-1', { protocolRef: { id: 'PRT-zymo', kind: 'protocol' } })),
+    )
+    const fetchMock = mockStepsEndpoint('/api/protocols/PRT-zymo/steps')
+
+    function PendingReader() {
+      const sel = useProtocolSelection()
+      useEffect(() => {
+        if (sel) settle.push(sel.stepsPending)
+      })
+      return null
+    }
+
+    render(
+      <ProtocolSelectionProvider>
+        <RunProtocolStepsLoader runId="RUN-1" />
+        <PendingReader />
+      </ProtocolSelectionProvider>,
+    )
+
+    // While resolveRunProtocol is still suspended (before its first await
+    // returns), the flag has already been observed true, and nothing after
+    // that first true is false — the rail reads "resolving" through the whole
+    // window, then settles false when the steps land. (The first read can be
+    // the initial false: it lands before the loader's effect publishes.)
+    await waitFor(() => {
+      expect(settle[settle.length - 1]).toBe(true)
+    })
+    expect(settle.slice(settle.indexOf(true)).every((p) => p === true)).toBe(true)
+
+    resolveRun()
+    await waitFor(() => {
+      expect(settle[settle.length - 1]).toBe(false)
+    })
+    fetchMock.mockRestore()
+  })
 })

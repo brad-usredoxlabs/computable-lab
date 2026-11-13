@@ -18,16 +18,16 @@ vi.mock('../../../shared/api/client', () => ({
 }))
 
 afterEach(cleanup)
-/** Mirrors the loader's publish order: identity first, steps state, no steps. */
-function Seed({ pending }: { pending: boolean }) {
+/** Mirrors the loader's publish order: identity first (when known), steps state, no steps. */
+function Seed({ pending, protocol = true }: { pending: boolean; protocol?: boolean }) {
   const sel = useProtocolSelection()
   const done = useRef(false)
   useEffect(() => {
     if (done.current || !sel) return
     done.current = true
-    sel.setProtocol({ recordId: 'LPR-1', title: 'Cell Seeding' })
+    if (protocol) sel.setProtocol({ recordId: 'LPR-1', title: 'Cell Seeding' })
     sel.setStepsPending(pending)
-  }, [sel, pending])
+  }, [sel, pending, protocol])
   return null
 }
 
@@ -58,6 +58,25 @@ describe('ProtocolNavPanel — pending / failed steps rail', () => {
     expect(screen.queryByTestId('protocol-nav-pending')).toBeNull()
     expect(screen.queryByTestId('attach-protocol')).toBeNull()
     expect(screen.queryByText(/No protocol attached/i)).toBeNull()
+  })
+
+  it('no identity yet + steps pending -> resolving rail; the attach door is unreachable (D-1)', () => {
+    // The resolve window: the loader published the pending flag before its
+    // first await, but resolveRunProtocol has not returned — protocol is null.
+    // The rail must read "resolving", never the live attach surface that could
+    // replace a protocol still resolving.
+    render(
+      <MemoryRouter>
+        <ProtocolSelectionProvider>
+          <Seed pending protocol={false} />
+          <ProtocolNavPanel title="2026-09-06 Run" runId="RUN-1" studyId="STU-1" />
+        </ProtocolSelectionProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('protocol-nav-pending').textContent).toContain('Resolving this run')
+    expect(screen.queryByTestId('attach-protocol')).toBeNull()
+    expect(screen.queryByText(/No protocol attached/i)).toBeNull()
+    expect(screen.queryByTestId('protocol-nav-read-error')).toBeNull()
   })
 
   it('no known protocol -> the attach hint, not the pending/failed rails (AC3)', () => {
