@@ -96,3 +96,12 @@ surfaces:
     selectableKinds: [sequence, sequence_interval, oligo-spec]
     aiRole: "sequence authoring and reproducible analysis"
     tabs: [ Editor, Assay, Analysis, Setup, Import, Knowledge ]
+
+  - id: record-create
+    label: "Record create"
+    path: "/record/new/:nodeType"
+    params:
+      nodeType: record
+    objectTypes: [record]
+    selectableKinds: []
+    aiRole: "author a new record in place"
