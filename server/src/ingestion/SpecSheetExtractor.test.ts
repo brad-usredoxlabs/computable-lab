@@ -648,7 +648,7 @@ describe('extractFromUrl — fieldOutcomes accounts for every declared field', (
       expect('passage' in o).toBe(false);
       expect(o.passage).toBeUndefined();
     }
-    // and the not_present fields never appear in proposals (proposals = evidence found)
+    // not_present fields never appear in proposals (proposals = evidence found)
     expect(result.proposals.map((p) => p.targetField).sort()).toEqual(['catalog_number', 'vendor']);
   });
 
@@ -675,7 +675,6 @@ describe('extractFromUrl — fieldOutcomes accounts for every declared field', (
     } finally {
       await writeFile(yamlPath, original, 'utf-8');
       await reload();
-      vi.restoreAllMocks();
     }
     expect((await getSpecSheetFieldMap('vendor-product')).fieldMappings).toHaveLength(9); // restored
   });

@@ -1490,10 +1490,8 @@ export interface SpecSheetFieldOutcome {
 export interface SpecSheetExtractSuccess {
   configured: true
   proposals: SpecSheetProposal[]
-  // Mirror of the server's required key. Optional on the client because the
-  // app's hand-written union still predates this field (and the NoProposals
-  // variant, a separate item) — typed mocks of the legacy shape must keep
-  // compiling. The live payload always carries the full 9-field list.
+  // Mirror of the server key; optional because the client's legacy union and
+  // its hand-written mocks predate this field (NoProposals variant: separate item).
   fieldOutcomes?: SpecSheetFieldOutcome[]
 }
 

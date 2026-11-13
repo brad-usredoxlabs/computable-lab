@@ -35,10 +35,9 @@ export interface SpecSheetExtractSuccess {
   configured: true;
   proposals: SpecSheetProposal[];
   /**
-   * One entry per field the field map declares (YAML declaration order,
-   * de-duplicated by targetField): 'extracted' carries the verbatim passage
-   * of the FIRST proposal for that field; 'not_present' carries NO passage
-   * key. A report, not a proposal — proposals keep their meaning unchanged.
+   * One outcome per declared field (YAML order, de-duplicated). 'extracted'
+   * carries the first proposal's verbatim passage; 'not_present' carries NO
+   * passage key. A report, not a proposal — proposals are unchanged.
    */
   fieldOutcomes: SpecSheetFieldOutcome[];
 }
@@ -354,15 +353,12 @@ export function extractProposals(
 // ---------------------------------------------------------------------------
 
 /**
- * Report one outcome per declared field, in YAML declaration order (the
- * order is the contract; do not sort). The field list is DATA —
- * fieldMap.fieldMappings — never a literal array in TypeScript.
- *
- * A field with one or more proposals is 'extracted' with the passage of the
- * FIRST proposal for that targetField (multiple proposals for one field
- * collapse to a single outcome). A field with no evidence is 'not_present'
- * and carries NO passage key — it never becomes a proposal and never gets a
- * guessed or empty-string value.
+ * One outcome per declared field, in YAML declaration order (the order is
+ * the contract; do not sort) and de-duplicated by targetField. The field
+ * list is DATA — fieldMap.fieldMappings — never a literal TS array.
+ * 'extracted' carries the passage of the FIRST proposal for that field
+ * (several proposals for one field collapse to one outcome); 'not_present'
+ * carries NO passage key — never a guess, never '', never a proposal.
  */
 export function fieldOutcomesFor(
   fieldMap: SpecSheetFieldMap,
