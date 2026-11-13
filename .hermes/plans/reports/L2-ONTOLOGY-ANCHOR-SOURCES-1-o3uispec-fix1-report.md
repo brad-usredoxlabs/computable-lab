@@ -138,3 +138,5 @@ o3uispec-fix1-base-tsc.txt (sorted base tsc error list, diffed empty vs HEAD lis
   0 new). Tree clean.
 
 DONE: L2-ONTOLOGY-ANCHOR-SOURCES-1 o3uispec-fix1
+
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o3uispec-fix1 UNIT unit DONE d14f61b726f913e7cb8eb91ca269d5cb9ea7fa8e
