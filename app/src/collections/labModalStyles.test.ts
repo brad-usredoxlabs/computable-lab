@@ -23,6 +23,15 @@ function parseRules(css: string): Record<string, Decls> {
 
 const rules = parseRules(labModalStyles)
 
+// FIX-1 (DEFECT 1): the old pin read the `overflow-y` longhand key only, so a shorthand
+// `overflow: auto;` on the panel or backdrop slipped through GREEN. A selector scrolls iff
+// any of the three overflow keys holds a value matching /auto|scroll/ (hidden/visible do not).
+const SCROLL_KEYS = ['overflow', 'overflow-x', 'overflow-y'] as const
+const SCROLL_RE = /auto|scroll/
+function scrollDeclared(decls: Decls): boolean {
+  return SCROLL_KEYS.some((key) => decls[key] !== undefined && SCROLL_RE.test(decls[key]))
+}
+
 describe('labModalStyles g3 D6 tall modal', () => {
   it('caps .lab-modal against the viewport, not a fixed pixel height', () => {
     const cap = rules['.lab-modal']?.['max-height']
@@ -36,7 +45,7 @@ describe('labModalStyles g3 D6 tall modal', () => {
     expect(body?.['overflow-y']).toBe('auto')
     expect(body?.['min-height']).toBe('0')
     const scrollers = Object.entries(rules)
-      .filter(([, decls]) => decls['overflow-y'])
+      .filter(([, decls]) => scrollDeclared(decls))
       .map(([selector]) => selector)
     expect(scrollers).toEqual(['.lab-modal__body'])
   })
@@ -46,11 +55,19 @@ describe('labModalStyles g3 D6 tall modal', () => {
     expect(backdrop?.['position']).toBe('fixed')
     expect(backdrop?.['inset']).toBe('0')
     expect(backdrop?.['padding']).toBe('24px')
-    expect(backdrop?.['overflow-y']).toBeUndefined()
+    // FIX-1 (DEFECT 1): backdrop and panel must not scroll; an explicit hidden/visible
+    // declaration stays legal (Mutation C `overflow: hidden` must remain GREEN).
+    expect(scrollDeclared(backdrop ?? {})).toBe(false)
     const panel = rules['.lab-modal']
     expect(panel?.['display']).toBe('flex')
     expect(panel?.['flex-direction']).toBe('column')
     expect(panel?.['width']).toBe('min(480px, 96vw)')
-    expect(panel?.['overflow-y']).toBeUndefined()
+    expect(scrollDeclared(panel ?? {})).toBe(false)
+  })
+
+  it('declares no fixed pixel height on the panel', () => {
+    // REVIEWER BAIT: `height: 900px` / `max-height: 1056px` — `max-height` is pinned to
+    // calc/vh in test 1; the `height` key itself must be absent from the panel.
+    expect('height' in (rules['.lab-modal'] ?? {})).toBe(false)
   })
 })
