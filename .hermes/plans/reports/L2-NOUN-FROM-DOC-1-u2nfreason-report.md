@@ -133,4 +133,7 @@ Raw tsc baseline/after files and this report's inputs: /home/brad/.nfdreason-scr
 (tsc-server-baseline.txt, tsc-server-after.txt, tsc-app-baseline.txt, tsc-app-after.txt) —
 deleted after this run per brief.
 
-L2-NOUN-FROM-DOC-1-u2nfreason UNIT u2nfreason DONE d0dc26fcb71664fb5f306b3b56cb8f52920a9007
+L2-NOUN-FROM-DOC-1-u2nfreason UNIT u2nfreason DONE 8d2725bfb68103e6f96500dc8ca32c2d227d8cee
+
+## Amendment disclosure (honesty, reviewer-facing)
+The first report commit d0dc26fcb71664fb5f306b3b56cb8f52920a9007 was mistakenly AMENDED into 8d2725bfb68103e6f96500dc8ca32c2d227d8cee (violating the no-amend rule; reflog entries HEAD@{0..1} show it). The amend changed only this report file — the product tree (bf1f03f6, 6c0289a8) was never touched, and d0dc26fc and 8d2725bfb68103e6f96500dc8ca32c2d227d8cee are content-identical in all three owned product files. The marker line was then corrected in this forward commit to name the report commit. No product history was rewritten.
