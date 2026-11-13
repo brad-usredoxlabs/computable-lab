@@ -688,4 +688,73 @@ describe('extractFromUrl — fieldOutcomes accounts for every declared field', (
     }
     expect((await getSpecSheetFieldMap('vendor-product')).fieldMappings).toHaveLength(9); // restored
   });
+
+  it('u2nfreason: not_present outcomes carry reason no_passage on the success arm; extracted outcomes carry no reason key', async () => {
+    // Same fixture as the 9-field success arm above: 2 fields extracted, 7 silent.
+    // The document HAD evidence, so a silent field was silent about THAT FIELD.
+    vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+      apiKey: 'sk-u2nfreason',
+      baseUrl: 'https://api.exa.ai',
+      defaultSearchType: 'auto',
+      defaultContentMode: 'highlights',
+      defaultMaxCharacters: 4000,
+      timeoutMs: 20000,
+    });
+    const docText = 'Vendor: Thermo\nCatalog Number: 25200056';
+    vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({
+      results: [{ text: docText }],
+    });
+
+    const cfg = {
+      integrations: { exa: { apiKey: 'sk-u2nfreason', enabled: true } },
+    } as unknown as Parameters<typeof extractFromUrl>[2];
+    const result = await extractFromUrl('vendor-product', 'https://example.com/u2nfreason-success', cfg);
+
+    expect(result.configured).toBe(true);
+    const narrowed = result as { configured: true; proposals: Array<{ targetField: string }>; fieldOutcomes: Array<{ targetField: string; status: string; reason?: string }> };
+    expect(narrowed.proposals).toHaveLength(2);
+
+    const extracted = narrowed.fieldOutcomes.filter((o) => o.status === 'extracted');
+    const notPresent = narrowed.fieldOutcomes.filter((o) => o.status === 'not_present');
+    expect(extracted).toHaveLength(2);
+    expect(notPresent).toHaveLength(7);
+
+    // every not_present outcome explains WHY (document had evidence, just not for this field)
+    for (const o of notPresent) {
+      expect(o.reason).toBe('no_passage');
+    }
+    // every extracted outcome carries NO reason key — absence, never an undefined value
+    for (const o of extracted) {
+      expect('reason' in o).toBe(false);
+    }
+  });
+
+  it('u2nfreason: not_present outcomes carry the document-level reason (no_field_match) on the no-proposals arm', async () => {
+    // Same text fixture as the no_field_match arm above: zero proposals at all.
+    // Zero proposals means the DOCUMENT had nothing, so the per-field reason is
+    // the SAME document-level reason as noProposals.reason (the two cannot drift).
+    vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+      apiKey: 'sk-u2nfreason',
+      baseUrl: 'https://api.exa.ai',
+      defaultSearchType: 'auto',
+      defaultContentMode: 'highlights',
+      defaultMaxCharacters: 4000,
+      timeoutMs: 20000,
+    });
+    vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({
+      results: [{
+        text: 'Polypropylene reagent reservoir. Single well format, sterile, individually wrapped. Designed for high-throughput applications with reliable liquid delivery.',
+      }],
+    });
+
+    const result = await extractFromUrl('labware', 'https://example.com/u2nfreason-nomatch');
+
+    expect(result.configured).toBe(true);
+    expect((result as any).noProposals.reason).toBe('no_field_match');
+    const outcomes = (result as any).fieldOutcomes as Array<{ targetField: string; status: string; reason?: string }>;
+    expect(outcomes.every((o) => o.status === 'not_present')).toBe(true);
+    for (const o of outcomes) {
+      expect(o.reason).toBe((result as any).noProposals.reason);
+    }
+  });
 });
