@@ -26,5 +26,5 @@ Commits: the report commit (message 'docs(ontology-o6): paperwork report + DONE 
 - Before: git -c core.fileMode=false status --porcelain -> empty (baseline measured 11:24 EST; re-measured clean this run).
 - After: same command -> empty; git log -1 --oneline -> the docs commit for this report.
 
-L2-ONTOLOGY-ANCHOR-SOURCES-1-o6mount-pw UNIT unit DONE __C1SHA__
+L2-ONTOLOGY-ANCHOR-SOURCES-1-o6mount-pw UNIT unit DONE ee29941b37c5b62b0e7e38ea9cd3f120beb8d344
 DONE L2-ONTOLOGY-ANCHOR-SOURCES-1-o6mount cfbd64b0
