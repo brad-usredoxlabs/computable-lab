@@ -33,7 +33,7 @@ import type {
 } from './types.js';
 import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
-import { createLocalOboProvider } from './providers/localObo.js';
+import { createLocalOboProvider, loadLocalOboSources, LocalOboSource } from './providers/localObo.js';
 import { createRecordProvider } from './providers/records.js';
 import { createTermProvider } from './providers/terms.js';
 import { createVendorExaProvider } from './providers/vendorExa.js';
@@ -42,6 +42,16 @@ const TIER_BASE: Record<ResolveTier, number> = { 0: 1.2, 1: 1.0, 2: 0.8, 3: 0.6,
 const DEFAULT_LOCAL_TIMEOUT_MS = 1500;
 const DEFAULT_REMOTE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 20;
+
+/** Check if the local-obo tier should be mounted by reading the registry. */
+export function localOboTierEnabled(registryPath?: string): boolean {
+  try {
+    const sources = loadLocalOboSources(registryPath);
+    return sources.length > 0;
+  } catch (_err) {
+    return false;
+  }
+}
 
 export interface ResolveSpineDeps {
   /** Ontology config (drives the OAK tier + OLS4 ontology restriction). */
@@ -262,6 +272,7 @@ export function createResolveSpineFromContext(ctx: {
   appConfig?: { ontology?: OntologyConfig } | undefined;
   /** Live config accessor so the tier-4 Exa vendor provider reads a freshly-pasted key. */
   getAppConfig?: () => AppConfig | undefined;
+  localOboRegistryPath?: string;
 }): ResolveSpine {
   const deps: ResolveSpineDeps = {
     termProvider: createTermProvider(ctx.store),
@@ -269,10 +280,12 @@ export function createResolveSpineFromContext(ctx: {
   };
   if (ctx.appConfig?.ontology) deps.ontology = ctx.appConfig.ontology;
   if (ctx.getAppConfig) deps.vendorProvider = createVendorExaProvider(ctx.getAppConfig);
-  // Shipped .obo sources: the provider reads config/ontology-sources.yaml lazily
-  // and throws only when every source failed — runProvider isolates that per
-  // call, so a registry-less checkout still boots (and simply contributes []).
-  deps.localOboProvider = createLocalOboProvider();
+  // Conditional mount of local-obo tier — only when at least one source is enabled
+  if (ctx.localOboRegistryPath && localOboTierEnabled(ctx.localOboRegistryPath)) {
+    deps.localOboProvider = createLocalOboProvider({ registryPath: ctx.localOboRegistryPath });
+  } else if (!ctx.localOboRegistryPath && localOboTierEnabled()) {
+    deps.localOboProvider = createLocalOboProvider();
+  }
   return createResolveSpine(deps);
 }
 
