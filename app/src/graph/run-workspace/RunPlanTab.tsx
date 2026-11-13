@@ -98,6 +98,22 @@ export function RunPlanTab({ summary, workspace, onRefresh }: RunPlanTabProps) {
     }
   }
 
+  const build = async () => {
+    if (!plannedRunId) return
+    setBusyId('build')
+    setActionError(null)
+    setActionMessage(null)
+    try {
+      const result = await apiClient.buildPlanGraph(plannedRunId)
+      setActionMessage(`Run graph ${result.graphId}${result.reused ? ' (reused)' : ''}`)
+      await onRefresh?.()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to build run graph')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const promote = async () => {
     setBusyId('promote')
     setActionError(null)
@@ -143,6 +159,15 @@ export function RunPlanTab({ summary, workspace, onRefresh }: RunPlanTabProps) {
           <li><strong>Local protocol</strong><span>{localProtocolId ?? 'None'}</span></li>
           <li><strong>Deck lock</strong><span>{deckLock ? `${String(deckLock.platformId ?? 'platform')} / ${String(deckLock.variantId ?? 'variant')}` : 'Manual/open deck'}</span></li>
         </ul>
+        <button
+          type="button"
+          data-testid="run-plan-build-graph"
+          className="run-workspace-card__button"
+          onClick={() => void build()}
+          disabled={!plannedRunId || busyId === 'build'}
+        >
+          Build run graph
+        </button>
         {methodEventGraphId ? (
           <button type="button" className="run-workspace-card__button" onClick={promote} disabled={busyId === 'promote'}>
             Promote to project template
