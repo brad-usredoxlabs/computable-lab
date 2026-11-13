@@ -3,10 +3,17 @@
 Item: L2-JOURNEY-COMPILER-1-s2envelope | Lane 2 | worktree /tmp/wt-L2-JOURNEY-s2envelope
 Branch: cl/lane2-journey-s2envelope-1846 | base: 7e43ac19d3e62e30fe9e1bbe6c13c60f512474f3
 
-## Commits (this branch, base + 3)
+## Commits (this branch, base + 4)
 - 77780aec L2-JOURNEY-COMPILER-1 s2envelope: RED pins for stage-2 envelope (module not found)
-- bfa08399f5667aefdc2afeeb68be090cc36e2a15 — the code commit: both owned files, unit complete
-- <this commit> docs(plan): L2-JOURNEY-COMPILER-1 s2envelope report + DONE marker
+- bfa08399f5667aefdc2afeeb68be090cc36e2a15 — the CODE commit: both owned unit files
+- 3c06607efa6d1fe6defb1dac2eed6e2da381921d — the REPORT commit: contains this report + marker.
+  This is the sha the DONE marker names, because the evidence contract requires the named sha to
+  be one that CONTAINS this report, and u6fix3pw (5988952e) + the u7css accepted marker both
+  enforce exactly that: `git cat-file -e <named>:<report>` must be rc 0. bfa08399 is the real code
+  commit (the full unit), 3c06607e is the real report commit; the marker names the latter per the
+  containment rule. Verified: `git rev-parse --verify 3c06607e...` rc 0;
+  `git cat-file -e 3c06607e:.hermes/plans/reports/L2-JOURNEY-COMPILER-1-s2envelope-report.md` rc 0.
+- <this commit> docs(plan): s2envelope marker correction (name the report-containing sha)
 
 ## Changed files (exactly the two owned files, both NEW; 249 lines total <= 300 budget)
 - server/src/compiler/journey/journeyEnvelope.ts (106 lines) — compileJourneyEnvelope binds a
@@ -82,4 +89,13 @@ at bfa08399.
 None for this unit. Leg "extended compile route" (route + UI) and L2-JOURNEY-POLICY-1
 (authorization) remain later legs per the brief. No merge/push performed (out of scope).
 
-L2-JOURNEY-COMPILER-1-s2envelope UNIT unit DONE bfa08399f5667aefdc2afeeb68be090cc36e2a15
+## Marker note
+The DONE marker below names 3c06607efa6d1fe6defb1dac2eed6e2da381921d — the commit that
+CONTAINS this report. The evidence contract requires the named sha to be a commit whose tree
+contains this report (`git cat-file -e <named>:<report>` rc 0); the accepted u7css marker and the
+u6fix3pw correction (5988952e) enforce exactly that. bfa08399f5667aefdc2afeeb68be090cc36e2a15 is
+the CODE commit (the full unit: both owned files) and is documented above for review.
+Verified: `git rev-parse --verify 3c06607efa6d1fe6defb1dac2eed6e2da381921d` rc 0;
+`git cat-file -e 3c06607efa6d1fe6defb1dac2eed6e2da381921d:.hermes/plans/reports/L2-JOURNEY-COMPILER-1-s2envelope-report.md` rc 0.
+
+L2-JOURNEY-COMPILER-1-s2envelope UNIT unit DONE 3c06607efa6d1fe6defb1dac2eed6e2da381921d
