@@ -289,4 +289,14 @@ describe('LabCollectionView', () => {
       expect(listRecordsSpy).toHaveBeenCalledWith('labware-definition', 200)
     })
   })
+
+  // ── L2-LAB-INVENTORY-CREATE-1 — gate D1: modal token scope ────────────
+  // The dialogs' styles use var(--cl-*) tokens, which only exist under
+  // .cl-app. A modal mounted as a sibling of AppShell renders unpainted.
+
+  it('mounts the receiving door inside the .cl-app token scope (gate D1)', () => {
+    renderCategory('materials')
+    fireEvent.click(screen.getByTestId('lab-category-receive-lot'))
+    expect(document.querySelector('.cl-app .lab-modal__backdrop')).not.toBeNull()
+  })
 })
