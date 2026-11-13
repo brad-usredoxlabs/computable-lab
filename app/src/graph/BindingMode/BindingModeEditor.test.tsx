@@ -82,27 +82,30 @@ const mockUniversalProtocol: RecordEnvelope = {
   },
 }
 
-const mockLabwareInstances: RecordEnvelope[] = [
+// Seam candidate universe: the pickers are fed from `labware` / `material`
+// records (recordIds unchanged from the pre-fix fixture so the save-shape
+// assertion below stays identical).
+const mockLabwareUniverse: RecordEnvelope[] = [
   {
     recordId: 'LWI-PLATE1',
-    schemaId: 'labware-instance',
-    meta: { kind: 'labware-instance' },
-    payload: { kind: 'labware-instance', name: 'Source Plate 1' },
+    schemaId: 'labware',
+    meta: { kind: 'labware' },
+    payload: { kind: 'labware', name: 'Source Plate 1' },
   },
   {
     recordId: 'LWI-RES1',
-    schemaId: 'labware-instance',
-    meta: { kind: 'labware-instance' },
-    payload: { kind: 'labware-instance', name: 'Reservoir 1' },
+    schemaId: 'labware',
+    meta: { kind: 'labware' },
+    payload: { kind: 'labware', name: 'Reservoir 1' },
   },
 ]
 
-const mockMaterialInstances: RecordEnvelope[] = [
+const mockMaterialUniverse: RecordEnvelope[] = [
   {
     recordId: 'MAT-WASH1',
-    schemaId: 'material-instance',
-    meta: { kind: 'material-instance' },
-    payload: { kind: 'material-instance', name: 'Wash Buffer Batch 1' },
+    schemaId: 'material',
+    meta: { kind: 'material' },
+    payload: { kind: 'material', name: 'Wash Buffer Batch 1' },
   },
 ]
 
@@ -131,8 +134,8 @@ describe('BindingModeEditor', () => {
     })
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
-      if (kind === 'labware-instance') return { records: mockLabwareInstances, total: 2 }
-      if (kind === 'material-instance') return { records: mockMaterialInstances, total: 1 }
+      if (kind === 'labware') return { records: mockLabwareUniverse, total: 2 }
+      if (kind === 'material') return { records: mockMaterialUniverse, total: 1 }
       return { records: [], total: 0 }
     })
   })

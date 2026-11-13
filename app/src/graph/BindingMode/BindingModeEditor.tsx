@@ -96,8 +96,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
   const [plannedRun, setPlannedRun] = useState<RecordEnvelope | null>(null)
   const [localProtocol, setLocalProtocol] = useState<RecordEnvelope | null>(null)
-  const [labwareInstances, setLabwareInstances] = useState<RecordEnvelope[]>([])
-  const [materialInstances, setMaterialInstances] = useState<RecordEnvelope[]>([])
+  const [labwareUniverse, setLabwareUniverse] = useState<RecordEnvelope[]>([])
+  const [materialUniverse, setMaterialUniverse] = useState<RecordEnvelope[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
@@ -144,17 +144,20 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
         }
 
         try {
-          const lwResp = await apiClient.listRecordsByKind('labware-instance', 500)
-          if (active) setLabwareInstances(lwResp.records)
+          // Seam candidate universe: `labware` / `material` records — the kinds
+          // the role-binding proposals endpoint names. The pickers are fed from
+          // here; the `*-instance` kinds serve no records and are no longer fetched.
+          const lwResp = await apiClient.listRecordsByKind('labware', 500)
+          if (active) setLabwareUniverse(lwResp.records)
         } catch {
-          // No labware instances
+          // No labware records
         }
 
         try {
-          const matResp = await apiClient.listRecordsByKind('material-instance', 500)
-          if (active) setMaterialInstances(matResp.records)
+          const matResp = await apiClient.listRecordsByKind('material', 500)
+          if (active) setMaterialUniverse(matResp.records)
         } catch {
-          // No material instances
+          // No material records
         }
       } catch (err) {
         if (!active) return
@@ -389,8 +392,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
             labwareRoles={labwareRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
             materialRoles={materialRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
             currentBindings={currentBindings}
-            labwareInstances={labwareInstances}
-            materialInstances={materialInstances}
+            labwareUniverse={labwareUniverse}
+            materialUniverse={materialUniverse}
             onBindingChange={handleBindingChange}
             diagnostics={compileResult?.diagnostics ?? []}
           />
