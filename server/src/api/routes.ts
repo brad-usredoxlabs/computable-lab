@@ -89,6 +89,7 @@ import type { HealthResponse } from './types.js';
 import { fileURLToPath } from 'node:url';
 import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
 import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
+import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
 
 /**
  * L2-JOURNEY-CAPABILITY-CATALOGUE-1: the shipped catalogue directory, resolved
@@ -338,6 +339,35 @@ export function registerRoutes(
           `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
         ],
       };
+    }
+  });
+
+  // L2-JOURNEY-COMPILER-1 (unit croute): THIN compile route. One call to the shipped
+  // compileJourneyStructure, relayed verbatim — manifest or lint diagnostics; never a second
+  // validation authority, never a 500 for a bad document; only a malformed request ENVELOPE is a
+  // 400, and even it carries { ok, diagnostics }. Catalogue re-read PER REQUEST, as above.
+  fastify.post('/journey/compile', async (request, reply) => {
+    const body = request.body as { document?: unknown } | null | undefined;
+    const document = body === null || body === undefined ? undefined : body.document;
+    if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{
+        rule: 'journey_compile_request_invalid',
+        message: `document must be a non-null object; received ${document === null ? 'null' : typeof document}`,
+      }] });
+    }
+    const dir = options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR;
+    try {
+      const admitted = await loadCapabilityCatalogueDir(dir, new Set(AGENT_ALLOWED_TOOLS));
+      const result = compileJourneyStructure(document, admitted.capabilities);
+      const catalogue_diagnostics = admitted.ok ? [] : admitted.diagnostics;
+      return result.ok
+        ? { ok: true, manifest: result.manifest, catalogue_diagnostics }
+        : { ok: false, diagnostics: result.diagnostics, catalogue_diagnostics };
+    } catch (error) {
+      return { ok: false, catalogue_diagnostics: [], diagnostics: [{
+        rule: 'journey_catalogue_unavailable',
+        message: `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
+      }] };
     }
   });
 
