@@ -70,27 +70,47 @@ did not state; surface a named refusal and ask for what is missing.
 Lane-scoped, not doctrine: for THIS lane a document-sourced protocol is treated as global. A lab's own
 SOP can also arrive as a PDF and still be local; the distinction is whose practice it describes.
 
-## 3. What exists in the journey machinery (measured 2026-11-13, trunk f4987dc7)
+## 3. What exists in the journey machinery
+
+Measured 2026-11-13 against trunk 73507b4b (the first pass was at f4987dc7, 83 commits earlier, and
+three claims had moved by the time this section was re-read). The anchors are re-verified by the
+checker; the COUNTS are only as fresh as the line below. **A stale claim here is a defect of the
+same class as a stale brief** — if you rely on a number in this section, confirm it in the tree first,
+and if it has moved, fix this file in the same session.
 
 Done and merged — the eight bedrock pieces: the journey intent document; a two-stage compiler; the
 human task contract; durable checkpoint + context delta (`PendingIntentStore`, `/ai/threads/:endpoint/
 checkpoints`, `server/src/compiler/journey/checkpointContract.ts:26-35`); policy sets as data; typed
 ports; the capability catalogue; the evidence ledger. Plus a YAML-declared trunk-journeys harness.
 
-Measured gaps that decide real work:
-- `config/journey/capabilities/` holds FOUR descriptors, all read-only (material-library-search,
-  ontology-lookup, vendor-web-search, ncbi-gene-search). No capability CREATES anything, and
-  `config/journey/` contains no journey document at all.
-- The universal→local protocol machinery EXISTS and is wired: schema + three lint rules,
-  `server/src/protocol/BranchResolver.ts` ("Phase-0 of localization"), four producers of
-  local-protocol records
-  (`server/src/compiler/protocol/LocalProtocolBuilder.ts`,
-  `server/src/compiler/pipeline/passes/ProtocolRealizePass.ts`,
-  `server/src/protocol/ProtocolContextService.ts`, `server/src/api/handlers/IntentAcceptHandlers.ts`),
-  three YAML pipelines, and `POST /runs/from-local-protocol`.
-  Missing: nothing writes `overrides.substitutions` (no material substitution is ever produced); no rule
-  refuses a run whose effective authority is a universal protocol; the localization pipeline is not a
-  declared capability. Do not build a fifth producer.
+Measured gaps that decide real work — RE-MEASURED 2026-11-13 18:15 against trunk 73507b4b (83
+commits after the first pass; three claims below had MOVED and are corrected here):
+
+- **Capability catalogue: seven descriptors, three of them write-shaped, NONE available now.**
+  Read-only and available: `material-library-search`, `ontology-lookup`, `vendor-web-search`,
+  `ncbi-gene-search` (all `implemented: true`, `available_now: true`). Write-shaped, all
+  `handler_kind: governed_write`, all `handler_ref: records.create`:
+  `noun-create-from-document` (`implemented: true`, `available_now: false`),
+  `labware-definition-create` and `labware-instance-place` (`implemented: false`).
+  So a journey still cannot MINT anything through the catalogue; it is declared, not enabled. Any
+  task that claims creation "works" must show `available_now` true and a receipt, not a descriptor.
+- **The governed-write registry exists**: `config/journey/governed-writes.yaml`, first entry
+  `records.create` (route `POST /records`, handler `RecordHandlers.create`, store
+  `RecordStoreImpl`, guards ajv + lint + ownership-acl). A `handler_ref` outside it must be refused
+  at load; adding an entry is a reviewable act.
+- **The first journey document exists**: `config/journey/declarations/labware-definition.yaml` (Pilot
+  A), two steps both in the admitted catalogue, and it DECLARES the missing instance-placement
+  capability as an unresolved slot instead of inventing one. Authoring a journey is therefore no
+  longer greenfield: extend this shape, do not design a second one.
+- **Local protocol tiers — two of three gaps still open.** Nothing PERSISTS
+  `overrides.substitutions`: the only occurrence is a TYPE on the in-memory realization payload
+  (`server/src/compiler/scientistIntent/realizeScientistIntent.ts:106`, whose own comment says
+  "persistence is W2-8's"). Assigning it in memory is not producing it. And no rule refuses a run
+  attached to a universal protocol: `schema/workflow/planned-run.lint.yaml` carries no
+  local-protocol rule, though `PlannedRunFromLocalProtocolService` does refuse a non-local reference
+  on ITS route.
+- The universal→local machinery (schema, three lint rules, `BranchResolver`, four producers, three
+  YAML pipelines) is unchanged: build the missing pieces INSIDE it; do not add a fifth producer.
 
 ## 4. Where the acceptance lives
 
