@@ -76,7 +76,7 @@ Same command:
 carries 12 tests = the 11 baseline legs + 1 new approximate-arm leg, all passing.)
 
 ### 3. Mutation probe
-Helper body replaced with `return raw` (unconditional), same command:
+Helper body replaced with `return raw` (unconditional), same command: `cd app && npx vitest run src/collections/MaterialReceivingDoor.test.tsx`
 ```
  FAIL  ... > anchors the stated arrival date on the approximate arm too, with its approximation (g3 D5)
 AssertionError: expected '2026-11-01' to be '2026-11-01T00:00:00.000Z' // Object.is equality
@@ -141,4 +141,4 @@ no hits).
   YAML, so no schema reload is required).
 - Blockers: none on this unit.
 
-L2-LABINV-g3d5date-advc-c1-l2t1852 UNIT g3d5date DONE ec9de5a11b988381fd740052306f1c6a2105270f
+L2-LABINV-g3d5date-advc-c1-l2t1852 UNIT g3d5date DONE f0c4fe868e0a2147439b88f6f344a9d9c371a85a
