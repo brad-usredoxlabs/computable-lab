@@ -29,7 +29,7 @@ export type SearchField = 'keywords' | 'tags';
 /**
  * A single suggestion source (local vocabulary, ontology, etc.).
  */
-export type SuggestionSource = 'local' | 'ols' | 'vendor-search' | 'local-records';
+export type SuggestionSource = 'local' | 'ols' | 'vendor-search' | 'local-records' | 'local-obo';
 
 /**
  * Normalized suggestion plan derived from FieldHint / ProjectionSlot.
@@ -121,7 +121,7 @@ function extractSources(props?: Record<string, unknown>): SuggestionSource[] {
   const raw = props?.sources;
   if (Array.isArray(raw)) {
     return raw.filter((s): s is SuggestionSource =>
-      s === 'local' || s === 'ols' || s === 'vendor-search' || s === 'local-records'
+      s === 'local' || s === 'ols' || s === 'vendor-search' || s === 'local-records' || s === 'local-obo'
     );
   }
   // Default: local-only
