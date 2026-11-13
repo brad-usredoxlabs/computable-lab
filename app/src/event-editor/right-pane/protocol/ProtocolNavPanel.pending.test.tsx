@@ -38,7 +38,7 @@ function Seed({ pending }: { pending: boolean }) {
 }
 
 describe('ProtocolNavPanel — pending / failed steps rail', () => {
-  it('identity known + steps pending -> pending rail, no attach surface', () => {
+  it('identity known + steps pending -> pending rail, no attach surface', async () => {
     render(
       <MemoryRouter>
         <ProtocolSelectionProvider>
@@ -47,12 +47,13 @@ describe('ProtocolNavPanel — pending / failed steps rail', () => {
         </ProtocolSelectionProvider>
       </MemoryRouter>,
     )
-    // The pending rail shows the identity header (ref label) + the loading line.
+    // The pending rail shows the identity header (name = ref label, then the
+    // record id once the record fetch settles) + the loading line. No attach
+    // affordance, no "No protocol attached".
     expect(screen.getByTestId('protocol-nav-pending').textContent).toContain('Cell Seeding')
-    expect(screen.getByTestId('protocol-nav-pending').textContent).toContain('LPR-1')
-    // the pending window never claims "No protocol attached"
+    const identityName = await screen.findByTestId('protocol-identity-name')
+    expect(identityName.textContent).toContain('LPR-1')
     expect(screen.queryByText(/No protocol attached/i)).toBeNull()
-    // and there is no attach surface to replace the attached protocol
     expect(screen.queryByTestId('attach-protocol')).toBeNull()
   })
 
