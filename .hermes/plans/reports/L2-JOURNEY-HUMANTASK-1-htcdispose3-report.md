@@ -81,3 +81,5 @@ Output budget: 2 files, 211 lines total (<= 220).
 - Reviewer focus: refusal-before-status shape, absence of a fourth status
   vocabulary, undeclared-value messages quoting the offending value.
 - No blockers.
+
+L2-JOURNEY-HUMANTASK-1 UNIT htcdispose3 DONE e72a0814d3e71a4b222d6d8f48e0004a5d6c2202
