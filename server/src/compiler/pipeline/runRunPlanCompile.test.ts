@@ -11,51 +11,6 @@ import type { RecordStore } from '../../store/types.js';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// ---------------------------------------------------------------------------
-// In-memory RecordStore for full-pipeline runs (planned-run → emit pass).
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal in-memory store covering the method surface the run-plan-compile
- * pipeline touches: get (by id), list (revision enumeration), create/update.
- */
-function makeInMemoryStore(initial: Record<string, Record<string, unknown>>): {
-  store: RecordStore;
-  created: Array<Record<string, unknown>>;
-  updated: Array<Record<string, unknown>>;
-} {
-  const records = new Map<string, Record<string, unknown>>(
-    Object.entries(initial).map(([id, payload]) => [id, { recordId: id, schemaId: '', payload }]),
-  );
-  const created: Array<Record<string, unknown>> = [];
-  const updated: Array<Record<string, unknown>> = [];
-  const envelope = (id: string) => {
-    const r = records.get(id);
-    return r ? { recordId: id, schemaId: r.schemaId, payload: r.payload } : null;
-  };
-  const store = {
-    get: async (id: string) => envelope(id),
-    getByPath: async () => null,
-    getWithValidation: async () => ({ success: false, error: 'not implemented' }),
-    list: async () => Array.from(records.values()).map((r) => ({ recordId: r.recordId as string, schemaId: r.schemaId as string, payload: r.payload })),
-    create: async (options: { envelope: { recordId: string; schemaId: string; payload: Record<string, unknown> } }) => {
-      records.set(options.envelope.recordId, { recordId: options.envelope.recordId, schemaId: options.envelope.schemaId, payload: options.envelope.payload });
-      created.push(options.envelope);
-      return { success: true, envelope: options.envelope };
-    },
-    update: async (options: { envelope: { recordId: string; schemaId: string; payload: Record<string, unknown> } }) => {
-      records.set(options.envelope.recordId, { recordId: options.envelope.recordId, schemaId: options.envelope.schemaId, payload: options.envelope.payload });
-      updated.push(options.envelope);
-      return { success: true, envelope: options.envelope };
-    },
-    delete: async () => ({ success: false, error: 'not implemented' }),
-    validate: async () => ({ valid: true, errors: [] }),
-    lint: async () => ({ ok: true, errors: [] }),
-    exists: async () => true,
-  } as unknown as RecordStore;
-  return { store, created, updated };
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PIPELINE_PATH = path.join(__dirname, '../../../../schema/registry/compile-pipelines/run-plan-compile.yaml');
 

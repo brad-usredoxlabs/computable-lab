@@ -79,6 +79,19 @@ function makeLoadVerbDefinition(
 }
 
 /**
+ * Loader for the two-input 'transfer' verb (source/target passthrough), the
+ * canonical shape used by the D-6 refusal legs below.
+ */
+function makeTransferVerbLoader(): (canonical: string) => Promise<VerbDefinitionLite | null> {
+  return makeLoadVerbDefinition({
+    transfer: makeVerbDefinition('transfer', [
+      { name: 'source', derivedFrom: { input: 'source', fn: 'passthrough' }, required: true },
+      { name: 'target', derivedFrom: { input: 'target', fn: 'passthrough' }, required: true },
+    ]),
+  });
+}
+
+/**
  * Build a per-step context entry for a given sample index and well.
  */
 function makeSampleContext(
@@ -483,20 +496,7 @@ describe('PlannedRunEventsEmitPass', () => {
     const updatedRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
     const recordStore = makeMockRecordStore(createdRecords, updatedRecords);
 
-    const verbDef = makeVerbDefinition('transfer', [
-      {
-        name: 'source',
-        derivedFrom: { input: 'source', fn: 'passthrough' },
-        required: true,
-      },
-      {
-        name: 'target',
-        derivedFrom: { input: 'target', fn: 'passthrough' },
-        required: true,
-      },
-    ]);
-
-    const loadVerbDef = makeLoadVerbDefinition({ transfer: verbDef });
+    const loadVerbDef = makeTransferVerbLoader();
 
     // Only plate is bound; reservoir is NOT bound
     const labwareResolutions = {
@@ -587,20 +587,7 @@ describe('PlannedRunEventsEmitPass', () => {
     const updatedRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
     const recordStore = makeMockRecordStore(createdRecords, updatedRecords);
 
-    const verbDef = makeVerbDefinition('transfer', [
-      {
-        name: 'source',
-        derivedFrom: { input: 'source', fn: 'passthrough' },
-        required: true,
-      },
-      {
-        name: 'target',
-        derivedFrom: { input: 'target', fn: 'passthrough' },
-        required: true,
-      },
-    ]);
-
-    const loadVerbDef = makeLoadVerbDefinition({ transfer: verbDef });
+    const loadVerbDef = makeTransferVerbLoader();
 
     // Fully bound, but the step carries no samples → zero events
     const labwareResolutions = {
