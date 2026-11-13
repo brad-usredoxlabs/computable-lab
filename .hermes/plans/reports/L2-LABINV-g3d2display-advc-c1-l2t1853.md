@@ -54,7 +54,7 @@ cd /home/brad/cl-wt/L2-LABINV-g3d2display-lane2 && ./server/node_modules/.bin/ts
 
 ## Marker
 
-L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
-L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT g3d2display DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
-L2-LABINV-g3d2display UNIT g3d2display DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
-L2-LABINV-g3d2display UNIT unit DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
+L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT DONE 075ef2cac1f5f4ee03aa37b9f25a03419ab18c4d
+L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT g3d2display DONE 075ef2cac1f5f4ee03aa37b9f25a03419ab18c4d
+L2-LABINV-g3d2display UNIT g3d2display DONE 075ef2cac1f5f4ee03aa37b9f25a03419ab18c4d
+L2-LABINV-g3d2display UNIT unit DONE 075ef2cac1f5f4ee03aa37b9f25a03419ab18c4d
