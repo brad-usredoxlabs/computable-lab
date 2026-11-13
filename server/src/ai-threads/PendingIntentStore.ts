@@ -119,8 +119,8 @@ export class PendingIntentStore {
     });
   }
 
-  /** Validate with the contract seam; REFUSE in injection mode a delta declaring request_revision (named `injection-refused`) — applied here because the committed validateContextDelta takes no mode argument. The parked checkpoint must exist (checkpoint-not-found, never a fallback). */
-  async attachDelta(delta: unknown): Promise<AttachResult> {
+  /** Validate with the contract seam; REFUSE in injection mode a delta declaring request_revision (named `injection-refused`) — applied here because the committed validateContextDelta takes no mode argument. The named checkpoint must BE the parked document: read once, compare its own checkpoint_id (checkpoint-not-found on absent/mismatch, never a fallback). */
+  async attachDelta(delta: unknown, checkpointId: string): Promise<AttachResult> {
     const result = validateContextDelta(delta);
     if (!result.valid) return { ok: false, diagnostics: result.diagnostics };
     if (result.delta.request_revision !== undefined) {
@@ -130,7 +130,10 @@ export class PendingIntentStore {
         message: 'delta declares request_revision: it would change the request quantity/targets/purpose, which forbids silent injection into the pending prompt',
       }] };
     }
-    if ((await this.readDocument()) === null) return { ok: false, diagnostics: [DIAG_NOT_FOUND] };
+    // One read into a local; the SAME NO-FALLBACK identity rule load()/resume() apply — the id in
+    // the path is only a claim until the stored document's own checkpoint_id confirms it.
+    const doc = await this.readDocument();
+    if (doc === null || doc.checkpoint_id !== checkpointId) return { ok: false, diagnostics: [DIAG_NOT_FOUND] };
     return { ok: true, delta: result.delta };
   }
 
