@@ -5,7 +5,8 @@
  * - Single-step single-sample concrete: 1 transfer step, 1 sample, both source and dest bound
  * - Semantic-key parity with abstract (spec-024): same step compiled both ways
  * - Multi-sample fanout preserves key: 1 step, 96 samples, bound
- * - Unbound role gracefully degrades: step references a role with no binding
+ * - Unbound role refuses: step references a role with no binding → ok:false, no record created, no repoint
+ * - Vacuous plan refuses: zero events → ok:false, no record created
  */
 
 import { describe, it, expect } from 'vitest';
@@ -23,6 +24,7 @@ import type { VerbDefinitionLite } from '../../../protocol/SemanticKeyBuilder.js
 
 function makeMockRecordStore(
   createdRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [],
+  updatedRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [],
 ): RecordStore {
   return {
     get: async () => null,
@@ -33,7 +35,10 @@ function makeMockRecordStore(
       createdRecords.push({ envelope: options.envelope, message: options.message ?? '' });
       return { success: true, envelope: options.envelope };
     },
-    update: async () => ({ success: false, error: 'not implemented' }),
+    update: async (options) => {
+      updatedRecords.push({ envelope: options.envelope, message: options.message ?? '' });
+      return { success: true, envelope: options.envelope };
+    },
     delete: async () => ({ success: false, error: 'not implemented' }),
     validate: async () => ({ valid: true, errors: [] }),
     lint: async () => ({ ok: true, errors: [] }),
@@ -470,12 +475,13 @@ describe('PlannedRunEventsEmitPass', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 4: Unbound role gracefully degrades
+  // Test 4: Unbound role → refuse (D-6)
   // ---------------------------------------------------------------------------
 
-  it('unbound role emits event with role string only and warning diagnostic', async () => {
+  it('unbound role refuses: ok:false with UNBOUND_ROLE diagnostic, no record created, no repoint (D-6)', async () => {
     const createdRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
-    const recordStore = makeMockRecordStore(createdRecords);
+    const updatedRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
+    const recordStore = makeMockRecordStore(createdRecords, updatedRecords);
 
     const verbDef = makeVerbDefinition('transfer', [
       {
@@ -532,6 +538,113 @@ describe('PlannedRunEventsEmitPass', () => {
     };
 
     const outputs = new Map<string, unknown>([
+      ['resolve_local_protocol', {
+        plannedRun: {
+          recordId: 'PLR-unbound',
+          payload: { kind: 'planned-run', methodEventGraphId: 'EVG-PREV' },
+        },
+        expandedProtocol,
+      }],
+      ['project_result', { runPlanCompileResult: runPlanResult }],
+    ]);
+
+    const state = makeMockState({}, outputs);
+    const pass = createPlannedRunEventsEmitPass({
+      recordStore,
+      buildSemanticKey,
+      derivations,
+      loadVerbDefinition: loadVerbDef,
+    });
+
+    const result = await pass.run({ pass_id: 'planned_run_events_emit', state });
+
+    // Refusal: ok:false and an error diagnostic naming the role and step
+    expect(result.ok).toBe(false);
+    expect(result.output).toBeUndefined();
+    expect(result.diagnostics).toBeDefined();
+    const refusal = result.diagnostics!.find(
+      (d) => d.code === 'UNBOUND_ROLE',
+    );
+    expect(refusal).toBeDefined();
+    expect(refusal!.severity).toBe('error');
+    expect(refusal!.message).toContain("'reservoir'");
+    expect(refusal!.message).toContain("'step-1'");
+    expect(refusal!.details).toEqual(
+      expect.objectContaining({ roleId: 'reservoir', stepId: 'step-1' }),
+    );
+
+    // Nothing was persisted and the planned-run link was not touched
+    expect(createdRecords.length).toBe(0);
+    expect(updatedRecords.length).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 4b: Vacuous plan (zero events) → refuse
+  // ---------------------------------------------------------------------------
+
+  it('vacuous plan refuses: ok:false with VACUOUS_PLAN_GRAPH diagnostic, no record created', async () => {
+    const createdRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
+    const updatedRecords: Array<{ envelope: Record<string, unknown>; message: string }> = [];
+    const recordStore = makeMockRecordStore(createdRecords, updatedRecords);
+
+    const verbDef = makeVerbDefinition('transfer', [
+      {
+        name: 'source',
+        derivedFrom: { input: 'source', fn: 'passthrough' },
+        required: true,
+      },
+      {
+        name: 'target',
+        derivedFrom: { input: 'target', fn: 'passthrough' },
+        required: true,
+      },
+    ]);
+
+    const loadVerbDef = makeLoadVerbDefinition({ transfer: verbDef });
+
+    // Fully bound, but the step carries no samples → zero events
+    const labwareResolutions = {
+      reservoir: {
+        recordId: 'LBI-reservoir-A',
+        kind: 'reservoir_12',
+        name: 'Reservoir A',
+      },
+      plate: {
+        recordId: 'LBI-plate-A',
+        kind: '96-well-plate',
+        name: 'Plate A',
+      },
+    };
+
+    const perStepContexts = [
+      makePerStepContext('step-1', []),
+    ];
+
+    const runPlanResult = makeRunPlanCompileResult(perStepContexts, {
+      materialResolutions: {},
+      labwareResolutions,
+    });
+
+    const expandedProtocol = {
+      kind: 'protocol',
+      recordId: 'PRT-000001',
+      title: 'Test Protocol',
+      steps: [
+        {
+          stepId: 'step-1',
+          kind: 'transfer',
+          phaseId: 'prep',
+          source: 'reservoir',
+          target: 'plate',
+          volume_uL: 200,
+        },
+      ],
+      phases: [{ id: 'prep', label: 'Prep', ordinal: 1 }],
+      resolvedSampleCount: 0,
+      resolvedPlateCount: 1,
+    };
+
+    const outputs = new Map<string, unknown>([
       ['resolve_local_protocol', { expandedProtocol }],
       ['project_result', { runPlanCompileResult: runPlanResult }],
     ]);
@@ -546,35 +659,16 @@ describe('PlannedRunEventsEmitPass', () => {
 
     const result = await pass.run({ pass_id: 'planned_run_events_emit', state });
 
-    expect(result.ok).toBe(true);
-    const output = result.output as { eventCount: number };
-    expect(output.eventCount).toBe(1);
+    expect(result.ok).toBe(false);
+    expect(result.output).toBeUndefined();
+    const refusal = result.diagnostics!.find(
+      (d) => d.code === 'VACUOUS_PLAN_GRAPH',
+    );
+    expect(refusal).toBeDefined();
+    expect(refusal!.severity).toBe('error');
 
-    // Should have a warning diagnostic for unbound role
-    expect(result.diagnostics).toBeDefined();
-    expect(result.diagnostics!.length).toBeGreaterThanOrEqual(1);
-
-    const envelope = createdRecords[0]!.envelope;
-    const events = envelope.payload.events;
-    expect(events.length).toBe(1);
-
-    const event = events[0];
-
-    // Source should have role string only (no labwareInstanceId)
-    expect(event.source).toBeDefined();
-    expect((event.source as Record<string, unknown>).role).toBe('reservoir');
-    // labwareInstanceId should be absent for unbound role
-    expect((event.source as Record<string, unknown>).labwareInstanceId).toBeUndefined();
-
-    // Target should have both labwareInstanceId AND role (bound)
-    expect(event.target).toBeDefined();
-    expect((event.target as Record<string, unknown>).labwareInstanceId).toBe('LBI-deepwell-2026-04-26-A');
-    expect((event.target as Record<string, unknown>).role).toBe('plate');
-
-    // semanticKey should still be computed using the role string
-    expect(event.semanticKey).toBeDefined();
-    expect(typeof event.semanticKey).toBe('string');
-    expect(event.semanticKey).toMatch(/^EVT-/);
+    expect(createdRecords.length).toBe(0);
+    expect(updatedRecords.length).toBe(0);
   });
 
   // ---------------------------------------------------------------------------
