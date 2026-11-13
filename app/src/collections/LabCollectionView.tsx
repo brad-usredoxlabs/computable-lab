@@ -239,6 +239,11 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   const [showInstanceModal, setShowInstanceModal] = useState(false)
   // Receive-a-lot door state (materials category) — stages a receiving draft only
   const [showReceiveModal, setShowReceiveModal] = useState(false)
+  // Discard cue (L2-LABINV-discardfix): the door reports a staged-draft
+  // discard through onDiscard; the cue is visible AFTER the door is gone and
+  // stays until dismissed (it also survives a reopen — the draft really was
+  // discarded, so the cue is still true).
+  const [receiveDiscarded, setReceiveDiscarded] = useState(false)
   const [labwareDefinitions, setLabwareDefinitions] = useState<RecordEnvelope[]>([])
 
   const activeKind = CATEGORIES.find((c) => c.id === activeCategory)?.kind ?? 'protocol'
@@ -355,6 +360,17 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
         {sortControls}
       </header>
 
+      {/* Discard cue (L2-LABINV-discardfix): the receiving door reports a
+          staged-draft discard through onDiscard; the cue stays on the page
+          after the door is gone and until dismissed. Purely local — nothing
+          was committed. */}
+      {activeCategory === 'materials' && receiveDiscarded && (
+        <p className="lab-collection__hint" data-testid="material-receiving-discarded">
+          Staged draft discarded.{' '}
+          <button type="button" onClick={() => setReceiveDiscarded(false)}>Dismiss</button>
+        </p>
+      )}
+
       <div className="lab-collection__body">
         <nav className="lab-collection__categories" role="navigation">
           {CATEGORIES.map((cat) => (
@@ -397,7 +413,10 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               type="button"
               className="lab-collection__category lab-collection__category--new"
               data-testid="lab-category-receive-lot"
-              onClick={() => setShowReceiveModal(true)}
+              onClick={() => {
+                setReceiveDiscarded(false)
+                setShowReceiveModal(true)
+              }}
             >
               + Receive a lot
             </button>
@@ -549,6 +568,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
           <MaterialReceivingDoor
             isOpen={showReceiveModal}
             onClose={() => setShowReceiveModal(false)}
+            onDiscard={() => setReceiveDiscarded(true)}
           />
         </>
       }
