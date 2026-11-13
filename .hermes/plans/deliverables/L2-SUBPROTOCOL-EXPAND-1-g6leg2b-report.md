@@ -24,3 +24,5 @@ RED proof — delete <LabwareEditorProvider>, run, restore:
   RESTORED: same cmd => 1 file / 1 test passed [pin not vacuous]
 Next: browser gate (lane-stack reload) — /labware-editor?id=&runId= renders the real
 editor, not NotFoundRoute (acceptance belongs to the independent browser reviewer).
+
+L2-SUBPROTOCOL-EXPAND-1-g6leg2b UNIT unit DONE 3821f19df91c54b6f3d57a188181fc5f780dd874
