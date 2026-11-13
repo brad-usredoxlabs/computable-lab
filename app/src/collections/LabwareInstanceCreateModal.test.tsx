@@ -53,6 +53,14 @@ afterEach(() => {
 const MOCK_DEFINITIONS = [
   { recordId: 'LW-PLATE-96', schemaId: '', payload: { name: '96-well plate' } },
   { recordId: 'LW-TROUGH-S', schemaId: '', payload: { name: 'Single trough reservoir' } },
+  {
+    recordId: 'LW-PLATE-96F',
+    schemaId: '',
+    payload: {
+      name: '96-well flat plate',
+      format: { rows: 8, cols: 12, wellCount: 96, wellNaming: 'A1..H12' },
+    },
+  },
 ]
 
 describe('LabwareInstanceCreateModal', () => {
@@ -308,5 +316,36 @@ describe('LabwareInstanceCreateModal', () => {
     const kindSelect = screen.getByTestId('labware-instance-location-kind') as HTMLSelectElement
     const values = Array.from(kindSelect.options).map((o) => o.value)
     expect(values).toEqual([''])
+  })
+
+  it('(viii) selects a defining geometry and shows it read-only, then falls back to "not declared"', () => {
+    render(
+      <LabwareInstanceCreateModal
+        definitions={MOCK_DEFINITIONS}
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    )
+
+    fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
+      target: { value: 'LW-PLATE-96F' },
+    })
+
+    // Declared geometry is projected from the definition — never typed.
+    const readout = screen.getByTestId('labware-instance-definition-geometry')
+    expect(readout.textContent).toContain('96 wells')
+    expect(readout.textContent).toContain('8×12')
+    expect(readout.textContent).toContain('A1..H12')
+    // Read-only: no input/select inside the readout row.
+    expect(readout.querySelector('input, select')).toBeNull()
+
+    // Switching to a definition that declares none replaces the value (no stale text).
+    fireEvent.change(screen.getByTestId('labware-instance-definition-select'), {
+      target: { value: 'LW-TROUGH-S' },
+    })
+    expect(screen.getByTestId('labware-instance-definition-geometry').textContent).toBe(
+      'Geometry not declared on this definition'
+    )
   })
 })
