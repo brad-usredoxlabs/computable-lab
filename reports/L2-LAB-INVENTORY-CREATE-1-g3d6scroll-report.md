@@ -13,7 +13,10 @@ Playwright's click on `.lab-modal__close` failed "element is outside of the view
 (MaterialReceivingDoor form, LabwareInstanceCreateModal div) read this one authority, so the fix
 belongs here and not in either consumer.
 
-## Changed files (2 — exactly the owned scope; diff vs base: 9 insertions, 2 deletions)
+## Changed files (vs base 25fb973b — measured per-file numstat: labModalStyles.ts 7 insertions / 1
+deletion; labModalStyles.test.ts 73 insertions / 0 deletions, new file vs base — DEFECT 2: the old
+"9 insertions, 2 deletions" claim is replaced by the figures recomputed with
+`git diff --numstat 25fb973b...HEAD`)
 1. app/src/collections/labModalStyles.ts — `.lab-modal` gains
    `max-height: calc(100vh - 48px);` (48px = the backdrop's own 24px top + 24px bottom gutter at
    :15) with the D6 comment; `.lab-modal__body` reflows from one line to three and gains
@@ -143,6 +146,47 @@ and ✕ stay pinned at the top and the footer is reached by scrolling inside the
 is content-sized (no height is fixed) and the backdrop's fixed/inert/flex behaviour and both
 importers' markup are untouched. This unit ran no browser lane (none assigned) — the independent
 browser reviewer owns AC acceptance.
+
+## FIX-1 (advc c1 DEFECT 1 + 2 + 3) — unit L2-LABINV-g3d6scroll-fix1
+DEFECT 1 (MAJOR): the g3 D6 pin measured GREEN against both spec-named regressions. The scroller set
+was built from the `overflow-y` longhand key ONLY, so a shorthand `overflow: auto;` on
+`.lab-modal`/`.lab-modal__backdrop` slipped through. Test file strengthened (production
+labModalStyles.ts UNTOUCHED — byte-identical to 3927fd04, verified with cmp): the scroller filter now
+counts any of `overflow`/`overflow-x`/`overflow-y` whose value matches /auto|scroll/, still expecting
+`['.lab-modal__body']`; the backdrop and panel legs require no auto/scroll overflow on any of the
+three keys (an explicit `hidden`/`visible` declaration stays legal — not over-tightened to
+"undefined"); a new test pins the `height` key off the panel (REVIEWER BAIT `height: 900px`;
+`max-height: 1056px` is already pinned in test 1). Test file 56 → 73 lines (20 insertions, 3 deletions).
+Raw outputs (command `cd app && npx vitest run src/collections/labModalStyles.test.ts`):
+[1] unmutated shipped CSS: `✓ (4 tests) 2ms / Test Files 1 passed (1) / Tests 4 passed (4)`
+[2] Mutation A — `overflow: auto;` added to `.lab-modal` → FAILED (2 tests):
+```
+ ❯ src/collections/labModalStyles.test.ts  (4 tests | 2 failed) 8ms
+   ❯ ... > scrolls inside .lab-modal__body only, with the flex shrink allowance
+     → expected [ '.lab-modal', '.lab-modal__body' ] to deeply equal [ '.lab-modal__body' ]
+   ❯ ... > keeps the g1 D1 backdrop behaviour and the pinned panel flex shell
+     → expected true to be false // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+```
+[3] Mutation B — `height: 900px;` added to `.lab-modal` → FAILED (1 test):
+```
+ ❯ src/collections/labModalStyles.test.ts  (4 tests | 1 failed) 8ms
+   ❯ ... > declares no fixed pixel height on the panel
+     → expected true to be false // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+```
+[4] Mutation C — `overflow: hidden;` on `.lab-modal__backdrop` → GREEN `Tests 4 passed (4)` — not
+over-tightened (hidden is a legal non-scroller per the /auto|scroll/ rule).
+Each mutation reverted with `git checkout -- app/src/collections/labModalStyles.ts`; final re-run on
+the shipped CSS: GREEN 4/4; typecheck unchanged (13 pre-existing errors, none naming labModalStyles;
+log fix1-tsc.log). Full raw logs: /home/brad/.hermes/receipts/L2-LABINV-g3d6scroll-lane2/
+fix1-{baseline2,mutA,mutB,mutC,final}.log (outside git).
+DEFECT 2: the line-16 numstat claim is replaced with the measured per-file figures (see above).
+DEFECT 3: exactly one DONE marker line remains, naming the report-body commit (see below).
 
 L2-LAB-INVENTORY-CREATE-1 UNIT DONE 13f6e7d922b620d995e3482480992bb700603e87
 L2-LAB-INVENTORY-CREATE-1 UNIT unit DONE 13f6e7d922b620d995e3482480992bb700603e87
