@@ -18,6 +18,9 @@ export const labModalStyles = `
   background: var(--cl-bg-elev); color: var(--cl-text);
   border: 1px solid var(--cl-border); border-radius: 8px;
   width: min(480px, 96vw); display: flex; flex-direction: column;
+  /* g3 D6 tall state: cap against the viewport (48px = the backdrop's 24px gutters),
+     so a tall dialog never pushes its header/close/footer off screen. */
+  max-height: calc(100vh - 48px);
   box-shadow: 0 16px 48px rgba(0,0,0,0.4);
 }
 .lab-modal__header {
@@ -30,7 +33,10 @@ export const labModalStyles = `
   color: var(--cl-text-dim); border-radius: 4px; width: 26px; height: 26px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-.lab-modal__body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.lab-modal__body {
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; min-height: 0;
+}
 .lab-modal__row { display: flex; flex-direction: column; gap: 4px; }
 .lab-modal__label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cl-text-faint); }
 .lab-modal__row select, .lab-modal__row input {
