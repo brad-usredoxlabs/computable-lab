@@ -1,0 +1,51 @@
+# L2-JOURNEY-CHECKPOINT-1 (unit cpschema2) — the context delta: what a journey
+# leg LEARNED that the parked prompt did not contain. Every entry is traceable
+# to source records (minItems 1 — a claim with no source is a bare assertion)
+# and an accepting actor. A delta that would change quantity/targets/purpose is
+# NOT an entry: its presence is declared as request_revision, which FORBIDS
+# silent injection. CLOSED; enums only; prose lives in description: keys.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/context-delta.schema.yaml"
+title: "Context Delta"
+type: object
+additionalProperties: false
+required: [delta_id, entries]
+properties:
+  delta_id: { type: string, minLength: 1 }
+  request_revision:
+    type: object
+    additionalProperties: false
+    description: "Optional. Its PRESENCE declares the delta would change the request's quantity, targets, or purpose, which FORBIDS silent injection into the pending prompt."
+    required: [changed_fields, reason]
+    properties:
+      changed_fields: { type: array, minItems: 1, uniqueItems: true, items: { type: string, enum: [quantity, targets, purpose] } }
+      reason: { type: string, minLength: 1 }
+  entries:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [kind, canonical_value, semantic_type, source_records, source_journey_ref, source_step_id, evidence, epistemic_status, accepted_by]
+      properties:
+        kind: { type: string, enum: [unresolved-slot, proposed-addition], description: "Nothing else is a delta entry." }
+        canonical_value: { type: string, minLength: 1, description: "Canonical form, not prose — what a resolved slot would carry." }
+        semantic_type: { type: string, minLength: 1, description: "A journey-port vocabulary name ($defs of journey-port.schema.yaml), not free prose." }
+        source_records:
+          type: array
+          minItems: 1
+          description: "An empty array is source-records-empty: a context claim with no source record is a bare assertion."
+          items:
+            type: object
+            additionalProperties: false
+            required: [record_id, revision]
+            properties: { record_id: { type: string, minLength: 1 }, revision: { type: string, minLength: 1 } }
+        source_journey_ref: { type: string, minLength: 1 }
+        source_step_id: { type: string, minLength: 1 }
+        evidence: { type: array, items: { type: string, minLength: 1 }, description: "May be empty — grounding is source_records, not prose here." }
+        epistemic_status: { type: string, enum: [observed, user-selected, inferred, proposed], description: "Closed vocabulary; any other label is epistemic-status-invalid." }
+        accepted_by:
+          type: object
+          additionalProperties: false
+          required: [actor, at]
+          description: "Absent means nobody accepted it: delta-entry-incomplete."
+          properties: { actor: { type: string, minLength: 1 }, at: { type: string, format: date-time } }

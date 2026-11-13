@@ -1,0 +1,81 @@
+# L2-JOURNEY-CHECKPOINT-1 (unit cpschema2) — the pending-intent checkpoint: the
+# shape of the PARKED PROMPT (journey-document.schema.yaml names a durable
+# checkpoint_ref; none existed). Anchor immutable, unset slots DECLARED (never
+# omitted), CLOSED except restoration_state (deliberately open — each surface
+# declares its own export in a later unit). Stores/routes nothing: later units.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/pending-intent-checkpoint.schema.yaml"
+title: "Pending Intent Checkpoint"
+description: "A durable checkpoint of a parked prompt, stored with the chat thread (thread_ref = an ai-threads threadId), so a reload, browser-back, or second tab still returns to the pending prompt."
+type: object
+$defs:
+  revision_pair:
+    type: object
+    additionalProperties: false
+    required: [record_id, revision]
+    properties:
+      record_id: { type: string, minLength: 1 }
+      revision: { type: string, minLength: 1 }
+additionalProperties: false
+required: [checkpoint_id, journey_ref, revision, thread_ref, request_anchor, pending_intent, unresolved_slots, origin, restoration_state, expected_return_type, status, concurrency_version]
+properties:
+  checkpoint_id: { type: string, minLength: 1 }
+  journey_ref: { type: string, minLength: 1 }
+  revision: { type: string, minLength: 1 }
+  thread_ref: { type: string, minLength: 1, description: "The ai-threads threadId this checkpoint is durable with." }
+  request_anchor:
+    type: object
+    additionalProperties: false
+    description: "The original user message, immutable by contract: return means THIS text, never a paraphrase (same anchor shape as journey-document.schema.yaml)."
+    required: [message_id, verbatim_text]
+    properties:
+      message_id: { type: string, minLength: 1 }
+      verbatim_text: { type: string, minLength: 1 }
+  pending_intent:
+    type: object
+    additionalProperties: false
+    required: [intent_id, intent_revision]
+    properties:
+      intent_id: { type: string, minLength: 1 }
+      intent_revision: { type: string, minLength: 1 }
+  unresolved_slots:
+    type: array
+    description: "Slots still unset. An unset slot is DECLARED here, never omitted; the empty array states every slot is known."
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, semantic_type]
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+        semantic_type: { type: string, minLength: 1, description: "A journey-port vocabulary name ($defs of journey-port.schema.yaml), not free prose." }
+  origin:
+    type: object
+    additionalProperties: false
+    description: "Where the prompt was parked, as data: no surface or route ids are baked into TS."
+    required: [surface, route, active_tab, record_revisions]
+    properties:
+      surface: { type: string, minLength: 1 }
+      route: { type: string, minLength: 1 }
+      active_tab: { type: string, minLength: 1 }
+      record_revisions: { type: array, items: { $ref: "#/$defs/revision_pair" } }
+  restoration_state:
+    type: object
+    additionalProperties: true
+    description: "Deliberately the ONLY open object: each surface declares its own restoration export in a later unit, so this file cannot close its fields."
+  parent_journey_ref: { type: string, minLength: 1, description: "Optional: set only when this journey was forked from another." }
+  expected_return_type:
+    type: string
+    enum: [SequenceSetReference, AlignmentReference, MaterialReference, LabwareDefinitionReference, CommittedRecordReference, StagedDraftReference]
+    description: "The six $defs names of journey-port.schema.yaml; a test refuses drift from the port schema."
+  status: { type: string, enum: [pending, resumable, resumed, cancelled, blocked], description: "The closed lifecycle; any other word (e.g. 'parked') is status-invalid." }
+  concurrency_version: { type: integer, minimum: 1, description: "Optimistic concurrency: two tabs resume through this, not last-write-wins." }
+  resume_receipt:
+    type: object
+    additionalProperties: false
+    description: "Present only once a resume consumed the checkpoint."
+    required: [receipt_id, resumed_at, resumed_by, outcome]
+    properties:
+      receipt_id: { type: string, minLength: 1 }
+      resumed_at: { type: string, format: date-time }
+      resumed_by: { type: string, minLength: 1 }
+      outcome: { type: string, minLength: 1 }
