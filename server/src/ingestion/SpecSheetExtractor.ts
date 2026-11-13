@@ -47,6 +47,8 @@ export interface SpecSheetFieldOutcome {
   status: 'extracted' | 'not_present';
   /** Present ONLY when status is 'extracted'. */
   passage?: string;
+  /** Present ONLY when status is 'not_present'; absent (never undefined) when 'extracted'. */
+  reason?: SpecSheetAbsenceReason;
 }
 
 export interface SpecSheetExtractNotConfigured {
@@ -76,6 +78,13 @@ export interface SpecSheetExtractNoProposals {
 }
 
 export type SpecSheetNoProposalReason = 'empty_document' | 'no_field_match';
+
+/**
+ * WHY a declared field is absent from the extraction report. Extends the
+ * existing no-proposal vocabulary with 'no_passage': the document had
+ * evidence (proposals), just not for this field.
+ */
+export type SpecSheetAbsenceReason = SpecSheetNoProposalReason | 'no_passage';
 
 export type SpecSheetExtractResult =
   | SpecSheetExtractSuccess
@@ -363,6 +372,7 @@ export function extractProposals(
 export function fieldOutcomesFor(
   fieldMap: SpecSheetFieldMap,
   proposals: SpecSheetProposal[],
+  absenceReason: SpecSheetAbsenceReason,
 ): SpecSheetFieldOutcome[] {
   const firstByField = new Map<string, SpecSheetProposal>();
   for (const proposal of proposals) {
@@ -379,7 +389,7 @@ export function fieldOutcomesFor(
     outcomes.push(
       first
         ? { targetField: mapping.targetField, status: 'extracted', passage: first.passage }
-        : { targetField: mapping.targetField, status: 'not_present' },
+        : { targetField: mapping.targetField, status: 'not_present', reason: absenceReason },
     );
   }
   return outcomes;
@@ -414,7 +424,18 @@ export async function extractFromUrl(
     const text = Array.isArray(results) && results[0]?.text ? results[0].text : '';
 
     const proposals = extractProposals(fieldMap, { url, text });
-    const fieldOutcomes = fieldOutcomesFor(fieldMap, proposals);
+    // Document-level absence reason, computed ONCE: empty text is an
+    // empty document, otherwise the document had no field match. When the
+    // document YIELDED proposals, a silent field was silent about THAT FIELD
+    // ('no_passage'), not about the document. The same value feeds the
+    // per-field outcomes and noProposals.reason so the two cannot drift.
+    const absenceReason: SpecSheetNoProposalReason =
+      text.length === 0 ? EXA_EMPTY_DOCUMENT : EXA_NO_FIELD_MATCH;
+    const fieldOutcomes = fieldOutcomesFor(
+      fieldMap,
+      proposals,
+      proposals.length === 0 ? absenceReason : 'no_passage',
+    );
     if (proposals.length === 0) {
       return {
         configured: true,
@@ -422,7 +443,7 @@ export async function extractFromUrl(
         fieldOutcomes,
         noProposals: {
           url,
-          reason: text.length === 0 ? EXA_EMPTY_DOCUMENT : EXA_NO_FIELD_MATCH,
+          reason: absenceReason,
         },
       };
     }

@@ -1485,6 +1485,8 @@ export interface SpecSheetFieldOutcome {
   status: 'extracted' | 'not_present'
   /** Present ONLY when status is 'extracted'. */
   passage?: string
+  /** Present ONLY when status is 'not_present'; absent (never undefined) when 'extracted'. */
+  reason?: 'empty_document' | 'no_field_match' | 'no_passage'
 }
 
 export interface SpecSheetExtractSuccess {
