@@ -125,12 +125,14 @@ describe('ldefsave-f1 envelope-derived identity for record input', () => {
       const body = JSON.parse(textContent!.text);
       expect(body.status).toBe('generated');
       expect(body.blockers).toEqual([]);
-      // Envelope identity drives the result: payload id (labware/pure_water_96@v1)
-      // differs from envelope recordId; loadName must derive from the ENVELOPE id.
-      expect(body.loadName).toBe(ENVELOPE_RECORD_ID.toLowerCase());
+      // Envelope identity drives the result: envelope recordId LBW-DEF-000042,
+      // payload id labware/pure_water_96@v1 (differs, no payload recordId).
+      // loadName must derive from the ENVELOPE id via safeOpentronsName.
+      expect(body.loadName).toBe('lbw_def_000042');
       expect(body.loadName).not.toContain('pure_water_96');
+      expect(body.namespace).toBe('purewater'); // vendor-derived, unchanged
       expect(body.source.recordId).toBe(ENVELOPE_RECORD_ID);
-      expect(body.definition.parameters.loadName).toBe(ENVELOPE_RECORD_ID.toLowerCase());
+      expect(body.definition.parameters.loadName).toBe('lbw_def_000042');
     } finally {
       await rm(workspaceRoot, { recursive: true, force: true });
     }
