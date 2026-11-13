@@ -143,3 +143,6 @@ by the pipeline, and my change adds none of them.
 
 Scratch worktree /home/brad/.subproto-danglingplan-scratch (base checkout + tsc baselines) was
 deleted at exit; nothing left in /tmp or the NFS mount.
+
+--- marker ---
+L2-SUBPROTOCOL-EXPAND-1-danglingplan UNIT danglingplan DONE 0a1b6551013a8bc45be7101c48fba0ba43561559
