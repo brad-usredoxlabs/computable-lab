@@ -21,7 +21,7 @@ Activity:  The plate type I'm asking for is a deepwell and I don't think we have
 Expectation: It asks me to create the deepwell type, anchored to the labware ontology if there's a term for it, and then puts a plate of that new type on the deck.
 Expectation: I can see visually that a 96-well plate has been added to the deck.
 
-Prompt 2:
+## Prompt 2
 
 Activity:  Select a range of wells (A2-H5) (using the mouse you have to select A2 then shift-click H5)
 Expectation:  Tyhe range of selected wells is highlighted in yellow.
@@ -33,7 +33,7 @@ Expectation: Shorthand prompt is returned specifying the newly minted vendor ter
 Acitivty:  Accept the proposal.
 Activity:  A mouseover of the selected wells should now display "100 uL DMEM"
 
-## Prompt 2
+## Prompt 2a
 
 Context:  This is a continuation of prompt 1, we are iteratively building an experiment.
 Prompt:  Add 1uL of 1mM clofibrate in DMSO to wells E2-H5.
@@ -57,7 +57,7 @@ Expectation: The next add material will be 20.7 ul of the 50:50 mix of (Trypsin-
 Activity: accept.
 Expectation:  Upon mouseover of any well (that is in A2-H5), the tooltip will show the 10,000 HepG2 cells and the final concentrations of FBS, DMEM, Trypsin-EDTA (~8.6%, ~82.9%, ~8.6%).  The wells E2-H5 will also show ~0.7% DMSO.
 
-## Prompt 3
+## Prompt 3a
 
 Prompt: Incubate the cells for 24 hours in the 37 degree, 5% CO2 incubator.
 Expectation: The incubation event will be added to the plates event graph.  There will be an obvious visual representation of plate events in the timeline (incubate, shake, vortex)
@@ -84,7 +84,7 @@ Expectation: The newly ingested protocol is added to the list of protocols follw
 
 ## Prompt 7 
 
-Prompt: Add the proper amount of Nile Red solution and Hoescht from the protocol to 10mls of Invitrogen Live Cell Imaging Solution.  The Live Cell Imaging Solution replaces the "Assay Buffer" in the protocol.  We're not using the Hoescht dye.   Add the 10mls of solution to a single channel 25ml reservoir,  Use the 8-channel pipette to transfer 100ul of the pre-mixed stain to each well (A2-H5).
+Prompt: Add the proper amount of Nile Red solution and Hoescht from the protocol to 10mls of Invitrogen Live Cell Imaging Solution.  The Live Cell Imaging Solution replaces the "Assay Buffer" in the protocol.  Add the 10mls of solution to a single channel 25ml reservoir,  Use the 8-channel pipette to transfer 100ul of the pre-mixed stain to each well (A2-H5).
 Expectation: Wells A2-H5 now contain 10,000 HepG2 cells * their growth rate calculated over the 24 hours with 100ul of 99.8% Invitrogen Live Cell Imaging Solution, 0.1% Nile Red Reagent (vendor product from APExBIO) and 0.1% Hoescht-xxxx (vendor Product from APExBIO)
 Activity: If a 25ml single channel reservoir isn't a labware type in the system yet, create it - one well, wide enough and deep enough that the whole 8-channel head fits inside it, which at 9mm tip spacing means at least 63mm across - then add an instance to the deck.
 Activity: If the Nile Red and Hoescht aren't in the system, create the material concepts (anchored to their ontology terms where they exist) and then the APExBIO vendor products with the real catalogue numbers.

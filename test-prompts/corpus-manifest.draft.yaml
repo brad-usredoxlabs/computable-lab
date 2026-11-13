@@ -1,0 +1,62 @@
+# DRAFT — corpus acceptance manifest, worked example for ONE scenario (prompt 1).
+#
+# WHY: test-prompts/AI-Chat-Corpus2.md stays the canon and stays in Brad's language. This file adds,
+# beside it, the five plain fields a reviewer needs to judge a drive without re-deriving intent:
+# where you start, what is said, what the human must choose, what must be true when you are returned,
+# and what "done" looks like. No compiler vocabulary, no handler ids, no step sequences — those live
+# in the implementation contracts (journeys, capabilities, ports).
+#
+# NOT YET ADOPTED. One scenario only, as a worked example for Brad. If the shape is right, the
+# remaining scenarios (2, 2a, 3, 3a, 4, 5, 6, 7, 8) get written the same way.
+#
+# Rules this file obeys:
+#   - `utterance` is VERBATIM from the source file. Never paraphrased, never tidied.
+#   - `completed_when` is always observable by a person looking at a screen, or by reading a record
+#     back by id. "The finished journey" is never an answer.
+#   - `not_done_if` names the traps that have actually fooled us before. It is the important half.
+
+version: draft-1
+source_file: test-prompts/AI-Chat-Corpus2.md
+source_sha256: 9388c5c7fafe723709fd188dc924446b   # recorded when this draft was authored
+scenarios:
+  - id: prompt-1
+    title: a plate type that does not exist yet
+    utterance: "Add a 96-well deepwell plate to the deck."
+    starts_at: /runs
+    entry_state: >-
+      The person is in a run, looking at the plate deck. The system does NOT already have a
+      96-well deepwell plate type.
+    human_choices:
+      - The assistant says plainly that the type is not in the system and offers to create it.
+      - The person completes the geometry (well count, arrangement, spacing, footprint, working
+        volume) on the create surface the assistant opens.
+      - The person sees the ontology match with its namespace and full label, or sees the record
+        marked UNANCHORED with the reason when no term fits.
+      - The person accepts.
+    return_expectation: >-
+      The person is back where they started, their original sentence is still there unchanged, and
+      a short note says what was created and what was placed. One click resumes the sentence.
+    completed_when:
+      - A plate of the newly created type is VISIBLY on the deck, where the person can see it.
+      - A labware definition record exists whose geometry is what the person entered (read back by id).
+      - A labware instance record exists, points at that definition by record id, and is the thing on the deck.
+      - The anchor state is visible either way — anchored with the term's namespace and label, or
+        UNANCHORED with a stated reason.
+      - Resuming drafts the original add-plate instruction, and the plate is not added a second time.
+    not_done_if:
+      - The create form was filled and saved but no plate is on the deck (this exact defect once
+        passed a check while the plate never existed).
+      - A definition was created but no instance, or the instance is not the one placed.
+      - An ontology near miss was chosen silently, or a term was chosen without showing its label.
+      - A geometry value the person never entered appears on the record.
+      - The original sentence was rewritten, or the person had to retype it.
+    evidence_required:
+      - Screenshots of the assistant's offer, the create form with values, and the deck with the plate.
+      - Record read-back naming the definition id, the instance id, and the instance's parent id.
+      - The served application revision the drive ran against.
+    fault_injection_leg: >-
+      Interrupt after the definition record is durably written but before the continuation is
+      acknowledged, then reload and resume, and also try from a second tab. Acceptable — the
+      continuation completes with no duplicate plate, or an explicit recoverable partial state that
+      names what already exists. Not acceptable — two plates, a lost record, or a journey reported
+      complete with nothing on the deck.
