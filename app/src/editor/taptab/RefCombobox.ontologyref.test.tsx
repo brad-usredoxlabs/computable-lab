@@ -26,12 +26,16 @@ vi.mock('../hooks/useResolveOntology', () => ({
 }));
 
 const renderFor = (
-  valueShape: 'ref' | 'ontology-ref' | 'material-ref' | 'record-ref' | 'text',
-  plan?: { sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: typeof valueShape }
+  valueShape: 'ref' | 'ontology-ref' | 'material-ref' | 'record-ref' | 'text' | undefined,
+  plan?: { sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: 'ref' | 'ontology-ref' | 'material-ref' | 'record-ref' | 'text' }
 ) => render(
   <RefCombobox value="" refKind="cl" onSelect={vi.fn()} onCancel={vi.fn()}
-    suggestionPlan={plan ?? { sources: ['local', 'ols'], ontologies: ['cl'], searchField: 'tags',
-      isRef: true, isCombobox: true, valueShape }} />
+    {...(plan !== undefined
+      ? { suggestionPlan: plan }
+      : valueShape === undefined
+        ? {}
+        : { suggestionPlan: { sources: ['local', 'ols'], ontologies: ['cl'], searchField: 'tags',
+            isRef: true, isCombobox: true, valueShape } })} />
 );
 
 const typeInto = (t: string) =>
@@ -50,6 +54,20 @@ describe('RefCombobox ontology-ref local-tier suppression', () => {
 
   it('still offers the local tier when valueShape is ref', () => {
     renderFor('ref');
+    typeInto('Mic');
+    expect(screen.getByText('Local vocabulary')).toBeInTheDocument();
+    expect(screen.getByText('tag-a')).toBeInTheDocument();
+  });
+
+  it('keeps the local tier when there is no suggestion plan', () => {
+    renderFor(undefined);
+    typeInto('Mic');
+    expect(screen.getByText('Local vocabulary')).toBeInTheDocument();
+    expect(screen.getByText('tag-a')).toBeInTheDocument();
+  });
+
+  it('keeps the local tier when valueShape is material-ref', () => {
+    renderFor('material-ref');
     typeInto('Mic');
     expect(screen.getByText('Local vocabulary')).toBeInTheDocument();
     expect(screen.getByText('tag-a')).toBeInTheDocument();
