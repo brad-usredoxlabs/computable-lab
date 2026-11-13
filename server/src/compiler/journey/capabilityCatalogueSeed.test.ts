@@ -4,9 +4,11 @@
  * config/journey/capabilities/ are admitted by the EXISTING admission function
  * (capabilityCatalogue.ts, unit u2loader) against the SHIPPED handler registry.
  * No cap-id literals here: ids come from the files. The known-handler set is
- * derived from AGENT_ALLOWED_TOOLS, never restated — a literal list would be the
- * second authority the item forbids. The only handler-id literal allowed is the
- * NEGATIVE fixture's, and it must be absent from the registry.
+ * derived from AGENT_ALLOWED_TOOLS plus the governed-write registry
+ * (config/journey/governed-writes.yaml, L2-NOUN-FROM-DOC-1 d1gwrite) — never
+ * restated, because a literal list would be the second authority the item
+ * forbids. The only handler-id literal allowed is the NEGATIVE fixture's, and
+ * it must be absent from every registry.
  */
 import { describe, it, expect } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
@@ -19,69 +21,101 @@ import {
   type CapabilityDescriptor,
 } from './capabilityCatalogue.js';
 
-const SEED_DIR = join(
+const CAPABILITIES_DIR = join(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../../../config/journey/capabilities',
 );
+const REGISTRY_FILE = join(
+  fileURLToPath(new URL('.', import.meta.url)),
+  '../../../../config/journey/governed-writes.yaml',
+);
+
+/** The registry is DATA, not code: its write ids are read from the YAML. */
+async function loadRegistryIds(): Promise<ReadonlySet<string>> {
+  try {
+    const doc = parseYaml(await readFile(REGISTRY_FILE, 'utf8')) as
+      | { writes?: Array<{ id?: string }> }
+      | null;
+    const entries = doc?.writes ?? [];
+    return new Set(entries.filter((entry) => typeof entry?.id === 'string').map((entry) => entry.id as string));
+  } catch {
+    return new Set(); // absent registry: agent tools alone, exactly as before.
+  }
+}
 
 /** Empty directory (or absent one) is an empty catalogue, not a test error. */
-async function loadSeeded(): Promise<Array<{ file: string; doc: unknown }>> {
+async function loadSeeded(dir: string): Promise<Array<{ file: string; doc: unknown }>> {
   let names: string[];
   try {
-    names = (await readdir(SEED_DIR)).filter((name) => name.endsWith('.yaml')).sort();
+    names = (await readdir(dir)).filter((name) => name.endsWith('.yaml')).sort();
   } catch {
     return [];
   }
   return Promise.all(
-    names.map(async (file) => ({ file, doc: parseYaml(await readFile(join(SEED_DIR, file), 'utf8')) })),
+    names.map(async (file) => ({ file, doc: parseYaml(await readFile(join(dir, file), 'utf8')) })),
   );
 }
 
-const knownHandlerIds: ReadonlySet<string> = new Set(AGENT_ALLOWED_TOOLS);
-const seeded = await loadSeeded();
+const registryIds: ReadonlySet<string> = await loadRegistryIds();
+const knownHandlerIds: ReadonlySet<string> = new Set([...AGENT_ALLOWED_TOOLS, ...registryIds]);
+const seeded = await loadSeeded(CAPABILITIES_DIR);
 const ids = seeded
   .map(({ doc }) => (doc as CapabilityDescriptor).capability_id)
   .sort();
 
 describe('seeded journey capability catalogue (real data, shipped registry)', () => {
-  it('admits all four seeded descriptors', async () => {
+  it('admits every seeded descriptor', async () => {
     const result = await admitCapabilityCatalogue(seeded, knownHandlerIds);
     console.log('admitted ids:', JSON.stringify(result.ok ? result.capabilities.map((c) => c.capability_id) : []));
     expect(result.ok ? [] : result.diagnostics).toEqual([]);
-    expect(result.capabilities).toHaveLength(4);
+    expect(result.capabilities).toHaveLength(seeded.length);
     // Ids are unique and derived from the files, not from a list here.
-    expect(new Set(ids).size).toBe(4);
+    expect(new Set(ids).size).toBe(ids.length);
     expect(result.capabilities.map((c) => c.capability_id)).toEqual(ids);
     for (const id of ids) expect(id).toMatch(/^journey\.[a-z][a-z0-9-]*$/);
   });
 
-  it('binds every seeded descriptor to a shipped agent tool', async () => {
+  it('binds agent_tool descriptors to shipped tools and governed_write to the registry', async () => {
     const result = await admitCapabilityCatalogue(seeded, knownHandlerIds);
-    expect(result.capabilities).toHaveLength(4);
+    expect(result.ok).toBe(true);
+    expect(result.capabilities).toHaveLength(seeded.length);
+    let agentToolCount = 0;
     for (const capability of result.capabilities) {
-      expect(AGENT_ALLOWED_TOOLS).toContain(capability.implementation.handler_ref);
-      expect(capability.implementation.handler_kind).toBe('agent_tool');
+      const { handler_kind, handler_ref } = capability.implementation;
+      if (handler_kind === 'governed_write') {
+        // A domain mutation admits only through a declared registry entry.
+        expect(registryIds.has(handler_ref)).toBe(true);
+        continue;
+      }
+      expect(handler_kind).toBe('agent_tool');
+      expect(AGENT_ALLOWED_TOOLS).toContain(handler_ref);
+      agentToolCount += 1;
     }
+    // The four seeded read-only descriptors keep their agent-tool binding.
+    expect(agentToolCount).toBeGreaterThanOrEqual(4);
     console.log(
       'handler refs:',
       JSON.stringify(result.capabilities.map((c) => c.implementation.handler_ref)),
     );
   });
 
-  it('rejects a fifth candidate whose handler_ref is absent, naming the dangling id', async () => {
-    const base = seeded[0];
-    expect(base).toBeDefined();
-    // Cloned in memory on purpose: a fifth committed file would be data nobody wants.
+  it('rejects a candidate whose handler_ref is absent from every registry, naming the dangling id', async () => {
+    // Clone a READ-ONLY descriptor in memory on purpose: a fifth-plus-one
+    // committed file would be data nobody wants.
+    const base = seeded.find(
+      ({ doc }) => (doc as CapabilityDescriptor).implementation.handler_kind !== 'governed_write',
+    );
+    if (!base) throw new Error('expected at least one read-only seeded descriptor');
     const candidate = structuredClone(base.doc) as CapabilityDescriptor;
     candidate.implementation.handler_ref = 'ncbi_nucleotide_search';
     const result = await admitCapabilityCatalogue(
       [...seeded, { file: 'dangling-candidate.yaml', doc: candidate }],
       knownHandlerIds,
     );
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error(`expected rejection, got ${result.capabilities.length} admitted`);
     expect(result.diagnostics.join('\n')).toContain('ncbi_nucleotide_search');
-    // The four real ones survive; nothing from the candidate is admitted.
-    expect(result.capabilities).toHaveLength(4);
+    // The real ones survive; nothing from the candidate is admitted.
+    expect(result.capabilities).toHaveLength(seeded.length);
     expect(result.capabilities.map((c) => c.capability_id)).toEqual(ids);
     console.log('negative diagnostic:', JSON.stringify(result.diagnostics));
   });

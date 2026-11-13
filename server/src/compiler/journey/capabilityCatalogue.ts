@@ -65,7 +65,15 @@ export async function admitCapabilityCatalogue(
   capabilities.sort((a, b) => (a.capability_id < b.capability_id ? -1 : a.capability_id > b.capability_id ? 1 : 0));
   return diagnostics.length === 0 ? { ok: true, capabilities } : { ok: false, capabilities, diagnostics };
 }
-/** Read every *.yaml in dir and admit it. One unparseable file must not blank the catalogue. */
+/** Read every *.yaml in dir and admit it. One unparseable file must not blank the catalogue.
+ *
+ * The sibling registry at join(dir, '..', 'governed-writes.yaml') is the ONLY
+ * declared source of a governed_write handler_ref. Its writes[].id values are
+ * unioned into the known set; an ABSENT registry changes nothing (read-only
+ * capabilities keep admitting exactly as before), while an unparseable
+ * registry — or an entry lacking an id — is named and contributes nothing.
+ * The three routes.ts call sites stay two-argument: the registry resolves
+ * from dir, never from a new parameter. */
 export async function loadCapabilityCatalogueDir(
   dir: string,
   knownHandlerIds: ReadonlySet<string>,
@@ -83,9 +91,45 @@ export async function loadCapabilityCatalogueDir(
       diagnostics.push(`${file}: could not parse YAML: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const admitted = await admitCapabilityCatalogue(descriptors, knownHandlerIds);
+  const registry = await readGovernedWriteRegistry(join(dir, '..', 'governed-writes.yaml'));
+  if (registry.diagnostics.length > 0) diagnostics.push(...registry.diagnostics);
+  const admitted = await admitCapabilityCatalogue(descriptors, registry.knownHandlerIds(knownHandlerIds));
   if (admitted.ok) {
     return diagnostics.length === 0 ? admitted : { ok: false, capabilities: admitted.capabilities, diagnostics };
   }
   return { ok: false, capabilities: admitted.capabilities, diagnostics: [...diagnostics, ...admitted.diagnostics] };
+}
+/** Parse the governed-write registry; absent file contributes nothing. */
+async function readGovernedWriteRegistry(
+  registryPath: string,
+): Promise<{ diagnostics: string[]; knownHandlerIds: (base: ReadonlySet<string>) => ReadonlySet<string> }> {
+  let parsed: unknown;
+  try {
+    parsed = parse(await readFile(registryPath, 'utf8'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { diagnostics: [], knownHandlerIds: (base) => base };
+    }
+    return {
+      diagnostics: [`governed-writes.yaml: ${registryPath}: could not parse YAML: ${error instanceof Error ? error.message : String(error)}`],
+      knownHandlerIds: (base) => base,
+    };
+  }
+  const writes = Array.isArray((parsed as { writes?: unknown } | null)?.writes)
+    ? ((parsed as { writes: unknown[] }).writes)
+    : [];
+  const diagnostics: string[] = [];
+  const ids = new Set<string>();
+  writes.forEach((entry, index) => {
+    const id = (entry as { id?: unknown } | null)?.id;
+    if (typeof id !== 'string' || id === '') {
+      diagnostics.push(`governed-writes.yaml: ${registryPath}: writes[${index}]/id: missing or non-string id`);
+      return;
+    }
+    ids.add(id);
+  });
+  return {
+    diagnostics,
+    knownHandlerIds: (base) => new Set([...base, ...ids]),
+  };
 }
