@@ -35,7 +35,8 @@ export interface ResumeInput { expectedVersion: number; receiptId: string; resum
 
 export type SaveResult = { ok: true } | { ok: false; diagnostics: ContractDiagnostic[] };
 export type ResumeResult = { ok: true; checkpoint: PendingIntentCheckpoint } | { ok: false; diagnostics: ContractDiagnostic[] };
-export type AttachResult = { ok: true; delta: ContextDelta } | { ok: false; diagnostics: ContractDiagnostic[] };
+/** The success arm carries the CONFIRMED document id (it equals the requested id only because the store compared them) — the caller must never echo the path segment instead. */
+export type AttachResult = { ok: true; delta: ContextDelta; checkpointId: string } | { ok: false; diagnostics: ContractDiagnostic[] };
 
 /** Named store-level "no checkpoint" — distinct from version_conflict, so the caller can tell "none here" from "already resumed". */
 const DIAG_NOT_FOUND: ContractDiagnostic = {
@@ -119,8 +120,8 @@ export class PendingIntentStore {
     });
   }
 
-  /** Validate with the contract seam; REFUSE in injection mode a delta declaring request_revision (named `injection-refused`) — applied here because the committed validateContextDelta takes no mode argument. The parked checkpoint must exist (checkpoint-not-found, never a fallback). */
-  async attachDelta(delta: unknown): Promise<AttachResult> {
+  /** Validate with the contract seam; REFUSE in injection mode a delta declaring request_revision (named `injection-refused`) — applied here because the committed validateContextDelta takes no mode argument. The named checkpoint must BE the parked document: read once, compare its own checkpoint_id (checkpoint-not-found on absent/mismatch, never a fallback). */
+  async attachDelta(delta: unknown, checkpointId: string): Promise<AttachResult> {
     const result = validateContextDelta(delta);
     if (!result.valid) return { ok: false, diagnostics: result.diagnostics };
     if (result.delta.request_revision !== undefined) {
@@ -130,8 +131,11 @@ export class PendingIntentStore {
         message: 'delta declares request_revision: it would change the request quantity/targets/purpose, which forbids silent injection into the pending prompt',
       }] };
     }
-    if ((await this.readDocument()) === null) return { ok: false, diagnostics: [DIAG_NOT_FOUND] };
-    return { ok: true, delta: result.delta };
+    // One read into a local; the SAME NO-FALLBACK identity rule load()/resume() apply — the id in
+    // the path is only a claim until the stored document's own checkpoint_id confirms it.
+    const doc = await this.readDocument();
+    if (doc === null || doc.checkpoint_id !== checkpointId) return { ok: false, diagnostics: [DIAG_NOT_FOUND] };
+    return { ok: true, delta: result.delta, checkpointId: doc.checkpoint_id };
   }
 
   /** Raw read: null on absent OR malformed JSON (never a partial interpretation); other I/O errors propagate. */

@@ -117,10 +117,23 @@ describe('PendingIntentStore — durable checkpoint beside the thread (cpstore3)
   it('a delta declaring request_revision is refused in injection mode; a plain delta passes the seam', async () => {
     const s = store(await makeRoot('cpstore3-delta-'));
     await expect(s.save(makeCheckpoint())).resolves.toMatchObject({ ok: true });
-    const refused = await s.attachDelta(makeDelta({ request_revision: { changed_fields: ['quantity'], reason: 'the user changed the volume' } }));
+    const refused = await s.attachDelta(makeDelta({ request_revision: { changed_fields: ['quantity'], reason: 'the user changed the volume' } }), 'cp-journey-1');
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(refused.diagnostics.some((d) => d.code === 'injection-refused')).toBe(true);
-    await expect(s.attachDelta(makeDelta())).resolves.toMatchObject({ ok: true });
+    await expect(s.attachDelta(makeDelta(), 'cp-journey-1')).resolves.toMatchObject({ ok: true });
+  });
+
+  it('a delta naming an id the stored document does not carry is refused checkpoint-not-found (d1bind)', async () => {
+    const s = store(await makeRoot('cpstore3-deltabind-'));
+    await expect(s.save(makeCheckpoint())).resolves.toMatchObject({ ok: true });
+    // The document on this thread is cp-journey-1; a ghost id must not attach (this is the defect:
+    // any parked checkpoint used to accept any id and the handler echoed the path back).
+    const ghost = await s.attachDelta(makeDelta(), 'CP-GHOST');
+    expect(ghost.ok).toBe(false);
+    if (!ghost.ok) expect(ghost.diagnostics.map((d) => d.code)).toEqual(['checkpoint-not-found']);
+    await expect(s.attachDelta(makeDelta(), 'cp-journey-1')).resolves.toMatchObject({ ok: true });
+    // Absent thread still refuses (the pre-existing arm, now id-bound).
+    await expect(store(await makeRoot('cpstore3-deltanone-')).attachDelta(makeDelta(), 'cp-journey-1')).resolves.toMatchObject({ ok: false });
   });
 
   it('a scope containing .. cannot escape rootDir', async () => {

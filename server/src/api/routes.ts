@@ -73,6 +73,7 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { ProtocolIntakeHandlers } from './handlers/ProtocolIntakeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
+import type { PendingIntentHandlers } from './handlers/PendingIntentHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
 import type { GraphSearchHandlers } from './handlers/GraphSearchHandlers.js';
 import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
@@ -178,6 +179,8 @@ export interface RouteOptions {
   verbActionMapHandlers?: VerbActionMapHandlers;
   foundryJobHandlers?: FoundryJobHandlers;
   aiThreadHandlers?: AiThreadHandlers;
+  /** L2-JOURNEY-CHECKPOINT-1: the pending-intent checkpoint routes under the same /ai/threads family. */
+  pendingIntentHandlers?: PendingIntentHandlers;
   jsonLdSearchHandlers?: JsonLdSearchHandlers;
   graphSearchHandlers?: GraphSearchHandlers;
   workspaceHandlers?: WorkspaceHandlers;
@@ -921,6 +924,17 @@ export function registerRoutes(
     // (which match `/ai/threads/<endpoint>` exactly) are unaffected.
     fastify.get('/ai/threads/:endpoint/threads', aiThreadHandlers.listThreads.bind(aiThreadHandlers));
     fastify.post('/ai/threads/:endpoint/promote', aiThreadHandlers.promote.bind(aiThreadHandlers));
+  }
+
+  // L2-JOURNEY-CHECKPOINT-1: the persisted pending-intent checkpoint, beside the thread.
+  // ONE prefix to call (the /ai/threads family): the handler delegates every write to the
+  // PendingIntentStore (validation/version-compare/resume live in the store, never here).
+  const { pendingIntentHandlers } = options;
+  if (pendingIntentHandlers) {
+    fastify.post('/ai/threads/:endpoint/checkpoints', pendingIntentHandlers.save.bind(pendingIntentHandlers));
+    fastify.get('/ai/threads/:endpoint/checkpoints/:checkpointId', pendingIntentHandlers.load.bind(pendingIntentHandlers));
+    fastify.post('/ai/threads/:endpoint/checkpoints/:checkpointId/resume', pendingIntentHandlers.resume.bind(pendingIntentHandlers));
+    fastify.post('/ai/threads/:endpoint/checkpoints/:checkpointId/delta', pendingIntentHandlers.attachDelta.bind(pendingIntentHandlers));
   }
 
   const { jsonLdSearchHandlers } = options;

@@ -99,6 +99,7 @@ import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js
 import { createProtocolIntakeHandlers } from './api/handlers/ProtocolIntakeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
+import { createPendingIntentHandlers } from './api/handlers/PendingIntentHandlers.js';
 import { createCorpusHandlers } from './api/handlers/CorpusHandlers.js';
 import { createStorageHandlers } from './api/handlers/StorageHandlers.js';
 import { createAnalysisHandlers } from './api/handlers/AnalysisHandlers.js';
@@ -1012,6 +1013,11 @@ export async function createServer(
     process.env.AI_THREADS_ROOT || resolve(ctx.workspaceRoot, 'var', 'ai-threads');
   const aiThreadStore = new AiThreadStore({ rootDir: aiThreadsRoot });
   const aiThreadHandlers = createAiThreadHandlers(aiThreadStore, ctx.store);
+  // L2-JOURNEY-CHECKPOINT-1: the pending-intent checkpoint store root is the SAME
+  // ai-threads root (the store derives its per-(user, endpoint, scope, thread) file
+  // path from it); the HTTP handlers re-implement nothing — every write delegates
+  // to the store (one Ajv seam, compare-and-set resume, injection-mode refusal).
+  const pendingIntentHandlers = createPendingIntentHandlers({ rootDir: aiThreadsRoot });
 
   const jsonLdSearchHandlers = createJsonLdSearchHandlers(
     ctx.jsonLdIndex,
@@ -1722,6 +1728,7 @@ export async function createServer(
     };
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.aiThreadHandlers = aiThreadHandlers;
+    routeOpts.pendingIntentHandlers = pendingIntentHandlers;
     routeOpts.jsonLdSearchHandlers = jsonLdSearchHandlers;
     routeOpts.graphSearchHandlers = graphSearchHandlers;
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
