@@ -212,6 +212,29 @@ describe('MaterialReceivingDoor', () => {
     expect(screen.queryByTestId('material-receiving-accepted-instance-id')).toBeNull()
   })
 
+  it('pins the accept in-flight guard: a second click in the same batch fires ONE accept and leaves the control disabled', async () => {
+    // advc c1 D1: THE CHANGE item 2 shipped this behaviour with no test. Mirror the
+    // submit-guard convention (:165): decline the first accept, click twice, and
+    // require exactly one relay of the three-key body plus a disabled control while
+    // the promise is still open — a double-POST stays invisible otherwise.
+    let release: (v: { recordId: string; instanceRecordId: string }) => void = () => {}
+    acceptSpy.mockReturnValue(new Promise((resolve) => { release = resolve }))
+    renderDoor()
+    fillClaim()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    const accept = await screen.findByTestId('material-receiving-accept')
+
+    fireEvent.click(accept)
+    fireEvent.click(accept)
+    expect(acceptSpy).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('material-receiving-accept')).toBeDisabled()
+
+    release({ recordId: 'MATREC-u8-2', instanceRecordId: 'MATINST-u8-2' })
+    await waitFor(() => expect(screen.getByTestId('material-receiving-accepted-record-id').textContent)
+      .toBe('MATREC-u8-2'))
+    expect(acceptSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('carries the shared .lab-modal base layout authority, not only its own rules (gate D1)', () => {
     // Browser gate L2-LABINV-SEEDLAB-browser-g1-l2t2210 D1: the door's own
     // <style> block declared ONLY __result/__refusal/__hint, so the backdrop sat
