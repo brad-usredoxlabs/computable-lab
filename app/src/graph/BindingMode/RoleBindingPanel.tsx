@@ -82,8 +82,8 @@ interface RoleBindingPanelProps {
   labwareRoles: Array<{ roleId: string; roleType: string }>
   materialRoles: Array<{ roleId: string; roleType: string }>
   currentBindings: Record<string, { instanceRef: string }>
-  labwareInstances: RecordEnvelope[]
-  materialInstances: RecordEnvelope[]
+  labwareUniverse: RecordEnvelope[]
+  materialUniverse: RecordEnvelope[]
   onBindingChange: (roleId: string, instanceRef: string) => void
   diagnostics: Diagnostic[]
 }
@@ -92,21 +92,23 @@ export function RoleBindingPanel({
   labwareRoles,
   materialRoles,
   currentBindings,
-  labwareInstances,
-  materialInstances,
+  labwareUniverse,
+  materialUniverse,
   onBindingChange,
   diagnostics,
 }: RoleBindingPanelProps) {
-  const labwareInstanceList = labwareInstances.map((r) => ({
+  // Candidate lists for the role pickers: the seam's candidate universe —
+  // records of the REAL kind (`labware` / `material`), not instance records.
+  const labwareUniverseList = labwareUniverse.map((r) => ({
     recordId: r.recordId,
     title: (r.payload as Record<string, unknown>)?.name as string || r.recordId,
-    kind: 'labware-instance',
+    kind: 'labware',
   }))
 
-  const materialInstanceList = materialInstances.map((r) => ({
+  const materialUniverseList = materialUniverse.map((r) => ({
     recordId: r.recordId,
     title: (r.payload as Record<string, unknown>)?.name as string || r.recordId,
-    kind: 'material-instance',
+    kind: 'material',
   }))
 
   // Filter diagnostics for labware roles
@@ -134,7 +136,7 @@ export function RoleBindingPanel({
               roleId={role.roleId}
               roleType={role.roleType}
               currentBinding={currentBindings[role.roleId]}
-              instances={labwareInstanceList}
+              instances={labwareUniverseList}
               onBindingChange={onBindingChange}
               diagnostics={labwareDiagnostics.filter(
                 (d) => (d.details as Record<string, unknown>)?.roleId === role.roleId,
@@ -153,7 +155,7 @@ export function RoleBindingPanel({
               roleId={role.roleId}
               roleType={role.roleType}
               currentBinding={currentBindings[role.roleId]}
-              instances={materialInstanceList}
+              instances={materialUniverseList}
               onBindingChange={onBindingChange}
               diagnostics={materialDiagnostics.filter(
                 (d) => (d.details as Record<string, unknown>)?.roleId === role.roleId,
