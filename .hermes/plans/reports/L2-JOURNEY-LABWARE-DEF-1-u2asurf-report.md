@@ -187,3 +187,14 @@ step on record-create). Item-level browser gate covers LABWARE-DEF-1 Units AC1-A
 ---
 
 L2-JOURNEY-LABWARE-DEF-1-u2asurf UNIT u2asurf DONE 5c5f05a6459fb8660459facfaf1275892ab60bce
+
+## POST-COMMIT RE-VERIFICATION (on the final commit cfb0c3f1d0a0df2512c8770398a2277ec8a49ca4)
+- `cd server && npx vitest run src/surfaces/surfaces.recordCreate.test.ts`
+  → Test Files 1 passed (1); Tests 5 passed (5)
+- `cd server && npx vitest run src/surfaces/`
+  → Test Files 4 passed (4); Tests 18 passed (18)
+- `cd server && npx tsc --noEmit` → exit 0, 0 output lines
+- `git -c core.fileMode=false status --short` → empty (0 lines)
+Commit chain: base 0c4d1542 → d4bc642a (step1 RED pin) → 09112c5b (step2 enum→pattern)
+→ 06171516 (step3 registry entry) → 5c5f05a6 (report body — the commit that contains
+this report) → cfb0c3f1 (marker append, final HEAD). No history rewrite.
