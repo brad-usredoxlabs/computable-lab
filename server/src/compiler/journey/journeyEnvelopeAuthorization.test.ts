@@ -24,8 +24,12 @@ const ALLOWED: PolicyActionDecision = {
   origin: { profileId: 'run-override', scope: 'run', scopeId: 'run-1', priority: 10 },
   rationale: 'run scope allows auto-create',
 };
-const BLOCKED: PolicyActionDecision = { ...ALLOWED, disposition: 'blocked' };
-const CONFIRM: PolicyActionDecision = { ...ALLOWED, disposition: 'needs-confirmation' };
+const BLOCKED: PolicyActionDecision = {
+  ...ALLOWED, disposition: 'blocked', origin: { ...ALLOWED.origin, profileId: 'org-default' },
+};
+const CONFIRM: PolicyActionDecision = {
+  ...ALLOWED, disposition: 'needs-confirmation', origin: { ...ALLOWED.origin, profileId: 'org-default' },
+};
 function compiledEnvelope() {
   const document = {
     journey_id: 'journey-compiler-fixture', revision: 1,
@@ -78,12 +82,15 @@ describe('journey envelope authorization', () => {
     expect(message).toContain('allowed');
     expect(message).toContain('blocked');
     expect(message).toContain('run-override');
+    expect(message).toContain('org-default');
   });
   it('AC3: allowed->needs-confirmation also flips (a comparison, not deny-only)', () => {
     const { envelope } = compiledEnvelope();
     const message = flipOf(recordEnvelopeAuthorization(envelope, ALLOWED), CONFIRM);
     expect(message).toContain('allowed');
     expect(message).toContain('needs-confirmation');
+    expect(message).toContain('run-override');
+    expect(message).toContain('org-default');
   });
   it('AC4: an envelope with no recorded authorization is refused as missing', () => {
     const { envelope } = compiledEnvelope();
