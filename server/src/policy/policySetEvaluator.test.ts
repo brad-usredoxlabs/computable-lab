@@ -101,4 +101,41 @@ describe('policySetEvaluator — deny wins / obligations / regulated sign-off / 
     expect(validatePdr(dup)).toBe(false);
     expect((validatePdr.errors ?? []).some((e) => e.instancePath === '/matched_rule_ids' && e.keyword === 'uniqueItems')).toBe(true);
   });
+
+  it('(g) stale inputs force blocked on the unclassified path too, names kept as obligations', () => {
+    const set = makeSet('PSET-TEST-ONE', [rule('R-ENV', { environment: 'lab' }, 'allow')], 'allow');
+    expect(validateSet(set), JSON.stringify(validateSet.errors)).toBe(true);
+    const rec = evaluatePolicySet({
+      sets: [set],
+      attributes: { environment: 'nightly-sandbox', stale_inputs: ['stale-reagent-lot'] },
+      now: NOW,
+    });
+    expect(rec.outcome).toBe('blocked');
+    expect(rec.matched_rule_ids).toEqual([]);
+    expect(rec.remaining_obligations).toContain('stale-reagent-lot');
+    expect(validatePdr({ ...rec }), JSON.stringify(validatePdr.errors)).toBe(true);
+  });
+
+  it('(h) duplicate rule id across two sets is emitted once and still passes the shipped validator', () => {
+    const one = makeSet('PSET-TEST-ONE', [rule('R-READ', { record_kind: 'sequence-set' }, 'allow')]);
+    const two = makeSet('PSET-TEST-TWO', [rule('R-READ', { record_kind: 'sequence-set' }, 'allow')]);
+    [one, two].forEach((s) => expect(validateSet(s), JSON.stringify(validateSet.errors)).toBe(true));
+    const rec = evaluatePolicySet({ sets: [one, two], attributes: ATTRS, now: NOW });
+    expect(rec.matched_rule_ids).toEqual(['R-READ']);
+    expect(validatePdr({ ...rec }), JSON.stringify(validatePdr.errors)).toBe(true);
+  });
+
+  it('(i) unclassified confirm default ⇒ needs-confirmation', () => {
+    const set = makeSet('PSET-TEST-ONE', [rule('R-ENV', { environment: 'lab' }, 'allow')], 'confirm');
+    const rec = evaluatePolicySet({ sets: [set], attributes: { environment: 'nightly-sandbox' }, now: NOW });
+    expect(rec.outcome).toBe('needs-confirmation');
+    expect(rec.matched_rule_ids).toEqual([]);
+  });
+
+  it('(j) a matching non-regulated confirm execution ⇒ needs-confirmation', () => {
+    const set = makeSet('PSET-TEST-ONE', [rule('R-CONFIRM', { record_kind: 'sequence-set' }, 'confirm')], 'deny');
+    const rec = evaluatePolicySet({ sets: [set], attributes: ATTRS, now: NOW });
+    expect(rec.outcome).toBe('needs-confirmation');
+    expect(rec.matched_rule_ids).toEqual(['R-CONFIRM']);
+  });
 });

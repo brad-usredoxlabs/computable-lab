@@ -90,6 +90,25 @@ properties:
             reason:
               type: "string"
               description: "Prose reason for the gate state."
+        checkpoint:
+          type: "object"
+          additionalProperties: false
+          required: [exports, restores]
+          properties:
+            exports:
+              type: "array"
+              uniqueItems: true
+              items:
+                type: "string"
+                pattern: "^[a-z][a-z0-9_]*$"
+              description: "Surface state exported into a checkpoint's restoration_state when the journey is checkpointed. Prose documentation, not rule text."
+            restores:
+              type: "array"
+              uniqueItems: true
+              items:
+                type: "string"
+                pattern: "^[a-z][a-z0-9_]*$"
+              description: "Surface state read back from a checkpoint's restoration_state to restore this surface to the exact spot. Names the same state as exports."
         description:
           type: "string"
           description: "Prose description of the surface — not read by any rule."

@@ -21,6 +21,9 @@ surfaces:
     gate:
       leg: null
       reason: "Browser gate for run-workspace surface still owed — J1 journey needs live probe evidence"
+    checkpoint:
+      exports: [selected_wells]
+      restores: [selected_wells]
     description: "Run workspace — executes a run against a revision, shows output artifacts and chat."
 
   - id: event-editor
@@ -36,6 +39,9 @@ surfaces:
     gate:
       leg: null
       reason: "Browser gate for event-editor surface still owed — J1 journey needs live probe evidence"
+    checkpoint:
+      exports: [selected_wells]
+      restores: [selected_wells]
     description: "Event editor — standalone deck host for event graphs with chat and deck viewer."
 
   - id: analysis
