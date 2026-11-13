@@ -98,7 +98,7 @@ At HEAD `setStepsPending` does not exist, so the helper throws. Raw:
 
 ## OUTPUT BUDGET
 - files <= 4: 4 files changed (exactly the owned set; no prohibited path touched)
-- lines <= 120: 120 added lines total (8 + 69 + 35 + 4)
+- lines <= 120: 116 added lines total across the 4 owned files (8 + 69 + 35 + 4)
 - `git diff --numstat 74f11d8f..HEAD -- app/src`:
       8  app/src/event-editor/protocol/ProtocolSelectionContext.tsx
       69 app/src/event-editor/right-pane/protocol/ProtocolNavPanel.pending.test.tsx
