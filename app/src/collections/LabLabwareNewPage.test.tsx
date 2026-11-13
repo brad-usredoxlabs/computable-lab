@@ -724,6 +724,40 @@ describe('LabLabwareNewPage', () => {
     expect(mockCreateRecord).not.toHaveBeenCalled()
   })
 
+  // g6topofix1 D2 boundary — arm precedence: rows+columns outranks a linear_count token.
+  it('prefers grid over linear when rows+columns and linear_count are both stated (g6topofix1 D2)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's2' },
+      { targetField: 'topology.linear_count', value: '96', sourceUrl: 'https://example.com/sheet', passage: '96 positions', specId: 's3' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's4' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('grid')
+  })
+
+  // g6topofix1 D2 boundary — a linear_count is a complete array fact even when only one of
+  // rows/columns also came through; the partial-array guard must not swallow it.
+  it('derives linear from linear_count alongside a partial array (g6topofix1 D2)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '1', sourceUrl: 'https://example.com/sheet', passage: '1 row', specId: 's1' },
+      { targetField: 'topology.linear_count', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 troughs', specId: 's2' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's3' },
+    ]
+    mockCreateRecord.mockResolvedValueOnce({ success: true })
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1)
+    })
+    const payload = (mockCreateRecord.mock.calls[0] as any)[1]
+    expect(payload.topology.addressing).toBe('linear')
+  })
+
   // g6 D1 — an extractor-supplied addressing is authoritative; derivation never overwrites it.
   it('keeps an extractor-supplied topology.addressing (g6 D1 no overwrite)', async () => {
     const proposals = [

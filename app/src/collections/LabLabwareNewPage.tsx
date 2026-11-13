@@ -140,24 +140,32 @@ function buildPayloadFromProposals(
   // g6 D1: the schema REQUIRES topology.addressing, but real spec sheets state array
   // facts (rows/columns/linear_count) without ever naming an addressing type. Derive it
   // deterministically from what the document DID yield; an extractor-supplied value wins.
+  // g6topofix1: 'single' is derivable ONLY when the sheet yielded no array facts at all.
+  // A partial array (exactly one of rows/columns, no linear_count) is a reachable outcome,
+  // and 'single' would contradict it (Opentrons maps 'single' -> one well). Add nothing so
+  // the pre-flight refuses by name instead of inventing a value.
   const hasField = (field: string) => proposals.some((p) => p.targetField === field)
-  const loopProposals: SpecSheetProposal[] = hasField('topology.addressing')
-    ? proposals
-    : [
-        ...proposals,
-        {
-          targetField: 'topology.addressing',
-          value:
-            hasField('topology.rows') && hasField('topology.columns')
-              ? 'grid'
-              : hasField('topology.linear_count')
-                ? 'linear'
-                : 'single',
-          sourceUrl: proposals[0]?.sourceUrl ?? '',
-          passage: '',
-          specId: 'derived-topology-addressing',
-        },
-      ]
+  const addressingValue: 'grid' | 'linear' | 'single' | undefined =
+    hasField('topology.rows') && hasField('topology.columns')
+      ? 'grid'
+      : hasField('topology.linear_count')
+        ? 'linear'
+        : !hasField('topology.rows') && !hasField('topology.columns')
+          ? 'single'
+          : undefined
+  const loopProposals: SpecSheetProposal[] =
+    hasField('topology.addressing') || addressingValue === undefined
+      ? proposals
+      : [
+          ...proposals,
+          {
+            targetField: 'topology.addressing',
+            value: addressingValue,
+            sourceUrl: proposals[0]?.sourceUrl ?? '',
+            passage: '',
+            specId: 'derived-topology-addressing',
+          },
+        ]
 
   for (const p of loopProposals) {
     if (p.targetField === 'display_name') continue // already set from the name input
