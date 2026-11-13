@@ -67,8 +67,10 @@ suite, config/ui/surfaces.yaml, server/src/**, schema/**, config/journey/**).
 
 ### tsc (optional; baseline measured first on the untouched tree)
 
-    baseline (pristine b73ec396): 14 `error TS` lines, all pre-existing, all in
-    ../server/** (missing server type deps: yaml, ajv, ajv-formats, ...)
+    baseline (pristine b73ec396): 14 `error TS` lines, all pre-existing — 8 in
+    app/src/ + 6 in ../server/src/ (missing server type deps: yaml, ajv,
+    ajv-formats, ...), identical error sets base vs HEAD (D3 correction: the
+    original "all in ../server/**" was false; split per advc c1)
     post-edit:                    14 `error TS` lines; `diff` of the two full
     outputs is EMPTY — identical error sets, zero new errors.
 
@@ -110,6 +112,75 @@ mutation-run.txt, tsc-baseline.txt); the scratch dir is deleted at exit.
 
 None for this unit. Units 2–3 of L2-JOURNEY-LABWARE-DEF-1 remain gated per
 the item plan (write-capability legs).
+
+---
+
+# u1pin1 (fix cycle 1 after advc c1) — L2-JOURNEY-LABWARE-DEF-1-u1pin1
+
+- branch: cl/lane2-journey-labwaredef-u1nounprefill-1404; base: 37bc215757f3a7814cce2180b1cdb32a47f09fdd
+- tier: routine (pins-only; no adversarial review owed)
+- Scope held: `LabLabwareNewPage.prefill.test.tsx` (+22 lines, 3 new `it` legs)
+  and this report only. No production edit: `initialPrefillName` text and the
+  `useState` initialiser are byte-identical to 37bc2157 (proved below).
+
+## Commits
+
+- 58e2174a — u1pin1 (RED): 3 new legs (trim, whitespace-only, cap+boundary)
+- (no separate commit needed after GREEN — test file is the only change)
+
+## Mutation probe (measured this run; raw logs in scratch)
+
+Each mutation applied ALONE in the worktree, suite run, then the product file
+restored from a scratch copy (md5-verified identical to 37bc2157 before and
+after). Transient scratch, deleted at exit.
+
+### M1 — delete ONLY `.trim()` (`:43` → `(prefill ?? '').slice(0, 120)`)
+
+    FAIL  ... > trims surrounding whitespace off the prefill value before seeding (M1 pin)
+    AssertionError: expected '  deepwell plate  ' to be 'deepwell plate' // Object.is equality
+    FAIL  ... > leaves the name input empty when prefillName is whitespace-only (AC2, M1 pin)
+    AssertionError: expected '   ' to be '' // Object.is equality
+    Test Files  1 failed (1)
+          Tests  2 failed | 3 passed (5)
+
+### M2 — delete ONLY `.slice(0, 120)` (`:43` → `(prefill ?? '').trim()`)
+
+    FAIL  ... > caps the prefilled value at 120 characters (M2 pin; display_name has no maxLength)
+    AssertionError: expected 200 to be 120 // Object.is equality
+    Test Files  1 failed (1)
+          Tests  1 failed | 4 passed (5)
+
+### M3 — seed reverted (`:302` → `useState('')`) — re-measured first-hand
+
+    FAIL  ... > seeds the name input from the declared ?prefillName= query value
+    AssertionError: expected '' to be '96-well deepwell plate' // Object.is equality
+    FAIL  ... > trims surrounding whitespace off the prefill value before seeding (M1 pin)
+    AssertionError: expected '' to be 'deepwell plate' // Object.is equality
+    FAIL  ... > caps the prefilled value at 120 characters (M2 pin; display_name has no maxLength)
+    AssertionError: expected +0 to be 120 // Object.is equality
+    Test Files  1 failed (1)
+          Tests  3 failed | 2 passed (5)
+
+All three match the review's measurement (review :129-155): the new legs die
+under their own mutation; the existing `:49` pin's failure under M3 is
+reproduced first-hand, not narrated.
+
+## Verification (raw summaries, at final commit)
+
+    $ cd app && npx vitest run src/collections/LabLabwareNewPage.prefill.test.tsx
+    Test Files  1 passed (1)
+          Tests  5 passed (5)
+
+    $ cd app && npx vitest run src/collections/LabLabwareNewPage.test.tsx
+    Test Files  1 passed (1)
+          Tests  35 passed (35)
+
+    $ cd app && npx tsc --noEmit -p tsconfig.json 2>&1 | grep -c "error TS"
+    14   (= base: 8 app/src + 6 ../server/src, identical sets base vs HEAD)
+
+    $ git -c core.fileMode=false status --short
+    (empty — clean tree at exit)
+    $ git diff --quiet -- app/src/collections/LabLabwareNewPage.tsx   # rc=0 (byte-identical)
 
 L2-JOURNEY-LABWARE-DEF-1 UNIT 1 DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
 L2-JOURNEY-LABWARE-DEF-1-u1nounprefill UNIT unit DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
