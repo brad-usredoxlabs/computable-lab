@@ -101,6 +101,22 @@ describe('JourneyEvidenceStore', () => {
     expect(await readFile(store.bundlePath(JOURNEY, 1), 'utf8')).toBe(original); // the original is untouched
   });
 
+  it('(AC4) two concurrent saves of DIFFERENT bytes at the same revision: exactly one succeeds and one is refused revision_exists; the file is the winner', async () => {
+    // TOCTOU: the existence check and the write must be ONE exclusive-create, so the second
+    // racing save cannot "see ENOENT then win the rename" and silently destroy the first bundle.
+    const first = build(completeInput({ revision: 20, observations: [doc('obs-1', 'observation: first racer, four minutes')] }));
+    const second = build(completeInput({ revision: 20, observations: [doc('obs-1', 'observation: second racer, six minutes')] }));
+    const settled = await Promise.allSettled([store.save(first), store.save(second)]);
+    console.log('AC4 concurrent-save outcome:', JSON.stringify(settled.map((s) => (s.status === 'fulfilled' ? 'FULFILLED' : `REJECTED:${(s.reason as JourneyEvidenceStoreError).rule}`))));
+    expect(settled.filter((s) => s.status === 'fulfilled')).toHaveLength(1);
+    const rejected = settled.filter((s) => s.status === 'rejected') as PromiseRejectedResult[];
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(JourneyEvidenceStoreError);
+    expect((rejected[0]!.reason as JourneyEvidenceStoreError).rule).toBe('revision_exists');
+    const onDisk = JSON.parse(await readFile(store.bundlePath(JOURNEY, 20), 'utf8')) as JourneyEvidenceBundle;
+    expect(onDisk).toEqual(first); // the file equals the winner's bytes — no silent overwrite of the loser over the winner
+  });
+
   it('(AC2) a stored document edited on disk: verify names that ref_id with expected ≠ actual, twice byte-stably; load returns null', async () => {
     const bundle = build(completeInput({ revision: 2, observations: [doc('obs-1', 'observation: absorbance plateau reached at four minutes, repeated')] }));
     await store.save(bundle);
