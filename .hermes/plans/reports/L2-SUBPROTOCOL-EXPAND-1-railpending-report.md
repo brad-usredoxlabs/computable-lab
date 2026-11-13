@@ -50,7 +50,7 @@ genuinely step-less protocol.
 - 33713bba452c21ba41269ea8214962d99f3d54ae  step 1 RED (new test; setStepsPending absent -> throws)
 - 77e5c6e77d47906effb402e900ff5543d63ea215  step 2 (stepsPending state + loader publish)
 - b419d5e2bbd90bbe53231af1872269b296d2673f  step 3 (rail splits pending/failed/attach — GREEN)
-- c595b5f3d76430fe4cf2aa280f164f8126184ff1  step 3 (cont.) trim to OUTPUT BUDGET  (== HEAD)
+- c595b5f3d76430fe4cf2aa280f164f8126184ff1  step 3 (cont.) trim to OUTPUT BUDGET  (code HEAD)
 
 ## ACCEPTANCE CONTRACT
 - AC1: On a run with an attached protocol, throttle the first steps request and load
@@ -94,7 +94,7 @@ At HEAD `setStepsPending` does not exist, so the helper throws. Raw:
 
 ### Tree state — `git -c core.fileMode=false status --short`
     (clean — no output)
-    HEAD = c595b5f3d76430fe4cf2aa280f164f8126184ff1
+    code HEAD = c595b5f3d76430fe4cf2aa280f164f8126184ff1 (report committed on top)
 
 ## OUTPUT BUDGET
 - files <= 4: 4 files changed (exactly the owned set; no prohibited path touched)
