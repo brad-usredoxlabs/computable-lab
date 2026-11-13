@@ -159,6 +159,20 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
     // run that already carries a protocol must not show a live "Attach to run"
     // that could replace it (G3-D3).
     const proto = sel?.protocol
+    if (!proto && sel?.stepsPending) {
+      // Resolve window (d1railpending2): the loader published the pending flag
+      // before its first await, so identity is still unknown while resolution
+      // runs. "No identity and no steps" can ONLY be resolving — the rail must
+      // not claim "no protocol" (or expose a live attach door) mid-resolve.
+      return (
+        <aside className="protocol-nav" data-testid="protocol-nav">
+          {title ? <header className="protocol-nav__head">{title}</header> : null}
+          <p className="protocol-nav__empty" data-testid="protocol-nav-pending">
+            Resolving this run's protocol…
+          </p>
+        </aside>
+      )
+    }
     if (proto && sel?.stepsPending) {
       return (
         <aside className="protocol-nav" data-testid="protocol-nav">

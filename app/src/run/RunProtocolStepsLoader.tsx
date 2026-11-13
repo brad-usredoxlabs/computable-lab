@@ -137,6 +137,11 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
   useEffect(() => {
     let cancelled = false
     const doLoad = async () => {
+      // Publish the pending flag BEFORE the first await (d1railpending2): until
+      // resolveRunProtocol returns, the run's protocol identity is unknown — the
+      // rail must read "resolving", never the live "No protocol attached /
+      // Attach to run" door that could replace a protocol still resolving (D-1).
+      sel?.setStepsPending(true)
       const resolved = await resolveRunProtocol(runId)
       const stepsId = resolved?.stepsId ?? runId
       if (cancelled) return
@@ -157,7 +162,6 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       // stale labels on every runId/protocol switch, regardless of whether
       // the step/resource fetches below succeed (PROTO-AI-10).
       sel?.setLabwareBindings(resolved?.labwareBindings ?? {})
-      sel?.setStepsPending(true)
       try {
         // What the assay NEEDS (declared labware / equipment roles) comes from
         // the protocol record, not the steps endpoint — publish it alongside the
