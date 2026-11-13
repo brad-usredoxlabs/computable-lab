@@ -67,5 +67,18 @@ async function loadLabwareDefinitionFromRecord(
   if (payload['kind'] !== 'labware-definition') {
     throw new Error(`Record ${recordId} is not a labware-definition`);
   }
-  return payload as unknown as LabwareDefinitionDraft;
+  // The envelope is the authoritative identity: RecordParser strips recordId
+  // out of the payload whenever the document also carries `id` (which is
+  // schema-required for this kind), so a door-created record's payload never
+  // carries it. Derive the draft's identity from the envelope here — one
+  // derivation, in the caller that owns the envelope (precedent:
+  // labwareDefinitionSearch.ts toHit). For door records envelope.recordId
+  // equals the payload's author-supplied `id`; materializing it in both
+  // identity fields makes the generated loadName/source identity the
+  // envelope's even when an inconsistent record carries a divergent `id`.
+  return {
+    ...payload,
+    id: envelope.recordId,
+    recordId: envelope.recordId,
+  } as unknown as LabwareDefinitionDraft;
 }
