@@ -2,7 +2,8 @@
  * SpecSheetExtractor — Engine that fetches a vendor spec-sheet URL via Exa
  * and extracts field proposals using a YAML field-map.
  *
- * Pure core: extractProposals(fieldMap, doc)
+ * Pure core: extractProposalOutcomes(fieldMap, doc) — one named outcome per
+ *   declared fieldMapping; extractProposals projects the proposed ones.
  * Orchestration: extractFromUrl(recordKind, url, appConfig)
  *
  * No field names, vendor strings, or catalog numbers hardcoded here.
@@ -31,9 +32,22 @@ export interface SpecSheetProposal {
   specId: string;
 }
 
+/** Reason a declared field produced no proposal (no matching label/value). */
+export type SpecSheetNotPresentReason = 'no_label_match';
+
+/**
+ * Named outcome for ONE declared fieldMapping: the proposal when the field
+ * matched, otherwise an explicit refusal. `not_present` carries no `value`:
+ * an absent field is reported, never guessed.
+ */
+export type SpecSheetFieldOutcome =
+  | { status: 'proposed'; proposal: SpecSheetProposal }
+  | { status: 'not_present'; targetField: string; reason: SpecSheetNotPresentReason };
+
 export interface SpecSheetExtractSuccess {
   configured: true;
   proposals: SpecSheetProposal[];
+  fieldOutcomes: SpecSheetFieldOutcome[];
 }
 
 export interface SpecSheetExtractNotConfigured {
@@ -58,6 +72,7 @@ export interface SpecSheetExtractNoProposals {
     url: string;
     reason: SpecSheetNoProposalReason;
   };
+  fieldOutcomes: SpecSheetFieldOutcome[];
 }
 
 export type SpecSheetNoProposalReason = 'empty_document' | 'no_field_match';
@@ -224,13 +239,13 @@ function isHeaderRow(
 // Pure extraction engine
 // ---------------------------------------------------------------------------
 
-export function extractProposals(
+export function extractProposalOutcomes(
   fieldMap: SpecSheetFieldMap,
   doc: { url: string; text: string },
-): SpecSheetProposal[] {
+): SpecSheetFieldOutcome[] {
   const specId = `XSPEC-${fieldMap.recordKind.toUpperCase()}`;
   const lines = doc.text.split('\n').filter((l) => l.trim().length > 0);
-  const proposals: SpecSheetProposal[] = [];
+  const outcomes: SpecSheetFieldOutcome[] = [];
 
   // Collect ALL keywords across every mapping for header detection
   const allKeywords: string[] = [];
@@ -246,12 +261,23 @@ export function extractProposals(
   // replaces the previous layout (last header wins, no cross-table merge).
   const punctOnlyRe = /^[\s\-\u2013\u2014\u00b7_:\|]*$/;
   let lastHeader: { positions: Map<string, number>; count: number } | null = null;
+  let fieldProposed = false;
 
   for (const mapping of fieldMap.fieldMappings) {
     const keywords = keywordsFor(mapping);
-    if (keywords.length === 0) continue;
+    if (keywords.length === 0) {
+      // Zero keywords: the scan is skipped (unchanged behaviour), but the
+      // field is still named so its absence is reported, not silent.
+      outcomes.push({
+        status: 'not_present',
+        targetField: mapping.targetField,
+        reason: 'no_label_match',
+      });
+      continue;
+    }
     // Reset per-mapping so each field scans independently
     lastHeader = null;
+    fieldProposed = false;
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -319,18 +345,44 @@ export function extractProposals(
       if (!rawValue) continue;
 
       const value = applyTransform(rawValue, mapping.transform);
-      proposals.push({
-        targetField: mapping.targetField,
-        value,
-        sourceUrl: doc.url,
-        passage: trimmed,
-        specId,
+      outcomes.push({
+        status: 'proposed',
+        proposal: {
+          targetField: mapping.targetField,
+          value,
+          sourceUrl: doc.url,
+          passage: trimmed,
+          specId,
+        },
       });
+      fieldProposed = true;
       break; // one match per field
+    }
+
+    // The field's line scan finished without a match: record the refusal
+    // instead of dropping the field (a field with no evidence must read
+    // not_present, not a guess).
+    if (!fieldProposed) {
+      outcomes.push({
+        status: 'not_present',
+        targetField: mapping.targetField,
+        reason: 'no_label_match',
+      });
     }
   }
 
-  return proposals;
+  return outcomes;
+}
+
+export function extractProposals(
+  fieldMap: SpecSheetFieldMap,
+  doc: { url: string; text: string },
+): SpecSheetProposal[] {
+  // Projection of the proposed outcomes — the single scan lives in
+  // extractProposalOutcomes (one loop, never a second copy).
+  return extractProposalOutcomes(fieldMap, doc).flatMap((o) =>
+    o.status === 'proposed' ? [o.proposal] : [],
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -361,7 +413,12 @@ export async function extractFromUrl(
     const results = (response as { results?: Array<{ text?: string }> })?.results;
     const text = Array.isArray(results) && results[0]?.text ? results[0].text : '';
 
-    const proposals = extractProposals(fieldMap, { url, text });
+    // One scan per call: the outcomes carry the named per-field records and
+    // the proposals are projected from them (see extractProposals).
+    const fieldOutcomes = extractProposalOutcomes(fieldMap, { url, text });
+    const proposals = fieldOutcomes.flatMap((o) =>
+      o.status === 'proposed' ? [o.proposal] : [],
+    );
     if (proposals.length === 0) {
       return {
         configured: true,
@@ -370,11 +427,13 @@ export async function extractFromUrl(
           url,
           reason: text.length === 0 ? EXA_EMPTY_DOCUMENT : EXA_NO_FIELD_MATCH,
         },
+        fieldOutcomes,
       };
     }
     return {
       configured: true,
       proposals,
+      fieldOutcomes,
     };
   } catch (_err) {
     // Typed block record on fetch failure — never synthesise a value
