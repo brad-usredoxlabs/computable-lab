@@ -262,4 +262,28 @@ describe('MaterialReceivingDoor', () => {
     expect(styleText).toMatch(/\.lab-modal__backdrop\s*\{[^}]*position:\s*fixed/s)
     expect(styleText).toMatch(/\.lab-modal\s*\{/)
   })
+
+  it('backs every .lab-modal__* token on the rendered CTAs with one declared rule (gate g3 D7)', async () => {
+    // Gate g3 D7: the door's CTAs carried `__primary`, which the shared stylesheet
+    // never declares, so they rendered as bare text. jsdom does not cascade <style>,
+    // so join the RENDERED buttons to the injected rule text — not a grep of the string.
+    const { container } = renderDoor()
+    fillClaim()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await screen.findByTestId('material-receiving-accept')
+    const styleText = Array.from(container.querySelectorAll('style'))
+      .map((el) => el.textContent ?? '').join('\n')
+    const tokens: string[] = []
+    for (const btn of Array.from(container.querySelectorAll<HTMLButtonElement>('.lab-modal button'))) {
+      tokens.push(...Array.from(btn.classList).filter((c) => c.startsWith('lab-modal__')))
+    }
+    // Both CTAs are rendered here (Stage draft + Accept): a rename that misses
+    // either site surfaces below as an undeclared token.
+    const undeclared = tokens.filter((t) => !new RegExp(`\\.${t}\\s*\\{`).test(styleText))
+    expect(undeclared, `no declared rule for: ${undeclared.join(', ')}`).toEqual([])
+    const primaryClass = Array.from(screen.getByTestId('material-receiving-submit').classList)
+      .find((c) => c.startsWith('lab-modal__')) as string
+    expect(styleText).toMatch(new RegExp(`\\.${primaryClass}\\s*\\{[^}]*background:\\s*var\\(--cl-accent\\)`))
+    expect(styleText).toMatch(new RegExp(`\\.${primaryClass}:disabled\\s*\\{[^}]*opacity:\\s*0\\.6`))
+  })
 })
