@@ -32,6 +32,18 @@ function nz(v: string): string | undefined {
   return v.trim().length > 0 ? v.trim() : undefined
 }
 
+// The Arrival date input is a native date control emitting a plain YYYY-MM-DD,
+// but the claim schema declares occurredAt as format: date-time
+// (schema/lab/attestation.schema.yaml:165). Encode the scientist's stated
+// date at UTC midnight: the DATE PART IS THE SCIENTIST'S STATEMENT, anchored
+// to UTC midnight. No local Date() (local midnight shifts the calendar date
+// back a day east of UTC) and no now() (an unstated time is absent, never
+// manufactured). Applied only at claim assembly, so the controlled input
+// keeps showing the plain date the human typed.
+function toOccurredAtValue(raw: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw
+}
+
 function Row({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
     <div className="lab-modal__row">
@@ -111,7 +123,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
       ...(product !== undefined ? { productLabel: product } : {}),
       ...(lot !== undefined ? { lotNumber: lot } : {}),
       ...(receiver !== undefined ? { receivedByLabel: receiver } : {}),
-      ...(statedTime !== undefined ? { occurredAt: statedTime } : {}),
+      ...(statedTime !== undefined ? { occurredAt: toOccurredAtValue(statedTime) } : {}),
       ...(approx !== undefined ? { approximation: approx } : {}),
     }
     try {
