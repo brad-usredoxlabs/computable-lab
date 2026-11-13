@@ -1,0 +1,38 @@
+# L2-JOURNEY-LABWARE-DEF-1 (u2acap2) — governed-write capability descriptor.
+# Placing an instance consumes a labware DEFINITION (the input port is a
+# LabwareDefinitionReference — a physical container is never smuggled in as its
+# own source) and commits a labware-instance record through the registered
+# governed write (governed-writes.yaml -> records.create -> POST /records).
+# This unit adds the declaration only: status.implemented is false.
+capability_id: journey.labware-instance-place
+version: "1.0.0"
+display_name: Place an instance of a declared labware definition on the deck
+justification: >-
+  Placing an instance commits a new record against a definition that is not an
+  instance, a domain mutation no shipped journey capability performs, so it is
+  its own governed-write capability bound to the records.create write.
+ports:
+  input:
+  - version: "1.0.0"
+    labware_definition_id: LAB-DEF-1
+  output:
+  - version: "1.0.0"
+    record_id: LAB-INST-1
+    record_type: labware-instance
+    receipt_id: RCPT-LAB-INST-1
+implementation:
+  handler_kind: governed_write
+  handler_ref: records.create
+effects: [domain_mutation]
+permissions: [journey.write]
+availability: {}
+surfaces: [run-design]
+idempotency: non_idempotent
+retry: none
+reconciliation: receipt_required
+evidence: [governed_write_receipt]
+status:
+  declared: true
+  implemented: false
+  available_now: false
+  browser_certified: false
