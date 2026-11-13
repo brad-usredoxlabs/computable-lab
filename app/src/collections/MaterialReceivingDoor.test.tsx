@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 
 const compileSpy = vi.fn()
 const acceptSpy = vi.fn()
@@ -300,5 +301,65 @@ describe('MaterialReceivingDoor', () => {
       .find((c) => c.startsWith('lab-modal__')) as string
     expect(styleText).toMatch(new RegExp(`\\.${primaryClass}\\s*\\{[^}]*background:\\s*var\\(--cl-accent\\)`))
     expect(styleText).toMatch(new RegExp(`\\.${primaryClass}:disabled\\s*\\{[^}]*opacity:\\s*0\\.6`))
+  })
+
+  it('discards a staged draft on close: reopen shows no staged block and a discard cue is visible', async () => {
+    // Browser gate L2-LABINV-discardfix (g5 LEG 1 DEFECT 1, trail step 33; shots
+    // 22-04 vs 31-06 md5-identical): the door is ALWAYS mounted by
+    // LabCollectionView and early-returns null on !isOpen, so every useState
+    // survived close/reopen and a staged draft resurrected byte-identical. The
+    // defect is state SURVIVING a close, so the harness re-renders the SAME
+    // component instance with isOpen false then true — no unmount between
+    // toggles (cleanup() only runs in the shared afterEach, pinned here).
+    // The harness mirrors the LabCollectionView placement: the PARENT owns the
+    // cue state and shows the banner when the door reports a discard through
+    // its optional onDiscard callback.
+    function Harness() {
+      const [open, setOpen] = useState(true)
+      const [discarded, setDiscarded] = useState(false)
+      return (
+        <>
+          <button type="button" data-testid="harness-open" onClick={() => setOpen(true)}>harness open</button>
+          <MaterialReceivingDoor
+            isOpen={open}
+            onClose={() => setOpen(false)}
+            onDiscard={() => setDiscarded(true)}
+          />
+          {discarded && (
+            <div data-testid="material-receiving-discarded">staged draft discarded</div>
+          )}
+        </>
+      )
+    }
+    render(<Harness />)
+    type('material-receiving-vendor', 'Sigma')
+    type('material-receiving-lot-number', 'LOT-DISCARD-TEST')
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await screen.findByTestId('material-receiving-draft-id')
+
+    // Close while a compiled/staged draft is on screen, then re-open the SAME
+    // instance. The discard is purely local (compile never writes): no
+    // accept/commit relay may fire on the discard path.
+    fireEvent.click(document.querySelector<HTMLButtonElement>('.lab-modal__cancel')!)
+    expect(screen.queryByTestId('material-receiving-draft-id')).toBeNull()
+    fireEvent.click(screen.getByTestId('harness-open'))
+
+    // No resurrected draftId, no staged block, no live Accept button, empty fields.
+    expect(screen.queryByTestId('material-receiving-draft-id')).toBeNull()
+    expect(screen.queryByTestId('material-receiving-result')).toBeNull()
+    expect(screen.queryByTestId('material-receiving-accept')).toBeNull()
+    expect((screen.getByTestId('material-receiving-vendor') as HTMLInputElement).value).toBe('')
+    expect((screen.getByTestId('material-receiving-lot-number') as HTMLInputElement).value).toBe('')
+    // The discard path is purely local: exactly ONE compile (the original
+    // stage), nothing else committed — no accept, no second compile.
+    expect(compileSpy).toHaveBeenCalledTimes(1)
+    expect(acceptSpy).not.toHaveBeenCalled()
+    // A visible discard cue: the cue element is present on the page and its
+    // text matches /discard/i. (jsdom 29 does not implement
+    // document.body.innerText — it is undefined — so assert the page text via
+    // textContent, the realizable equivalent of the gate's innerText check.)
+    const cue = screen.getByTestId('material-receiving-discarded')
+    expect(cue.textContent).toMatch(/discard/i)
+    expect(document.body.textContent ?? '').toMatch(/discard/i)
   })
 })

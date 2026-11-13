@@ -18,6 +18,12 @@
  * present-as-undefined. occurredAt/approximation ride only in the occurrence
  * states the lint pairings allow (known needs occurredAt; approximate needs
  * occurredAt + approximation; unknown carries neither).
+ *
+ * Discard-on-close (L2-LABINV-discardfix, g5 LEG 1 DEFECT 1): the parent
+ * keeps this door ALWAYS mounted (null early-return on !isOpen), so its
+ * state outlives a close. Closing while a staged draft is on screen
+ * (compiled result, not yet accepted) DISCARDS it locally and reports it
+ * via the optional onDiscard cue callback. Purely local: nothing commits.
  */
 
 import { useState, type FormEvent, type ReactNode } from 'react'
@@ -85,7 +91,11 @@ function StatusSelect({ id, label, value, onChange, tid }: {
   )
 }
 
-export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function MaterialReceivingDoor({ isOpen, onClose, onDiscard }: {
+  isOpen: boolean
+  onClose: () => void
+  onDiscard?: () => void
+}) {
   const [vendor, setVendor] = useState('')
   const [catalogNumber, setCatalogNumber] = useState('')
   const [productLabel, setProductLabel] = useState('')
@@ -100,6 +110,32 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
   const [busy, setBusy] = useState(false)
   const [acceptBusy, setAcceptBusy] = useState(false)
   const [accepted, setAccepted] = useState<{ receiptId: string | null; instanceId: string | null } | null>(null)
+
+  // Discard-on-close (g5 LEG 1 DEFECT 1): the parent keeps this door always
+  // mounted, so a staged draft (result !== null, not yet accepted) must be
+  // reset on close or it resurrects byte-identical on reopen. Purely local —
+  // nothing commits, no server call.
+  const handleClose = () => {
+    const staged = result !== null && accepted === null
+    if (staged) {
+      setVendor('')
+      setCatalogNumber('')
+      setProductLabel('')
+      setLotNumber('')
+      setReceivedByStatus('unknown')
+      setReceivedByLabel('')
+      setOccurredAtStatus('unknown')
+      setOccurredAt('')
+      setApproximation('')
+      setResult(null)
+      setFailure(null)
+      setBusy(false)
+      setAcceptBusy(false)
+      setAccepted(null)
+      onDiscard?.()
+    }
+    onClose()
+  }
 
   if (!isOpen) return null
 
@@ -158,7 +194,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
 
   return (
     <div className="lab-modal__backdrop" role="presentation"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose() }}>
       <style>{`${labModalStyles}
 .lab-modal__result { margin: 0; padding: 8px 10px; border: 1px solid var(--cl-border); border-radius: 6px; }
 .lab-modal__result dl { margin: 0; }
@@ -172,7 +208,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
       <div className="lab-modal" role="dialog" aria-modal="true" aria-label="Receive a lot">
         <header className="lab-modal__header">
           <h2>Receive a lot</h2>
-          <button type="button" className="lab-modal__close" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="lab-modal__close" onClick={handleClose} aria-label="Close">✕</button>
         </header>
         <form className="lab-modal__body" onSubmit={handleSubmit}>
           {failure && (
@@ -253,7 +289,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
             </div>
           )}
           <footer className="lab-modal__footer">
-            <button type="button" className="lab-modal__cancel" onClick={onClose}>Close</button>
+            <button type="button" className="lab-modal__cancel" onClick={handleClose}>Close</button>
             <button type="submit" className="lab-modal__save" disabled={busy}
               data-testid="material-receiving-submit">{busy ? 'Compiling…' : 'Stage draft'}</button>
           </footer>
