@@ -75,8 +75,8 @@ rules:
       - op: exists
         path: occurredAt
   message:
-    template: "an aliquot with occurredAtStatus known is missing occurredAt ({{aliquots}})"
-    paths: [ "aliquots" ]
+    template: "an aliquot with occurredAtStatus known is missing occurredAt ({{aliquots[*].disposition}})"
+    paths: [ "aliquots[*].disposition" ]
 
 - id: chain-draft-occurred-unknown-is-terminal
   title: "an aliquot with occurredAtStatus unknown carries no time fields (terminal honesty, Q5)"
@@ -97,8 +97,8 @@ rules:
         - op: not
           not: { op: exists, path: approximation }
   message:
-    template: "an aliquot with occurredAtStatus unknown must not carry occurredAt or approximation ({{aliquots}})"
-    paths: [ "aliquots" ]
+    template: "an aliquot with occurredAtStatus unknown must not carry occurredAt or approximation ({{aliquots[*].disposition}})"
+    paths: [ "aliquots[*].disposition" ]
 
 # --- OQ-1(a) ruling: cross-session consumption is OUT OF SCOPE, rendered as a
 #     refusal, never silently converted (bait 12 / bait via OQ-1) --------------

@@ -42,8 +42,8 @@ rules:
       - op: exists
         path: occurredAt
   message:
-    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: attestation-occurred-approximate-needs-approximation
   title: "approximate occurrence requires occurredAt + approximation"
@@ -65,8 +65,8 @@ rules:
         - { op: exists, path: occurredAt }
         - { op: exists, path: approximation }
   message:
-    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: attestation-occurred-unknown-is-terminal
   title: "unknown occurrence carries no time fields (terminal honesty, Q5)"
@@ -90,8 +90,8 @@ rules:
         - op: not
           not: { op: exists, path: approximation }
   message:
-    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- supersedes / correction pairing (§2c) --------------------------------
 - id: attestation-supersedes-needs-correction
@@ -265,8 +265,8 @@ rules:
         path: assertion.verb
         values: [ fulfills, re-evaluates-fulfillment ]
   message:
-    template: "a fulfillment claim (assertion.fulfilledBy present) carries a verb outside [fulfills, re-evaluates-fulfillment] ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim (assertion.fulfilledBy present) carries a verb outside [fulfills, re-evaluates-fulfillment] ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-fulfilledby-vocabulary
   title: "fulfilledBy is exactly receipt | derivation | instance"
@@ -292,8 +292,8 @@ rules:
         path: assertion.fulfilledBy
         values: [ receipt, derivation, instance ]
   message:
-    template: "assertion.fulfilledBy outside [receipt, derivation, instance] ({{claims}})"
-    paths: [ "claims" ]
+    template: "assertion.fulfilledBy outside [receipt, derivation, instance] ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-about-names-requirement
   title: "a fulfillment claim is about the requirement occurrence (event-requirement ref, REQE- id)"
@@ -318,8 +318,8 @@ rules:
         - { op: equals, path: assertion.about.type, value: event-requirement }
         - { op: regex, path: assertion.about.id, pattern: '^REQE-[a-z0-9-]+$' }
   message:
-    template: "a fulfillment claim's about must be a record ref of type event-requirement with a REQE- id ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim's about must be a record ref of type event-requirement with a REQE- id ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-requirement-id-traceable
   title: "about.id must be a member of the claim's copied requirementIds"
@@ -343,8 +343,8 @@ rules:
         path: assertion.about.id
         collectionPath: assertion.requirementIds
   message:
-    template: "a fulfillment claim's about.id is not one of its copied assertion.requirementIds ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim's about.id is not one of its copied assertion.requirementIds ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-evidence-is-ref
   title: "a fulfillment claim names its evidence as a ref-shaped object, never a bare string"
@@ -369,8 +369,8 @@ rules:
         - { op: exists, path: assertion.evidence.kind }
         - { op: exists, path: assertion.evidence.id }
   message:
-    template: "a fulfillment claim must carry assertion.evidence as a ref-shaped object with kind + id ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim must carry assertion.evidence as a ref-shaped object with kind + id ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- componentRef anchor (D3: occurrence id + componentRef, NO second id) --
 - id: fulfil-componentref-in-requirement
@@ -398,8 +398,8 @@ rules:
         path: assertion.componentRef
         collectionPath: assertion.componentRefs
   message:
-    template: "assertion.componentRef is not a member of the copied assertion.componentRefs from the pinned plan ({{claims}})"
-    paths: [ "claims" ]
+    template: "assertion.componentRef is not a member of the copied assertion.componentRefs from the pinned plan ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- pinned-revision scoping (§7.4) -----------------------------------------
 - id: fulfil-claim-pin-required
@@ -479,8 +479,8 @@ rules:
             path: verdict
             values: [ compatible, mismatch, incomplete ]
   message:
-    template: "a fulfillment claim must declare assertion.evaluations with verdicts in [compatible, mismatch, incomplete] ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim must declare assertion.evaluations with verdicts in [compatible, mismatch, incomplete] ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-completed-needs-compatible-evaluations
   title: "a completed fulfillment claim requires EVERY evaluation verdict compatible"
@@ -518,8 +518,8 @@ rules:
             path: verdict
             values: [ compatible ]
   message:
-    template: "a completed fulfillment claim carries an evaluation verdict outside [compatible] or declares no evaluations — an EMPTY evaluations array declares nothing ({{claims}})"
-    paths: [ "claims" ]
+    template: "a completed fulfillment claim carries an evaluation verdict outside [compatible] or declares no evaluations — an EMPTY evaluations array declares nothing ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: fulfil-mismatch-blocks
   title: "ANY mismatch verdict blocks a fulfillment claim regardless of claimStatus"
@@ -547,8 +547,8 @@ rules:
           op: not
           not: { op: equals, path: verdict, value: mismatch }
   message:
-    template: "a fulfillment claim declares a mismatch evaluation — the evidence is known not to satisfy the requirement ({{claims}})"
-    paths: [ "claims" ]
+    template: "a fulfillment claim declares a mismatch evaluation — the evidence is known not to satisfy the requirement ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- case-5 re-evaluation: the changedFacts-vary collision ruling (§7.6) ---
 - id: fulfil-reevaluation-changed-facts-must-vary
