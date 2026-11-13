@@ -123,7 +123,8 @@ Tree clean after restore (git status --porcelain empty).
 ## Commits (on cl/lane2-labinv-g3d2display-2125, from base b8f291ed)
 - 2cdb2e7cbf13e833892440b254cd06f416229837 test(resolve): g3 D2 RED — display_name-only definition is invisible to the lexical law
 - 7a414036d85354a7eecccc74078937d7e533eee1 fix(resolve): match display_name in the record lexical law + label fallback
-- <this report commit> docs(plan): L2-LAB-INVENTORY-CREATE-1 g3d2display report + DONE marker
+- 5a06c07979b76ece954e47b27e2ba1cf53074daa docs(plan): L2-LAB-INVENTORY-CREATE-1 g3d2display report + DONE marker (contains this file)
+- follow-up marker-correction commit (names 5a06c079, the report commit, in the exit marker)
 
 ## Acceptance contract status
 1. PASS — provider leg for the shipped shape: substring 'microfuge' → concept hit
@@ -142,11 +143,11 @@ Tree clean after restore (git status --porcelain empty).
 
 ## Marker
 L2-LAB-INVENTORY-CREATE-1-g3d2display UNIT DONE 7a414036d85354a7eecccc74078937d7e533eee1
-The 40-char sha above is the fix commit 7a414036d85354a7eecccc74078937d7e533eee1
-(fix(resolve): match display_name in the record lexical law + label fallback),
-which contains the product change (server/src/resolve/providers/records.ts) and the
-RED/GREEN tests. This report file was added in the follow-up commit
-dd805ed3a03a24e0a0c68807dc596f37de750374 (docs(plan): L2-LAB-INVENTORY-CREATE-1 g3d2display report + DONE marker),
-which also contains the fix commit, so the marker sha contains both the code and this report.
+The 40-char sha above is the fix commit (fix(resolve): match display_name in the record
+lexical law + label fallback) — the commit containing the product change
+(server/src/resolve/providers/records.ts) and the RED/GREEN tests.
+This report file was committed in 5a06c07979b76ece954e47b27e2ba1cf53074daa, which also
+contains the fix commit; the exit marker below therefore names 5a06c079 (in-branch history,
+contains this file and the fix — verifiable: git cat-file -e 5a06c079:reports/...).
 
-L2-LABINV-g3d2display UNIT unit DONE dd805ed3a03a24e0a0c68807dc596f37de750374
+L2-LABINV-g3d2display UNIT unit DONE 5a06c07979b76ece954e47b27e2ba1cf53074daa
