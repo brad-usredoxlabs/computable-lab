@@ -1,12 +1,10 @@
 /**
  * Tests for LabShelfLookup — the /lab consumer of GET /api/inventory/shelf
- * (MATRES-SHELF, item L2-LAB-INVENTORY-CREATE-1 leg (c)).
- *
- * Network stubbed with vi.stubGlobal('fetch', ...) — jsdom, no real server.
- * Five legs: (a) exactly ONE encoded request + rendered concepts/entries
- * with levels; (b) location rendered only when present, honest placeholder
- * otherwise; (c) 'unknown-provenance' verbatim, never hidden; (d) non-ok =>
- * honest error, NO results; (e) no fetch on mount or empty/whitespace submit.
+ * (MATRES-SHELF, L2-LAB-INVENTORY-CREATE-1 leg (c)). fetch is stubbed with
+ * vi.stubGlobal (jsdom, no real server). Five legs: (a) ONE encoded request
+ * + rendered concepts/entries with levels; (b) location only when present,
+ * honest placeholder otherwise; (c) 'unknown-provenance' verbatim; (d)
+ * non-ok => honest error, NO results; (e) no fetch on mount / empty submit.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
