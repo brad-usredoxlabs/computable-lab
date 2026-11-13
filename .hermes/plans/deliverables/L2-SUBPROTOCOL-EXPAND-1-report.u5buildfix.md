@@ -43,3 +43,28 @@ VERIFICATION
 - HTTP status assertions pinned
 
 L2-SUBPROTO-u5buildfix UNIT unit DONE 1eb1aee24c03b823117ef5c714ca9cde1b1b3033
+
+CYCLE 3 (c3)
+DEFECTS FIXED:
+D1 (hardcode prohibition unpinned): Added two test legs —
+  (a) makeSchemaRegistryEnumMismatch(): registry returns enum:['other'] while protocol
+      verb is 'add_material' -> expects 409 UNSUPPORTED_EVENT_TYPE (proves the verb check
+      reads from schema, not a literal list);
+  (b) makeSchemaRegistryNoEnumKey(): registry returns event_type:{type:'string'} with no
+      enum key but properties present -> expects 500 SCHEMA_ENUM_MISSING from the
+      enum-empty guard.
+  Acceptance mutation proven: replacing schema read with hardcoded
+  ['add_material','transfer','mix','other'] would make D1a test RED.
+D2 (named 409 lost details): Added details:{roleId,stepId} to the non-MALFORMED 409
+  return in PlannedRunHandlers.ts:566. Strengthened UNBOUND_ROLE assertion to include
+  details property. exactOptionalPropertyTypes enforced (details present, not undefined).
+
+CHANGED FILES:
+- server/src/api/handlers/PlannedRunHandlers.ts (D2: added details to 409 return)
+- server/src/api/handlers/planGraphBuild.test.ts (D1: two new legs + D2: strengthened assertion)
+
+VERIFICATION:
+- vitest: 7 passed (was 5)
+- tsc --noEmit: 0 errors
+
+L2-SUBPROTO-EXPAND-1 u5buildfix-c3 UNIT 1 DONE 23fde84ea96b7fa24ba3d9c38eca56bfea8a26de
