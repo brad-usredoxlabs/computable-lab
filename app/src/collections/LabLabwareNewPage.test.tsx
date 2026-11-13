@@ -689,6 +689,41 @@ describe('LabLabwareNewPage', () => {
     expect(payload.topology.addressing).toBe('single')
   })
 
+  // g6topofix1 D1 — a partial array (rows only, columns absent) is a reachable extraction
+  // outcome: the source alternatives are disjoint. 'single' is NOT derivable from it — writing
+  // it beside rows=8 would contradict the record and corrupt the Opentrons export (one well).
+  // The builder must add NOTHING so the g5 pre-flight refuses by name with no POST.
+  it('refuses (no POST) when only topology.rows is present, never inventing single (g6topofix1 D1)', async () => {
+    const proposals = [
+      { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's1' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's2' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('lab-labware-error').textContent).toBe(
+      'Cannot save: missing or invalid: topology.addressing',
+    )
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+  })
+
+  // g6topofix1 D1 — the mirror leg: columns only (rows absent) must refuse the same way.
+  it('refuses (no POST) when only topology.columns is present, never inventing single (g6topofix1 D1)', async () => {
+    const proposals = [
+      { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's1' },
+      { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL wells', specId: 's2' },
+    ]
+    await extractAndOpenSave(proposals, labwareSchemaShape)
+    await waitFor(() => {
+      expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('lab-labware-error').textContent).toBe(
+      'Cannot save: missing or invalid: topology.addressing',
+    )
+    expect(mockCreateRecord).not.toHaveBeenCalled()
+  })
+
   // g6 D1 — an extractor-supplied addressing is authoritative; derivation never overwrites it.
   it('keeps an extractor-supplied topology.addressing (g6 D1 no overwrite)', async () => {
     const proposals = [
