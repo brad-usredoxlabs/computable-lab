@@ -223,7 +223,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
                 <dd data-testid="material-receiving-review-hash">{result.reviewHash}</dd>
               </dl>
               {!accepted && (
-                <button type="button" className="lab-modal__primary" onClick={handleAccept}
+                <button type="button" className="lab-modal__save" onClick={handleAccept}
                   disabled={acceptBusy} data-testid="material-receiving-accept">
                   {acceptBusy ? 'Accepting…' : 'Accept'}
                 </button>
@@ -254,7 +254,7 @@ export function MaterialReceivingDoor({ isOpen, onClose }: { isOpen: boolean; on
           )}
           <footer className="lab-modal__footer">
             <button type="button" className="lab-modal__cancel" onClick={onClose}>Close</button>
-            <button type="submit" className="lab-modal__primary" disabled={busy}
+            <button type="submit" className="lab-modal__save" disabled={busy}
               data-testid="material-receiving-submit">{busy ? 'Compiling…' : 'Stage draft'}</button>
           </footer>
         </form>
