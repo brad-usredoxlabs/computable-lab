@@ -1,69 +1,31 @@
 # L2-JOURNEY-HUMANTASK-1 (unit htcreceipt) — the human-task completion receipt.
-#
-# The receipt is the PROOF a declared human task (human-task.schema.yaml)
-# completed: it names the committed collection record (record_id) and every
-# member with the pinned revision chosen (member_refs), so "the surface was
-# merely visited" and "the selection was staged" can never be confused with a
-# completion — those states yield named refusals, never this document.
-#
-# SELF-CONTAINED ON PURPOSE: member_refs mirrors the record-ref fields
-# (record_id, revision_id) instead of $ref-ing
-# ../core/datatypes/ref.schema.yaml — under Ajv strict:true a cross-directory
-# relative $ref resolves only if the reader registers that schema too, and
-# unit 1's precedent already rejected that risk. The reader of this schema is
-# one Ajv2020 instance compiling ONE document.
-#
-# CLOSED and declarative: additionalProperties is false everywhere. No roles,
-# approvals or policy tiers live here — that authority is
-# L2-JOURNEY-POLICY-1's, not this schema's.
+# Emitted ONLY when decideHumanTaskCompletion accepts a committed record for a
+# versioned_selection human task: a visit or a staged draft yields a named
+# refusal, never this document. SELF-CONTAINED ON PURPOSE: member_refs mirrors
+# the record-ref fields of ../core/datatypes/ref.schema.yaml rather than $ref-
+# ing it (under Ajv strict:true a cross-directory $ref needs that schema
+# registered too — unit 1's precedent rejected that risk). CLOSED; no roles,
+# approvals or tiers (L2-JOURNEY-POLICY-1's authority).
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/human-task-receipt.schema.yaml"
 title: "Human Task Completion Receipt"
-description: >
-  Emitted only when decideHumanTaskCompletion accepts a committed record for a
-  versioned_selection human task. Every field is copied from the committed
-  record or the injected clock — never from a staged draft or surface state.
 type: object
 additionalProperties: false
 required: [kind, task_id, record_id, member_refs, completed_at, schema_id]
 properties:
-  kind:
-    const: human-task-receipt
-    description: "Discriminator so a consumer never mistakes this for another receipt shape."
-  task_id:
-    type: string
-    minLength: 1
-    description: "The journey step id whose human_task contract this receipt completes."
-  record_id:
-    type: string
-    minLength: 1
-    description: "The committed collection record's canonical identity (the envelope's recordId, RecordEnvelope.ts) — never a staged draft id."
+  kind: { const: human-task-receipt, description: "Discriminator: a consumer never mistakes this for another receipt shape." }
+  task_id: { type: string, minLength: 1, description: "The journey step id whose human_task contract this receipt completes." }
+  record_id: { type: string, minLength: 1, description: "The committed collection record's canonical identity (the envelope's recordId, RecordEnvelope.ts) — never a staged draft id." }
   member_refs:
     type: array
     minItems: 1
-    description: >
-      Each selected member with its pinned revision, IN MEMBER ORDER exactly as
-      the committed record lists them (never sorted). record_id and revision_id
-      mirror the record-ref fields of datatypes/ref.schema.yaml — see the
-      self-containment note above.
+    description: "Each selected member with its pinned revision, IN MEMBER ORDER exactly as the committed record lists them (never sorted)."
     items:
       type: object
       additionalProperties: false
       required: [record_id, revision_id]
       properties:
-        record_id:
-          type: string
-          minLength: 1
-          description: "The member record's canonical id."
-        revision_id:
-          type: string
-          minLength: 1
-          description: "The pinned revision the person selected (ref.schema.yaml revisionRef.id). A member without one makes the task incomplete, not this field optional."
-  completed_at:
-    type: string
-    format: date-time
-    description: "The injected ISO clock at the moment of the decision — the module never reads a clock itself."
-  schema_id:
-    type: string
-    minLength: 1
-    description: "The committed record's schemaId (the envelope's governing-schema URI), so the receipt names what kind of record closed the task."
+        record_id: { type: string, minLength: 1, description: "The member record's canonical id." }
+        revision_id: { type: string, minLength: 1, description: "The pinned revision chosen (ref.schema.yaml revisionRef.id). A member without one makes the task incomplete, not this field optional." }
+  completed_at: { type: string, format: date-time, description: "The injected ISO clock at the decision — the module never reads a clock itself." }
+  schema_id: { type: string, minLength: 1, description: "The committed record's schemaId (the envelope's governing-schema URI): what kind of record closed the task." }
