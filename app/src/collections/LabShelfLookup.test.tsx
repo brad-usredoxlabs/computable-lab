@@ -1,14 +1,12 @@
 /**
- * Tests for LabShelfLookup — the /lab materials-category consumer of the
- * shipped read-only GET /api/inventory/shelf (MATRES-SHELF, item
- * L2-LAB-INVENTORY-CREATE-1 leg (c)).
+ * Tests for LabShelfLookup — the /lab consumer of GET /api/inventory/shelf
+ * (MATRES-SHELF, item L2-LAB-INVENTORY-CREATE-1 leg (c)).
  *
  * Network stubbed with vi.stubGlobal('fetch', ...) — jsdom, no real server.
  * Five legs: (a) exactly ONE encoded request + rendered concepts/entries
  * with levels; (b) location rendered only when present, honest placeholder
- * otherwise; (c) 'unknown-provenance' rendered verbatim, never hidden;
- * (d) non-ok renders an honest error and NO results; (e) no fetch on mount
- * and none on an empty/whitespace submit.
+ * otherwise; (c) 'unknown-provenance' verbatim, never hidden; (d) non-ok =>
+ * honest error, NO results; (e) no fetch on mount or empty/whitespace submit.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -26,32 +24,9 @@ const FULL = {
       vendor: 'VendorA',
       lot: 'LOT-1',
       entries: [
-        {
-          recordId: 'MIN-A',
-          kind: 'material-instance',
-          label: 'DMEM instance A',
-          level: 'instance',
-          vendor: 'VendorA',
-          lot: 'LOT-1',
-          location: 'Freezer F-2, Shelf A3',
-          joinedVia: 'vendor-product',
-        },
-        {
-          recordId: 'MIN-U',
-          kind: 'material-instance',
-          label: 'DMEM instance U',
-          level: 'instance',
-          joinedVia: 'unknown-provenance',
-        },
-        {
-          recordId: 'ALQ-1',
-          kind: 'aliquot',
-          label: 'DMEM aliquot 1',
-          level: 'aliquot',
-          vendor: 'VendorA',
-          lot: 'LOT-1',
-          joinedVia: 'source-lot',
-        },
+        { recordId: 'MIN-A', kind: 'material-instance', label: 'DMEM instance A', level: 'instance', vendor: 'VendorA', lot: 'LOT-1', location: 'Freezer F-2, Shelf A3', joinedVia: 'vendor-product' },
+        { recordId: 'MIN-U', kind: 'material-instance', label: 'DMEM instance U', level: 'instance', joinedVia: 'unknown-provenance' },
+        { recordId: 'ALQ-1', kind: 'aliquot', label: 'DMEM aliquot 1', level: 'aliquot', vendor: 'VendorA', lot: 'LOT-1', joinedVia: 'source-lot' },
       ],
     },
     {

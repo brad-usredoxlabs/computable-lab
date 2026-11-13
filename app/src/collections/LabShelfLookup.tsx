@@ -1,19 +1,16 @@
 /**
  * LabShelfLookup — the /lab materials-category consumer of MATRES-SHELF
  * (item L2-LAB-INVENTORY-CREATE-1 leg (c): "what DMEM is on the shelf").
- *
  * One labelled search box calls the shipped read-only
  * GET /api/inventory/shelf?term=... and renders the ShelfReport verbatim:
- * the resolved concepts and every recorded line with its level, its
- * vendor/lot/location ONLY where the server sent them, and its joinedVia
- * provenance — including 'unknown-provenance' (never blank, never invented).
- *
- * Display law (never-guess applied to rendering): the term is user input;
- * every row is server data. The only literals are the endpoint path and
- * the 'unknown-provenance' label. Fetch ONLY on submit — never on mount —
- * and an empty/whitespace term issues no request. Non-ok => honest error,
- * previous result cleared. Types are a LOCAL structural mirror of
- * server/src/resolve/shelfLookup.ts ShelfReport (the app imports across the
+ * concepts, and every recorded line with its level, vendor/lot/location
+ * ONLY where the server sent them, and its joinedVia — including
+ * 'unknown-provenance' (never blank, never invented). The term is user
+ * input; every row is server data; the only literals are the endpoint path
+ * and the 'unknown-provenance' label. Fetch ONLY on submit — never on
+ * mount — and an empty/whitespace term issues no request. Non-ok => honest
+ * error, previous result cleared. Types are a LOCAL structural mirror of
+ * server/src/resolve/shelfLookup.ts ShelfReport (app imports across the
  * boundary only inside tests); nothing is declared the server does not send.
  */
 import { useState, type FormEvent } from 'react'
@@ -81,30 +78,16 @@ export function LabShelfLookup() {
   return (
     <section className="lab-shelf" data-testid="lab-shelf-lookup" aria-label="Shelf lookup">
       <form className="lab-shelf__form" onSubmit={(e) => void onSubmit(e)}>
-        <label className="lab-shelf__label" htmlFor="lab-shelf-term-input">
-          What is on the shelf
-        </label>
-        <input
-          id="lab-shelf-term-input"
-          className="lab-shelf__input"
-          data-testid="lab-shelf-term"
-          type="text"
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-        />
-        <button className="lab-shelf__submit" type="submit" data-testid="lab-shelf-submit">
-          Look up
-        </button>
+        <label className="lab-shelf__label" htmlFor="lab-shelf-term-input">What is on the shelf</label>
+        <input id="lab-shelf-term-input" className="lab-shelf__input" data-testid="lab-shelf-term" type="text" value={term}
+          onChange={(e) => setTerm(e.target.value)} />
+        <button className="lab-shelf__submit" type="submit" data-testid="lab-shelf-submit">Look up</button>
       </form>
       {state.phase === 'loading' && (
-        <p className="lab-shelf__hint" data-testid="lab-shelf-loading">
-          Looking up {state.term}…
-        </p>
+        <p className="lab-shelf__hint" data-testid="lab-shelf-loading">Looking up {state.term}…</p>
       )}
       {state.phase === 'error' && (
-        <p className="lab-shelf__error" data-testid="lab-shelf-error">
-          {state.message}
-        </p>
+        <p className="lab-shelf__error" data-testid="lab-shelf-error">{state.message}</p>
       )}
       {state.phase === 'done' && (
         <div className="lab-shelf__result" data-testid="lab-shelf-result">
@@ -121,9 +104,7 @@ export function LabShelfLookup() {
             <p className="lab-shelf__hint">No recorded concepts matched {state.report.term}.</p>
           )}
           {state.report.groups.length === 0 ? (
-            <p className="lab-shelf__hint" data-testid="lab-shelf-empty">
-              Nothing recorded for {state.report.term}.
-            </p>
+            <p className="lab-shelf__hint" data-testid="lab-shelf-empty">Nothing recorded for {state.report.term}.</p>
           ) : (
             state.report.groups.map((group) => (
               <div className="lab-shelf__group" key={`${group.vendor ?? ''}\u0000${group.lot ?? ''}`}>
