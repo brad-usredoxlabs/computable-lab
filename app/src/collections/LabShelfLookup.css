@@ -1,6 +1,6 @@
 /* LabShelfLookup — MATRES-SHELF consumer panel under /lab (materials).
-   Owns its stylesheet on purpose: LabCollectionView.css is shared with live
-   work and must not grow a hunk for this unit. Tokens from tokens.css. */
+   Owns its stylesheet: LabCollectionView.css is shared with live work and
+   must not grow a hunk for this unit. Tokens from tokens.css (--cl-*). */
 
 .lab-shelf {
   flex-shrink: 0;
@@ -40,7 +40,6 @@
   border-radius: 6px;
   background: var(--cl-bg-elev-2);
   color: var(--cl-text);
-  font-size: 14px;
   cursor: pointer;
 }
 
@@ -82,7 +81,6 @@
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .lab-shelf__entries {
@@ -109,12 +107,13 @@
 .lab-shelf__entry-level,
 .lab-shelf__entry-vendor,
 .lab-shelf__entry-lot,
-.lab-shelf__entry-location,
-.lab-shelf__entry-provenance {
+.lab-shelf__entry-location {
   color: var(--cl-text-dim);
   font-size: 12px;
 }
 
 .lab-shelf__entry-provenance {
   margin-left: auto;
+  color: var(--cl-text-dim);
+  font-size: 12px;
 }
