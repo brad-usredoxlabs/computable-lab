@@ -59,4 +59,26 @@ describe('LabLabwareNewPage prefillName (u1nounprefill)', () => {
     renderAt('/lab/labware/new?prefillName=')
     expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value).toBe('')
   })
+
+  it('trims surrounding whitespace off the prefill value before seeding (M1 pin)', () => {
+    renderAt('/lab/labware/new?prefillName=%20%20deepwell%20plate%20%20')
+    const nameInput = screen.getByTestId('lab-labware-name-input') as HTMLInputElement
+    expect(nameInput.value).toBe('deepwell plate')
+  })
+
+  it('leaves the name input empty when prefillName is whitespace-only (AC2, M1 pin)', () => {
+    renderAt('/lab/labware/new?prefillName=%20%20%20')
+    expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value).toBe('')
+  })
+
+  it('caps the prefilled value at 120 characters (M2 pin; display_name has no maxLength)', () => {
+    renderAt(`/lab/labware/new?prefillName=${'a'.repeat(200)}`)
+    expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value.length).toBe(120)
+    cleanup()
+    renderAt(`/lab/labware/new?prefillName=${'a'.repeat(121)}`)
+    expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value.length).toBe(120)
+    cleanup()
+    renderAt(`/lab/labware/new?prefillName=${'a'.repeat(120)}`)
+    expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value.length).toBe(120)
+  })
 })
