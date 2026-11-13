@@ -6,7 +6,6 @@
 // so a run's own plan graph must load instead of surfacing as missing.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiClient } from './client'
-import { ApiError } from './errors'
 
 const fetchMock = vi.fn()
 
