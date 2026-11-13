@@ -4213,9 +4213,6 @@ function LabwareEventEditorContent({
       {executionNotice && (
         <div className="deck-execution-notice" data-testid="run-method-graph-notice">{executionNotice}</div>
       )}
-      {planningEnabled && executionNotice && (
-        <div className="deck-execution-notice">{executionNotice}</div>
-      )}
       {loadedTemplateOutputs.length > 0 && (
         <div className="template-output-bar">
           <span className="template-output-bar__label">Declared Outputs</span>
