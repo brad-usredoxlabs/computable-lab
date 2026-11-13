@@ -88,12 +88,17 @@ export function RefCombobox({
   // 'ols' switch above) — no global default, so other ref fields stay
   // decoy-free.
   const includeLocalObo = sources.includes('local-obo');
+  // An ontology-ref field commits a structured ref OBJECT, so the lab-local
+  // vocabulary tier (bare strings) can only ever 422 on save — suppress it for
+  // those fields only, from the plan's own valueShape (same per-field shape as
+  // the switches above). Plans without a valueShape keep the local tier.
+  const offerLocalTier = suggestionPlan?.valueShape !== 'ontology-ref';
 
   // Get local tag suggestions — use the searchField from the plan
   const { suggestions: localResults, loading: localLoading } = useTagSuggestions({
     query,
     field: searchField,
-    enabled: query.length >= 1,
+    enabled: offerLocalTier && query.length >= 1,
   });
 
   // Ontology results come from the resolve() spine (POST /resolve: local OAK →
