@@ -177,3 +177,104 @@ The marker sha below is `git rev-parse HEAD` of the code commit that contains th
 L2-JOURNEY-CHECKPOINT-1 UNIT 3 DONE 4eb2471ee4a0b4249421107bce346569b903bae5
 L2-JOURNEY-CHECKPOINT-1 UNIT cproute DONE 4eb2471ee4a0b4249421107bce346569b903bae5
 L2-JOURNEY-CHECKPOINT-1 UNIT cproute DONE 2bcbeeda6e188d50f3d3fe576d275e90df6c9768
+
+## d1bind fix cycle
+
+Source: reviews/L2-JOURNEY-CHECKPOINT-1-accum-advc-c1-l2t1876.md D1 (major, required-correction), probe P5.
+Base measured this run: `807329d27ecf2e4e829e1d8c2714120efb64d94f`, tree clean.
+
+### Defect
+`POST /ai/threads/protocols/checkpoints/CP-GHOST/delta` on a thread holding `cp-journey-1` answered
+`200 {"delta_id":"delta-1","checkpoint_id":"CP-GHOST"}`. `attachDelta` checked only "a document exists"
+(`readDocument() === null`) and the handler echoed the path segment back, so the delta was bound to a
+checkpoint id the store never had — while `load()` and `resume()` already compare `checkpoint_id`.
+
+### Change (4 files, all in the brief's owned set)
+- `server/src/ai-threads/PendingIntentStore.ts`: `attachDelta(delta: unknown, checkpointId: string)`;
+  one `readDocument()` into a local; refuse `DIAG_NOT_FOUND` (unchanged code `checkpoint-not-found`)
+  unless `doc !== null && doc.checkpoint_id === checkpointId`. Order unchanged: contract validation
+  -> `injection-refused` 422 -> identity check. `AttachResult`'s success arm now carries the
+  CONFIRMED `checkpointId` (read from the stored document), so the handler cannot echo the path.
+- `server/src/api/handlers/PendingIntentHandlers.ts`: passes `checkpointId` to the store; maps the
+  `checkpoint-not-found` diagnostic to `404 {error:'checkpoint-not-found', code, reason}` (after the
+  422 arm, before the generic 400 arm); the 200 body's `checkpoint_id` is `result.checkpointId`, never
+  the raw path string.
+- Tests: one new arm each in `PendingIntentHandlers.test.ts` and `PendingIntentStore.test.ts` (ghost id
+  refused, matching id still 200); the two existing `attachDelta` call sites now pass the stored id.
+- NOT touched: `routes.ts` (its `:checkpointId` param already existed at :937), `checkpointContract.ts`,
+  `checkpointRestoreCheck.ts`, any schema/app path.
+
+### RED first (raw, before the fix)
+New handler arm and new store arm both fail; the other 13 pass:
+
+```
+ ❯ src/api/handlers/PendingIntentHandlers.test.ts  (7 tests | 1 failed) 71ms
+   ❯ ... > a delta naming a checkpoint id the thread does not hold => 404 checkpoint-not-found, no fabricated association (d1bind)
+     -> expected 200 to be 404 // Object.is equality
+ ❯ src/ai-threads/PendingIntentStore.test.ts  (8 tests | 1 failed) 83ms
+   ❯ ... > a delta naming an id the stored document does not carry is refused checkpoint-not-found (d1bind)
+     -> expected true to be false // Object.is equality
+ Test Files  2 failed (2)
+      Tests  2 failed | 13 passed (15)
+```
+RED commit `c75e996e`; store fix `fb8f6b61`; handler mapping `4a0fbd61746877018d2d6da50728e9ecc1a66793`.
+
+### GREEN (raw)
+```
+cd server && npx vitest run src/api/handlers/PendingIntentHandlers.test.ts src/ai-threads/PendingIntentStore.test.ts
+ ✓ src/ai-threads/PendingIntentStore.test.ts  (8 tests) 71ms
+ ✓ src/api/handlers/PendingIntentHandlers.test.ts  (7 tests) 74ms
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+```
+`cd server && npx tsc --noEmit` -> `TSC_REAL_EXIT=0` (no output).
+
+### Live probe (AC1/AC2/AC3) — real server from THIS worktree, isolated dirs
+Server started from this worktree (`npx tsx src/server.ts`, PORT=3123, HOST=127.0.0.1,
+`APP_BASE_PATH=<worktree>`, `AI_THREADS_ROOT=/home/brad/.checkpoint-d1bind-scratch/ai-threads`,
+`HOME=/home/brad/.checkpoint-d1bind-scratch/home` so the embedded-git data dir was scratch-local and never
+`~/.computable-lab`). Brad's :3001/:5174 and the lane stacks were not touched; the server was killed after
+the probe (port 3123 verified closed).
+
+```
+BASE=http://127.0.0.1:3123/api/ai/threads/protocols/checkpoints
+curl -s -w ' [%{http_code}]' -X POST "$BASE?threadId=probe-1" -H 'content-type: application/json' -H 'x-user-id: u1' --data @cp.json
+  -> {"checkpoint_id":"cp-journey-1","concurrency_version":1} [201]
+curl ... "$BASE/CP-GHOST/delta?threadId=probe-1" ... --data @delta.json
+  -> {"error":"checkpoint-not-found","code":"checkpoint-not-found","reason":"no checkpoint document is stored for this thread: absent file, malformed JSON, or a mismatched checkpoint_id — never a fallback read of a sibling thread or \"most recently updated\""} [404]
+curl ... "$BASE/cp-journey-1/delta?threadId=probe-1" ... --data @delta.json
+  -> {"delta_id":"delta-1","checkpoint_id":"cp-journey-1"} [200]
+curl ... "$BASE/cp-journey-1/delta?threadId=probe-1" ... --data @delta-inj.json   (request_revision)
+  -> {"error":"injection-refused","code":"injection-refused","reason":"delta declares request_revision: ..."} [422]
+curl ... "$BASE/cp-journey-1/delta?threadId=probe-1" ... --data @delta-bad.json  (entry missing canonical_value/semantic_type)
+  -> {"error":"delta rejected by contract","codes":["delta-entry-incomplete",...,"shape-invalid"],...} [400]
+```
+The 404 body carries NO `delta_id` (also asserted in the handler test).
+
+### Mutation probe (the only mutation that matters)
+Deleted the `doc.checkpoint_id !== checkpointId` half of the guard, leaving `doc === null`; ran the two
+targeted files:
+
+```
+ -> expected 200 to be 404 // Object.is equality
+ -> expected true to be false // Object.is equality
+ FAIL  src/ai-threads/PendingIntentStore.test.ts > ... > a delta naming an id the stored document does not carry is refused checkpoint-not-found (d1bind)
+ FAIL  src/api/handlers/PendingIntentHandlers.test.ts > ... > a delta naming a checkpoint id the thread does not hold => 404 checkpoint-not-found, no fabricated association (d1bind)
+ Test Files  2 failed (2)
+      Tests  2 failed | 13 passed (15)
+```
+Restored the guard -> `Tests 15 passed (15)`; `git -c core.fileMode=false status --short` printed nothing (clean).
+
+### Notes for review
+- `AttachResult`'s success arm gained `checkpointId`: the brief requires the 200 body's `checkpoint_id`
+  to come from the confirmed document, and the store is the only component that has read it. No second
+  not-found code was minted (`DIAG_NOT_FOUND` reused verbatim); the 422 rule text and `load`/`resume`
+  behaviour are untouched.
+- No UI surface at this unit (ACCEPTANCE waived); the end-to-end resume path is the item's browser gate.
+- Scratch dir `/home/brad/.checkpoint-d1bind-scratch/` (probe scripts, payloads, isolated data) removed at
+  exit; the raw outputs above are the receipt.
+
+### Marker
+Code commit containing the fix: `4a0fbd61746877018d2d6da50728e9ecc1a66793`; this section is committed after it.
+
+L2-JOURNEY-CHECKPOINT-1 UNIT d1bind DONE 4a0fbd61746877018d2d6da50728e9ecc1a66793
