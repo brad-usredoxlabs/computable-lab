@@ -52,7 +52,7 @@ function humanTask(overrides: Record<string, unknown> = {}): Record<string, unkn
     controls: ['select-step', 'approve-plan'],
     selectable_kinds: ['protocol-step', 'event'],
     completion: { kind: 'versioned_selection', receipt_required: true },
-    output_port: { version: 'v1', draft_id: 'DRAFT-1' },
+    output_port: { version: 'v1', record_id: 'REC-1', record_type: 'assay-result', receipt_id: 'RCPT-1' },
     on_cancel: 'keep_journey_active',
     on_defer: 'end_journey',
     ...overrides,
