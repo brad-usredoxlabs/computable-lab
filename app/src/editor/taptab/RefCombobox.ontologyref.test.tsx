@@ -25,9 +25,12 @@ vi.mock('../hooks/useResolveOntology', () => ({
   })),
 }));
 
-const renderFor = (valueShape: 'ref' | 'ontology-ref') => render(
+const renderFor = (
+  valueShape: 'ref' | 'ontology-ref' | 'material-ref' | 'record-ref' | 'text',
+  plan?: { sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: typeof valueShape }
+) => render(
   <RefCombobox value="" refKind="cl" onSelect={vi.fn()} onCancel={vi.fn()}
-    suggestionPlan={{ sources: ['local', 'ols'], ontologies: ['cl'], searchField: 'tags',
+    suggestionPlan={plan ?? { sources: ['local', 'ols'], ontologies: ['cl'], searchField: 'tags',
       isRef: true, isCombobox: true, valueShape }} />
 );
 
