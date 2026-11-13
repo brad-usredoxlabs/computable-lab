@@ -183,3 +183,7 @@ step on record-create). Item-level browser gate covers LABWARE-DEF-1 Units AC1-A
   browser gate (not this unit).
 - No domain-contract change; the change is confined to registry DATA + its structural
   schema (enum → pattern), both within the approved scope.
+
+---
+
+L2-JOURNEY-LABWARE-DEF-1-u2asurf UNIT u2asurf DONE 5c5f05a6459fb8660459facfaf1275892ab60bce
