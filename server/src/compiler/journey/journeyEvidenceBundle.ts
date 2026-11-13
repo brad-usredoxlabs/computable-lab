@@ -1,27 +1,22 @@
 /**
  * L2-JOURNEY-EVIDENCE-1 (unit evbundle): the journey evidence bundle as ONE
  * closed schema manifest, built and verified in a pure module. An auditor
- * working only from the bundle must be able to reconstruct what was asked,
- * what the AI added, which policy applied (the envelope's recorded
- * authorization, never re-evaluated here), who approved what, which effects
- * occurred, and which external data versions were used. buildJourneyEvidenceBundle
- * assembles the manifest from caller-measured inputs — no store, no route,
- * no clock (`now`-style injection is unnecessary because no field is
- * stamped: the retained documents ARE the clock record). The fixed refusal
- * order is empty request anchor -> required approval with no retained
+ * working only from the bundle must reconstruct what was asked, what the AI
+ * added, which policy applied (the envelope's recorded authorization, never
+ * re-evaluated here), who approved what, which effects occurred, and which
+ * external data versions were used. No store, no route, no clock — the
+ * retained documents ARE the clock record, so nothing is stamped. Fixed
+ * refusal order: empty request anchor -> required approval with no retained
  * receipt -> unknown effect receipt id -> missing determinism mode -> ok;
  * each refusal emits ONE named rule plus a message naming the offending id.
- * verifyJourneyEvidenceBundle re-hashes every retained document's exact text
- * against its declared sha256 (node:crypto) — the bundle is evidence, not a
- * compliance claim; a mismatch is reported, never repaired.
- *
- * Shape: schema/workflow/journey-evidence-bundle.schema.yaml. The manifest and
- * envelope members mirror the shipped TS shapes (journeyCompiler.ts:39,
- * journeyEnvelope.ts:30) by import — never widened here. One Ajv authority,
- * the same loader shape as journeyDocumentLint.ts:65:
- * join(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow').
- * Zero journey-id / step-id / surface-name literals: the journey identity
- * arrives as an argument.
+ * verify re-hashes every retained document's exact text against its declared
+ * sha256 (node:crypto); a mismatch is reported, never repaired — the bundle
+ * is evidence, not a compliance claim. Shape:
+ * schema/workflow/journey-evidence-bundle.schema.yaml; manifest and envelope
+ * members mirror the shipped TS shapes (journeyCompiler.ts:39,
+ * journeyEnvelope.ts:30) by import, never widened. One Ajv authority — the
+ * loader shape of journeyDocumentLint.ts:65. Zero journey-id / step-id /
+ * surface-name literals: the journey identity arrives as an argument.
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';

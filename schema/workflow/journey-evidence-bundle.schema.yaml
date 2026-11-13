@@ -1,19 +1,16 @@
 # L2-JOURNEY-EVIDENCE-1 (unit evbundle) — the journey evidence bundle.
-#
 # ONE closed manifest per journey revision: what was asked (request), what the
 # AI added (intent_revisions), which compiler versions compiled it, which
 # external data versions were used (retained_versions), the compiled manifests
 # and execution envelopes, the retained observations, who approved what
-# (human_approvals, the human-task completion receipts), which effects
-# occurred (effect_receipts), the checkpoint events, and the determinism mode.
-# Every preserved document is retained WITH its document text, not just its
-# digest: ref_id + declared sha256 + the document itself, so an auditor
+# (human_approvals), which effects occurred (effect_receipts), the checkpoint
+# events, and the determinism mode. Every preserved document is retained WITH
+# its document text (ref_id + declared sha256 + document), so an auditor
 # working only from the bundle can re-hash each entry against its declared
 # digest. The manifest and envelope members mirror the shipped TS shapes
-# (journeyCompiler.ts:39, journeyEnvelope.ts:30) verbatim — this schema
-# records them, never widens them. The bundle is a RETAINED EVIDENCE RECORD,
-# not a compliance claim: nothing in it certifies that the journey was run
-# correctly, only that its inputs, decisions and effects are recoverable.
+# (journeyCompiler.ts:39, journeyEnvelope.ts:30) verbatim — never widened
+# here. The bundle is a RETAINED EVIDENCE RECORD, not a compliance claim: it
+# certifies nothing; it only makes inputs, decisions and effects recoverable.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/journey-evidence-bundle.schema.yaml"
 title: "Journey Evidence Bundle"

@@ -1,24 +1,20 @@
 // @vitest-environment node
 /**
- * L2-JOURNEY-EVIDENCE-1 (unit evbundle), RED-first: the journey evidence
- * bundle is ONE closed manifest — (a) a complete input builds AND the bundle
- * validates against journey-evidence-bundle.schema.yaml in the same run;
- * (b) a required approval with no retained receipt is refused, naming the
- * task; (c) an effect whose receipt is not retained is refused, naming the
- * receipt id; (d) a retained document that no longer hashes to its declared
- * sha256 verifies as a mismatch naming the entry ref; (e) a bundle declaring
- * no determinism mode is refused. The schema gate pins the enum (a fourth
- * mode / an unknown top-level member is refused) and verify is byte-stable
- * across two runs (AC3). Fixtures use neutral ids; the module carries no
- * journey/step/surface literals.
+ * L2-JOURNEY-EVIDENCE-1 (unit evbundle), RED-first: the bundle is ONE closed
+ * manifest — (a) complete input builds AND validates against the schema in
+ * the same run; (a2) the closed schema refuses a 4th determinism mode and an
+ * unknown top-level member (via the module's single loader); (b) a required
+ * approval with no retained receipt is refused, naming the task; (c) an
+ * effect whose receipt is not retained is refused, naming the receipt id;
+ * (e0) an empty request anchor is refused first; (e) no determinism mode is
+ * refused; fixed order pins approval before determinism; (d) a retained
+ * document that no longer hashes to its declared sha256 verifies as a
+ * mismatch naming the ref; AC3: verify is byte-stable across two runs.
+ * Fixtures use neutral ids; the module carries no journey/step/surface
+ * literals.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import Ajv2020 from 'ajv/dist/2020.js';
-import { parse } from 'yaml';
 import type { CompiledJourneyManifest } from './journeyCompiler.js';
 import type { CompiledJourneyEnvelope } from './journeyEnvelope.js';
 import {
@@ -32,19 +28,14 @@ import {
 } from './journeyEvidenceBundle.js';
 import type { JourneyEvidenceBundle, JourneyEvidenceBundleInput } from './journeyEvidenceBundle.js';
 
-const SCHEMA_DIR = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow');
 const sha256Hex = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 const doc = (refId: string, text: string): { ref_id: string; sha256: string; document: string } =>
   ({ ref_id: refId, sha256: sha256Hex(text), document: text });
 
 const REQUEST = { message_id: 'msg-0001', verbatim_text: 'Run the full assay on the new extract' };
 const MANIFEST: CompiledJourneyManifest = {
-  journey_id: 'JX-2026-113',
-  revision: 1,
-  steps: [{
-    id: 'step-extract', capability_ref: 'cap-extract', capability_version: '1.2.0',
-    interaction_mode: 'automatic', status: 'READY', reasons: [], blocked_by: [],
-  }],
+  journey_id: 'JX-2026-113', revision: 1,
+  steps: [{ id: 'step-extract', capability_ref: 'cap-extract', capability_version: '1.2.0', interaction_mode: 'automatic', status: 'READY', reasons: [], blocked_by: [] }],
   not_ready: [],
 };
 const ENVELOPE: CompiledJourneyEnvelope = {
@@ -53,8 +44,8 @@ const ENVELOPE: CompiledJourneyEnvelope = {
   bindings: [{ port_index: 0, declared_version: 'v3', resolved_version: 'v3' }],
   authorization: {
     action: 'auto-create', target: 'cap-extract', disposition: 'allowed',
-    authority: 'project-owner', setting_key: 'allowAutoCreate',
-    origin_profile_id: 'profile-lab-1', rationale: 'declared policy permits auto-create for this step',
+    authority: 'project-owner', setting_key: 'allowAutoCreate', origin_profile_id: 'profile-lab-1',
+    rationale: 'declared policy permits auto-create for this step',
   },
 };
 /** The complete input every arm starts from; arms override, never rebuild. */
@@ -97,19 +88,15 @@ describe('buildJourneyEvidenceBundle', () => {
     const verdict = validateJourneyEvidenceBundle(out.bundle);
     expect(verdict).toEqual({ ok: true });
   });
-  it('(a2) the schema gate refuses a fourth determinism mode and an unknown top-level member', () => {
+  it('(a2) the closed schema refuses a fourth determinism mode and an unknown top-level member', () => {
     const out = buildJourneyEvidenceBundle(completeInput());
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    const ajv = new Ajv2020({ strict: true, allErrors: true });
-    const schemaText = readFileSync(resolve(SCHEMA_DIR, 'journey-evidence-bundle.schema.yaml'), 'utf8');
-    const validate = ajv.compile(parse(schemaText));
-    const live = { ...out.bundle, determinism: { mode: 'live' } } as Record<string, unknown>;
-    expect(validate(live)).toBe(false);
-    const extra = { ...out.bundle, plate_positions: [{ well: 'A1' }] } as Record<string, unknown>;
-    expect(validate(extra)).toBe(false);
-    // and through the module's own loader (one Ajv authority):
-    expect(validateJourneyEvidenceBundle(live)).not.toEqual({ ok: true });
+    // through the module's own loader — one Ajv authority, no second one:
+    const live = { ...out.bundle, determinism: { mode: 'live' } };
+    expect(validateJourneyEvidenceBundle(live).ok).toBe(false);
+    const extra = { ...out.bundle, plate_positions: [{ well: 'A1' }] };
+    expect(validateJourneyEvidenceBundle(extra).ok).toBe(false);
   });
   it('(b) a required approval with no retained receipt is refused, naming the task', () => {
     const out = buildJourneyEvidenceBundle(completeInput({ human_approvals: [] }));
