@@ -131,3 +131,6 @@ AC4 concurrent-save outcome: ["FULFILLED","FULFILLED"]
 
 ### Residual note
 `link()` requires the tmp and final names on the same filesystem — they are in the same directory by construction, so this holds; a filesystem without hardlink support would surface as a non-EEXIST error rather than a silent overwrite (fail-closed).
+
+## Marker (evtoctou)
+L2-JOURNEY-EVIDENCE-1 UNIT evtoctou DONE 406113d3604005a10e1704ea73bd385772454f49
