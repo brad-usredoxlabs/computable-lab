@@ -207,3 +207,7 @@ Commits on this branch (oldest first):
 - 36a63d1e — steps 2-4: two descriptors + additive registry extension (4/4 GREEN)
 - <this report commit> — report (sha below)
 - <final marker commit> — exit marker appended
+
+---
+
+L2-JOURNEY-LABWARE-DEF-1-u2acap2 UNIT unit DONE 60d36d4a221d95b4dafb84db2687daaccf45c079
