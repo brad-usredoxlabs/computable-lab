@@ -249,6 +249,21 @@ describe('MaterialReceivingDoor', () => {
     expect(acceptSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('wraps the unbroken reviewHash/ids inside the panel: the shared dd rule carries overflow-wrap (hashwrap)', async () => {
+    // Browser gate LABINV-browser-bundle-g4-l2t1857 LEG 1: the 64-char monospace
+    // reviewHash ran past the panel's right edge. jsdom does no layout, so pin the
+    // DECLARATION on the rendered dd rule (both result and refusal use it); the
+    // visual proof stays with the g5 browser bundle.
+    const { container } = renderDoor()
+    fillClaim()
+    fireEvent.click(screen.getByTestId('material-receiving-submit'))
+    await screen.findByTestId('material-receiving-review-hash')
+    const css = Array.from(container.querySelectorAll('style'))
+      .map((el) => el.textContent ?? '').join('\n')
+    const ddRule = /\.lab-modal__result dd,\s*\.lab-modal__refusal dl dd\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(ddRule).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
   it('carries the shared .lab-modal base layout authority, not only its own rules (gate D1)', () => {
     // Browser gate L2-LABINV-SEEDLAB-browser-g1-l2t2210 D1: the door's own
     // <style> block declared ONLY __result/__refusal/__hint, so the backdrop sat
