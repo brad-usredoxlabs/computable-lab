@@ -91,6 +91,21 @@ export function LabwareInstanceCreateModal({
     }
   }
 
+  // Geometry is a read-only projection of the selected definition — never typed,
+  // never sent on the create payload, never a second fetch.
+  const selectedDef = definitions.find((def) => def.recordId === selectedDefId)
+  const fmt = selectedDef
+    ? ((selectedDef.payload as Record<string, unknown>).format as Record<string, unknown> | undefined)
+    : undefined
+  const geometryText = (() => {
+    const parts: string[] = []
+    if (typeof fmt?.wellCount === 'number') parts.push(`${fmt.wellCount} wells`)
+    if (typeof fmt?.rows === 'number' && typeof fmt?.cols === 'number') parts.push(`${fmt.rows}×${fmt.cols}`)
+    if (parts.length === 0) return 'Geometry not declared on this definition'
+    if (typeof fmt?.wellNaming === 'string' && fmt.wellNaming) parts.push(fmt.wellNaming)
+    return parts.join(' · ')
+  })()
+
   return (
     <div
       className="lab-modal__backdrop"
@@ -136,6 +151,11 @@ export function LabwareInstanceCreateModal({
                 )
               })}
             </select>
+          </div>
+
+          <div className="lab-modal__row">
+            <span className="lab-modal__label">Geometry</span>
+            <span data-testid="labware-instance-definition-geometry">{geometryText}</span>
           </div>
 
           <div className="lab-modal__row">
