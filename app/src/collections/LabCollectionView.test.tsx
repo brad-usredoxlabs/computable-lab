@@ -299,4 +299,14 @@ describe('LabCollectionView', () => {
     fireEvent.click(screen.getByTestId('lab-category-receive-lot'))
     expect(document.querySelector('.cl-app .lab-modal__backdrop')).not.toBeNull()
   })
+
+  it('mounts the instance dialog inside the .cl-app token scope (gate D1)', () => {
+    renderCategory('labware-instances')
+    fireEvent.click(screen.getByTestId('lab-category-new-labware-instance'))
+    // Scoped to the instance dialog's own control so the receiving door
+    // (or any other .lab-modal__backdrop) cannot satisfy this pin.
+    expect(
+      document.querySelector('.cl-app .lab-modal__backdrop [data-testid="labware-instance-label-input"]'),
+    ).not.toBeNull()
+  })
 })
