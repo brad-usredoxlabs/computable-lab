@@ -81,6 +81,7 @@ const LabMaterialNewPage = lazy(async () => import('./collections/LabMaterialNew
 const LabLabwareNewPage = lazy(async () => import('./collections/LabLabwareNewPage').then((m) => ({ default: m.LabLabwareNewPage })))
 // u6binddoor: role binding surface — mounts RunEditorRouter on /runs/:runId/bindings
 const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((m) => ({ default: m.RunEditorRouter })))
+const LabwareEditorRoutePage = lazy(async () => import('./graph/LabwareEditorRoutePage').then((m) => ({ default: m.LabwareEditorRoutePage })))
 // QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
 // now imported by RegistryHostPage (the shell host), not routed directly.
 
@@ -245,6 +246,7 @@ export function App() {
                   QMS7-1: hosted in the unified workspace shell. */}
               <Route path="/registry" element={<DeferredRoute><RegistryHostPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
+              <Route path="/labware-editor" element={<DeferredRoute><LabwareEditorRoutePage /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />
               </Routes>
