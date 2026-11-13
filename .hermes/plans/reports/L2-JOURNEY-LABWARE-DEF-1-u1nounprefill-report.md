@@ -184,3 +184,5 @@ reproduced first-hand, not narrated.
 
 L2-JOURNEY-LABWARE-DEF-1 UNIT 1 DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
 L2-JOURNEY-LABWARE-DEF-1-u1nounprefill UNIT unit DONE d05cf784743d96ec26cac69aceeee4bc64dcc2fd
+
+L2-JOURNEY-LABWARE-DEF-1 UNIT 4 DONE c10d3cc2eedfab502fb330aa92cb3fbc6a5be4cc
