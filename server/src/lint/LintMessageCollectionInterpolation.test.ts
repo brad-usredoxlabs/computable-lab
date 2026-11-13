@@ -45,7 +45,7 @@ const FIXTURE = {
     { claimStatus: 'unknown', occurredAtStatus: 'known' },
   ],
   aliquots: [
-    { disposition: 'available', occurredAtStatus: 'known' },
+    { disposition: 'stored', occurredAtStatus: 'known' },
     { disposition: 'consumed', occurredAtStatus: 'known' },
   ],
 };
@@ -78,8 +78,10 @@ describe('lint messages name scalars, never a whole collection', () => {
   it('projected item fields render the offending scalars (three in-scope files)', () => {
     const inScope = ['attestation', 'material-receiving', 'chain-draft'];
     let rendered = 0;
+    let inspected = 0;
     for (const { spec } of specs.filter((s) => inScope.includes(s.name))) {
       for (const rule of spec.rules) {
+        inspected += 1; // BEFORE the [*] prefilter: a reintroduced prefilter must go RED below
         const placeholders = extractTemplatePaths(rule.message.template);
         if (!placeholders.some((p) => p.includes('[*]'))) continue;
         rendered += 1;
@@ -87,10 +89,14 @@ describe('lint messages name scalars, never a whole collection', () => {
         expect(message, rule.id).not.toContain('[object Object]');
         expect(message, rule.id).not.toContain('{{');
         if (placeholders.includes('claims[*].claimStatus')) expect(message).toContain('completed,unknown');
-        if (placeholders.includes('aliquots[*].disposition')) expect(message).toContain('available,consumed');
+        if (placeholders.includes('aliquots[*].disposition')) expect(message).toContain('stored,consumed');
       }
     }
     expect(rendered).toBeGreaterThanOrEqual(20); // the 20 measured rules
+    const inScopeRuleCount = specs
+      .filter((s) => inScope.includes(s.name))
+      .reduce((n, s) => n + s.spec.rules.length, 0);
+    expect(inspected).toBe(inScopeRuleCount); // a reintroduced prefilter makes inspected < total -> RED
   });
 
   it('AC1: a known-occurrence claim without occurredAt names its claimStatus values', () => {
