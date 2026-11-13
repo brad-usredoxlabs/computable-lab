@@ -109,3 +109,5 @@ run, 2026-11-13 ~04:11 EST.
 The marker sha is the commit containing THIS report:
 `git rev-parse HEAD` at write time (paperwork commit; the unit's code lives
 in 25d37c25 + 29be43e5).
+
+L2-JOURNEY-CHECKPOINT-1 UNIT cpschema2 DONE 2859faed740f339690b4cc3e23345be91e556a07
