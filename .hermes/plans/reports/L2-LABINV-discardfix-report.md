@@ -117,4 +117,4 @@ this worktree); 0 errors reference any file changed by this unit.
   visible. Owner: browser reviewer (acceptance owner).
 - YAML/lane stack: no YAML changed, so no lane-stack reload required.
 
-L2-LABINV-discardfix UNIT unit DONE __REPORT_SHA__
+L2-LABINV-discardfix UNIT unit DONE 403888d80a629795eb46ae99d90c18b181c37aed
