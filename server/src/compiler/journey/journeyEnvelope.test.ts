@@ -132,4 +132,12 @@ describe('compileJourneyEnvelope', () => {
     expect(result.diagnostics[0]!.step_id).toBe('ghost-step');
     expect(result.diagnostics[0]!.message).toContain('ghost-step');
   });
+  it('AC5: the product module holds no journey- literal, no quoted id-to-value table, no switch, and no re-validation import', () => {
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'journeyEnvelope.ts'), 'utf8');
+    expect(source).not.toMatch(/["']journey-/);
+    expect(source).not.toMatch(/["'][a-z0-9_.-]+["']\s*:/);
+    expect(source).not.toMatch(/\bswitch\s*\(/);
+    expect(source).not.toContain('lintJourneyDocument');
+    expect(source).not.toContain('validatePortBinding');
+  });
 });
