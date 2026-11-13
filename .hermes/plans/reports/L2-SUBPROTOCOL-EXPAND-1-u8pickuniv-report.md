@@ -82,4 +82,4 @@ weakened: the save-shape assertion is identical). Flagging to the orchestrator.
 Implementation complete. Owner: orchestrator -> browser reviewer (acceptance #1 on
 the live lane 2 stack; YAML-free, no lane-stack reload needed). No blockers.
 
-L2-SUBPROTOCOL-EXPAND-1-u8pickuniv UNIT u8pickuniv PENDING <report-sha>
+L2-SUBPROTOCOL-EXPAND-1-u8pickuniv UNIT u8pickuniv DONE 58d71e61d4c8a212ee222256963b2950926b1f49 (report contained at this sha; marker finalised in follow-up commit)
