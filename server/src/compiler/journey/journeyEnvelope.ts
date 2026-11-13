@@ -10,17 +10,27 @@
  * with a named stale-input diagnostic instead of silently executing against
  * new data. Rule order is fixed and each refusal returns ONE diagnostic:
  * step unknown, then human step, then input unbound, then stale input.
+ * s2polauth records the caller-supplied policy decision on the envelope and
+ * re-compares its disposition when the decision is re-evaluated.
  */
 import type { CompiledJourneyManifest } from './journeyCompiler.js';
+import type { PolicyActionDecision, PolicyDecisionDisposition } from '../../policy/types.js';
 export const RULE_ENVELOPE_STEP_UNKNOWN = 'journey_envelope_step_unknown';
 export const RULE_ENVELOPE_HUMAN_STEP = 'journey_envelope_human_step';
 export const RULE_ENVELOPE_INPUT_UNBOUND = 'journey_envelope_input_unbound';
 export const RULE_ENVELOPE_STALE_INPUT = 'journey_envelope_stale_input';
+export const RULE_ENVELOPE_AUTHORIZATION_FLIPPED = 'journey_envelope_authorization_flipped';
+export const RULE_ENVELOPE_AUTHORIZATION_MISSING = 'journey_envelope_authorization_missing';
 export interface ResolvedInputVersion { port_index: number; version: string }
 export interface JourneyEnvelopeBinding { port_index: number; declared_version: string; resolved_version: string }
+export interface JourneyEnvelopeAuthorization {
+  action: string; target: string; disposition: PolicyDecisionDisposition;
+  authority: string; setting_key: string; origin_profile_id: string; rationale: string;
+}
 export interface CompiledJourneyEnvelope {
   journey_id: string; revision: number; step_id: string;
   capability_ref: string; capability_version: string; bindings: JourneyEnvelopeBinding[];
+  authorization?: JourneyEnvelopeAuthorization;
 }
 export interface JourneyEnvelopeDiagnostic { rule: string; message: string; step_id: string }
 export type JourneyEnvelopeResult = { ok: true; envelope: CompiledJourneyEnvelope } | { ok: false; diagnostics: JourneyEnvelopeDiagnostic[] };
@@ -103,4 +113,28 @@ export function checkEnvelopeFreshness(envelope: CompiledJourneyEnvelope, curren
   const diagnostics = comparePinnedVersions(envelope.step_id, pinned, current);
   if (diagnostics.length === 0) return { valid: true };
   return { valid: false, diagnostics };
+}
+/** Record the policy decision the caller already evaluated. The module never
+ * evaluates policy itself: it copies the decision's fields into a new
+ * envelope and leaves the argument untouched. */
+export function recordEnvelopeAuthorization(envelope: CompiledJourneyEnvelope, decision: PolicyActionDecision): CompiledJourneyEnvelope {
+  const recorded: JourneyEnvelopeAuthorization = {
+    action: decision.action, target: decision.target, disposition: decision.disposition,
+    authority: decision.authority, setting_key: decision.settingKey,
+    origin_profile_id: decision.origin.profileId, rationale: decision.rationale,
+  };
+  return { ...envelope, ...(recorded !== undefined ? { authorization: recorded } : {}) };
+}
+/** Re-compare the recorded disposition with the caller's re-evaluated decision.
+ * A missing record is refused first (it may not read as permission); a changed
+ * disposition is AUTHORIZATION_FLIPPED naming both sides. One diagnostic. */
+export function checkEnvelopeAuthorization(envelope: CompiledJourneyEnvelope, decision: PolicyActionDecision): { valid: true } | { valid: false; diagnostics: JourneyEnvelopeDiagnostic[] } {
+  const recorded = envelope.authorization;
+  if (recorded === undefined) {
+    return { valid: false, diagnostics: [{ rule: RULE_ENVELOPE_AUTHORIZATION_MISSING, message: `step ${envelope.step_id}: the envelope records no policy authorization; a missing authorization may not be read as permission`, step_id: envelope.step_id }] };
+  }
+  if (recorded.disposition !== decision.disposition) {
+    return { valid: false, diagnostics: [{ rule: RULE_ENVELOPE_AUTHORIZATION_FLIPPED, message: `step ${envelope.step_id}: recorded disposition ${recorded.disposition} (origin ${recorded.origin_profile_id}) no longer matches the re-evaluated disposition ${decision.disposition} (origin ${decision.origin.profileId})`, step_id: envelope.step_id }] };
+  }
+  return { valid: true };
 }
