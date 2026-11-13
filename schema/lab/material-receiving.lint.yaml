@@ -50,8 +50,8 @@ rules:
       - op: exists
         path: assertion.vendorProductRef
   message:
-    template: "vendor-scoped lot: a receipt claim carries assertion.lot without assertion.vendorProductRef — the lot at claims[*].assertion.lot is not vendor-scoped (resolve the vendor-product; the draft keeps the reported lot while blocked) ({{claims}})"
-    paths: [ "claims" ]
+    template: "vendor-scoped lot: a receipt claim carries assertion.lot without assertion.vendorProductRef — the lot at claims[*].assertion.lot is not vendor-scoped (resolve the vendor-product; the draft keeps the reported lot while blocked) ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- occurredAtStatus pairing (envelope vocabulary, per-kind instances) ---
 - id: material-receiving-occurred-known-needs-occurred-at
@@ -72,8 +72,8 @@ rules:
       - op: exists
         path: occurredAt
   message:
-    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: material-receiving-occurred-approximate-needs-approximation
   title: "approximate occurrence requires occurredAt + approximation"
@@ -95,8 +95,8 @@ rules:
         - { op: exists, path: occurredAt }
         - { op: exists, path: approximation }
   message:
-    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: material-receiving-occurred-unknown-is-terminal
   title: "unknown occurrence carries no time fields (terminal honesty, Q5)"
@@ -121,8 +121,8 @@ rules:
         - op: not
           not: { op: exists, path: approximation }
   message:
-    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- receivedByStatus pairing (Q5 pattern, RECV's own vocabulary) ---------
 - id: material-receiving-receivedby-known-needs-receivedby
@@ -145,8 +145,8 @@ rules:
       - op: exists
         path: assertion.receivedBy
   message:
-    template: "claims pairing: a claim with assertion.receivedByStatus known is missing assertion.receivedBy ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with assertion.receivedByStatus known is missing assertion.receivedBy ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 - id: material-receiving-receivedby-unknown-is-terminal
   title: "unknown receiver carries no receivedBy (terminal honesty, Q5)"
@@ -169,8 +169,8 @@ rules:
         - op: not
           not: { op: exists, path: assertion.receivedBy }
   message:
-    template: "claims pairing: a claim with assertion.receivedByStatus unknown must not carry assertion.receivedBy ({{claims}})"
-    paths: [ "claims" ]
+    template: "claims pairing: a claim with assertion.receivedByStatus unknown must not carry assertion.receivedBy ({{claims[*].claimStatus}})"
+    paths: [ "claims[*].claimStatus" ]
 
 # --- supersedes / correction pairing (envelope vocabulary, per-kind) ------
 - id: material-receiving-supersedes-needs-correction
