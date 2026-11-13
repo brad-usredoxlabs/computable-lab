@@ -29,6 +29,20 @@ function mintRecordId(): string {
   return `LW-${hex}`
 }
 
+/**
+ * Seed the name input from the declared ?prefillName= query value (u1nounprefill),
+ * so the journey can open this create surface with the noun already filled in —
+ * no re-typing (D8 ghost-first). Same convention as FormulationsPage's
+ * prefillName param. Read ONCE at first render (lazy useState initialiser —
+ * never an effect, which would clobber typed input on re-render). Missing,
+ * empty, or whitespace-only values yield '' exactly as before; no extraction,
+ * save, or network call happens on load.
+ */
+function initialPrefillName(): string {
+  const prefill = new URLSearchParams(window.location.search).get('prefillName')
+  return (prefill ?? '').trim().slice(0, 120)
+}
+
 /** Unit token -> multiplier into microlitres (the schema's volume unit). */
 const UNIT_TO_UL: Record<string, number> = {
   nl: 0.001,
@@ -285,7 +299,7 @@ function collectInvalidRequiredPaths(
 export function LabLabwareNewPage() {
   const navigate = useNavigate()
 
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => initialPrefillName())
   const [sheetUrl, setSheetUrl] = useState('')
   const [proposals, setProposals] = useState<SpecSheetProposal[] | null>(null)
   const [state, setState] = useState<
