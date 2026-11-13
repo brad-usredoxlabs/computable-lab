@@ -9,13 +9,16 @@
  * under the lint's own rule, with no manifest; (e) the product module names
  * exactly the closed literal and object-key vocabulary, with mutant proofs;
  * (f) an empty descriptor version string is refused under
- * journey_capability_version_missing.
+ * journey_capability_version_missing; (g) RED probe for unit s2inval: a
+ * compiled manifest must be able to carry a stage-2 envelope invalidation
+ * via recordEnvelopeInvalidation — today the manifest has no way to carry
+ * one and the probe fails.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { compileJourneyStructure } from './journeyCompiler.js';
+import { compileJourneyStructure, recordEnvelopeInvalidation } from './journeyCompiler.js';
 import { lintJourneyDocument } from './journeyDocumentLint.js';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
 
@@ -87,6 +90,14 @@ const CLOSED_KEYS = [
   'diagnostics', 'input_ports', 'output_ports', 'document', 'catalogue', 'rule', 'step_id',
   'blockedBy', 'compiled', 'rawVersion',
 ];
+/** The same clean two-step fixture the first pin uses: step 1 READY,
+ * step 2 NOT_READY awaiting its producer — the shape unit s2inval needs. */
+function twoStepPlan() {
+  return doc({ steps: [
+    { id: 'transfer', capability_ref: 'transfer', input_ports: [], interaction_mode: 'automatic', output_ports: [port('StagedDraftReference')] },
+    { id: 'measure', capability_ref: 'measure', input_ports: [port('StagedDraftReference')], interaction_mode: 'automatic', output_ports: [] },
+  ] });
+}
 /** True when the source names a string literal or object key outside the closed sets. */
 function outsideClosedSets(mutant: string): boolean {
   const { literals, keys } = stringTokens(mutant);
@@ -197,5 +208,32 @@ describe('compileJourneyStructure', () => {
     expect(outsideClosedSets(source + '\nconst stepIdTable = { ' + stepIds[0] + ': 1, ' + stepIds[1] + ': 2 };\n')).toBe(true);
     const capabilityId = 'ghost' + '-cap'; // (iii) a capability-id equality check
     expect(outsideClosedSets(source + "\nif (step.capability_ref === '" + capabilityId + "') { return { ok: false, diagnostics: [] }; }\n")).toBe(true);
+  });
+  it('RED probe (unit s2inval): the manifest can carry a stage-2 envelope invalidation', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    // The NOT_READY step of the fixture is the step an envelope can go stale on.
+    const target = manifest.steps[1]!;
+    expect(target.id).toBe('measure');
+    expect(target.status).toBe('NOT_READY');
+    // RED today: CompiledJourneyManifest has no invalidations member and the
+    // export does not exist — this call is the probe the unit must make pass.
+    const recorded = recordEnvelopeInvalidation(manifest, {
+      step_id: target.id,
+      rule: 'journey_envelope_stale_input',
+      message: 'the step 2 input is stale',
+    });
+    expect(recorded).toBeDefined();
+    expect(recorded.invalidations).toEqual([{
+      step_id: 'measure',
+      rule: 'journey_envelope_stale_input',
+      message: 'the step 2 input is stale',
+    }]);
+    expect(recorded.steps[1]!.status).toBe('NOT_READY');
+    expect(recorded.steps[1]!.reasons).toEqual(['awaiting_producer_output', 'stale_input']);
+    expect(recorded.not_ready).toEqual(['measure']);
   });
 });
