@@ -1,0 +1,619 @@
+# CORPUS ACCEPTANCE MANIFEST — computable-lab
+#
+# ADOPTED by Brad 2026-11-13 ("The shape is correct."). Gate-drivable.
+#
+# WHAT THIS IS, AND WHAT IT IS NOT
+# test-prompts/AI-Chat-Corpus2.md remains the canon and remains in Brad's language. This file sits
+# beside it and adds, per scenario, the fields a reviewer needs in order to judge a drive without
+# re-deriving intent: where you start, what is said verbatim, what the human must choose or approve,
+# what must be true when you are returned, and what "done" looks like. It contains NO compiler
+# vocabulary, no handler ids and no step sequences — those live in the implementation contracts
+# (journey documents, capability descriptors, typed ports).
+#
+# RULES THIS FILE OBEYS
+#   - `utterances` are VERBATIM from the source file, in order. Never paraphrased, never tidied.
+#     Brad's own typos are preserved; they are part of the test.
+#   - `completed_when` is always observable by a person looking at a screen, or by reading a record
+#     back by id. "The journey completed" is never an answer.
+#   - `not_done_if` names traps that have actually fooled us, or that a plausible-looking build
+#     would fall into. It is the important half of every scenario.
+#   - `open_questions` are recorded, never resolved by an agent. If a scenario cannot pass because
+#     one is unresolved, that is a stop for Brad, not a judgement call for a model.
+#
+# CONTINUITY: the corpus is ONE continuous experiment. "Do not clear context between prompts."
+# Scenarios 2 onwards normally start from the state the previous scenario left behind. A drive that
+# resets between scenarios is testing something else and must say so in its receipt.
+#
+# READING OLD RECEIPTS: before 2026-11-13 the corpus had duplicate scenario headings. Old receipts
+# saying "prompt 2" mean scenarios 2 and 2a; "prompt 3" means 3 and 3a. The mapping is recorded in
+# .hermes/cl/lanes/2/corpus-state.md (REVISION NOTE 2026-11-13T17:05). Never rewrite old receipts.
+
+version: 1
+status: adopted
+adopted_by: "Brad, 2026-11-13, verbatim: \"The shape is correct.\""
+source_file: test-prompts/AI-Chat-Corpus2.md
+source_sha256: 025665dbefcb1b44ae149e2d0d8d1a7ce7cf977cc79833a140535c298af34ef5   # AI-Chat-Corpus2.md, commit 707eaefe
+
+scenarios:
+  - id: prompt-1
+    title: a plate type that does not exist yet
+    continues_from: null
+    starts_at: /runs
+    utterances:
+      - "Add a 96-well deepwell plate to the deck."
+    entry_state: >-
+      The person is in a run, looking at the plate deck. The system does NOT already have a
+      96-well deepwell plate type.
+    human_choices:
+      - >-
+        The assistant says plainly that the type is not in the system and offers to create it.
+      - >-
+        The person completes the geometry on the create surface the assistant opens — well count,
+        arrangement, spacing, footprint, working volume.
+      - >-
+        The person sees the ontology match with its namespace and full label, or sees the record
+        marked UNANCHORED with the reason when no term fits.
+      - >-
+        The person accepts.
+    return_expectation: >-
+      The person is back where they started, their original sentence is still there unchanged, and
+      a short note says what was created and what was placed. One click resumes the sentence.
+    completed_when:
+      - >-
+        A plate of the newly created type is VISIBLY on the deck, where the person can see it.
+      - >-
+        A labware definition record exists whose geometry is what the person entered, read back by id.
+      - >-
+        A labware instance record exists, points at that definition by record id, and is the thing
+        on the deck.
+      - >-
+        The anchor state is visible either way — anchored with the term's namespace and label, or
+        UNANCHORED with a stated reason.
+      - >-
+        Resuming drafts the original add-plate instruction, and the plate is not added a second time.
+    not_done_if:
+      - >-
+        The create form was filled and saved but no plate is on the deck — this exact defect once
+        passed a check while the plate never existed.
+      - >-
+        A definition was created but no instance, or the instance is not the one placed.
+      - >-
+        An ontology near miss was chosen silently, or a term was chosen without showing its label.
+      - >-
+        A geometry value the person never entered appears on the record.
+      - >-
+        The original sentence was rewritten, or the person had to retype it.
+    evidence_required:
+      - >-
+        Screenshots of the assistant's offer, the create form with values, and the deck with the plate.
+      - >-
+        Record read-back naming the definition id, the instance id, and the instance's parent id.
+      - >-
+        The served application revision the drive ran against.
+    fault_injection_leg: >-
+      Interrupt after the definition record is durably written but before the continuation is
+      acknowledged, then reload and resume, and also try from a second tab. Acceptable — the
+      continuation completes with no duplicate plate, or an explicit recoverable partial state that
+      names what already exists. Not acceptable — two plates, a lost record, or a journey reported
+      complete with nothing on the deck.
+    open_questions: []
+
+  - id: prompt-2
+    title: select a well range, then DMEM which the lab does not stock yet
+    continues_from: prompt-1
+    starts_at: /runs
+    utterances:
+      - "Add 100 ul of DMEM"
+    entry_state: >-
+      Continuing in the same run and session as scenario 1. A plate is on the deck. DMEM is NOT
+      stocked — there is no material concept and no vendor product for it.
+    human_choices:
+      - >-
+        The person selects the well range with the mouse, clicking A2 then shift-clicking H5.
+      - >-
+        The assistant states that DMEM is not stocked and creates it first — the material concept
+        anchored to its DMEM ontology term, then the Sigma D6429-500ML vendor product pointing at
+        that concept — rather than sending the person away to build it by hand.
+      - >-
+        The person accepts the proposal, or answers a clarification if one is genuinely needed.
+    return_expectation: >-
+      The shorthand proposal comes back naming the newly created vendor product and the well range.
+      While the proposal is pending, mousing over the highlighted wells shows a tooltip with the
+      100 uL of DMEM being proposed. After accept, mousing over the same wells shows 100 uL DMEM.
+    completed_when:
+      - >-
+        The selected well range is highlighted in yellow before any proposal is applied.
+      - >-
+        A committed event exists for the named wells carrying 100 uL of the Sigma D6429-500ML DMEM
+        vendor product, and the wells are painted accordingly.
+      - >-
+        The material concept is anchored to a DMEM ontology term with namespace and label shown,
+        and the vendor product points at it by record id. A near-miss such as DMEM/F-12 is not
+        acceptable.
+      - >-
+        The tooltip after accept reads 100 uL DMEM, and survives a cold reload of the page.
+    not_done_if:
+      - >-
+        The wells are painted but no event was written — paint without a record.
+      - >-
+        Only a concept was created with no vendor product, or a vendor product with no concept.
+      - >-
+        A near-miss ontology term was picked silently, or a catalogue number was invented. The
+        catalogue number must be the stated Sigma D6429-500ML, asked for if unknown.
+      - >-
+        The tooltip claims a volume the person did not state.
+      - >-
+        A clarification card is raised for a resolution that was in fact unambiguous.
+    evidence_required:
+      - >-
+        Screenshots of the yellow selection, the pending proposal with its tooltip, the accepted
+        wells with the 100 uL DMEM tooltip, and one after a cold reload.
+      - >-
+        Record read-back naming the event id, the concept id and the vendor-product id.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Interrupt after the vendor-product record is committed but before the event proposal is
+      applied, then reload. Acceptable — the person sees DMEM already exists and the proposal still
+      applies once, or an explicit partial state naming what exists. Not acceptable — two DMEM
+      vendor products, an event applied twice, or the wells reverted to empty with no notice.
+    open_questions:
+      - >-
+        Well addressing is ambiguous in the source. "select A2 then shift-click H5" implies a
+        rectangle, while scenario 2a splits the same range into A2-D5 and E2-H5. Record which wells
+        the drive actually selected; do not let a model decide the intended block.
+
+  - id: prompt-2a
+    title: 1 mM clofibrate in DMSO, and the composition the wells now carry
+    continues_from: prompt-2
+    starts_at: /runs
+    utterances:
+      - "Add 1uL of 1mM clofibrate in DMSO to wells E2-H5."
+    entry_state: >-
+      Continuing in the same run and session. The DMEM add from scenario 2 is committed.
+      Clofibrate is not in the system, and neither is a 1 mM in DMSO formulation.
+    human_choices:
+      - >-
+        If clofibrate is absent, the assistant creates the concept anchored to its chemistry
+        ontology term, then the 1 mM in DMSO formulation against that concept — stating what it is
+        minting rather than assuming silently.
+      - >-
+        The person accepts the proposal, then clicks well A1 to select it.
+    return_expectation: >-
+      The events come back with the 1 mM clofibrate ghosted into the named wells. Mousing over a
+      well of that block shows the final clofibrate concentration as well as the components.
+    completed_when:
+      - >-
+        The clofibrate concept is anchored to a chemistry ontology term, and a formulation record
+        exists at 1 mM in DMSO referencing that concept.
+      - >-
+        Committed events carry 1 uL of that formulation into the named wells.
+      - >-
+        Selecting A1 shows the two blocks in DIFFERENT colours — the DMEM-only wells in one block,
+        the clofibrate wells in another.
+      - >-
+        Mousing over a DMEM-only well shows 100 uL of DMEM only. Mousing over a clofibrate well
+        shows 100 uL DMEM (~99%), 1 uL DMSO (~0.9%) and the final clofibrate concentration.
+      - >-
+        The composition survives a cold reload.
+    not_done_if:
+      - >-
+        The formulation was applied as a bare volume with no concentration, or the concentration
+        was invented instead of 1 mM as stated.
+      - >-
+        The two blocks render the same colour, or the tooltips are identical between blocks.
+      - >-
+        The DMSO is reported as a separate ingredient the person never mentioned, rather than as
+        the solvent coming from the formulation.
+      - >-
+        Percentages are shown to more precision than the inputs support, or do not sum into the
+        whole well.
+    evidence_required:
+      - >-
+        Screenshots of the two-colour blocks and both tooltips, plus one after a cold reload.
+      - >-
+        Record read-back naming the formulation id, its concentration and solvent, and the event ids.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Interrupt after the formulation record commits but before the events are applied, then
+      reload. Acceptable — no second formulation is minted and the apply happens once. Not
+      acceptable — two 1 mM formulations, or wells carrying double the clofibrate.
+    open_questions:
+      - >-
+        Same well-addressing ambiguity as scenario 2. "E2-H5" is used as a block, and the
+        A2-D5/E2-H5 split only makes sense under one reading of the earlier selection. Record what
+        the drive used; do not resolve it with a guess.
+
+  - id: prompt-3
+    title: cells counted in units rather than volume, from an attached protocol
+    continues_from: prompt-2a
+    starts_at: /runs
+    utterances:
+      - "Add 10,000 HepG2 cells to wells A2-H5"
+    entry_state: >-
+      Continuing in the same run and session. The Cell Seeding Protocol is not yet attached to the
+      run. HepG2 is not in the system. Trypsin-EDTA, DMEM and FBS exist as vendor products or can
+      be created from the catalogue numbers Brad supplied.
+    human_choices:
+      - >-
+        The person adds the Cell Seeding Protocol to the list of protocols followed in this run.
+        That protocol produces a parameter, cells per uL, which the corpus states as 483.
+      - >-
+        If HepG2 is absent, the assistant creates the cell line material anchored to its cell line
+        ontology term and uses it here.
+      - >-
+        The person accepts.
+    return_expectation: >-
+      The next add-material proposal is 20.7 uL of the 50:50 mix of trypsin-EDTA against the
+      90 percent DMEM plus 10 percent FBS quench, containing 483 cells per uL — the volume DERIVED
+      from the cell count, never typed by the person.
+    completed_when:
+      - >-
+        The protocol is attached to the run and its cells-per-uL parameter is recorded as 483,
+        readable by name from the run.
+      - >-
+        HepG2 exists as a cell-line material anchored to a cell-line ontology term.
+      - >-
+        Trypsin-EDTA (Thermo 25200056), DMEM (Sigma D6429-500ML) and FBS (Sigma F4135-100ML) exist
+        as vendor products with those exact catalogue numbers, each pointing at its concept.
+      - >-
+        The proposal is 20.7 uL of the mix containing 10,000 cells, and the arithmetic is shown or
+        derivable from the stated 483 cells per uL.
+      - >-
+        After accept, mousing over any well in the range shows 10,000 HepG2 cells plus the final
+        concentrations of FBS, DMEM and trypsin-EDTA (~8.6, ~82.9, ~8.6 percent), and the
+        clofibrate wells also show ~0.7 percent DMSO.
+    not_done_if:
+      - >-
+        Cells were added as a plain volume with no unit conversion, or 10,000 was treated as uL.
+      - >-
+        Cells per uL was guessed by the model instead of being asked for or read from the protocol.
+      - >-
+        A catalogue number was invented, or a near-miss product was chosen for trypsin-EDTA.
+      - >-
+        The mix is not the stated two-part quench — trypsin-EDTA against 90 percent DMEM plus
+        10 percent FBS.
+      - >-
+        Percentages are asserted without the components that produce them.
+    evidence_required:
+      - >-
+        Screenshots of the protocol attached with its parameter, the derived proposal, and the
+        tooltip showing cells plus percentages.
+      - >-
+        Record read-back naming the protocol id, the parameter name and value, the cell-line id and
+        the three vendor-product ids.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Interrupt after the cell-line record commits but before the derived proposal applies, then
+      reload. Acceptable — the parameter is still readable and the apply happens once. Not
+      acceptable — two HepG2 concepts, a lost cells-per-uL parameter, or wells carrying 20,000 cells.
+    open_questions:
+      - >-
+        The corpus states the cells-per-uL parameter is "assumed" to be 483. Confirm whether the
+        system must ASK for it at execution, per the standing rule that it asks and never assumes,
+        or may consume a value the corpus declares. As written, a drive should treat 483 as
+        declared input and record where it came from.
+
+  - id: prompt-3a
+    title: an incubation with a visible place in the plate's history
+    continues_from: prompt-3
+    starts_at: /runs
+    utterances:
+      - "Incubate the cells for 24 hours in the 37 degree, 5% CO2 incubator."
+    entry_state: >-
+      Continuing in the same run and session. Cells are in the wells. An incubator exists as
+      equipment.
+    human_choices:
+      - >-
+        The person accepts the incubation event, or confirms the equipment and duration if asked.
+    return_expectation: >-
+      The incubation appears in the plate's event graph and is visible in the timeline as a
+      distinct kind of plate event, alongside the other plate-level events.
+    completed_when:
+      - >-
+        An incubation event exists in the plate's event graph with the stated duration, temperature
+        and CO2 level, and names the incubator used.
+      - >-
+        The timeline shows an obvious visual marker for the incubation, distinguishable at a glance
+        from the material additions.
+      - >-
+        A cold reload still shows it.
+    not_done_if:
+      - >-
+        The incubation is stored only as free text on a note.
+      - >-
+        Duration, temperature or CO2 was filled in from a default the person never stated.
+      - >-
+        The timeline renders it identically to a material addition, so a reader cannot tell the
+        plate was incubated.
+    evidence_required:
+      - >-
+        Screenshots of the timeline before and after, and one after a cold reload.
+      - >-
+        Record read-back naming the event id and its parameters.
+      - >-
+        The served application revision.
+    fault_injection_leg: null
+    open_questions: []
+
+  - id: prompt-4
+    title: aspirate and wash, with the cells surviving the media change
+    continues_from: prompt-3a
+    starts_at: /runs
+    utterances:
+      - "Aspirate the media from the wells.  Wash 2X with PBS."
+    entry_state: >-
+      Continuing in the same run and session. The wells contain the added materials and the cells.
+      Cells are adherent, so removing the liquid does not remove them.
+    human_choices:
+      - >-
+        The person accepts the two wash events, and answers only if the PBS stock is genuinely
+        unknown.
+    return_expectation: >-
+      Two PBS washes appear in the timeline. The wells read as empty of media but still containing
+      the cells, and the cell number is understood to have grown over the 24 hours.
+    completed_when:
+      - >-
+        Two DISTINCT wash events exist, in order, after an aspiration event.
+      - >-
+        The wells' contents no longer include the media components, and the cells remain.
+      - >-
+        The cell count reflects growth over 24 hours under the stated 30-hour doubling time, and
+        whether that number is derived is visible or stated.
+      - >-
+        The timeline and the well tooltip agree about what is in the wells now.
+    not_done_if:
+      - >-
+        The aspirate removes the cells — adherent cells do not leave with the liquid.
+      - >-
+        The two washes collapse into one event, or their order is lost.
+      - >-
+        The cell number stays at 10,000 as if no time had passed, with no statement that growth was
+        not modelled.
+      - >-
+        The tooltip still lists media components that were aspirated.
+    evidence_required:
+      - >-
+        Screenshots of the timeline with the two washes, and of a well tooltip after the washes.
+      - >-
+        Record read-back naming the aspiration and wash event ids, and the derived cell count.
+      - >-
+        The served application revision.
+    fault_injection_leg: null
+    open_questions: []
+
+  - id: prompt-5
+    title: protocol ingestion that produces a protocol, not a dead end
+    continues_from: prompt-4
+    starts_at: /runs
+    utterances:
+      - "Take us to protocol ingestion"
+    entry_state: >-
+      Continuing in the same session. The run exists. The ingestion surface is reachable.
+    human_choices:
+      - >-
+        The main pane navigates to the protocol ingestion tab.
+      - >-
+        The person runs an Exa search for "Nile Red Neutral Lipids Mammalian Adherent Cells" and
+        chooses the Red Fluorometric Lipid Droplet Assay Kit from abexbt.com.
+      - >-
+        The person chooses to build a protocol from the chosen candidate, then extracts a candidate.
+      - >-
+        The person answers the decision tree — adherent versus suspension, live versus fixed — by
+        selecting adherent and live, then clicks to draft the semantic protocol.
+    return_expectation: >-
+      A concise protocol is drafted containing materials, equipment and an ordered list of steps
+      that includes only the parts relevant to adherent, live cells.
+    completed_when:
+      - >-
+        The main pane is on the protocol ingestion tab, and the path from search hit to protocol
+        candidate to draft is walkable without a dead link. Brad has called this surface "100
+        borked", so the walk itself is the evidence.
+      - >-
+        The decision tree offers adherent versus suspension and live versus fixed, and the choices
+        change what is extracted.
+      - >-
+        The drafted protocol names its materials and equipment, each traceable to the source
+        document, and its steps are ordered and complete for adherent live cells.
+      - >-
+        The draft is a proposal — nothing is committed until the person accepts.
+    not_done_if:
+      - >-
+        The page is reachable but a control leads nowhere, or the search returns hits that cannot
+        be opened.
+      - >-
+        The draft includes suspension-only or fixed-cell-only steps, meaning the decision tree was
+        ignored or unanswered without changing the extraction.
+      - >-
+        Materials or equipment appear that are not in the source document.
+      - >-
+        A protocol record is written before the person accepts.
+      - >-
+        The draft silently drops the kit details that a later scenario needs.
+    evidence_required:
+      - >-
+        Screenshots of each step of the walk, ending with the drafted protocol.
+      - >-
+        Read-back of the proposal, not a committed record, naming the source document and the
+        extracted material list.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Interrupt after the source document is fetched and stored but before the draft is produced,
+      then reload and resume. Acceptable — one stored document, one draft. Not acceptable — the
+      document fetched twice under two ids, or a draft produced from a half-fetched page.
+    open_questions:
+      - >-
+        Brad wrote that the surface should probably offer "Build Protocol" and then "Extract
+        Candidate", and that the other links should probably be deleted. Confirm whether the other
+        entry points are to be removed or merely demoted before a gate treats their presence as a
+        defect.
+
+  - id: prompt-6
+    title: the ingested protocol becomes the run's active protocol
+    continues_from: prompt-5
+    starts_at: /runs
+    utterances:
+      - "Attach the protocol to the run and return us to the event editor."
+    entry_state: >-
+      Continuing in the same session. A protocol proposal exists from scenario 5 and has been
+      accepted by the person.
+    human_choices:
+      - >-
+        The person confirms the attach if asked, and is returned to the event editor.
+    return_expectation: >-
+      The newly ingested protocol is in the run's list of protocols followed, is the active
+      selection, and is displayed in the left-hand pane.
+    completed_when:
+      - >-
+        The run's protocol list contains the new protocol in addition to any already attached, in
+        order, with the new one active.
+      - >-
+        The event editor is the visible surface on return, with the protocol shown in the left pane.
+      - >-
+        Reading the run back by id shows the protocol reference by record id.
+    not_done_if:
+      - >-
+        The attach replaced the previously attached protocol instead of adding to the list.
+      - >-
+        The protocol is listed but not active, or active but not listed.
+      - >-
+        The return lands somewhere other than the event editor.
+      - >-
+        The previous protocol's steps disappear from the surface.
+    evidence_required:
+      - >-
+        Screenshots of the returned event editor with the left pane, and of the protocol list.
+      - >-
+        Record read-back of the run showing both protocol references and which is active.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Attach the same protocol twice in a row, deliberately. Acceptable — one reference, and the
+      second attempt says so. Not acceptable — a duplicate entry, or a silently reordered list.
+    open_questions: []
+
+  - id: prompt-7
+    title: a stain mixed into a reservoir and transferred with an 8-channel head
+    continues_from: prompt-6
+    starts_at: /runs
+    utterances:
+      - >-
+        Add the proper amount of Nile Red solution and Hoescht from the protocol to 10mls of
+        Invitrogen Live Cell Imaging Solution.  The Live Cell Imaging Solution replaces the "Assay
+        Buffer" in the protocol.  Add the 10mls of solution to a single channel 25ml reservoir,
+        Use the 8-channel pipette to transfer 100ul of the pre-mixed stain to each well (A2-H5).
+    entry_state: >-
+      Continuing in the same run and session. The assay protocol is attached and active. A 25 ml
+      single-channel reservoir type may not exist yet. Nile Red and Hoechst may not exist.
+    human_choices:
+      - >-
+        If the reservoir type is absent, the person confirms a single-well reservoir wide and deep
+        enough for the whole 8-channel head, which at 9 mm tip spacing means at least 63 mm across,
+        then it is placed on the deck as an instance.
+      - >-
+        If Nile Red or Hoechst is absent, the person confirms creation of the material concepts,
+        anchored where an ontology term exists, then the APExBIO vendor products with real
+        catalogue numbers — asked for, never invented.
+      - >-
+        The person accepts the transfer.
+    return_expectation: >-
+      Wells A2-H5 contain the cells grown over 24 hours plus 100 uL of 99.8 percent Invitrogen
+      Live Cell Imaging Solution carrying 0.1 percent Nile Red reagent and 0.1 percent Hoechst,
+      both APExBIO products, and the reservoir holds the remainder.
+    completed_when:
+      - >-
+        The mixed stain is one composed material — 10 ml of Live Cell Imaging Solution plus the
+        per-protocol amounts of Nile Red and Hoechst — with the components and their percentages
+        readable.
+      - >-
+        The reservoir exists as a labware definition of one well with an interior at least 63 mm
+        across, and an instance of it is on the deck holding the 10 ml.
+      - >-
+        The transfer is recorded as an 8-channel transfer of 100 uL to each named well, not as a
+        stack of single-channel additions, and the per-well composition matches the expectation.
+      - >-
+        The well tooltip does not contradict the reservoir's composition, and the numbers survive
+        a cold reload.
+    not_done_if:
+      - >-
+        The stain's components are added to the wells separately, as if pipetted directly, rather
+        than as one premixed material transferred from the reservoir.
+      - >-
+        The reservoir is created with an invented geometry that would not fit the head, or its
+        interior width is not recorded.
+      - >-
+        An APExBIO catalogue number is invented or a substitute dye is chosen.
+      - >-
+        Hoechst is omitted because an earlier draft sentence said it was not used. Brad removed
+        that sentence on 2026-11-13 and Hoechst IS used here.
+      - >-
+        Wells outside the named range receive the stain.
+    evidence_required:
+      - >-
+        Screenshots of the reservoir on the deck, the composed stain, and the well tooltip with
+        percentages.
+      - >-
+        Record read-back naming the reservoir definition and instance ids, the stain composition,
+        and the vendor-product ids for both dyes.
+      - >-
+        The served application revision.
+    fault_injection_leg: >-
+      Interrupt after the stain composition is committed but before the transfer applies, then
+      reload. Acceptable — one composition, one transfer. Not acceptable — two reservoirs, or wells
+      that received the stain twice.
+    open_questions:
+      - >-
+        The corpus states 0.1 percent Nile Red and 0.1 percent Hoechst in 99.8 percent solution,
+        while also saying the amounts come from the protocol. If the protocol disagrees with those
+        numbers, the protocol wins and the receipt must say which source was used. Confirm this
+        ordering before a gate treats a mismatch as a defect.
+
+  - id: prompt-8
+    title: images on the NAS become a linked, analysable dataset for this run
+    continues_from: prompt-7
+    starts_at: /runs
+    utterances:
+      - "I have just dropped the fluorescence images into the NAS, take us to the image analysis for this run."
+    entry_state: >-
+      Continuing in the same run and session. Fluorescence images exist on the NAS, outside the
+      application, named by whatever the instrument wrote.
+    human_choices:
+      - >-
+        The person indicates where the images are, and confirms linking them to this run's protocol
+        if asked.
+    return_expectation: >-
+      The main pane is on the image analysis surface for THIS run, the raw data files are linked to
+      the protocol, and an analysis layer exists that a person can start work in.
+    completed_when:
+      - >-
+        The files are linked to the protocol as data references, not copied into the record store,
+        and the link names the source location and the file identities.
+      - >-
+        The analysis surface is scoped to this run and shows the linked images.
+      - >-
+        A person can reach an actual image-analysis action for those files from that surface.
+    not_done_if:
+      - >-
+        The images are described in free text rather than linked as references.
+      - >-
+        The analysis surface is a placeholder that cannot name or open the files.
+      - >-
+        The surface is not scoped to this run — a generic page that would show any run's images.
+      - >-
+        Files are copied into git or into a record payload.
+    evidence_required:
+      - >-
+        Screenshots of the analysis surface showing this run's images.
+      - >-
+        Read-back naming the data-reference ids and the source path they point at.
+      - >-
+        The served application revision.
+    fault_injection_leg: null
+    open_questions:
+      - >-
+        Brad's expectation here is the thinnest in the corpus ("we will build an image analysis
+        layer using Napari"). Confirm the minimum that counts as done — linking plus an openable
+        analysis surface, or a working Napari view — before a gate grades it.
