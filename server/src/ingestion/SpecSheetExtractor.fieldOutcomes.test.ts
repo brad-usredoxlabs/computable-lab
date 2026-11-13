@@ -125,11 +125,9 @@ describe('extractFromUrl — fieldOutcomes carried through unchanged', () => {
       if (!('noProposals' in result)) throw new Error('noProposals missing');
       expect(result.noProposals.reason).toBe(reason); // semantics unchanged
       expect(result.proposals).toEqual([]);
-      if ('fieldOutcomes' in result) {
-        expect(result.fieldOutcomes).toHaveLength(declared.length);
-        expect(result.fieldOutcomes.every((o) => !isProposed(o))).toBe(true);
-        expect(result.fieldOutcomes.map(fieldOf)).toEqual(declared.map((m) => m.targetField));
-      }
+      expect(result.fieldOutcomes).toHaveLength(declared.length);
+      expect(result.fieldOutcomes.every((o) => !isProposed(o))).toBe(true);
+      expect(result.fieldOutcomes.map(fieldOf)).toEqual(declared.map((m) => m.targetField));
     }
   });
 
