@@ -20,6 +20,7 @@ import {
   type TemplateInputResolution,
 } from '../shared/api/treeClient'
 import { useLabwareEditor, type LabwareEditorState } from './context/LabwareEditorContext'
+import { resolveRunMethodGraph, runMethodGraphMissingNotice } from './runMethodGraphLoad'
 import { DualLabwarePane } from './labware/DualLabwarePane'
 import { DeckVisualizationPanel, type DeckPlacement } from './labware/DeckVisualizationPanel'
 import { EventRibbon } from './events/ribbon'
@@ -1583,9 +1584,12 @@ function LabwareEventEditorContent({
         if (runId) {
           const method = await getRunMethod(runId)
           setRunMethodSummary(method)
-          if (method.hasMethod && method.methodEventGraphId) {
-            await loadById(method.methodEventGraphId)
+          const outcome = await resolveRunMethodGraph(method, loadById)
+          if (outcome.kind === 'loaded') {
             return
+          }
+          if (outcome.kind === 'missing') {
+            setExecutionNotice(runMethodGraphMissingNotice(outcome.graphId))
           }
         }
       } catch (err) {
@@ -4205,6 +4209,9 @@ function LabwareEventEditorContent({
           {runMethodLockedVocabId ? <> / <strong>{runMethodLockedVocabId}</strong></> : null}
           {runMethodSourceTemplateId ? <> (template: {runMethodSourceTemplateId})</> : null}.
         </div>
+      )}
+      {executionNotice && (
+        <div className="deck-execution-notice" data-testid="run-method-graph-notice">{executionNotice}</div>
       )}
       {planningEnabled && executionNotice && (
         <div className="deck-execution-notice">{executionNotice}</div>
