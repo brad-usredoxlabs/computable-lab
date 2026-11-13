@@ -1480,9 +1480,19 @@ export interface SpecSheetProposal {
   specId: string
 }
 
+export interface SpecSheetFieldOutcome {
+  targetField: string
+  status: 'extracted' | 'not_present'
+  /** Present ONLY when status is 'extracted'. */
+  passage?: string
+}
+
 export interface SpecSheetExtractSuccess {
   configured: true
   proposals: SpecSheetProposal[]
+  // Mirror of the server key; optional because the client's legacy union and
+  // its hand-written mocks predate this field (NoProposals variant: separate item).
+  fieldOutcomes?: SpecSheetFieldOutcome[]
 }
 
 export interface SpecSheetExtractNotConfigured {

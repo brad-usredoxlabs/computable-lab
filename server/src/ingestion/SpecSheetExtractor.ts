@@ -34,6 +34,19 @@ export interface SpecSheetProposal {
 export interface SpecSheetExtractSuccess {
   configured: true;
   proposals: SpecSheetProposal[];
+  /**
+   * One outcome per declared field (YAML order, de-duplicated). 'extracted'
+   * carries the first proposal's verbatim passage; 'not_present' carries NO
+   * passage key. A report, not a proposal — proposals are unchanged.
+   */
+  fieldOutcomes: SpecSheetFieldOutcome[];
+}
+
+export interface SpecSheetFieldOutcome {
+  targetField: string;
+  status: 'extracted' | 'not_present';
+  /** Present ONLY when status is 'extracted'. */
+  passage?: string;
 }
 
 export interface SpecSheetExtractNotConfigured {
@@ -54,6 +67,8 @@ export interface SpecSheetExtractBlocked {
 export interface SpecSheetExtractNoProposals {
   configured: true;
   proposals: [];
+  /** Every declared field is necessarily not_present here. */
+  fieldOutcomes: SpecSheetFieldOutcome[];
   noProposals: {
     url: string;
     reason: SpecSheetNoProposalReason;
@@ -334,6 +349,43 @@ export function extractProposals(
 }
 
 // ---------------------------------------------------------------------------
+// Field-outcome projection — every declared field is accounted for
+// ---------------------------------------------------------------------------
+
+/**
+ * One outcome per declared field, in YAML declaration order (the order is
+ * the contract; do not sort) and de-duplicated by targetField. The field
+ * list is DATA — fieldMap.fieldMappings — never a literal TS array.
+ * 'extracted' carries the passage of the FIRST proposal for that field
+ * (several proposals for one field collapse to one outcome); 'not_present'
+ * carries NO passage key — never a guess, never '', never a proposal.
+ */
+export function fieldOutcomesFor(
+  fieldMap: SpecSheetFieldMap,
+  proposals: SpecSheetProposal[],
+): SpecSheetFieldOutcome[] {
+  const firstByField = new Map<string, SpecSheetProposal>();
+  for (const proposal of proposals) {
+    if (!firstByField.has(proposal.targetField)) {
+      firstByField.set(proposal.targetField, proposal);
+    }
+  }
+  const outcomes: SpecSheetFieldOutcome[] = [];
+  const seen = new Set<string>();
+  for (const mapping of fieldMap.fieldMappings) {
+    if (seen.has(mapping.targetField)) continue; // de-duplicate by targetField
+    seen.add(mapping.targetField);
+    const first = firstByField.get(mapping.targetField);
+    outcomes.push(
+      first
+        ? { targetField: mapping.targetField, status: 'extracted', passage: first.passage }
+        : { targetField: mapping.targetField, status: 'not_present' },
+    );
+  }
+  return outcomes;
+}
+
+// ---------------------------------------------------------------------------
 // Orchestration — fetch + extract from URL
 // ---------------------------------------------------------------------------
 
@@ -362,10 +414,12 @@ export async function extractFromUrl(
     const text = Array.isArray(results) && results[0]?.text ? results[0].text : '';
 
     const proposals = extractProposals(fieldMap, { url, text });
+    const fieldOutcomes = fieldOutcomesFor(fieldMap, proposals);
     if (proposals.length === 0) {
       return {
         configured: true,
         proposals: [],
+        fieldOutcomes,
         noProposals: {
           url,
           reason: text.length === 0 ? EXA_EMPTY_DOCUMENT : EXA_NO_FIELD_MATCH,
@@ -375,6 +429,7 @@ export async function extractFromUrl(
     return {
       configured: true,
       proposals,
+      fieldOutcomes,
     };
   } catch (_err) {
     // Typed block record on fetch failure — never synthesise a value
