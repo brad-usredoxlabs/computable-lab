@@ -9,7 +9,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { SpecSheetFieldMap } from './SpecSheetFieldMaps.js';
-import { getSpecSheetFieldMap } from './SpecSheetFieldMaps.js';
+import { getSpecSheetFieldMap, reload } from './SpecSheetFieldMaps.js';
+import { readFile, writeFile } from 'node:fs/promises';
 import { extractProposals, extractFromUrl, EXA_FETCH_BLOCKED } from './SpecSheetExtractor.js';
 
 /* ------------------------------------------------------------------ */
@@ -649,5 +650,33 @@ describe('extractFromUrl — fieldOutcomes accounts for every declared field', (
     }
     // and the not_present fields never appear in proposals (proposals = evidence found)
     expect(result.proposals.map((p) => p.targetField).sort()).toEqual(['catalog_number', 'vendor']);
+  });
+
+  it('AC3: outcome list length tracks the YAML fieldMappings (swap + reload, no TS edit)', async () => {
+    const yamlPath = new URL('../../../schema/ingestion/spec-sheet.vendor-product.yaml', import.meta.url);
+    const original = await readFile(yamlPath, 'utf-8');
+    try {
+      const swapped = original.replace(
+        '      - targetField: synonyms',
+        '      - targetField: ac3_probe_field\n        source: "AC3 transient probe field"\n      - targetField: synonyms',
+      );
+      expect(swapped).not.toBe(original); // the swap anchor must have matched
+      await writeFile(yamlPath, swapped, 'utf-8');
+      await reload();
+      vi.spyOn(exaMod, 'resolveExaConfig').mockReturnValue({
+        apiKey: 'k', baseUrl: 'b', defaultSearchType: 'auto', defaultContentMode: 'highlights', defaultMaxCharacters: 1, timeoutMs: 1,
+      });
+      vi.spyOn(exaMod, 'exaGetContents').mockResolvedValue({ results: [{ text: 'Vendor: Thermo\nCatalog Number: 25200056' }] });
+      const r = await extractFromUrl('vendor-product', 'https://example.com/ac3');
+      const outcomes = (r as { fieldOutcomes?: Array<{ targetField: string; status: string }> }).fieldOutcomes;
+      expect(outcomes).toHaveLength(10); // 9 declared + 1 added, with zero TypeScript edits
+      expect(outcomes?.some((o) => o.targetField === 'ac3_probe_field')).toBe(true);
+      expect(outcomes?.filter((o) => o.status === 'extracted')).toHaveLength(2);
+    } finally {
+      await writeFile(yamlPath, original, 'utf-8');
+      await reload();
+      vi.restoreAllMocks();
+    }
+    expect((await getSpecSheetFieldMap('vendor-product')).fieldMappings).toHaveLength(9); // restored
   });
 });
