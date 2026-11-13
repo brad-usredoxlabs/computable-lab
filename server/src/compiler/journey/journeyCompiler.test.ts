@@ -252,6 +252,41 @@ describe('compileJourneyStructure', () => {
       expect(step.status === 'READY' ? step.reasons.length === 0 : step.reasons.length > 0).toBe(true);
     }
   });
+  // D1 (advc c1): the realistic stage-2 target is a READY step — the AC1 pin above
+  // only invalidates 'measure', which is already NOT_READY, so it cannot witness the
+  // status flip or the not_ready recompute. This leg invalidates the READY 'transfer'.
+  it('AC1b: invalidating a READY step flips it to NOT_READY with stale_input and adds it to not_ready in document order', () => {
+    const plan = twoStepPlan();
+    const result = compileJourneyStructure(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('gate unexpectedly failed');
+    const manifest = result.manifest;
+    // Fixture precondition, asserted not assumed: 'transfer' really is READY.
+    expect(manifest.steps[0]!.status).toBe('READY');
+    expect(manifest.not_ready).toEqual(['measure']);
+    const recorded = recordEnvelopeInvalidation(manifest, {
+      step_id: 'transfer',
+      rule: 'journey_envelope_stale_input',
+      message: 'step transfer: the source record was revised',
+    });
+    expect(recorded.invalidations).toHaveLength(1);
+    expect(recorded.invalidations).toEqual([{
+      step_id: 'transfer',
+      rule: 'journey_envelope_stale_input',
+      message: 'step transfer: the source record was revised',
+    }]);
+    expect(recorded.steps[0]!.status).toBe('NOT_READY');
+    expect(recorded.steps[0]!.reasons).toContain('stale_input');
+    expect(recorded.steps[0]!.reasons.filter((r) => r === 'stale_input')).toHaveLength(1);
+    // The recompute must re-derive, not reuse the old array: document order, both ids.
+    expect(recorded.not_ready).toEqual(['transfer', 'measure']);
+    // 'measure' rides through unchanged.
+    expect(recorded.steps[1]!.status).toBe('NOT_READY');
+    expect(recorded.steps[1]!.reasons).toEqual(['awaiting_producer_output']);
+    // The input manifest is untouched.
+    expect(manifest.steps[0]!.status).toBe('READY');
+    expect(manifest.not_ready).toEqual(['measure']);
+  });
   it('AC2: a second refusal for the same step and rule adds no duplicate stale_input reason and does not mutate the input manifest', () => {
     const plan = twoStepPlan();
     const result = compileJourneyStructure(plan, CATALOGUE);
