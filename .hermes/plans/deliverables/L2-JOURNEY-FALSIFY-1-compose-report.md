@@ -94,4 +94,4 @@ worktree L2-DELREFS-d5traversal-lane2 — none introduced by this unit.
 2. server/src/compiler/journey/genomicsMinFalsification.test.ts — the pin + report numbers
 3. this report
 
-L2-JOURNEY-FALSIFY-1-falsify-compose UNIT unit DONE
+L2-JOURNEY-FALSIFY-1-falsify-compose UNIT L2-JOURNEY-FALSIFY-1-falsify-compose DONE 9f7cd45b4ec0bdcf55610cc7768255e19ae531fa
