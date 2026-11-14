@@ -1,0 +1,37 @@
+$schema: https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml
+kind: analysis-engine
+id: ENG-PEAKINTEG-1
+title: GC-7 declared-settings peak integration engine (stdlib)
+description: >-
+  Shipped GC-7 peak-integration core (computable_lab_analysis.peak_integration,
+  spec 2026-10-28_GC-7): validation, timed integration windows,
+  vertical-drop/tangent-skim baseline, prominence-floor peak detection,
+  width/slope-sensitivity floors, area/height rejects, the saturated rule.
+  Stdlib-only (zero host packages). deconvolution is declared unsupported:
+  the module has no deconvolution code path. Every 'supported' capability is
+  pinned to a code path by server/src/analysis/analysisEngineDeclarations.test.ts.
+implementation:
+  adapter: python-entry-script
+  entry: 'run(ctx)'
+  module: computable_lab_analysis
+version_constraints:
+  python: '>=3.13'
+  packages: []
+capabilities:
+  declared:
+    - { capability: baseline_control, support: supported }
+    - { capability: width_slope_sensitivity, support: supported }
+    - { capability: area_height_reject, support: supported }
+    - { capability: timed_integration_windows, support: supported }
+    - { capability: peak_detection, support: supported }
+    - { capability: deconvolution, support: unsupported }
+availability:
+  available: true
+  note: >-
+    Probed 2026-11-14 (lane worktree): last-resort interpreter
+    /usr/bin/python3 (Python 3.14.7) imports computable_lab_analysis from
+    server/python-executor-service/src; stdlib-only module.
+runtime_requirements:
+  interpreter: system
+lifecycleId: registry-ops
+state: draft
