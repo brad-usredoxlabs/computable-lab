@@ -3897,6 +3897,32 @@ function LabwareEventEditorContent({
                       ))}
                     </select>
                   </label>
+                  <label className="results-mode-field">
+                    <span>Instrument</span>
+                    <select
+                      value={resultsMode.selectedEquipmentId ?? ''}
+                      onChange={(e) => resultsMode.setSelectedEquipmentId(e.target.value || null)}
+                    >
+                      <option value="">{resultsMode.equipmentOptions.length > 0 ? 'Ambient / not recorded' : 'No equipment records declared'}</option>
+                      {resultsMode.equipmentOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="results-mode-field__hint">
+                      {resultsMode.equipmentSource === 'picked'
+                        ? `Chosen here — ${resultsMode.equipmentOptions.find((option) => option.id === resultsMode.selectedEquipmentId)?.label ?? ''}${
+                            resultsMode.activeContext?.payload.equipment_ref?.id &&
+                            resultsMode.activeContext.payload.equipment_ref.id !== resultsMode.selectedEquipmentId
+                              ? `; the readout "${resultsMode.activeContextLabel ?? resultsMode.activeContext.recordId}" names a different instrument`
+                              : ''
+                          }`
+                        : resultsMode.equipmentSource === 'readout'
+                          ? `From readout ${resultsMode.activeContextLabel ?? resultsMode.activeContext?.recordId ?? ''}`
+                          : 'No instrument will be recorded: publishing is refused until you choose an instrument or select a readout that declares one.'}
+                    </span>
+                  </label>
                   <label className="results-mode-field results-mode-field--wide">
                     <span>Raw Data File</span>
                     <input

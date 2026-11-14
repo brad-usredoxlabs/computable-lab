@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   apiClient,
+  type MaterialRefInput,
   type MeasurementContextRecord,
   type MeasurementParserValidationResult,
   type MeasurementRecordPayload,
@@ -95,6 +96,12 @@ export interface UseResultsModeResult {
   uploadedDataReferenceId: string | null
   /** What the parser actually read, read back from the created measurement record (null until readable). */
   parseSummary: ResultsParseSummary | null
+  /** Declared equipment records (the store's `equipment` kind) backing the Attach drawer's instrument pick. */
+  equipmentOptions: Array<{ id: string; label: string }>
+  selectedEquipmentId: string | null
+  setSelectedEquipmentId: (id: string | null) => void
+  /** Which source resolves the recorded instrument: the person's pick, the active readout, or none. */
+  equipmentSource: 'picked' | 'readout' | null
   parserId: string
   setParserId: (parserId: string) => void
   preview: MeasurementParserValidationResult | null
@@ -300,6 +307,38 @@ export function useResultsMode(args: {
   const [validating, setValidating] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null)
+  const [equipmentOptions, setEquipmentOptions] = useState<Array<{ id: string; label: string }>>([])
+  // True when the equipment load itself failed (the store did not answer). A
+  // failed load is NOT a declared absence: refusal fires only on an answered,
+  // empty listing — a store outage must not silently block publishing.
+  const [equipmentLoadFailed, setEquipmentLoadFailed] = useState(false)
+
+  // Declared equipment records back the Attach drawer's instrument pick. Loaded
+  // once on mount from the store — the drawer never invents an instrument list.
+  useEffect(() => {
+    let cancelled = false
+    void apiClient
+      .listRecordsByKind('equipment', 200)
+      .then(({ records }) => {
+        if (cancelled) return
+        setEquipmentLoadFailed(false)
+        setEquipmentOptions(
+          (Array.isArray(records) ? records : []).map((record) => ({
+            id: record.recordId,
+            label: typeof record.payload.name === 'string' && record.payload.name.trim() !== '' ? record.payload.name : record.recordId,
+          })),
+        )
+      })
+      .catch(() => {
+        // An answered-empty store is a DECLARED absence ("No equipment records
+        // declared"); a failed load is surfaced as a load error, not a refusal.
+        if (!cancelled) setEquipmentLoadFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -434,6 +473,16 @@ export function useResultsMode(args: {
     [measurementContexts, activeContextId],
   )
   const activeContextLabel = activeContext?.payload.name || null
+
+  const pickedEquipment = useMemo(
+    () => (selectedEquipmentId ? equipmentOptions.find((option) => option.id === selectedEquipmentId) ?? null : null),
+    [equipmentOptions, selectedEquipmentId],
+  )
+  const equipmentSource: 'picked' | 'readout' | null = pickedEquipment
+    ? 'picked'
+    : activeContext?.payload.equipment_ref
+      ? 'readout'
+      : null
 
   const activeMeasurement = useMemo(
     () => measurements.find((measurement) => measurement.recordId === activeMeasurementId) ?? null,
@@ -603,13 +652,29 @@ export function useResultsMode(args: {
       setError('Run context is missing.')
       return
     }
+    // The instrument is stated, never silently inherited: the person's explicit
+    // pick wins, then the active readout's declared ref. When neither resolves,
+    // publishing is refused with a named reason — never an instrument-less
+    // measurement published silently. (A failed equipment load is not a
+    // declared absence: the readout ref is forwarded in that case.)
+    const equipmentRef: MaterialRefInput | null = pickedEquipment
+      ? { kind: 'record', id: pickedEquipment.id, type: 'equipment' }
+      : activeContext?.payload.equipment_ref ?? null
+    if (!equipmentRef && !equipmentLoadFailed) {
+      setError(
+        activeContext
+          ? `No instrument is recorded for this measurement: choose one from the declared equipment records, or clear the pick so the readout "${activeContextLabel ?? activeContext.recordId}"'s instrument is used.`
+          : 'No instrument is recorded for this measurement: choose one from the declared equipment records before publishing.',
+      )
+      return
+    }
     setIngesting(true)
     setError(null)
     try {
       const measurementContext = activeContext
       const measurementLabwareId = measurementContext?.payload.source_ref?.id || targetLabwareId || sourceLabwareId
       const response = await apiClient.ingestMeasurement({
-        ...(measurementContext?.payload.equipment_ref ? { equipmentRef: measurementContext.payload.equipment_ref } : {}),
+        ...(equipmentRef ? { equipmentRef } : {}),
         ...(measurementLabwareId ? { labwareInstanceRef: { kind: 'record', id: measurementLabwareId, type: 'labware' } } : {}),
         eventGraphRef: { kind: 'record', id: eventGraphId, type: 'event-graph' },
         ...(measurementContext ? { measurementContextRef: { kind: 'record', id: measurementContext.recordId, type: 'measurement-context', label: measurementContext.payload.name } } : {}),
@@ -637,7 +702,7 @@ export function useResultsMode(args: {
     } finally {
       setIngesting(false)
     }
-  }, [activeContext, activeReadEventId, eventGraphId, parserId, rawDataPath, refresh, runId, sourceLabwareId, targetLabwareId, timepoint])
+  }, [activeContext, activeContextLabel, activeReadEventId, eventGraphId, parserId, pickedEquipment, rawDataPath, refresh, runId, sourceLabwareId, targetLabwareId, timepoint])
 
   const activeLabwareId = measurementLabwareId(activeMeasurement, activeContext)
   const sourceWellContents = useMemo(() => {
@@ -897,6 +962,10 @@ export function useResultsMode(args: {
     uploadedContentHash,
     uploadedDataReferenceId,
     parseSummary,
+    equipmentOptions,
+    selectedEquipmentId,
+    setSelectedEquipmentId,
+    equipmentSource,
     parserId,
     setParserId,
     preview,
