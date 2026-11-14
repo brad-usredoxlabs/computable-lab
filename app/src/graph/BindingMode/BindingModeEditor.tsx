@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import type { RecordEnvelope } from '../../types/kernel'
-import type { Labware } from '../../types/labware'
+import {
+  labwareRecordToEditorLabware,
+  type Labware,
+  type LabwareRecordPayload,
+} from '../../types/labware'
 import { usePlatformRegistry } from '../../shared/hooks/usePlatformRegistry'
 import { DeckVisualizationPanel, type DeckPlacement } from '../labware/DeckVisualizationPanel'
-import { LABWARE_CONFIGS, type LabwareType } from '../../types/labware'
 import { DeckPickerSelect } from './DeckPickerSelect'
 import { RoleBindingPanel } from './RoleBindingPanel'
 import { SampleBindingPanel } from './SampleBindingPanel'
@@ -368,27 +371,24 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   }, [currentBindings, labwareRoles])
 
   // Build the labware list for DeckVisualizationPanel from the SAME
-  // labware-only view. Each bound record is a full `Labware` object: the
-  // panel reads `labwareType` (e.g. `isTipRackType` → `.startsWith`) and the
-  // addressing/geometry fields, so the binding-derived stub must carry them.
+  // labware-only view. Each bound record is a full `Labware` object built by
+  // the canonical record mapper: a persisted record's `labwareType` is the
+  // schema CATEGORY ('plate', 'reservoir', …) while the panel needs the render
+  // type + real addressing/geometry, which only the mapper derives from
+  // `format`. A record missing from the universe is skipped — never stubbed.
   const deckLabwares = useMemo<Labware[]>(() => {
     const labwares: Labware[] = []
     for (const [roleId, binding] of Object.entries(currentBindings)) {
       if (!labwareRoles.some((r) => r.roleId === roleId)) continue
       const record = labwareUniverse.find((r) => r.recordId === binding.instanceRef)
-      const payload = record?.payload as { labwareType?: string } | undefined
-      const declared = payload?.labwareType
-      const labwareType: LabwareType =
-        declared && Object.prototype.hasOwnProperty.call(LABWARE_CONFIGS, declared)
-          ? (declared as LabwareType)
-          : 'plate_96'
+      const payload = record?.payload as LabwareRecordPayload | undefined
+      if (!record || !payload) continue
+      const mapped = labwareRecordToEditorLabware({ ...payload, recordId: record.recordId })
       labwares.push({
+        ...mapped,
         labwareId: binding.instanceRef,
         recordId: binding.instanceRef,
-        labwareType,
         name: roleId,
-        addressing: { type: 'grid' },
-        geometry: LABWARE_CONFIGS[labwareType].geometry,
       })
     }
     return labwares
