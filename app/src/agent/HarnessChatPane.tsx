@@ -340,6 +340,23 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
           {chat.honestWall}
         </div>
       ) : null}
+      {/* L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON state —
+          the user-selected thread's read returned no messages in this tab.
+          Rendered in the transcript region, keyed off the hook's structured
+          `threadUnreadable` predicate (single writer: the hydration effect —
+          never re-derived from the list's messageCount, never seeded from
+          another tab). The wording names what was attempted (thread id +
+          scope); it does NOT claim the thread is empty. Clears on the next
+          readable read or on switch/new/re-key. */}
+      {chat.threadUnreadable ? (
+        <div
+          className="harness-chat-pane__thread-unreadable"
+          data-testid="thread-unreadable"
+          role="status"
+        >
+          {`This tab could not read the messages for thread ${chat.threadUnreadable.threadId} (scope ${chat.threadUnreadable.scope || 'default'}). The read of the selected thread returned no messages here — that is not a claim the thread is empty.`}
+        </div>
+      ) : null}
       {/* Staged deck proposal: apply/discard + per-event drop, reachable even
           when the deck itself is off screen (mobile drawer). */}
       <ChatPreviewCard chat={chat} />
