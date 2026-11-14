@@ -1,27 +1,27 @@
+# Conservation interval record — computed output of the conservation-analysis
+# capability (server/src/sequences/conservationCompute.ts), READ AGAINST a
+# validated conservation-analysis declaration
+# (schema/sequence-analysis/conservation-analysis.schema.yaml). The record is
+# the computation's RECEIPT, not the contract: it names the declaration id and
+# version it read and records every policy it applied. regionStart/regionEnd
+# are ALIGNMENT coordinates (1-based columns of the aligned rows), never
+# source coordinates. The per-sequence source mapping is the alignment
+# artifact's own coordinateMap field (source: alignment.coordinateMap,
+# produced by server/src/sequences/sequenceRuntime.ts), copied per row —
+# first/last non-null coordinateMap value within the region span, null when the
+# row is entirely gapped there — and is never recomputed here. strand and
+# convention are the declaration's coordinate_mapping values, recorded.
+# metricValue is the declared below-threshold behaviour verbatim: 'unresolved'
+# when coverage fell below the declared threshold or the weighted denominator
+# was empty — never a number, never null. coverage and uncertainty are
+# reported alongside the number: an interval is a measured quantity with its
+# own denominator, its gap/ambiguity treatment and its uncertainty, not just a
+# colour — and it claims no primer suitability (primer_suitability.claimed:
+# false is the declaration's; a coloured column is never a primer
+# recommendation). No numeric defaults and no policy-read-as-example block.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/sequence-analysis/conservation-interval.schema.yaml"
 title: "ConservationInterval"
-description: >-
-  One interval record COMPUTED over an alignment artifact by reading a
-  validated conservation-analysis declaration
-  (schema/sequence-analysis/conservation-analysis.schema.yaml) — the
-  computation's receipt, not the contract: it names the declaration id and
-  version it read, records every policy choice it applied, and carries the
-  number the declaration's threshold permits. regionStart/regionEnd are
-  ALIGNMENT coordinates (1-based columns of the aligned rows), never source
-  coordinates. The per-sequence source mapping is the alignment artifact's own
-  coordinateMap field (source: alignment.coordinateMap, produced by
-  server/src/sequences/sequenceRuntime.ts), copied per row — first/last
-  non-null coordinateMap value within the region span, null when the row is
-  entirely gapped there — and is never recomputed here. strand and convention
-  are the declaration's coordinate_mapping values, recorded. metricValue is the
-  declared below-threshold behaviour verbatim: 'unresolved' when coverage fell
-  below the declared threshold or the weighted denominator was empty — never a
-  number, never null. coverage and uncertainty are reported alongside the
-  number: an interval is a measured quantity with its own denominator, its
-  gap/ambiguity treatment and its uncertainty, not just a colour — and it
-  claims no primer suitability (primer_suitability.claimed: false is the
-  declaration's, and a coloured column is never a primer recommendation).
 type: object
 additionalProperties: false
 required:
@@ -48,23 +48,18 @@ properties:
   declarationId:
     type: string
     minLength: 1
-    description: "The conservation-analysis declaration this interval was computed against."
   declarationVersion:
     type: string
     minLength: 1
-    description: "The declaration's version, copied verbatim: a changed policy is a changed version, and the receipt names it."
   regionStart:
     type: integer
     minimum: 1
-    description: "First column of the interval in ALIGNMENT coordinates (1-based column of the aligned rows), not source coordinates."
   regionEnd:
     type: integer
     minimum: 1
-    description: "Last column of the interval in ALIGNMENT coordinates (1-based column of the aligned rows), not source coordinates."
   metricId:
     type: string
     minLength: 1
-    description: "The declared metric id, copied from the declaration."
   metricUnit:
     const: "per_column"
   metricValue:
@@ -75,40 +70,31 @@ properties:
   metricDenominator:
     type: string
     enum: [ non_gap_columns, all_columns, defined_bases, weighted_bases ]
-    description: "The declaration's metric.denominator, recorded — the choice the number was computed under, stated, never inferred."
   metricWeighting:
     type: string
     enum: [ none, sequence_count, unique_taxa ]
-    description: "The declaration's metric.weighting, recorded — how the sequences entered the count."
   gapTreatment:
     type: string
     enum: [ exclude_column, count_as_mismatch, impute ]
-    description: "The declaration's gap_policy.treatment, recorded — what was done with gapped columns."
   ambiguityTreatment:
     type: string
     enum: [ exclude_column, count_as_partial_match, impute ]
-    description: "The declaration's ambiguity_policy.treatment, recorded — what was done with the declared ambiguity codes."
   coverage:
     type: number
     minimum: 0
     maximum: 1
-    description: "Counted columns over the region's columns under the declaration's coverage.denominator — the coverage the metricValue was reported against."
   coverageThreshold:
     type: number
     minimum: 0
     maximum: 1
-    description: "The declaration's coverage.threshold, recorded."
   uncertainty:
     type: number
     minimum: 0
-    description: "The per-interval uncertainty estimate; reported even when metricValue is 'unresolved'. Outputs carry coverage AND uncertainty, not just a colour."
   uncertaintyMethod:
     type: string
     minLength: 1
-    description: "The declaration's uncertainty.method string, copied verbatim — recorded, not interpreted."
   source:
     const: "alignment.coordinateMap"
-    description: "The per-sequence source mapping is the alignment artifact's own coordinateMap field, copied per row — never a recomputation."
   perSequence:
     type: array
     minItems: 1
@@ -124,16 +110,12 @@ properties:
           type: string
           minLength: 1
         start:
-          type: ["number", "null"]
-          description: "First non-null value of this row's own coordinateMap within the region span, copied — null when the row is entirely gapped there."
+          type: [ "number", "null" ]
         end:
-          type: ["number", "null"]
-          description: "Last non-null value of this row's own coordinateMap within the region span, copied — null when the row is entirely gapped there."
+          type: [ "number", "null" ]
         strand:
           type: string
           enum: [ forward, reverse_complement, as_aligned ]
-          description: "Copied verbatim from the declaration's coordinate_mapping.strand."
         convention:
           type: string
           enum: [ one_based, zero_based ]
-          description: "Copied verbatim from the declaration's coordinate_mapping.convention."
