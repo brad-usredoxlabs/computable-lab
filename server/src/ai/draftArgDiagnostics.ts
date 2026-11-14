@@ -125,13 +125,27 @@ export function draftArgCorrectionInstruction(args: unknown): string | undefined
  * option shape returns the EXACT branch bytes it always returned (the
  * `toBe` byte pins — freeformLegs.test.ts:725 — hold unchanged).
  *
- * exactOptionalPropertyTypes: callers pass the flag ABSENT or `true` —
+ * L2-P1-EMPTY-TURN-CARD-1 (u1finalsite) extends the family with a FOURTH
+ * cause — the FINAL-ANSWER exit (no tool call at all): the model answered in
+ * plain text, never called the draft tool, and finished `finish_reason
+ * "stop"`, so nothing was drafted. That site is the one the guard's doc
+ * comment never covered (the run used to return `success: true` with an
+ * empty `events` array — the client's only surviving statement was "No
+ * events generated."). The arm is ADDITIVE and rides AFTER the `truncated`
+ * arm: it fires ONLY when the finish was not `"length"` (so the sentence
+ * never claims `"stop"` on a truncated finish — it states the OBSERVED
+ * cause, never a guessed one), and `truncated` is computed from the actual
+ * `choice.finish_reason`. Every other option shape returns the EXACT branch
+ * bytes it always returned (the byte pins hold unchanged).
+ *
+ * exactOptionalPropertyTypes: callers pass the flags ABSENT or `true` —
  * NEVER `undefined`.
  */
 export function emptyDraftMessage(options: {
   truncated: boolean;
   hadArguments: boolean;
   degenerateEmptyResponse?: boolean;
+  noToolCall?: boolean;
 }): string {
   if (options.degenerateEmptyResponse === true) {
     return (
@@ -143,6 +157,12 @@ export function emptyDraftMessage(options: {
     return (
       'no proposal: the model’s answer was cut off at its output limit before it finished the tool call ' +
       '(finish_reason "length"). Raise the agent max_tokens for this profile, or ask for fewer wells at a time.'
+    );
+  }
+  if (options.noToolCall === true) {
+    return (
+      'no proposal: the model answered without calling the draft tool and finished with finish_reason "stop", ' +
+      'so there was nothing to draft. Nothing was applied — try rephrasing, or name the material explicitly.'
     );
   }
   if (!options.hadArguments) {

@@ -3089,7 +3089,7 @@ export function createAgentOrchestrator(
             turns: turn + 1,
             toolCalls: totalToolCalls,
           };
-          const result: AgentResult = isDocDiscussionTurn
+          let result: AgentResult = isDocDiscussionTurn
             ? docDiscussionContent.trim().length > 0
               // L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable
               // marker — a doc-discussion prose answer is a deliverable, and
@@ -3111,6 +3111,37 @@ export function createAgentOrchestrator(
                 turn + 1,
                 totalToolCalls,
               );
+          // L2-P1-EMPTY-TURN-CARD-1 (u1finalsite): the FINAL-ANSWER exit —
+          // the ONE silent-success site the "draft produced nothing" guard's
+          // own doc comment never covered. A no-tool-call answer that parses
+          // to an empty deliverable set used to return success:true with
+          // events:[] (the client's only surviving statement: "No events
+          // generated."). Route it through the SAME guard as the draft-tool
+          // arm (draftProducedNothingOnServer + emptyDraftMessage — no second
+          // predicate, no new message vocabulary), passing ONLY what the
+          // finish actually observed (choice.finish_reason): truncated=true
+          // means the noToolCall "stop" sentence never fires (it states the
+          // OBSERVED cause, never a guessed one). A notes-only answer-intent
+          // turn is a legitimate deliverable and must NOT be errored — the
+          // guard counts the 7 canonical channels only, so the notes channel
+          // is checked here, beside it. Non-doc-discussion arm ONLY: the
+          // doc-discussion prose answer (proseDeliverable) is unchanged.
+          if (
+            !isDocDiscussionTurn &&
+            result.success &&
+            draftProducedNothingOnServer(result) &&
+            !(result.notes?.length ?? 0)
+          ) {
+            result = {
+              ...result,
+              success: false,
+              error: emptyDraftMessage({
+                truncated: choice.finish_reason === 'length',
+                hadArguments: false,
+                noToolCall: true,
+              }),
+            };
+          }
           const elapsed = Date.now() - t0;
           
           // Record final turn stats
