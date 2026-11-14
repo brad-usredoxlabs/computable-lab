@@ -3901,7 +3901,7 @@ function LabwareEventEditorContent({
                     <span>Raw Data File</span>
                     <input
                       type="file"
-                      accept=".csv,.tsv,.txt,.json,.xml"
+                      accept=".csv,.tsv,.txt,.json,.xml,.cdf,.ch,.D,.dad"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (!file) return
@@ -3915,6 +3915,14 @@ function LabwareEventEditorContent({
                     {resultsMode.uploadedFileName ? (
                       <span className="results-mode-field__hint">
                         Uploaded: <strong>{resultsMode.uploadedFileName}</strong>
+                        {resultsMode.uploadedContentHash ? (
+                          <>
+                            {' · '}
+                            <code title={`content hash (from the data-reference): ${resultsMode.uploadedContentHash}`}>
+                              sha256: {resultsMode.uploadedContentHash.slice(0, 12)}…
+                            </code>
+                          </>
+                        ) : null}
                       </span>
                     ) : null}
                   </label>
@@ -3941,6 +3949,31 @@ function LabwareEventEditorContent({
                     Refresh Results
                   </button>
                 </div>
+                {resultsMode.error ? (
+                  <p className="results-mode-field__hint" data-testid="attach-error">
+                    {resultsMode.error}
+                  </p>
+                ) : null}
+                {resultsMode.parseSummary ? (
+                  <div className="results-mode-summary">
+                    <strong>Parse result</strong>
+                    <p>
+                      {resultsMode.parseSummary.parserId} v{resultsMode.parseSummary.parserVersion} · {resultsMode.parseSummary.units} · {resultsMode.parseSummary.rowCount} rows
+                    </p>
+                    <p>
+                      first: {resultsMode.parseSummary.firstPoint ?? 'n/a'} · last: {resultsMode.parseSummary.lastPoint ?? 'n/a'}
+                    </p>
+                    <p>
+                      measurement <code title={resultsMode.parseSummary.recordId}>{resultsMode.parseSummary.recordId}</code>
+                      {resultsMode.uploadedDataReferenceId ? (
+                        <>
+                          {' · data-reference '}
+                          <code title={resultsMode.uploadedDataReferenceId}>{resultsMode.uploadedDataReferenceId}</code>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="results-mode-summary">
                   <strong>Run-linked review</strong>
                   <p>{resultsMode.measurementSummary}</p>

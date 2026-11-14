@@ -19,12 +19,7 @@ const PARSER_OPTIONS = [
   { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV' },
 ] as const
 
-/**
- * What the parser actually read, read back off the created measurement record
- * (never synthesized client-side): parser id/version, units as the parser
- * reported them, row count, first and last data point verbatim, and the
- * data-reference stored path from the record's raw-data artifact.
- */
+/** What the parser actually read, read back off the created measurement record (never synthesized client-side). */
 export interface ResultsParseSummary {
   recordId: string
   parserId: string
@@ -98,7 +93,7 @@ export interface UseResultsModeResult {
   uploadedContentHash: string | null
   /** Data-reference record id anchoring the uploaded bytes (binary uploads only). */
   uploadedDataReferenceId: string | null
-  /** What the parser actually read, read back from the created measurement record (null until a successful ingest is readable). */
+  /** What the parser actually read, read back from the created measurement record (null until readable). */
   parseSummary: ResultsParseSummary | null
   parserId: string
   setParserId: (parserId: string) => void
@@ -158,32 +153,22 @@ function eventLabel(event: PlateEvent): string {
   return [event.eventId, assay, instrument].filter(Boolean).join(' · ')
 }
 
-/** One data point rendered verbatim from the record's own row — the parser's
- *  unit field and time field as stored, no recomputation. */
+/** One data point rendered verbatim from the record's own row — no recomputation. */
 function formatDataPoint(row: { timeMin?: number; value: number; unit?: string }): string {
   const unit = row.unit ? ` ${row.unit}` : ''
   const time = typeof row.timeMin === 'number' ? `${row.timeMin} min — ` : ''
   return `${time}${row.value}${unit}`
 }
 
-/**
- * Build the parse summary from the created measurement record's payload
- * (READ-BACK: the record as stored server-side — data rows, parserInfo,
- * channel labels, and the raw-data artifact's data-reference stored path).
- * A record that cannot be read back yields null — never a synthesized one.
- */
+/** Build the parse summary READ-BACK from the created record's payload; null when the record is not readable — never synthesized. */
 function buildParseSummary(recordId: string, payload: MeasurementRecordPayload | null): ResultsParseSummary | null {
   if (!payload) return null
   const parserId = payload.parserInfo?.parserId
   if (!parserId) return null
-  // The record's rows carry the parser's declared per-row unit (and, for
-  // chromatograms, a timeMin) beyond the generic MeasurementRow view.
   const rows = (payload.data ?? []) as Array<{ timeMin?: number; value: number; unit?: string }>
   const first = rows[0]
   const last = rows.length > 0 ? rows[rows.length - 1] : undefined
-  // The record's rows carry the parser's declared units directly: the time
-  // field (timeMin, in minutes) and the per-row intensity unit. Render them
-  // verbatim — do not recompute or infer units the record does not state.
+  // Units are the record's own per-row fields (timeMin in minutes; per-row unit) — verbatim, not recomputed.
   const hasTime = rows.some((row) => typeof row.timeMin === 'number')
   const intensityUnits = Array.from(new Set(rows.map((row) => row.unit).filter((unit): unit is string => Boolean(unit))))
   const unitsParts: string[] = []
@@ -490,11 +475,8 @@ export function useResultsMode(args: {
     return readRows(activeMeasurement?.payload ?? null)
   }, [activeMeasurement?.payload, preview])
 
-  // After a successful ingest, read the created measurement back off the
-  // refreshed workspace (the existing load/refresh path: refresh() above) and
-  // summarize what the parser actually put in the record. If the record is not
-  // (yet) readable, the summary stays null — the UI says so; nothing is
-  // synthesized.
+  // Read the created measurement back off the refreshed workspace (existing load/refresh path) and summarize
+  // what the parser actually put in the record. Not (yet) readable -> null; the UI says so; nothing is synthesized.
   const parseSummary = useMemo(() => {
     if (!ingestedMeasurementId) return null
     const record = workspace?.measurements.find((measurement) => measurement.recordId === ingestedMeasurementId)
