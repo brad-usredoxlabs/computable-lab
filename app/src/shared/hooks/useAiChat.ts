@@ -1252,6 +1252,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               ...(Array.isArray(m.metadata?.clarificationAnswers) && m.metadata.clarificationAnswers.length > 0
                 ? { clarificationAnswers: m.metadata.clarificationAnswers as AiClarificationAnswer[] }
                 : {}),
+              // L2-P1-RELOAD-CLARIFIER-1 / u2surviveriders (hydrate leg): ride the
+              // TYPED clarification requests back VERBATIM (the persist leg above
+              // wrote them) so a cold reload mid-clarification restores the SAME
+              // grouped card — same request ids, prompts and offered options —
+              // from the persisted document, NEVER re-derived on hydrate and never
+              // re-asked. Key ABSENT when never persisted (conditional-spread
+              // idiom), never `undefined`. The grouped-card arm (ChatLog.tsx:538)
+              // is NOT gated on `restored`, so no render change is needed.
+              ...(Array.isArray(m.metadata?.clarificationRequests) && m.metadata.clarificationRequests.length > 0
+                ? { clarificationRequests: m.metadata.clarificationRequests as AiClarificationRequest[] }
+                : {}),
               // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
               // mark the RESTORED message. Its answer inputs (the picker's
               // search field, the option buttons) do NOT survive a reload in
