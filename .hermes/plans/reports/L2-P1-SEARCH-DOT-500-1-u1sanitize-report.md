@@ -122,3 +122,5 @@ must never fabricate a result nor silently swallow a failure. The fix returns
 REAL hits (the LBW-THERMO record) — it does not paper over the throw with an
 empty 200 (the domain bait). No second authority created; no contract broken;
 the 500 catch-all stays for genuine failures.
+
+L2-P1-SEARCH-DOT-500-1 UNIT u1sanitize DONE bcd25919497417e58437464218d130a515736828
