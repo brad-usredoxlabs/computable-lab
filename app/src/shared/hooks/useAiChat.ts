@@ -335,6 +335,21 @@ export interface UseAiChatReturn {
   thinkingMode: boolean
   setThinkingMode: (value: boolean) => void
   /**
+   * L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON the pane must
+   * show when a SELECTED thread's hydration GET resolved to ZERO messages —
+   * this tab could not read the thread's messages (thread id + scope named).
+   * One predicate, fed by the hydration result: SET when a user-initiated
+   * `switchThread`'s read resolves empty, CLEARED when a read resolves with
+   * messages and on every thread reset (switch / new / re-key / fresh send).
+   * A fresh mint resolving empty is a NEW conversation (honest blank pane),
+   * NOT a named reason (the predicate is mint-exempt via userSwitchRef).
+   * Optional (absent-not-undefined, exactOptionalPropertyTypes) so hand-rolled
+   * stub literals that predate it keep typechecking; the REAL hook always
+   * supplies the key (null when no reason) — a consumer never sees it missing
+   * where `useAiChat` produced the chat.
+   */
+  threadUnreadable?: { threadId: string; scope: string } | null
+  /**
    * L2-THREAD-SCOPED-1: the ACTIVE thread id of the current scope. Only
    * present when the chat is thread-scoped (an `endpoint` is set) — absent
    * (not undefined) on in-memory chats so exactOptional surfaces never see a
@@ -928,6 +943,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // previewEvents, messages]; the ref keeps the CURRENT pair live).
   const activeThreadRef = useRef(activeThread)
   activeThreadRef.current = activeThread
+  // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON state (one
+  // predicate, fed by the hydration result — never re-derived from the list's
+  // messageCount). `userSwitchRef` marks that the current activation is a
+  // USER-initiated `switchThread`, so a read resolving EMPTY is a "could not
+  // read" state (not a fresh-mint new conversation — the honest blank pane).
+  const [threadUnreadable, setThreadUnreadable] = useState<{ threadId: string; scope: string } | null>(null)
+  const userSwitchRef = useRef(false)
 
   // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): scope-DECISION status
   // (absent / 'settled' = default). While provisional the lazy-mint and
@@ -945,6 +967,9 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // newThread / re-key) also drops the recovery marker — it belonged to the
     // turn whose messages just left the screen.
     setStatusRecoveredFrom(null)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the named-reason belongs to the
+    // read that produced it — a wipe (switch / new / re-key) drops it.
+    setThreadUnreadable(null)
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
     // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
@@ -961,6 +986,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     (id: string) => {
       if (!endpoint) return
       if (scopeStatusRef.current === 'provisional') return
+      // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: this activation is a
+      // USER-initiated selection — if its read resolves EMPTY, the pane
+      // shows the named reason (it is NOT a fresh-mint new conversation).
+      userSwitchRef.current = true
       writeTabThreadMapEntry(scope, id)
       resetChatState()
       setActiveThread({ scope: scope ?? '', id })
@@ -1060,6 +1089,9 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         // matching resetChatState (:947) and the send reset (:1265). Without
         // this a fresh EMPTY transcript rendered the previous turn's marker.
         setStatusRecoveredFrom(null)
+        // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the re-key wipe drops the
+        // named-reason too (it belonged to the read it preceded).
+        setThreadUnreadable(null)
         persistedIdsRef.current = new Set()
       }
       lastThreadKeyRef.current = threadKey
@@ -1075,6 +1107,35 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     getThread(endpoint, threadOpts)
       .then((thread) => {
         if (cancelled) return
+        // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON predicate,
+        // fed by the hydration result (ONE source — never the list's
+        // messageCount). A non-empty read is readable: clear the reason. An
+        // EMPTY read is a named reason ONLY when the activation is a
+        // USER-initiated switchThread (userSwitchRef) — a fresh mint (or the
+        // mount-time restore of a minted thread) resolving empty is a NEW
+        // conversation: the honest blank pane, not a "could not read" claim.
+        // The reason RIDES `honestWall` (the pane-relevant, transcript-region
+        // honest-failure channel): `honestWall` is in
+        // AiPanelContext.paneRelevantSignature, so setting/clearing it bumps
+        // the registration store and re-renders the pane in the production
+        // SIBLING topology (the pane is not a child of the hook owner). The
+        // pane renders the distinct `thread-unreadable` state off the
+        // STRUCTURED `threadUnreadable` predicate (this effect is the single
+        // writer — the wording never claims the thread is empty, only that
+        // this tab's read of it returned no messages).
+        if (thread.messages.length > 0) {
+          setThreadUnreadable(null)
+          setHonestWall(null)
+          userSwitchRef.current = false
+        } else {
+          const pair = activeThreadRef.current
+          if (userSwitchRef.current && pair) {
+            setThreadUnreadable({ threadId: pair.id, scope: pair.scope })
+            setHonestWall(
+              `This tab could not read the messages for thread ${pair.id} (scope ${pair.scope || 'default'}). The selected listed thread's read returned no messages to show here.`,
+            )
+          }
+        }
         if (thread.messages.length > 0) {
           const hydrated: ChatMessage[] = thread.messages
             .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -1268,6 +1329,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // L2-PROSE-SHORTHAND-SALVAGE-1: a new send starts a new turn — the
       // prior turn's recovery marker must not survive onto it.
       setStatusRecoveredFrom(null)
+      // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: a new send is the user acting
+      // on the thread — the prior read's named-reason must not survive onto
+      // the fresh turn (the composer is live, the conversation is resumable).
+      setThreadUnreadable(null)
 
       // LEG F fix run 1 (advc D1): RESUME a deferred re-key at the START of
       // a new turn. If the thread scope flipped while the previous turn was
@@ -2608,6 +2673,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     unresolvedRefs,
     honestWall,
     statusRecoveredFrom,
+    threadUnreadable,
     adoptionError,
     previewStagedLabwareCount,
     inputText,
