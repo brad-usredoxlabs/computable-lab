@@ -8,9 +8,9 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { stringify } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { AGENT_ALLOWED_TOOLS } from '../../ai/index.js';
 import { registerRoutes } from '../../api/routes.js';
 import type { PolicyDecisionRecord, PolicyRule, PolicySetDoc } from '../../policy/policySetEvaluator.js';
@@ -18,15 +18,23 @@ import type { CapabilityDescriptor } from './capabilityCatalogue.js';
 import type { CompiledJourneyEnvelope } from './journeyEnvelope.js';
 import {
   RULE_DISPATCH_POLICY_UNAVAILABLE,
+  RULE_DISPATCH_REFUSED,
   RULE_DISPATCH_UNCLASSIFIED,
+  RULE_DISPATCH_CAPABILITY_UNAVAILABLE,
   derivePolicyAttributes,
   guardJourneyDispatch,
   loadPolicySetsDir,
+  refuseUnavailableCapability,
 } from './journeyDispatch.js';
 
 const SCRATCH_ROOT = '/home/brad/.jcc-dispatch-scratch';
 const CAP = 'journey.fixture.dispatch';
 const NOW = '2026-11-13T05:00:00Z';
+/** The SHIPPED descriptors the noun-create declaration admits (config/journey/capabilities/).
+ * Read per test, never hand-copied: a flipped status in config is exactly what this unit guards. */
+const SHIPPED_CAPABILITIES_DIR = join(__dirname, '../../../../config/journey/capabilities');
+const loadShippedDescriptor = async (name: string): Promise<CapabilityDescriptor> =>
+  parse(await readFile(join(SHIPPED_CAPABILITIES_DIR, name), 'utf8')) as CapabilityDescriptor;
 
 /** Valid against schema/governance/policy-set.schema.yaml; only id/rules vary. */
 const makeSet = (id: string, rules: PolicyRule[], unclassified: 'allow' | 'confirm' | 'deny' = 'deny'): PolicySetDoc => ({
@@ -118,6 +126,55 @@ describe('guardJourneyDispatch', () => {
   });
 });
 
+/**
+ * L2-JOURNEY-NOUN-CREATE-1 (unit capguard): declared-as-enabled is not enabled.
+ * A descriptor that EXISTS in config/journey/capabilities/ is not a capability
+ * the journey may EXECUTE; status.available_now: false means declared, not
+ * enabled. The predicate is an execution precondition the route consults AHEAD
+ * of policy — it returns a diagnostic, never a PolicyDecisionRecord (no policy
+ * set is evaluated, and none may be fabricated to carry the refusal).
+ */
+describe('refuseUnavailableCapability', () => {
+  const stepId = 'choose-creation-path';
+  it('(h) the SHIPPED material-create descriptor is refused; the message names the capability, available_now: false and the step', async () => {
+    const descriptor = await loadShippedDescriptor('material-create.yaml');
+    expect(descriptor.status as object).toEqual({ declared: true, implemented: false, available_now: false, browser_certified: false });
+    const refusal = refuseUnavailableCapability(descriptor, stepId);
+    expect(refusal).not.toBeUndefined();
+    expect(refusal!.rule).toBe(RULE_DISPATCH_CAPABILITY_UNAVAILABLE);
+    expect(refusal!.message).toContain('journey.material-create');
+    expect(refusal!.message).toContain('available_now: false');
+    expect(refusal!.message).toContain(stepId);
+    expect(refusal!.step_id).toBe(stepId);
+  });
+
+  it('(h) the SHIPPED noun-create-from-document descriptor is refused the same way', async () => {
+    const descriptor = await loadShippedDescriptor('noun-create-from-document.yaml');
+    const refusal = refuseUnavailableCapability(descriptor, stepId);
+    expect(refusal!.rule).toBe(RULE_DISPATCH_CAPABILITY_UNAVAILABLE);
+    expect(refusal!.message).toContain('journey.noun-create-from-document');
+  });
+
+  it('(i) the SHIPPED available descriptor is NOT refused: available_now === true hands on', async () => {
+    const descriptor = await loadShippedDescriptor('material-library-search.yaml');
+    expect((descriptor.status as { available_now?: unknown }).available_now).toBe(true);
+    expect(refuseUnavailableCapability(descriptor, stepId)).toBeUndefined();
+  });
+
+  it('(i) a missing status object is NOT available: the schema makes status required, so an absent status is a malformed descriptor and must not read as permission', () => {
+    const malformed = { capability_id: 'journey.malformed', version: '1.0.0', implementation: { handler_kind: 'agent_tool', handler_ref: AGENT_ALLOWED_TOOLS[0]! } };
+    const refusal = refuseUnavailableCapability(malformed as CapabilityDescriptor, stepId);
+    expect(refusal).not.toBeUndefined();
+    expect(refusal!.rule).toBe(RULE_DISPATCH_CAPABILITY_UNAVAILABLE);
+    expect(refusal!.message).toContain('journey.malformed');
+  });
+
+  it('(i) a status object with available_now missing is NOT available either (only exactly true reads as permission)', () => {
+    const partial = { capability_id: 'journey.partial', version: '1.0.0', implementation: { handler_kind: 'agent_tool', handler_ref: AGENT_ALLOWED_TOOLS[0]! }, status: { declared: true, implemented: true, browser_certified: false } };
+    expect(refuseUnavailableCapability(partial as CapabilityDescriptor, stepId)!.rule).toBe(RULE_DISPATCH_CAPABILITY_UNAVAILABLE);
+  });
+});
+
 /** Minimal stubs for the unconditional registerRoutes registrations. */
 function stubRouteOptions() {
   const noop = async () => ({});
@@ -183,11 +240,31 @@ const buildApp = async (journeyCatalogueDir: string, journeyPolicySetDir: string
   apps.push(app);
   return app;
 };
-interface DispatchBody { ok: boolean; record?: PolicyDecisionRecord; diagnostics: Array<{ rule: string; message: string }> }
+interface DispatchBody { ok: boolean; record?: PolicyDecisionRecord; diagnostics: Array<{ rule: string; message: string; step_id?: string }> }
 const dispatch = async (app: FastifyInstance, extra: Record<string, unknown> = {}) => {
   const response = await app.inject({
     method: 'POST', url: '/api/journey/dispatch',
     payload: { document: document(), step_id: 'search', ...extra },
+  });
+  return { status: response.statusCode, body: response.json() as DispatchBody };
+};
+/** A lint-valid document whose ONE automatic step names the given capability;
+ * used against the REAL shipped catalogue so the descriptor is the shipped one. */
+const shippedDocument = (stepId: string, capabilityRef: string) => ({
+  journey_id: 'journey-dispatch-shipped', revision: 1,
+  authoring_actor: { actor_kind: 'person', actor_id: 'operator-1' },
+  request_anchor: { message_id: 'msg-cap', verbatim_text: 'create the material' },
+  objective: 'dispatch a step against the shipped catalogue', completion_contract: ['the step is dispatched'],
+  parameters: [],
+  steps: [{ id: stepId, capability_ref: capabilityRef, input_ports: [], interaction_mode: 'automatic', output_ports: [] }],
+  alternatives: { options: [{ alternative_id: 'alt-a', summary: 'a single declared option' }], selection_authority: 'user' },
+  return_contract: { checkpoint_ref: 'cp-1', permitted_result_types: ['completed'], require_explicit_resume: true },
+  assumptions: [], unresolved_questions: [],
+});
+const dispatchShipped = async (app: FastifyInstance, stepId: string, capabilityRef: string) => {
+  const response = await app.inject({
+    method: 'POST', url: '/api/journey/dispatch',
+    payload: { document: shippedDocument(stepId, capabilityRef), step_id: stepId },
   });
   return { status: response.statusCode, body: response.json() as DispatchBody };
 };
@@ -233,5 +310,50 @@ describe('POST /api/journey/dispatch', () => {
     expect(status).toBe(403);
     expect(body.ok).toBe(false);
     expect(body.diagnostics[0]!.message).toContain('no policy set declared');
+  });
+
+  /**
+   * L2-JOURNEY-NOUN-CREATE-1 (unit capguard) route leg. The route consults
+   * refuseUnavailableCapability AHEAD of loadPolicySetsDir, against the REAL
+   * shipped catalogue (options.journeyCatalogueDir is left at the default): a
+   * step naming journey.material-create (available_now: false in
+   * config/journey/capabilities/material-create.yaml) is refused before any
+   * policy set is read — 403, one diagnostic, NO record key (no policy set was
+   * evaluated; nothing is fabricated to carry the refusal).
+   * NOTE: the shipped noun-create declaration's own step "choose-creation-path"
+   * is human_in_the_loop, which the envelope guard refuses at 400 (it is never
+   * pre-compiled) BEFORE capability resolution; this leg therefore dispatches a
+   * lint-valid AUTOMATIC step that names the SAME shipped descriptor — the
+   * descriptor under guard is the shipped one either way.
+   */
+  it('(j) a step naming the shipped journey.material-create is refused BEFORE policy: 403, the named rule, no record key', async () => {
+    const app = await buildApp(SHIPPED_CAPABILITIES_DIR, await writePolicyDir([
+      makeSet('PSET-LANE2-ONE', [rule('R-ALLOW-DM', { effect_kind: 'domain_mutation' }, 'allow')]),
+    ]));
+    const { status, body } = await dispatchShipped(app, 'choose-creation-path', 'journey.material-create');
+    expect(status).toBe(403);
+    expect(body.ok).toBe(false);
+    expect(body.diagnostics).toHaveLength(1);
+    expect(body.diagnostics[0]!.rule).toBe(RULE_DISPATCH_CAPABILITY_UNAVAILABLE);
+    expect(body.diagnostics[0]!.message).toContain('journey.material-create');
+    expect(body.diagnostics[0]!.message).toContain('available_now: false');
+    expect(body.diagnostics[0]!.message).toContain('choose-creation-path');
+    // No policy set was evaluated or fabricated: the record key is ABSENT.
+    expect(body).not.toHaveProperty('record');
+  });
+
+  it('(j) the same request against an AVAILABLE capability is NOT refused by the new rule: it reaches policy and the deny wins, with the pre-change body shape', async () => {
+    const app = await buildApp(SHIPPED_CAPABILITIES_DIR, await writePolicyDir([
+      makeSet('PSET-LANE2-ONE', [rule('R-DENY-READ', { effect_kind: 'read' }, 'deny')]),
+    ]));
+    const { status, body } = await dispatchShipped(app, 'search', 'journey.material-library-search');
+    expect(status).toBe(403);
+    expect(body.ok).toBe(false);
+    // Exactly the pre-change policy refusal shape: a REAL evaluated record.
+    expect(body.diagnostics[0]!.rule).toBe(RULE_DISPATCH_REFUSED);
+    expect(body.diagnostics[0]!.message).toContain('R-DENY-READ');
+    expect(body.record!.outcome).toBe('blocked');
+    expect(body.record!.matched_rule_ids).toEqual(['R-DENY-READ']);
+    expect(body.record!.evaluated_attributes.capability).toBe('journey.material-library-search');
   });
 });
