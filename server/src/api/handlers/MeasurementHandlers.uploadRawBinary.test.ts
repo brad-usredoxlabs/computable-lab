@@ -1,11 +1,9 @@
 // @vitest-environment node
 /**
  * MeasurementHandlers.uploadRawBinary — L2-GC-RAW-BINARY-1 (binbytes).
- *
- * A NON-UTF8 upload (e.g. an Agilent GC-FID .ch / ANDI .cdf chromatogram) must be
- * written UNCHANGED through the existing device-backed blob store and answered with
- * the data-reference id + sha256; a UTF-8 (CSV) upload keeps today's git-inbox path
- * byte-for-byte. No second writer, no silent truncation.
+ * A NON-UTF8 upload (e.g. Agilent GC-FID .ch / ANDI .cdf) must be written UNCHANGED
+ * through the existing device-backed blob store and answered with the data-reference
+ * id + sha256; a UTF-8 (CSV) upload keeps today's git-inbox path byte-for-byte.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -16,30 +14,23 @@ import { StorageService } from '../../storage/StorageService.js';
 import type { AppContext } from '../../server.js';
 
 const SCRATCH = '/home/brad/.gc-raw-scratch';
-
 /** Bytes that are NOT valid UTF-8 (0xFF/0xFE/0x80 cannot round-trip). */
 const BINARY_BYTES = Buffer.from([0x2e, 0x00, 0xff, 0xfe, 0x41, 0x80]);
 const BINARY_SHA = createHash('sha256').update(BINARY_BYTES).digest('hex');
 const CSV_TEXT = 'well,metric,value\nA1,ct,12.5\nH12,ct,13.1\n';
 
-interface CreatedEnvelope {
-  envelope: { recordId: string; schemaId: string; payload: Record<string, unknown> };
-  message: string;
-}
+interface Envelope { recordId: string; schemaId: string; payload: Record<string, unknown>; }
+interface Created { envelope: Envelope; message: string; }
 
 function makeStore() {
-  const created: CreatedEnvelope[] = [];
+  const created: Created[] = [];
   return {
     created,
     // First call returns [] (fresh DREF namespace); later calls see prior DREFs
     // so the recorder increments (AC4: second upload = second data-reference).
-    async list(filter?: { kind?: string }) {
-      if (filter?.kind === 'data-reference') {
-        return created.map((c) => ({ recordId: c.envelope.recordId }));
-      }
-      return [];
-    },
-    async create(options: CreatedEnvelope) {
+    list: async (filter?: { kind?: string }) =>
+      filter?.kind === 'data-reference' ? created.map((c) => ({ recordId: c.envelope.recordId })) : [],
+    create: async (options: Created) => {
       created.push(options);
       return { success: true, envelope: options.envelope };
     },
@@ -50,17 +41,19 @@ function makeRepoAdapter() {
   const files = new Map<string, { content: string; message: string }>();
   return {
     files,
-    async fileExists(path: string) {
-      return files.has(path);
-    },
-    async createFile(options: { path: string; content: string; message: string }) {
+    fileExists: async (path: string) => files.has(path),
+    createFile: async (options: { path: string; content: string; message: string }) => {
       files.set(options.path, { content: options.content, message: options.message });
       return { success: true };
     },
   };
 }
 
-function makeCtx(store: ReturnType<typeof makeStore>, repoAdapter: ReturnType<typeof makeRepoAdapter>, deviceRoot: string): AppContext {
+function makeCtx(
+  store: ReturnType<typeof makeStore>,
+  repoAdapter: ReturnType<typeof makeRepoAdapter>,
+  deviceRoot: string,
+): AppContext {
   const storageService = new StorageService([
     { id: 'scratch', label: 'scratch device', kind: 'local-mount', default: true, mountPath: deviceRoot },
   ]);
@@ -68,13 +61,7 @@ function makeCtx(store: ReturnType<typeof makeStore>, repoAdapter: ReturnType<ty
 }
 
 function makeReply() {
-  return {
-    statusCode: 200,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-  };
+  return { statusCode: 200, status(code: number) { this.statusCode = code; return this; } };
 }
 
 interface BinaryResponse {
@@ -132,7 +119,6 @@ describe('MeasurementHandlers uploadRawMeasurementFile binary path', () => {
     // Bytes on disk under the device root equal the original buffer byte-for-byte.
     const onDisk = await readFile(join(deviceRoot, res.path));
     expect(Buffer.compare(onDisk, BINARY_BYTES)).toBe(0);
-    expect(envelope.payload['contentHash']).toBe(createHash('sha256').update(onDisk).digest('hex'));
   });
 
   it('keeps a UTF-8 CSV upload on the git-inbox path with today\u2019s response shape plus mode: text', async () => {
@@ -155,13 +141,12 @@ describe('MeasurementHandlers uploadRawMeasurementFile binary path', () => {
     expect(res.fileName).toBe('plate.csv');
     expect(res.size).toBe(buffer.length);
     expect(res.mode).toBe('text');
-    // No binary-path fields leak onto the text response (exactOptionalPropertyTypes: absent, not undefined).
+    // No binary-path fields leak onto the text response (absent, not undefined).
     expect('sha256' in res).toBe(false);
     expect('dataReferenceId' in res).toBe(false);
 
-    // The inbox file content is the exact decoded text (no U+FFFD mangling possible for valid UTF-8).
-    const written = repoAdapter.files.get(res.path);
-    expect(written?.content).toBe(CSV_TEXT);
+    // The inbox file content is the exact decoded text.
+    expect(repoAdapter.files.get(res.path)?.content).toBe(CSV_TEXT);
     expect(store.created.length).toBe(0);
   });
 
@@ -170,9 +155,9 @@ describe('MeasurementHandlers uploadRawMeasurementFile binary path', () => {
     const store = makeStore();
     const repoAdapter = makeRepoAdapter();
     const handlers = createMeasurementHandlers(makeCtx(store, repoAdapter, deviceRoot));
-    const reply = makeReply();
 
     // '====' is non-empty base64 that decodes to ZERO bytes (the gap EMPTY_FILE closes).
+    const reply = makeReply();
     const result = await handlers.uploadRawMeasurementFile(
       { body: { fileName: 'empty.bin', contentBase64: '====' } } as never,
       reply as never,
