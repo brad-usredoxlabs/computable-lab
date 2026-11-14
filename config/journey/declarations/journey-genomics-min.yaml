@@ -5,11 +5,13 @@
 # REAL work-surface registry (server/src/compiler/journey/genomicsMinFalsification.test.ts).
 #
 # EXTENDS the Pilot-A shape (labware-definition.yaml); it does not redesign it.
-# FALSIFICATION FINDING (the point of this unit): of the journey's beats, only
-# the CURIE-resolution beat has a capability in the 8-id catalogue. The
-# unservable beats are left as commented-out entries below — their ids are
-# NAMED in the report (F1-F4), never invented here, and the pin test reactivates
-# them and asserts journey_capability_not_in_catalogue for exactly those ids.
+# FALSIFICATION FINDING (FALSIFY-1, the point of that unit): of the journey's
+# beats, only the CURIE-resolution beat had a capability in the 8-id
+# catalogue; the unservable beats' ids are NAMED in that report (F1-F4), never
+# invented here. EXTENDED by u1nucsearch: F1 is now SERVED (admitted
+# descriptor); the remaining unservable beats (F2-F4) stay as commented-out
+# entries below, and the pin test reactivates them and asserts
+# journey_capability_not_in_catalogue for exactly those ids.
 journey_id: journey-genomics-min
 revision: 1
 authoring_actor:
@@ -37,7 +39,7 @@ parameters:
     provenance: user-supplied
     status: resolved
 steps:
-  # The one servable beat: the taxon+marker resolves against the ontology.
+  # The CURIE-resolution beat: the taxon+marker resolves against the ontology.
   # journey.ontology-lookup is admitted and available_now: true.
   - id: resolve-marker
     capability_ref: journey.ontology-lookup
@@ -46,20 +48,23 @@ steps:
       - version: v1
         draft_id: DRAFT-genomics-marker
     interaction_mode: automatic
-  # UN-SERVABLE BEATS — commented out on purpose. The catalogue (8 ids) has no
-  # descriptor for any of them; inventing one is the defect this gate exists to
-  # catch. The pin test reactivates each and asserts the refusal.
-  # F1: nucleotide search on the resolved taxon+marker (ncbi_nucleotide_search);
-  #     the observation must be recorded as a VERSIONED input (query, retrieval
-  #     date, truncation/pagination, accession versions). journey.ncbi-gene-search
-  #     is gene-TARGET resolution, not a nucleotide search — not a substitute.
-  # - id: nucleotide-search
-  #   capability_ref: journey.ncbi-nucleotide-search
-  #   input_ports: []
-  #   output_ports:
-  #     - version: v1
-  #       draft_id: DRAFT-nucleotide-observation
-  #   interaction_mode: automatic
+  # F1 is SERVED (u1nucsearch): journey.ncbi-nucleotide-search is admitted —
+  # a nucleotide search on the resolved taxon+marker (ncbi_nucleotide_search).
+  # The observation is a STAGED DRAFT (no record_id, no receipt): recording
+  # the versioned observation is F2, still refused below. journey.ncbi-gene-
+  # search is gene-TARGET resolution, not a nucleotide search — not a
+  # substitute.
+  - id: nucleotide-search
+    capability_ref: journey.ncbi-nucleotide-search
+    input_ports: []
+    output_ports:
+      - version: v1
+        draft_id: DRAFT-nucleotide-observation
+    interaction_mode: automatic
+  # UN-SERVABLE BEATS — F2/F3/F4 commented out on purpose: the catalogue (9
+  # ids) still has no descriptor for any of them; inventing one is the defect
+  # this gate exists to catch. The pin test reactivates each and asserts the
+  # refusal.
   # F2: retained candidate evidence — the versioned observation of the search.
   #     No capability in the catalogue records an external-search observation.
   # - id: retain-candidates

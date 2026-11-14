@@ -107,13 +107,17 @@ describe('seeded journey capability catalogue (real data, shipped registry)', ()
     );
     if (!base) throw new Error('expected at least one read-only seeded descriptor');
     const candidate = structuredClone(base.doc) as CapabilityDescriptor;
-    candidate.implementation.handler_ref = 'ncbi_nucleotide_search';
+    // u1nucsearch moved the set deliberately (8 -> 9): 'ncbi_nucleotide_search'
+    // is now admitted by the allowlist, so the dangling fixture must be a
+    // handler id absent from EVERY registry — ncbi_protein_search is the
+    // sibling tool that is registered (ncbiTools.ts:154) but NOT agent-allowed.
+    candidate.implementation.handler_ref = 'ncbi_protein_search';
     const result = await admitCapabilityCatalogue(
       [...seeded, { file: 'dangling-candidate.yaml', doc: candidate }],
       knownHandlerIds,
     );
     if (result.ok) throw new Error(`expected rejection, got ${result.capabilities.length} admitted`);
-    expect(result.diagnostics.join('\n')).toContain('ncbi_nucleotide_search');
+    expect(result.diagnostics.join('\n')).toContain('ncbi_protein_search');
     // The real ones survive; nothing from the candidate is admitted.
     expect(result.capabilities).toHaveLength(seeded.length);
     expect(result.capabilities.map((c) => c.capability_id)).toEqual(ids);
