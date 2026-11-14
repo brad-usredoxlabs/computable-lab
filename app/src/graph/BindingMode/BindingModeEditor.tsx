@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import type { RecordEnvelope } from '../../types/kernel'
-import type { Labware } from '../../types/labware'
+import {
+  labwareRecordToEditorLabware,
+  type Labware,
+  type LabwareRecordPayload,
+} from '../../types/labware'
 import { usePlatformRegistry } from '../../shared/hooks/usePlatformRegistry'
 import { DeckVisualizationPanel, type DeckPlacement } from '../labware/DeckVisualizationPanel'
 import { DeckPickerSelect } from './DeckPickerSelect'
@@ -88,6 +92,27 @@ interface BindingChange {
   labware?: Array<{ roleId: string; labwareInstanceRef: string }>
   materials?: Array<{ roleId: string; materialInstanceRef: string }>
   deckPlatformId?: string
+}
+
+/**
+ * Merge one incoming `BindingChange` into the pending debounce accumulator.
+ * `labware` / `materials` merge per-role (last write for a role wins), so edits
+ * made inside one debounce window accumulate instead of replacing each other;
+ * `deckPlatformId` is the scalar field of the same object, so a later value
+ * wins. The server keeps its own per-role merge — this only stops the client
+ * from dropping edits it made itself.
+ */
+function mergeBindingChange(prev: BindingChange | null, next: BindingChange): BindingChange {
+  const merged: BindingChange = prev ?? {}
+  const mergeRoleList = <T extends { roleId: string }>(keptList: T[] | undefined, incoming: T[] | undefined): T[] | undefined => {
+    if (!incoming) return keptList
+    const kept = (keptList ?? []).filter((entry) => !incoming.some((c) => c.roleId === entry.roleId))
+    return [...kept, ...incoming]
+  }
+  merged.labware = mergeRoleList(merged.labware, next.labware)
+  merged.materials = mergeRoleList(merged.materials, next.materials)
+  if (next.deckPlatformId !== undefined) merged.deckPlatformId = next.deckPlatformId
+  return merged
 }
 
 export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
@@ -271,7 +296,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
   const scheduleSave = useCallback(
     (changes: BindingChange) => {
-      pendingChangesRef.current = changes
+      pendingChangesRef.current = mergeBindingChange(pendingChangesRef.current, changes)
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
       }
@@ -333,23 +358,41 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
     return () => clearTimeout(handle)
   }, [lastEditAt, id])
 
-  // Build deck placements from current bindings
+  // Build deck placements from current bindings — LABWARE roles only. The
+  // deck panel's contract is "placements are labware": material bindings are
+  // a different record kind and must never be presented as deck objects.
   const deckPlacements = useMemo<DeckPlacement[]>(() => {
     const placements: DeckPlacement[] = []
     for (const [roleId, binding] of Object.entries(currentBindings)) {
+      if (!labwareRoles.some((r) => r.roleId === roleId)) continue
       placements.push({ slotId: `role:${roleId}`, labwareId: binding.instanceRef })
     }
     return placements
-  }, [currentBindings])
+  }, [currentBindings, labwareRoles])
 
-  // Build labware list for DeckVisualizationPanel
-  const deckLabwares = useMemo(() => {
-    const labwares: Array<{ labwareId: string; name: string }> = []
+  // Build the labware list for DeckVisualizationPanel from the SAME
+  // labware-only view. Each bound record is a full `Labware` object built by
+  // the canonical record mapper: a persisted record's `labwareType` is the
+  // schema CATEGORY ('plate', 'reservoir', …) while the panel needs the render
+  // type + real addressing/geometry, which only the mapper derives from
+  // `format`. A record missing from the universe is skipped — never stubbed.
+  const deckLabwares = useMemo<Labware[]>(() => {
+    const labwares: Labware[] = []
     for (const [roleId, binding] of Object.entries(currentBindings)) {
-      labwares.push({ labwareId: binding.instanceRef, name: roleId })
+      if (!labwareRoles.some((r) => r.roleId === roleId)) continue
+      const record = labwareUniverse.find((r) => r.recordId === binding.instanceRef)
+      const payload = record?.payload as LabwareRecordPayload | undefined
+      if (!record || !payload) continue
+      const mapped = labwareRecordToEditorLabware({ ...payload, recordId: record.recordId })
+      labwares.push({
+        ...mapped,
+        labwareId: binding.instanceRef,
+        recordId: binding.instanceRef,
+        name: roleId,
+      })
     }
     return labwares
-  }, [currentBindings])
+  }, [currentBindings, labwareRoles, labwareUniverse])
 
   if (loading) return <div className="binding-mode-editor">Loading planned-run...</div>
   if (error) return <div className="binding-mode-editor binding-mode-editor--error">{error}</div>
@@ -412,7 +455,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
               platform={currentPlatformId}
               variant=""
               platforms={platforms}
-              labwares={deckLabwares as Labware[]}
+              labwares={deckLabwares}
               placements={deckPlacements}
               onPlatformChange={handlePlatformChange}
               onVariantChange={() => {}}
