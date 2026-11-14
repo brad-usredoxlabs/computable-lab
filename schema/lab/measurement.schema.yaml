@@ -130,6 +130,12 @@ properties:
           type: number
         unit:
           type: string
+        timeMin:
+          type: number
+          description: >
+            Retention time in minutes, as the parser transcribed it (declared
+            on MeasurementRow; emitted by chromatographic parsers such as
+            agilent6890). Absent for non-chromatographic reads.
 
   artifacts:
     type: array
@@ -158,6 +164,27 @@ properties:
       parsedAt:
         type: string
         format: date-time
+      units:
+        type: object
+        description: >
+          The units the PARSER DECLARED for its read, transcribed from the
+          source file (e.g. the header's bracket tokens). A unit the parser
+          could not read is the literal 'unstated' — never a default; absent
+          entirely when the parser declares no units.
+        additionalProperties: false
+        required: [ time, intensity ]
+        properties:
+          time:
+            type: string
+          intensity:
+            type: string
+      metadata:
+        type: object
+        description: >
+          Preamble metadata the parser transcribed verbatim from the source
+          file (e.g. Instrument, Method, Injection Date) — what the file
+          said, not a default.
+        additionalProperties: { type: string }
 
   notes:
     type: string

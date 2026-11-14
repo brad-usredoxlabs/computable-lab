@@ -40,6 +40,8 @@ type MeasurementPayload = {
     parserId: string;
     parserVersion: string;
     parsedAt: string;
+    units?: { time: string; intensity: string };
+    metadata?: Record<string, string>;
   };
 };
 
@@ -169,6 +171,14 @@ export class MeasurementService {
         parserId: parsed.parserId,
         parserVersion: parsed.parserVersion,
         parsedAt,
+        // u0parserinfo: persist the parser's OWN declared units and preamble
+        // metadata (MeasurementParseResult) — what the file said, verbatim.
+        // Omitted entirely when the parser declares none: never a bare
+        // undefined, never a friendly default for a missing/sentinel unit.
+        ...(parsed.units !== undefined ? { units: parsed.units } : {}),
+        ...(parsed.metadata !== undefined && Object.keys(parsed.metadata).length > 0
+          ? { metadata: parsed.metadata }
+          : {}),
       },
     };
 
