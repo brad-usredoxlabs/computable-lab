@@ -133,4 +133,40 @@ describe('agilent6890 ChemStation parser (unit chemstation)', () => {
     const me = expectBadRequest(() => parser.parse('"RetTime [min]","Signal [pA]"\n'));
     expect(me.message).toMatch(/no data rows/i);
   });
+
+  it('refuses a tab row whose intensity cell is empty, quoting the line and the detected headers (advcfix1)', () => {
+    const content = ['Time [min]\tSignal [pA]\tPeak No', '0.1\t\t7', ''].join('\n');
+    const me = expectBadRequest(() => parser.parse(content));
+    // The empty middle cell must not shift the columns: the row is refused,
+    // with the offending line quoted verbatim and the detected headers named.
+    expect(me.message).toContain('0.1\t\t7');
+    expect(me.message).toContain('line 2');
+    expect(me.message).toContain('Time [min]');
+    expect(me.message).toContain('Signal [pA]');
+  });
+
+  it('parses a tab-separated row positionally (advcfix1)', () => {
+    const result = parser.parse(['Time [min]\tSignal [pA]\tPeak No', '0.1\t250.5\t7', ''].join('\n'));
+    expect(result.data.length).toBe(1);
+    expect(result.data[0]).toEqual({
+      well: 'NA',
+      metric: 'intensity',
+      value: 250.5,
+      channelId: 'chromatogram',
+      unit: 'pA',
+      timeMin: 0.1,
+    });
+  });
+
+  it('refuses non-numeric cells that a prefix parse would silently coerce (advcfix1)', () => {
+    const content1 = ['Time [min]\tSignal [pA]', '0.1\t1.2.3', ''].join('\n');
+    const me1 = expectBadRequest(() => parser.parse(content1));
+    expect(me1.message).toContain('0.1\t1.2.3');
+    expect(me1.message).toContain('line 2');
+
+    const content2 = ['Time [min]\tSignal [pA]', '45abc\t10', ''].join('\n');
+    const me2 = expectBadRequest(() => parser.parse(content2));
+    expect(me2.message).toContain('45abc\t10');
+    expect(me2.message).toContain('line 2');
+  });
 });
