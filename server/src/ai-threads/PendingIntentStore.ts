@@ -19,6 +19,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateCheckpoint, validateContextDelta, type ContractDiagnostic, type ContextDelta, type PendingIntentCheckpoint } from '../compiler/journey/checkpointContract.js';
+import type { RestoreVerdict } from '../compiler/journey/checkpointRestoreCheck.js';
 import { DEFAULT_THREAD_SCOPE, isValidThreadSegment } from './AiThreadStore.js';
 
 export interface PendingIntentStoreOptions {
@@ -28,6 +29,14 @@ export interface PendingIntentStoreOptions {
   /** Absent scope lands under the reserved DEFAULT_THREAD_SCOPE segment (as for the sibling store). */
   scope?: string;
   threadId: string;
+  /**
+   * Origin-record revision check consulted on resume, BEFORE the status 'resumed' document is
+   * built. A blocked verdict refuses with the verdict's OWN named code (the store re-implements
+   * no comparison — restoreCheckpoint is the one authority) and writes nothing: the document
+   * stays 'pending', the version is untouched, and no receipt exists. Absent = today's
+   * behaviour (no default that pretends a check ran; it is a declared dependency, not a guess).
+   */
+  originCheck?: (checkpoint: PendingIntentCheckpoint) => Promise<RestoreVerdict>;
 }
 
 /** All REQUIRED: an absent field is a type error, never a silently-`undefined` receipt field (exactOptionalPropertyTypes). */
@@ -59,6 +68,8 @@ export class PendingIntentStore {
   private readonly scopeSeg: string;
   private readonly threadId: string;
   private readonly filePath: string;
+  /** Declared dependency, not a guess: absent (undefined) = no check, exactly today's behaviour. */
+  private readonly originCheck: PendingIntentStoreOptions['originCheck'];
 
   constructor(options: PendingIntentStoreOptions) {
     this.userId = segment(options.userId, 'userId');
@@ -67,6 +78,7 @@ export class PendingIntentStore {
     this.scopeSeg = segment(options.scope ?? DEFAULT_THREAD_SCOPE, 'scope');
     this.threadId = segment(options.threadId, 'threadId');
     this.filePath = join(options.rootDir, this.userId, this.endpoint, this.scopeSeg, `${this.threadId}.checkpoint.json`);
+    this.originCheck = options.originCheck;
   }
 
   /** Order one operation on this file behind all previous ones; the chain never rejects, so a failure cannot wedge later ones. */
@@ -101,6 +113,17 @@ export class PendingIntentStore {
       }
       if (doc.status === 'resumed') {
         return { ok: false, diagnostics: [versionConflict(`checkpoint ${doc.checkpoint_id} was already resumed: its resume_receipt is authoritative and consumption is once-only`)] };
+      }
+      // L2-JOURNEY-FALSIFY-1 (u1refdrill): consult the origin-record revision check (the ONE
+      // authority — restoreCheckpoint; the store re-implements no token comparison) BEFORE
+      // building the status 'resumed' document. A blocked verdict refuses with the verdict's
+      // OWN named code and writes NOTHING: the document stays 'pending', the version is
+      // untouched, and no receipt is minted — a refused resume consumes nothing.
+      if (this.originCheck !== undefined) {
+        const verdict = await this.originCheck(doc);
+        if (!verdict.restorable) {
+          return { ok: false, diagnostics: [{ code: verdict.code, path: '/origin/record_revisions', message: verdict.message }] };
+        }
       }
       // Re-run the one seam on the result before it hits disk; receipt fields come from REQUIRED inputs (never `undefined`).
       const next = validateCheckpoint({

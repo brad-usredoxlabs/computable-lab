@@ -114,6 +114,68 @@ describe('PendingIntentStore — durable checkpoint beside the thread (cpstore3)
     if (!again.ok) expect(again.diagnostics[0]?.code).toBe('version_conflict');
   });
 
+  it('resume consults the origin-record revision check BEFORE writing: a changed origin record is refused origin-record-changed and the checkpoint is left untouched (u1refdrill)', async () => {
+    const root = await makeRoot('cpstore3-refdrill-');
+    let consulted = 0;
+    const s = new PendingIntentStore({
+      rootDir: root, userId: 'u1', endpoint: 'protocols', threadId: 'thread-A',
+      originCheck: async () => {
+        consulted += 1;
+        return {
+          restorable: false,
+          code: 'origin-record-changed',
+          recordId: 'rec-1',
+          message: "origin record rec-1 changed since the checkpoint: declared revision '7' but the live envelope's contentSha is '9'",
+        };
+      },
+    });
+    // The parked checkpoint declares the origin record at revision '7'; the check reports rec-1 has since moved to '9'.
+    await expect(s.save(makeCheckpoint({
+      status: 'pending',
+      origin: { surface: 'deck-surface', route: '/decks', active_tab: 'tab-1', record_revisions: [{ record_id: 'rec-1', revision: '7' }] },
+    }))).resolves.toMatchObject({ ok: true });
+    const result = await s.resume('cp-journey-1', resumeInput('rcpt-1', '2026-11-13T03:43:00.000Z', 'brad'));
+    // The call is refused with the NAMED code (not a generic contract failure) and the check ran...
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.map((d) => d.code)).toEqual(['origin-record-changed']);
+      expect(result.diagnostics[0]?.message).toContain('rec-1');
+    }
+    expect(consulted).toBe(1);
+    // ...and BEFORE any write: the stored document re-reads status 'pending', the version is unchanged, and no resume_receipt was ever written.
+    const reloaded = await s.load('cp-journey-1');
+    expect(reloaded).not.toBeNull();
+    if (reloaded !== null) {
+      expect(reloaded.status).toBe('pending');
+      expect(reloaded.concurrency_version).toBe(1);
+      expect(reloaded.resume_receipt).toBeUndefined();
+    }
+  });
+
+  it('a resume with all origin revisions still matching resumes exactly as today, and two concurrent resumes still produce exactly one winner even when the check is wired (u1refdrill)', async () => {
+    const root = await makeRoot('cpstore3-refdrillmatch-');
+    const originCheck = async () => ({ restorable: true, checked: ['rec-1'] });
+    const make = () => new PendingIntentStore({
+      rootDir: root, userId: 'u1', endpoint: 'protocols', threadId: 'thread-A', originCheck,
+    });
+    const tabA = make();
+    const tabB = make();
+    const cp = makeCheckpoint({
+      origin: { surface: 'deck-surface', route: '/decks', active_tab: 'tab-1', record_revisions: [{ record_id: 'rec-1', revision: '7' }] },
+    });
+    await expect(tabA.save(cp)).resolves.toMatchObject({ ok: true });
+    const [a, b] = await Promise.all([
+      tabA.resume('cp-journey-1', resumeInput('rcpt-M', '2026-11-13T03:44:00.000Z', 'tab-A')),
+      tabB.resume('cp-journey-1', resumeInput('rcpt-N', '2026-11-13T03:44:01.000Z', 'tab-B')),
+    ]);
+    // AC3: matching revisions do NOT change the resume — the existing CAS still gives exactly one winner.
+    expect([a, b].map((r) => (r.ok ? 'ok' : r.diagnostics[0]?.code)).sort()).toEqual(['ok', 'version_conflict']);
+    const winner = a.ok ? a : b;
+    const loser = a.ok ? b : a;
+    if (winner.ok) expect(winner.checkpoint.status).toBe('resumed');
+    if (!loser.ok) expect(loser.diagnostics[0]?.message).toContain('concurrency_version');
+  });
+
   it('a delta declaring request_revision is refused in injection mode; a plain delta passes the seam', async () => {
     const s = store(await makeRoot('cpstore3-delta-'));
     await expect(s.save(makeCheckpoint())).resolves.toMatchObject({ ok: true });
