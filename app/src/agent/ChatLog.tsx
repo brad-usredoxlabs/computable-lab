@@ -300,7 +300,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
    * produce a bordered box containing only an empty <ol> — on a phone that
    * reads as a mangled grey rectangle under the question.
    */
-  function renderClarificationBlock(message: ChatMessage) {
+  function renderClarificationBlock(message: ChatMessage, restoredAnswerable: boolean) {
     const clarification = message.clarification!
     // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice): a
     // THREAD-RESTORED message (the useAiChat getThread hydrate marks it
@@ -315,7 +315,15 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     // (`<p>{message.content}</p>`), so "render neither" preserves the record
     // of what was asked while dropping the dead chrome. Live turns carry no
     // `restored` flag and render byte-unchanged (the controls pin this).
-    if (message.restored) return null
+    // L2-P1-RELOAD-CLARIFIER-1 (tailanswer): the ONE exception — a restored
+    // turn that is UNANSWERED (the isClarificationAnswered adjacency rule)
+    // and is the LAST message is the live open question rehydrated on
+    // reload (pending intent is restored on reload, context §2.6 — and
+    // never a record): it keeps its answer surface so the person can still
+    // answer it. Every other restored turn (historical, or already
+    // answered) stays fully suppressed. Rendering is pure — no append, no
+    // id, no server call.
+    if (message.restored && !restoredAnswerable) return null
     const options = clarification.options ?? []
     const request = clarificationRequest(clarification)
     const promptDiffers = message.content !== clarification.prompt
@@ -475,6 +483,13 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           // the arms below render byte-unchanged.
           const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
           const answered = hasClarification && isClarificationAnswered(messages, index)
+          // L2-P1-RELOAD-CLARIFIER-1 (tailanswer): the same adjacency rule
+          // that names a restored turn ANSWERED also names the ONE restored
+          // turn that is still open — unanswered AND the last message. Only
+          // that one keeps its answer surface (renderClarificationBlock
+          // below); a restored turn followed by another message is
+          // historical and stays input-less (the D3-CHROME pin).
+          const restoredAnswerable = Boolean(message.restored) && !answered && index === messages.length - 1
           const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
           // BGATE-FIX D3 (render-side dedupe — see renderTypedClarification):
           // the typed cards print a prompt only when it is NOT already on
@@ -585,7 +600,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
             </div>
           ) : (
             <>
-              {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
+              {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message, restoredAnswerable)}
               {message.clarificationRequests && message.clarificationRequests.length > 1 && onClarificationSubmit ? (
                 // L2-CLARIFY-CARD-1 (P4): ONE card per sentence (one slot per
                 // fact, one Submit, one answered row). The single-request and
