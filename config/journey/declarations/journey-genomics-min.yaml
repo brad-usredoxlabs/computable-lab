@@ -1,0 +1,137 @@
+# L2-JOURNEY-FALSIFY-1 (unit falsify-compose) — the minimal genomics journey
+# (JOURNEY-GENOMICS-MIN-1), AUTHORED AS DATA in the journey-document format.
+# A declaration, not code: it changes no behavior. It must survive
+# lintJourneyDocument against the REAL shipped capability catalogue and the
+# REAL work-surface registry (server/src/compiler/journey/genomicsMinFalsification.test.ts).
+#
+# EXTENDS the Pilot-A shape (labware-definition.yaml); it does not redesign it.
+# FALSIFICATION FINDING (the point of this unit): of the journey's beats, only
+# the CURIE-resolution beat has a capability in the 8-id catalogue. The
+# unservable beats are left as commented-out entries below — their ids are
+# NAMED in the report (F1-F4), never invented here, and the pin test reactivates
+# them and asserts journey_capability_not_in_catalogue for exactly those ids.
+journey_id: journey-genomics-min
+revision: 1
+authoring_actor:
+  actor_kind: agent
+  actor_id: journey-author
+request_anchor:
+  message_id: corpus-genomics-min-1
+  verbatim_text: "Alistipes 16S: search, select sequences, align, and give me the rendered alignment back with my selection intact"
+objective: >
+  resolve the taxon+marker to ontology CURIEs, then search NCBI Nucleotide,
+  have a person select candidate sequences into a committed collection, run
+  MAFFT on that collection, and return to the origin with the selection and
+  the rendered alignment intact.
+completion_contract:
+  - "the taxon+marker is resolved to CURIEs"
+  - "the person's selection is committed as a sequence-collection record"
+  - "the alignment artefact is rendered and the selection is returned with it"
+parameters:
+  - name: taxon
+    value: Alistipes
+    provenance: user-supplied
+    status: resolved
+  - name: marker
+    value: 16S
+    provenance: user-supplied
+    status: resolved
+steps:
+  # The one servable beat: the taxon+marker resolves against the ontology.
+  # journey.ontology-lookup is admitted and available_now: true.
+  - id: resolve-marker
+    capability_ref: journey.ontology-lookup
+    input_ports: []
+    output_ports:
+      - version: v1
+        draft_id: DRAFT-genomics-marker
+    interaction_mode: automatic
+  # UN-SERVABLE BEATS — commented out on purpose. The catalogue (8 ids) has no
+  # descriptor for any of them; inventing one is the defect this gate exists to
+  # catch. The pin test reactivates each and asserts the refusal.
+  # F1: nucleotide search on the resolved taxon+marker (ncbi_nucleotide_search);
+  #     the observation must be recorded as a VERSIONED input (query, retrieval
+  #     date, truncation/pagination, accession versions). journey.ncbi-gene-search
+  #     is gene-TARGET resolution, not a nucleotide search — not a substitute.
+  # - id: nucleotide-search
+  #   capability_ref: journey.ncbi-nucleotide-search
+  #   input_ports: []
+  #   output_ports:
+  #     - version: v1
+  #       draft_id: DRAFT-nucleotide-observation
+  #   interaction_mode: automatic
+  # F2: retained candidate evidence — the versioned observation of the search.
+  #     No capability in the catalogue records an external-search observation.
+  # - id: retain-candidates
+  #   capability_ref: journey.sequence-candidate-record
+  #   input_ports:
+  #     - version: v1
+  #       draft_id: DRAFT-nucleotide-observation
+  #   output_ports:
+  #     - version: v1
+  #       draft_id: DRAFT-candidate-evidence
+  #   interaction_mode: automatic
+  # F3: HUMAN TASK selecting sequences; completion = a committed collection
+  #     record with versioned members (not a page visit). No governed-write
+  #     capability mints a sequence-collection record.
+  # - id: select-candidates
+  #   capability_ref: journey.sequence-collection-create
+  #   input_ports:
+  #     - version: v1
+  #       draft_id: DRAFT-candidate-evidence
+  #   output_ports:
+  #     - version: v1
+  #       record_id: COLLECTION-SELECTED
+  #       record_type: sequence-collection
+  #       receipt_id: RCPT-COLLECTION-SELECTED
+  #   interaction_mode: human_in_the_loop
+  #   human_task:
+  #     decision: "select the candidate sequences to commit"
+  #     surface: sequences
+  #     controls: [sequence-candidate-list]
+  #     selectable_kinds: [sequence]
+  #     completion:
+  #       kind: versioned_selection
+  #       receipt_required: true
+  #     output_port:
+  #       version: v1
+  #       record_id: COLLECTION-SELECTED
+  #       record_type: sequence-collection
+  #       receipt_id: RCPT-COLLECTION-SELECTED
+  #     on_cancel: keep_journey_active
+  #     on_defer: keep_journey_active
+  # F4: MAFFT execution through the existing engine runner. No capability in
+  #     the catalogue runs an alignment engine.
+  # - id: run-mafft
+  #   capability_ref: journey.sequence-alignment-run
+  #   input_ports:
+  #     - version: v1
+  #       record_id: COLLECTION-SELECTED
+  #       record_type: sequence-collection
+  #       receipt_id: RCPT-COLLECTION-SELECTED
+  #   output_ports:
+  #     - version: v1
+  #       alignment_id: ALIGN-MAFFT-1
+  #   interaction_mode: automatic
+  # The rendered-alignment beat is PRESENTATION, not execution: a page renders
+  # the artefact; it owns no capability (architect-context-l2.md §2.4), so it
+  # is not a step and no capability_ref is invented for it.
+alternatives:
+  options:
+    - alternative_id: ncbi-nucleotide-path
+      summary: "search NCBI Nucleotide for Alistipes 16S marker candidates (unservable today — F1)"
+  selection_authority: user
+return_contract:
+  checkpoint_ref: cp-journey-genomics-min
+  permitted_result_types:
+    - completed
+    - abandoned
+  require_explicit_resume: true
+assumptions:
+  - "journey.ncbi-gene-search resolves gene targets against NCBI Gene; it is not a nucleotide search on a taxon+marker and is not a substitute for F1"
+  - "the rendered-alignment beat is a presentation of the alignment artefact, not a capability, so the composition commits no presentation_surface for it"
+unresolved_questions:
+  - "F1: the nucleotide-search beat needs an id the catalogue does not supply (journey.ncbi-nucleotide-search); the composition refuses the id rather than inventing it"
+  - "F2: retained candidate evidence (the versioned external-search observation) has no capability (journey.sequence-candidate-record)"
+  - "F3: the human selection beat's committed sequence-collection record has no governed-write capability (journey.sequence-collection-create)"
+  - "F4: MAFFT execution through the existing engine runner has no capability (journey.sequence-alignment-run)"
