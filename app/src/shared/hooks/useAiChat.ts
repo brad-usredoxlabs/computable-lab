@@ -30,6 +30,7 @@ import type {
   OntologyRefProposal,
   AiConversationMessage,
   AiLabwareAddition,
+  AiRecordCreation,
   InstrumentApplianceJob,
   PromptMention,
   AiAgentActionEnvelope,
@@ -439,6 +440,15 @@ export interface AiProposalDraft {
    * the EXISTING record (keyed by recordId), never a re-creation.
    */
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
+  /**
+   * L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft (decision
+   * STARTER-PACK-AND-PROMPT1-l2-20261114 / gate PROMPT1-GATE-20261114T051016Z,
+   * finding R1-13): records the done wants CREATED — carried VERBATIM from
+   * result.recordCreations (conditional spread: ABSENT when the done carried
+   * none — exactOptionalPropertyTypes). Staging writes nothing (Accept is the
+   * one write path; builder forwards them, draftPreview.ts:487).
+   */
+  recordCreations?: AiRecordCreation[]
   /** The prompt that produced this draft. */
   prompt: string
   // NOTE (L2-CHAT-1 FIX1 D7): this draft carries NO `revisionHistory` field.
@@ -1932,7 +1942,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // the previous preview's trail + THIS draft's prompt, so the FIRST
             // draft's prompt rides as currentPreviewDraft.sourcePrompt and is
             // never in the trail (the trail starts at the 2nd draft).
-            if (normalizedPreviewEvents.length > 0 && !isConfirm) {
+            if ((normalizedPreviewEvents.length > 0 || (result.recordCreations?.length ?? 0) > 0) && !isConfirm) {
+              // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only turn
+              // (zero events) ALSO reaches the deck's proposal review — SAME
+              // seam, SAME data path. No onProposalDrafted => non-deck arm below.
               revisionTrailRef.current = revising
                 ? [...revisionTrailRef.current, { prompt, createdAt: new Date().toISOString() }]
                 : []
@@ -1945,6 +1958,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 events: normalizedPreviewEvents,
                 labwareAdditions: result.labwareAdditions ?? [],
                 ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
+                ...(result.recordCreations?.length ? { recordCreations: result.recordCreations } : {}),
                 prompt,
               })
             } else {
@@ -2048,6 +2062,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only done
+            // the deck just STAGED (draft carrying recordCreations handed to
+            // onProposalDrafted above — SAME per-turn shape as
+            // handledProposalFrame, :1635/:1801). Only when a draft WAS handed
+            // AND recordCreations carried; else the wall still fires.
+            const recordDraftStaged =
+              (result.recordCreations?.length ?? 0) > 0 &&
+              onProposalDraftedRef.current !== undefined
+            if (recordDraftStaged) handledProposalFrame = true
             // SEQ-ANSWER-CONTRACT-1 D4: derive whether the turn streamed
             // answer text (visible to the user) from accumulated text_delta
             // frames. A whitespace-only delta is NOT an answer — trim before
