@@ -91,6 +91,22 @@ describe('uploadRawMeasurementFile binary path', () => {
     expect(Buffer.compare(await readFile(join(h.deviceRoot, res.path!)), BINARY_BYTES)).toBe(0);
   });
 
+  it('forces the device path for a VALID-UTF8 payload when binary: true is set', async () => {
+    // Valid UTF-8 (round-trips) — only the explicit binary: true force clause keeps it on the
+    // device/binary arm; deleting `|| request.body.binary === true` from the handler makes this RED.
+    const h = harness();
+    const forced = Buffer.from('ACQUISITION START\nwell,metric,value\nA1,ct,12.5\n', 'utf8');
+    const { status, out } = await upload(h, { fileName: 'forced.ch', contentBase64: forced.toString('base64'), binary: true });
+    expect(status).toBe(201);
+    const res = out as Resp;
+    expect(res.mode).toBe('binary');
+    expect(res.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(res.sha256).toBe(createHash('sha256').update(forced).digest('hex'));
+    expect(res.path?.startsWith('measurements/')).toBe(true);
+    expect(h.store.created.length).toBe(1);
+    expect(h.files.size).toBe(0); // no records/inbox/... file on the text arm
+  });
+
   it('keeps a UTF-8 CSV upload on the git-inbox path with today\u2019s shape plus mode: text', async () => {
     const h = harness();
     const { status, out } = await upload(h, { fileName: 'plate.csv', contentBase64: CSV_BYTES.toString('base64'), runId: 'RUN-1' });
