@@ -82,3 +82,5 @@ mutation the probe described.
 - None. Nothing else in this unit's scope; the WIP commit's rest (aiThreadClient.ts +23,
   useAiChat.ts +97, useAiChat.threadSelect.test.tsx 199 lines) was already delivered in 148a0b80
   and is untouched here.
+
+L2-P1-TAB2-TRANSCRIPT-1-u3finish UNIT L2-P1-TAB2-TRANSCRIPT-1-u3finish DONE 69687061f948c486da5d954fbb4ad14f6a1b4598
