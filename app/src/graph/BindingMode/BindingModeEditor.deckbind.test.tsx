@@ -147,6 +147,10 @@ describe('BindingModeEditor deck bindings (g4bindfix2)', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('deck-visualization')).toBeInTheDocument()
+      // Roles resolve from the universal protocol asynchronously; wait until
+      // the panel has re-rendered with the resolved labware roles so the
+      // captured props are the FINAL ones, not the pre-resolution render.
+      expect(capturedDeckProps?.placements?.length ?? 0).toBeGreaterThan(0)
     }, { timeout: 3000 })
 
     const placements: DeckPlacement[] = (capturedDeckProps?.placements ?? []) as DeckPlacement[]
