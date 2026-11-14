@@ -76,6 +76,38 @@ export function createLabwareLookup(
     // signature accepts a filter object
     const labwareRecords = await store.list({ kind: 'labware' });
 
+    // L2-P1-BIND-ID-1 recbyid: the IDENTITY tier — resolve by recordId, not
+    // by name. "Identity is a record id, never a name" (architect-context-l2
+    // §2.7): names, labels and aliases only pre-select a candidate. A
+    // `labware: <recordId>` answer carries one identity end to end, so an
+    // EXACT, CASE-SENSITIVE hint === recordId match — over the lab's
+    // labware-DEFINITION records AND labware instance records — returns that
+    // record at the top score, before any name/alias scoring. recordId only:
+    // never `id`, platform_aliases, or the display name. This ADDS an
+    // identity tier; it does not replace the label tier below.
+    const definitionRecords = await store.list({ kind: 'labware-definition' });
+    // Trim surrounding whitespace (a recordId never carries any) but keep the
+    // match CASE-SENSITIVE: identity is the record id exactly, never a case-
+    // folded name.
+    const identityHint = hint.trim();
+    const identityRecord =
+      definitionRecords.find((r) => r.recordId === identityHint) ??
+      labwareRecords.find((r) => r.recordId === identityHint);
+    if (identityRecord) {
+      const identityPayload = identityRecord.payload as Record<string, unknown>;
+      const isDefinition = definitionRecords.some(
+        (r) => r.recordId === identityRecord.recordId,
+      );
+      const identityTitle = isDefinition
+        ? typeof identityPayload['display_name'] === 'string'
+          ? identityPayload['display_name']
+          : identityRecord.recordId
+        : typeof identityPayload['name'] === 'string'
+          ? identityPayload['name']
+          : identityRecord.recordId;
+      return [{ recordId: identityRecord.recordId, title: identityTitle }];
+    }
+
     interface Scored {
       recordId: string;
       title: string;

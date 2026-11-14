@@ -512,11 +512,17 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
   // registry) in parallel. Records first so user-curated workspace plates
   // win the order; definitions fill in when the workspace is bare (fresh
   // appliance) or no record matches the query.
-  const [recordRes, defRes] = await Promise.all([
+  const [recordRes, defRes, defRecordRes] = await Promise.all([
     searchJsonLd({ q: q || undefined, type: 'labware', limit: PAGE }),
     apiClient
       .searchLabwareDefinitions({ q, limit: PAGE })
       .catch(() => ({ hits: [] as Array<{ recordId: string; label: string }>, total: 0 })),
+    // L2-P1-BIND-ID-1 recbyid: this lab's labware-definition recordIds, ONE
+    // call per resolve (never one GET per row). A records-API miss must not
+    // fail the menu, so a throw collapses to null (see the split below).
+    apiClient
+      .listRecordsByKind('labware-definition', 200)
+      .catch(() => null),
   ])
   abortIfNeeded(ctx)
 
@@ -534,11 +540,45 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
     mention: { type: 'labware', id: hit.recordId, label: hit.label },
   }))
   const seen = new Set(records.map((s) => s.key))
+  // L2-P1-BIND-ID-1 recbyid: the answer channel carries ONE identity end to
+  // end — identity is a record id, never a name. A Definition row is offered
+  // ONLY when this lab's record store actually holds that recordId (the
+  // vendored registry and the lab's records are distinct authorities; the
+  // registry copy `lbw-def-generic-96-well-deepwell-plate` GETs 404 while the
+  // lab holds `lbw-def-generic-96-well-deep-plate`, same display_name).
+  // `defRecordRes === null` means the records list failed (or resolved
+  // nothing fetchable) → keep today's behaviour (offer the rows) and do not
+  // fail the menu.
+  const heldDefinitionIds = new Set(
+    (defRecordRes?.records ?? []).map((r) => r.recordId),
+  )
+  let unavailableDiagnostic: SlashSuggestion | null = null
   const defs: SlashSuggestion[] = []
   for (const hit of defRes.hits) {
     const key = `labware:${hit.recordId}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (defRecordRes !== null && !heldDefinitionIds.has(hit.recordId)) {
+      // recordId absent from this lab's records → NO selectable row (a
+      // mention would point at an id no record has). Surface ONE disabled
+      // diagnostic naming the missing id instead of silently dropping it.
+      if (unavailableDiagnostic === null) {
+        unavailableDiagnostic = {
+          key: `${key}:unavailable`,
+          label: `Not in this lab's records: ${hit.label}`,
+          badge: 'Unavailable',
+          subtitle: hit.recordId,
+          disabled: true,
+          detail: {
+            source: 'Labware definition registry (on-box)',
+            id: hit.recordId,
+            extra: [{ label: 'Kind', value: 'labware definition' }],
+          },
+          mention: { type: 'labware', id: hit.recordId, label: hit.label },
+        }
+      }
+      continue
+    }
     defs.push({
       key,
       label: hit.label,
@@ -551,6 +591,9 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
       },
       mention: { type: 'labware', id: hit.recordId, label: hit.label },
     })
+  }
+  if (unavailableDiagnostic !== null) {
+    defs.push(unavailableDiagnostic)
   }
   // Exa web vendor-product tier — streams after local records + definitions so
   // a fresh appliance can still discover vendor labware off the web.
