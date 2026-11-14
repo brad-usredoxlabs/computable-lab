@@ -171,3 +171,5 @@ install` was run. These are git-ignored and are not part of the commit.
 Implementation complete (declaration half only: records + execute/artifact read-back are unit 2 of 2,
 which needs a data-repo minting decision that is not a coder's). Await adversarial/browser acceptance by
 the orchestrator. No blockers on this unit's scope.
+
+L2-GC-ANALYSIS-BIND-1-u1measkind UNIT u1measkind DONE 09bc7fe33ca302fc326fe7248df1af1dce7a76be
