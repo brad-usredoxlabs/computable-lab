@@ -186,3 +186,5 @@ read-back pasted above.
   (5-file budget; a half-threaded flag is worse than a declared one).
 - No lane-stack reload needed for this unit (no loader/server code changed); a reload matters only
   when regguard lands.
+
+L2-P1-SEED-ENTRY-1-regflag UNIT unit DONE 0bc1b93ad849bd50868caff368c5996e7a7ab947
