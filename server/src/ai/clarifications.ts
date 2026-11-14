@@ -275,3 +275,108 @@ export function clarificationRequestsFromAssurance(
   }
   return requests;
 }
+
+/**
+ * L2-P1-EMPTY-TURN-CARD-2 (u1emptycard) — the empty-turn guard's NAMED ABSENCE card.
+ * When the turn ends having produced NOTHING (the empty-turn guard) and the user's
+ * sentence names a labware noun with NO store/deck match, the done result ALSO
+ * carries one typed clarificationRequest declaring the absence — the client's
+ * existing typed-clarification arm renders the card beside the named-cause error
+ * (no client change). Gate defect D1 of PROMPT1-GATE-20261114T192103Z (2nd
+ * occurrence): the prompt-1 manifest utterance ended "No events generated." with
+ * zero records. The probe is a STORE/DECK EXISTENCE lookup only (the composed
+ * `searchLabwareByHint`, the same lookup the compile uses) — resolution is never
+ * re-asked. Deterministic extraction: strip the leading action verb, split on the
+ * corpus delimiter set (`,` and standalone `and`), drop parentheticals / trailing
+ * location phrases / pure well-deck-volume-count noise; keep phrases carrying a
+ * labware head noun. The FIRST candidate (longest first) whose probe returns ZERO
+ * matches is the named absence — at most ONE request. Every candidate matches, or
+ * none extract, returns [] — an EXISTING-labware turn gets no new card (AC3).
+ */
+/** `[Answered clarifications]` trailer appendClarificationAnswersToPrompt appends (AgentOrchestrator.ts:278-292) — authoritative answer data, never user wording; must not leak into a mention. */
+const ANSWERED_CLARIFICATIONS_TRAILER = /\n\s*\[Answered clarifications\][\s\S]*$/;
+
+/** Leading action verbs: place/add/create/set up/put/run (the corpus's placement verbs). */
+const EMPTY_TURN_ACTION_VERB = /^(?:place|add|create|set up|put|run)\s+/i;
+
+/** Labware head nouns (existing vocabulary); `well` inside "black-walled" is not a well (trailing-letter guard). */
+const EMPTY_TURN_LABWARE_HEAD =
+  /\b(?:plate|plates|tube|rack|racks|reservoir|reservoirs|vial|cryobox|well)(?![a-z])/i;
+
+/** A fragment that is pure well/deck/volume/count noise - never a noun. */
+const EMPTY_TURN_NOISE =
+  /^\d+\s*[-]?\s*(?:well|wells|plate|plates|tube|tubes|row|rows|column|columns|channel|channels|slot|slots|microliter|microliters|micro|ml|ul|uL|mL)(?:\s*[-,]?\s*\S*)?$/i;
+
+/**
+ * Extract candidate labware noun phrases from a user sentence.
+ * Deterministic: strip the leading action verb, drop parentheticals + the
+ * answered-clarifications trailer, split on `,` and standalone `and`, strip
+ * leading determiners and trailing location phrases, keep labware-head nouns
+ * that are not pure well/deck/volume/count noise.
+ */
+export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
+  if (typeof sentence !== 'string') return [];
+  const text = sentence.replace(ANSWERED_CLARIFICATIONS_TRAILER, '');
+  const noParenthetical = text.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ');
+  const withoutVerb = noParenthetical.replace(EMPTY_TURN_ACTION_VERB, '');
+  const fragments = withoutVerb
+    .split(/,|and(?=\s)/)
+    .map((fragment) => fragment.trim().replace(/[.;!?]+$/, '').trim())
+    // Leading determiners aren't part of the noun ("a Thermo ..." → "Thermo ...").
+    .map((fragment) => fragment.replace(/^(?:a|an|the)\s+/i, '').trim())
+    // Trailing location phrases (on the deck, into well A1) aren't part of the noun.
+    .map((fragment) => fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim())
+    .filter(
+      (fragment) =>
+        fragment.length > 0 &&
+        EMPTY_TURN_LABWARE_HEAD.test(fragment) &&
+        !EMPTY_TURN_NOISE.test(fragment),
+    );
+  return fragments;
+}
+
+/**
+ * Given the user turn text and the composed `searchLabwareByHint`, return
+ * `AgentClarificationRequest[]` with AT MOST ONE request: a NAMED ABSENCE for
+ * the FIRST candidate (longest first) the store/deck lookup returns ZERO
+ * matches for. Every candidate matches, or none extract, returns []. Same
+ * absence vocabulary as clarificationRequestsFromAssurance: absence.mention =
+ * trimmed original-casing noun, reason = `Not in this lab's records: <mention>`,
+ * options empty, query/snippet = mention, kind via normalizeClarificationKind.
+ */
+export async function emptyTurnAbsenceRequests(
+  turnText: string,
+  searchLabwareByHint: (hint: string) => Promise<Array<{ recordId: string; title: string }>>,
+): Promise<AgentClarificationRequest[]> {
+  const candidates = extractEmptyTurnLabwarePhrases(turnText);
+  if (candidates.length === 0) return [];
+  // Longest first; probe the FULL extracted phrase (never a sub-window — the
+  // lookup's name tier is substring-based, a sub-phrase probe could miss a
+  // longer-held name and declare a false absence).
+  const ordered = [...candidates].sort(
+    (a, b) => b.length - a.length || candidates.indexOf(a) - candidates.indexOf(b),
+  );
+  for (const candidate of ordered) {
+    const matches = await searchLabwareByHint(candidate);
+    if (matches.length === 0) {
+      const mention = candidate.trim();
+      if (!mention) return [];
+      const kind = normalizeClarificationKind(mention);
+      const request: AgentClarificationRequest = {
+        id: 'empty-turn-absence-1',
+        kind,
+        // Harness-authored (filterModelClarifications keeps origin 'harness' verbatim).
+        prompt: 'Pick the record this step names.',
+        origin: 'harness',
+        entityType: kind,
+        menuProvider: menuProviderForKind(kind),
+        options: [],
+        query: mention,
+        snippet: mention,
+        absence: { mention, reason: `Not in this lab's records: ${mention}` },
+      };
+      return [request];
+    }
+  }
+  return [];
+}
