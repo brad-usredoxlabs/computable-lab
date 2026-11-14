@@ -44,6 +44,7 @@ function mockFetch(ctxs: Array<ReturnType<typeof ctx>> = []) {
     const path = (typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url).replace(/^\/api\//, '')
     const method = init?.method ?? 'GET'
     if (method === 'POST' && path.endsWith('/measurements/ingest')) return json(201, { success: true, recordId: 'MEAS-000100' })
+    if (method === 'GET' && path.startsWith('records?')) return json(200, { records: [], total: 0 })
     if (method === 'GET' && path.startsWith('runs/RUN-000001/workspace')) {
       return json(200, {
         run: { recordId: 'RUN-000001', schemaId: 'run', payload: { kind: 'run' } },
@@ -96,12 +97,20 @@ describe('useResultsMode — instrument pick (L2-RUN-ATTACH-CAPABILITY-1 u2instr
     const { result } = renderHook(() => useResultsMode(args()))
     await waitFor(() => expect(result.current.equipmentOptions).toHaveLength(2))
     await waitFor(() => expect(result.current.activeContextId).toBe('CTX-000001'))
-    await act(async () => {
+    act(() => {
       result.current.setRawDataPath('data/instruments/readout.csv')
+    })
+    await act(async () => {
       await result.current.ingest()
     })
     expect(ingestSpy).toHaveBeenCalledTimes(1)
-    expect(ingestSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ equipmentRef: { kind: 'record', id: 'EQP-000001', type: 'equipment' } }))
+    // The readout's ref is forwarded VERBATIM (its label travels with it —
+    // today's behaviour), so assert the identity fields, not the whole object.
+    expect(ingestSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        equipmentRef: expect.objectContaining({ kind: 'record', id: 'EQP-000001', type: 'equipment' }),
+      }),
+    )
     expect(result.current.equipmentSource).toBe('readout')
   })
 
@@ -111,8 +120,10 @@ describe('useResultsMode — instrument pick (L2-RUN-ATTACH-CAPABILITY-1 u2instr
     const ingestSpy = vi.spyOn(apiClient, 'ingestMeasurement').mockResolvedValue({ success: true, recordId: 'MEAS-000100' })
     const { result } = renderHook(() => useResultsMode(args()))
     await waitFor(() => expect(result.current.equipmentOptions).toEqual([]))
-    await act(async () => {
+    act(() => {
       result.current.setRawDataPath('data/instruments/readout.csv')
+    })
+    await act(async () => {
       await result.current.ingest()
     })
     expect(ingestSpy).not.toHaveBeenCalled()
