@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AddToDeckDialog } from './AddToDeckDialog'
 import type { Labware } from '../../types/labware'
 
@@ -9,8 +9,8 @@ const createFromVendorExa = vi.hoisted(() => vi.fn())
 const searchLabwareDefinitions = vi.hoisted(() => vi.fn())
 const searchRecords = vi.hoisted(() => vi.fn())
 const resolve = vi.hoisted(() => vi.fn())
-// pickerdoor: the create door must be NAVIGATION ONLY — this spy exists to
-// prove the dialog never mints anything by opening the door (zero POST /records).
+// pickerdoor: the door must be NAVIGATION ONLY — this spy proves the dialog
+// never mints anything by opening the door (zero POST /records).
 const createRecord = vi.hoisted(() => vi.fn())
 
 vi.mock('../../shared/api/client', () => ({
@@ -34,9 +34,8 @@ function openDialog(props: Partial<{ surfaceKind: 'slot' | 'lawn' }> = {}): {
   container: HTMLElement
 } {
   const holder = { labware: null as Labware | null }
-  // pickerdoor: the dialog navigates (useNavigate) when its create door is
-  // clicked, so every render lives inside a router — same idiom as the
-  // App.test.tsx / App.url.test.tsx MemoryRouter harnesses.
+  // pickerdoor: the dialog navigates (useNavigate) on door click — every render
+  // lives inside a router (App.test.tsx / App.url.test.tsx MemoryRouter idiom).
   const view = render(
     <MemoryRouter initialEntries={['/runs/RUN-1/events']}>
       <AddToDeckDialog
@@ -380,29 +379,35 @@ describe('AddToDeckDialog', () => {
     expect((addBtn as HTMLButtonElement).disabled).toBe(false)
   })
 
-  // ---- pickerdoor: a missing type is a DECLARED absence with a door, not a
-  // silent "no" (architect-context-l2.md §2.15). The door lands on the REAL
-  // /lab/labware/new route with the page's existing ?prefillName= contract —
-  // the user's own trimmed, URL-encoded words, never an invented value — and
-  // writes nothing.
+  // ---- pickerdoor: a missing type is a DECLARED absence with a door (§2.15).
   it('empty Plates result agrees in number and offers a create door naming the query', async () => {
     const { container } = openDialog()
     fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
 
     // The corrected copy: "plates" is plural — NOT "No plates matches".
     await screen.findByText('No plates match "A58941".')
-    // And the create door row names the user's own words, nothing else.
+    // And the create door row names the user's own words; the body holds no
+    // selectable vendor row and no non-bindable line.
     expect(screen.getByRole('button', { name: /^Create "A58941"…$/ })).toBeTruthy()
-    // The door is a row in the result body — no selectable vendor row, no
-    // non-bindable line, and the empty state is the only other body content.
     expect(container.querySelectorAll('.ee-dialog__vendor-row').length).toBe(0)
     expect(container.querySelectorAll('.ee-dialog__nonbindable').length).toBe(0)
   })
 
   it('clicking the create door navigates to /lab/labware/new?prefillName=A58941, closes, and writes nothing', async () => {
     const onClose = vi.fn()
+    // MemoryRouter history is in-memory (window.location is untouched), so the
+    // location is read through a useLocation probe in the SAME router.
+    const holder: { location: { pathname: string; search: string } } = {
+      location: { pathname: '/', search: '' },
+    }
+    function LocationProbe() {
+      const location = useLocation()
+      holder.location = location
+      return null
+    }
     render(
       <MemoryRouter initialEntries={['/runs/RUN-1/events']}>
+        <LocationProbe />
         <AddToDeckDialog
           open
           contextLabel="Bench 1"
@@ -412,15 +417,14 @@ describe('AddToDeckDialog', () => {
         />
       </MemoryRouter>,
     )
-    const { location } = window as unknown as { location: { pathname: string; search: string } }
     fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
     const door = await screen.findByRole('button', { name: /^Create "A58941"…$/ })
     fireEvent.click(door)
 
     // The door lands on the REAL create route (App.tsx:169) with the
     // prefillName param that LabLabwareNewPage.tsx:72 actually reads.
-    await waitFor(() => expect(location.pathname).toBe('/lab/labware/new'))
-    expect(location.search).toBe('?prefillName=A58941')
+    await waitFor(() => expect(holder.location.pathname).toBe('/lab/labware/new'))
+    expect(holder.location.search).toBe('?prefillName=A58941')
     // …and it closes the dialog — opening the door is not a second surface.
     expect(onClose).toHaveBeenCalledTimes(1)
     // Navigation only: opening a door mints NOTHING (zero POST /records).
@@ -430,8 +434,8 @@ describe('AddToDeckDialog', () => {
 
   it('an empty query renders no create door (nothing to name — never invent a type)', () => {
     const { container } = openDialog()
-    // Resting state on the Plates tab: catalog rows fill the body, no empty
-    // state and therefore no door — a blank query has nothing to name.
+    // Resting Plates state: catalog rows fill the body — no empty state, no
+    // door (a blank query has nothing to name).
     expect(container.querySelector('.ee-dialog__empty')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Create / })).toBeNull()
   })
@@ -463,8 +467,8 @@ describe('AddToDeckDialog', () => {
     const { container } = openDialog()
     fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
 
-    // The merged dialogconsume behaviour survives: ONE labelled, non-
-    // interactive line carrying the server's reason — never a button.
+    // dialogconsume behaviour survives: ONE labelled, non-interactive line
+    // carrying the server's reason — never a button.
     await screen.findByText(/Not in this lab's stock: Registry Thermo Imaging Plate A58941/i)
     expect(screen.queryByRole('button', { name: /Registry Thermo/i })).toBeNull()
     expect(screen.getByText(/registry entry with no record in the lab store \(not lab stock\)/i)).toBeTruthy()
