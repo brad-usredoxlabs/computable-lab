@@ -13,6 +13,9 @@
  *   buildInfo.ts: a missing .git yields sha 'unknown', not an exception).
  */
 import { describe, expect, it } from 'vitest';
+import { execSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolveBuildInfo } from './buildInfo.js';
 
 describe('resolveBuildInfo (L2-P1-BUILDINFO-1 buildinfo)', () => {
@@ -29,8 +32,14 @@ describe('resolveBuildInfo (L2-P1-BUILDINFO-1 buildinfo)', () => {
   });
 
   it('reports the worktree HEAD it serves (no hand-typed sha)', () => {
-    // The worktree this module lives in is a real git checkout, so the
-    // derived sha must be a real commit, not 'unknown'.
-    expect(resolveBuildInfo().sha).not.toBe('unknown');
+    // Independent oracle: this test derives HEAD itself (separate exec, same
+    // worktree) and requires the module's answer to EQUAL it. A constant or
+    // pasted sha — e.g. '0'.repeat(40) — cannot survive this comparison.
+    const worktreeRoot = join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..', '..', '..', '..',
+    );
+    const oracle = execSync('git rev-parse HEAD', { cwd: worktreeRoot, encoding: 'utf8' }).trim();
+    expect(resolveBuildInfo().sha).toBe(oracle);
   });
 });
