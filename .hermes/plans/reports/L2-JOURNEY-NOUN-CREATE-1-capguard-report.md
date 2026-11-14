@@ -127,3 +127,6 @@ Line budget: files = 3 (two product + one test; report not counted), lines = 162
   (declared-as-enabled bait closed); (c) the compiler READY/NOT_READY vocabulary was left alone deliberately.
 - Next action: unit 2 of this item (the other unit) is independent and out of scope here.
 - Owner/resume: no blockers. Re-verify from a clean checkout with the two symlinks in place.
+
+---
+L2-JOURNEY-NOUN-CREATE-1-capguard UNIT L2-JOURNEY-NOUN-CREATE-1 DONE 9a7f7d78b73b841fd03db8670884302996323ac6
