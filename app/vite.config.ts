@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import { resolve } from 'node:path'
+import { realpathSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -86,6 +87,24 @@ export default defineConfig({
   server: {
     watch: {
       ignored: ['!**/node_modules/@cla-lab/ai-overlay-appliance/**'],
+    },
+    // Worktrees symlink `node_modules` to the canon checkout (e.g.
+    // /mnt/vast/home/brad/git/computable-lab/node_modules). Vite serves dependency
+    // files by their REAL path through /@fs/..., so its default root-derived allow
+    // list rejects them with 403 and the app dies on a dynamic import. Allow the
+    // dependency realpath explicitly instead of widening everything.
+    fs: {
+      allow: [
+        resolve(__dirname, '..'),
+        resolve(__dirname, '..', '..'),
+        ...((): string[] => {
+          try {
+            return [realpathSync(resolve(__dirname, '..', 'node_modules'))]
+          } catch {
+            return []
+          }
+        })(),
+      ],
     },
     host: true,
     port: 5174,
