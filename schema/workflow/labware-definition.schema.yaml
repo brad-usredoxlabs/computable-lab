@@ -90,6 +90,9 @@ properties:
   read_only:
     type: boolean
     description: "Imported/vendor definitions should be marked true."
+  offerable:
+    type: boolean
+    description: "True when this catalogue entry's id is a store recordId, i.e. the lab actually stocks it. Absent means NOT offerable: selecting it must open the create path prefilled, never present it as bindable stock."
   source:
     type: object
     additionalProperties: false
