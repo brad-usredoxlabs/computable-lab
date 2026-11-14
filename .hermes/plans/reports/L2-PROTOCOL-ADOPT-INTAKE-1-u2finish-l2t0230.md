@@ -34,3 +34,7 @@ VERIFY 4 (raw) `cd server && npx tsc --noEmit -p .`: exit 0, 0 "error TS" lines 
 Changed files this unit: the report only (no product changes; no npm install; no history rewrite).
 Next actions: none from this unit; browser/reviewer acceptance of the seam is the independent lane.
 Exit state: tree clean at exit; no blocker.
+
+---
+
+L2-PROTOCOL-ADOPT-INTAKE-1-u2finish UNIT u2finish DONE 5c3c70f24bf8fb0518fd096d00c2ad059bd67a15
