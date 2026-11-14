@@ -115,4 +115,4 @@ git diff --stat 3b5b71a1..HEAD:
 
 ---
 
-L2-P1-RELOAD-CLARIFIER-1-cardsurvive UNIT unit DONE 8ff5c6c33adcfcb9e670e87729eeb1b96714cce1
+L2-P1-RELOAD-CLARIFIER-1-cardsurvive UNIT cardsurvive DONE 8ff5c6c33adcfcb9e670e87729eeb1b96714cce1
