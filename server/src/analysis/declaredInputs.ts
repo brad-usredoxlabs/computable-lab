@@ -327,7 +327,14 @@ export async function validateDeclaredInputs(
       if (ref.type === ARTIFACT_KIND) {
         resolvedKind = payload.dataKind ?? (payload.dataReferenceRef as { dataKind?: string } | undefined)?.dataKind;
       } else {
-        resolvedKind = payload.dataKind;
+        // L2-GC-ANALYSIS-BIND-1 (u1measkind): a bound record whose payload
+        // carries no dataKind (a parsed measurement — measurement.schema.yaml
+        // declares only const: "measurement" as its kind) resolves its kind
+        // from its own record TYPE (mirrors the artifact arm's ?? fallback):
+        // never an invented default, never a silent skip of the comparison.
+        // The "absent ⇒ skip" rule below still governs the artifact arm, whose
+        // record can resolve to no kind at all.
+        resolvedKind = payload.dataKind ?? ref.type;
       }
       if (resolvedKind !== undefined && resolvedKind !== slot.dataKind) {
         throw new AnalysisServiceError(

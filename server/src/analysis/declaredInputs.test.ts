@@ -314,19 +314,23 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
     })).resolves.toBeUndefined();
   });
 
-  it('keeps the "absent ⇒ skip" rule for a record that resolves to NO kind at all (payload.dataKind and the record-type fallback both undefined ⇒ no comparison, byte-identical to base)', async () => {
-    // The fallback may resolve a kind from the record TYPE only. A record with
-    // no payload.dataKind AND a type that resolves to no kind still gets the
-    // named skip — no invented default kind, no new rejection.
+  it('keeps the "absent ⇒ skip" rule for a record that resolves to NO kind at all (artifact-typed ref with neither dataKind source ⇒ the comparison is skipped, byte-identical to base)', async () => {
+    // After the u1measkind fallback the non-artifact arm always resolves a
+    // kind (payload.dataKind ?? ref.type — ref.type is a non-empty string,
+    // enforced at (iii)), so the ONLY record shape that can still resolve to
+    // no kind is an artifact-typed ref with neither payload.dataKind nor a
+    // dataReferenceRef dataKind. The comparison guard (resolvedKind !==
+    // undefined) must keep skipping it — no invented default kind, no new
+    // rejection; the artifact arm is unchanged.
     const store = storeWith({
-      'REC-TEST-NOKIND': { kind: 'some-kind', recordId: 'REC-TEST-NOKIND' },
+      'AOUT-TEST-NOKIND': { kind: 'analysis-output-artifact', id: 'AOUT-TEST-NOKIND', name: 'untyped' },
     });
     const payload = {
       kind: 'analysis-revision', id: 'ANREV-TEST-GC',
-      inputs: [{ name: 'any', dataKind: 'table', required: true, acceptsKinds: ['some-kind'] }],
+      inputs: [{ name: 'any', dataKind: 'table', required: true, acceptsKinds: ['analysis-output-artifact'] }],
     };
     await expect(validateDeclaredInputs(store, payload, {
-      any: { kind: 'record', id: 'REC-TEST-NOKIND', type: 'some-kind' },
+      any: AOUT_REF('AOUT-TEST-NOKIND'),
     })).resolves.toBeUndefined();
   });
 
