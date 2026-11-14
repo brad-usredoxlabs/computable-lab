@@ -1,0 +1,35 @@
+version: 1
+channels:
+  - id: events
+    meaning: "Discrete experiment events the draft proposes to add to the active event graph."
+    treatment: answer
+  - id: clarification
+    meaning: "A clarification request asking the person to resolve a missing or ambiguous input."
+    treatment: card
+  - id: recordCreations
+    meaning: "Record creations the draft stages for acceptance as new lab records."
+    treatment: wall
+  - id: labwareAdditions
+    meaning: "Concrete labware instance placements the draft proposes into a well or deck."
+    treatment: wall
+  - id: equipmentRequirements
+    meaning: "Equipment requirements the draft lists as needed to execute the proposed work."
+    treatment: wall
+  - id: labwareRequirements
+    meaning: "Labware requirements the draft lists as needed to execute the proposed work."
+    treatment: wall
+  - id: deckLayout
+    meaning: "A deck layout the draft proposes for a platform variant to arrange instances on."
+    treatment: wall
+  - id: sequenceProposal
+    meaning: "A run sequence the draft proposes to structure the upcoming execution."
+    treatment: wall
+  - id: protocolEdit
+    meaning: "A protocol edit the draft proposes as a diff against the active protocol."
+    treatment: wall
+  - id: proseDeliverable
+    meaning: "Prose the draft delivers as the message text of the turn itself."
+    treatment: answer
+  - id: instrumentJob
+    meaning: "An instrument appliance job the draft proposes to run on lab equipment."
+    treatment: wall

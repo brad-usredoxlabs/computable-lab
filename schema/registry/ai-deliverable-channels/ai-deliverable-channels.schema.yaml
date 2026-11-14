@@ -1,0 +1,40 @@
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'ai-deliverable-channels-registry.schema.yaml'
+title: 'AI-Deliverable Channels Registry Document Schema'
+description: >
+  Structural validation for schema/registry/ai-deliverable-channels/
+  ai-deliverable-channels.yaml. Ajv is the single validation authority
+  (repo rule #3): the treatment vocabulary is enforced HERE, never by a
+  hardcoded allow-list in TypeScript. Every declared channel carries exactly
+  one declared treatment — the enum has NO "ignore" state, so a channel the
+  surface cannot present is declared `wall` (a named failure), never silently
+  dropped. There is exactly one entry per channel id (uniqueIds keyword).
+type: object
+required: [version, channels]
+additionalProperties: false
+properties:
+  version:
+    const: 1
+  channels:
+    type: array
+    minItems: 1
+    uniqueIds: [id]
+    items:
+      type: object
+      required: [id, meaning, treatment]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][A-Za-z]*$'
+        meaning:
+          type: string
+          minLength: 10
+        treatment:
+          type: string
+          enum: [card, mount, navigate, wall, answer]
+          description: >-
+            How the surface must treat a channel the draft carries. NO
+            "ignore" state exists: `wall` is the declared treatment for a
+            channel the surface cannot present — its acceptance must be a
+            named failure, never silence.
