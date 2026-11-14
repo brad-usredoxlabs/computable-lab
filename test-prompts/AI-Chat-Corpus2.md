@@ -16,10 +16,11 @@ Two things not to do: don't pick a near miss for me (DMEM is not DMEM/F-12), and
 
 Surface: Event Editor
 Bench: Single SBS plate manual
-Prompt:  Add a 96-well deepwell plate to the deck.
-Activity:  The plate type I'm asking for is a deepwell and I don't think we have that type in the system yet.
-Expectation: It asks me to create the deepwell type, anchored to the labware ontology if there's a term for it, and then puts a plate of that new type on the deck.
-Expectation: I can see visually that a 96-well plate has been added to the deck.
+Prompt:  Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom (catalog number A58941) on the deck.
+Activity:  Neither that plate type nor the Thermo A58941 product is in the system yet. This is a vendor product, not a generic shape: identify the type it is, create the type anchored to the labware ontology if there's a term for it, then create the Thermo product pointing at that type with its real catalogue number.
+Expectation: It asks me to create the type, anchored to the labware ontology if there's a term for it, and then puts a plate of that new type on the deck.
+Expectation: It records the Thermo A58941 product against the type it created, using the catalogue number I gave it and inventing nothing.
+Expectation: I can see visually that a 384-well plate has been added to the deck.
 
 ## Prompt 2
 

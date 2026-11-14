@@ -32,74 +32,74 @@ version: 1
 status: adopted
 adopted_by: "Brad, 2026-11-13, verbatim: \"The shape is correct.\""
 source_file: test-prompts/AI-Chat-Corpus2.md
-source_sha256: 025665dbefcb1b44ae149e2d0d8d1a7ce7cf977cc79833a140535c298af34ef5   # AI-Chat-Corpus2.md, commit 707eaefe
+source_sha256: 01cb85fe7ddb38f9cb3ee2a2cd68aa42fbd6be2a20940a666e83e171605812b2   # AI-Chat-Corpus2.md after the prompt-1 rewrite (Thermo A58941)
 
 scenarios:
   - id: prompt-1
-    title: a plate type that does not exist yet
+    title: a plate type that does not exist yet — named as a vendor product with a catalogue number
     continues_from: null
     starts_at: /runs
     utterances:
-      - "Add a 96-well deepwell plate to the deck."
+      - "Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom (catalog number A58941) on the deck."
     entry_state: >-
-      The person is in a run, looking at the plate deck. The system does NOT already have a
-      96-well deepwell plate type. On lane 2 the seed data currently VIOLATES this (two deepwell
-      definitions ship as lab stock); Brad ruled on 2026-11-13 that the stock is pruned or namespaced so
-      the scenario starts from a true state — ruling:
-      .hermes/plans/decisions/PROMPT1-ENTRY-STATE-l2-20261113.md. A drive that finds a deepwell already
-      offered has failed its entry condition before it begins.
+      The person is in a run, looking at the plate deck. The lab SHIPS with a starter pack of generic
+      labwares (96/384-well plates, reservoirs, tubes, racks, tip racks) and that pack is expected to stay.
+      What must NOT exist is this specific type as lab stock and the Thermo A58941 product record. A generic
+      384-well shape existing is fine and is exactly the distinction under test: a generic TYPE is not a
+      registered PRODUCT and neither is stock. Brad, 2026-11-14: the goal is to ship computable-lab with a
+      starter pack of generic labwares; the earlier deepwell wording collided with that pack.
     human_choices:
-      - >-
-        The assistant says plainly that the type is not in the system and offers to create it.
-      - >-
-        The person completes the geometry on the create surface the assistant opens — well count,
-        arrangement, spacing, footprint, working volume.
-      - >-
-        The person sees the ontology match with its namespace and full label, or sees the record
-        marked UNANCHORED with the reason when no term fits.
-      - >-
-        The person accepts.
+      - The assistant says plainly that this type is not in the system and offers to create it, rather than
+        binding to a generic 384-well shape as if it were the Thermo product.
+      - The person completes the geometry on the create surface the assistant opens — well count,
+        arrangement, spacing, footprint, working volume — or confirms the geometry the type implies.
+      - The person confirms the Thermo A58941 product against that type, with the catalogue number carried
+        verbatim; nothing else is invented.
+      - The person sees the anchor state either as an ontology term with its namespace and full label, or as
+        UNANCHORED with a stated reason, and accepts.
     return_expectation: >-
-      The person is back where they started, their original sentence is still there unchanged, and
-      a short note says what was created and what was placed. One click resumes the sentence.
+      The person is back where they started, the original sentence unchanged, a note saying what was created
+      and what was placed, and one click resumes the sentence.
     completed_when:
       - >-
         A plate of the newly created type is VISIBLY on the deck, where the person can see it.
       - >-
-        A labware definition record exists whose geometry is what the person entered, read back by id.
+        A labware definition record exists with the geometry the person entered, read back by id.
       - >-
-        A labware instance record exists, points at that definition by record id, and is the thing
-        on the deck.
+        The Thermo product exists as its own record with catalogue number A58941 carried verbatim, pointing at
+        that definition; a generic 384-well shape is NOT accepted in its place.
       - >-
-        The anchor state is visible either way — anchored with the term's namespace and label, or
-        UNANCHORED with a stated reason.
+        A labware instance exists, points at the definition by record id, and is the thing on the deck.
       - >-
-        Resuming drafts the original add-plate instruction, and the plate is not added a second time.
+        The anchor state is visible either way — anchored with namespace and label, or UNANCHORED with a reason.
+      - >-
+        Resuming drafts the original instruction, and the plate is not added a second time.
     not_done_if:
       - >-
-        The create form was filled and saved but no plate is on the deck — this exact defect once
-        passed a check while the plate never existed.
+        The create form was filled and saved but no plate is on the deck.
       - >-
-        A definition was created but no instance, or the instance is not the one placed.
+        A generic 384-well plate from the starter pack is presented as the Thermo product, or the product is
+        recorded against a generic type without the catalogue number.
       - >-
-        An ontology near miss was chosen silently, or a term was chosen without showing its label.
+        A catalogue number other than A58941 appears, or the number is reformatted.
       - >-
-        A geometry value the person never entered appears on the record.
+        A definition exists with no instance, or the instance is not what was placed.
       - >-
         The original sentence was rewritten, or the person had to retype it.
     evidence_required:
       - >-
-        Screenshots of the assistant's offer, the create form with values, and the deck with the plate.
+        Screenshots of the assistant's offer, the create form with values, the product row with A58941, and the
+        deck with the plate.
       - >-
-        Record read-back naming the definition id, the instance id, and the instance's parent id.
+        Record read-back naming the definition id, the product id with its catalogue number, the instance id
+        and the instance's parent id.
       - >-
         The served application revision the drive ran against.
     fault_injection_leg: >-
-      Interrupt after the definition record is durably written but before the continuation is
-      acknowledged, then reload and resume, and also try from a second tab. Acceptable — the
-      continuation completes with no duplicate plate, or an explicit recoverable partial state that
-      names what already exists. Not acceptable — two plates, a lost record, or a journey reported
-      complete with nothing on the deck.
+      Interrupt after the definition record is durably written but before the continuation is acknowledged,
+      then reload and resume, and also try from a second tab. Acceptable — the continuation completes with no
+      duplicate plate, or an explicit recoverable partial state naming what exists. Not acceptable — two
+      plates, a lost record, or a journey reported complete with nothing on the deck.
     open_questions: []
 
   - id: prompt-2
