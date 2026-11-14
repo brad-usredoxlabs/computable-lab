@@ -6,8 +6,8 @@
  *  (b) the sha shown after upload is EXACTLY the value the server returned on
  *      the data-reference write (a hook-computed hash fails this);
  *  (c) after ingest the hook exposes a parse summary read back from the created
- *      measurement record (parserId / row count / first+last point / stored
- *      path) rather than undefined.
+ *      measurement record (parserId / row count / first+last point / per-row
+ *      unit as the record's rows carry it / stored path) rather than undefined.
  *
  * jsdom environment (the repo default) — this exercises a hook with fetch,
  * not a node-only seam.
