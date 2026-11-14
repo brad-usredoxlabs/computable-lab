@@ -55,3 +55,17 @@ Brad, same session: "the 'two failures in a row' rule ONLY applies to simple, on
 gates iterate by design; the instruments and the orchestrator's instructions are updated accordingly. A gate
 FIX produces a finding and another round. Escalation still happens when the same defect recurs twice with no
 new evidence, or when a fix would change a scenario's meaning or the lab's data.
+
+## AMENDMENT — Brad answered the pack-authority question (2026-11-14, option "a")
+
+"The registry is vocabulary only; the pack is store records; anything offered as '[LAB] Your lab' must be a
+record." Binding consequences:
+
+1. **A picker row labelled as this lab's stock must be backed by a store record.** The label is a claim of
+   ownership; it may not be rendered for a registry entry that has no record. Registry-only entries are
+   vocabulary (a TYPE the system understands) and must be presented as such, or not offered at all.
+2. **No fabricated reads.** `GET /api/records/:id` must not return a payload for a registry entry that is not
+   a store record. The legacy-spelling fallback merged on 2026-11-13 (609e902d) may resolve ALIASES to real
+   records; it may not promote vocabulary into a record-shaped read. A 404 there is the honest answer.
+3. **The pack grows by records.** Adding a generic shape to the shipped pack is a data change that creates a
+   record, with provenance, like any other; the registry stays the vocabulary layer.
