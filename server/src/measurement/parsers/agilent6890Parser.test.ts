@@ -169,4 +169,118 @@ describe('agilent6890 ChemStation parser (unit chemstation)', () => {
     expect(me2.message).toContain('45abc\t10');
     expect(me2.message).toContain('line 2');
   });
+
+  it('locates the real header below a preamble sentence that names time and signal (advcfix2, defect 3)', () => {
+    // "Results, Time, Signal" is a preamble sentence, not a header: it is
+    // rejected as a candidate because no following row is numeric at its
+    // claimed indices, and the real quoted header below it is located.
+    const content = [
+      'Results, Time, Signal',
+      '"RetTime [min]","Signal [pA]"',
+      '0.0,100',
+      '1.5,250.5',
+      '',
+    ].join('\n');
+    const result = parser.parse(content);
+    expect(result.metadata?.['Time Column']).toBe('RetTime [min]');
+    expect(result.metadata?.['Signal Column']).toBe('Signal [pA]');
+    expect(result.units).toEqual({ time: 'min', intensity: 'pA' });
+    expect(result.data.length).toBe(2);
+    expect(result.data.map((row) => row.timeMin)).toEqual([0, 1.5]);
+    expect(result.data.map((row) => row.value)).toEqual([100, 250.5]);
+  });
+
+  it('retains every preamble line: duplicate keys are suffixed, comment and colon-less lines are kept (advcfix2, defect 4)', () => {
+    const content = [
+      '# ChemStation export',
+      'Signal Name: FID1 A',
+      'Signal Name: FID1 B',
+      'OPERATOR RUN 12',
+      '"RetTime [min]","Signal A [pA]"',
+      '0.0,10',
+      '1.0,20',
+      '',
+    ].join('\n');
+    const result = parser.parse(content);
+    expect(result.metadata?.['Signal Name']).toBe('FID1 A');
+    expect(result.metadata?.['Signal Name (2)']).toBe('FID1 B');
+    expect(result.metadata?.['line 4']).toBe('OPERATOR RUN 12');
+    expect(result.metadata?.['line 1']).toBe('# ChemStation export');
+    expect(result.data.length).toBe(2);
+    expect(result.data.map((row) => row.value)).toEqual([10, 20]);
+  });
+
+  it('quotes the first five candidate lines and names the total inspected count (advcfix2, defect 5)', () => {
+    const preamble = [
+      'Instrument: 6890N GC',
+      'Method: mystery.met',
+      'Injection Date: 14-NOV-2026 08:15:02',
+      'Signal Name: FID1 A',
+      'Operator: brad',
+      'Run: 12',
+      'Column: Time',
+      'Note: one',
+      'Note: two',
+      'Note: three',
+    ];
+    const me = expectBadRequest(() => parser.parse(preamble.join('\n')));
+    expect(me.message).toMatch(/expects columns/i);
+    // All ten candidate lines were inspected; the message says so...
+    expect(me.message).toContain('10 candidate lines');
+    // ...and quotes the first five...
+    expect(me.message).toContain('line 5: Operator: brad');
+    // ...without quoting (or implying it inspected) the rest.
+    expect(me.message).not.toContain('line 6');
+    expect(me.message).not.toContain('Note: one');
+  });
+
+  it('locates multi-signal ChemStation headers and records the first qualifying signal column verbatim (advcfix2, defect 6)', () => {
+    const multi = [
+      '"RetTime [min]","Signal A [pA]","Signal B [pA]"',
+      '0.0,100,200',
+      '1.0,150,250',
+      '',
+    ].join('\n');
+    const multiResult = parser.parse(multi);
+    // The FIRST qualifying intensity column wins — recorded verbatim, not guessed.
+    expect(multiResult.metadata?.['Signal Column']).toBe('Signal A [pA]');
+    expect(multiResult.units).toEqual({ time: 'min', intensity: 'pA' });
+    expect(multiResult.data.length).toBe(2);
+    expect(multiResult.data.map((row) => row.value)).toEqual([100, 150]);
+
+    // A real Agilent export names its FID signal "FID1 A"; that cell qualifies
+    // through its bracketed unit token, so the file parses on its own names.
+    const fid = ['"Time [min]","FID1 A [pA]"', '0.05,10', '1.0,20', ''].join('\n');
+    const fidResult = parser.parse(fid);
+    expect(fidResult.metadata?.['Signal Column']).toBe('FID1 A [pA]');
+    expect(fidResult.units).toEqual({ time: 'min', intensity: 'pA' });
+    expect(fidResult.data.length).toBe(2);
+    expect(fidResult.data.map((row) => row.timeMin)).toEqual([0.05, 1]);
+    expect(fidResult.data.map((row) => row.value)).toEqual([10, 20]);
+  });
+
+  it('refuses a non-minute time axis instead of storing seconds in timeMin (advcfix2, defect 7)', () => {
+    const me = expectBadRequest(() => parser.parse(['"Time [s]","Signal [pA]"', '0.05,10', ''].join('\n')));
+    // The refusal names the unit token it found and the minutes requirement;
+    // no row is returned and no conversion is invented.
+    expect(me.message).toContain('Time [s]');
+    expect(me.message).toContain('"s"');
+    expect(me.message).toContain('requires minutes');
+    expect(me.message).toContain('no conversion');
+
+    // Bracketed minute spellings (any case) stay accepted and are transcribed
+    // verbatim, as today.
+    const minutes = parser.parse(['"Time [MINUTES]","Signal [pA]"', '1.0,5', ''].join('\n'));
+    expect(minutes.units).toEqual({ time: 'MINUTES', intensity: 'pA' });
+    expect(minutes.data.length).toBe(1);
+  });
+
+  it('refuses a semicolon-delimited file by name instead of with the generic header message (advcfix2, defect 8)', () => {
+    const me = expectBadRequest(() => parser.parse(['"Time [min]";"Signal [pA]"', '0.05,10', ''].join('\n')));
+    expect(me.message).toMatch(/expects columns/i);
+    // A human reading the refusal knows what to do: re-export, do not hand-parse.
+    expect(me.message).toContain('semicolon-delimited');
+    expect(me.message).toContain('decimal-comma');
+    expect(me.message).toContain('line 1');
+  });
 });
