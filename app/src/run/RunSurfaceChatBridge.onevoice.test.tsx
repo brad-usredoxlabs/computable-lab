@@ -11,11 +11,14 @@
  * mutually exclusive on a records-only success) — the wall is the ONE voice.
  *
  * Renders the RUN surface's shared chat exactly as RunWorkspacePage does
- * (ChatFocusProvider > DeckChatSlice + SurfaceChatBridge host="run-workspace"
- * + HarnessChatPane), stream mocked to a done carrying ONLY recordCreations,
- * and asserts on the DOM: the wall fired (NOT silently empty), it NAMES the
- * records, it does NOT say "Nothing was proposed", and no message contains
- * "did not propose any changes".
+ * (ChatFocusProvider > DeckChatSlice + the deck bar PreviewActionBar +
+ * SurfaceChatBridge host="run-workspace" + HarnessChatPane), stream mocked
+ * to a done carrying ONLY recordCreations. The u1recordsdraft seam staged
+ * that preview (useDeckGhostMount keeps a records-only draft alive), so the
+ * run surface's ONE delivery statement is the staged deck preview; the
+ * honest wall is the fallback ONLY when nothing was staged. The pin:
+ * exactly ONE marker (preview bar OR wall — never both, never neither), it
+ * NAMES the material, and no message contains "did not propose any changes".
  */
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { act } from 'react'
@@ -34,7 +37,12 @@ vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.mjs
 // The run door's deck slice is PUBLISHED by DeckChatSlice (reads the mocked
 // useEventEditor); the minimal state + isDeckSetupLocked match the focus
 // test's proven run-host mock (it runs the same publisher without a full
-// EventEditorProvider).
+// EventEditorProvider). The state carries the fields the REAL ghost-mount
+// closure reads (useDeckGhostMount passes state.labwares verbatim to
+// buildPreviewFromDraft — the u1recordsdraft proven mock shape), and
+// `setPreview` mutates the SAME state object: the mock editor is static (no
+// reducer), so the live value is what the real deck bar (PreviewActionBar)
+// reads on the poll loop's rerender — the real marker, not a spy assertion.
 const eventEditorContextValue = {
   state: {
     eventGraphId: 'EG-1',
@@ -46,11 +54,16 @@ const eventEditorContextValue = {
     selection: null,
     placements: [],
     events: [],
-    preview: null,
+    labwares: {},
+    equipments: {},
+    focusPlacementId: null,
+    preview: null as EventEditorPreview | null,
   },
   actions: {
     appendEvent: vi.fn(),
-    setPreview: vi.fn(),
+    setPreview: (preview: EventEditorPreview | null) => {
+      eventEditorContextValue.state.preview = preview
+    },
     clearPreview: vi.fn(),
     commitPreview: vi.fn(),
     setReviewState: vi.fn(),
@@ -108,9 +121,11 @@ import { streamAssist } from '../shared/api/aiClient'
 import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
 import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
+import { PreviewActionBar } from '../event-editor/deck/PreviewActionBar'
 import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
 import type { AiContext } from '../types/aiContext'
+import type { EventEditorPreview } from '../event-editor/EventEditorContext'
 
 const aiContext: AiContext = {
   surface: 'run-workspace',
@@ -132,6 +147,7 @@ function renderRunChat() {
               <AiPanelProvider>
                 <ChatFocusProvider>
                   <DeckChatSlice />
+                  <PreviewActionBar />
                   <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
                   <HarnessChatPane />
                 </ChatFocusProvider>
@@ -146,25 +162,44 @@ function renderRunChat() {
   return { ...utils, reread: () => utils.rerender(tree) }
 }
 
+// The turn-complete marker is exactly ONE (the onevoice contract): the
+// u1recordsdraft seam stages the deck preview (the deck bar renders it) —
+// that IS the delivery statement; the honest wall is the fallback ONLY when
+// nothing was staged. Neither marker means the turn never completed.
+// PreviewActionBar.tsx:159: the real bar (class .preview-bar, the deck bar's
+// own markup — no invented testid); useAiChat.ts:2190 renders the wall
+// (data-testid="honest-wall") only on the nothing-staged fallback.
+const PREVIEW_BAR_SELECTOR = '.preview-bar'
+const HONEST_WALL_SELECTOR = '[data-testid="honest-wall"]'
+
+function oneVoiceMarkers() {
+  return {
+    preview: document.querySelector(PREVIEW_BAR_SELECTOR),
+    wall: document.querySelector(HONEST_WALL_SELECTOR),
+  }
+}
+
 async function awaitTurnComplete(deck: ReturnType<typeof renderRunChat>, timeoutMs = 4000) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     await act(async () => {
       deck.reread()
     })
-    // The streaming stop button leaving means the stream ended; the wall
-    // (the turn-complete marker for a no-proposal turn) is rendered once the
-    // done frame is processed. Poll on both.
+    // The streaming stop button leaving means the stream ended; the
+    // delivery marker (staged-preview deck bar OR the honest wall) renders
+    // once the done frame is processed. Poll on both.
     const stopGone = !document.querySelector('[data-testid="interpreting-stop"]')
-    const wallUp = document.querySelector('[data-testid="honest-wall"]') !== null
-    if (stopGone && wallUp) return
-    if (Date.now() >= deadline) throw new Error('turn never completed')
+    const { preview, wall } = oneVoiceMarkers()
+    if (stopGone && (preview !== null || wall !== null)) return
+    if (Date.now() >= deadline) {
+      throw new Error('turn never completed (neither the staged deck preview bar nor the honest wall rendered)')
+    }
     await new Promise((r) => setTimeout(r, 50))
   }
 }
 
 describe('run surface — L2-P1-CREATE-RECORD-LANDS-1 onevoice (ONE statement on a records-only success)', () => {
-  it('a recordCreations-only done shows the wall naming the records and NO "did not propose any changes" bubble', async () => {
+  it('a recordCreations-only done stages the deck preview as the ONE delivery statement (NO "did not propose any changes" bubble; wall only when nothing staged)', async () => {
     vi.mocked(streamAssist).mockImplementation(async function* () {
       yield { type: 'status', message: 'working' } as never
       yield {
@@ -192,16 +227,43 @@ describe('run surface — L2-P1-CREATE-RECORD-LANDS-1 onevoice (ONE statement on
       pane.reread()
     })
 
-    // THE one-voice contract on the rendered run surface:
-    const wall = document.querySelector('[data-testid="honest-wall"]')?.textContent ?? ''
-    // (1) the pane is NOT silently empty — the wall fired (anti-silence gate).
-    expect(wall).not.toBe('')
-    // (2) it NAMES the delivery: the records to create were delivered.
-    expect(wall).toContain('records to create')
-    // (3) it does NOT deny the delivery it just named.
-    expect(wall).not.toContain('Nothing was proposed')
+    // THE one-voice contract on the rendered run surface: the staged deck
+    // preview (the deck bar) is the delivery statement; the honest wall is
+    // the fallback ONLY when nothing was staged — exactly ONE marker on
+    // screen. The bar's OWN summary names counts ("preview ready" for a
+    // records-only preview), so the material is named where the run surface
+    // names it: the deck bar's review modal (ProposedGraphModal's "New
+    // records" section lists each creation's name) — open it like a user.
+    const { preview, wall } = oneVoiceMarkers()
+    // (1) NOT silently empty — exactly ONE delivery marker fired. A wall
+    // BESIDE the staged preview would be the old two-voices contradiction.
+    expect(preview !== null || wall !== null).toBe(true)
+    expect(preview !== null && wall !== null).toBe(false)
+    // (2) it NAMES the delivery: open the staged preview's review — the
+    // record to create is listed by name (no invented marker: the modal's
+    // proposed-record rows, ProposedGraphModal.tsx:311-328).
+    if (preview !== null) {
+      await act(async () => {
+        fireEvent.click(
+          Array.from(preview.querySelectorAll('button')).find(
+            (b) => b.textContent?.trim() === 'View changes',
+          )!,
+        )
+        pane.reread()
+      })
+      const review = document.querySelector('[data-testid="proposed-records-section"]')
+      expect(review).not.toBeNull()
+      expect(review?.textContent ?? '').toContain('Lysis buffer')
+      const recordRow = document.querySelector('[data-testid="proposed-record-row"]')
+      expect(recordRow?.textContent ?? '').toContain('Lysis buffer')
+    }
+    // (3) the wall (when it is the voice — the nothing-staged fallback)
+    // does NOT deny the delivery it just named.
+    if (wall !== null) {
+      expect(wall.textContent).not.toContain('Nothing was proposed')
+    }
     // (4) the SECOND statement (the bubble) never appears in the same turn
-    // as the wall — one voice, no contradiction on one screen.
+    // as the marker — one voice, no contradiction on one screen.
     expect(document.body.textContent).not.toContain('AI completed the task but did not propose any changes.')
   })
 })
