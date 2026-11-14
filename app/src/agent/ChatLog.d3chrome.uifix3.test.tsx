@@ -144,7 +144,12 @@ describe('ChatLog — L2-SUITE-A-uifix3 D3-CHROME: a restored transcript renders
       <ChatLog
         {...props}
         onClarificationPick={vi.fn()}
-        messages={[userMsg('u', 'Place a bead beating plate on the deck.'), restoredBeadTurn()]}
+        // L2-P1-RELOAD-CLARIFIER-1 (tailanswer) re-shape (NOT deletion): the
+        // restored turn is FOLLOWED by another message, so it is the
+        // HISTORICAL case this pin locks — its real invariant is "a
+        // restored historical turn renders no inputs" (the UNANSWERED tail
+        // case now lives in ChatLog.reloadTail.answerable.test.tsx).
+        messages={[userMsg('u', 'Place a bead beating plate on the deck.'), restoredBeadTurn(), userMsg('u-next', 'Carry on.')]}
       />,
     )
 
@@ -186,7 +191,12 @@ describe('ChatLog — L2-SUITE-A-uifix3 D3-CHROME: a restored transcript renders
       <ChatLog
         {...props}
         onClarificationPick={vi.fn()}
-        messages={[userMsg('u2', 'Make the mix.'), restoredChoiceTurn]}
+        // L2-P1-RELOAD-CLARIFIER-1 (tailanswer) re-shape (NOT deletion): a
+        // following message makes the restored choice turn the HISTORICAL
+        // case this pin locks — "a restored historical turn renders no
+        // option buttons" (the unanswered-tail case moved to
+        // ChatLog.reloadTail.answerable.test.tsx).
+        messages={[userMsg('u2', 'Make the mix.'), restoredChoiceTurn, userMsg('u2-next', 'Carry on.')]}
       />,
     )
 
