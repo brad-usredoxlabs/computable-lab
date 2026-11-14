@@ -1183,6 +1183,18 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               ...(Array.isArray(m.metadata?.clarificationAnswers) && m.metadata.clarificationAnswers.length > 0
                 ? { clarificationAnswers: m.metadata.clarificationAnswers as AiClarificationAnswer[] }
                 : {}),
+              // L2-P1-RELOAD-CLARIFIER-1 (unit cardsurvive, ruling PENDING-
+              // DRAFT-PERSISTENCE §2.6): ride the FULL typed requests array
+              // back so a cold reload mid-card re-renders the SAME grouped
+              // card from the SAME persisted document (ids/prompts/options/
+              // menuProvider/clarifyControl byte-identical) — the question is
+              // restored from the persisted message metadata, NOT re-derived
+              // and NOT re-asked; nothing is auto-answered and no option is
+              // invented. Key ABSENT when never persisted (the conditional-
+              // spread idiom), never `undefined`.
+              ...(Array.isArray(m.metadata?.clarificationRequests) && m.metadata.clarificationRequests.length > 0
+                ? { clarificationRequests: m.metadata.clarificationRequests as AiClarificationRequest[] }
+                : {}),
               // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
               // mark the RESTORED message. Its answer inputs (the picker's
               // search field, the option buttons) do NOT survive a reload in
@@ -1257,6 +1269,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // prompt message persists byte-identically.
       if (m.clarificationAnswers && m.clarificationAnswers.length > 0)
         metadata.clarificationAnswers = m.clarificationAnswers
+      // L2-P1-RELOAD-CLARIFIER-1 (unit cardsurvive, ruling PENDING-DRAFT-
+      // PERSISTENCE §2.6): persist the FULL typed requests array so a reload
+      // mid-card re-renders the SAME grouped card from the SAME persisted
+      // document (ids/prompts/options/menuProvider/clarifyControl byte-
+      // identical) — never re-derived from the thread's answers, never
+      // re-asked. Key ABSENT (never `undefined`) when the turn carried no
+      // requests; a plain turn persists byte-identically.
+      if (m.clarificationRequests && m.clarificationRequests.length > 0)
+        metadata.clarificationRequests = m.clarificationRequests
       // L2-CHAT-UI-1 LEG A (A3): persist the shorthand so the intent card
       // survives a reload (the hydration ride below reads it back).
       if (m.shorthand) metadata.shorthand = m.shorthand
